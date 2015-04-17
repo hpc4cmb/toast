@@ -7,23 +7,17 @@ from mpi4py import MPI
 
 import unittest
 
-from dist import *
+from toast.obs import *
 
 
-class DistTest(unittest.TestCase):
-
-    def setUp(self):
-        self.mpicomm = MPI.COMM_WORLD
-        worldsize = self.mpicomm.size
-        groupsize = int( worldsize / 2 )
-        self.comm = Comm(MPI.COMM_WORLD, groupsize=groupsize)
+class ObsTest(unittest.TestCase):
 
     def test_construction(self):
         start = MPI.Wtime()
-        self.dist = Dist(self.comm)
+        obs = Obs()
         stop = MPI.Wtime()
         elapsed = stop - start
-        print('Proc {}:  test took {:.4f} s'.format( self.comm.comm_world.rank, elapsed ))
+        print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
 
 
 

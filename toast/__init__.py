@@ -10,7 +10,14 @@ Time Ordered Astrophysics Scalable Tools (TOAST) is a software package
 designed to allow the processing of...
 '''
 
-from _version import __version__
+from ._version import __version__
+
+from .dist import Comm, Dist
+from .obs import Obs
+
+__all__ = [
+    'Comm', 'Dist', 'Obs', 'Streams', 'Pointing', 'Baselines', 'Noise',
+]
 
 #sys.excepthook = sys_excepthook
 #def mpi_excepthook(type, value, traceback):
