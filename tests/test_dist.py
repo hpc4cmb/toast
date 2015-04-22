@@ -14,16 +14,25 @@ class DistTest(unittest.TestCase):
 
     def setUp(self):
         self.mpicomm = MPI.COMM_WORLD
-        worldsize = self.mpicomm.size
-        groupsize = int( worldsize / 2 )
-        self.comm = Comm(MPI.COMM_WORLD, groupsize=groupsize)
+        self.worldsize = self.mpicomm.size
+        if (self.worldsize >= 2):
+            self.groupsize = int( self.worldsize / 2 )
+            self.ngroup = 2
+        else:
+            self.groupsize = 1
+            self.ngroup = 1
+        self.comm = Comm(MPI.COMM_WORLD, groupsize=self.groupsize)
 
     def test_construction(self):
         start = MPI.Wtime()
+        
+        self.assertEqual(self.comm.ngroup, self.ngroup)
+        self.assertEqual(self.comm.group_size, self.groupsize)
+        
         self.dist = Dist(self.comm)
         stop = MPI.Wtime()
         elapsed = stop - start
-        print('Proc {}:  test took {:.4f} s'.format( self.comm.comm_world.rank, elapsed ))
+        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
 
 
 

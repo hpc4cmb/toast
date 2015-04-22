@@ -18,6 +18,8 @@ class Streams(object):
     might have different flavors of data and flags.
     """
 
+    DEFAULT_FLAVOR = 'default'
+
     def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, flavors=None, samples=0):
         """
         Construct a Streams object given an MPI communicator.
@@ -41,35 +43,47 @@ class Streams(object):
         self.detectors = []
         if detectors != None:
             self.detectors = detectors
-        self.flavors = ['default']
+        self.flavors = [self.DEFAULT_FLAVOR]
         if flavors != None:
             self.flavors.extend(flavors)
         self.samples = samples
         self.data = {}
-        for det in detectors:
+        for det in self.detectors:
             self.data[det] = {}
-            for flv in flavors:
-                self.data[det][flv] = np.zeros(nsamp, dtype=np.float64)
-
-
-    def _valid_dets(self):
-        return self.detectors
-
-
-    def _valid_flavors(self):
-        return self.flavors
-
-
-    def _nsamp(self):
-        return self.samples
+            for flv in self.flavors:
+                self.data[det][flv] = np.zeros(self.samples, dtype=np.float64)
+        self.flags = {}
+        for det in self.detectors:
+            self.flags[det] = {}
+            for flv in self.flavors:
+                self.flags[det][flv] = np.zeros(self.samples, dtype=np.uint8)
 
 
     def _get(self, detector, flavor, start, n):
-        return self.data[detector][flavor]
+        return (self.data[detector][flavor][start:start+n], self.flags[detector][flavor][start:start+n])
 
 
-    def _put(self, detector, flavor, start, data):
-        self.data[detector][flavor][start:] = np.copy(data)
+    def _put(self, detector, flavor, start, data, flags):
+        n = data.shape[0]
+        self.data[detector][flavor][start:start+n] = np.copy(data)
+        self.flags[detector][flavor][start:start+n] = np.copy(flags)
+        return
+
+
+    def valid_dets(self):
+        return self.detectors
+
+
+    def valid_flavors(self):
+        return self.flavors
+
+
+    def is_timedist(self):
+        return self.timedist
+
+
+    def nsamp(self):
+        return self.samples
 
 
     def mpicomm(self):
@@ -77,31 +91,28 @@ class Streams(object):
 
 
     def read(self, detector=None, flavor='default', start=0, n=0):
-
-        if detector not in _valid_dets():
+        if detector not in self.valid_dets():
             raise ValueError('detector {} not found'.format(detector))
-
-        if flavor not in _valid_flavors():
+        if flavor not in self.valid_flavors():
             raise ValueError('flavor {} not found'.format(flavor))
-
-        if (start < 0) or (start + n > _nsamp()):
+        if (start < 0) or (start + n > self.nsamp()):
             raise ValueError('sample range {} - {} is invalid'.format(start, start+n-1))
+        return self._get(detector, flavor, start, n)
 
-        return _get(self, detector, flavor, start, n)
 
-
-    def write(self, detector=None, flavor='default', start=0, data=data):
-
-        if detector not in _valid_dets():
+    def write(self, detector=None, flavor='default', start=0, data=None, flags=None):
+        if detector not in self.valid_dets():
             raise ValueError('detector {} not found'.format(detector))
-
-        if flavor not in _valid_flavors():
+        if flavor not in self.valid_flavors():
             raise ValueError('flavor {} not found'.format(flavor))
-
-        if (start < 0) or (start + data.shape[0] > _nsamp()):
+        if data is None or flags is None:
+            raise ValueError('both data and flags must be specified')
+        if data.shape != flags.shape:
+            raise ValueError('data and flags arrays must be the same length')
+        if (start < 0) or (start + data.shape[0] > self.nsamp()):
             raise ValueError('sample range {} - {} is invalid'.format(start, start+data.shape[0]-1))
-
-        _put(self, detector, flavor, start, data)
+        self._put(detector, flavor, start, data, flags)
+        return
 
 
 
@@ -110,7 +121,7 @@ class StreamsWhiteNoise(Streams):
     Provide white noise streams.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, seed=0):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, rngstream=0):
         """
         Construct a StreamsWhiteNoise object given an MPI communicator.
 
@@ -132,29 +143,18 @@ class StreamsWhiteNoise(Streams):
         # We call the parent class constructor to set the MPI communicator and
         # distribution type, but we do NOT pass the detector list, as this 
         # would allocate memory for the data buffer in the base class.
-        super().__init__(mpicomm=mpicomm, timdist=timedist, detectors=None, flavors=None, samples=0)
+        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=None, flavors=None, samples=0)
 
         if detectors is None:
             raise ValueError('you must specify a list of detectors')
         self.detectors = detectors
+        self.rngstream = rngstream
         self.seeds = {}
         for dets in enumerate(self.detectors):
             self.seeds[dets[1]] = dets[0] 
-        self.flavors = ['default']
+        self.flavors = [self.DEFAULT_FLAVOR]
         self.samples = samples
         self.rms = rms
-
-
-    def _valid_dets(self):
-        return self.detectors
-
-
-    def _valid_flavors(self):
-        return self.flavors
-
-
-    def _nsamp(self):
-        return self.samples
 
 
     def _get(self, detector, flavor, start, n):
@@ -162,10 +162,11 @@ class StreamsWhiteNoise(Streams):
         # results from the generator.  This is just a place holder until
         # the streamed rng is implemented.
         np.random.seed(self.seeds[detector])
-        trash = np.random.norma(loc=0.0, scale=self.rms, size=(n-start))
-        return np.random.normal(loc=0.0, scale=self.rms, size=n)
+        trash = np.random.normal(loc=0.0, scale=self.rms, size=(n-start))
+        return ( np.random.normal(loc=0.0, scale=self.rms, size=n), np.zeros(n, dtype=np.uint8) )
 
 
-    def _put(self, detector, flavor, start, data):
+    def _put(self, detector, flavor, start, data, flags):
         raise RuntimeError('cannot write data to simulated white noise streams')
+        return
 

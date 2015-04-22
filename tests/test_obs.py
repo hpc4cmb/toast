@@ -17,7 +17,7 @@ class ObsTest(unittest.TestCase):
         obs = Obs()
         stop = MPI.Wtime()
         elapsed = stop - start
-        print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
 
 
 

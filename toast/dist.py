@@ -39,7 +39,7 @@ class Comm(object):
         """
 
         self.comm_world = world
-        if(groupsize <= 0):
+        if( (groupsize <= 0) or (groupsize > self.comm_world.size) ):
             groupsize = self.comm_world.size
  
         self.group_size = groupsize

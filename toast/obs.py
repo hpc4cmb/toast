@@ -15,7 +15,7 @@ class Obs(object):
     Pointing, Streams, Baselines, and Noise.
     """
 
-    def __init__(self, streams=None, pointing=None, baselines=None, noise=None ):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, streams=None, pointing=None, baselines=None, noise=None ):
         """
         Construct an Obs object given instances of the different
         data classes (or None).
@@ -24,6 +24,7 @@ class Obs(object):
         classes.
 
         Args:
+            mpicomm: The MPI communicator sharing this observation
             streams: An instance of the tod.streams.Streams class
             pointing: An instance of the tod.pointing.Pointing class
             baselines: An instance of the tod.baselines.Baselines class
@@ -35,27 +36,10 @@ class Obs(object):
         Raises:
             Nothing
         """
-
+        self.mpicomm = mpicomm
         self.streams = streams
         self.pointing = pointing
         self.baselines = baselines
         self.noise = noise
-
-
-
-class ObsTest(unittest.TestCase):
-
-    def test_construction(self):
-        start = MPI.Wtime()
-        obs = Obs()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
-
-
-
-if __name__ == "__main__":
-    unittest.main()
-
 
 
