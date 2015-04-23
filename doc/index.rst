@@ -9,8 +9,12 @@ Welcome to TOAST's documentation!
 Contents:
 
 .. toctree::
-   :maxdepth: 2
+    :maxdepth: 2
 
+    .. automodule:: toast
+
+    dist.rst
+    tod.rst
 
 
 Indices and tables

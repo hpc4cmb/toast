@@ -60,6 +60,46 @@ class Comm(object):
         self.comm_rank = self.comm_world.Split(self.group_rank, self.group)
 
 
+def distribute_discrete(sizes, groups):
+    totalsize = sum(sizes)
+    target = float(totalsize) / float(groups)
+    
+
+
+
+def distribute_uniform(totalsize, groups):
+    """
+    Uniformly distribute items between groups.
+
+    Given some number of items and some number of groups,
+    distribute the items between groups in the most Uniform
+    way possible.
+
+    Args:
+        totalsize: The total number of items.
+        groups: The number of groups.
+
+    Returns:
+        A list of tuples, one per group.  The first element
+        of the tuple is the first item assigned to the group,
+        and the second element is the number of items
+        assigned to the group. 
+    """
+    ret = []
+    for i in range(groups):
+        myn = totalsize // groups
+        off = 0
+        leftover = totalsize % groups
+        if ( i < leftover ):
+            myn = myn + 1
+            off = i * myn
+        else:
+            off = ((myn + 1) * leftover) + (myn * (i - leftover))
+        ret.extend( (off, myn) )
+    return ret
+
+
+
 class Dist(object):
     """
     Class which represents distributed data
