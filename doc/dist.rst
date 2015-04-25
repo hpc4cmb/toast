@@ -1,6 +1,6 @@
 .. _dist:
 
-Distributed Data
+Data Distribution
 =================================
 
 
@@ -13,5 +13,10 @@ Distributed Data
 .. autoclass:: toast.Dist
     :members:
 
+
+Example
+-----------
+
+.. literalinclude:: ../pipelines/toast_example_dist.py
 
 

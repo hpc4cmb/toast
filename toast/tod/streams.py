@@ -9,6 +9,8 @@ import unittest
 
 import numpy as np
 
+from ..dist import distribute_det_samples
+
 
 class Streams(object):
     """
@@ -16,28 +18,23 @@ class Streams(object):
 
     Each Streams class has one or more detectors, and each detctor
     might have different flavors of data and flags.
+
+    Attributes:
+        DEFAULT_FLAVOR (string): the name of the default flavor which always exists.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        timedist (bool): if True, the data is distributed by time, otherwise by
+            detector.
+        detectors (list): list of names to use for the detectors.
+        flavors (list): list of *EXTRA* flavors to use (beyond the default).
+        samples (int): pre-initialize the storage with this number of samples.
     """
 
     DEFAULT_FLAVOR = 'default'
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, flavors=None, samples=0):
-        """
-        Construct a Streams object given an MPI communicator.
 
-        Args:
-            mpicomm: the MPI communicator over which the data is distributed.
-            timedist: if True, the data is distributed by time, otherwise by
-                      detector.
-            detectors: list of names to use for the detectors.
-            flavors: list of *EXTRA* flavors to use (beyond the default).
-            samples: pre-initialize the storage with this number of samples.
-
-        Returns:
-            Nothing
-
-        Raises:
-            Nothing
-        """
         self.mpicomm = mpicomm
         self.timedist = timedist
         self.detectors = []
@@ -47,16 +44,19 @@ class Streams(object):
         if flavors != None:
             self.flavors.extend(flavors)
         self.samples = samples
+
+        (self.dist_dets, self.dist_samples) = distribute_det_samples(self.mpicomm, self.timedist, self.detectors, self.samples)
+
         self.data = {}
-        for det in self.detectors:
+        for det in self.dist_dets:
             self.data[det] = {}
             for flv in self.flavors:
-                self.data[det][flv] = np.zeros(self.samples, dtype=np.float64)
+                self.data[det][flv] = np.zeros(self.dist_samples[1], dtype=np.float64)
         self.flags = {}
-        for det in self.detectors:
+        for det in self.dist_dets:
             self.flags[det] = {}
             for flv in self.flavors:
-                self.flags[det][flv] = np.zeros(self.samples, dtype=np.uint8)
+                self.flags[det][flv] = np.zeros(self.dist_samples[1], dtype=np.uint8)
 
 
     def _get(self, detector, flavor, start, n):
@@ -82,26 +82,34 @@ class Streams(object):
         return self.timedist
 
 
-    def nsamp(self):
+    def total_samples(self):
         return self.samples
+
+
+    def local_samples(self):
+        return self.dist_samples
+
+
+    def local_dets(self):
+        return self.dist_dets
 
 
     def mpicomm(self):
         return self.mpicomm
 
 
-    def read(self, detector=None, flavor='default', start=0, n=0):
-        if detector not in self.valid_dets():
+    def read(self, detector=None, flavor='default', local_start=0, n=0):
+        if detector not in self.local_dets():
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.valid_flavors():
             raise ValueError('flavor {} not found'.format(flavor))
-        if (start < 0) or (start + n > self.nsamp()):
-            raise ValueError('sample range {} - {} is invalid'.format(start, start+n-1))
-        return self._get(detector, flavor, start, n)
+        if (local_start < 0) or (local_start + n > self.local_samples()[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get(detector, flavor, local_start, n)
 
 
-    def write(self, detector=None, flavor='default', start=0, data=None, flags=None):
-        if detector not in self.valid_dets():
+    def write(self, detector=None, flavor='default', local_start=0, data=None, flags=None):
+        if detector not in self.local_dets():
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.valid_flavors():
             raise ValueError('flavor {} not found'.format(flavor))
@@ -109,9 +117,9 @@ class Streams(object):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
             raise ValueError('data and flags arrays must be the same length')
-        if (start < 0) or (start + data.shape[0] > self.nsamp()):
-            raise ValueError('sample range {} - {} is invalid'.format(start, start+data.shape[0]-1))
-        self._put(detector, flavor, start, data, flags)
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples()[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+        self._put(detector, flavor, local_start, data, flags)
         return
 
 
@@ -119,26 +127,17 @@ class Streams(object):
 class StreamsWhiteNoise(Streams):
     """
     Provide white noise streams.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        timedist (bool): if True, the data is distributed by time, otherwise by
+                  detector.
+        detectors (list): list of names to use for the detectors.
+        rms (float): RMS of the white noise.
+        samples (int): maximum allowed samples.
     """
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, rngstream=0):
-        """
-        Construct a StreamsWhiteNoise object given an MPI communicator.
-
-        Args:
-            mpicomm: the MPI communicator over which the data is distributed.
-            timedist: if True, the data is distributed by time, otherwise by
-                      detector.
-            detectors: list of names to use for the detectors.
-            rms: RMS of the white noise.
-            samples: pre-initialize the storage with this number of samples.
-
-        Returns:
-            Nothing
-
-        Raises:
-            Nothing
-        """
         
         # We call the parent class constructor to set the MPI communicator and
         # distribution type, but we do NOT pass the detector list, as this 
@@ -148,6 +147,7 @@ class StreamsWhiteNoise(Streams):
         if detectors is None:
             raise ValueError('you must specify a list of detectors')
         self.detectors = detectors
+
         self.rngstream = rngstream
         self.seeds = {}
         for dets in enumerate(self.detectors):
@@ -155,6 +155,8 @@ class StreamsWhiteNoise(Streams):
         self.flavors = [self.DEFAULT_FLAVOR]
         self.samples = samples
         self.rms = rms
+
+        (self.dist_dets, self.dist_samples) = distribute_det_samples(self.mpicomm, self.timedist, self.detectors, self.samples)
 
 
     def _get(self, detector, flavor, start, n):

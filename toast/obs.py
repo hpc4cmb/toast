@@ -11,31 +11,23 @@ import unittest
 class Obs(object):
     """
     Class which represents a single observation.
-    Each observation contains one instance of each type of class:
-    Pointing, Streams, Baselines, and Noise.
+
+    Each observation contains one instance (or None) of each 
+    type of class: Pointing, Streams, Baselines, and Noise.
+
+    An Obs class is basically just a container of these data
+    classes.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): The MPI communicator sharing this observation
+        streams (toast.tod.Streams): An instance of the Streams class
+        pointing (toast.tod.Pointing): An instance of the Pointing class
+        baselines (toast.tod.Baselines): An instance of the Baselines class
+        noise (toast.tod.Noise): An instance of the Noise class
     """
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, streams=None, pointing=None, baselines=None, noise=None ):
-        """
-        Construct an Obs object given instances of the different
-        data classes (or None).
 
-        An Obs class is basically just a container of these data
-        classes.
-
-        Args:
-            mpicomm: The MPI communicator sharing this observation
-            streams: An instance of the tod.streams.Streams class
-            pointing: An instance of the tod.pointing.Pointing class
-            baselines: An instance of the tod.baselines.Baselines class
-            noise: An instance of the fod.noise.Noise class
-
-        Returns:
-            Nothing
-
-        Raises:
-            Nothing
-        """
         self.mpicomm = mpicomm
         self.streams = streams
         self.pointing = pointing

@@ -11,32 +11,22 @@ import unittest
 class Comm(object):
     """
     Class which represents a two-level hierarchy of MPI communicators.
+
+    A Comm object splits the full set of processes into groups
+    of size "group".  If group_size does not divide evenly
+    into the size of the given communicator, then those processes
+    remain idle.
+
+    A Comm object stores three MPI communicators:  The "world"
+    communicator given here, which contains all processes to
+    consider, a "group" communicator (one per group)
+
+    Args:
+        world (mpi4py.MPI.Comm): the MPI communicator containing all processes.
+        group (int): the size of each process group.
     """
 
     def __init__(self, world=MPI.COMM_WORLD, groupsize=0):
-        """
-        Construct a Comm object given an existing MPI communicator.
-
-        A Comm object splits the full set of processes into groups
-        of size "group".  If group_size does not divide evenly
-        into the size of the given communicator, then those processes
-        remain idle.
-
-        A Comm object stores three MPI communicators:  The "world"
-        communicator given here, which contains all processes to
-        consider, a "group" communicator (one per group)
-
-        Args:
-            world: the MPI communicator containing all processes.
-            group: the size of each process group.
-
-        Returns:
-            Nothing
-
-        Raises:
-            RuntimeError: if the world communicator is not defined
-            or the group size is larger than the communicator.
-        """
 
         self.comm_world = world
         if( (groupsize <= 0) or (groupsize > self.comm_world.size) ):
@@ -76,14 +66,14 @@ def distribute_uniform(totalsize, groups):
     way possible.
 
     Args:
-        totalsize: The total number of items.
-        groups: The number of groups.
+        totalsize (int): The total number of items.
+        groups (int): The number of groups.
 
     Returns:
-        A list of tuples, one per group.  The first element
-        of the tuple is the first item assigned to the group,
-        and the second element is the number of items
-        assigned to the group. 
+        list of tuples: there is one tuple per group.  The 
+        first element of the tuple is the first item 
+        assigned to the group, and the second element is 
+        the number of items assigned to the group. 
     """
     ret = []
     for i in range(groups):
@@ -95,32 +85,34 @@ def distribute_uniform(totalsize, groups):
             off = i * myn
         else:
             off = ((myn + 1) * leftover) + (myn * (i - leftover))
-        ret.extend( (off, myn) )
+        ret.append( (off, myn) )
     return ret
 
+
+def distribute_det_samples(mpicomm, timedist, detectors, samples):
+    dist_dets = detectors
+    dist_samples = (0, samples)
+    if timedist:
+        dist_all = distribute_uniform(samples, mpicomm.size)
+        dist_samples = dist_all[mpicomm.rank]
+    else:
+        dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]
+        dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
+    return (dist_dets, dist_samples)
 
 
 class Dist(object):
     """
     Class which represents distributed data
+
+    A Dist object contains a list of observations assigned to
+    each process group in the Comm.
+
+    Args:
+        comm (toast.Comm): the toast Comm class for distributing the data.
     """
 
     def __init__(self, comm=Comm()):
-        """
-        Construct a Dist object given a toast Comm.
-
-        A Dist object contains a list of observations assigned to
-        each process group in the Comm.
-
-        Args:
-            comm: the toast Comm class for distributing the data.
-
-        Returns:
-            Nothing
-
-        Raises:
-            Nothing
-        """
 
         self.comm = comm
         self.obs = []

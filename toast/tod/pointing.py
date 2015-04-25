@@ -9,6 +9,8 @@ import unittest
 
 import numpy as np
 
+from ..dist import distribute_det_samples
+
 
 class Pointing(object):
     """
@@ -17,25 +19,17 @@ class Pointing(object):
 
     Each Pointing class has one or more detectors, and this class
     provides pointing quaternions and flags for each detector.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        timedist (bool): if True, the data is distributed by time, otherwise by
+            detector.
+        detectors (list): list of names to use for the detectors.
+        samples (int): pre-initialize the storage with this number of samples.
     """
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0):
-        """
-        Construct a Pointing object given an MPI communicator.
 
-        Args:
-            mpicomm: the MPI communicator over which the data is distributed.
-            timedist: if True, the data is distributed by time, otherwise by
-                      detector.
-            detectors: list of names to use for the detectors.
-            samples: pre-initialize the storage with this number of samples.
-
-        Returns:
-            Nothing
-
-        Raises:
-            Nothing
-        """
         self.mpicomm = mpicomm
         self.timedist = timedist
         self.detectors = []
@@ -43,12 +37,17 @@ class Pointing(object):
             self.detectors = detectors
         self.samples = samples
         self.ndata = 4 * self.samples
+
+        (self.dist_dets, self.dist_samples) = distribute_det_samples(self.mpicomm, self.timedist, self.detectors, self.samples)
+
+        self.dist_ndata = (4*self.dist_samples[0], 4*self.dist_samples[1])
+
         self.data = {}
         for det in self.detectors:
-            self.data[det] = np.zeros(self.ndata, dtype=np.float64)
+            self.data[det] = np.zeros(self.dist_ndata[1], dtype=np.float64)
         self.flags = {}
         for det in self.detectors:
-            self.flags[det] = np.zeros(self.samples, dtype=np.uint8)
+            self.flags[det] = np.zeros(self.dist_samples[1], dtype=np.uint8)
 
 
     def _get(self, detector, start, n):
@@ -70,8 +69,16 @@ class Pointing(object):
         return self.timedist
 
 
-    def nsamp(self):
+    def total_samples(self):
         return self.samples
+
+
+    def local_samples(self):
+        return self.dist_samples
+
+
+    def local_dets(self):
+        return self.dist_dets
 
 
     def mpicomm(self):

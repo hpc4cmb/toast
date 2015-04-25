@@ -4,4 +4,5 @@
 
 from .streams import Streams, StreamsWhiteNoise
 
+from .pointing import Pointing
 
