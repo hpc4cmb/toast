@@ -4,6 +4,7 @@
 
 
 from mpi4py import MPI
+from collections import namedtuple
 
 import unittest
 
@@ -100,6 +101,8 @@ def distribute_det_samples(mpicomm, timedist, detectors, samples):
         dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
     return (dist_dets, dist_samples)
 
+
+Obs = namedtuple('Obs', ['mpicomm', 'streams', 'pointing', 'baselines', 'noise'])
 
 class Dist(object):
     """
