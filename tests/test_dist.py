@@ -26,7 +26,7 @@ class DistTest(unittest.TestCase):
     def test_construction(self):
         start = MPI.Wtime()
         
-        self.assertEqual(self.comm.ngroup, self.ngroup)
+        self.assertEqual(self.comm.ngroups, self.ngroup)
         self.assertEqual(self.comm.group_size, self.groupsize)
         
         self.dist = Dist(self.comm)

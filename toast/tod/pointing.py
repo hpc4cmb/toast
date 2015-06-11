@@ -30,24 +30,24 @@ class Pointing(object):
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0):
 
-        self.mpicomm = mpicomm
-        self.timedist = timedist
-        self.detectors = []
-        if detectors != None:
-            self.detectors = detectors
-        self.samples = samples
-        self.ndata = 4 * self.samples
+        self._mpicomm = mpicomm
+        self._timedist = timedist
+        self._dets = []
+        if detectors is not None:
+            self._dets = detectors
+        self._nsamp = samples
+        self._ndata = 4 * self._nsamp
 
-        (self.dist_dets, self.dist_samples) = distribute_det_samples(self.mpicomm, self.timedist, self.detectors, self.samples)
+        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp)
 
-        self.dist_ndata = (4*self.dist_samples[0], 4*self.dist_samples[1])
+        self._dist_ndata = (4*self._dist_samples[0], 4*self._dist_samples[1])
 
         self.data = {}
-        for det in self.detectors:
-            self.data[det] = np.zeros(self.dist_ndata[1], dtype=np.float64)
+        for det in self._dets:
+            self.data[det] = np.zeros(self._dist_ndata[1], dtype=np.float64)
         self.flags = {}
-        for det in self.detectors:
-            self.flags[det] = np.zeros(self.dist_samples[1], dtype=np.uint8)
+        for det in self._dets:
+            self.flags[det] = np.zeros(self._dist_samples[1], dtype=np.uint8)
 
 
     def _get(self, detector, start, n):
@@ -61,32 +61,33 @@ class Pointing(object):
         return
 
 
-    def valid_dets(self):
-        return self.detectors
+    @property
+    def detectors(self):
+        return self._dets
 
+    @property
+    def timedist(self):
+        return self._timedist
 
-    def is_timedist(self):
-        return self.timedist
-
-
+    @property
     def total_samples(self):
-        return self.samples
+        return self._nsamp
 
-
+    @property
     def local_samples(self):
-        return self.dist_samples
+        return self._dist_nsamp
 
-
+    @property
     def local_dets(self):
-        return self.dist_dets
+        return self._dist_dets
 
-
+    @property
     def mpicomm(self):
-        return self.mpicomm
+        return self._mpicomm
 
 
     def read(self, detector=None, start=0, n=0):
-        if detector not in self.valid_dets():
+        if detector not in self.detectors():
             raise ValueError('detector {} not found'.format(detector))
         if (start < 0) or (start + n > self.nsamp()):
             raise ValueError('sample range {} - {} is invalid'.format(start, start+n-1))

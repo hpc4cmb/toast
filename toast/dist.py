@@ -29,26 +29,93 @@ class Comm(object):
 
     def __init__(self, world=MPI.COMM_WORLD, groupsize=0):
 
-        self.comm_world = world
-        if( (groupsize <= 0) or (groupsize > self.comm_world.size) ):
-            groupsize = self.comm_world.size
- 
-        self.group_size = groupsize
+        self._wcomm = world
+        self._wrank = self._wcomm.rank
+        self._wsize = self._wcomm.size
 
-        if self.group_size > self.comm_world.size:
-            raise RuntimeError('requested group size ({}) is larger than world communicator ({})'.format(self.group_size, self.comm_world.size))
+        self._gsize = groupsize
 
-        self.ngroup = int(self.comm_world.size / self.group_size)
-        self.group = int(self.comm_world.rank / self.group_size)
+        if( (self._gsize < 0) or (self._gsize > self._wsize) ):
+            raise ValueError("Invalid groupsize ({}).  Should be between {} and {}.".format(groupsize, 0, self._wsize))
 
-        self.group_rank = self.comm_world.rank % self.group_size
+        if self._gsize == 0:
+            self._gsize = self._wsize
 
-        if self.group >= self.ngroup:
-            self.group = MPI.UNDEFINED
-            self.group_rank = MPI.UNDEFINED
+        self._ngroups = int(self._wsize / self._gsize)
+        self._group = int(self._wrank / self._gsize)
 
-        self.comm_group = self.comm_world.Split(self.group, self.group_rank)
-        self.comm_rank = self.comm_world.Split(self.group_rank, self.group)
+        self._grank = self._wrank % self._gsize
+
+        if self._group >= self._ngroups:
+            self._group = MPI.UNDEFINED
+            self._grank = MPI.UNDEFINED
+
+        self._gcomm = self._wcomm.Split(self._group, self._grank)
+        self._rcomm = self._wcomm.Split(self._grank, self._group)
+
+    @property
+    def world_size(self):
+        """
+        The size of the world communicator.
+        """
+        return self._wsize
+
+    @property
+    def world_rank(self):
+        """
+        The rank of this process in the world communicator.
+        """
+        return self._wrank
+
+    @property
+    def ngroups(self):
+        """
+        The number of process groups.
+        """
+        return self._ngroups
+
+    @property
+    def group(self):
+        """
+        The group containing this process.
+        """
+        return self._group
+
+    @property
+    def group_size(self):
+        """
+        The size of the group containing this process.
+        """
+        return self._gsize
+
+    @property
+    def group_rank(self):
+        """
+        The rank of this process in the group communicator.
+        """
+        return self._grank
+
+    @property
+    def comm_world(self):
+        """
+        The world communicator.
+        """
+        return self._wcomm
+
+    @property
+    def comm_group(self):
+        """
+        The communicator shared by processes within this group.
+        """
+        return self._gcomm
+
+    @property
+    def comm_rank(self):
+        """
+        The communicator shared by processes with the same group_rank.
+        """
+        return self._rcomm
+
 
 
 def distribute_discrete(sizes, groups):

@@ -20,8 +20,7 @@ from mpi4py import MPI
 
 from ._version import __version__
 
-from .dist import Comm, Dist, distribute_uniform, distribute_discrete, distribute_det_samples
-from .obs import Obs
+from .dist import Comm, Obs, Dist, distribute_uniform, distribute_discrete, distribute_det_samples
 
 __all__ = [
     'Comm', 'Dist', 'Obs', 'distribute_uniform', 'distribute_discrete',
