@@ -184,6 +184,13 @@ class Dist(object):
 
     def __init__(self, comm=Comm()):
 
-        self.comm = comm
+        self._comm = comm
         self.obs = []
+
+    @property
+    def comm(self):
+        """
+        The toast.Comm over which the data is distributed.
+        """
+        return self._comm
 

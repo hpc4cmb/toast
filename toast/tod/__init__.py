@@ -4,5 +4,5 @@
 
 from .streams import Streams, StreamsWhiteNoise
 
-from .pointing import Pointing
+from .pointing import Pointing, PointingSimSingle
 
