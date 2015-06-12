@@ -29,12 +29,12 @@ class PointingTest(unittest.TestCase):
     def test_props(self):
         start = MPI.Wtime()
         
-        self.assertEqual(self.pntg.valid_dets(), self.dets)
-        self.assertEqual(self.pntg.local_dets(), self.dets)
-        self.assertEqual(self.strms.total_samples(), self.totsamp)
-        self.assertEqual(self.strms.local_samples()[0], self.myoff)
-        self.assertEqual(self.strms.local_samples()[1], self.mynsamp)
-        self.assertTrue(self.strms.is_timedist())
+        self.assertEqual(self.pntg.detectors, self.dets)
+        self.assertEqual(self.pntg.local_dets, self.dets)
+        self.assertEqual(self.pntg.total_samples, self.totsamp)
+        self.assertEqual(self.pntg.local_samples[0], self.myoff)
+        self.assertEqual(self.pntg.local_samples[1], self.mynsamp)
+        self.assertTrue(self.pntg.timedist)
 
         stop = MPI.Wtime()
         elapsed = stop - start
@@ -44,7 +44,7 @@ class PointingTest(unittest.TestCase):
         start = MPI.Wtime()
 
         for d in self.dets:
-            data, flags = self.pntg.read(detector=d, flavor=f, local_start=0, n=self.mynsamp)
+            data, flags = self.pntg.read(detector=d, local_start=0, n=self.mynsamp)
             np.testing.assert_equal(flags, self.flagvec)
             np.testing.assert_almost_equal(data, self.datavec)
 

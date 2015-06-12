@@ -17,7 +17,7 @@ class StreamsTest(unittest.TestCase):
         self.dets = ['1a', '1b', '2a', '2b']
         self.flavs = ['proc1', 'proc2']
         self.flavscheck = [Streams.DEFAULT_FLAVOR] + self.flavs
-        self.mynsamp = 100
+        self.mynsamp = 10
         self.myoff = self.mynsamp * MPI.COMM_WORLD.rank
         self.totsamp = self.mynsamp * MPI.COMM_WORLD.size
         self.strms = Streams(mpicomm=MPI.COMM_WORLD, timedist=True, detectors=self.dets, flavors=self.flavs, samples=self.totsamp)
@@ -33,13 +33,13 @@ class StreamsTest(unittest.TestCase):
     def test_props(self):
         start = MPI.Wtime()
         
-        self.assertEqual(self.strms.valid_dets(), self.dets)
-        self.assertEqual(self.strms.local_dets(), self.dets)
-        self.assertEqual(self.strms.valid_flavors(), self.flavscheck)
-        self.assertEqual(self.strms.total_samples(), self.totsamp)
-        self.assertEqual(self.strms.local_samples()[0], self.myoff)
-        self.assertEqual(self.strms.local_samples()[1], self.mynsamp)
-        self.assertTrue(self.strms.is_timedist())
+        self.assertEqual(self.strms.detectors, self.dets)
+        self.assertEqual(self.strms.local_dets, self.dets)
+        self.assertEqual(self.strms.flavors, self.flavscheck)
+        self.assertEqual(self.strms.total_samples, self.totsamp)
+        self.assertEqual(self.strms.local_samples[0], self.myoff)
+        self.assertEqual(self.strms.local_samples[1], self.mynsamp)
+        self.assertTrue(self.strms.timedist)
 
         stop = MPI.Wtime()
         elapsed = stop - start
