@@ -64,7 +64,8 @@ class OperatorCopy(Operator):
 
 
     def _shuffle(self, data, flags, local_dets, local_samples):
-        pass
+        raise NotImplementedError("re-mapping of data distribution not yet supported")
+        return
 
 
     def exec(self, indist):
@@ -76,19 +77,21 @@ class OperatorCopy(Operator):
             base = inobs.baselines
             nse = inobs.noise
 
-            outstr = Streams(mpicomm=str.mpicomm, timedist=timedist, 
+            if str.timedist != pntg.timedist:
+                raise RuntimeError("pointing and streams objects have different distributions!")
+
+            outstr = Streams(mpicomm=str.mpicomm, timedist=self.timedist, 
                 detectors=str.detectors, flavors=str.flavors, 
                 samples=str.total_samples)
             
-            outpntg = Pointing(mpicomm=pntg.mpicomm, timedist=timedist,
-                detectors=pntg.detectors, flavors=pntg.flavors,
-                samples=pntg.total_samples)
+            outpntg = Pointing(mpicomm=pntg.mpicomm, timedist=self.timedist,
+                detectors=pntg.detectors, samples=pntg.total_samples)
 
             # FIXME:  add noise and baselines once implemented
             outbaselines = None
             outnoise = None
             
-            if inobs.timedist == timedist:
+            if str.timedist == self.timedist:
                 # we have the same distribution, and just need
                 # to read and write
                 for det in str.local_dets:
