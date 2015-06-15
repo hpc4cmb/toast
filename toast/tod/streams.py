@@ -290,5 +290,7 @@ class StreamsPlanckEFF(Streams):
             return stop_index2 - start_index1
         elif ring_range is not None:
             raise Exception('Ring span selection not yet implemented')
-        else od_range is not None:
+        elif od_range is not None:
             raise Exception('OD span selection not yet implemented')
+
+        raise Exception('No data span selected')
