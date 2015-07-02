@@ -8,6 +8,8 @@ from collections import namedtuple
 
 import unittest
 
+import numpy as np
+
 
 class Comm(object):
     """
@@ -119,9 +121,23 @@ class Comm(object):
 
 
 def distribute_discrete(sizes, groups):
-    totalsize = sum(sizes)
+    totalsize = np.sum(sizes)
     target = float(totalsize) / float(groups)
-    
+    ret = []
+    off = 0
+    ioff = 0
+    for i in range(groups):
+        if ioff == len(sizes):
+            ret.append( (off, 0) )
+            continue
+        mysize = sizes[ioff]
+        ioff += 1
+        while (len(sizes)-ioff > groups-i-1) and (np.abs(mysize-target) > np.abs(mysize+sizes[ioff]-target)):
+            mysize += sizes[ioff]
+            ioff += 1
+        ret.append( (off, mysize) )
+        off += mysize
+    return ret
 
 
 
@@ -157,11 +173,14 @@ def distribute_uniform(totalsize, groups):
     return ret
 
 
-def distribute_det_samples(mpicomm, timedist, detectors, samples):
+def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     dist_dets = detectors
     dist_samples = (0, samples)
     if timedist:
-        dist_all = distribute_uniform(samples, mpicomm.size)
+        if sizes is not None:
+            dist_all = distribute_discrete(sizes, mpicomm.size)
+        else:
+            dist_all = distribute_uniform(samples, mpicomm.size)
         dist_samples = dist_all[mpicomm.rank]
     else:
         dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]

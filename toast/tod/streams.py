@@ -33,7 +33,7 @@ class Streams(object):
 
     DEFAULT_FLAVOR = 'default'
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, flavors=None, samples=0):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, flavors=None, samples=0, sizes=None):
 
         self._mpicomm = mpicomm
         self._timedist = timedist
@@ -45,8 +45,9 @@ class Streams(object):
         if flavors is not None:
             self._flavors.extend(flavors)
         self._nsamp = samples
+        self._sizes = sizes
         
-        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp)
+        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
         self.data = {}
         for det in self._dist_dets:

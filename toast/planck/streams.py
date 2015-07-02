@@ -9,6 +9,14 @@ import unittest
 
 import numpy as np
 
+import sqlite3
+
+import io
+
+import glob
+
+import astropy.io.fits as pf
+
 from ..dist import distribute_det_samples
 
 from ..tod.streams import Streams
@@ -43,15 +51,15 @@ class StreamsPlanckEFF(Streams):
             raise ValueError('You must provide a path to the exchange files')
         
         if freq is None:
-            raise ValueError('You must set specify the frequency to run on')
+            raise ValueError('You must specify the frequency to run on')
 
         self._load_ringdb( ringdb, mpicomm )
 
         self.freq = freq
 
-        samples = self._count_samples( obt_range, ring_range, od_range )
+        samples = self._count_samples( obt_range, ring_range, od_range ) # sets self._sizes
 
-        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=None, flavors=None, samples=0)
+        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, flavors=None, samples=0, sizes=self._sizes)
 
         self._dets = detectors
         self._flavors = [self.DEFAULT_FLAVOR]
@@ -95,9 +103,9 @@ class StreamsPlanckEFF(Streams):
 
         ods = []
         if self.freq < 100:
-            query = self.conn.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(self.freq, start_time1, stop_time2) )
+            query = self.ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(self.freq, start_time1, stop_time2) )
         else:
-            query = self.conn.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == 100'.format(start_time1, stop_time2) )
+            query = self.ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == 100'.format(start_time1, stop_time2) )
         for q in query:
             ods.append( [int(q[0]), int(q[1])] )
 
@@ -172,7 +180,7 @@ class StreamsPlanckEFF(Streams):
         if np.shape( flag )[-1] != stop - start:
             raise Exception('ERROR: inconsistent dimensions: shape(data) = ', np.shape(data), ', shape(flag) = ', np.shape(flag), ', stop-start = ', stop-start)
 
-        if self.shape[0] > 1: data = data.T # Conform to expected geometry            
+        if len(np.shape(data)) > 1: data = data.T # Conform to expected geometry            
 
         return (data, flag)
 
@@ -212,9 +220,9 @@ class StreamsPlanckEFF(Streams):
 
         ods = []
         if self.freq < 100:
-            query = self.conn.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(self.freq, start_time1, stop_time2) )
+            query = self.ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(self.freq, start_time1, stop_time2) )
         else:
-            query = self.conn.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == 100'.format(start_time1, stop_time2) )
+            query = self.ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == 100'.format(start_time1, stop_time2) )
         for q in query:
             ods.append( [int(q[0]), int(q[1])] )
 
@@ -292,7 +300,7 @@ class StreamsPlanckEFF(Streams):
         if itask == 0:
 
             conn = sqlite3.connect(path)
-            tempfile = StringIO.StringIO()
+            tempfile = io.StringIO()
             for line in conn.iterdump():
                 tempfile.write('{}\n'.format(line))
             conn.close()
@@ -338,11 +346,22 @@ class StreamsPlanckEFF(Streams):
         else:
             # no span specified, use all available data
 
+            # This first version of the query will include the repointing maneuvers in the definitions of the science scans immediately before them.
+            #cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where pointID_unique like "%S%" or pointID_unique like "%O%" order by start_index'.format( self.ringtable )
+            # This second version of the query will list the repointing maneuvers as separate intervals
             cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} order by start_index'.format( self.ringtable )
+            # FIXME: a third option would be to include the repointing maneuvers in the following science scans (MOC definition) but this would require extra processing of the query results. 
 
-            start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = self.ringdb.execute( cmd ).fetchall()[-1]
+            intervals = self.ringdb.execute( cmd ).fetchall()
 
-            start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = self.ringdb.execute( cmd ).fetchall()[0]
+            start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
+
+            start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
+
+            self._sizes = []
+            for interval in intervals:
+                start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
+                self._sizes.append( stop_index - start_index + 1 )
 
             self.offset = start_index1
             
