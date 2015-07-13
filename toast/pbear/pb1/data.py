@@ -2,14 +2,213 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-
-from mpi4py import MPI
-
-import unittest
-
 import numpy as np
 
-import PyArcReader as pyarc
+import tidas as td
+
+import PyArcReader as arc
+import AnalysisBackend.misc.parse_flat_map as parsemap
+import AnalysisBackend.indexing.featureflags_chile as features
+
+
+class Volume ( object ):
+
+    def __init__ ( self, path ):
+
+    def _datatype ( self, flags ):
+        ret = 0
+        arctype = arc.typeString ( flags )
+        if ( ( arctype == "BOOL" ) or ( arctype == "UCHAR" ) ):
+            ret = "uint8"
+        elif ( arctype == "CHAR" ):
+            ret = "int8"
+        elif ( arctype == "SHORT" ):
+            ret = "int16"
+        elif ( arctype == "USHORT" ):
+            ret = "uint16"
+        elif ( arctype == "INT" ):
+            ret = "int32"
+        elif ( arctype == "UINT" ):
+            ret = "uint32"
+        elif ( arctype == "FLOAT" ):
+            ret = "float32"
+        elif ( arctype == "COMPLEX" ):
+            ret = "float64"
+        elif ( arctype == "DOUBLE" ):
+            ret = "float64"
+        else:
+            raise RuntimeError ( 'Unknown PyArcReader datatype' )
+        return ret
+
+
+    def _target ( self, indx, val ):
+        comp = 0
+        ret = 0
+        if ( val & features.F_SCIENCE ):
+            comp += 1
+            ret = features.F_SCIENCE
+        if ( val & features.F_RADIOPOINTING ):
+            comp += 1
+            ret = features.F_RADIOPOINTING
+        if ( val & features.F_OPTICALPOINTING ):
+            comp += 1
+            ret = features.F_OPTICALPOINTING
+        if ( val & features.F_ARRAYMAP ):
+            comp += 1
+            ret = features.F_ARRAYMAP
+        if ( val & features.F_PIXELMAP ):
+            comp += 1
+            ret = features.F_PIXELMAP
+        if ( val & features.F_AZTILT ):
+            comp += 1
+            ret = features.F_AZTILT
+        if ( val & features.F_STIMFLUXCAL ):
+            comp += 1
+            ret = features.F_STIMFLUXCAL
+        if ( val & features.F_STIMPOLCAL ):
+            comp += 1
+            ret = features.F_STIMPOLCAL
+        if ( val & features.F_TUNEPERF ):
+            comp += 1
+            ret = features.F_TUNEPERF
+        if ( val & features.F_ELEVATION_BALANCE ):
+            comp += 1
+            ret = features.F_ELEVATION_BALANCE
+        if ( comp > 1 ):
+            print >> sys.stderr, "WARNING:  duplicate observation targets (features = {}) specified at frame {} of {}".format( val, indx, self.path )
+        return ret
+
+
+    def _scan ( self, indx, val ):
+        comp = 0
+        ret = 0
+        if ( val & features.F_CES ):
+            comp += 1
+            ret = features.F_CES
+        if ( val & features.F_TRACKRASTER ):
+            comp += 1
+            ret = features.F_TRACKRASTER
+        if ( val & features.F_FIXEDTRACK ):
+            comp += 1
+            ret = features.F_FIXEDTRACK
+        if ( val & features.F_ELNOD ):
+            comp += 1
+            ret = features.F_ELNOD
+        if ( val & features.F_SLEWING ):
+            comp += 1
+            ret = features.F_SLEWING
+        if ( comp > 1 ):
+            print >> sys.stderr, "WARNING:  duplicate scan types (features = {}) specified at frame {} of {}".format( val, indx, self.path )
+        return ret
+
+
+    def _config ( self, val ):
+        ret = features.F_STIMCHOP | features.F_STIMPOLON | features.F_STIMPOLSPIN | features.F_GUNNON | features.F_GUNNCHOP | features.F_TUNING | features.F_GUNNPOLCAL | features.F_DSCPOLCAL
+        return ret & val
+
+
+    def _features ( self ):
+
+        print "scanning {} frames for features transitions".format( self.dir.nframes )
+
+        flags = self.read ( 'array-frame-features', 0, self.dir.nframes, 0, 0 )
+
+        transitions = [ i for (i, (b, e)) in enumerate( zip( flags[:-1], flags[1:] ) ) if ( b != e ) ]
+
+        in_obs = False
+
+        obs = []
+        curobs = {}
+        curobs[ 'scans' ] = []
+        curscan = {}
+        curscan[ 'configs' ] = []
+        curconf = {}
+
+        for trans in transitions:
+
+            if ( ( flags[ trans ] & features.F_ANALYZE ) and ( not ( flags[ trans+1 ] & features.F_ANALYZE ) ) ):
+                # we are leaving an observation
+                in_obs = False
+                curobs[ 'last' ] = trans
+                curscan[ 'last' ] = trans
+                curconf[ 'last' ] = trans
+                print "    leaving config %d at %d" % ( curconf['bits'], curconf['last'] )
+                curscan[ 'configs' ] += [ curconf ]
+                print "  leaving scan type %d at %d" % ( curscan['type'], curscan['last'] )
+                curobs[ 'scans' ] += [ curscan ]
+                print "leaving obs at %d" % ( curobs['last'] )
+                obs += [ curobs ]
+                curobs = {}
+                curobs[ 'scans' ] = []
+                curscan = {}
+                curscan[ 'configs' ] = []
+                curconf = {}
+            elif ( ( not ( flags[ trans ] & features.F_ANALYZE ) ) and ( flags[ trans+1 ] & features.F_ANALYZE ) ):
+                # we are entering a new observation
+                in_obs = True
+                curobs[ 'first' ] = trans+1
+                curscan[ 'first' ] = trans+1
+                curscan[ 'type' ] = self._scan ( trans+1, flags[ trans+1 ] )
+                curconf[ 'first' ] = trans+1
+                curconf[ 'bits' ] = self._config ( flags[ trans+1 ] )
+                print "entering obs at %d" % ( curobs['first'] )
+                print "  entering scan type %d at %d" % ( curscan['type'], curscan['first'] )
+                print "    entering config %d at %d" % ( curconf['bits'], curconf['first'] )
+
+            if ( in_obs ):
+                curobs[ 'target' ] = self._target ( trans+1, flags[ trans+1 ] )
+
+                oldtype = self._scan ( trans, flags[ trans ] )
+                newtype = self._scan ( trans+1, flags[ trans+1 ] )
+
+                oldconf = self._config ( flags[ trans ] )
+                newconf = self._config ( flags[ trans+1 ] )
+
+                if ( oldtype != newtype ):
+                    # we are entering a new scan type
+                    curconf[ 'last' ] = trans
+                    print "    leaving config %d at %d" % ( curconf['bits'], curconf['last'] )
+                    curscan[ 'configs' ] += [ curconf ]
+                    curconf = {}
+                    curscan[ 'last' ] = trans
+                    print "  leaving scan type %d at %d" % ( curscan['type'], curscan['last'] )
+                    curobs[ 'scans' ] += [ curscan ]
+                    curscan = {}
+                    curscan[ 'configs' ] = []
+                    curscan[ 'first' ] = trans+1
+                    curscan[ 'type' ] = newtype
+                    curconf[ 'first' ] = trans+1
+                    curconf[ 'bits' ] = newconf
+                    print "  entering scan type %d at %d" % ( curscan['type'], curscan['first'] )
+                    print "    entering config %d at %d" % ( curconf['bits'], curconf['first'] )
+                elif ( oldconf != newconf ):
+                    # we are entering a new configuration
+                    curconf[ 'last' ] = trans
+                    print "    leaving config %d at %d" % ( curconf['bits'], curconf['last'] )
+                    curscan[ 'configs' ] += [ curconf ]
+                    curconf = {}
+                    curconf[ 'first' ] = trans+1
+                    curconf[ 'bits' ] = newconf
+                    print "    entering config %d at %d" % ( curconf['bits'], curconf['first'] )
+
+        curconf[ 'last' ] = self.dir.nframes - 1
+        print "    leaving config %d at %d" % ( curconf['bits'], curconf['last'] )
+        curscan[ 'last' ] = self.dir.nframes - 1
+        curscan[ 'configs' ] += [ curconf ]
+        print "  leaving scan type %d at %d" % ( curscan['type'], curscan['last'] )
+        curobs[ 'last' ] = self.dir.nframes - 1
+        curobs[ 'scans' ] += [ curscan ]
+        print "leaving obs (target = %d) at %d" % ( curobs['target'], curobs['last'] )
+        obs += [ curobs ]
+
+        return
+
+    def append ( ar, hwmap=None ):
+        xmlmap = None
+        if ( hwmap is not None ):
+            xmlmap = parsemap.build_index_maps( hwmap )
+
+
 
 
 class Archive ( object ):
@@ -293,3 +492,6 @@ class Archive ( object ):
             output[ field[0] ].shape = ( frames * spf )
 
         return output
+
+
+
