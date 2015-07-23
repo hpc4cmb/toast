@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-from . import mpiunittest as unittest
+import unittest
 import sys
 
 from toast.tod.streams import StreamsWhiteNoise
@@ -69,6 +69,7 @@ class OperatorMemoryTest(unittest.TestCase):
         op = OperatorCopy(timedist=True)
 
         outdist = op.exec(self.dist)
+        print("test_copy")
         
         stop = MPI.Wtime()
         elapsed = stop - start
