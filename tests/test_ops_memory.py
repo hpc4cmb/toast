@@ -69,7 +69,6 @@ class OperatorMemoryTest(unittest.TestCase):
         op = OperatorCopy(timedist=True)
 
         outdist = op.exec(self.dist)
-        print("test_copy")
         
         stop = MPI.Wtime()
         elapsed = stop - start
