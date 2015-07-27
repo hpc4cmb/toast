@@ -6,6 +6,8 @@ from mpi4py import MPI
 
 import sys
 
+import contextlib
+
 from unittest import TestCase
 from unittest import TextTestRunner
 from unittest import TestResult, TextTestResult
@@ -46,6 +48,19 @@ class MPITestCase(TestCase):
 
     def setComm(self, comm):
         self.comm = comm
+
+    def print_in_turns(self, msg):
+        for i in range(self.comm.size):
+            if i == 0:
+                if self.comm.rank == 0:
+                    print('proc {:04d}: {}'.format(i, msg))
+            else:
+                if self.comm.rank == 0:
+                    othermsg = self.comm.recv(source=i, tag=i)
+                    print('proc {:04d}: {}'.format(i, othermsg))
+                elif i == self.comm.rank:
+                    self.comm.send(msg, dest=0, tag=i)
+            self.comm.Barrier()
 
 
 class MPITestInfo(object):

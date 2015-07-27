@@ -71,5 +71,5 @@ class OperatorMemoryTest(MPITestCase):
         
         stop = MPI.Wtime()
         elapsed = stop - start
-        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        self.print_in_turns("copy test took {:.3f} s".format(elapsed))
 
