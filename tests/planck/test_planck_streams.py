@@ -71,7 +71,7 @@ class StreamsPlanckEFFTest(unittest.TestCase):
             data, flags = self.eff.read(detector=d, local_start=0, n=n)
             np.testing.assert_almost_equal(data, np.ones(n)*i)
             np.testing.assert_equal(flags, np.zeros(n, dtype=np.byte) )
-            print( 'Planck EFF Steam read: {}: \n {}, {} \n'.format(d, data, flags) )
+            print( 'Planck EFF Stream read: {}: \n {}, {} \n'.format(d, data, flags) )
 
         stop = MPI.Wtime()
         elapsed = stop - start

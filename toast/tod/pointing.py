@@ -28,7 +28,7 @@ class Pointing(object):
         samples (int): pre-initialize the storage with this number of samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0, sizes=None):
 
         self._mpicomm = mpicomm
         self._timedist = timedist
@@ -37,8 +37,9 @@ class Pointing(object):
             self._dets = detectors
         self._nsamp = samples
         self._ndata = 4 * self._nsamp
+        self._sizes = sizes
 
-        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp)
+        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
         self._dist_ndata = (4*self._dist_samples[0], 4*self._dist_samples[1])
 
