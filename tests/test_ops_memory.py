@@ -3,27 +3,26 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-import unittest
+from .mpirunner import MPITestCase
 import sys
 
 from toast.tod.streams import StreamsWhiteNoise
 from toast.ops.memory import *
 
 
-
-class OperatorMemoryTest(unittest.TestCase):
+class OperatorMemoryTest(MPITestCase):
 
     def setUp(self):
-        self.mpicomm = MPI.COMM_WORLD
-        self.worldsize = self.mpicomm.size
+        # Note: self.comm is set by the test infrastructure
+        self.worldsize = self.comm.size
         if (self.worldsize >= 2):
             self.groupsize = int( self.worldsize / 2 )
             self.ngroup = 2
         else:
             self.groupsize = 1
             self.ngroup = 1
-        self.comm = Comm(MPI.COMM_WORLD, groupsize=self.groupsize)
-        self.dist = Dist(self.comm)
+        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
+        self.dist = Dist(self.toastcomm)
 
         self.dets = ['1a', '1b', '2a', '2b']
         self.flavs = ['proc1', 'proc2']
@@ -32,7 +31,7 @@ class OperatorMemoryTest(unittest.TestCase):
         self.rms = 10.0
 
         # every process group creates some number of observations
-        nobs = self.comm.group + 1
+        nobs = self.toastcomm.group + 1
 
         for i in range(nobs):
             # create the streams and pointing for this observation
@@ -73,11 +72,4 @@ class OperatorMemoryTest(unittest.TestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
-
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 

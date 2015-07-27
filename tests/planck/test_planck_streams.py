@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-import unittest
+from ..mpirunner import MPITestCase
 import sys
 
 import os
@@ -11,10 +11,11 @@ import os
 from toast.planck.streams import *
 
 
-class StreamsPlanckEFFTest(unittest.TestCase):
+class StreamsPlanckEFFTest(MPITestCase):
 
 
     def setUp(self):
+        # Note: self.comm is set by the test infrastructure
         self.dets = ['100-1a','100-1b','100-4a','100-4b']
         self.ringdb = 'testdata/rings.db'
         if not os.path.isfile(self.ringdb):
@@ -24,7 +25,7 @@ class StreamsPlanckEFFTest(unittest.TestCase):
             self.no_data = False
         self.effdir = 'testdata/EFF'
         self.freq = 100
-        self.eff = StreamsPlanckEFF(mpicomm=MPI.COMM_WORLD, timedist=True, detectors=self.dets, ringdb=self.ringdb, effdir=self.effdir, freq=self.freq)
+        self.eff = StreamsPlanckEFF(mpicomm=self.comm, timedist=True, detectors=self.dets, ringdb=self.ringdb, effdir=self.effdir, freq=self.freq)
 
 
     def test_props(self):
@@ -75,13 +76,4 @@ class StreamsPlanckEFFTest(unittest.TestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
-
-
-
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 

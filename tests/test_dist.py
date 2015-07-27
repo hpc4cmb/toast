@@ -3,40 +3,33 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-import unittest
+from .mpirunner import MPITestCase
 import sys
 
 from toast.dist import *
 
 
-class DistTest(unittest.TestCase):
+class DistTest(MPITestCase):
 
     def setUp(self):
-        self.mpicomm = MPI.COMM_WORLD
-        self.worldsize = self.mpicomm.size
+        # Note: self.comm is set by the test infrastructure
+        self.worldsize = self.comm.size
         if (self.worldsize >= 2):
             self.groupsize = int( self.worldsize / 2 )
             self.ngroup = 2
         else:
             self.groupsize = 1
             self.ngroup = 1
-        self.comm = Comm(MPI.COMM_WORLD, groupsize=self.groupsize)
+        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
 
     def test_construction(self):
         start = MPI.Wtime()
         
-        self.assertEqual(self.comm.ngroups, self.ngroup)
-        self.assertEqual(self.comm.group_size, self.groupsize)
+        self.assertEqual(self.toastcomm.ngroups, self.ngroup)
+        self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
-        self.dist = Dist(self.comm)
+        self.dist = Dist(self.toastcomm)
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
-
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 

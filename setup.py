@@ -6,8 +6,14 @@ import sys
 import re
 import subprocess
 
+import unittest
+
 from setuptools import find_packages, setup, Extension
 from Cython.Build import cythonize
+
+from setuptools.command.test import test as TestCommand
+
+from tests.mpirunner import MPITestRunner
 
 
 def get_version():
@@ -33,6 +39,28 @@ extensions = cythonize ( [] )
 
 scripts = glob.glob('pipelines/*.py')
 
+# customize the test command, to use MPI runner
+
+class MPITestCommand(TestCommand):
+
+    def __init__(self, *args, **kwargs):
+        super(MPITestCommand, self).__init__(*args, **kwargs)
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = []
+        self.test_suite = True
+
+    def run_tests(self):
+        loader = unittest.TestLoader()
+        runner = MPITestRunner()
+        suite = loader.discover('tests', pattern='test_*.py', top_level_dir='.')
+        runner.run(suite)
+
+
 # set it all up
 
 setup (
@@ -48,9 +76,8 @@ setup (
     scripts = scripts,
     license = 'BSD',
     requires = ['Python (>3.4.0)', ],
-    test_suite = 'tests.suite'
+    cmdclass={'test': MPITestCommand}
 )
-
 
 # extra cleanup of cython generated sources
 

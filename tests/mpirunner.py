@@ -4,8 +4,22 @@
 
 from mpi4py import MPI
 
+import sys
+
+from unittest import TestCase
 from unittest import TextTestRunner
 from unittest import TestResult, TextTestResult
+
+
+def testcase_name(test_method):
+    testcase = type(test_method)
+
+    # Ignore module name if it is '__main__'
+    module = testcase.__module__ + '.'
+    if module == '__main__.':
+        module = ''
+    result = module + testcase.__name__
+    return result
 
 
 class NoopStream(object):
@@ -22,6 +36,70 @@ class NoopStream(object):
         pass
 
 
+class MPITestCase(TestCase):
+    """
+    A simple wrapper around the standard TestCase which provides
+    one extra method to set the communicator.
+    """
+    def __init__(self, *args, **kwargs):
+        super(MPITestCase, self).__init__(*args, **kwargs)
+
+    def setComm(self, comm):
+        self.comm = comm
+
+
+class MPITestInfo(object):
+    """
+    This class keeps useful information about the execution of a
+    test method.
+    """
+
+    # Possible test outcomes
+    (SUCCESS, FAILURE, ERROR, SKIP) = range(4)
+
+    def __init__(self, test_result, test_method, outcome=SUCCESS, err=None, subTest=None):
+        self.test_result = test_result
+        self.outcome = outcome
+        self.elapsed_time = 0
+        self.err = err
+        self.stdout = test_result._stdout_data
+        self.stderr = test_result._stderr_data
+
+        self.test_description = self.test_result.getDescription(test_method)
+        self.test_exception_info = (
+            '' if outcome in (self.SUCCESS, self.SKIP)
+            else self.test_result._exc_info_to_string(
+                    self.err, test_method)
+        )
+
+        self.test_name = testcase_name(test_method)
+        self.test_id = test_method.id()
+        if subTest:
+            self.test_id = subTest.id()
+
+    def id(self):
+        return self.test_id
+
+    def test_finished(self):
+        """Save info that can only be calculated once a test has run.
+        """
+        self.elapsed_time = \
+            self.test_result.stop_time - self.test_result.start_time
+
+    def get_description(self):
+        """
+        Return a text representation of the test method.
+        """
+        return self.test_description
+
+    def get_error_info(self):
+        """
+        Return a text representation of an exception thrown by a test
+        method.
+        """
+        return self.test_exception_info
+
+
 class MPITestResult(TextTestResult):
     """
     A test result class that gathers per-process results and writes
@@ -29,8 +107,12 @@ class MPITestResult(TextTestResult):
 
     Used by MPITestRunner.
     """
-    def __init__(self, stream=sys.stderr, descriptions=1, verbosity=1):
-        TextTestResult.__init__(self, stream, descriptions, verbosity)
+    def __init__(self, comm, stream, descriptions=1, verbosity=1):
+        self.comm = comm
+        self.rank = self.comm.rank
+        self.size = self.comm.size
+        self.stream = stream
+        TextTestResult.__init__(self, self.stream, descriptions, verbosity)
         self.buffer = True  # we are capturing test output
         self._stdout_data = None
         self._stderr_data = None
@@ -41,7 +123,7 @@ class MPITestResult(TextTestResult):
     def _prepare_callback(self, test_info, target_list, verbose_str,
                           short_str):
         """
-        Appends a TestInfo to the given target list and sets a callback
+        Appends a MPITestInfo to the given target list and sets a callback
         method to be called by stopTest method.
         """
         target_list.append(test_info)
@@ -50,26 +132,23 @@ class MPITestResult(TextTestResult):
             """Prints the test method outcome to the stream, as well as
             the elapsed time.
             """
-
             test_info.test_finished()
 
-            # Ignore the elapsed times for a more reliable unit testing
-            if not self.elapsed_times:
-                self.start_time = self.stop_time = 0
-
             if self.showAll:
-                self.stream.writeln(
-                    '%s (%.3fs)' % (verbose_str, test_info.elapsed_time)
-                )
+                self.stream.writeln('{} ({:.3f}s)'.format(verbose_str, test_info.elapsed_time))
             elif self.dots:
                 self.stream.write(short_str)
+
         self.callback = callback
 
     def startTest(self, test):
         """
-        Called before execute each test method.
+        Called before executing each test method.
         """
-        self.start_time = time.time()
+        self.comm.Barrier()
+        if isinstance(test, MPITestCase):
+            test.setComm(self.comm)
+        self.start_time = MPI.Wtime()
         TestResult.startTest(self, test)
 
         if self.showAll:
@@ -82,14 +161,12 @@ class MPITestResult(TextTestResult):
 
     def stopTest(self, test):
         """
-        Called after execute each test method.
+        Called after executing each test method.
         """
         self._save_output_data()
-        # self._stdout_data = sys.stdout.getvalue()
-        # self._stderr_data = sys.stderr.getvalue()
-
-        _TextTestResult.stopTest(self, test)
-        self.stop_time = time.time()
+        TextTestResult.stopTest(self, test)
+        self.comm.Barrier()
+        self.stop_time = MPI.Wtime()
 
         if self.callback and callable(self.callback):
             self.callback()
@@ -101,7 +178,7 @@ class MPITestResult(TextTestResult):
         """
         self._save_output_data()
         self._prepare_callback(
-            _TestInfo(self, test), self.successes, 'OK', '.'
+            MPITestInfo(self, test), self.successes, 'OK', '.'
         )
 
     def addFailure(self, test, err):
@@ -109,7 +186,7 @@ class MPITestResult(TextTestResult):
         Called when a test method fails.
         """
         self._save_output_data()
-        testinfo = _TestInfo(self, test, _TestInfo.FAILURE, err)
+        testinfo = MPITestInfo(self, test, MPITestInfo.FAILURE, err)
         self.failures.append((
             testinfo,
             self._exc_info_to_string(err, test)
@@ -121,7 +198,7 @@ class MPITestResult(TextTestResult):
         Called when a test method raises an error.
         """
         self._save_output_data()
-        testinfo = _TestInfo(self, test, _TestInfo.ERROR, err)
+        testinfo = MPITestInfo(self, test, MPITestInfo.ERROR, err)
         self.errors.append((
             testinfo,
             self._exc_info_to_string(err, test)
@@ -134,7 +211,7 @@ class MPITestResult(TextTestResult):
         """
         if err is not None:
             self._save_output_data()
-            testinfo = _TestInfo(self, testcase, _TestInfo.ERROR, err, subTest=test)
+            testinfo = MPITestInfo(self, testcase, MPITestInfo.ERROR, err, subTest=test)
             self.errors.append((
                 testinfo,
                 self._exc_info_to_string(err, testcase)
@@ -146,7 +223,7 @@ class MPITestResult(TextTestResult):
         Called when a test method was skipped.
         """
         self._save_output_data()
-        testinfo = _TestInfo(self, test, _TestInfo.SKIP, reason)
+        testinfo = MPITestInfo(self, test, MPITestInfo.SKIP, reason)
         self.skipped.append((testinfo, reason))
         self._prepare_callback(testinfo, [], 'SKIP', 'S')
 
@@ -157,11 +234,11 @@ class MPITestResult(TextTestResult):
         for test_info, error in errors:
             self.stream.writeln(self.separator1)
             self.stream.writeln(
-                '%s [%.3fs]: %s' % (flavour, test_info.elapsed_time,
+                '{} [{:.3f}s]: {}'.format(flavour, test_info.elapsed_time,
                                     test_info.get_description())
             )
             self.stream.writeln(self.separator2)
-            self.stream.writeln('%s' % test_info.get_error_info())
+            self.stream.writeln('{}'.format(test_info.get_error_info()))
 
     def _get_info_by_testcase(self):
         """
@@ -184,177 +261,6 @@ class MPITestResult(TextTestResult):
 
         return tests_by_testcase
 
-    def _report_testsuite_properties(xml_testsuite, xml_document, properties):
-        xml_properties = xml_document.createElement('properties')
-        xml_testsuite.appendChild(xml_properties)
-        if properties:
-            for key, value in properties.items():
-                prop = xml_document.createElement('property')
-                prop.setAttribute('name', str(key))
-                prop.setAttribute('value', str(value))
-                xml_properties.appendChild(prop)
-        return xml_properties
-
-    _report_testsuite_properties = staticmethod(_report_testsuite_properties)
-
-    def _report_testsuite(suite_name, tests, xml_document, parentElement,
-                          properties):
-        """
-        Appends the testsuite section to the XML document.
-        """
-        testsuite = xml_document.createElement('testsuite')
-        parentElement.appendChild(testsuite)
-
-        testsuite.setAttribute('name', suite_name)
-        testsuite.setAttribute('tests', str(len(tests)))
-
-        testsuite.setAttribute(
-            'time', '%.3f' % sum(map(lambda e: e.elapsed_time, tests))
-        )
-        failures = filter(lambda e: e.outcome == _TestInfo.FAILURE, tests)
-        testsuite.setAttribute('failures', str(len(list(failures))))
-
-        errors = filter(lambda e: e.outcome == _TestInfo.ERROR, tests)
-        testsuite.setAttribute('errors', str(len(list(errors))))
-
-        _XMLTestResult._report_testsuite_properties(
-            testsuite, xml_document, properties)
-
-        systemout = xml_document.createElement('system-out')
-        testsuite.appendChild(systemout)
-
-        stdout = StringIO()
-        for test in tests:
-            # Merge the stdout from the tests in a class
-            stdout.write(test.stdout)
-        _XMLTestResult._createCDATAsections(
-            xml_document, systemout, stdout.getvalue())
-
-        systemerr = xml_document.createElement('system-err')
-        testsuite.appendChild(systemerr)
-
-        stderr = StringIO()
-        for test in tests:
-            # Merge the stderr from the tests in a class
-            stderr.write(test.stderr)
-        _XMLTestResult._createCDATAsections(
-            xml_document, systemerr, stderr.getvalue())
-
-        return testsuite
-
-    _report_testsuite = staticmethod(_report_testsuite)
-
-    def _test_method_name(test_id):
-        """
-        Returns the test method name.
-        """
-        return test_id.split('.')[-1]
-
-    _test_method_name = staticmethod(_test_method_name)
-
-    def _createCDATAsections(xmldoc, node, text):
-        text = safe_unicode(text)
-        pos = text.find(']]>')
-        while pos >= 0:
-            tmp = text[0:pos+2]
-            cdata = xmldoc.createCDATASection(tmp)
-            node.appendChild(cdata)
-            text = text[pos+2:]
-            pos = text.find(']]>')
-        cdata = xmldoc.createCDATASection(text)
-        node.appendChild(cdata)
-
-    _createCDATAsections = staticmethod(_createCDATAsections)
-
-    def _report_testcase(suite_name, test_result, xml_testsuite, xml_document):
-        """
-        Appends a testcase section to the XML document.
-        """
-        testcase = xml_document.createElement('testcase')
-        xml_testsuite.appendChild(testcase)
-
-        testcase.setAttribute('classname', suite_name)
-        testcase.setAttribute(
-            'name', _XMLTestResult._test_method_name(test_result.test_id)
-        )
-        testcase.setAttribute('time', '%.3f' % test_result.elapsed_time)
-
-        if (test_result.outcome != _TestInfo.SUCCESS):
-            elem_name = ('failure', 'error', 'skipped')[test_result.outcome-1]
-            failure = xml_document.createElement(elem_name)
-            testcase.appendChild(failure)
-            if test_result.outcome != _TestInfo.SKIP:
-                failure.setAttribute(
-                    'type',
-                    safe_unicode(test_result.err[0].__name__)
-                )
-                failure.setAttribute(
-                    'message',
-                    safe_unicode(test_result.err[1])
-                )
-                error_info = safe_unicode(test_result.get_error_info())
-                _XMLTestResult._createCDATAsections(
-                    xml_document, failure, error_info)
-            else:
-                failure.setAttribute('type', 'skip')
-                failure.setAttribute('message', safe_unicode(test_result.err))
-
-    _report_testcase = staticmethod(_report_testcase)
-
-    def generate_reports(self, test_runner):
-        """
-        Generates the XML reports to a given XMLTestRunner object.
-        """
-        from xml.dom.minidom import Document
-        all_results = self._get_info_by_testcase()
-
-        outputHandledAsString = \
-            isinstance(test_runner.output, six.string_types)
-
-        if (outputHandledAsString and not os.path.exists(test_runner.output)):
-            os.makedirs(test_runner.output)
-
-        if not outputHandledAsString:
-            doc = Document()
-            testsuite = doc.createElement('testsuites')
-            doc.appendChild(testsuite)
-            parentElement = testsuite
-
-        for suite, tests in all_results.items():
-            if outputHandledAsString:
-                doc = Document()
-                parentElement = doc
-
-            suite_name = suite
-            if test_runner.outsuffix:
-                # not checking with 'is not None', empty means no suffix.
-                suite_name = '%s-%s' % (suite, test_runner.outsuffix)
-
-            # Build the XML file
-            testsuite = _XMLTestResult._report_testsuite(
-                suite_name, tests, doc, parentElement, self.properties
-            )
-            for test in tests:
-                _XMLTestResult._report_testcase(suite, test, testsuite, doc)
-            xml_content = doc.toprettyxml(
-                indent='\t',
-                encoding=test_runner.encoding
-            )
-
-            if outputHandledAsString:
-                filename = path.join(
-                    test_runner.output,
-                    'TEST-%s.xml' % suite_name)
-                with open(filename, 'wb') as report_file:
-                    report_file.write(xml_content)
-
-        if not outputHandledAsString:
-            # Assume that test_runner.output is a stream
-            test_runner.output.write(xml_content)
-
-
-
-
 
 
 class MPITestRunner(TextTestRunner):
@@ -367,21 +273,22 @@ class MPITestRunner(TextTestRunner):
         self.rank = self.comm.rank
         self.size = self.comm.size
         if self.rank == 0:
-            TextTestRunner.__init__(self, stream, descriptions, verbosity,
-                                failfast=failfast, buffer=buffer)
+            self.stream = stream
         else:
-            TextTestRunner.__init__(self, NoopStream(), descriptions, verbosity,
+            self.stream = NoopStream()
+        TextTestRunner.__init__(self, self.stream, descriptions, verbosity,
                                 failfast=failfast, buffer=buffer)
         self.verbosity = verbosity
+
 
     def _make_result(self):
         """
         Creates a TestResult object which will be used to store
         information about the executed tests.
         """
-        return MPITestResult(
-            self.stream, self.descriptions, self.verbosity, self.elapsed_times
-        )
+        return MPITestResult(self.comm, self.stream, self.descriptions, 
+            self.verbosity)
+
 
     def run(self, test):
         """
@@ -400,18 +307,16 @@ class MPITestRunner(TextTestRunner):
             self.stream.writeln(result.separator2)
 
             # Execute tests
-            start_time = time.time()
+            start_time = MPI.Wtime()
             test(result)
-            stop_time = time.time()
+            stop_time = MPI.Wtime()
             time_taken = stop_time - start_time
 
             # Print results
             result.printErrors()
             self.stream.writeln(result.separator2)
             run = result.testsRun
-            self.stream.writeln("Ran %d test%s in %.3fs" % (
-                run, run != 1 and "s" or "", time_taken)
-            )
+            self.stream.writeln("Ran {} test{} in {:.3f}s".format(run, (run != 1) and "s" or "", time_taken))
             self.stream.writeln()
 
             expectedFails = unexpectedSuccesses = skipped = 0
@@ -449,10 +354,6 @@ class MPITestRunner(TextTestRunner):
             else:
                 self.stream.write("\n")
 
-            # Generate reports
-            self.stream.writeln()
-            self.stream.writeln('Generating XML reports...')
-            result.generate_reports(self)
         finally:
             pass
 
