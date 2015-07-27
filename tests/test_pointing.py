@@ -2,23 +2,23 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-
 from mpi4py import MPI
-
-import unittest
+from .mpirunner import MPITestCase
+import sys
 
 from toast.tod.pointing import *
 
 
-class PointingTest(unittest.TestCase):
+class PointingTest(MPITestCase):
 
 
     def setUp(self):
+        # Note: self.comm is set by the test infrastructure
         self.dets = ['1a', '1b', '2a', '2b']
         self.mynsamp = 100
-        self.myoff = self.mynsamp * MPI.COMM_WORLD.rank
-        self.totsamp = self.mynsamp * MPI.COMM_WORLD.size
-        self.pntg = Pointing(mpicomm=MPI.COMM_WORLD, timedist=True, detectors=self.dets, samples=self.totsamp)
+        self.myoff = self.mynsamp * self.comm.rank
+        self.totsamp = self.mynsamp * self.comm.size
+        self.pntg = Pointing(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
         self.datavec = np.zeros(4*self.mynsamp, dtype=np.float64)
         self.flagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
         # generate some fake pointing for each of the fake detectors
@@ -50,10 +50,4 @@ class PointingTest(unittest.TestCase):
 
         stop = MPI.Wtime()
         elapsed = stop - start
-            
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 
