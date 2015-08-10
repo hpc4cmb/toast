@@ -54,7 +54,7 @@ class MPITestCommand(TestCommand):
         self.test_args = []
         self.test_suite = True
 
-    def run_tests(self):
+    def run(self):
         loader = unittest.TestLoader()
         runner = MPITestRunner(verbosity=2)
         suite = loader.discover('tests', pattern='test_*.py', top_level_dir='.')

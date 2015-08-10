@@ -8,8 +8,8 @@ setuptools, ...  Then run
 
     $> python setup.py develop --prefix=/somewhere/in/python/path
 
-Now you can run the test suite (note the "quiet" option to disable annoying
-from every process):
+Now you can run the test suite (note the "quiet" option to disable 
+annoying messages from every process):
 
     $> mpirun -np 4 python setup.py -q test
 
