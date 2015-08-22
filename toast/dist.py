@@ -188,13 +188,13 @@ def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     return (dist_dets, dist_samples)
 
 
-Obs = namedtuple('Obs', ['mpicomm', 'streams', 'pointing', 'baselines', 'noise'])
+Obs = namedtuple('Obs', ['mpicomm', 'tod', 'baselines', 'noise'])
 
-class Dist(object):
+class Data(object):
     """
     Class which represents distributed data
 
-    A Dist object contains a list of observations assigned to
+    A Data object contains a list of observations assigned to
     each process group in the Comm.
 
     Args:

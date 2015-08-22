@@ -10,15 +10,14 @@ import unittest
 import numpy as np
 
 from ..dist import Comm, Dist, Obs
-from ..tod.pointing import Pointing
-from ..tod.streams import Streams
+from ..tod import TOD
 
 
 class Operator(object):
     """
     Base class for an operator that acts on collections of observations.
 
-    An operator takes as input a toast.dist.Dist object and returns a
+    An operator takes as input a toast.dist.Data object and returns a
     new instance of the same size.  For each observation in the distributed
     data, an operator may pass some data types forward unchanged, or it may
     replace or modify data.
@@ -68,51 +67,43 @@ class OperatorCopy(Operator):
         return
 
 
-    def exec(self, indist):
+    def exec(self, indata):
         comm = indist.comm
-        outdist = Dist(comm)
-        for inobs in indist.obs:
-            str = inobs.streams
-            pntg = inobs.pointing
+        outdata = Data(comm)
+        for inobs in indata.obs:
+            tod = inobs.tod
             base = inobs.baselines
             nse = inobs.noise
 
-            if str.timedist != pntg.timedist:
-                raise RuntimeError("pointing and streams objects have different distributions!")
-
-            outstr = Streams(mpicomm=str.mpicomm, timedist=self.timedist, 
-                detectors=str.detectors, flavors=str.flavors, 
-                samples=str.total_samples)
-            
-            outpntg = Pointing(mpicomm=pntg.mpicomm, timedist=self.timedist,
-                detectors=pntg.detectors, samples=pntg.total_samples)
+            outtod = TOD(mpicomm=str.mpicomm, timedist=self.timedist, 
+                detectors=tod.detectors, flavors=tod.flavors, 
+                samples=tod.total_samples)
 
             # FIXME:  add noise and baselines once implemented
             outbaselines = None
             outnoise = None
             
-            if str.timedist == self.timedist:
+            if tod.timedist == self.timedist:
                 # we have the same distribution, and just need
                 # to read and write
-                for det in str.local_dets:
-                    pdata, pflags = pntg.read(det, 0, pntg.local_samples[1])
-                    outpntg.write(det, 0, pdata, pflags)
-                    for flv in str.flavors:
-                        data, flags = str.read(det, flv, 0, str.local_samples[1]) 
-                        outstr.write(det, flv, 0, data, flags)
+                for det in tod.local_dets:
+                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
+                    outtod.write_pntg(det, 0, pdata, pflags)
+                    for flv in tod.flavors:
+                        data, flags = tod.read(det, flv, 0, tod.local_samples[1]) 
+                        outtod.write(det, flv, 0, data, flags)
             else:
                 # we have to read our local piece and communicate
-                for det in str.local_dets:
-                    pdata, pflags = pntg.read(det, 0, pntg.local_samples[1])
-                    pdata, pflags = _shuffle(pdata, pflags, str.local_dets, str.local_samples)
-                    outpntg.write(det, 0, pdata, pflags)
-                    for flv in str.flavors:
-                        data, flags = str.read(det, flv, 0, str.local_samples[1])
-                        data, flags = _shuffle(data, flags, str.local_dets, str.local_samples)
+                for det in tod.local_dets:
+                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
+                    pdata, pflags = _shuffle(pdata, pflags, tod.local_dets, tod.local_samples)
+                    outtod.write_pntg(det, 0, pdata, pflags)
+                    for flv in tod.flavors:
+                        data, flags = tod.read(det, flv, 0, tod.local_samples[1])
+                        data, flags = _shuffle(data, flags, tod.local_dets, tod.local_samples)
                         outstr.write(det, flv, 0, data, flags)
 
-            outobs = Obs(mpicomm=inobs.mpicomm, streams=outstr, pointing=outpntg, 
-                baselines=outbaselines, noise = outnoise)
+            outobs = Obs(mpicomm=inobs.mpicomm, tod=outtod, baselines=outbaselines, noise = outnoise)
 
             outdist.obs.append(outobs)
         return outdist
