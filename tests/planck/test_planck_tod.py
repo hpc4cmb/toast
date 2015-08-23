@@ -8,10 +8,10 @@ import sys
 
 import os
 
-from toast.planck.streams import *
+from toast.planck.tod import *
 
 
-class StreamsPlanckEFFTest(MPITestCase):
+class TODPlanckEFFTest(MPITestCase):
 
 
     def setUp(self):
@@ -35,7 +35,7 @@ class StreamsPlanckEFFTest(MPITestCase):
         
         #self.assertEqual(self.eff.detectors, self.dets)
 
-        print( 'Running Planck stream properties test. Total samples {}, local samples {}'.format( self.eff.total_samples, self.eff.local_samples ) )
+        print( 'Running Planck TOD properties test. Total samples {}, local samples {}'.format( self.eff.total_samples, self.eff.local_samples ) )
 
         stop = MPI.Wtime()
         elapsed = stop - start

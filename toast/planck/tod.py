@@ -9,19 +9,18 @@ import unittest
 
 import numpy as np
 
-from ..dist import distribute_det_samples
-
-from ..tod.pointing import Pointing
-
-from .streams import StreamsPlanckEFF
-
 from scipy.constants import degree, arcmin, arcsec, c
 
 import quaternionarray as qa
 
+import healpy as hp
+
+from ..dist import distribute_det_samples
+
+from ..tod import TOD
+
 from .utilities import load_ringdb, count_samples, read_eff, write_eff, load_RIMO
 
-import healpy as hp
 
 xaxis = np.array( [1,0,0], dtype=np.float64 )
 yaxis = np.array( [0,1,0], dtype=np.float64 )
@@ -34,9 +33,9 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 cinv = 1e3 / c # Inverse light speed in km / s ( the assumed unit for velocity )
 
 
-class PointingPlanckEFF(Pointing):
+class TODPlanckEFF(TOD):
     """
-    Provide pointing for Planck Exchange File Format data.
+    Provide pointing and detector timestreams for Planck Exchange File Format data.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
@@ -93,7 +92,7 @@ class PointingPlanckEFF(Pointing):
         self.order = order
         self.nside = nside
         
-        self._offset,self._nsamp, self._sizes = count_samples( self.ringdb, self.ringtable, obt_range, ring_range, od_range )
+        self._offset, self._nsamp, self._sizes = count_samples( self.ringdb, self.ringtable, obt_range, ring_range, od_range )
 
         super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=0, sizes=self._sizes)
 
@@ -113,9 +112,24 @@ class PointingPlanckEFF(Pointing):
         else:
             self.coordmatrix, do_conv, normcoord = hp.rotator.get_coordconv_matrix( ['E', self.coord] )
             self.coordquat = qa.from_rotmat( self.coordmatrix )
-        
+    
 
-    def _get(self, detector, local_start, n):
+    def _get(self, detector, flavor, local_start, n):
+
+        data, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask )
+
+        return (data, flag)
+
+
+    def _put(self, detector, flavor, local_start, data, flags):
+
+        result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.flagmask )
+        # FIXME: should we check the result here?
+        # We should NOT return result, since the return needs to be empty
+        return
+
+
+    def _get_pntg(self, detector, local_start, n):
 
         epsilon = self.RIMO[ detector ].epsilon
         eta = (1 - epsilon) / (1 + epsilon)
@@ -196,15 +210,14 @@ class PointingPlanckEFF(Pointing):
                     out[ind,1] = eta * np.cos( 2 * psi )
                     out[ind,2] = eta * np.sin( 2 * psi )
 
-
-
         # Return
-
         return (out, flag)
     
 
-    def _put(self, detector, start, data, flags):
+    def _put_pntg(self, detector, start, data, flags):
 
         result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.flagmask )
+        # FIXME: should we check the result here?
+        # We should NOT return result, since the return needs to be empty
+        return
 
-        return result

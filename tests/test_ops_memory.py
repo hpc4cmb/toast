@@ -42,7 +42,7 @@ class OperatorMemoryTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODSimple(
-                mpicomm = self.dist.comm.comm_group, 
+                mpicomm = self.data.comm.comm_group, 
                 timedist = True, 
                 detectors = self.dets,
                 rms = self.rms,

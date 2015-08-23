@@ -250,7 +250,7 @@ class TODSimple(TOD):
         # convert to quaternions
         # FIXME: use our quaternion library once implemented
 
-        data = np.zeros(n, dtype=np.float64)
+        data = np.zeros(4*n, dtype=np.float64)
         flags = np.zeros(n, dtype=np.uint8)
 
         return (data, flags)

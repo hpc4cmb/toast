@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from ..dist import Comm, Dist, Obs
+from ..dist import Comm, Data, Obs
 from ..tod import TOD
 
 
@@ -68,14 +68,14 @@ class OperatorCopy(Operator):
 
 
     def exec(self, indata):
-        comm = indist.comm
+        comm = indata.comm
         outdata = Data(comm)
         for inobs in indata.obs:
             tod = inobs.tod
             base = inobs.baselines
             nse = inobs.noise
 
-            outtod = TOD(mpicomm=str.mpicomm, timedist=self.timedist, 
+            outtod = TOD(mpicomm=tod.mpicomm, timedist=self.timedist, 
                 detectors=tod.detectors, flavors=tod.flavors, 
                 samples=tod.total_samples)
 
@@ -88,6 +88,7 @@ class OperatorCopy(Operator):
                 # to read and write
                 for det in tod.local_dets:
                     pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
+                    print("copy input pdata, pflags have size: {}, {}".format(len(pdata), len(pflags)))
                     outtod.write_pntg(det, 0, pdata, pflags)
                     for flv in tod.flavors:
                         data, flags = tod.read(det, flv, 0, tod.local_samples[1]) 
@@ -105,7 +106,7 @@ class OperatorCopy(Operator):
 
             outobs = Obs(mpicomm=inobs.mpicomm, tod=outtod, baselines=outbaselines, noise = outnoise)
 
-            outdist.obs.append(outobs)
-        return outdist
+            outdata.obs.append(outobs)
+        return outdata
 
 
