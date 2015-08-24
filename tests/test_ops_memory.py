@@ -6,7 +6,7 @@ from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
 
-from toast.tod.streams import StreamsWhiteNoise
+from toast.tod import *
 from toast.ops.memory import *
 
 
@@ -22,11 +22,16 @@ class OperatorMemoryTest(MPITestCase):
             self.groupsize = 1
             self.ngroup = 1
         self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
-        self.dist = Dist(self.toastcomm)
+        self.data = Data(self.toastcomm)
 
-        self.dets = ['1a', '1b', '2a', '2b']
+        self.dets = {
+            '1a' : (0.0, 1.0),
+            '1b' : (0.0, -1.0),
+            '2a' : (1.0, 0.0),
+            '2b' : (-1.0, 0.0)
+            }
         self.flavs = ['proc1', 'proc2']
-        self.flavscheck = [Streams.DEFAULT_FLAVOR] + self.flavs
+        self.flavscheck = [TOD.DEFAULT_FLAVOR] + self.flavs
         self.totsamp = 100
         self.rms = 10.0
 
@@ -34,28 +39,20 @@ class OperatorMemoryTest(MPITestCase):
         nobs = self.toastcomm.group + 1
 
         for i in range(nobs):
-            # create the streams and pointing for this observation
+            # create the TOD for this observation
 
-            pntg = Pointing(
-                mpicomm = self.dist.comm.comm_group, 
+            tod = TODSimple(
+                mpicomm = self.data.comm.comm_group, 
                 timedist = True, 
-                detectors = self.dets, 
-                samples = self.totsamp
-            )
-
-            str = StreamsWhiteNoise(
-                mpicomm = self.dist.comm.comm_group,
-                timedist = True,
                 detectors = self.dets,
                 rms = self.rms,
                 samples = self.totsamp
             )
 
-            self.dist.obs.append( 
+            self.data.obs.append( 
                 Obs(
-                    mpicomm = self.dist.comm.comm_group, 
-                    streams = str, 
-                    pointing = pntg, 
+                    mpicomm = self.data.comm.comm_group, 
+                    tod = tod, 
                     baselines = None, 
                     noise = None
                 )
@@ -67,7 +64,7 @@ class OperatorMemoryTest(MPITestCase):
 
         op = OperatorCopy(timedist=True)
 
-        outdist = op.exec(self.dist)
+        outdata = op.exec(self.data)
         
         stop = MPI.Wtime()
         elapsed = stop - start

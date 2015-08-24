@@ -9,7 +9,7 @@ import sys
 from toast.dist import *
 
 
-class DistTest(MPITestCase):
+class DataTest(MPITestCase):
 
     def setUp(self):
         # Note: self.comm is set by the test infrastructure
@@ -28,7 +28,7 @@ class DistTest(MPITestCase):
         self.assertEqual(self.toastcomm.ngroups, self.ngroup)
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
-        self.dist = Dist(self.toastcomm)
+        self.data = Data(self.toastcomm)
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))

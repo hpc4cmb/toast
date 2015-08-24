@@ -19,7 +19,7 @@ import astropy.io.fits as pf
 
 from ..dist import distribute_det_samples
 
-from ..tod.streams import Streams
+#from ..tod import TOD
 
 from collections import namedtuple
 
@@ -68,7 +68,7 @@ def read_eff(detector, local_start, n, offset, local_samples, ringtable, ringdb,
                 if itry < ntry: continue
                 raise Exception('Failed to query ring start and stop times from {} (2/2). Failed query: {}. Error: '.format(ringdb_path, cmd, e))
     except Exception as e:
-        raise Exception( 'StreamsPlanckEFF._get: Giving up after {} tries to get source ODs: {}'.format(ntry,e) )
+        raise Exception( 'TODPlanckEFF._get: Giving up after {} tries to get source ODs: {}'.format(ntry,e) )
 
     # Determine the list of ODs that contain the rings
 
@@ -176,7 +176,7 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringta
     data2d = np.atleast_2d( data )
 
     if len(data2d[0]) != stop - start:
-        raise Exception( 'streamsPlanckEFF: stop-start = {} but len(data) = {}'.format( stop-start, len(data2d[0]) ) )
+        raise Exception( 'TODPlanckEFF: stop-start = {} but len(data) = {}'.format( stop-start, len(data2d[0]) ) )
 
     ntry = 10
     try:
@@ -195,7 +195,7 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringta
                 if itry < ntry: continue
                 raise Exception('Failed to query ring start and stop times from {} (2/2). Failed query: {}. Error: '.format(ringdb_path, cmd, e))
     except Exception as e:
-        raise Exception( 'streamsPlanckEFF._put: Giving up after {} tries to get target ODs: {}'.format(ntry,e) )
+        raise Exception( 'TODPlanckEFF._put: Giving up after {} tries to get target ODs: {}'.format(ntry,e) )
 
     ods = []
     if freq < 100:
@@ -239,7 +239,7 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringta
         ncol = len( h[hdu].columns )
         ncol_data = len(data2d)
 
-        if ncol-1 != ncol_data: raise Exception( 'streamsPlanckEFF._put: Expected {} columns to write data but got {}.'.format(ncol-1,ncol_data) )
+        if ncol-1 != ncol_data: raise Exception( 'TODPlanckEFF._put: Expected {} columns to write data but got {}.'.format(ncol-1,ncol_data) )
 
         if nwrite > 0:
             try:

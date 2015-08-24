@@ -9,18 +9,21 @@ import unittest
 
 import numpy as np
 
-from ..dist import distribute_det_samples
+from .dist import distribute_det_samples
 
 
-class Streams(object):
+class TOD(object):
     """
-    Base class for an object that provides a collection of streams.
+    Base class for an object that provides detector pointing and a 
+    collection of streams for a single observation.
 
-    Each Streams class has one or more detectors, and each detector
-    might have different flavors of data and flags.
+    Each TOD class has one or more detectors, and this class provides 
+    pointing quaternions and flags for each detector.  Each detector
+    might also have different flavors of detector data and flags.
 
     Attributes:
-        DEFAULT_FLAVOR (string): the name of the default flavor which always exists.
+        DEFAULT_FLAVOR (string): the name of the default detector data
+        flavor which always exists.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
@@ -37,7 +40,6 @@ class Streams(object):
 
         self._mpicomm = mpicomm
         self._timedist = timedist
-
         self._dets = []
         if detectors is not None:
             self._dets = detectors
@@ -45,9 +47,12 @@ class Streams(object):
         if flavors is not None:
             self._flavors.extend(flavors)
         self._nsamp = samples
+        self._npntg = 4 * self._nsamp
         self._sizes = sizes
-        
+
         (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
+
+        self._dist_npntg = (4*self._dist_samples[0], 4*self._dist_samples[1])
 
         self.data = {}
         for det in self._dist_dets:
@@ -60,6 +65,14 @@ class Streams(object):
             self.flags[det] = {}
             for flv in self._flavors:
                 self.flags[det][flv] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+
+        self.pntg = {}
+        for det in self._dist_dets:
+            self.pntg[det] = np.zeros(self._dist_npntg[1], dtype=np.float64)
+
+        self.pflags = {}
+        for det in self._dist_dets:
+            self.pflags[det] = np.zeros(self._dist_npntg[1], dtype=np.uint8)
 
 
     @property
@@ -102,6 +115,17 @@ class Streams(object):
         return
 
 
+    def _get_pntg(self, detector, start, n):
+        return (self.pntg[detector][4*start:4*(start+n)], self.pflags[detector][start:start+n])
+
+
+    def _put_pntg(self, detector, start, data, flags):
+        n = flags.shape[0]
+        self.pntg[detector][4*start:4*(start+n)] = np.copy(data)
+        self.pflags[detector][start:(start+n)] = np.copy(flags)
+        return
+
+
     def read(self, detector=None, flavor='default', local_start=0, n=0):
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
@@ -127,16 +151,42 @@ class Streams(object):
         return
 
 
+    def read_pntg(self, detector=None, local_start=0, n=0):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_pntg(detector, local_start, n)
 
-class StreamsWhiteNoise(Streams):
+
+    def write_pntg(self, detector=None, local_start=0, data=None, flags=None):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if (data is None) or (flags is None):
+            raise ValueError('both data and flags must be specified')
+        if data.shape[0] != 4 * flags.shape[0]:
+            raise ValueError('data and flags arrays must be the same number of samples')
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+        self._put_pntg(detector, local_start, data, flags)
+        return
+
+
+class TODSimple(TOD):
     """
-    Provide white noise streams.
+    Provide a simple generator of detector data.
+
+    This provides white noise timestreams for a specified number of detectors
+    and a focalplane geometry provided by a specifying two offset angles for
+    each detector from the boresight.  The boresight pointing is just a simple
+    rastering over the sphere.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         timedist (bool): if True, the data is distributed by time, otherwise by
                   detector.
-        detectors (list): list of names to use for the detectors.
+        detectors (dictionary): each key is the detector name, and each value
+                  is a tuple of x/y angle offsets in arcminutes.
         rms (float): RMS of the white noise.
         samples (int): maximum allowed samples.
     """
@@ -149,17 +199,24 @@ class StreamsWhiteNoise(Streams):
         super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=None, flavors=None, samples=0)
 
         if detectors is None:
-            raise ValueError('you must specify a list of detectors')
+            # in this case, we will have a single detector at the boresight
+            self._dets = {'boresight' : (0.0, 0.0)}
+        else:
+            self._dets = detectors
 
-        self._dets = detectors
         self._flavors = [self.DEFAULT_FLAVOR]
         self._nsamp = samples
         
         (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp)
 
+        self._dist_npntg = (4*self._dist_samples[0], 4*self._dist_samples[1])
+
+        self._theta_steps = 180
+        self._phi_steps = 360
+
         self.rngstream = rngstream
         self.seeds = {}
-        for det in enumerate(self._dets):
+        for det in enumerate(self._dets.keys()):
             self.seeds[det[1]] = det[0] 
         self.rms = rms
 
@@ -174,6 +231,33 @@ class StreamsWhiteNoise(Streams):
 
 
     def _put(self, detector, flavor, start, data, flags):
-        raise RuntimeError('cannot write data to simulated white noise streams')
+        raise RuntimeError('cannot write data to simulated data streams')
         return
+
+
+    def _get_pntg(self, detector, start, n):
+        # compute the absolute sample offset
+        start_abs = self._dist_samples[0] + start
+
+        # compute the position on the sphere, spiralling from North
+        # pole to South.  obviously the pointings will be densest at
+        # the poles.
+        start_theta = int(start_abs / self._theta_steps)
+        start_phi = int(start_abs / self._phi_steps)
+
+        # ... in progress ...
+
+        # convert to quaternions
+        # FIXME: use our quaternion library once implemented
+
+        data = np.zeros(4*n, dtype=np.float64)
+        flags = np.zeros(n, dtype=np.uint8)
+
+        return (data, flags)
+
+
+    def _put_pntg(self, detector, start, data, flags):
+        raise RuntimeError('cannot write data to simulated pointing')
+        return
+
 

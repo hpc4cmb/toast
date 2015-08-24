@@ -3,7 +3,5 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-from .streams import StreamsPlanckEFF
-
-from .pointing import PointingPlanckEFF
+from .tod import TODPlanckEFF
 
