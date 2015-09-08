@@ -4,3 +4,5 @@
 
 from .memory import Operator, OperatorCopy
 
+from .madam import OperatorMadam
+
