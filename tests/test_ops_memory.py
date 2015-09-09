@@ -50,8 +50,7 @@ class OperatorMemoryTest(MPITestCase):
             )
 
             self.data.obs.append( 
-                Obs(
-                    mpicomm = self.data.comm.comm_group, 
+                Obs( 
                     tod = tod, 
                     baselines = None, 
                     noise = None

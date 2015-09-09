@@ -188,7 +188,7 @@ def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     return (dist_dets, dist_samples)
 
 
-Obs = namedtuple('Obs', ['mpicomm', 'tod', 'baselines', 'noise'])
+Obs = namedtuple('Obs', ['tod', 'baselines', 'noise'])
 
 class Data(object):
     """

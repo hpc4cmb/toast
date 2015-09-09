@@ -104,7 +104,7 @@ class OperatorCopy(Operator):
                         data, flags = _shuffle(data, flags, tod.local_dets, tod.local_samples)
                         outstr.write(det, flv, 0, data, flags)
 
-            outobs = Obs(mpicomm=inobs.mpicomm, tod=outtod, baselines=outbaselines, noise = outnoise)
+            outobs = Obs(tod=outtod, baselines=outbaselines, noise = outnoise)
 
             outdata.obs.append(outobs)
         return outdata

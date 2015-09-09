@@ -74,6 +74,8 @@ class TOD(object):
         for det in self._dist_dets:
             self.pflags[det] = np.zeros(self._dist_npntg[1], dtype=np.uint8)
 
+        self.pmat = {}
+
 
     @property
     def detectors(self):
@@ -167,8 +169,48 @@ class TOD(object):
         if data.shape[0] != 4 * flags.shape[0]:
             raise ValueError('data and flags arrays must be the same number of samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
+        return
+
+
+    def read_pmat(self, name=None, detector=None, local_start=0, n=0):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if name not in self.pmat.keys():
+            raise ValueError('pointing matrix {} not found'.format(name))
+        if detector not in self.pmat[name].keys():
+            raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector))
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        if 'pixels' not in self.pmat[name][detector]:
+            raise RuntimeError('detector {} in pointing matrix {} does not have pixel vector'.format(detector, name))
+        if 'weights' not in self.pmat[name][detector]:
+            raise RuntimeError('detector {} in pointing matrix {} does not have weights vector'.format(detector, name))
+        nnz = int(len(self.pmat[name][detector]['weights']) / self.pmat[name][detector]['pixels'])
+        return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
+
+
+    def write_pmat(self, name=None, detector=None, local_start=0, pixels=None, weights=None):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if (pixels is None) or (weights is None):
+            raise ValueError('both pixels and weights must be specified')
+        npix = pixels.shape[0]
+        nw = weights.shape[0]
+        nnz = int(nw / npix)
+        if nnz * npix != nw:
+            raise ValueError('number of pointing weights {} is not a multiple of pixels length {}'.format(nw, npix))
+        if (local_start < 0) or (local_start + npix > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+npix-1))
+        if name not in self.pmat.keys():
+            self.pmat[name] = {}
+        if detector not in self.pmat[name].keys():
+            self.pmat[name][detector] = {}
+            self.pmat[name][detector]['pixels'] = np.zeros(self.local_samples[1], dtype=np.int64)
+            self.pmat[name][detector]['weights'] = np.zeros(nnz*self.local_samples[1], dtype=np.float64)
+        self.pmat[name][detector]['pixels'][local_start:local_start+npix] = np.copy(pixels)
+        self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = np.copy(weights)
         return
 
 
