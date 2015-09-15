@@ -8,10 +8,10 @@ import sys
 
 import os
 
-from toast.planck.tod import *
+from toast.exp.planck.tod import *
 
 
-class TODPlanckEFFTest(MPITestCase):
+class TODPlanckExchangeTest(MPITestCase):
 
 
     def setUp(self):
@@ -25,7 +25,7 @@ class TODPlanckEFFTest(MPITestCase):
             self.no_data = False
         self.effdir = 'testdata/EFF'
         self.freq = 100
-        self.eff = StreamsPlanckEFF(mpicomm=self.comm, timedist=True, detectors=self.dets, ringdb=self.ringdb, effdir=self.effdir, freq=self.freq)
+        self.eff = Exchange(mpicomm=self.comm, timedist=True, detectors=self.dets, ringdb=self.ringdb, effdir=self.effdir, freq=self.freq)
 
 
     def test_props(self):

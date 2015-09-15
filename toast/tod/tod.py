@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from .dist import distribute_det_samples
+from ..dist import distribute_det_samples
 
 
 class TOD(object):
@@ -32,6 +32,7 @@ class TOD(object):
         detectors (list): list of names to use for the detectors.
         flavors (list): list of *EXTRA* flavors to use (beyond the default).
         samples (int): pre-initialize the storage with this number of samples.
+        sizes (list): specify the indivisible chunks in which to split the samples.
     """
 
     DEFAULT_FLAVOR = 'default'
@@ -214,22 +215,26 @@ class TOD(object):
         return
 
 
-class TODSimple(TOD):
+class TODFake(TOD):
     """
-    Provide a simple generator of detector data.
+    Provide a simple generator of fake detector data.
 
-    This provides white noise timestreams for a specified number of detectors
-    and a focalplane geometry provided by a specifying two offset angles for
-    each detector from the boresight.  The boresight pointing is just a simple
-    rastering over the sphere.
+    This provides timestreams for a specified number of detectors.  The
+    sky signal is a linear gradient across healpix pixels in NEST ordering.
+    The focalplane geometry is specified
+    and a focalplane geometry provided by a specifying the quaternion rotation for
+    each detector from the boresight.  The boresight pointing is just wrapping 
+    around the healpix sphere in ring order
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         timedist (bool): if True, the data is distributed by time, otherwise by
                   detector.
         detectors (dictionary): each key is the detector name, and each value
-                  is a tuple of x/y angle offsets in arcminutes.
+                  is a quaternion.
         rms (float): RMS of the white noise.
+        min (float): minimum of signal gradient.
+        max (float): maximum of signal gradient.
         samples (int): maximum allowed samples.
     """
 
@@ -242,7 +247,7 @@ class TODSimple(TOD):
 
         if detectors is None:
             # in this case, we will have a single detector at the boresight
-            self._dets = {'boresight' : (0.0, 0.0)}
+            self._dets = {'boresight' : (0.0, 0.0, 0.0, 1.0)}
         else:
             self._dets = detectors
 

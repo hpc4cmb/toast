@@ -15,9 +15,9 @@ import quaternionarray as qa
 
 import healpy as hp
 
-from ..dist import distribute_det_samples
+from toast.dist import distribute_det_samples
 
-from ..tod import TOD
+from toast.tod import TOD
 
 from .utilities import load_ringdb, count_samples, read_eff, write_eff, load_RIMO
 
@@ -33,7 +33,7 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 cinv = 1e3 / c # Inverse light speed in km / s ( the assumed unit for velocity )
 
 
-class TODPlanckEFF(TOD):
+class Exchange(TOD):
     """
     Provide pointing and detector timestreams for Planck Exchange File Format data.
 

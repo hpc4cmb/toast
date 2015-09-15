@@ -7,10 +7,10 @@ from .mpirunner import MPITestCase
 import sys
 
 from toast.tod.tod import *
-from toast.tod.memory import *
+from toast.tod.pointing import *
 
 
-class OpCopyTest(MPITestCase):
+class OpPointingFakeTest(MPITestCase):
 
     def setUp(self):
         # Note: self.comm is set by the test infrastructure
@@ -25,7 +25,7 @@ class OpCopyTest(MPITestCase):
         self.data = Data(self.toastcomm)
 
         self.dets = {
-            '1a' : (0.0, 1.0),
+            'fake' : (0.0, 1.0),
             '1b' : (0.0, -1.0),
             '2a' : (1.0, 0.0),
             '2b' : (-1.0, 0.0)
@@ -58,10 +58,10 @@ class OpCopyTest(MPITestCase):
             )
 
 
-    def test_copy(self):
+    def test_fake(self):
         start = MPI.Wtime()
 
-        op = OpCopy(timedist=True)
+        op = OpPointingFake()
 
         outdata = op.exec(self.data)
         

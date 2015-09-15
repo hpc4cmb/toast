@@ -3,5 +3,5 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-from .tod import TODPlanckEFF
+from .tod import Exchange
 

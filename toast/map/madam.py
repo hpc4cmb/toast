@@ -14,11 +14,11 @@ import numpy as np
 import numpy.ctypeslib as npc
 
 from ..dist import Comm, Data, Obs
+from ..operator import Operator
 from ..tod import TOD
-from .memory import Operator
 
 
-class OperatorMadam(Operator):
+class OpMadam(Operator):
     """
     Operator which passes data to libmadam for map-making.
 

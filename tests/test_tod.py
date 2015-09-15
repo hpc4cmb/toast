@@ -6,7 +6,8 @@ from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
 
-from toast.tod import *
+from toast.dist import *
+from toast.tod.tod import *
 
 
 class TODTest(MPITestCase):
@@ -36,7 +37,7 @@ class TODTest(MPITestCase):
             self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec, flags=self.pflagvec)
             for f in self.flavs:
                 self.tod.write(detector=d, flavor=f, local_start=0, data=self.datavec, flags=self.flagvec)
-        self.whtnse = TODSimple(mpicomm=self.comm, timedist=True, detectors=self.dets, rms=self.rms, samples=self.totsamp)
+        self.whtnse = TODFake(mpicomm=self.comm, timedist=True, detectors=self.dets, rms=self.rms, samples=self.totsamp)
 
 
     def test_props(self):

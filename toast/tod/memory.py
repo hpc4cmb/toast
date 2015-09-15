@@ -9,33 +9,12 @@ import unittest
 
 import numpy as np
 
+from ..operator import Operator
 from ..dist import Comm, Data, Obs
-from ..tod import TOD
+from .tod import TOD
 
 
-class Operator(object):
-    """
-    Base class for an operator that acts on collections of observations.
-
-    An operator takes as input a toast.dist.Data object and returns a
-    new instance of the same size.  For each observation in the distributed
-    data, an operator may pass some data types forward unchanged, or it may
-    replace or modify data.
-
-    Currently this class does nothing, but may in the future...
-
-    Args:
-        None
-    """
-
-    def __init__(self):
-        pass
-
-    def exec(self, indist):
-        return indist
-
-
-class OperatorCopy(Operator):
+class OpCopy(Operator):
     """
     Operator which copies input data into the native in-memory format.
 

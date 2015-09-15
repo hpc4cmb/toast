@@ -17,9 +17,7 @@ import glob
 
 import astropy.io.fits as pf
 
-from ..dist import distribute_det_samples
-
-#from ..tod import TOD
+from toast.dist import distribute_det_samples
 
 from collections import namedtuple
 
