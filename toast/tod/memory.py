@@ -53,6 +53,7 @@ class OpCopy(Operator):
             tod = inobs.tod
             base = inobs.baselines
             nse = inobs.noise
+            intrvl = inobs.intervals
 
             outtod = TOD(mpicomm=tod.mpicomm, timedist=self.timedist, 
                 detectors=tod.detectors, flavors=tod.flavors, 
@@ -83,7 +84,7 @@ class OpCopy(Operator):
                         data, flags = _shuffle(data, flags, tod.local_dets, tod.local_samples)
                         outstr.write(det, flv, 0, data, flags)
 
-            outobs = Obs(tod=outtod, baselines=outbaselines, noise = outnoise)
+            outobs = Obs(tod=outtod, intervals=intrvl, baselines=outbaselines, noise = outnoise)
 
             outdata.obs.append(outobs)
         return outdata

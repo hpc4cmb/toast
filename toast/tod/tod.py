@@ -12,6 +12,7 @@ import numpy as np
 from ..dist import distribute_det_samples
 
 
+
 class TOD(object):
     """
     Base class for an object that provides detector pointing and a 
@@ -54,6 +55,8 @@ class TOD(object):
         (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
         self._dist_npntg = (4*self._dist_samples[0], 4*self._dist_samples[1])
+
+        self.stamps = np.zeros(self._dist_samples[1], dtype=np.float64)
 
         self.data = {}
         for det in self._dist_dets:
@@ -129,6 +132,16 @@ class TOD(object):
         return
 
 
+    def _get_times(self, start, n):
+        return (self.stamps[start:start+n])
+
+
+    def _put_times(self, start, stamps):
+        n = stamps.shape[0]
+        self.stamps[start:start+n] = np.copy(stamps)
+        return
+
+
     def read(self, detector=None, flavor='default', local_start=0, n=0):
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
@@ -151,6 +164,19 @@ class TOD(object):
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put(detector, flavor, local_start, data, flags)
+        return
+
+
+    def read_times(self, local_start=0, n=0):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_times(local_start, n)
+
+
+    def write_times(self, local_start=0, stamps=None):
+        if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+        self._put_times(local_start, stamps)
         return
 
 
@@ -215,6 +241,14 @@ class TOD(object):
         return
 
 
+    def pmat_nnz(self, name=None):
+        if name not in self.pmat.keys():
+            raise ValueError('pointing matrix {} not found'.format(name))
+        nnz = int(len(self.pmat[name][detector]['weights']) / self.pmat[name][detector]['pixels'])
+        return nnz
+
+
+
 class TODFake(TOD):
     """
     Provide a simple generator of fake detector data.
@@ -238,7 +272,7 @@ class TODFake(TOD):
         samples (int): maximum allowed samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, rngstream=0):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, rngstream=0, firsttime=0.0, rate=100.0):
         
         # We call the parent class constructor to set the MPI communicator and
         # distribution type, but we do NOT pass the detector list, as this 
@@ -266,6 +300,8 @@ class TODFake(TOD):
         for det in enumerate(self._dets.keys()):
             self.seeds[det[1]] = det[0] 
         self.rms = rms
+        self.firsttime = firsttime
+        self.rate = rate
 
 
     def _get(self, detector, flavor, start, n):
@@ -279,6 +315,19 @@ class TODFake(TOD):
 
     def _put(self, detector, flavor, start, data, flags):
         raise RuntimeError('cannot write data to simulated data streams')
+        return
+
+
+    def _get_times(self, start, n):
+        start_abs = self._dist_samples[0] + start
+        start_time = self.firsttime + float(start_abs) / self.rate
+        stop_time = start_time + float(n) / self.rate
+        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
+        return stamps
+
+
+    def _put_times(self, start, stamps):
+        raise RuntimeError('cannot write timestamps to simulated data streams')
         return
 
 

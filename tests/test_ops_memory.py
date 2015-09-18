@@ -51,7 +51,8 @@ class OpCopyTest(MPITestCase):
 
             self.data.obs.append( 
                 Obs( 
-                    tod = tod, 
+                    tod = tod,
+                    intervals = [],
                     baselines = None, 
                     noise = None
                 )

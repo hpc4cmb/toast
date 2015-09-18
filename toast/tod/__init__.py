@@ -4,6 +4,8 @@
 
 from .tod import TOD, TODFake
 
+from .interval import Interval
+
 from .memory import Operator, OpCopy
 
 from .pointing import OpPointingFake
