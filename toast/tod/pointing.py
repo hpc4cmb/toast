@@ -9,13 +9,13 @@ import unittest
 
 import numpy as np
 
-from ..operator import Operator
-from ..dist import Comm, Data, Obs
-from .tod import TOD
-
 import healpy as hp
 
 import quaternionarray as qa
+
+from ..operator import Operator
+from ..dist import Comm, Data, Obs
+from .tod import TOD
 
 
 class OpPointingFake(Operator):
