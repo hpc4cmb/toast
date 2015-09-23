@@ -126,8 +126,8 @@ class TOD(object):
 
     def _put_pntg(self, detector, start, data, flags):
         if detector not in self.pntg.keys():
-            self.pntg[det] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
-            self.pflags[det] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+            self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
+            self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
         n = flags.shape[0]
         self.pntg[detector][4*start:4*(start+n)] = np.copy(data)
         self.pflags[detector][start:(start+n)] = np.copy(flags)
@@ -148,7 +148,9 @@ class TOD(object):
         return
 
 
-    def read(self, detector=None, flavor=self.DEFAULT_FLAVOR, local_start=0, n=0):
+    def read(self, detector=None, flavor=None, local_start=0, n=0):
+        if flavor is None:
+            flavor = self.DEFAULT_FLAVOR
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -160,7 +162,9 @@ class TOD(object):
         return self._get(detector, flavor, local_start, n)
 
 
-    def write(self, detector=None, flavor=self.DEFAULT_FLAVOR, local_start=0, data=None, flags=None):
+    def write(self, detector=None, flavor=None, local_start=0, data=None, flags=None):
+        if flavor is None:
+            flavor = self.DEFAULT_FLAVOR
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -217,7 +221,9 @@ class TOD(object):
         return
 
 
-    def read_pmat(self, name=self.DEFAULT_FLAVOR, detector=None, local_start=0, n=0):
+    def read_pmat(self, name=None, detector=None, local_start=0, n=0):
+        if name is None:
+            name = self.DEFAULT_FLAVOR
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -234,7 +240,9 @@ class TOD(object):
         return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
 
 
-    def write_pmat(self, name=self.DEFAULT_FLAVOR, detector=None, local_start=0, pixels=None, weights=None):
+    def write_pmat(self, name=None, detector=None, local_start=0, pixels=None, weights=None):
+        if name is None:
+            name = self.DEFAULT_FLAVOR
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -259,7 +267,9 @@ class TOD(object):
         return
 
 
-    def pmat_nnz(self, name=self.DEFAULT_FLAVOR):
+    def pmat_nnz(self, name=None):
+        if name is None:
+            name = self.DEFAULT_FLAVOR
         if name not in self.pmat.keys():
             raise ValueError('pointing matrix {} not found'.format(name))
         nnz = int(len(self.pmat[name][detector]['weights']) / self.pmat[name][detector]['pixels'])

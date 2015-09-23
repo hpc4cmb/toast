@@ -8,6 +8,7 @@ import sys
 
 from toast.tod.tod import *
 from toast.tod.pointing import *
+from toast.tod.sim import *
 
 
 class OpPointingFakeTest(MPITestCase):
@@ -42,10 +43,8 @@ class OpPointingFakeTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODFake(
-                mpicomm = self.data.comm.comm_group, 
-                timedist = True, 
+                mpicomm = self.data.comm.comm_group,  
                 detectors = self.dets,
-                rms = self.rms,
                 samples = self.totsamp
             )
 

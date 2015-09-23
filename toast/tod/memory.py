@@ -67,20 +67,20 @@ class OpCopy(Operator):
                 # we have the same distribution, and just need
                 # to read and write
                 for det in tod.local_dets:
-                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
+                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples)
                     print("copy input pdata, pflags have size: {}, {}".format(len(pdata), len(pflags)))
                     outtod.write_pntg(det, 0, pdata, pflags)
                     for flv in tod.flavors:
-                        data, flags = tod.read(det, flv, 0, tod.local_samples[1]) 
+                        data, flags = tod.read(det, flv, 0, tod.local_samples) 
                         outtod.write(det, flv, 0, data, flags)
             else:
                 # we have to read our local piece and communicate
                 for det in tod.local_dets:
-                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
+                    pdata, pflags = tod.read_pntg(det, 0, tod.local_samples)
                     pdata, pflags = _shuffle(pdata, pflags, tod.local_dets, tod.local_samples)
                     outtod.write_pntg(det, 0, pdata, pflags)
                     for flv in tod.flavors:
-                        data, flags = tod.read(det, flv, 0, tod.local_samples[1])
+                        data, flags = tod.read(det, flv, 0, tod.local_samples)
                         data, flags = _shuffle(data, flags, tod.local_dets, tod.local_samples)
                         outstr.write(det, flv, 0, data, flags)
 

@@ -24,50 +24,31 @@ class TODFake(TOD):
     """
     Provide a simple generator of fake detector pointing.
 
-    This provides timestreams for a specified number of detectors.  The
-    sky signal is a linear gradient across healpix pixels in NEST ordering.
-    The focalplane geometry is specified
-    and a focalplane geometry provided by a specifying the quaternion rotation for
-    each detector from the boresight.  The boresight pointing is just wrapping 
-    around the healpix sphere in ring order
+    Detector focalplane offsets are specified as a dictionary of
+    quaternion tuples.  The boresight pointing is a simple looping 
+    over HealPix ring ordered pixel centers.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
-        timedist (bool): if True, the data is distributed by time, otherwise by
-                  detector.
         detectors (dictionary): each key is the detector name, and each value
-                  is a quaternion.
-        rms (float): RMS of the white noise.
-        min (float): minimum of signal gradient.
-        max (float): maximum of signal gradient.
+                  is a quaternion tuple.
         samples (int): maximum allowed samples.
+        firsttime (float): starting time of data.
+        rate (float): sample rate in Hz.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, rms=1.0, samples=0, rngstream=0, firsttime=0.0, rate=100.0):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0):
         
-        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors.keys(), flavors=None, samples=samples)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors.keys(), flavors=None, samples=samples)
 
-        self._fp = detectors
-
-        self._theta_steps = 180
-        self._phi_steps = 360
-
-        self._rngstream = rngstream
-        self._seeds = {}
-        for det in enumerate(self.detectors):
-            self._seeds[det[1]] = det[0] 
-        self._rms = rms
+        self._fp = detectors        
         self._firsttime = firsttime
         self._rate = rate
 
 
     def _get(self, detector, flavor, start, n):
-        # Setting the seed like this does NOT guarantee uncorrelated
-        # results from the generator.  This is just a place holder until
-        # the streamed rng is implemented.
-        np.random.seed(self.seeds[detector])
-        trash = np.random.normal(loc=0.0, scale=self.rms, size=(n-start))
-        return ( np.random.normal(loc=0.0, scale=self.rms, size=n), np.zeros(n, dtype=np.uint8) )
+        # This class just returns data streams of zeros
+        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8) )
 
 
     def _put(self, detector, flavor, start, data, flags):
@@ -92,16 +73,6 @@ class TODFake(TOD):
         # compute the absolute sample offset
         start_abs = self.local_offset + start
 
-        # compute the position on the sphere, spiralling from North
-        # pole to South.  obviously the pointings will be densest at
-        # the poles.
-        start_theta = int(start_abs / self._theta_steps)
-        start_phi = int(start_abs / self._phi_steps)
-
-        # ... in progress ...
-
-        # convert to quaternions
-        # FIXME: use our quaternion library once implemented
 
         data = np.zeros(4*n, dtype=np.float64)
         flags = np.zeros(n, dtype=np.uint8)
@@ -130,6 +101,12 @@ class OpSimNoise(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._flavor = flavor
+
+        self._rngstream = rngstream
+        self._seeds = {}
+        for det in enumerate(self.detectors):
+            self._seeds[det[1]] = det[0] 
+        self._rms = rms
 
     @property
     def timedist(self):
@@ -179,6 +156,13 @@ class OpSimNoise(Operator):
         return outdata
 
 
+
+        # Setting the seed like this does NOT guarantee uncorrelated
+        # results from the generator.  This is just a place holder until
+        # the streamed rng is implemented.
+        np.random.seed(self.seeds[detector])
+        trash = np.random.normal(loc=0.0, scale=self.rms, size=(n-start))
+        return ( np.random.normal(loc=0.0, scale=self.rms, size=n), np.zeros(n, dtype=np.uint8) )
 
 
 

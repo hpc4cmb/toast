@@ -7,6 +7,7 @@ from .mpirunner import MPITestCase
 import sys
 
 from toast.tod.tod import *
+from toast.tod.sim import *
 from toast.map.madam import *
 
 
@@ -36,9 +37,7 @@ class OpMadamTest(MPITestCase):
 
             tod = TODFake(
                 mpicomm = self.data.comm.comm_group, 
-                timedist = True, 
                 detectors = self.dets,
-                rms = self.rms,
                 samples = self.totsamp
             )
 

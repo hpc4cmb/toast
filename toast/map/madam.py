@@ -49,11 +49,14 @@ class OpMadam(Operator):
         self._params = params
 
         # dlopen the madam library, if not done already
-        if OperatorMadam.lib_handle is None:
-            OperatorMadam.lib_path = find_library('libmadam')
-            OperatorMadam.lib_handle = ct.CDLL(OperatorMadam.lib_path, mode=ct.RTLD_GLOBAL)
-            OperatorMadam.lib_handle.destripe.restype = None
-            OperatorMadam.lib_handle.destripe.argtypes = [
+        if OpMadam.lib_handle is None:
+            #OpMadam.lib_path = find_library('libmadam')
+            OpMadam.lib_path = '/home/kisner/software/lib/libmadam.so'
+            if OpMadam.lib_path is None:
+                raise RuntimeError('cannot find libmadam')
+            OpMadam.lib_handle = ct.CDLL(OpMadam.lib_path)
+            OpMadam.lib_handle.destripe.restype = None
+            OpMadam.lib_handle.destripe.argtypes = [
                 ct.c_int,
                 ct.c_char_p,
                 ct.c_long,
@@ -155,7 +158,7 @@ class OpMadam(Operator):
 
         # destripe
 
-        OperatorMadam.lib_handle.destripe(
+        OpMadam.lib_handle.destripe(
             fcomm,
             parstring,
             ndet,

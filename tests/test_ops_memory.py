@@ -8,6 +8,7 @@ import sys
 
 from toast.tod.tod import *
 from toast.tod.memory import *
+from toast.tod.sim import *
 
 
 class OpCopyTest(MPITestCase):
@@ -43,9 +44,7 @@ class OpCopyTest(MPITestCase):
 
             tod = TODFake(
                 mpicomm = self.data.comm.comm_group, 
-                timedist = True, 
                 detectors = self.dets,
-                rms = self.rms,
                 samples = self.totsamp
             )
 
