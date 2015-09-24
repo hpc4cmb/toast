@@ -19,6 +19,33 @@ from ..tod import TOD
 from ..tod import Interval
 
 
+libmadam = ct.CDLL('libmadam.so')
+
+libmadam.destripe.restype = None
+libmadam.destripe.argtypes = [
+    ct.c_int,
+    ct.c_char_p,
+    ct.c_long,
+    ct.c_char_p,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    ct.c_long,
+    ct.c_long,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    ct.c_long,
+    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+    ct.c_long,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    ct.c_long,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+    ct.c_long,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
+]
+
+
 class OpMadam(Operator):
     """
     Operator which passes data to libmadam for map-making.
@@ -26,13 +53,6 @@ class OpMadam(Operator):
     Args:
         params (dictionary): parameters to pass to madam.
     """
-
-    # We store the shared library handle as a class
-    # attribute, so that we only ever dlopen the library
-    # once.
-
-    lib_path = ""
-    lib_handle = None
 
     def __init__(self, flavor=None, pmat=None, params={}):
         
@@ -48,51 +68,20 @@ class OpMadam(Operator):
             self._pmat = TOD.DEFAULT_FLAVOR
         self._params = params
 
-        # dlopen the madam library, if not done already
-        if OpMadam.lib_handle is None:
-            #OpMadam.lib_path = find_library('libmadam')
-            OpMadam.lib_path = '/home/kisner/software/lib/libmadam.so'
-            if OpMadam.lib_path is None:
-                raise RuntimeError('cannot find libmadam')
-            OpMadam.lib_handle = ct.CDLL(OpMadam.lib_path)
-            OpMadam.lib_handle.destripe.restype = None
-            OpMadam.lib_handle.destripe.argtypes = [
-                ct.c_int,
-                ct.c_char_p,
-                ct.c_long,
-                ct.c_char_p,
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                ct.c_long,
-                ct.c_long,
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                ct.c_long,
-                npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-                npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-                ct.c_long,
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                ct.c_long,
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-                ct.c_long,
-                npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-            ]
-
 
     @property
     def timedist(self):
         return self._timedist
 
 
-    def _dict2parstring(d):
+    def _dict2parstring(self, d):
         s = ''
         for key, value in d.items():
             s += '{} = {};'.format(key, value)
         return s
 
 
-    def _dets2detstring(dets):
+    def _dets2detstring(self, dets):
         s = ''
         for d in dets:
             s += '{};'.format(d)
@@ -122,22 +111,23 @@ class OpMadam(Operator):
         ndet = len(tod.detectors)
         nglobal = tod.total_samples
         nlocal = tod.local_samples
-        nnz = tod.pmat_nnz(self._pmat)
+        nnz = tod.pmat_nnz(self._pmat, tod.detectors[0])
 
-        parstring = _dict2parstring(self._params)
-        detstring = _dets2detstring(tod.detectors)
+        parstring = self._dict2parstring(self._params)
+        detstring = self._dets2detstring(tod.detectors)
 
         timestamps = tod.read_times()
 
         signal = np.zeros(ndet * nlocal, dtype=np.float64)
+        flags = np.zeros(ndet * nlocal, dtype=np.uint8)
         pixels = np.zeros(ndet * nlocal, dtype=np.int64)
         pixweights = np.zeros(ndet * nlocal * nnz, dtype=np.float64)
 
         for d in range(ndet):
-            dslice = (d * nlocal, (d+1) * nlocal)
-            dwslice = (d * nlocal * nnz, (d+1) * nlocal * nnz)
-            signal[dslice] = tod.read(detector=d, flavor=self._flavor)
-            pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=d)
+            dslice = slice(d * nlocal, (d+1) * nlocal)
+            dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
+            signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=tod.local_samples)
+            pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=tod.local_samples)
 
         nperiod = len(intervals)
         periods = np.zeros(nperiod, dtype=np.int64)
@@ -149,7 +139,7 @@ class OpMadam(Operator):
         detweights = np.ones(ndet, dtype=np.float64)
 
         npsd = np.ones(ndet, dtype=np.int64)
-        npsdtot = np.sum(npsd)
+        npsdtot = int(np.sum(npsd))
         psdstarts = np.zeros(npsdtot, dtype=np.float64)
         npsdbin = 1
         npsdval = npsdbin * npsdtot
@@ -158,27 +148,8 @@ class OpMadam(Operator):
 
         # destripe
 
-        OpMadam.lib_handle.destripe(
-            fcomm,
-            parstring,
-            ndet,
-            detstring,
-            detweights,
-            nlocal,
-            nnz,
-            timestamps,
-            pixels,
-            pixweights,
-            signal,
-            nperiod,
-            periods,
-            npsd,
-            npsdtot,
-            psdstarts,
-            npsdbin,
-            psdfreqs,
-            npsdval,
-            psdvals
-        )
+        print(type(todfcomm), type(parstring), type(ndet), type(detstring), type(detweights), type(nlocal), type(nnz), type(timestamps), type(pixels), type(pixweights), type(signal), type(nperiod), type(periods), type(npsd), type(npsdtot), type(psdstarts), type(npsdbin), type(psdfreqs), type(npsdval), type(psdvals))
+
+        libmadam.destripe(todfcomm, ct.c_char_p(parstring), ndet, detstring, detweights, nlocal, nnz, timestamps, pixels, pixweights, signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
 
         return

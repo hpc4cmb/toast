@@ -24,9 +24,9 @@ class TODFake(TOD):
     """
     Provide a simple generator of fake detector pointing.
 
-    Detector focalplane offsets are specified as a dictionary of
-    quaternion tuples.  The boresight pointing is a simple looping 
-    over HealPix ring ordered pixel centers.
+    Detector focalplane offsets are specified as a dictionary of 4-element
+    ndarrays.  The boresight pointing is a simple looping over HealPix 
+    ring ordered pixel centers.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
@@ -38,12 +38,19 @@ class TODFake(TOD):
     """
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0):
-        
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors.keys(), flavors=None, samples=samples)
+        if detectors is None:
+            self._fp = {TOD.DEFAULT_FLAVOR : np.array([0.0, 0.0, 1.0, 0.0])}
+        else:
+            self._fp = detectors
 
-        self._fp = detectors        
+        self._detlist = sorted(list(self._fp.keys()))
+        
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, flavors=None, samples=samples)
+
         self._firsttime = firsttime
         self._rate = rate
+        self._nside = 256
+        self._npix = 12 * self._nside * self._nside
 
 
     def _get(self, detector, flavor, start, n):
@@ -58,8 +65,8 @@ class TODFake(TOD):
 
     def _get_times(self, start, n):
         start_abs = self.local_offset + start
-        start_time = self.firsttime + float(start_abs) / self.rate
-        stop_time = start_time + float(n) / self.rate
+        start_time = self._firsttime + float(start_abs) / self._rate
+        stop_time = start_time + float(n) / self._rate
         stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
         return stamps
 
@@ -73,9 +80,35 @@ class TODFake(TOD):
         # compute the absolute sample offset
         start_abs = self.local_offset + start
 
+        detquat = np.asarray(self._fp[detector])
 
-        data = np.zeros(4*n, dtype=np.float64)
+        # pixel offset
+        start_pix = int(start_abs % self._npix)
+        pixels = np.linspace(start_pix, start_pix + n, num=n, endpoint=False)
+        pixels = np.mod(pixels, self._npix*np.ones(n, dtype=np.int64)).astype(np.int64)
+
+        x, y, z = hp.pix2vec(self._nside, pixels, nest=False)
+
+        zaxis = np.array([0,0,1], dtype=np.float64)
+
+        dir = np.ravel(np.column_stack((x, y, z))).reshape(-1,3)
+
+        orient = np.cross(dir, np.tile(zaxis, x.shape[0]).reshape(-1,3))
+
+        norm = np.linalg.norm(orient, axis=1)
+
+        orient = orient / np.repeat(norm,3).reshape(-1,3)
+
+        v = np.cross(dir, orient)
+        
+        s = np.sqrt(np.power(np.linalg.norm(dir, axis=1), 2) * np.power(np.linalg.norm(orient, axis=1), 2)).reshape(-1,1)
+
+        boresight = np.concatenate((v, s), axis=1)
+        #print(boresight)
+        #print(detquat)
+
         flags = np.zeros(n, dtype=np.uint8)
+        data = qa.mult(boresight, detquat).flatten()
 
         return (data, flags)
 

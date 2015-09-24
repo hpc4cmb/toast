@@ -56,11 +56,11 @@ class OpPointingFake(Operator):
             tod = obs.tod
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(det, 0, tod.local_samples)
-                dir = qa.rotate(np.reshape(pdata, (-1, 4)), zaxis)
+                dir = qa.rotate(pdata.reshape(-1, 4), zaxis)
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=True)
                 nnz = 1
                 weights = np.ones(nnz * tod.local_samples, dtype=np.float64)
-                tod.write_pmat(name=TOD.DEFAULT_FLAVOR, detector=det, local_start=0, pixels=pixels, weights=weights) 
+                tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights) 
         return
 
 

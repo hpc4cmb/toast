@@ -10,6 +10,8 @@ from toast.tod.tod import *
 from toast.tod.memory import *
 from toast.tod.sim import *
 
+import quaternionarray as qa
+
 
 class OpCopyTest(MPITestCase):
 
@@ -25,11 +27,15 @@ class OpCopyTest(MPITestCase):
         self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
 
+        spread = 0.1 * np.pi / 180.0
+        angterm = np.cos(spread / 2.0)
+        axiscoef = np.sin(spread / 2.0)
+
         self.dets = {
-            '1a' : (0.0, 1.0),
-            '1b' : (0.0, -1.0),
-            '2a' : (1.0, 0.0),
-            '2b' : (-1.0, 0.0)
+            '1a' : np.array([axiscoef, 0.0, 0.0, angterm]),
+            '1b' : np.array([-axiscoef, 0.0, 0.0, angterm]),
+            '2a' : np.array([0.0, axiscoef, 0.0, angterm]),
+            '2b' : np.array([0.0, -axiscoef, 0.0, angterm])
             }
         self.flavs = ['proc1', 'proc2']
         self.flavscheck = [TOD.DEFAULT_FLAVOR] + self.flavs

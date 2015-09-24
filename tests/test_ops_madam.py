@@ -7,6 +7,8 @@ from .mpirunner import MPITestCase
 import sys
 
 from toast.tod.tod import *
+from toast.tod.memory import *
+from toast.tod.pointing import *
 from toast.tod.sim import *
 from toast.map.madam import *
 
@@ -20,14 +22,13 @@ class OpMadamTest(MPITestCase):
         self.data = Data(self.toastcomm)
 
         self.dets = {
-            '1a' : (0.0, 1.0),
-            '1b' : (0.0, -1.0),
-            '2a' : (1.0, 0.0),
-            '2b' : (-1.0, 0.0)
+            'bore' : np.array([0.0, 0.0, 1.0, 0.0])
             }
 
         self.totsamp = 100000
         self.rms = 10.0
+        self.nside = 256
+        self.rate = 50.0
 
         # madam only supports a single observation
         nobs = 1
@@ -36,9 +37,10 @@ class OpMadamTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODFake(
-                mpicomm = self.data.comm.comm_group, 
-                detectors = self.dets,
-                samples = self.totsamp
+                mpicomm=self.toastcomm.comm_group, 
+                detectors=self.dets,
+                samples=self.totsamp,
+                rate=self.rate
             )
 
             self.data.obs.append( 
@@ -54,10 +56,30 @@ class OpMadamTest(MPITestCase):
     def test_madam_gradient(self):
         start = MPI.Wtime()
 
-        par = {}
+        # cache the data in memory
+        cache = OpCopy()
+        data = cache.exec(self.data)
 
-        op = OpMadam(params=par)
-        op.exec(self.data)
+        # make a simple pointing matrix
+        pointing = OpPointingFake(nside=self.nside)
+        pointing.exec(data)
+
+        pars = {}
+        pars[ 'base_first' ] = 1.0
+        pars[ 'fsample' ] = self.rate
+        pars[ 'nside_map' ] = self.nside
+        pars[ 'nside_cross' ] = self.nside
+        pars[ 'nside_submap' ] = self.nside
+        pars[ 'write_map' ] = True
+        pars[ 'write_binmap' ] = True
+        pars[ 'write_matrix' ] = True
+        pars[ 'write_wcov' ] = True
+        pars[ 'write_hits' ] = True
+        pars[ 'kfilter' ] = False
+        pars[ 'path_output' ] = './'
+
+        madam = OpMadam(params=pars)
+        madam.exec(data)
 
         stop = MPI.Wtime()
         elapsed = stop - start

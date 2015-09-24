@@ -96,6 +96,10 @@ class TOD(object):
     def mpicomm(self):
         return self._mpicomm
 
+    @property
+    def pointings(self):
+        return sorted(list(self.pmat.keys()))
+
 
     def _get(self, detector, flavor, start, n):
         if detector not in self.data.keys():
@@ -236,7 +240,7 @@ class TOD(object):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         if 'pixels' not in self.pmat[name][detector]:
             raise RuntimeError('detector {} in pointing matrix {} not yet written'.format(detector, name))
-        nnz = int(len(self.pmat[name][detector]['weights']) / self.pmat[name][detector]['pixels'])
+        nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
         return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
 
 
@@ -267,12 +271,14 @@ class TOD(object):
         return
 
 
-    def pmat_nnz(self, name=None):
+    def pmat_nnz(self, name=None, detector=None):
         if name is None:
             name = self.DEFAULT_FLAVOR
+        if detector is None:
+            raise ValueError('you must specify the detector')
         if name not in self.pmat.keys():
             raise ValueError('pointing matrix {} not found'.format(name))
-        nnz = int(len(self.pmat[name][detector]['weights']) / self.pmat[name][detector]['pixels'])
+        nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
         return nnz
 
 
