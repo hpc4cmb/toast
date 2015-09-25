@@ -27,7 +27,7 @@ class OpMadamTest(MPITestCase):
 
         self.totsamp = 100000
         self.rms = 10.0
-        self.nside = 256
+        self.nside = 64
         self.rate = 50.0
 
         # madam only supports a single observation
@@ -70,12 +70,13 @@ class OpMadamTest(MPITestCase):
         pars[ 'nside_map' ] = self.nside
         pars[ 'nside_cross' ] = self.nside
         pars[ 'nside_submap' ] = self.nside
-        pars[ 'write_map' ] = True
+        pars[ 'write_map' ] = False
         pars[ 'write_binmap' ] = True
-        pars[ 'write_matrix' ] = True
-        pars[ 'write_wcov' ] = True
+        pars[ 'write_matrix' ] = False
+        pars[ 'write_wcov' ] = False
         pars[ 'write_hits' ] = True
         pars[ 'kfilter' ] = False
+        pars[ 'run_submap_test' ] = False
         pars[ 'path_output' ] = './'
 
         madam = OpMadam(params=pars)

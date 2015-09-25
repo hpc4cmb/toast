@@ -129,10 +129,18 @@ class OpMadam(Operator):
             signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=tod.local_samples)
             pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=tod.local_samples)
 
-        nperiod = len(intervals)
+        nperiod = None
+        if (len(intervals) == 0):
+            nperiod = 1
+        else:
+            nperiod = len(intervals)
+
         periods = np.zeros(nperiod, dtype=np.int64)
-        for p in range(nperiod):
-            periods[p] = int(intervals[p].first)
+        if (len(intervals) == 0):
+            periods[0] = 0
+        else:
+            for p in range(nperiod):
+                periods[p] = int(intervals[p].first)
 
         # use uniform white noise PSDs for now...
 
@@ -148,8 +156,6 @@ class OpMadam(Operator):
 
         # destripe
 
-        print(type(todfcomm), type(parstring), type(ndet), type(detstring), type(detweights), type(nlocal), type(nnz), type(timestamps), type(pixels), type(pixweights), type(signal), type(nperiod), type(periods), type(npsd), type(npsdtot), type(psdstarts), type(npsdbin), type(psdfreqs), type(npsdval), type(psdvals))
-
-        libmadam.destripe(todfcomm, ct.c_char_p(parstring), ndet, detstring, detweights, nlocal, nnz, timestamps, pixels, pixweights, signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
+        libmadam.destripe(todfcomm, parstring.encode(), ndet, detstring.encode(), detweights, nlocal, nnz, timestamps, pixels, pixweights, signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
 
         return
