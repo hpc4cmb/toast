@@ -6,8 +6,8 @@ from .tod import TOD
 
 from .interval import Interval
 
-from .memory import Operator, OpCopy
+from .memory import OpCopy
 
 from .pointing import OpPointingFake
 
-from .sim import TODFake, OpSimNoise
+from .sim import TODFake, OpSimGradient

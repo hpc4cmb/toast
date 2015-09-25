@@ -25,9 +25,11 @@ class OpMadamTest(MPITestCase):
             'bore' : np.array([0.0, 0.0, 1.0, 0.0])
             }
 
-        self.totsamp = 100000
+        self.sim_nside = 64
+        self.totsamp = 3 * 49152
+        #self.totsamp = 20
         self.rms = 10.0
-        self.nside = 64
+        self.map_nside = 64
         self.rate = 50.0
 
         # madam only supports a single observation
@@ -40,7 +42,8 @@ class OpMadamTest(MPITestCase):
                 mpicomm=self.toastcomm.comm_group, 
                 detectors=self.dets,
                 samples=self.totsamp,
-                rate=self.rate
+                rate=self.rate,
+                nside=self.sim_nside
             )
 
             self.data.obs.append( 
@@ -60,16 +63,21 @@ class OpMadamTest(MPITestCase):
         cache = OpCopy()
         data = cache.exec(self.data)
 
+        # add simple sky gradient signal
+        grad = OpSimGradient(nside=self.sim_nside)
+        grad.exec(data)
+
         # make a simple pointing matrix
-        pointing = OpPointingFake(nside=self.nside)
+        pointing = OpPointingFake(nside=self.map_nside, nest=True)
         pointing.exec(data)
 
         pars = {}
+        pars[ 'kfirst' ] = False
         pars[ 'base_first' ] = 1.0
         pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.nside
-        pars[ 'nside_cross' ] = self.nside
-        pars[ 'nside_submap' ] = self.nside
+        pars[ 'nside_map' ] = self.map_nside
+        pars[ 'nside_cross' ] = self.map_nside
+        pars[ 'nside_submap' ] = self.map_nside
         pars[ 'write_map' ] = False
         pars[ 'write_binmap' ] = True
         pars[ 'write_matrix' ] = False
