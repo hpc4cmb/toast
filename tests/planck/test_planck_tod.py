@@ -11,7 +11,7 @@ import os
 from toast.exp.planck.tod import *
 
 
-class TODPlanckExchangeTest(MPITestCase):
+class PlanckExchangeTest(MPITestCase):
 
 
     def setUp(self):

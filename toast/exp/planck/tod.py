@@ -91,10 +91,11 @@ class Exchange(TOD):
         self.deaberrate = deaberrate
         self.order = order
         self.nside = nside
-        
-        self._offset, self._nsamp, self._sizes = count_samples( self.ringdb, self.ringtable, obt_range, ring_range, od_range )
 
-        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=0, sizes=self._sizes)
+        self._offset, self._nsamp, self._sizes = count_samples( self.ringdb, self.ringtable, obt_range, ring_range, od_range )
+        
+        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=self._nsamp, sizes=self._sizes)
+        
 
         self._dets = detectors
 
@@ -216,8 +217,18 @@ class Exchange(TOD):
 
     def _put_pntg(self, detector, start, data, flags):
 
-        result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.flagmask )
+        result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.flagmask )
         # FIXME: should we check the result here?
         # We should NOT return result, since the return needs to be empty
+        return
+
+
+    def _get_times(self, start, n):
+        data, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'OBT', 0, 0 )
+        return data
+
+
+    def _put_times(self, start, stamps):
+        result = write_eff( detector, local_start, stamps, np.zeros(stamps.shape[0], dtype=np.uint8), self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'OBT', 0 )
         return
 
