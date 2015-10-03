@@ -19,7 +19,7 @@ from toast.dist import distribute_det_samples
 
 from toast.tod import TOD
 
-from .utilities import load_ringdb, count_samples, read_eff, write_eff, load_RIMO
+from .utilities import load_ringdb, count_samples, read_eff, write_eff, load_RIMO, bolos_by_freq
 
 
 xaxis = np.array( [1,0,0], dtype=np.float64 )
@@ -49,12 +49,12 @@ class Exchange(TOD):
         od_range: data span in operational days
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, fn_ringdb=None, effdir=None, obt_range=None, ring_range=None, od_range=None, freq=None, RIMO=None, coord='G', mode='THETAPHIPSI', deaberrate=True, order='RING', nside=2048, obtmask=0, flagmask=0, bufsize=100000):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, ringdb=None, effdir=None, obt_range=None, ring_range=None, od_range=None, freq=None, RIMO=None, coord='G', deaberrate=True, obtmask=0, flagmask=0, bufsize=100000):
 
         if detectors is None:
             raise ValueError('you must specify a list of detectors')
 
-        if fn_ringdb is None:
+        if ringdb is None:
             raise ValueError('You must provide a path to the ring database')
 
         if effdir is None:
@@ -66,7 +66,7 @@ class Exchange(TOD):
         if RIMO is None:
             raise ValueError('You must specify which RIMO to use')
 
-        self.ringdb_path = fn_ringdb
+        self.ringdb_path = ringdb
         self.ringdb = load_ringdb( self.ringdb_path, mpicomm )
 
         self.RIMO_path = RIMO
@@ -75,29 +75,36 @@ class Exchange(TOD):
         self.bufsize = bufsize
 
         self.freq = freq
-        if self.freq < 100:
-            self.ringtable = 'ring_times_{}'.format(self.freq)
-        else:
-            self.ringtable = 'ring_times_hfi'
 
         self.coord = coord
-        if mode == 'QUATERNION':
-            self.ncol = 4
-        elif mode == 'THETAPHIPSI':
-            self.ncol = 3
-        elif mode == 'IQU':
-            self.ncol = 3
-        self.mode = mode
+
         self.deaberrate = deaberrate
-        self.order = order
-        self.nside = nside
 
-        self._offset, self._nsamp, self._sizes = count_samples( self.ringdb, self.ringtable, obt_range, ring_range, od_range )
-        
-        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=self._nsamp, sizes=self._sizes)
-        
+        self.mpicomm = mpicomm
 
-        self._dets = detectors
+        rank = self.mpicomm.rank
+
+        self.globalstart = 0.0
+        self.globalfirst = 0
+        self.allsamp = 0
+        self.rings = []
+        
+        if rank == 0:
+            self.globalstart, self.globalfirst, self.allsamp, self.rings = count_samples( self.ringdb, self.freq, obt_range, ring_range, od_range )
+        
+        self.mpicomm.bcast(self.globalstart, root=0)
+        self.mpicomm.bcast(self.globalfirst, root=0)
+        self.mpicomm.bcast(self.allsamp, root=0)
+        self.mpicomm.bcast(self.rings, root=0)
+        
+        if detectors is None:
+            self._dets = bolos_by_freq(self.freq)
+        else:
+            self._dets = detectors
+
+        self.ringsizes = [ x.samples for x in self.rings ]
+
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors, samples=self.allsamp, sizes=self.ringsizes)
 
         self.effdir = effdir
         self.obtmask = obtmask
@@ -114,6 +121,11 @@ class Exchange(TOD):
             self.coordmatrix, do_conv, normcoord = hp.rotator.get_coordconv_matrix( ['E', self.coord] )
             self.coordquat = qa.from_rotmat( self.coordmatrix )
     
+
+    @property
+    def valid_intervals(self):
+        return self.rings
+
 
     def _get(self, detector, flavor, local_start, n):
 
@@ -161,7 +173,7 @@ class Exchange(TOD):
 
         # Initialize output
 
-        out = np.zeros( [n,self.ncol], dtype=np.float64 )
+        out = np.zeros( (n, 4), dtype=np.float64 )
 
         # Rotate into detector frame and convert to desired format
 
@@ -188,28 +200,7 @@ class Exchange(TOD):
             if self.coordquat is not None:
                 quats = qa.mult( self.coordquat, quats )
 
-            if self.mode == 'QUATERNION':
-                out[ind] = quats
-            elif self.mode == 'THETAPHIPSI' or self.mode == 'IQU':
-                vec_dir = qa.rotate( quats, zaxis )
-                theta, phi = hp.vec2ang( vec_dir )
-
-                vec_dir = vec_dir.T.copy()
-                vec_orient = qa.rotate( quats, xaxis ).T                
-                
-                ypa = vec_orient[0]*vec_dir[1] - vec_orient[1]*vec_dir[0]
-                xpa = -vec_orient[0]*vec_dir[2]*vec_dir[0] - vec_orient[1]*vec_dir[2]*vec_dir[1] + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
-
-                psi = np.arctan2( ypa, xpa )
-
-                if self.mode == 'THETAPHIPSI':                    
-                    out[ind,0] = theta
-                    out[ind,1] = phi
-                    out[ind,2] = psi
-                elif self.mode == 'IQU':
-                    out[ind,0] = hp.vec2pix( self.nside, *(vec.T), nest=(self.order=='NEST') )
-                    out[ind,1] = eta * np.cos( 2 * psi )
-                    out[ind,2] = eta * np.sin( 2 * psi )
+            out[ind] = quats
 
         # Return
         return (out, flag)

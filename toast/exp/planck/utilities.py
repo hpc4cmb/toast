@@ -19,6 +19,8 @@ import astropy.io.fits as pf
 
 from toast.dist import distribute_det_samples
 
+from toast.tod.interval import Interval
+
 from collections import namedtuple
 
 from scipy.constants import degree, arcmin, arcsec, c
@@ -36,7 +38,9 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 DetectorData = namedtuple( 'DetectorData', 'detector phi_uv theta_uv psi_uv psi_pol epsilon fsample fknee alpha net quat' )
 
 
-def read_eff(detector, local_start, n, offset, local_samples, ringtable, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask ):
+def read_eff(detector, local_start, n, offset, local_samples, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask ):
+
+    ringtable = ringdb_table_name(freq)
 
     # Convert to global indices
 
@@ -159,7 +163,9 @@ def read_eff(detector, local_start, n, offset, local_samples, ringtable, ringdb,
     return (data, flag)
 
 
-def write_eff( detector, local_start, data, flags, offset, local_samples, ringtable, ringdb, ringdb_path, freq, effdir, extname, flagmask ):
+def write_eff( detector, local_start, data, flags, offset, local_samples, ringdb, ringdb_path, freq, effdir, extname, flagmask ):
+
+    ringtable = ringdb_table_name(freq)
 
     # Convert to global indices
 
@@ -261,6 +267,13 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringta
     return result
 
 
+def ringdb_table_name(freq):
+    if freq < 100:
+        return 'ring_times_{}'.format(self.freq)
+    else:
+        return 'ring_times_hfi'
+
+
 def load_ringdb(path, mpicomm):
     """
     Load and broadcast the ring database.
@@ -341,10 +354,17 @@ def load_RIMO(path, mpicomm):
     return RIMO
 
 
-def count_samples(ringdb, ringtable, obt_range, ring_range, od_range):
+def count_samples(ringdb, freq, obt_range, ring_range, od_range):
     """
     Query the ring database to determine which global samples the requested sample indices point to.
     """
+
+    ringtable = ringdb_table_name(freq)
+
+    rings = []
+    samples = 0
+    global_start = 0.0
+    global_first = 0
 
     if obt_range is not None:
         start, stop = obt_range
@@ -356,14 +376,14 @@ def count_samples(ringdb, ringtable, obt_range, ring_range, od_range):
         start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
 
         start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
+
+        global_start = start_time1
+        global_first = start_index1
+        samples = stop_index2 - start_index1 + 1
         
-        sizes = []
         for interval in intervals:
             start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
-            sizes.append( stop_index - start_index + 1 )
-
-        offset = start_index1
-        samples = stop_index2 - start_index1
+            rings.append( Interval(start=start_time, stop=stop_time, first=start_index, last=stop_index) )
 
         return offset, samples, sizes
     elif ring_range is not None:
@@ -385,15 +405,15 @@ def count_samples(ringdb, ringtable, obt_range, ring_range, od_range):
 
         start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
 
-        sizes = []
+        global_start = start_time1
+        global_first = start_index1
+        samples = stop_index2 - start_index1 + 1
+
         for interval in intervals:
             start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
-            sizes.append( stop_index - start_index + 1 )
+            rings.append( Interval(start=start_time, stop=stop_time, first=start_index, last=stop_index) )
 
-        offset = start_index1
-        samples = stop_index2 - start_index1
-
-        return offset, samples, sizes
+    return global_start, global_first, samples, rings
 
 
 def bolos_by_type(type):

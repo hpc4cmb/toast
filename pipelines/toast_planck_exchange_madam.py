@@ -13,73 +13,58 @@ parser.add_argument( '--freq', required=True, help='Frequency' )
 parser.add_argument( '--dets', required=False, default=None, help='Detector list (comma separated)' )
 parser.add_argument( '--effdir', required=True, help='Input Exchange Format File directory' )
 parser.add_argument( '--ringdb', required=True, help='Ring DB file' )
-parser.add_argument( '--odfirst', required=False, default=91, help='First OD to use' )
-parser.add_argument( '--odlast', required=False, default=110, help='Last OD to use' )
+parser.add_argument( '--odfirst', required=False, default=None, help='First OD to use' )
+parser.add_argument( '--odlast', required=False, default=None, help='Last OD to use' )
+parser.add_argument( '--ringfirst', required=False, default=None, help='First ring to use' )
+parser.add_argument( '--ringlast', required=False, default=None, help='Last ring to use' )
+parser.add_argument( '--obtfirst', required=False, default=None, help='First OBT to use' )
+parser.add_argument( '--obtlast', required=False, default=None, help='Last OBT to use' )
 parser.add_argument( '--madampar', required=False, default=None, help='Madam parameter file' )
 parser.add_argument( '--out', required=False, default='.', help='Output directory' )
 args = parser.parse_args()
 
+start = MPI.Wtime()
+
+odrange = None
+if args.odfirst is not None and args.odlast is not None:
+    odrange = (args.odfirst, args.odlast)
+
+ringrange = None
+if args.ringfirst is not None and args.ringlast is not None:
+    ringrange = (args.ringfirst, args.ringlast)
+
+obtrange = None
+if args.obtfirst is not None and args.obtlast is not None:
+    obtrange = (args.obtfirst, args.obtlast)
 
 # This is the 2-level toast communicator.  By default,
 # there is just one group which spans MPI_COMM_WORLD.
 comm = toast.Comm()
 
+# This is the distributed data, consisting of one or
+# more observations, each distributed over a communicator.
 data = toast.Data(comm)
 
-# madam only supports a single observation.  Normally
-# we would have multiple observations with some subset
-# assigned to each process group.
+# Read in madam parameter file
+pars = {}
 
-
-
-# create the TOD for this observation
-
-tod = planck.Exchange(
-    mpicomm=comm.comm_group, 
-    detectors=args.dets,
-    fn_ringdb=args.ringdb,
-    effdir=args.effdir,
-
-    samples=self.totsamp,
-    rate=self.rate,
-    nside=self.sim_nside
-)
-
-mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, fn_ringdb=None, effdir=None, obt_range=None, ring_range=None, od_range=None, freq=None, RIMO=None, coord='G', mode='THETAPHIPSI', deaberrate=True, order='RING', nside=2048, obtmask=0, flagmask=0, bufsize=100000)
-
-data.obs.append( 
-    Obs( 
-        tod = tod,
-        intervals = [],
-        baselines = None, 
-        noise = None
-    )
-)
-
-
-
-
-        start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        data = cache.exec(self.data)
-
-        # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside)
-        grad.exec(data)
-
-        # make a simple pointing matrix
-        pointing = OpPointingFake(nside=self.map_nside, nest=True)
-        pointing.exec(data)
-
-        pars = {}
+if comm.comm_world.rank == 0:
+    if args.madampar is not None:
+        pat = re.compile(r'\s*(\S+)\s*=\s*(\S+)\s*')
+        comment = re.compile(r'^#.*')
+        with open(args.madampar, 'r') as f:
+            for line in f:
+                if not comment.match(line):
+                    result = pat.match(line)
+                    if result:
+                        pars[result.group(1)] = result.group(2)
+    else:
         pars[ 'kfirst' ] = False
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = self.map_nside
+        pars[ 'base_first' ] = 60.0
+        pars[ 'fsample' ] = 180.35
+        pars[ 'nside_map' ] = 1024
+        pars[ 'nside_cross' ] = 1024
+        pars[ 'nside_submap' ] = 1024
         pars[ 'write_map' ] = False
         pars[ 'write_binmap' ] = True
         pars[ 'write_matrix' ] = False
@@ -89,10 +74,72 @@ data.obs.append(
         pars[ 'run_submap_test' ] = False
         pars[ 'path_output' ] = './'
 
-        madam = OpMadam(params=pars)
-        madam.exec(data)
+comm.comm_world.bcast(pars, root=0)
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
+# madam only supports a single observation.  Normally
+# we would have multiple observations with some subset
+# assigned to each process group.
+
+# create the TOD for this observation
+
+tod = planck.Exchange(
+    mpicomm=comm.comm_group, 
+    detectors=args.dets,
+    ringdb=args.ringdb,
+    effdir=args.effdir,
+    obt_range=obtrange,
+    ring_range=ringrange,
+    od_range=odrange,
+    freq=args.freq,
+    RIMO=args.rimo
+)
+
+# normally we get the intervals from somewhere else, but since
+# the Exchange TOD already had to get that information, we can
+# get it from there.
+
+data.obs.append( 
+    Obs( 
+        tod = tod,
+        intervals = tod.valid_intervals(),
+        baselines = None, 
+        noise = None
+    )
+)
+
+stop = MPI.Wtime()
+elapsed = stop - start
+if mpicomm.rank == 0:
+    print("Metadata queries took {:.3f} s".format(elapsed))
+start = stop
+
+# cache the data in memory
+cache = OpCopy()
+data = cache.exec(data)
+
+stop = MPI.Wtime()
+elapsed = stop - start
+if mpicomm.rank == 0:
+    print("Data read and cache took {:.3f} s".format(elapsed))
+start = stop
+
+# make a planck Healpix pointing matrix
+# FIXME: get mode from madam parameter if T-only
+pointing = OpPointingPlanck(nside=pars['nside_map'])
+pointing.exec(data)
+
+stop = MPI.Wtime()
+elapsed = stop - start
+if mpicomm.rank == 0:
+    print("Pointing Matrix took {:.3f} s".format(elapsed))
+start = stop
+
+madam = OpMadam(params=pars)
+madam.exec(data)
+
+stop = MPI.Wtime()
+
+elapsed = stop - start
+if mpicomm.rank == 0:
+    print("Madam took {:.3f} s".format(elapsed))
 
