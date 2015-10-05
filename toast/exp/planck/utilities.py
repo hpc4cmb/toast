@@ -38,42 +38,43 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 DetectorData = namedtuple( 'DetectorData', 'detector phi_uv theta_uv psi_uv psi_pol epsilon fsample fknee alpha net quat' )
 
 
-def read_eff(detector, local_start, n, offset, local_samples, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask ):
+def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask ):
 
     ringtable = ringdb_table_name(freq)
 
     # Convert to global indices
 
-    start = offset + local_samples[0] + local_start
+    start = globalfirst + local_offset + local_start
     stop = start + n
 
     # Start, stop interval follows Python conventions. (stop-start) samples are read starting at "start". Sample at "stop" is omitted
 
     # Determine first and last ring to read
 
-    ntry = 10
-    try:
-        for itry in range(ntry):
-            try:
-                cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} order by start_index'.format(ringtable, start)
-                start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = ringdb.execute( cmd ).fetchall()[-1]
-            except Exception as e:
-                if itry < ntry: continue
-                raise Exception('Failed to query ring start and stop times from {} (1/2). Failed query: {}. Error: {}'.format(ringdb_path, cmd, e))
-            try:
-                cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where stop_index >= {} order by start_index'.format(ringtable, stop)
-                start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = ringdb.execute( cmd ).fetchall()[0]
-            except Exception as e:
-                if itry < ntry: continue
-                raise Exception('Failed to query ring start and stop times from {} (2/2). Failed query: {}. Error: '.format(ringdb_path, cmd, e))
-    except Exception as e:
-        raise Exception( 'TODPlanckEFF._get: Giving up after {} tries to get source ODs: {}'.format(ntry,e) )
+    start_time1 = None
+    start_time2 = None
+    stop_time1 = None
+    stop_time2 = None
+    start_index1 = None
+    start_index2 = None
+    stop_index1 = None
+    stop_index2 = None
+    start_row1 = None
+    start_row2 = None
+    stop_row1 = None
+    stop_row2 = None
+
+    cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} order by start_index'.format(ringtable, start)
+    start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = ringdb.execute( cmd ).fetchall()[-1]
+
+    cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where stop_index >= {} order by start_index'.format(ringtable, stop)
+    start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = ringdb.execute( cmd ).fetchall()[0]
 
     # Determine the list of ODs that contain the rings
 
     ods = []
-    if freq < 100:
-        query = ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(freq, start_time1, stop_time2) )
+    if int(freq) < 100:
+        query = ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == {}'.format(start_time1, stop_time2, freq) )
     else:
         query = ringdb.execute( 'select eff_od, nrow from eff_files where stop_time >= {} and start_time <= {} and freq == 100'.format(start_time1, stop_time2) )
     for q in query:
@@ -163,13 +164,13 @@ def read_eff(detector, local_start, n, offset, local_samples, ringdb, ringdb_pat
     return (data, flag)
 
 
-def write_eff( detector, local_start, data, flags, offset, local_samples, ringdb, ringdb_path, freq, effdir, extname, flagmask ):
+def write_eff(local_start, data, flags, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, flagmask ):
 
     ringtable = ringdb_table_name(freq)
 
     # Convert to global indices
 
-    start = offset + local_samples[0] + local_start
+    start = globalfirst + local_offset + local_start
     stop = start + len(data)
 
     # Promote all input data to 2 dimensions to support multicolumn writing
@@ -177,26 +178,26 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringdb
     data2d = np.atleast_2d( data )
 
     if len(data2d[0]) != stop - start:
-        raise Exception( 'TODPlanckEFF: stop-start = {} but len(data) = {}'.format( stop-start, len(data2d[0]) ) )
+        raise Exception( 'stop-start = {} but len(data) = {}'.format( stop-start, len(data2d[0]) ) )
 
-    ntry = 10
-    try:
-        for itry in range(10):
-            try:
-                cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} order by start_index'.format(ringtable, start)
-                start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = ringdb.execute( cmd ).fetchall()[-1]
-            except Exception as e:
-                if itry < ntry: continue
-                raise Exception('Failed to query ring start and stop times from {} (1/2). Failed query: {}. Error: {}'.format(ringdb_path, cmd, e))
+    start_time1 = None
+    start_time2 = None
+    stop_time1 = None
+    stop_time2 = None
+    start_index1 = None
+    start_index2 = None
+    stop_index1 = None
+    stop_index2 = None
+    start_row1 = None
+    start_row2 = None
+    stop_row1 = None
+    stop_row2 = None
 
-            try:
-                cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where stop_index >= {} order by start_index'.format(ringtable, stop)
-                start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = ringdb.execute( cmd ).fetchall()[0]
-            except Exception as e:
-                if itry < ntry: continue
-                raise Exception('Failed to query ring start and stop times from {} (2/2). Failed query: {}. Error: '.format(ringdb_path, cmd, e))
-    except Exception as e:
-        raise Exception( 'TODPlanckEFF._put: Giving up after {} tries to get target ODs: {}'.format(ntry,e) )
+    cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} order by start_index'.format(ringtable, start)
+    start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = ringdb.execute( cmd ).fetchall()[-1]
+
+    cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where stop_index >= {} order by start_index'.format(ringtable, stop)
+    start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = ringdb.execute( cmd ).fetchall()[0]
 
     ods = []
     if freq < 100:
@@ -240,7 +241,7 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringdb
         ncol = len( h[hdu].columns )
         ncol_data = len(data2d)
 
-        if ncol-1 != ncol_data: raise Exception( 'TODPlanckEFF._put: Expected {} columns to write data but got {}.'.format(ncol-1,ncol_data) )
+        if ncol-1 != ncol_data: raise Exception( 'Expected {} columns to write data but got {}.'.format(ncol-1,ncol_data) )
 
         if nwrite > 0:
             try:
@@ -268,7 +269,7 @@ def write_eff( detector, local_start, data, flags, offset, local_samples, ringdb
 
 
 def ringdb_table_name(freq):
-    if freq < 100:
+    if int(freq) < 100:
         return 'ring_times_{}'.format(self.freq)
     else:
         return 'ring_times_hfi'
@@ -371,7 +372,7 @@ def count_samples(ringdb, freq, obt_range, ring_range, od_range):
     select_range = None
 
     if od_range is not None:
-        cmd = 'select od, start_time, stop_time from {} where od <= {} and od >= {} order by od'.format( ringtable, od_range[0], od_range[1] )
+        cmd = 'select od, start_time, stop_time from ods where od >= {} and od <= {} order by od'.format(od_range[0], od_range[1])
         ods = ringdb.execute( cmd ).fetchall()
         od1, start1, stop1 = ods[0]
         od2, start2, stop2 = ods[-1]
@@ -387,7 +388,7 @@ def count_samples(ringdb, freq, obt_range, ring_range, od_range):
 
     if select_range is not None:
         start, stop = select_range
-        cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} and stop_index >= {} order by start_index'.format( ringtable, stop, start )
+        cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_time <= {} and stop_time >= {} order by start_index'.format( ringtable, stop, start )
     else:
         # no span specified, use all available data
         # This first version of the query will include the repointing maneuvers in the definitions of the science scans immediately before them.

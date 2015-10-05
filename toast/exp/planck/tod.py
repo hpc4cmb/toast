@@ -49,10 +49,7 @@ class Exchange(TOD):
         od_range: data span in operational days
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, ringdb=None, effdir=None, obt_range=None, ring_range=None, od_range=None, freq=None, RIMO=None, coord='G', deaberrate=True, obtmask=0, flagmask=0, bufsize=100000):
-
-        if detectors is None:
-            raise ValueError('you must specify a list of detectors')
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, ringdb=None, effdir=None, obt_range=None, ring_range=None, od_range=None, freq=None, RIMO=None, coord='G', deaberrate=True, obtmask=0, flagmask=0):
 
         if ringdb is None:
             raise ValueError('You must provide a path to the ring database')
@@ -72,17 +69,13 @@ class Exchange(TOD):
         self.RIMO_path = RIMO
         self.RIMO = load_RIMO( self.RIMO_path, mpicomm )
 
-        self.bufsize = bufsize
-
         self.freq = freq
 
         self.coord = coord
 
         self.deaberrate = deaberrate
 
-        self.mpicomm = mpicomm
-
-        rank = self.mpicomm.rank
+        rank = mpicomm.rank
 
         self.globalstart = 0.0
         self.globalfirst = 0
@@ -92,15 +85,13 @@ class Exchange(TOD):
         if rank == 0:
             self.globalstart, self.globalfirst, self.allsamp, self.rings = count_samples( self.ringdb, self.freq, obt_range, ring_range, od_range )
         
-        self.mpicomm.bcast(self.globalstart, root=0)
-        self.mpicomm.bcast(self.globalfirst, root=0)
-        self.mpicomm.bcast(self.allsamp, root=0)
-        self.mpicomm.bcast(self.rings, root=0)
+        mpicomm.bcast(self.globalstart, root=0)
+        mpicomm.bcast(self.globalfirst, root=0)
+        mpicomm.bcast(self.allsamp, root=0)
+        mpicomm.bcast(self.rings, root=0)
         
         if detectors is None:
-            self._dets = bolos_by_freq(self.freq)
-        else:
-            self._dets = detectors
+            detectors = bolos_by_freq(self.freq)
 
         self.ringsizes = [ x.samples for x in self.rings ]
 
@@ -134,14 +125,14 @@ class Exchange(TOD):
 
     def _get(self, detector, flavor, local_start, n):
 
-        data, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask )
+        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask)
 
         return (data, flag)
 
 
     def _put(self, detector, flavor, local_start, data, flags):
 
-        result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.flagmask )
+        result = write_eff(local_start, data, flags, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.flagmask)
         # FIXME: should we check the result here?
         # We should NOT return result, since the return needs to be empty
         return
@@ -160,7 +151,7 @@ class Exchange(TOD):
 
         # Get the satellite attitude
 
-        satquat, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask )
+        satquat, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
         satquat = satquat.T.copy()
 
         #satquat = qa.mult( satquat, spinrot )
@@ -170,61 +161,46 @@ class Exchange(TOD):
         # Get the satellite velocity
 
         if self.deaberrate:        
-            satvel, flag2 = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'velocity', self.satobtmask, self.satvelmask )
+            satvel, flag2 = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'velocity', self.satobtmask, self.satvelmask)
             flag |= flag2
             satvel = satvel.T.copy()
-            
             #print('satvel = {}'.format(satvel))
-
-        # Initialize output
-
-        out = np.zeros( (n, 4), dtype=np.float64 )
 
         # Rotate into detector frame and convert to desired format
 
-        istart = 0
+        quats = qa.mult(qa.norm(satquat), detquat)
 
-        while istart < n:
-            
-            istop = min( istart+self.bufsize, n )
-            ind = slice( istart, istop )
-            quats = qa.mult( qa.norm( satquat[ind] ), detquat )
+        if self.deaberrate:
+            # Correct for aberration
+            vec = qa.rotate(quats, zaxis)
+            abvec = np.cross(vec, satvel)
+            lens = np.linalg.norm(abvec, axis=1)
+            ang = lens * cinv
+            abvec /= np.tile(lens, (3,1)).T # Normalize for direction
+            abquat = qa.rotation(abvec, -ang)
+            quats = qa.mult(abquat, quats)
 
-            istart = istop
-
-            if self.deaberrate:
-                # Correct for aberration
-                vec = qa.rotate( quats[ind], zaxis )
-                abvec = np.cross( vec, satvel[ind] )
-                lens = np.linalg.norm( abvec, axis=1 )
-                ang = lens * cinv
-                abvec /= np.tile( lens, (3,1) ).T # Normalize for direction
-                abquat = qa.rotation( abvec, -ang )
-                quats = qa.mult( abquat, quats )
-
-            if self.coordquat is not None:
-                quats = qa.mult( self.coordquat, quats )
-
-            out[ind] = quats
+        if self.coordquat is not None:
+            quats = qa.mult(self.coordquat, quats)
 
         # Return
-        return (out, flag)
+        return (quats.flatten(), flag)
     
 
-    def _put_pntg(self, detector, start, data, flags):
+    def _put_pntg(self, detector, local_start, start, data, flags):
 
-        result = write_eff( detector, local_start, data, flags, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.flagmask )
+        result = write_eff(local_start, data, flags, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.flagmask)
         # FIXME: should we check the result here?
         # We should NOT return result, since the return needs to be empty
         return
 
 
-    def _get_times(self, start, n):
-        data, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'OBT', 0, 0 )
+    def _get_times(self, local_start, n):
+        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'obt', 0, 0)
         return data
 
 
-    def _put_times(self, start, stamps):
-        result = write_eff( detector, local_start, stamps, np.zeros(stamps.shape[0], dtype=np.uint8), self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'OBT', 0 )
+    def _put_times(self, local_start, stamps):
+        result = write_eff(local_start, stamps, np.zeros(stamps.shape[0], dtype=np.uint8), self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'obt', 0)
         return
 

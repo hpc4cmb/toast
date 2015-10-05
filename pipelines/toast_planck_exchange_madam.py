@@ -2,8 +2,14 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-import toast
+import mpi4py.MPI as MPI
 
+import toast
+import toast.tod
+import toast.map
+import toast.exp.planck as tp
+
+import re
 import argparse
 
 
@@ -27,15 +33,19 @@ start = MPI.Wtime()
 
 odrange = None
 if args.odfirst is not None and args.odlast is not None:
-    odrange = (args.odfirst, args.odlast)
+    odrange = (int(args.odfirst), int(args.odlast))
 
 ringrange = None
 if args.ringfirst is not None and args.ringlast is not None:
-    ringrange = (args.ringfirst, args.ringlast)
+    ringrange = (int(args.ringfirst), int(args.ringlast))
 
 obtrange = None
 if args.obtfirst is not None and args.obtlast is not None:
-    obtrange = (args.obtfirst, args.obtlast)
+    obtrange = (float(args.obtfirst), float(args.obtlast))
+
+detectors = None
+if args.dets is not None:
+    detectors = re.split(',', args.dets)
 
 # This is the 2-level toast communicator.  By default,
 # there is just one group which spans MPI_COMM_WORLD.
@@ -82,15 +92,15 @@ comm.comm_world.bcast(pars, root=0)
 
 # create the TOD for this observation
 
-tod = planck.Exchange(
+tod = tp.Exchange(
     mpicomm=comm.comm_group, 
-    detectors=args.dets,
+    detectors=detectors,
     ringdb=args.ringdb,
     effdir=args.effdir,
     obt_range=obtrange,
     ring_range=ringrange,
     od_range=odrange,
-    freq=args.freq,
+    freq=int(args.freq),
     RIMO=args.rimo
 )
 
@@ -99,38 +109,41 @@ tod = planck.Exchange(
 # get it from there.
 
 data.obs.append( 
-    Obs( 
+    toast.Obs( 
         tod = tod,
-        intervals = tod.valid_intervals(),
+        intervals = tod.valid_intervals,
         baselines = None, 
         noise = None
     )
 )
 
+comm.comm_world.barrier()
 stop = MPI.Wtime()
 elapsed = stop - start
-if mpicomm.rank == 0:
+if comm.comm_world.rank == 0:
     print("Metadata queries took {:.3f} s".format(elapsed))
 start = stop
 
 # cache the data in memory
-cache = OpCopy()
+cache = toast.tod.OpCopy()
 data = cache.exec(data)
 
+comm.comm_world.barrier()
 stop = MPI.Wtime()
 elapsed = stop - start
-if mpicomm.rank == 0:
+if comm.comm_world.rank == 0:
     print("Data read and cache took {:.3f} s".format(elapsed))
 start = stop
 
 # make a planck Healpix pointing matrix
 # FIXME: get mode from madam parameter if T-only
-pointing = OpPointingPlanck(nside=pars['nside_map'])
+pointing = tp.OpPointingPlanck(nside=pars['nside_map'])
 pointing.exec(data)
 
+comm.comm_world.barrier()
 stop = MPI.Wtime()
 elapsed = stop - start
-if mpicomm.rank == 0:
+if comm.comm_world.rank == 0:
     print("Pointing Matrix took {:.3f} s".format(elapsed))
 start = stop
 
@@ -139,15 +152,15 @@ start = stop
 # operator can use that.
 detweights = {}
 for d in tod.detectors:
-    net = tod.rimo()[d]['net']
+    net = tod.rimo[d].net
     detweights[d] = net * net
 
-madam = OpMadam(params=pars, detweights=detweights)
+madam = toast.map.OpMadam(params=pars, detweights=detweights)
 madam.exec(data)
 
+comm.comm_world.barrier()
 stop = MPI.Wtime()
-
 elapsed = stop - start
-if mpicomm.rank == 0:
+if comm.comm_world.rank == 0:
     print("Madam took {:.3f} s".format(elapsed))
 

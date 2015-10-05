@@ -61,7 +61,7 @@ class OpPointingPlanck(toast.Operator):
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
                 dir = qa.rotate(pdata.reshape(-1, 4), np.tile(zaxis, tod.local_samples).reshape(-1,3))
-                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
+                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=True)
 
                 # FIXME: get epsilon
                 epsilon = 1.0
@@ -70,14 +70,14 @@ class OpPointingPlanck(toast.Operator):
                 oneminus = 0.5 * (1.0 - epsilon)
 
                 dweight = 1.0
-                if self.detweights is not None:
-                    dweight = self.detweights[det]
+                if self._detweights is not None:
+                    dweight = self._detweights[det]
 
-                if self.mode == 'I':
-                    weights = np.ones(nnz * tod.local_samples, dtype=np.float64)
+                if self._mode == 'I':
+                    weights = np.ones(tod.local_samples, dtype=np.float64)
                     weights *= dweight
                     tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
-                elif self.mode == 'IQU':
+                elif self._mode == 'IQU':
                     orient = qa.rotate(pdata.reshape(-1, 4), np.tile(xaxis, tod.local_samples).reshape(-1,3))
                     y = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
                     x = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])
