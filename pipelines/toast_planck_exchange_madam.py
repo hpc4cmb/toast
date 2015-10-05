@@ -94,7 +94,7 @@ tod = planck.Exchange(
     RIMO=args.rimo
 )
 
-# normally we get the intervals from somewhere else, but since
+# normally we would get the intervals from somewhere else, but since
 # the Exchange TOD already had to get that information, we can
 # get it from there.
 
@@ -134,7 +134,15 @@ if mpicomm.rank == 0:
     print("Pointing Matrix took {:.3f} s".format(elapsed))
 start = stop
 
-madam = OpMadam(params=pars)
+# for now, we pass in the noise weights from the RIMO.
+# once the noise class is implemented, then the madam
+# operator can use that.
+detweights = {}
+for d in tod.detectors:
+    net = tod.rimo()[d]['net']
+    detweights[d] = net * net
+
+madam = OpMadam(params=pars, detweights=detweights)
 madam.exec(data)
 
 stop = MPI.Wtime()

@@ -127,6 +127,11 @@ class Exchange(TOD):
         return self.rings
 
 
+    @property
+    def rimo(self):
+        return self.RIMO
+
+
     def _get(self, detector, flavor, local_start, n):
 
         data, flag = read_eff( detector, local_start, n, self._offset, self.local_samples, self.ringtable, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask )

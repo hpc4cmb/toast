@@ -54,7 +54,7 @@ class OpMadam(Operator):
         params (dictionary): parameters to pass to madam.
     """
 
-    def __init__(self, flavor=None, pmat=None, params={}):
+    def __init__(self, flavor=None, pmat=None, detweights=None, params={}):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -66,6 +66,7 @@ class OpMadam(Operator):
         self._pmat = pmat
         if self._pmat is None:
             self._pmat = TOD.DEFAULT_FLAVOR
+        self._detw = detweights
         self._params = params
 
 
@@ -142,9 +143,18 @@ class OpMadam(Operator):
             for p in range(nperiod):
                 periods[p] = int(intervals[p].first)
 
-        # use uniform white noise PSDs for now...
+        # detweights is either a dictionary of weights specified at construction time,
+        # or else we get these from the white noise level.
+        detw = {}
+        if self._detw is None:
+            for d in range(ndet):
+                detw[tod.detectors[d]] = 1.0
+        else:
+            detw = self._detw
 
-        detweights = np.ones(ndet, dtype=np.float64)
+        detweights = np.zeros(ndet, dtype=np.float64)
+        for d in range(ndet):
+            detweights[d] = detw[tod.detectors[d]]
 
         npsd = np.ones(ndet, dtype=np.int64)
         npsdtot = int(np.sum(npsd))
