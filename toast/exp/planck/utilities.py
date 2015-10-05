@@ -356,7 +356,9 @@ def load_RIMO(path, mpicomm):
 
 def count_samples(ringdb, freq, obt_range, ring_range, od_range):
     """
-    Query the ring database to determine which global samples the requested sample indices point to.
+    Query the ring database to determine which global samples the requested time ranges
+    point to.  The ranges are checked in order:  OD, ring, then OBT.  If none are
+    specified, the full data is selected.
     """
 
     ringtable = ringdb_table_name(freq)
@@ -366,52 +368,46 @@ def count_samples(ringdb, freq, obt_range, ring_range, od_range):
     global_start = 0.0
     global_first = 0
 
-    if obt_range is not None:
-        start, stop = obt_range
+    select_range = None
 
-        cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} and stop_index >= {} order by start_index'.format( ringtable, stop, start )
+    if od_range is not None:
+        cmd = 'select od, start_time, stop_time from {} where od <= {} and od >= {} order by od'.format( ringtable, od_range[0], od_range[1] )
+        ods = ringdb.execute( cmd ).fetchall()
+        od1, start1, stop1 = ods[0]
+        od2, start2, stop2 = ods[-1]
+        select_range = (start1, stop2)
 
-        intervals = ringdb.execute( cmd ).fetchall()
-        
-        start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
-
-        start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
-
-        global_start = start_time1
-        global_first = start_index1
-        samples = stop_index2 - start_index1 + 1
-        
-        for interval in intervals:
-            start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
-            rings.append( Interval(start=start_time, stop=stop_time, first=start_index, last=stop_index) )
-
-        return offset, samples, sizes
-    elif ring_range is not None:
+    if ring_range is not None:
         raise Exception('Ring span selection not yet implemented')
-    elif od_range is not None:
-        raise Exception('OD span selection not yet implemented')
+
+    if obt_range is not None:
+        select_range = obt_range
+
+    cmd = ''
+
+    if select_range is not None:
+        start, stop = select_range
+        cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where start_index <= {} and stop_index >= {} order by start_index'.format( ringtable, stop, start )
     else:
         # no span specified, use all available data
-
         # This first version of the query will include the repointing maneuvers in the definitions of the science scans immediately before them.
         #cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} where pointID_unique like "%S%" or pointID_unique like "%O%" order by start_index'.format( ringtable )
         # This second version of the query will list the repointing maneuvers as separate intervals
         cmd = 'select start_time, stop_time, start_index, stop_index, start_row, stop_row from {} order by start_index'.format( ringtable )
         # FIXME: a third option would be to include the repointing maneuvers in the following science scans (MOC definition) but this would require extra processing of the query results. 
+    
+    intervals = ringdb.execute( cmd ).fetchall()
 
-        intervals = ringdb.execute( cmd ).fetchall()
+    start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
+    start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
 
-        start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
+    global_start = start_time1
+    global_first = start_index1
+    samples = stop_index2 - start_index1 + 1
 
-        start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
-
-        global_start = start_time1
-        global_first = start_index1
-        samples = stop_index2 - start_index1 + 1
-
-        for interval in intervals:
-            start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
-            rings.append( Interval(start=start_time, stop=stop_time, first=start_index, last=stop_index) )
+    for interval in intervals:
+        start_time, stop_time, start_index, stop_index, start_row, stop_row = interval
+        rings.append( Interval(start=start_time, stop=stop_time, first=start_index, last=stop_index) )
 
     return global_start, global_first, samples, rings
 
