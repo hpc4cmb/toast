@@ -153,7 +153,7 @@ start = stop
 detweights = {}
 for d in tod.detectors:
     net = tod.rimo[d].net
-    detweights[d] = net * net
+    detweights[d] = 1.0 / (net * net)
 
 madam = toast.map.OpMadam(params=pars, detweights=detweights)
 madam.exec(data)
