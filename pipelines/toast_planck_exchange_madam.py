@@ -136,8 +136,10 @@ if comm.comm_world.rank == 0:
 start = stop
 
 # make a planck Healpix pointing matrix
-# FIXME: get mode from madam parameter if T-only
-pointing = tp.OpPointingPlanck(nside=pars['nside_map'])
+mode = 'IQU'
+if pars['temperature_only'] == 'T':
+    mode = 'I'
+pointing = tp.OpPointingPlanck(nside=int(pars['nside_map']), mode=mode)
 pointing.exec(data)
 
 comm.comm_world.barrier()
