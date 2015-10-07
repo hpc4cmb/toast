@@ -84,7 +84,7 @@ if comm.comm_world.rank == 0:
         pars[ 'run_submap_test' ] = False
         pars[ 'path_output' ] = './'
 
-comm.comm_world.bcast(pars, root=0)
+pars = comm.comm_world.bcast(pars, root=0)
 
 # madam only supports a single observation.  Normally
 # we would have multiple observations with some subset

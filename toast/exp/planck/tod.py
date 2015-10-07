@@ -85,10 +85,10 @@ class Exchange(TOD):
         if rank == 0:
             self.globalstart, self.globalfirst, self.allsamp, self.rings = count_samples( self.ringdb, self.freq, obt_range, ring_range, od_range )
         
-        mpicomm.bcast(self.globalstart, root=0)
-        mpicomm.bcast(self.globalfirst, root=0)
-        mpicomm.bcast(self.allsamp, root=0)
-        mpicomm.bcast(self.rings, root=0)
+        self.globalstart = mpicomm.bcast(self.globalstart, root=0)
+        self.globalfirst = mpicomm.bcast(self.globalfirst, root=0)
+        self.allsamp = mpicomm.bcast(self.allsamp, root=0)
+        self.rings = mpicomm.bcast(self.rings, root=0)
         
         if detectors is None:
             detectors = bolos_by_freq(self.freq)
