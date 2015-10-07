@@ -285,8 +285,9 @@ def load_ringdb(path, mpicomm):
 
     # Read database to tempfile and broadcast
 
-    if itask == 0:
+    tempfile = ''
 
+    if itask == 0:
         conn = sqlite3.connect(path)
         tempfile = io.StringIO()
         for line in conn.iterdump():
@@ -315,12 +316,10 @@ def load_RIMO(path, mpicomm):
 
     # Read database, parse and broadcast
 
+    RIMO = {}
+
     if itask == 0:
-
-        RIMO = {}
-
         hdulist = pf.open( path, 'readonly' )
-
         detectors = hdulist[1].data.field('detector').ravel()
         phi_uvs = hdulist[1].data.field('phi_uv').ravel()
         theta_uvs = hdulist[1].data.field('theta_uv').ravel()
