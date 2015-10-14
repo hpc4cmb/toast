@@ -195,7 +195,7 @@ class TOD(object):
         if stamps is None:
             raise ValueError('you must specify the vector of time stamps')
         if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps)
         return
 
