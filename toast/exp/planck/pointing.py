@@ -64,7 +64,7 @@ class OpPointingPlanck(toast.Operator):
 
                 dir = qa.rotate(pdata.reshape(-1, 4), np.tile(zaxis, tod.local_samples).reshape(-1,3))
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=True)
-                pixels = np.where((np.repeat(pflags, 4) == 0), pixels, np.repeat(1, pixels.shape[0]))
+                pixels = np.where((pflags == 0), pixels, np.repeat(1, pixels.shape[0]))
 
                 # FIXME: get epsilon
                 epsilon = 1.0
