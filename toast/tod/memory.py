@@ -65,7 +65,7 @@ class OpCopy(Operator):
 
             outtod = TOD(mpicomm=tod.mpicomm, timedist=self.timedist, 
                 detectors=tod.detectors, flavors=tod.flavors, 
-                samples=tod.total_samples)
+                samples=tod.total_samples, sizes=tod.chunks)
 
             # FIXME:  add noise and baselines once implemented
             outbaselines = None

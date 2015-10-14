@@ -77,6 +77,10 @@ class TOD(object):
         return self._timedist
 
     @property
+    def chunks(self):
+        return self._sizes
+
+    @property
     def total_samples(self):
         return self._nsamp
 
