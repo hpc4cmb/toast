@@ -102,6 +102,7 @@ class OpMadam(Operator):
         if not tod.timedist:
             raise RuntimeError("Madam requires data to be distributed by time")
 
+        # get the total list of intervals
         intervals = data.obs[0].intervals
 
         todcomm = tod.mpicomm
@@ -110,7 +111,6 @@ class OpMadam(Operator):
         # create madam-compatible buffers
 
         ndet = len(tod.detectors)
-        nglobal = tod.total_samples
         nlocal = tod.local_samples
         nnz = tod.pmat_nnz(self._pmat, tod.detectors[0])
 
@@ -130,18 +130,22 @@ class OpMadam(Operator):
             signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=tod.local_samples)
             pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=tod.local_samples)
 
+        # extract only the intervals that are local to this process.
+
+        local_bounds = [ (t.first - tod.local_offset) for t in intervals if (t.first >= tod.local_offset) and (t.first < tod.local_offset + tod.local_samples) ]
+        
         nperiod = None
-        if (len(intervals) == 0):
-            nperiod = 1
+        if len(local_bounds) > 0:
+            if local_bounds[0] > 0:
+                local_bounds.insert(0, 0)
+            nperiod = len(local_bounds)
         else:
-            nperiod = len(intervals)
+            nperiod = 1
+            local_bounds = [0,]
 
         periods = np.zeros(nperiod, dtype=np.int64)
-        if (len(intervals) == 0):
-            periods[0] = 0
-        else:
-            for p in range(nperiod):
-                periods[p] = int(intervals[p].first)
+        for p in range(nperiod):
+            periods[p] = int(local_bounds[p])
 
         # detweights is either a dictionary of weights specified at construction time,
         # or else we get these from the white noise level.

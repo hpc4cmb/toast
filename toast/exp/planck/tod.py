@@ -80,22 +80,32 @@ class Exchange(TOD):
         self.globalstart = 0.0
         self.globalfirst = 0
         self.allsamp = 0
-        self.rings = []
+        self.allrings = []
         
         if rank == 0:
-            self.globalstart, self.globalfirst, self.allsamp, self.rings = count_samples( self.ringdb, self.freq, obt_range, ring_range, od_range )
+            self.globalstart, self.globalfirst, self.allsamp, self.allrings = count_samples( self.ringdb, self.freq, obt_range, ring_range, od_range )
         
         self.globalstart = mpicomm.bcast(self.globalstart, root=0)
         self.globalfirst = mpicomm.bcast(self.globalfirst, root=0)
         self.allsamp = mpicomm.bcast(self.allsamp, root=0)
-        self.rings = mpicomm.bcast(self.rings, root=0)
+        self.allrings = mpicomm.bcast(self.allrings, root=0)
         
         if detectors is None:
             detectors = bolos_by_freq(self.freq)
 
-        self.ringsizes = [ x.samples for x in self.rings ]
+        # for data distribution, we need the contiguous sample
+        # ranges based on the ring starts.  If the first ring
+        # does not start at zero, add a fake ring at the start.
+        # Similarly for the end ring.
 
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors, samples=self.allsamp, sizes=self.ringsizes)
+        ringstarts = [ x.first for x in self.allrings ]
+        if ringstarts[0] != 0:
+            ringstarts.insert(0, 0)
+        ringstarts.append(self.allsamp)
+
+        ringsizes = [ (y - x) for x, y in zip(ringstarts[:-1], ringstarts[1:]) ]
+
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors, samples=self.allsamp, sizes=ringsizes)
 
         self.effdir = effdir
         self.obtmask = obtmask
@@ -115,7 +125,7 @@ class Exchange(TOD):
 
     @property
     def valid_intervals(self):
-        return self.rings
+        return self.allrings
 
 
     @property
