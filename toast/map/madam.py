@@ -129,6 +129,12 @@ class OpMadam(Operator):
             dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
             signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=tod.local_samples)
             pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=tod.local_samples)
+        
+        # apply detector flags to the pointing matrix, since that is the
+        # only way to pass flag information to madam
+
+        pixels = np.where((flags == 0), pixels, np.repeat(-1, pixels.shape[0]))
+        pixweights = np.where((np.repeat(flags, nnz) == 0), pixweights, np.repeat(0.0, pixweights.shape[0]))
 
         # extract only the intervals that are local to this process.
 

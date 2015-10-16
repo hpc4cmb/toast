@@ -53,6 +53,7 @@ class OpPointingPlanck(toast.Operator):
         xaxis = np.array([1,0,0], dtype=np.float64)
         yaxis = np.array([0,1,0], dtype=np.float64)
         zaxis = np.array([0,0,1], dtype=np.float64)
+        nullquat = np.array([0,0,0,1], dtype=np.float64)
 
         # FIXME: use detweights or noise information
 
@@ -60,11 +61,12 @@ class OpPointingPlanck(toast.Operator):
             tod = obs.tod
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
-                pdata = np.where((np.repeat(pflags, 4) == 0), pdata, np.zeros_like(pdata))
+
+                pdata = np.where((np.repeat(pflags, 4) == 0), pdata, np.tile(nullquat, tod.local_samples))
 
                 dir = qa.rotate(pdata.reshape(-1, 4), np.tile(zaxis, tod.local_samples).reshape(-1,3))
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=True)
-                pixels = np.where((pflags == 0), pixels, np.repeat(1, pixels.shape[0]))
+                pixels = np.where((pflags == 0), pixels, np.repeat(-1, pixels.shape[0]))
 
                 # FIXME: get epsilon
                 epsilon = 1.0
