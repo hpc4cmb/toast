@@ -119,26 +119,51 @@ class Comm(object):
         return self._rcomm
 
 
+# This is effectively the "Painter's Partition Problem".
 
-def distribute_discrete(sizes, groups):
-    totalsize = np.sum(sizes)
-    target = float(totalsize) / float(groups)
-    ret = []
+def distribute_required_groups(A, max_per_group):
+    ngroup = 1
+    total = 0
+    for i in range(A.shape[0]):
+        total += A[i]
+        if total > max_per_group:
+            total = A[i]
+            ngroup += 1
+    return ngroup
+
+def distribute_partition(A, k):
+    low = np.max(A)
+    high = np.sum(A)
+    while low < high:
+        mid = low + int((high - low) / 2)
+        required = distribute_required_groups(A, mid)
+        if required <= k:
+            high = mid
+        else:
+            low = mid + 1
+    return low
+
+def distribute_discrete(sizes, groups, pow=1.0):
+    chunks = np.array(sizes, dtype=np.int64)
+    weights = np.power(chunks.astype(np.float64), pow)
+    max_per_proc = distribute_partition(weights.astype(np.int64), groups)
+
+    dist = []
     off = 0
-    ioff = 0
-    for i in range(groups):
-        if ioff == len(sizes):
-            ret.append( (off, 0) )
-            continue
-        mysize = sizes[ioff]
-        ioff += 1
-        while (len(sizes)-ioff > groups-i-1) and (np.abs(mysize-target) > np.abs(mysize+sizes[ioff]-target)):
-            mysize += sizes[ioff]
-            ioff += 1
-        ret.append( (off, mysize) )
-        off += mysize
-    return ret
+    cur = 0
+    curweight = 0
+    for i in range(weights.shape[0]):
+        if curweight + weights[i] > max_per_proc:
+            dist.append( (off, cur) )
+            off += cur
+            cur = 0
+            curweight = 0
+        cur += chunks[i]
+        curweight += weights[i]
 
+    dist.append( (off, cur) )
+
+    return dist
 
 
 def distribute_uniform(totalsize, groups):
