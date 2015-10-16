@@ -149,21 +149,28 @@ def distribute_discrete(sizes, groups, pow=1.0):
     max_per_proc = distribute_partition(weights.astype(np.int64), groups)
 
     dist = []
+    gchunks = []
+
+    gcur = []
     off = 0
     cur = 0
     curweight = 0
     for i in range(weights.shape[0]):
         if curweight + weights[i] > max_per_proc:
             dist.append( (off, cur) )
+            gchunks.append(gcur)
             off += cur
             cur = 0
             curweight = 0
+            gcur = []
         cur += chunks[i]
         curweight += weights[i]
+        gcur.append(chunks[i])
 
     dist.append( (off, cur) )
+    gchunks.append(gcur)
 
-    return dist
+    return dist, gchunks
 
 
 def distribute_uniform(totalsize, groups):
@@ -201,16 +208,20 @@ def distribute_uniform(totalsize, groups):
 def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     dist_dets = detectors
     dist_samples = (0, samples)
+    dist_sizes = sizes
+
     if timedist:
         if sizes is not None:
-            dist_all = distribute_discrete(sizes, mpicomm.size)
+            dist_all, dist_allsizes = distribute_discrete(sizes, mpicomm.size)
+            dist_sizes = dist_allsizes[mpicomm.rank]
         else:
             dist_all = distribute_uniform(samples, mpicomm.size)
         dist_samples = dist_all[mpicomm.rank]
     else:
         dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]
         dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
-    return (dist_dets, dist_samples)
+
+    return (dist_dets, dist_samples, dist_sizes)
 
 
 Obs = namedtuple('Obs', ['tod', 'intervals', 'baselines', 'noise'])

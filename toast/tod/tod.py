@@ -61,16 +61,7 @@ class TOD(object):
             if samples != test:
                 raise RuntimeError("Sum of sizes ({}) does not equal total samples ({})".format(test, samples))
 
-        (self._dist_dets, self._dist_samples) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
-
-        self._dist_sizes = None
-        if sizes is not None:
-            self._dist_sizes = []
-            off = 0
-            for s in sizes:
-                if (off >= self._dist_samples[0]) and (off < self._dist_samples[0] + self._dist_samples[1]):
-                    self._dist_sizes.extend(s)
-                off += s
+        (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
         self.stamps = None
         self.data = {}
