@@ -26,6 +26,6 @@ class Operator(object):
     def __init__(self):
         pass
 
-    def exec(self, indist):
-        return indist
+    def exec(self, data):
+        return data
 

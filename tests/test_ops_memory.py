@@ -71,6 +71,8 @@ class OpCopyTest(MPITestCase):
         op = OpCopy(timedist=True)
 
         outdata = op.exec(self.data)
+        with open("out_test_copy.log", "w") as f:
+            outdata.info(f)
         
         stop = MPI.Wtime()
         elapsed = stop - start

@@ -266,10 +266,122 @@ class Data(object):
         self._comm = comm
         self.obs = []
 
+
     @property
     def comm(self):
         """
         The toast.Comm over which the data is distributed.
         """
         return self._comm
+
+
+    def info(self, handle):
+        """
+        Print information about the distributed data to the
+        specified file handle.  Only the rank 0 process writes.
+        """
+
+        # Each process group gathers their output
+
+        groupstr = ""
+        procstr = ""
+
+        gcomm = self._comm.comm_group
+        wcomm = self._comm.comm_world
+        rcomm = self._comm.comm_rank
+
+        if wcomm.rank == 0:
+            handle.write("Data distributed over {} processes in {} groups".format(self._comm.world_size, self._comm.ngroups))
+
+        for ob in self.obs:
+            id = ob.id
+            tod = ob.tod
+            base = ob.baselines
+            nse = ob.noise
+            intrvl = ob.intervals
+
+            if gcomm.rank == 0:
+                groupstr = "observation {}:\n".format(id)
+                groupstr = "{}  {} total samples, {} detectors\n".format(groupstr, tod.total_samples, len(tod.detectors))
+                groupstr = "{}  {} intervals:\n".format(groupstr, len(intrvl))
+                if intrvl is not None:
+                    for it in intrvl:
+                        groupstr = "{}    {} --> {} ({} --> {})\n".format(groupstr, it.first, it.last, it.start, it.stop)
+
+            # rank zero of the group will print general information,
+            # and each process will get its statistics.
+
+            nsamp = tod.local_samples
+            dets = tod.local_dets
+
+            procstr = "  proc {}\n".format(gcomm.rank)
+            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), tod.chunks)
+            
+            if tod.local_chunks is not None:
+                for chk in tod.local_chunks:
+                    procstr = "{}      {}\n".format(procstr, chk)
+
+            if nsamp > 0:
+    
+                stamps = tod.read_times(local_start=0, n=nsamp)
+
+                procstr = "{}    timestamps {} --> {}\n".format(procstr, stamps[0], stamps[-1])
+
+                for dt in dets:
+                    procstr = "{}    det {}:\n".format(procstr, dt)
+
+                    pdata, pflags = tod.read_pntg(detector=dt, local_start=0, n=nsamp)
+
+                    procstr = "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] ({}) --> [{:.3e} {:.3e} {:.3e} {:.3e}] ({})\n".format(procstr, pdata[0], pdata[1], pdata[2], pdata[3], pflags[0], pdata[-4], pdata[-3], pdata[-2], pdata[-1], pflags[-1])
+
+                    for flv in tod.flavors:
+                        data, flags = tod.read(detector=dt, flavor=flv, local_start=0, n=nsamp)
+                        procstr = "{}      flavor {}:  {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, flv, data[0], flags[0], data[-1], flags[-1])
+                        good = np.where(flags == 0)
+                        min = np.min(data[good])
+                        max = np.max(data[good])
+                        mean = np.mean(data[good])
+                        rms = np.std(data[good])
+                        procstr = "{}        min = {}, max = {}, mean = {}, rms = {}\n".format(procstr, min, max, mean, rms)
+
+                    for name in tod.pointings:
+                        pixels, weights = tod.read_pmat(name=name, detector=dt, local_start=0, n=nsamp)
+                        nnz = int(len(weights) / len(pixels))
+                        procstr = "{}      pmat {}:\n".format(procstr, name)
+                        procstr = "{}        {} : ".format(procstr, pixels[0])
+                        for i in range(nnz):
+                            procstr = "{} {:.3e}".format(procstr, weights[i])
+                        procstr = "{} -->\n".format(procstr)
+                        procstr = "{}        {} : ".format(procstr, pixels[-1])
+                        for i in range(nnz):
+                            procstr = "{} {:.3e}".format(procstr, weights[-(nnz-i)])
+                        procstr = "{}\n".format(procstr)
+
+            recvstr = ""
+            if gcomm.rank == 0:
+                groupstr = "{}{}".format(groupstr, procstr)
+            for p in range(1, gcomm.size):
+                if gcomm.rank == 0:
+                    gcomm.recv(buf=recvstr, source=p, tag=p)
+                    groupstr = "{}{}".format(groupstr, recvstr)
+                elif p == gcomm.rank:
+                    gcomm.send(procstr, 0, tag=p)
+                gcomm.barrier()
+
+        # the world rank 0 process collects output from all groups and
+        # writes to the handle
+
+        recvgrp = ""
+        if wcomm.rank == 0:
+            handle.write(groupstr)
+        for g in range(1, self._comm.ngroups):
+            if wcomm.rank == 0:
+                rcomm.recv(buf=recvgrp, source=g, tag=g)
+                handle.write(recvgrp)
+            elif g == self._comm.group:
+                if gcomm.rank == 0:
+                    rcomm.send(groupstr, 0, tag=g)
+            wcomm.barrier()
+
+        return
 

@@ -72,6 +72,9 @@ class OpMadamTest(MPITestCase):
         pointing = OpPointingFake(nside=self.map_nside, nest=True)
         pointing.exec(data)
 
+        with open("out_test_madam.log", "w") as f:
+            data.info(f)
+
         pars = {}
         pars[ 'kfirst' ] = False
         pars[ 'base_first' ] = 1.0

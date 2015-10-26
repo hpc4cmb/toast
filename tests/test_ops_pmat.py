@@ -68,8 +68,10 @@ class OpPointingFakeTest(MPITestCase):
         start = MPI.Wtime()
 
         op = OpPointingFake()
+        op.exec(self.data)
 
-        outdata = op.exec(self.data)
+        with open("out_test_fake.log", "w") as f:
+            self.data.info(f)
         
         stop = MPI.Wtime()
         elapsed = stop - start

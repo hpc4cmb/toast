@@ -95,6 +95,9 @@ class DataTest(MPITestCase):
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
         self.data = Data(self.toastcomm)
+        with open("out_test_construct.log", "w") as f:
+            self.data.info(f)
+
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
