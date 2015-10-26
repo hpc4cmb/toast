@@ -58,6 +58,7 @@ class OpCopy(Operator):
         comm = indata.comm
         outdata = Data(comm)
         for inobs in indata.obs:
+            id = inobs.id
             tod = inobs.tod
             base = inobs.baselines
             nse = inobs.noise
@@ -104,7 +105,7 @@ class OpCopy(Operator):
                         pixels, weights = _shuffle_pointing(pixels, weights, tod.local_dets, tod.local_offset, tod.local_samples)
                         outtod.write_pmat(name=name, detector=det, local_start=0, pixels=pixels, weights=weights)
 
-            outobs = Obs(tod=outtod, intervals=intrvl, baselines=outbaselines, noise = outnoise)
+            outobs = Obs(id=id, tod=outtod, intervals=intrvl, baselines=outbaselines, noise = outnoise)
 
             outdata.obs.append(outobs)
         return outdata

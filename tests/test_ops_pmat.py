@@ -55,6 +55,7 @@ class OpPointingFakeTest(MPITestCase):
 
             self.data.obs.append( 
                 Obs( 
+                    id = 'test',
                     tod = tod,
                     intervals = [],
                     baselines = None, 

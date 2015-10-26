@@ -110,6 +110,7 @@ tod = tp.Exchange(
 
 data.obs.append( 
     toast.Obs( 
+        id = 'mission',
         tod = tod,
         intervals = tod.valid_intervals,
         baselines = None, 

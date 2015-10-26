@@ -144,6 +144,30 @@ def distribute_partition(A, k):
     return low
 
 def distribute_discrete(sizes, groups, pow=1.0):
+    """
+    Distribute indivisible blocks of items between groups.
+
+    Given some contiguous blocks of items which cannot be 
+    subdivided, distribute these blocks to the specified
+    number of groups in a way which minimizes the maximum
+    total items given to any group.  Optionally weight the
+    blocks by a power of their size when computing the
+    distribution.
+
+    Args:
+        sizes (list): The sizes of the indivisible blocks.
+        groups (int): The number of groups.
+        pow (float): The power to use for weighting
+
+    Returns:
+        two lists: the first is a list of tuples.  There is
+        one tuple per group.  The first element of the tuple
+        is the first item assigned to the group, and the 
+        second element is the number of items assigned to 
+        the group.  The second list contains one list per 
+        group giving the sizes of the blocks assigned to
+        that group.
+    """
     chunks = np.array(sizes, dtype=np.int64)
     weights = np.power(chunks.astype(np.float64), pow)
     max_per_proc = distribute_partition(weights.astype(np.int64), groups)
@@ -224,7 +248,7 @@ def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     return (dist_dets, dist_samples, dist_sizes)
 
 
-Obs = namedtuple('Obs', ['tod', 'intervals', 'baselines', 'noise'])
+Obs = namedtuple('Obs', ['id', 'tod', 'intervals', 'baselines', 'noise'])
 
 class Data(object):
     """
