@@ -315,7 +315,7 @@ class Data(object):
             dets = tod.local_dets
 
             procstr = "  proc {}\n".format(gcomm.rank)
-            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), tod.chunks)
+            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), len(tod.chunks))
             
             if tod.local_chunks is not None:
                 for chk in tod.local_chunks:
@@ -342,7 +342,7 @@ class Data(object):
                         max = np.max(data[good])
                         mean = np.mean(data[good])
                         rms = np.std(data[good])
-                        procstr = "{}        min = {}, max = {}, mean = {}, rms = {}\n".format(procstr, min, max, mean, rms)
+                        procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
 
                     for name in tod.pointings:
                         pixels, weights = tod.read_pmat(name=name, detector=dt, local_start=0, n=nsamp)
@@ -356,6 +356,7 @@ class Data(object):
                         for i in range(nnz):
                             procstr = "{} {:.3e}".format(procstr, weights[-(nnz-i)])
                         procstr = "{}\n".format(procstr)
+                        procstr = "{}        {} good pointings\n".format(len(np.where(pixels >= 0)))
 
             recvstr = ""
             if gcomm.rank == 0:
