@@ -16,6 +16,7 @@ import argparse
 parser = argparse.ArgumentParser( description='Simple MADAM Mapmaking' )
 parser.add_argument( '--rimo', required=True, help='RIMO file' )
 parser.add_argument( '--freq', required=True, help='Frequency' )
+parser.add_argument( '--debug', dest='debug', action='store_true', help='Write data distribution info to file')
 parser.add_argument( '--dets', required=False, default=None, help='Detector list (comma separated)' )
 parser.add_argument( '--effdir', required=True, help='Input Exchange Format File directory' )
 parser.add_argument( '--ringdb', required=True, help='Ring DB file' )
@@ -27,6 +28,8 @@ parser.add_argument( '--obtfirst', required=False, default=None, help='First OBT
 parser.add_argument( '--obtlast', required=False, default=None, help='Last OBT to use' )
 parser.add_argument( '--madampar', required=False, default=None, help='Madam parameter file' )
 parser.add_argument( '--out', required=False, default='.', help='Output directory' )
+
+parser.set_defaults(debug=False)
 args = parser.parse_args()
 
 start = MPI.Wtime()
@@ -157,6 +160,10 @@ detweights = {}
 for d in tod.detectors:
     net = tod.rimo[d].net
     detweights[d] = 1.0 / (net * net)
+
+if args.debug:
+    with open("debug_planck_exchange_madam.txt", "w") as f:
+        data.info(f)
 
 madam = toast.map.OpMadam(params=pars, detweights=detweights)
 madam.exec(data)
