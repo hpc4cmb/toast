@@ -362,10 +362,10 @@ class Data(object):
                 groupstr = "{}{}".format(groupstr, procstr)
             for p in range(1, gcomm.size):
                 if gcomm.rank == 0:
-                    gcomm.recv(buf=recvstr, source=p, tag=p)
+                    recvstr = gcomm.recv(source=p, tag=p)
                     groupstr = "{}{}".format(groupstr, recvstr)
                 elif p == gcomm.rank:
-                    gcomm.send(procstr, 0, tag=p)
+                    gcomm.send(procstr, dest=0, tag=p)
                 gcomm.barrier()
 
         # the world rank 0 process collects output from all groups and
@@ -376,11 +376,11 @@ class Data(object):
             handle.write(groupstr)
         for g in range(1, self._comm.ngroups):
             if wcomm.rank == 0:
-                rcomm.recv(buf=recvgrp, source=g, tag=g)
+                recvgrp = rcomm.recv(source=g, tag=g)
                 handle.write(recvgrp)
             elif g == self._comm.group:
                 if gcomm.rank == 0:
-                    rcomm.send(groupstr, 0, tag=g)
+                    rcomm.send(groupstr, dest=0, tag=g)
             wcomm.barrier()
 
         return
