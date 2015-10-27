@@ -315,7 +315,10 @@ class Data(object):
             dets = tod.local_dets
 
             procstr = "  proc {}\n".format(gcomm.rank)
-            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), len(tod.chunks))
+            global_chunks = 1
+            if tod.chunks is not None:
+                global_chunks = len(tod.chunks)
+            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), global_chunks)
             
             if tod.local_chunks is not None:
                 for chk in tod.local_chunks:
@@ -356,7 +359,7 @@ class Data(object):
                         for i in range(nnz):
                             procstr = "{} {:.3e}".format(procstr, weights[-(nnz-i)])
                         procstr = "{}\n".format(procstr)
-                        procstr = "{}        {} good pointings\n".format(len(np.where(pixels >= 0)))
+                        procstr = "{}        {} good pointings\n".format(procstr, len(np.where(pixels >= 0)))
 
             recvstr = ""
             if gcomm.rank == 0:
