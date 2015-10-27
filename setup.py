@@ -59,6 +59,8 @@ class MPITestCommand(TestCommand):
         runner = MPITestRunner(verbosity=2)
         suite = loader.discover('tests', pattern='test_*.py', top_level_dir='.')
         runner.run(suite)
+        suite = loader.discover('tests/exp/planck', pattern='test_*.py', top_level_dir='.')
+        runner.run(suite)
 
 
 # set it all up
