@@ -117,7 +117,7 @@ class OpMadam(Operator):
         parstring = self._dict2parstring(self._params)
         detstring = self._dets2detstring(tod.detectors)
 
-        timestamps = tod.read_times()
+        timestamps = tod.read_times(local_start=0, n=nlocal)
 
         signal = np.zeros(ndet * nlocal, dtype=np.float64)
         flags = np.zeros(ndet * nlocal, dtype=np.uint8)
@@ -127,8 +127,8 @@ class OpMadam(Operator):
         for d in range(ndet):
             dslice = slice(d * nlocal, (d+1) * nlocal)
             dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
-            signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=tod.local_samples)
-            pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=tod.local_samples)
+            signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=nlocal)
+            pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=nlocal)
         
         # apply detector flags to the pointing matrix, since that is the
         # only way to pass flag information to madam

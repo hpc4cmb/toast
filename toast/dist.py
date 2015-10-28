@@ -291,7 +291,7 @@ class Data(object):
         rcomm = self._comm.comm_rank
 
         if wcomm.rank == 0:
-            handle.write("Data distributed over {} processes in {} groups".format(self._comm.world_size, self._comm.ngroups))
+            handle.write("Data distributed over {} processes in {} groups\n".format(self._comm.world_size, self._comm.ngroups))
 
         for ob in self.obs:
             id = ob.id
