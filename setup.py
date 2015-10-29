@@ -74,7 +74,7 @@ setup (
     author_email = 'mail@theodorekisner.com',
     url = 'https://github.com/tskisner/pytoast',
     ext_modules = extensions,
-    packages = [ 'toast' ],
+    packages = [ 'toast', 'toast.tod', 'toast.map', 'toast.exp.planck' ],
     scripts = scripts,
     license = 'BSD',
     requires = ['Python (>3.4.0)', ],
