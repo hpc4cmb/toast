@@ -58,7 +58,7 @@ class OpPointingPlanck(toast.Operator):
         # FIXME: use detweights or noise information
 
         for obs in data.obs:
-            tod = obs.tod
+            tod = obs['tod']
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
 

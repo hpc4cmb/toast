@@ -46,15 +46,14 @@ class OpMadamTest(MPITestCase):
                 nside=self.sim_nside
             )
 
-            self.data.obs.append( 
-                Obs( 
-                    id = 'test',
-                    tod = tod,
-                    intervals = [],
-                    baselines = None, 
-                    noise = None
-                )
-            )
+            ob = {}
+            ob['id'] = 'test'
+            ob['tod'] = tod
+            ob['intervals'] = []
+            ob['baselines'] = None
+            ob['noise'] = None
+
+            self.data.obs.append(ob)
 
 
     def test_madam_gradient(self):
@@ -62,18 +61,18 @@ class OpMadamTest(MPITestCase):
 
         # cache the data in memory
         cache = OpCopy()
-        data = cache.exec(self.data)
+        cache.exec(self.data)
 
         # add simple sky gradient signal
         grad = OpSimGradient(nside=self.sim_nside)
-        grad.exec(data)
+        grad.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingFake(nside=self.map_nside, nest=True)
-        pointing.exec(data)
+        pointing.exec(self.data)
 
         with open("out_test_madam.log", "w") as f:
-            data.info(f)
+            self.data.info(f)
 
         pars = {}
         pars[ 'kfirst' ] = False
@@ -92,7 +91,7 @@ class OpMadamTest(MPITestCase):
         pars[ 'path_output' ] = './'
 
         madam = OpMadam(params=pars)
-        madam.exec(data)
+        madam.exec(self.data)
 
         stop = MPI.Wtime()
         elapsed = stop - start

@@ -161,8 +161,8 @@ class Exchange(TOD):
 
         # Get the satellite attitude
 
-        satquat, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
-        satquat = satquat.T.copy()
+        quats, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
+        quats = quats.T.copy()
 
         #satquat = qa.mult( satquat, spinrot )
 
@@ -178,7 +178,7 @@ class Exchange(TOD):
 
         # Rotate into detector frame and convert to desired format
 
-        quats = qa.mult(qa.norm(satquat), detquat)
+        quats = qa.mult(qa.norm(quats), detquat)
 
         if self.deaberrate:
             # Correct for aberration

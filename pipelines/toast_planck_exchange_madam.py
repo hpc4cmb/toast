@@ -111,15 +111,14 @@ tod = tp.Exchange(
 # the Exchange TOD already had to get that information, we can
 # get it from there.
 
-data.obs.append( 
-    toast.Obs( 
-        id = 'mission',
-        tod = tod,
-        intervals = tod.valid_intervals,
-        baselines = None, 
-        noise = None
-    )
-)
+ob = {}
+ob['id'] = 'mission'
+ob['tod'] = tod
+ob['intervals'] = tod.valid_intervals
+ob['baselines'] = None
+ob['noise'] = None
+
+data.obs.append(ob)
 
 comm.comm_world.barrier()
 stop = MPI.Wtime()
@@ -130,7 +129,7 @@ start = stop
 
 # cache the data in memory
 cache = toast.tod.OpCopy()
-data = cache.exec(data)
+cache.exec(data)
 
 comm.comm_world.barrier()
 stop = MPI.Wtime()

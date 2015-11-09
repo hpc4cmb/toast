@@ -4,7 +4,6 @@
 
 
 from mpi4py import MPI
-from collections import namedtuple
 
 import unittest
 
@@ -248,8 +247,6 @@ def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
     return (dist_dets, dist_samples, dist_sizes)
 
 
-Obs = namedtuple('Obs', ['id', 'tod', 'intervals', 'baselines', 'noise'])
-
 class Data(object):
     """
     Class which represents distributed data
@@ -275,6 +272,15 @@ class Data(object):
         return self._comm
 
 
+    def clear(self):
+        """
+        Clear the dictionary of all observations, so that they can be garbage collected.
+        """
+        for ob in self.obs:
+            ob.clear()
+        return
+
+
     def info(self, handle):
         """
         Print information about the distributed data to the
@@ -294,11 +300,11 @@ class Data(object):
             handle.write("Data distributed over {} processes in {} groups\n".format(self._comm.world_size, self._comm.ngroups))
 
         for ob in self.obs:
-            id = ob.id
-            tod = ob.tod
-            base = ob.baselines
-            nse = ob.noise
-            intrvl = ob.intervals
+            id = ob['id']
+            tod = ob['tod']
+            base = ob['baselines']
+            nse = ob['noise']
+            intrvl = ob['intervals']
 
             if gcomm.rank == 0:
                 groupstr = "observation {}:\n".format(id)

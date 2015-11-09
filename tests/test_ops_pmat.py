@@ -53,15 +53,14 @@ class OpPointingFakeTest(MPITestCase):
                 samples = self.totsamp
             )
 
-            self.data.obs.append( 
-                Obs( 
-                    id = 'test',
-                    tod = tod,
-                    intervals = [],
-                    baselines = None, 
-                    noise = None
-                )
-            )
+            ob = {}
+            ob['id'] = 'test'
+            ob['tod'] = tod
+            ob['intervals'] = []
+            ob['baselines'] = None
+            ob['noise'] = None
+
+            self.data.obs.append(ob)
 
 
     def test_fake(self):

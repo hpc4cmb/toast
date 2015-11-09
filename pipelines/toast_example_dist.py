@@ -18,16 +18,13 @@ obs_dets = ['detA', 'detB', 'detC']
 
 for i in range(10):
     tod = TOD(mpicomm=cm.comm_group, detectors=obs_dets, samples=obs_samples)
-
-    obs = toast.Obs( 
-        id = '{}'.format(i),
-        tod = tod,
-        intervals = None,
-        baselines = None, 
-        noise = None
-    )
-
-    dd.obs.append(obs)
+    ob = {}
+    ob['id'] = '{}'.format(i)
+    ob['tod'] = tod
+    ob['intervals'] = None
+    ob['baselines'] = None
+    ob['noise'] = None
+    dd.obs.append(ob)
 
 # Now at the end we have 4 process groups, each of which is assigned
 # 10 observations.  Each of these observations has 3 detectors and 100

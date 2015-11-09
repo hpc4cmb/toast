@@ -54,15 +54,14 @@ class OpCopyTest(MPITestCase):
                 samples = self.totsamp
             )
 
-            self.data.obs.append( 
-                Obs( 
-                    id = 'test',
-                    tod = tod,
-                    intervals = [],
-                    baselines = None, 
-                    noise = None
-                )
-            )
+            ob = {}
+            ob['id'] = 'test'
+            ob['tod'] = tod
+            ob['intervals'] = []
+            ob['baselines'] = None
+            ob['noise'] = None
+
+            self.data.obs.append(ob)
 
 
     def test_copy(self):
@@ -70,9 +69,9 @@ class OpCopyTest(MPITestCase):
 
         op = OpCopy(timedist=True)
 
-        outdata = op.exec(self.data)
+        op.exec(self.data)
         with open("out_test_copy.log", "w") as f:
-            outdata.info(f)
+            self.data.info(f)
         
         stop = MPI.Wtime()
         elapsed = stop - start

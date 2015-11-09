@@ -13,7 +13,7 @@ import unittest
 import numpy as np
 import numpy.ctypeslib as npc
 
-from ..dist import Comm, Data, Obs
+from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
 from ..tod import Interval
@@ -98,12 +98,12 @@ class OpMadam(Operator):
         if len(data.obs) != 1:
             raise RuntimeError("Madam requires a single observation")
 
-        tod = data.obs[0].tod
+        tod = data.obs[0]['tod']
         if not tod.timedist:
             raise RuntimeError("Madam requires data to be distributed by time")
 
         # get the total list of intervals
-        intervals = data.obs[0].intervals
+        intervals = data.obs[0]['intervals']
 
         todcomm = tod.mpicomm
         todfcomm = todcomm.py2f()

@@ -12,7 +12,6 @@ import numpy as np
 from ..dist import distribute_det_samples
 
 
-
 class TOD(object):
     """
     Base class for an object that provides detector pointing and a 
@@ -132,8 +131,8 @@ class TOD(object):
             self.data[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.float64)
             self.flags[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.uint8)
         n = data.shape[0]
-        self.data[detector][flavor][start:start+n] = np.copy(data)
-        self.flags[detector][flavor][start:start+n] = np.copy(flags)
+        self.data[detector][flavor][start:start+n] = data
+        self.flags[detector][flavor][start:start+n] = flags
         return
 
 
@@ -148,8 +147,8 @@ class TOD(object):
             self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
             self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
         n = flags.shape[0]
-        self.pntg[detector][4*start:4*(start+n)] = np.copy(data)
-        self.pflags[detector][start:(start+n)] = np.copy(flags)
+        self.pntg[detector][4*start:4*(start+n)] = data
+        self.pflags[detector][start:(start+n)] = flags
         return
 
 
@@ -163,9 +162,8 @@ class TOD(object):
         if self.stamps is None:
             self.stamps = np.zeros(self._dist_samples[1], dtype=np.float64)
         n = stamps.shape[0]
-        self.stamps[start:start+n] = np.copy(stamps)
+        self.stamps[start:start+n] = stamps
         return
-
 
     def read(self, detector=None, flavor=None, local_start=0, n=0):
         if flavor is None:
@@ -179,7 +177,6 @@ class TOD(object):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get(detector, flavor, local_start, n)
-
 
     def write(self, detector=None, flavor=None, local_start=0, data=None, flags=None):
         if flavor is None:
@@ -199,12 +196,10 @@ class TOD(object):
         self._put(detector, flavor, local_start, data, flags)
         return
 
-
     def read_times(self, local_start=0, n=0):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_times(local_start, n)
-
 
     def write_times(self, local_start=0, stamps=None):
         if stamps is None:
@@ -214,7 +209,6 @@ class TOD(object):
         self._put_times(local_start, stamps)
         return
 
-
     def read_pntg(self, detector=None, local_start=0, n=0):
         if detector is None:
             raise ValueError('you must specify the detector')
@@ -223,7 +217,6 @@ class TOD(object):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n)
-
 
     def write_pntg(self, detector=None, local_start=0, data=None, flags=None):
         if detector is None:
@@ -238,7 +231,6 @@ class TOD(object):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
         return
-
 
     def read_pmat(self, name=None, detector=None, local_start=0, n=0):
         if name is None:
@@ -257,7 +249,6 @@ class TOD(object):
             raise RuntimeError('detector {} in pointing matrix {} not yet written'.format(detector, name))
         nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
         return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
-
 
     def write_pmat(self, name=None, detector=None, local_start=0, pixels=None, weights=None):
         if name is None:
@@ -281,8 +272,8 @@ class TOD(object):
             self.pmat[name][detector] = {}
             self.pmat[name][detector]['pixels'] = np.zeros(self.local_samples, dtype=np.int64)
             self.pmat[name][detector]['weights'] = np.zeros(nnz*self.local_samples, dtype=np.float64)
-        self.pmat[name][detector]['pixels'][local_start:local_start+npix] = np.copy(pixels)
-        self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = np.copy(weights)
+        self.pmat[name][detector]['pixels'][local_start:local_start+npix] = pixels
+        self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = weights
         return
 
 

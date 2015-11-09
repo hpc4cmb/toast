@@ -14,7 +14,7 @@ import healpy as hp
 import quaternionarray as qa
 
 from ..operator import Operator
-from ..dist import Comm, Data, Obs
+from ..dist import Comm, Data
 from .tod import TOD
 
 
@@ -54,7 +54,7 @@ class OpPointingFake(Operator):
         zaxis = np.array([0,0,1], dtype=np.float64)
 
         for obs in data.obs:
-            tod = obs.tod
+            tod = obs['tod']
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
                 dir = qa.rotate(pdata.reshape(-1, 4), zaxis)

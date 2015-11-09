@@ -20,7 +20,7 @@ from mpi4py import MPI
 
 from ._version import __version__
 
-from .dist import Comm, Obs, Data, distribute_uniform, distribute_discrete, distribute_det_samples
+from .dist import Comm, Data, distribute_uniform, distribute_discrete, distribute_det_samples
 
 from .operator import Operator
 
