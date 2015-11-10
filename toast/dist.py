@@ -321,10 +321,10 @@ class Data(object):
             dets = tod.local_dets
 
             procstr = "  proc {}\n".format(gcomm.rank)
-            global_chunks = 1
-            if tod.chunks is not None:
-                global_chunks = len(tod.chunks)
-            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), global_chunks)
+            my_chunks = 1
+            if tod.local_chunks is not None:
+                my_chunks = len(tod.local_chunks)
+            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), my_chunks)
             
             if tod.local_chunks is not None:
                 for chk in tod.local_chunks:

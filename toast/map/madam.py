@@ -167,7 +167,7 @@ class OpMadam(Operator):
             detweights[d] = detw[tod.detectors[d]]
 
         npsd = np.ones(ndet, dtype=np.int64)
-        npsdtot = int(np.sum(npsd))
+        npsdtot = np.sum(npsd)
         psdstarts = np.zeros(npsdtot, dtype=np.float64)
         npsdbin = 1
         npsdval = npsdbin * npsdtot

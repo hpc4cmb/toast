@@ -49,7 +49,9 @@ class TOD(object):
             self._dets = detectors
         self._flavors = [self.DEFAULT_FLAVOR]
         if flavors is not None:
-            self._flavors.extend(flavors)
+            for flv in flavors:
+                if flv not in self._flavors:
+                    self._flavors.append(flv)
         self._nsamp = samples
         self._sizes = sizes
 
