@@ -37,8 +37,10 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 
 DetectorData = namedtuple( 'DetectorData', 'detector phi_uv theta_uv psi_uv psi_pol epsilon fsample fknee alpha net quat' )
 
+eff_cache = {} # Cache TOI by OD so that we don't read every interval separately and reuse pointing information
 
-def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask ):
+
+def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask, use_cache=True ):
 
     ringtable = ringdb_table_name(freq)
 
@@ -87,27 +89,13 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
     nread = 0
 
     while len(ods) > 0:
+
         od, nrow = ods[0]
 
         if nrow < first_row:
             ods = ods[1:]
             first_row -= nrow
             continue
-
-        if extname.lower() in ['attitude', 'velocity']:
-            pattern = effdir + '/{:04}/pointing*fits'.format(od, freq)
-        else:
-            pattern = effdir + '/{:04}/?{:03}*fits'.format(od, freq)
-        try:
-            fn = sorted( glob.glob( pattern ) )[-1]
-        except:
-            raise Exception( 'Error: failed to find a file to read matching: ' + pattern )
-        
-        h = pf.open( fn, 'readonly' )
-        hdu = 1
-        while extname not in h[hdu].header['extname'].strip().lower():
-            hdu += 1
-            if hdu == len(h): raise Exception('No HDU matching extname = {} in {}'.format(extname, fn))
 
         if nrow - first_row > nleft:
             last_row = first_row + nleft
@@ -116,39 +104,122 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
 
         nbuff = last_row - first_row
 
-        ncol = len( h[hdu].columns )
+        if not use_cache or effdir not in eff_cache or od not in eff_cache[ effdir ] or extname not in eff_cache[ effdir ][ od ]:
 
-        #tme = np.array( h[1].data.field(0)[first_row:last_row] ) # DEBUG
-        #print('Reading EFF for:') # DEBUG
-        #for t in tme: print('{:.8f}'.format(t*1e-9)) # DEBUG
-        
-        if ncol == 2:
-            dat = np.array( h[hdu].data.field(0)[first_row:last_row] )
+            if use_cache and effdir not in eff_cache: eff_cache[ effdir ] = {}
+            if use_cache and od not in eff_cache[ effdir ]: eff_cache[ effdir ][ od ] = {}
+
+            if extname.lower() in ['attitude', 'velocity']:
+                pattern = effdir + '/{:04}/pointing*fits'.format(od, freq)
+            else:
+                pattern = effdir + '/{:04}/?{:03}*fits'.format(od, freq)
+            try:
+                fn = sorted( glob.glob( pattern ) )[-1]
+            except:
+                raise Exception( 'Error: failed to find a file to read matching: ' + pattern )
+
+            h = pf.open( fn, 'readonly' )
+            hdu = 1
+            while extname not in h[hdu].header['extname'].strip().lower():
+                hdu += 1
+                if hdu == len(h): raise Exception('No HDU matching extname = {} in {}'.format(extname, fn))
+
+            ncol = len( h[hdu].columns )
+
+            if use_cache:
+                # Cache the entire column
+                if ncol == 2:
+                    dat = np.array( h[hdu].data.field(0) )
+                else:
+                    dat = np.array( [ h[hdu].data.field(col).ravel() for col in range(ncol-1) ] )
+                eff_cache[ effdir ][ od ][ extname ] = dat.copy()
+                if ncol == 2:
+                    dat = dat[ first_row:last_row ]
+                else:
+                    dat = dat[ :, first_row:last_row ]
+            else:
+                if ncol == 2:
+                    dat = np.array( h[hdu].data.field(0)[first_row:last_row] )
+                else:
+                    dat = np.array( [ h[hdu].data.field(col)[first_row:last_row].ravel() for col in range(ncol-1) ] )
+
+            flg = np.zeros( last_row-first_row, dtype=np.byte )
+
+            if obtmask != 0:
+                if use_cache:
+                    if 'obtflag' not in eff_cache[ effdir ][ od ]:
+                        # Cache the OBT flags if they are not already cached
+                        eff_cache[ effdir ][ od ][ 'obtflag' ] = np.array(h[1].data.field(1), dtype=np.byte)
+                    obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row]
+                else:
+                    obtflg = np.array(h[1].data.field(1)[first_row:last_row], dtype=np.byte)
+                if obtmask > 0:
+                    flg += obtflg & obtmask
+                else:
+                    flg += np.logical_not( obtflg & -obtmask )
+
+            if flagmask != 0:
+                if use_cache:
+                    # Cache the detector flags
+                    eff_cache[ effdir ][ od ][ extname+'flag' ] = np.array( h[hdu].data.field(ncol-1), dtype=np.byte )
+                    detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row]
+                else:
+                    detflg = np.array(h[hdu].data.field(ncol-1)[first_row:last_row], dtype=np.byte)
+                if flagmask > 0:
+                    flg += detflg & flagmask
+                else:
+                    flg += np.logical_not( detflg & -flagmask )
+
+            h.close()
         else:
-            dat = np.array( [ h[hdu].data.field(col)[first_row:last_row].ravel() for col in range(ncol-1) ] )
-        data.append( dat )
+            # get the requested TOI from the cache
 
-        flg = np.zeros( last_row-first_row, dtype=np.byte )
-        if obtmask != 0:
-            if obtmask > 0:
-                flg += np.array(h[1].data.field(1)[first_row:last_row], dtype=np.byte) & obtmask
+            if len( np.shape( eff_cache[ effdir ][ od ][ extname ] ) ) == 1:
+                ncol = 2
             else:
-                flg += np.logical_not( np.array(h[1].data.field(1)[first_row:last_row], dtype=np.byte) & -obtmask )
-        if flagmask != 0:
-            if flagmask > 0:
-                flg += np.array(h[hdu].data.field(ncol-1)[first_row:last_row], dtype=np.byte) & flagmask
+                ncol = np.shape( eff_cache[ effdir ][ od ][ extname ] )[0] + 1
+
+            dat = eff_cache[ effdir ][ od ][ extname ]
+
+            if ncol == 2:
+                dat = dat[ first_row:last_row ]
             else:
-                flg += np.logical_not( np.array(h[hdu].data.field(ncol-1)[first_row:last_row], dtype=np.byte) & -flagmask )
+                dat = dat[ :, first_row:last_row ]
+
+            flg = np.zeros( last_row-first_row, dtype=np.byte )
+
+            if obtmask != 0:
+                obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row]
+
+                if obtmask > 0:
+                    flg += obtflg & obtmask
+                else:
+                    flg += np.logical_not( obtflg & -obtmask )
+
+            if flagmask != 0:
+                detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row]
+
+                if flagmask > 0:
+                    flg += detflg & flagmask
+                else:
+                    flg += np.logical_not( detflg & -flagmask )
+
+
+        #if ncol == 2: # DEBUG
+        #    print( 'DEBUG: start = {}, n = {}, extname = {}, std(dat) = {}, nflg = {}, obtmask = {}, flagmask = {}'.format( # DEBUG
+        #            start, n, extname, np.std(dat), np.sum(flg), obtmask, flagmask ) ) # DEBUG
+
+        data.append( dat )
         flag.append( flg )
 
         ods = ods[1:]
         first_row = 0
-        h.close()
 
         nread += nbuff
         nleft -= nbuff
 
         if nleft == 0: break
+
 
     if len(data) > 0: data = np.hstack(data).T
     if len(flag) > 0: flag = np.hstack(flag).T
