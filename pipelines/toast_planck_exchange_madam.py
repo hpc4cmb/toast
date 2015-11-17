@@ -104,7 +104,9 @@ tod = tp.Exchange(
     ring_range=ringrange,
     od_range=odrange,
     freq=int(args.freq),
-    RIMO=args.rimo
+    RIMO=args.rimo,
+    obtmask=1,
+    flagmask=1,
 )
 
 # normally we would get the intervals from somewhere else, but since
@@ -149,7 +151,7 @@ comm.comm_world.barrier()
 stop = MPI.Wtime()
 elapsed = stop - start
 if comm.comm_world.rank == 0:
-    print("Pointing Matrix took {:.3f} s".format(elapsed))
+    print("Pointing Matrix took {:.3f} s, mode = {}".format(elapsed,mode))
 start = stop
 
 # for now, we pass in the noise weights from the RIMO.
