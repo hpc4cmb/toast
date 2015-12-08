@@ -13,4 +13,6 @@ from .memory import OpCopy
 
 from .pointing import OpPointingFake
 
-from .sim import TODFake, OpSimGradient
+from .sim import TODFake, OpSimGradient, OpSimNoise
+
+from .noise import Noise

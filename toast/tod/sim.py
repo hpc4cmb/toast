@@ -9,6 +9,9 @@ import unittest
 
 import numpy as np
 
+import scipy.fftpack as sft
+import scipy.interpolate as si
+
 import healpy as hp
 
 import quaternionarray as qa
@@ -185,84 +188,153 @@ class OpSimGradient(Operator):
 
 
 
-# class OpSimNoise(Operator):
-#     """
-#     Operator which generates noise timestreams and accumulates that data
-#     to a particular timestream flavor.
+class OpSimNoise(Operator):
+    """
+    Operator which generates noise timestreams and accumulates that data
+    to a particular timestream flavor.
 
-#     This passes through each observation and ...
+    This passes through each observation and every process generates data
+    for its assigned samples.
 
-#     Args:
+    Args:
+        flavor (str): the TOD flavor to accumulate the noise data to.
+        stream (int): random stream for first detector.
+        accum (bool): should output be accumulated or overwritten.
+    """
+
+    def __init__(self, flavor=None, stream=None, accum=False):
         
-#     """
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
 
-#     def __init__(self, flavor=None, rms=1.0, ):
-        
-#         # We call the parent class constructor, which currently does nothing
-#         super().__init__()
-#         self._flavor = flavor
+        if stream is None:
+            raise RuntimeError("you must specify the random stream index")
 
-#         self._rngstream = rngstream
-#         self._seeds = {}
-#         for det in enumerate(self.detectors):
-#             self._seeds[det[1]] = det[0] 
-#         self._rms = rms
+        if flavor is None:
+            self._flavor = TOD.DEFAULT_FLAVOR
+        self._flavor = flavor
 
-#     @property
-#     def timedist(self):
-#         return self._timedist
+        self._oversample = 2
+        self._accum = accum
 
-#     def exec(self, indata):
-#         comm = indata.comm
-#         outdata = Data(comm)
-#         for inobs in indata.obs:
-#             tod = inobs.tod
-#             base = inobs.baselines
-#             nse = inobs.noise
-#             intrvl = inobs.intervals
+        self._rngstream = stream
 
-#             outtod = TOD(mpicomm=tod.mpicomm, timedist=self.timedist, 
-#                 detectors=tod.detectors, flavors=tod.flavors, 
-#                 samples=tod.total_samples)
 
-#             # FIXME:  add noise and baselines once implemented
-#             outbaselines = None
-#             outnoise = None
+    @property
+    def timedist(self):
+        return self._timedist
+
+
+    def exec(self, data):
+        comm = data.comm
+
+        for obs in data.obs:
+            tod = obs['tod']
+            nse = obs['noise']
+
+            # compute effective sample rate
+
+            times = tod.read_times(local_start=0, n=tod.local_samples)
+            dt = np.mean(times[1:-1] - times[0:-2])
+            rate = 1.0 / dt
+
+            # eventually we'll redistribute, to allow long correlations...
             
-#             if tod.timedist == self.timedist:
-#                 # we have the same distribution, and just need
-#                 # to read and write
-#                 for det in tod.local_dets:
-#                     pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
-#                     print("copy input pdata, pflags have size: {}, {}".format(len(pdata), len(pflags)))
-#                     outtod.write_pntg(det, 0, pdata, pflags)
-#                     for flv in tod.flavors:
-#                         data, flags = tod.read(det, flv, 0, tod.local_samples[1]) 
-#                         outtod.write(det, flv, 0, data, flags)
-#             else:
-#                 # we have to read our local piece and communicate
-#                 for det in tod.local_dets:
-#                     pdata, pflags = tod.read_pntg(det, 0, tod.local_samples[1])
-#                     pdata, pflags = _shuffle(pdata, pflags, tod.local_dets, tod.local_samples)
-#                     outtod.write_pntg(det, 0, pdata, pflags)
-#                     for flv in tod.flavors:
-#                         data, flags = tod.read(det, flv, 0, tod.local_samples[1])
-#                         data, flags = _shuffle(data, flags, tod.local_dets, tod.local_samples)
-#                         outstr.write(det, flv, 0, data, flags)
+            nsedata = np.zeros(tod.local_samples)
 
-#             outobs = Obs(tod=outtod, intervals=intrvl, baselines=outbaselines, noise = outnoise)
+            fftlen = 2
+            while fftlen <= (self._oversample * tod.local_samples):
+                fftlen *= 2
+            half = int(fftlen / 2)
+            norm = rate * half;
+            df = rate / fftlen
 
-#             outdata.obs.append(outobs)
-#         return outdata
+            freq = np.linspace(df, df*half, num=half, endpoint=True)
+            logfreq = np.log10(freq)
 
+            tempdata = np.zeros(tod.local_samples, dtype=np.float64)
+            tempflags = np.zeros(tod.local_samples, dtype=np.uint8)
+            tdata = np.zeros(fftlen, dtype=np.float64)
+            fdata = np.zeros(fftlen, dtype=np.float64)
 
+            # ignore zero frequency
+            trimzero = False
+            if nse.freq[0] == 0:
+                trimzero = True
 
-#         # Setting the seed like this does NOT guarantee uncorrelated
-#         # results from the generator.  This is just a place holder until
-#         # the streamed rng is implemented.
-#         np.random.seed(self.seeds[detector])
-#         trash = np.random.normal(loc=0.0, scale=self.rms, size=(n-start))
-#         return ( np.random.normal(loc=0.0, scale=self.rms, size=n), np.zeros(n, dtype=np.uint8) )
+            if trimzero:
+                rawfreq = nse.freq[1:]
+            else:
+                rawfreq = nse.freq
+            lograwfreq = np.log10(rawfreq)
 
+            idet = 0
+            for det in tod.local_dets:
+
+                # interpolate the psd
+
+                if trimzero:
+                    rawpsd = nse.psd(det)[1:]
+                else:
+                    rawpsd = nse.psd(det)
+
+                #np.savetxt("out_simnoise_rawpsd.txt", np.transpose(np.vstack((rawfreq, rawpsd))))
+
+                lograwpsd = np.log10(rawpsd)
+
+                interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
+
+                logpsd = interp(logfreq)
+
+                psd = np.power(10.0, logpsd)
+
+                # High-pass filter the PSD to not contain power below
+                # fmin to limit the correlation length.  Also cut
+                # Nyquist.
+                fmin = rate / float(tod.local_samples)
+                psd[freq < fmin] = 0.0
+                psd[-1] = 0.0
+
+                #np.savetxt("out_simnoise_psd.txt", np.transpose(np.vstack((freq, psd))))
+
+                # gaussian Re/Im randoms
+
+                # FIXME: Setting the seed like this does NOT guarantee uncorrelated
+                # results from the generator.  This is just a place holder until
+                # the streamed rng is implemented.
+
+                np.random.seed(self._rngstream + idet)
+
+                fdata = np.zeros(fftlen)
+                fdata = np.random.normal(loc=0.0, scale=1.0, size=fftlen)
+                #np.savetxt("out_simnoise_fdata_uni.txt", fdata, delimiter='\n')
+
+                # scale by PSD
+
+                scale = np.sqrt(psd * norm)
+
+                fdata[0] *= 0.0
+                fdata[1:half] *= scale[0:-1]
+                fdata[half] *= np.sqrt(2 * scale[-1])
+                fdata[half+1:] *= scale[-2::-1]
+
+                #np.savetxt("out_simnoise_fdata.txt", fdata, delimiter='\n')
+
+                # make the noise TOD
+
+                tdata = sft.irfft(fdata)
+                #np.savetxt("out_simnoise_tdata.txt", tdata, delimiter='\n')
+
+                if self._accum:
+                    tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples)
+                    tempdata += tdata[0:tod.local_samples]
+                else:
+                    tempdata = tdata[0:tod.local_samples]
+
+                tod.write(detector=det, flavor=self._flavor, local_start=0, data=tempdata, flags=tempflags)
+
+                idet += 1
+
+        return
 
 
