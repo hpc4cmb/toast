@@ -153,20 +153,11 @@ class Exchange(TOD):
         epsilon = self.RIMO[ detector ].epsilon
         eta = (1 - epsilon) / (1 + epsilon)
         detquat = self.RIMO[ detector ].quat        
-        #detvec = qa.rotate( detquat, zaxis ) # DEBUG
-        #orivec = qa.rotate( detquat, xaxis ) # DEBUG
-
-        #print('detvec = {}'.format( detvec )) # DEBUG
-        #print('orivec = {}'.format( orivec )) # DEBUG
 
         # Get the satellite attitude
 
         quats, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
         quats = quats.T.copy()
-
-        #satquat = qa.mult( satquat, spinrot )
-
-        #print('satquat = {}'.format(satquat))
 
         # Get the satellite velocity
 
@@ -174,7 +165,6 @@ class Exchange(TOD):
             satvel, flag2 = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'velocity', self.satobtmask, self.satvelmask)
             flag |= flag2
             satvel = satvel.T.copy()
-            #print('satvel = {}'.format(satvel))
 
         # Rotate into detector frame and convert to desired format
 

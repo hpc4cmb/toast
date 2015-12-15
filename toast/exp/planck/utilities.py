@@ -449,7 +449,15 @@ def count_samples(ringdb, freq, obt_range, ring_range, od_range):
         select_range = (start1, stop2)
 
     if ring_range is not None:
-        raise Exception('Ring span selection not yet implemented')
+        # Ring numbers are not recorded into the database. Simply get a list of the repointing maneuvers at the start of each pointing period
+        cmd = 'select start_time, stop_time from {} where pointID_unique like "%-H%" order by start_time'.format( ringtable )
+        ringlist = ringdb.execute( cmd ).fetchall()
+        try:
+            start1, stop1 = ringlist[ ring_range[0] ]
+            start2, stop2 = ringlist[ ring_range[1]+1 ]
+        except:
+            raise Exception( 'Failed to determine the ring span {} from the datababase'.format( ring_range ) )
+        select_range = (start1, start2 - 1.0 )
 
     if obt_range is not None:
         select_range = obt_range

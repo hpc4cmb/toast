@@ -25,14 +25,23 @@ class OpPointingPlanck(toast.Operator):
 
     """
 
-    def __init__(self, nside=1024, mode='I', detweights=None):
+    def __init__(self, nside=1024, mode='I', detweights=None, RIMO=None):
         self._nside = nside
         self._mode = mode
         self._detweights = detweights
+        
+        if RIMO is None:
+            raise ValueError('You must specify which RIMO to use')
+
+        self.RIMO = RIMO # The Reduced Instrument Model contains the necessary detector parameters
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
+
+    @property
+    def rimo(self):
+        return self.RIMO
 
     @property
     def nside(self):
@@ -55,24 +64,21 @@ class OpPointingPlanck(toast.Operator):
         zaxis = np.array([0,0,1], dtype=np.float64)
         nullquat = np.array([0,0,0,1], dtype=np.float64)
 
-        # FIXME: use detweights or noise information
-
         for obs in data.obs:
             tod = obs['tod']
+
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
 
-                pdata = np.where((np.repeat(pflags, 4) == 0), pdata, np.tile(nullquat, tod.local_samples))
+                pdata = pdata.reshape(-1,4).copy()
+                pdata[ pflags != 0 ] = nullquat
+                vec_dir = qa.rotate( pdata, zaxis ).T.copy()
+                
+                pixels = hp.vec2pix(self._nside, *vec_dir, nest=True)
+                pixels[ pflags != 0 ] = -1
 
-                dir = qa.rotate(pdata.reshape(-1, 4), np.tile(zaxis, tod.local_samples).reshape(-1,3))
-                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=True)
-                pixels = np.where((pflags == 0), pixels, np.repeat(-1, pixels.shape[0]))
-
-                # FIXME: get epsilon
-                epsilon = 1.0
-
-                oneplus = 0.5 * (1.0 + epsilon)
-                oneminus = 0.5 * (1.0 - epsilon)
+                epsilon = self.RIMO[ det ].epsilon
+                eta = (1 - epsilon) / (1 + epsilon)
 
                 dweight = 1.0
                 if self._detweights is not None:
@@ -83,20 +89,19 @@ class OpPointingPlanck(toast.Operator):
                     weights *= dweight
                     tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
                 elif self._mode == 'IQU':
-                    orient = qa.rotate(pdata.reshape(-1, 4), np.tile(xaxis, tod.local_samples).reshape(-1,3))
-                    y = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
-                    x = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])
-                        
-                    detang = np.arctan2(y, x)
-                    cang = np.cos(detang)
-                    sang = np.sin(detang)
-                    
-                    Ival = np.zeros_like(cang)
-                    Ival[:] = dweight * oneplus
-                    Qval = dweight * oneminus * cang
-                    Uval = dweight * oneminus * sang
+                    vec_orient = qa.rotate( pdata, xaxis ).T.copy()
+
+                    ypa = vec_orient[0]*vec_dir[1] - vec_orient[1]*vec_dir[0]
+                    xpa = -vec_orient[0]*vec_dir[2]*vec_dir[0] - vec_orient[1]*vec_dir[2]*vec_dir[1] + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
+
+                    psi = np.arctan2( ypa, xpa )
+
+                    Ival = dweight * np.ones( tod.local_samples )
+                    Qval = dweight * eta * np.cos( 2 * psi )
+                    Uval = dweight * eta * np.sin( 2 * psi )
 
                     weights = np.ravel(np.column_stack((Ival, Qval, Uval)))
+
                     tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
                 else:
                     raise RuntimeError("invalid mode for Planck Pointing")

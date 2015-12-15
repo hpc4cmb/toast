@@ -73,6 +73,7 @@ if comm.comm_world.rank == 0:
                         pars[result.group(1)] = result.group(2)
     else:
         pars[ 'kfirst' ] = False
+        pars[ 'temperature_only' ] = False
         pars[ 'base_first' ] = 60.0
         pars[ 'fsample' ] = 180.35
         pars[ 'nside_map' ] = 1024
@@ -109,6 +110,8 @@ tod = tp.Exchange(
     flagmask=1,
 )
 
+RIMO = tod.rimo
+
 # normally we would get the intervals from somewhere else, but since
 # the Exchange TOD already had to get that information, we can
 # get it from there.
@@ -144,7 +147,7 @@ start = stop
 mode = 'IQU'
 if pars['temperature_only'] == 'T':
     mode = 'I'
-pointing = tp.OpPointingPlanck(nside=int(pars['nside_map']), mode=mode)
+pointing = tp.OpPointingPlanck(nside=int(pars['nside_map']), mode=mode, RIMO=RIMO)
 pointing.exec(data)
 
 comm.comm_world.barrier()
