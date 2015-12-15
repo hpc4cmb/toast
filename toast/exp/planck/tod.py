@@ -94,16 +94,12 @@ class Exchange(TOD):
             detectors = bolos_by_freq(self.freq)
 
         # for data distribution, we need the contiguous sample
-        # ranges based on the ring starts.  If the first ring
-        # does not start at zero, add a fake ring at the start.
-        # Similarly for the end ring.
+        # ranges based on the ring starts.
 
         ringstarts = [ x.first for x in self.allrings ]
-        if ringstarts[0] != 0:
-            ringstarts.insert(0, 0)
-        ringstarts.append(self.allsamp)
 
         ringsizes = [ (y - x) for x, y in zip(ringstarts[:-1], ringstarts[1:]) ]
+        ringsizes.append( self.allrings[-1].last - self.allrings[-1].first + 1 )
 
         super().__init__(mpicomm=mpicomm, timedist=True, detectors=detectors, samples=self.allsamp, sizes=ringsizes)
 
@@ -158,6 +154,17 @@ class Exchange(TOD):
 
         quats, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
         quats = quats.T.copy()
+
+        # Mask out samples that have unreliable pointing (interpolated across interval ends)
+        
+        start = self.globalfirst + self.local_offset + local_start
+        stop = start + n
+        ind = np.arange( start, stop )
+        for interval_before, interval_after in zip( self.allrings[:-1], self.allrings[1:] ):
+            gap_start = interval_before.last
+            gap_stop = interval_after.first
+            if gap_start <= stop and gap_stop >= start:
+                flag[ np.logical_and( ind>gap_start, ind<gap_stop) ] = True
 
         # Get the satellite velocity
 

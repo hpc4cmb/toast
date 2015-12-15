@@ -78,7 +78,7 @@ if comm.comm_world.rank == 0:
         pars[ 'fsample' ] = 180.35
         pars[ 'nside_map' ] = 1024
         pars[ 'nside_cross' ] = 1024
-        pars[ 'nside_submap' ] = 1024
+        pars[ 'nside_submap' ] = 16
         pars[ 'write_map' ] = False
         pars[ 'write_binmap' ] = True
         pars[ 'write_matrix' ] = False
@@ -87,6 +87,7 @@ if comm.comm_world.rank == 0:
         pars[ 'kfilter' ] = False
         pars[ 'run_submap_test' ] = False
         pars[ 'path_output' ] = './'
+        pars[ 'info' ] = 3
 
 pars = comm.comm_world.bcast(pars, root=0)
 
@@ -122,6 +123,8 @@ ob['tod'] = tod
 ob['intervals'] = tod.valid_intervals
 ob['baselines'] = None
 ob['noise'] = None
+
+print( '{:4} : Processing {} chunks : {}. Local offset : {}, samples {} / {}.'.format( comm.comm_world.rank, len(tod.local_chunks), tod.local_chunks, tod.local_offset, tod.local_samples, tod.total_samples ) )
 
 data.obs.append(ob)
 

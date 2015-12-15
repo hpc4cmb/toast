@@ -42,6 +42,8 @@ eff_cache = {} # Cache TOI by OD so that we don't read every interval separately
 
 def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask, use_cache=True ):
 
+    if n < 1: raise Exception( 'ERROR: cannot read negative number of samples: {}'.format(n) )
+
     ringtable = ringdb_table_name(freq)
 
     # Convert to global indices
@@ -103,6 +105,8 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
             last_row = nrow
 
         nbuff = last_row - first_row
+
+        if nbuff < 1: raise Exception( 'Empty read on OD {}: indices {} - {}, rows {} - {}, timestamps {} - {}'.format( od, start, stop, first_row, last_row, start_time1, stop_time2 ) )
 
         if not use_cache or effdir not in eff_cache or od not in eff_cache[ effdir ] or extname not in eff_cache[ effdir ][ od ]:
 
@@ -204,10 +208,6 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
                 else:
                     flg += np.logical_not( detflg & -flagmask )
 
-
-        #if ncol == 2: # DEBUG
-        #    print( 'DEBUG: start = {}, n = {}, extname = {}, std(dat) = {}, nflg = {}, obtmask = {}, flagmask = {}'.format( # DEBUG
-        #            start, n, extname, np.std(dat), np.sum(flg), obtmask, flagmask ) ) # DEBUG
 
         data.append( dat )
         flag.append( flg )
@@ -476,6 +476,8 @@ def count_samples(ringdb, freq, obt_range, ring_range, od_range):
         # FIXME: a third option would be to include the repointing maneuvers in the following science scans (MOC definition) but this would require extra processing of the query results. 
     
     intervals = ringdb.execute( cmd ).fetchall()
+
+    if len(intervals) < 1: raise Exception( 'Warning: failed to find any intervals with the query: {}'.format( cmd ) )
 
     start_time1, stop_time1, start_index1, stop_index1, start_row1, stop_row1 = intervals[0]
     start_time2, stop_time2, start_index2, stop_index2, start_row2, stop_row2 = intervals[-1]
