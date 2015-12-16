@@ -5,6 +5,7 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.dist import *
 from toast.tod.tod import *
@@ -14,6 +15,10 @@ class TODTest(MPITestCase):
 
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+            
         # Note: self.comm is set by the test infrastructure
         self.dets = ['1a', '1b', '2a', '2b']
         self.flavs = ['proc1', 'proc2']

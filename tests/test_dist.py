@@ -5,6 +5,7 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.dist import *
 
@@ -12,6 +13,10 @@ from toast.dist import *
 class DataTest(MPITestCase):
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
         if (self.worldsize >= 2):
@@ -95,7 +100,7 @@ class DataTest(MPITestCase):
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
         self.data = Data(self.toastcomm)
-        with open("out_test_construct.log", "w") as f:
+        with open(os.path.join(self.outdir,"out_test_construct.log"), "w") as f:
             self.data.info(f)
 
         stop = MPI.Wtime()

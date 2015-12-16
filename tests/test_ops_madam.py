@@ -5,6 +5,7 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.tod.tod import *
 from toast.tod.memory import *
@@ -16,6 +17,10 @@ from toast.map.madam import *
 class OpMadamTest(MPITestCase):
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+
         # Note: self.comm is set by the test infrastructure
 
         self.toastcomm = Comm(world=self.comm)
@@ -71,24 +76,24 @@ class OpMadamTest(MPITestCase):
         pointing = OpPointingFake(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
-        with open("out_test_madam.log", "w") as f:
+        with open(os.path.join(self.outdir,"out_test_madam.log"), "w") as f:
             self.data.info(f)
 
         pars = {}
-        pars[ 'kfirst' ] = False
+        pars[ 'kfirst' ] = 'F'
         pars[ 'base_first' ] = 1.0
         pars[ 'fsample' ] = self.rate
         pars[ 'nside_map' ] = self.map_nside
         pars[ 'nside_cross' ] = self.map_nside
         pars[ 'nside_submap' ] = self.map_nside
-        pars[ 'write_map' ] = False
-        pars[ 'write_binmap' ] = True
-        pars[ 'write_matrix' ] = False
-        pars[ 'write_wcov' ] = False
-        pars[ 'write_hits' ] = True
-        pars[ 'kfilter' ] = False
-        pars[ 'run_submap_test' ] = False
-        pars[ 'path_output' ] = './'
+        pars[ 'write_map' ] = 'F'
+        pars[ 'write_binmap' ] = 'T'
+        pars[ 'write_matrix' ] = 'F'
+        pars[ 'write_wcov' ] = 'F'
+        pars[ 'write_hits' ] = 'T'
+        pars[ 'kfilter' ] = 'F'
+        pars[ 'run_submap_test' ] = 'F'
+        pars[ 'path_output' ] = self.outdir
 
         madam = OpMadam(params=pars)
         madam.exec(self.data)

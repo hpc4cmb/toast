@@ -5,6 +5,7 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.tod.tod import *
 from toast.tod.memory import *
@@ -16,6 +17,10 @@ import quaternionarray as qa
 class OpCopyTest(MPITestCase):
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
         if (self.worldsize >= 2):
@@ -70,7 +75,7 @@ class OpCopyTest(MPITestCase):
         op = OpCopy(timedist=True)
 
         op.exec(self.data)
-        with open("out_test_copy.log", "w") as f:
+        with open(os.path.join(self.outdir,"out_test_copy.log"), "w") as f:
             self.data.info(f)
         
         stop = MPI.Wtime()

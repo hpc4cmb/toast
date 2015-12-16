@@ -6,3 +6,5 @@
 # import functions in our public API
 
 from .madam import OpMadam
+
+from .pixels import OpLocalPixels

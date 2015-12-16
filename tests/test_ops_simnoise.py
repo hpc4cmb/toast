@@ -5,6 +5,7 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.tod.tod import *
 from toast.tod.pointing import *
@@ -15,6 +16,10 @@ from toast.tod.noise import *
 class OpSimNoiseTest(MPITestCase):
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
         if (self.worldsize >= 2):
@@ -56,7 +61,7 @@ class OpSimNoiseTest(MPITestCase):
         op = OpSimNoise(stream=123456)
         op.exec(self.data)
 
-        np.savetxt("out_test_simnoise.txt", self.tod.read(detector='fake', local_start=0, n=self.tod.local_samples), delimiter='\n')
+        np.savetxt(os.path.join(self.outdir,"out_test_simnoise.txt"), self.tod.read(detector='fake', local_start=0, n=self.tod.local_samples), delimiter='\n')
         
         stop = MPI.Wtime()
         elapsed = stop - start

@@ -5,15 +5,21 @@
 from mpi4py import MPI
 from .mpirunner import MPITestCase
 import sys
+import os
 
 from toast.tod.tod import *
 from toast.tod.pointing import *
 from toast.tod.sim import *
+from toast.map.pixels import *
 
 
 class OpPointingFakeTest(MPITestCase):
 
     def setUp(self):
+        self.outdir = "tests_output"
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
         if (self.worldsize >= 2):
@@ -69,7 +75,10 @@ class OpPointingFakeTest(MPITestCase):
         op = OpPointingFake()
         op.exec(self.data)
 
-        with open("out_test_fake.log", "w") as f:
+        lc = OpLocalPixels()
+        local = lc.exec(self.data)
+
+        with open(os.path.join(self.outdir,"out_test_fake.log"), "w") as f:
             self.data.info(f)
         
         stop = MPI.Wtime()
