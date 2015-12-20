@@ -138,6 +138,22 @@ class TOD(object):
         return
 
 
+    def clear(self, detector=None, flavor=None):
+        if flavor is None:
+            flavor = self.DEFAULT_FLAVOR
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if flavor not in self.flavors:
+            raise ValueError('flavor {} not found'.format(flavor))
+        if detector in self.data.keys():
+            if flavor in self.data[detector].keys():
+                del self.data[detector][flavor]
+                del self.flags[detector][flavor]
+        return
+
+
     def _get_pntg(self, detector, start, n):
         if detector not in self.pntg.keys():
             raise ValueError('detector {} pointing not yet written'.format(detector))
@@ -154,6 +170,17 @@ class TOD(object):
         return
 
 
+    def clear_pntg(self, detector=None):
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if detector in self.pntg.keys():
+            del self.pntg[detector]
+            del self.pflags[detector]
+        return
+
+
     def _get_times(self, start, n):
         if self.stamps is None:
             raise RuntimeError('cannot read timestamps before writing them')
@@ -167,6 +194,7 @@ class TOD(object):
         self.stamps[start:start+n] = stamps
         return
 
+
     def read(self, detector=None, flavor=None, local_start=0, n=0):
         if flavor is None:
             flavor = self.DEFAULT_FLAVOR
@@ -179,6 +207,7 @@ class TOD(object):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get(detector, flavor, local_start, n)
+
 
     def write(self, detector=None, flavor=None, local_start=0, data=None, flags=None):
         if flavor is None:
@@ -198,10 +227,12 @@ class TOD(object):
         self._put(detector, flavor, local_start, data, flags)
         return
 
+
     def read_times(self, local_start=0, n=0):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_times(local_start, n)
+
 
     def write_times(self, local_start=0, stamps=None):
         if stamps is None:
@@ -211,6 +242,7 @@ class TOD(object):
         self._put_times(local_start, stamps)
         return
 
+
     def read_pntg(self, detector=None, local_start=0, n=0):
         if detector is None:
             raise ValueError('you must specify the detector')
@@ -219,6 +251,7 @@ class TOD(object):
         if (local_start < 0) or (local_start + n > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n)
+
 
     def write_pntg(self, detector=None, local_start=0, data=None, flags=None):
         if detector is None:
@@ -233,6 +266,7 @@ class TOD(object):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
         return
+
 
     def read_pmat(self, name=None, detector=None, local_start=0, n=0):
         if name is None:
@@ -251,6 +285,7 @@ class TOD(object):
             raise RuntimeError('detector {} in pointing matrix {} not yet written'.format(detector, name))
         nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
         return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
+
 
     def write_pmat(self, name=None, detector=None, local_start=0, pixels=None, weights=None):
         if name is None:
@@ -279,6 +314,18 @@ class TOD(object):
         return
 
 
+    def clear_pmat(self, name=None, detector=None):
+        if name is None:
+            name = self.DEFAULT_FLAVOR
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if name in self.pmat.keys():
+            del self.pmat[name][detector]
+        return
+
+
     def pmat_nnz(self, name=None, detector=None):
         if name is None:
             name = self.DEFAULT_FLAVOR
@@ -289,4 +336,13 @@ class TOD(object):
         nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
         return nnz
 
+
+    def clear_all(self):
+        for det in self.local_dets:
+            for name in self.pmat.keys():
+                self.clear_pmat(name=name, detector=det)
+            self.clear_pntg(detector=det)
+            for flv in self.flavors:
+                self.clear(detector=det, flavor=flv)
+        return
 
