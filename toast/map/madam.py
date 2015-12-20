@@ -54,7 +54,7 @@ class OpMadam(Operator):
         params (dictionary): parameters to pass to madam.
     """
 
-    def __init__(self, flavor=None, pmat=None, detweights=None, params={}):
+    def __init__(self, flavor=None, pmat=None, detweights=None, highmem=False, params={}):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -67,6 +67,7 @@ class OpMadam(Operator):
         if self._pmat is None:
             self._pmat = TOD.DEFAULT_FLAVOR
         self._detw = detweights
+        self._highmem = highmem
         self._params = params
 
 
@@ -129,12 +130,15 @@ class OpMadam(Operator):
             dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
             signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=nlocal)
             pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=nlocal)
+            if not self._highmem:
+                tod.clear(detector=tod.detectors[d], flavor=self._flavor)
+                tod.clear_pmat(name=self._pmat, detector=tod.detectors[d])
         
         # apply detector flags to the pointing matrix, since that is the
         # only way to pass flag information to madam
 
-        pixels = np.where((flags == 0), pixels, np.repeat(-1, pixels.shape[0]))
-        pixweights = np.where((np.repeat(flags, nnz) == 0), pixweights, np.repeat(0.0, pixweights.shape[0]))
+        pixels[flags != 0] = -1
+        pixweights[np.repeat(flags, nnz) != 0] = 0.0
 
         # extract only the intervals that are local to this process.
 
