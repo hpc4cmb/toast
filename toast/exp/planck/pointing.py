@@ -25,10 +25,11 @@ class OpPointingPlanck(toast.Operator):
 
     """
 
-    def __init__(self, nside=1024, mode='I', detweights=None, RIMO=None):
+    def __init__(self, nside=1024, mode='I', detweights=None, RIMO=None, highmem=False):
         self._nside = nside
         self._mode = mode
         self._detweights = detweights
+        self._highmem = highmem
         
         if RIMO is None:
             raise ValueError('You must specify which RIMO to use')
@@ -105,6 +106,9 @@ class OpPointingPlanck(toast.Operator):
                     tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
                 else:
                     raise RuntimeError("invalid mode for Planck Pointing")
+
+                if not self._highmem:
+                    tod.clear_pntg(detector=det)
                     
         return
 
