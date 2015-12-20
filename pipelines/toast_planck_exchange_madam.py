@@ -16,7 +16,8 @@ import argparse
 parser = argparse.ArgumentParser( description='Simple MADAM Mapmaking' )
 parser.add_argument( '--rimo', required=True, help='RIMO file' )
 parser.add_argument( '--freq', required=True, help='Frequency' )
-parser.add_argument( '--debug', dest='debug', action='store_true', help='Write data distribution info to file')
+parser.add_argument( '--debug', dest='debug', default=False, action='store_true', help='Write data distribution info to file')
+parser.add_argument( '--highmem', dest='highmem', default=False, action='store_true', help='Do not purge intermediate data products from memory')
 parser.add_argument( '--dets', required=False, default=None, help='Detector list (comma separated)' )
 parser.add_argument( '--effdir', required=True, help='Input Exchange Format File directory' )
 parser.add_argument( '--ringdb', required=True, help='Ring DB file' )
@@ -29,7 +30,6 @@ parser.add_argument( '--obtlast', required=False, default=None, help='Last OBT t
 parser.add_argument( '--madampar', required=False, default=None, help='Madam parameter file' )
 parser.add_argument( '--out', required=False, default='.', help='Output directory' )
 
-parser.set_defaults(debug=False)
 args = parser.parse_args()
 
 start = MPI.Wtime()
@@ -150,7 +150,7 @@ start = stop
 mode = 'IQU'
 if pars['temperature_only'] == 'T':
     mode = 'I'
-pointing = tp.OpPointingPlanck(nside=int(pars['nside_map']), mode=mode, RIMO=RIMO)
+pointing = tp.OpPointingPlanck(nside=int(pars['nside_map']), mode=mode, RIMO=RIMO, highmem=args.highmem)
 pointing.exec(data)
 
 comm.comm_world.barrier()
@@ -172,7 +172,7 @@ if args.debug:
     with open("debug_planck_exchange_madam.txt", "w") as f:
         data.info(f)
 
-madam = toast.map.OpMadam(params=pars, detweights=detweights)
+madam = toast.map.OpMadam(params=pars, detweights=detweights, highmem=args.highmem)
 madam.exec(data)
 
 comm.comm_world.barrier()
