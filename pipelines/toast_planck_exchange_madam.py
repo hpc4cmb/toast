@@ -12,6 +12,7 @@ import toast.exp.planck as tp
 import re
 import argparse
 
+import time
 
 parser = argparse.ArgumentParser( description='Simple MADAM Mapmaking' )
 parser.add_argument( '--rimo', required=True, help='RIMO file' )
@@ -138,6 +139,9 @@ start = stop
 # cache the data in memory
 cache = toast.tod.OpCopy()
 cache.exec(data)
+
+tod.purge_eff_cache()
+#del tod # Also deleting "tod" will purge the cache but you cannot reference other useful "tod" member later on
 
 comm.comm_world.barrier()
 stop = MPI.Wtime()

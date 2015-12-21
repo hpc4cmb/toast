@@ -93,7 +93,8 @@ class OpPointingPlanck(toast.Operator):
                     vec_orient = qa.rotate( pdata, xaxis ).T.copy()
 
                     ypa = vec_orient[0]*vec_dir[1] - vec_orient[1]*vec_dir[0]
-                    xpa = -vec_orient[0]*vec_dir[2]*vec_dir[0] - vec_orient[1]*vec_dir[2]*vec_dir[1] + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
+                    #xpa = -vec_orient[0]*vec_dir[2]*vec_dir[0] - vec_orient[1]*vec_dir[2]*vec_dir[1] + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
+                    xpa = -vec_dir[2]*(vec_orient[0]*vec_dir[0] - vec_orient[1]*vec_dir[1]) + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
 
                     psi = np.arctan2( ypa, xpa )
 

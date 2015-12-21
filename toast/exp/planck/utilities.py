@@ -37,10 +37,7 @@ spinrot = qa.rotation( yaxis, np.pi/2 - spinangle )
 
 DetectorData = namedtuple( 'DetectorData', 'detector phi_uv theta_uv psi_uv psi_pol epsilon fsample fknee alpha net quat' )
 
-eff_cache = {} # Cache TOI by OD so that we don't read every interval separately and reuse pointing information
-
-
-def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask, use_cache=True ):
+def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, freq, effdir, extname, obtmask, flagmask, eff_cache=None, debug=0 ):
 
     if n < 1: raise Exception( 'ERROR: cannot read negative number of samples: {}'.format(n) )
 
@@ -108,10 +105,10 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
 
         if nbuff < 1: raise Exception( 'Empty read on OD {}: indices {} - {}, rows {} - {}, timestamps {} - {}'.format( od, start, stop, first_row, last_row, start_time1, stop_time2 ) )
 
-        if not use_cache or effdir not in eff_cache or od not in eff_cache[ effdir ] or extname not in eff_cache[ effdir ][ od ]:
+        if eff_cache is None or effdir not in eff_cache or od not in eff_cache[ effdir ] or extname not in eff_cache[ effdir ][ od ]:
 
-            if use_cache and effdir not in eff_cache: eff_cache[ effdir ] = {}
-            if use_cache and od not in eff_cache[ effdir ]: eff_cache[ effdir ][ od ] = {}
+            if eff_cache is not None and effdir not in eff_cache: eff_cache[ effdir ] = {}
+            if eff_cache is not None and od not in eff_cache[ effdir ]: eff_cache[ effdir ][ od ] = {}
 
             if extname.lower() in ['attitude', 'velocity']:
                 pattern = effdir + '/{:04}/pointing*fits'.format(od, freq)
@@ -130,17 +127,20 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
 
             ncol = len( h[hdu].columns )
 
-            if use_cache:
+            if eff_cache is not None:
                 # Cache the entire column
+                if extname not in eff_cache[ effdir ][ od ]:
+                    if ncol == 2:
+                        temp = np.array( h[hdu].data.field(0) )
+                    else:
+                        temp = np.array( [ h[hdu].data.field(col).ravel() for col in range(ncol-1) ] )
+                    if (debug > 3): print('Storing {:.2f} MB to eff_cache:{}:{}:{}'.format(temp.nbytes/2.0**20,effdir,od,extname)) # DEBUG
+                    eff_cache[ effdir ][ od ][ extname ] = temp.copy()
                 if ncol == 2:
-                    dat = np.array( h[hdu].data.field(0) )
+                    dat = eff_cache[ effdir ][ od ][ extname ][ first_row:last_row ].copy()
                 else:
-                    dat = np.array( [ h[hdu].data.field(col).ravel() for col in range(ncol-1) ] )
-                eff_cache[ effdir ][ od ][ extname ] = dat.copy()
-                if ncol == 2:
-                    dat = dat[ first_row:last_row ]
-                else:
-                    dat = dat[ :, first_row:last_row ]
+                    dat = eff_cache[ effdir ][ od ][ extname ][ :, first_row:last_row ].copy()
+                if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(dat.nbytes/2.0**20,effdir,od,extname)) # DEBUG
             else:
                 if ncol == 2:
                     dat = np.array( h[hdu].data.field(0)[first_row:last_row] )
@@ -150,11 +150,14 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
             flg = np.zeros( last_row-first_row, dtype=np.byte )
 
             if obtmask != 0:
-                if use_cache:
+                if eff_cache is not None:
                     if 'obtflag' not in eff_cache[ effdir ][ od ]:
                         # Cache the OBT flags if they are not already cached
-                        eff_cache[ effdir ][ od ][ 'obtflag' ] = np.array(h[1].data.field(1), dtype=np.byte)
-                    obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row]
+                        temp = np.array(h[1].data.field(1), dtype=np.byte)
+                        if (debug > 3): print('Storing {:.2f} MB to eff_cache:{}:{}:{}'.format(temp.nbytes/2.0**20,effdir,od,'obtflag')) # DEBUG
+                        eff_cache[ effdir ][ od ][ 'obtflag' ] = temp.copy()
+                    obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row].copy()
+                    if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(obtflg.nbytes/2.0**20,effdir,od,'obtflag')) # DEBUG
                 else:
                     obtflg = np.array(h[1].data.field(1)[first_row:last_row], dtype=np.byte)
                 if obtmask > 0:
@@ -163,10 +166,14 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
                     flg += np.logical_not( obtflg & -obtmask )
 
             if flagmask != 0:
-                if use_cache:
+                if eff_cache is not None:
                     # Cache the detector flags
-                    eff_cache[ effdir ][ od ][ extname+'flag' ] = np.array( h[hdu].data.field(ncol-1), dtype=np.byte )
-                    detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row]
+                    if extname+'flag' not in eff_cache[ effdir ][ od ]:
+                        temp = np.array( h[hdu].data.field(ncol-1), dtype=np.byte )
+                        if (debug > 3): print('Storing {:.2f} MB to eff_cache:{}:{}:{}'.format(temp.nbytes/2.0**20,effdir,od,extname+'flag')) # DEBUG
+                        eff_cache[ effdir ][ od ][ extname+'flag' ] = temp.copy()
+                    detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row].copy()
+                    if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(detflg.nbytes/2.0**20,effdir,od,extname+'flag')) # DEBUG
                 else:
                     detflg = np.array(h[hdu].data.field(ncol-1)[first_row:last_row], dtype=np.byte)
                 if flagmask > 0:
@@ -183,26 +190,30 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
             else:
                 ncol = np.shape( eff_cache[ effdir ][ od ][ extname ] )[0] + 1
 
-            dat = eff_cache[ effdir ][ od ][ extname ]
-
             if ncol == 2:
-                dat = dat[ first_row:last_row ]
+                dat = eff_cache[ effdir ][ od ][ extname ][ first_row:last_row ].copy()
             else:
-                dat = dat[ :, first_row:last_row ]
+                dat = eff_cache[ effdir ][ od ][ extname ][ :, first_row:last_row ].copy()
 
+            if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(dat.nbytes/2.0**20,effdir,od,extname)) # DEBUG
+            
             flg = np.zeros( last_row-first_row, dtype=np.byte )
 
             if obtmask != 0:
-                obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row]
+                obtflg = eff_cache[ effdir ][ od ][ 'obtflag' ][first_row:last_row].copy()
 
+                if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(obtflg.nbytes/2.0**20,effdir,od,'obtflag')) # DEBUG
+                              
                 if obtmask > 0:
                     flg += obtflg & obtmask
                 else:
                     flg += np.logical_not( obtflg & -obtmask )
 
             if flagmask != 0:
-                detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row]
+                detflg = eff_cache[ effdir ][ od ][ extname+'flag' ][first_row:last_row].copy()
 
+                if (debug > 3): print('Retrieved {:.2f} MB from eff_cache:{}:{}:{}'.format(detflg.nbytes/2.0**20,effdir,od,extname+'flag')) # DEBUG
+                              
                 if flagmask > 0:
                     flg += detflg & flagmask
                 else:

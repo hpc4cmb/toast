@@ -69,6 +69,8 @@ class Exchange(TOD):
         self.RIMO_path = RIMO
         self.RIMO = load_RIMO( self.RIMO_path, mpicomm )
 
+        self.eff_cache = {}
+
         self.freq = freq
 
         self.coord = coord
@@ -117,7 +119,10 @@ class Exchange(TOD):
         else:
             self.coordmatrix, do_conv, normcoord = hp.rotator.get_coordconv_matrix( ['E', self.coord] )
             self.coordquat = qa.from_rotmat( self.coordmatrix )
-    
+
+    def purge_eff_cache( self ):
+        del self.eff_cache
+        self.eff_cache = {}
 
     @property
     def valid_intervals(self):
@@ -131,7 +136,7 @@ class Exchange(TOD):
 
     def _get(self, detector, flavor, local_start, n):
 
-        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask)
+        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, detector.lower(), self.obtmask, self.flagmask, eff_cache=self.eff_cache)
 
         return (data, flag)
 
@@ -152,7 +157,7 @@ class Exchange(TOD):
 
         # Get the satellite attitude
 
-        quats, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask)
+        quats, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.satobtmask, self.satquatmask, eff_cache=self.eff_cache)
         quats = quats.T.copy()
 
         # Mask out samples that have unreliable pointing (interpolated across interval ends)
@@ -169,7 +174,7 @@ class Exchange(TOD):
         # Get the satellite velocity
 
         if self.deaberrate:        
-            satvel, flag2 = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'velocity', self.satobtmask, self.satvelmask)
+            satvel, flag2 = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'velocity', self.satobtmask, self.satvelmask, eff_cache=self.eff_cache)
             flag |= flag2
             satvel = satvel.T.copy()
 
@@ -203,7 +208,7 @@ class Exchange(TOD):
 
 
     def _get_times(self, local_start, n):
-        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'obt', 0, 0)
+        data, flag = read_eff(local_start, n, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'obt', 0, 0, eff_cache=self.eff_cache)
         return data
 
 
