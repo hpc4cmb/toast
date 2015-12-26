@@ -16,3 +16,5 @@ from .pointing import OpPointingFake
 from .sim import TODFake, OpSimGradient, OpSimNoise
 
 from .noise import Noise
+
+from .conviqt import OpSimConviqt

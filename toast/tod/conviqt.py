@@ -10,6 +10,8 @@ from ctypes.util import find_library
 
 import unittest
 
+import healpy as hp
+
 import numpy as np
 import numpy.ctypeslib as npc
 
@@ -20,9 +22,17 @@ from ..operator import Operator
 from ..tod import TOD
 from ..tod import Interval
 
+# Define portably the MPI communicator datatype
 
+try:
+    if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
+        MPI_Comm = ct.c_int
+    else:
+        MPI_Comm = ct.c_void_p
+except Exception as e:
+    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You may need to install from a git checkout. ({})'.format(e))
 
-libconviqt = ct.CDLL('libconviqt')
+libconviqt = ct.CDLL('libconviqt.so')
 
 # Beam functions
 
@@ -39,7 +49,7 @@ libconviqt.conviqt_beam_read.argtypes = [
     ct.c_long,
     ct.c_byte,
     ct.c_char_p,
-    ct.c_int
+    MPI_Comm
 ]
 
 # Sky functions
@@ -57,7 +67,7 @@ libconviqt.conviqt_sky_read.argtypes = [
     ct.c_byte,
     ct.c_char_p,
     ct.c_double,
-    ct.c_int
+    MPI_Comm
 ]
 
 # Detector functions
@@ -106,6 +116,31 @@ libconviqt.conviqt_pointing_alloc.argtypes = [
 libconviqt.conviqt_pointing_data.restype = ct.POINTER(ct.c_double)
 libconviqt.conviqt_pointing_data.argtypes = [ct.c_void_p]
 
+# Convolver functions
+
+libconviqt.conviqt_convolver_new.restype = ct.c_void_p
+libconviqt.conviqt_convolver_new.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_byte,
+    ct.c_long,
+    ct.c_long,
+    ct.c_long,
+    ct.c_long,
+    ct.c_long,
+    MPI_Comm
+]
+
+libconviqt.conviqt_convolver_convolve.restype = ct.c_int
+libconviqt.conviqt_convolver_convolve.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_byte
+]
+
+libconviqt.conviqt_convolver_del.restype = ct.c_int
+libconviqt.conviqt_convolver_del.argtypes = [ct.c_void_p]
 
 
 class OpSimConviqt(Operator):
@@ -118,76 +153,42 @@ class OpSimConviqt(Operator):
         
     """
 
-    def __init__(self, lmax, beamlmax, beammmax, skyfile, detectordata, pol=True, fwhm=4.0, nbetafac=10, mcsamples=0, lmaxout=32, order=3, comm=MPI.COMM_WORLD, flavor=None):
+    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=5, calibrate=True, flavor=None, dxx=True):
         """
         Set up on-the-fly signal convolution. Inputs:
-        lmax : maximum ell to do the convolution to
-        beamlmax : maximum ell beams are provided in
-        beammmax : maximum m to convolve to
-        skyfile : path to spherical harmonic expansion of the sky to convolve [Healpix FITS]
-        detectordata : list of (detector_name, detector_beam_file, epsilon) tuples
+        lmax : sky maximum ell (and m). Actual resolution in the Healpix FITS file may differ.
+        beamlmax : beam maximum ell. Actual resolution in the Healpix FITS file may differ.
+        beammmax : beam maximum m. Actual resolution in the Healpix FITS file may differ.
+        detectordata : list of (detector_name, detector_sky_file, detector_beam_file, epsilon, psipol[radian]) tuples
         pol(True) : boolean to determine if polarized simulation is needed
         fwhm(5.0) : width of a symmetric gaussian beam [in arcmin] already present in the skyfile (will be deconvolved away).
-        nbetafac(10) : conviqt resolution parameter (expert mode)
+        nbetafac(6000) : conviqt resolution parameter (expert mode)
         mcsamples(0) : reserved input for future Monte Carlo mode
-        lmaxout(32) : 
-        order(3) : 
-        comm(MPI.COMM_WORLD) : communicator to use in loading the inputs
+        lmaxout(6000) : Convolution resolution
+        order(5) : conviqt order parameter (expert mode)
+        calibrate(True) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
+        dxx(True) : The beam frame is either Dxx or Pxx. Pxx includes the rotation to polarization sensitive basis, Dxx does not.
+                    When Dxx=True, detector orientation from attitude quaternions is corrected for the polarization angle.
         """
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
         self._lmax = lmax
         self._beamlmax = beamlmax
-        self._beammmax = beammax
-        self._skyfile = skyfile
-        self._detectordata = detectordata
+        self._beammmax = beammmax
+        self._detectordata = {}
+        for entry in detectordata:
+            self._detectordata[entry[0]] = entry[1:]
         self._pol = pol
         self._fwhm = fwhm
         self._nbetafac = nbetafac
         self._mcsamples = mcsamples
         self._lmaxout = lmaxout
         self._order = order
+        self._calibrate = calibrate
+        self._dxx = dxx
 
-        self._flavor = flavor
-        
-        self._sky = libconviqt.conviqt_sky_new()
-        # FIXME : check the latest on passing the communicator to C++
-        err = libconviqt.conviqt_sky_read( self._sky, self._lmax, self._pol, self._skyfile, self._fwhm, comm.py2f())
-        if err != 0: raise Exception('Failed to load ' + self._skyfile)
-
-        self._beams = {}
-        self._detectors = {}
-        for det_id, beamfile, epsilon in self._detectordata:
-            beam = libconviqt.conviqt_beam_new()
-            err = libconviqt.conviqt_beam_read(beam, self._beamlmax, self._beammmax, self._pol, beamfile, comm.py2f())
-            if err != 0: raise Exception('Failed to load ' + beamfile)
-            self._beams[ det_id ] = beam
-            detector = libconviqt.conviqt_detector_new_with_id(det_id)
-            libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
-            self._detectors[ det_id ] = detector
-
-
-    def __del__(self):
-
-        try:
-            libconviqt.conviqt_sky_del( self._sky )
-        except:
-            pass
-
-        for beam in self._beams.values():
-            try:
-                libconviqt.conviqt_beam_del( beam )
-            except:
-                pass
-
-        for detector in self._detectors.values():
-            try:
-                libconviqt.conviqt_detector_del( detector )
-            except:
-                pass
-
-
+        self._flavor = flavor        
         
 
     def exec(self, data):
@@ -204,15 +205,36 @@ class OpSimConviqt(Operator):
         # the communicator with all processes with
         # the same rank within their group
         #crank = comm.comm_rank
-        comm = data.comm.mpicomm # Check how to pass the communicator correctly
 
-        zaxis = np.array([0,0,1], dtype=np.float64)
+        xaxis, yaxis, zaxis = np.eye(3)
+        nullquat = np.array([0,0,0,1], dtype=np.float64)
 
         for obs in data.obs:
             tod = obs['tod']
             intrvl = obs['intervals']
 
+            comm_ptr = MPI._addressof(tod.mpicomm)
+            comm = MPI_Comm.from_address(comm_ptr)
+
             for det in tod.local_dets:
+
+                try:
+                    skyfile, beamfile, epsilon, psipol = self._detectordata[det]
+                except:
+                    raise Exception('ERROR: conviqt object not initialized to convolve detector {}. Available detectors are {}'.format(det, self._detectordata.keys()))
+                    
+                sky = libconviqt.conviqt_sky_new()
+                # FIXME : check the latest on passing the communicator to C++
+                err = libconviqt.conviqt_sky_read(sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm)
+                if err != 0: raise Exception('Failed to load ' + skyfile)
+
+                beam = libconviqt.conviqt_beam_new()
+                err = libconviqt.conviqt_beam_read(beam, self._beamlmax, self._beammmax, self._pol, beamfile.encode(), comm)
+                if err != 0: raise Exception('Failed to load ' + beamfile)
+
+                detector = libconviqt.conviqt_detector_new_with_id(det.encode())
+                libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
+                
                 # We need the three pointing angles to describe the pointing. read_pntg returns the attitude quaternions.
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
 
@@ -232,6 +254,9 @@ class OpSimConviqt(Operator):
 
                 psi = np.arctan2(ypa, xpa)
 
+                if self._dxx:
+                    psi -= psipol
+
                 # Is the psi angle in Pxx or Dxx? Pxx will include the detector polarization angle, Dxx will not.
 
                 pnt = libconviqt.conviqt_pointing_new()
@@ -248,10 +273,11 @@ class OpSimConviqt(Operator):
                     ppnt[row*5 + 3] = 0
                     ppnt[row*5 + 4] = row
 
-                convolver = libconviqt.conviqt_convolver_new(self._sky, self._beams[det], self._detectors[det], self._pol, self._lmax, self._beammmax, self._nbetafac, self._mcsamples, self._lmaxout, self._order, comm )
-                if convolver == 0: raise Exception( "Failed to instantiate convolver" )
+                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._nbetafac, self._mcsamples, self._lmaxout, self._order, comm )
 
-                err = libconviqt.conviqt_convolver_convolve( convolver, pnt )
+                if convolver is None: raise Exception( "Failed to instantiate convolver" )
+
+                err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
                 if err != 0: raise Exception( 'Convolution FAILED!' )
 
                 convolved_data = np.zeros(tod.local_samples)
@@ -263,6 +289,9 @@ class OpSimConviqt(Operator):
                 tod.write(detector=det, flavor=self._flavor, local_start=0, data=convolved_data, flags=pflags)
 
                 libconviqt.conviqt_pointing_del(pnt)
+                libconviqt.conviqt_detector_del(detector)
+                libconviqt.conviqt_beam_del(beam)
+                libconviqt.conviqt_sky_del(sky)
 
         return
 
