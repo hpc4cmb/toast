@@ -224,7 +224,6 @@ class OpSimConviqt(Operator):
                     raise Exception('ERROR: conviqt object not initialized to convolve detector {}. Available detectors are {}'.format(det, self._detectordata.keys()))
                     
                 sky = libconviqt.conviqt_sky_new()
-                # FIXME : check the latest on passing the communicator to C++
                 err = libconviqt.conviqt_sky_read(sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm)
                 if err != 0: raise Exception('Failed to load ' + skyfile)
 
@@ -254,10 +253,10 @@ class OpSimConviqt(Operator):
 
                 psi = np.arctan2(ypa, xpa)
 
+                # Is the psi angle in Pxx or Dxx? Pxx will include the detector polarization angle, Dxx will not.
+
                 if self._dxx:
                     psi -= psipol
-
-                # Is the psi angle in Pxx or Dxx? Pxx will include the detector polarization angle, Dxx will not.
 
                 pnt = libconviqt.conviqt_pointing_new()
 
@@ -270,15 +269,19 @@ class OpSimConviqt(Operator):
                     ppnt[row*5 + 0] = phi[row]
                     ppnt[row*5 + 1] = theta[row]
                     ppnt[row*5 + 2] = psi[row]
-                    ppnt[row*5 + 3] = 0
-                    ppnt[row*5 + 4] = row
+                    ppnt[row*5 + 3] = 0 # This column will host the convolved data upon exit
+                    ppnt[row*5 + 4] = 0 # libconviqt will assign the running indices to this column.
 
-                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._nbetafac, self._mcsamples, self._lmaxout, self._order, comm )
+                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._nbetafac, self._mcsamples, self._lmaxout, self._order, comm)
 
-                if convolver is None: raise Exception( "Failed to instantiate convolver" )
+                if convolver is None: raise Exception("Failed to instantiate convolver")
 
                 err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
-                if err != 0: raise Exception( 'Convolution FAILED!' )
+                if err != 0: raise Exception('Convolution FAILED!')
+
+                # The pointer to the data will have changed during the convolution call ...
+
+                ppnt = libconviqt.conviqt_pointing_data( pnt )
 
                 convolved_data = np.zeros(tod.local_samples)
                 for row in range(tod.local_samples):
