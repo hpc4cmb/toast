@@ -140,6 +140,11 @@ class Exchange(TOD):
 
         return (data, flag)
 
+    
+    def _get_flags(self, detector, flavor, local_start, n):
+
+        raise Exception('Planck tod class does not implement reading just the flags.')
+
 
     def _put(self, detector, flavor, local_start, data, flags):
 
@@ -149,6 +154,11 @@ class Exchange(TOD):
         return
 
 
+    def _put(self, detector, flavor, local_start, data, flags):
+
+        raise Exception('Planck tod class does not implement writing just the flags.')
+
+    
     def _get_pntg(self, detector, local_start, n):
 
         epsilon = self.RIMO[ detector ].epsilon
@@ -199,12 +209,22 @@ class Exchange(TOD):
         return (quats.flatten(), flag)
     
 
+    def _get_pntg_flags(self, detector, local_start, n):
+
+        raise Exception('Planck tod class does not implement reading just the pointing flags.')
+
+
     def _put_pntg(self, detector, local_start, start, data, flags):
 
         result = write_eff(local_start, data, flags, self.globalfirst, self.local_offset, self.ringdb, self.ringdb_path, self.freq, self.effdir, 'attitude', self.flagmask)
         # FIXME: should we check the result here?
         # We should NOT return result, since the return needs to be empty
         return
+
+
+    def _put_pntg_flags(self, detector, local_start, start, flags):
+
+        raise Exception('Planck tod class does not implement writing just the pointing flags.')
 
 
     def _get_times(self, local_start, n):
