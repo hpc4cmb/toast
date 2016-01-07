@@ -125,6 +125,14 @@ class TOD(object):
         return (self.data[detector][flavor][start:start+n], self.flags[detector][flavor][start:start+n])
 
 
+    def _get_flags(self, detector, flavor, start, n):
+        if detector not in self.data.keys():
+            raise ValueError('detector {} data not yet written'.format(detector))
+        if flavor not in self.data[detector].keys():
+            raise ValueError('detector {} flavor {} data not yet written'.format(detector, flavor))
+        return self.flags[detector][flavor][start:start+n]
+
+
     def _put(self, detector, flavor, start, data, flags):
         if detector not in self.data.keys():
             self.data[detector] = {}
@@ -134,6 +142,18 @@ class TOD(object):
             self.flags[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.uint8)
         n = data.shape[0]
         self.data[detector][flavor][start:start+n] = data
+        self.flags[detector][flavor][start:start+n] = flags
+        return
+
+
+    def _put_flags(self, detector, flavor, start, flags):
+        if detector not in self.data.keys():
+            self.data[detector] = {}
+            self.flags[detector] = {}
+        if flavor not in self.data[detector].keys():
+            self.data[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.float64)
+            self.flags[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+        n = data.shape[0]
         self.flags[detector][flavor][start:start+n] = flags
         return
 
@@ -160,12 +180,27 @@ class TOD(object):
         return (self.pntg[detector][4*start:4*(start+n)], self.pflags[detector][start:start+n])
 
 
+    def _get_pntg_flags(self, detector, start, n):
+        if detector not in self.pntg.keys():
+            raise ValueError('detector {} pointing not yet written'.format(detector))
+        return self.pflags[detector][start:start+n]
+
+
     def _put_pntg(self, detector, start, data, flags):
         if detector not in self.pntg.keys():
             self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
             self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
         n = flags.shape[0]
         self.pntg[detector][4*start:4*(start+n)] = data
+        self.pflags[detector][start:(start+n)] = flags
+        return
+
+
+    def _put_pntg_flags(self, detector, start, flags):
+        if detector not in self.pntg.keys():
+            self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
+            self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+        n = flags.shape[0]
         self.pflags[detector][start:(start+n)] = flags
         return
 
@@ -209,6 +244,20 @@ class TOD(object):
         return self._get(detector, flavor, local_start, n)
 
 
+    def read_flags(self, detector=None, flavor=None, local_start=0, n=0):
+        if flavor is None:
+            flavor = self.DEFAULT_FLAVOR
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if flavor not in self.flavors:
+            raise ValueError('flavor {} not found'.format(flavor))
+        if (local_start < 0) or (local_start + n > self.local_samples):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_flags(detector, flavor, local_start, n)
+
+
     def write(self, detector=None, flavor=None, local_start=0, data=None, flags=None):
         if flavor is None:
             flavor = self.DEFAULT_FLAVOR
@@ -225,6 +274,25 @@ class TOD(object):
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put(detector, flavor, local_start, data, flags)
+        return
+
+
+    def write_flags(self, detector=None, flavor=None, local_start=0, flags=None):
+        if flavor is None:
+            flavor = self.DEFAULT_FLAVOR
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if flavor not in self.flavors:
+            raise ValueError('flavor {} not found'.format(flavor))
+        if (data is None) or (flags is None):
+            raise ValueError('both data and flags must be specified')
+        if data.shape != flags.shape:
+            raise ValueError('data and flags arrays must be the same length')
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+        self._put_flags(detector, flavor, local_start, flags)
         return
 
 
@@ -253,6 +321,16 @@ class TOD(object):
         return self._get_pntg(detector, local_start, n)
 
 
+    def read_pntg_flags(self, detector=None, local_start=0, n=0):
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if (local_start < 0) or (local_start + n > self.local_samples):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_pntg_flags(detector, local_start, n)
+
+
     def write_pntg(self, detector=None, local_start=0, data=None, flags=None):
         if detector is None:
             raise ValueError('you must specify the detector')
@@ -265,6 +343,21 @@ class TOD(object):
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
+        return
+
+
+    def write_pntg_flags(self, detector=None, local_start=0, flags=None):
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if (data is None) or (flags is None):
+            raise ValueError('both data and flags must be specified')
+        if data.shape[0] != 4 * flags.shape[0]:
+            raise ValueError('data and flags arrays must represent the same number of samples')
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
+        self._put_pntg_flags(detector, local_start, flags)
         return
 
 
