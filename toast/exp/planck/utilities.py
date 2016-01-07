@@ -241,7 +241,9 @@ def read_eff(local_start, n, globalfirst, local_offset, ringdb, ringdb_path, fre
     if np.shape( flag )[-1] != stop - start:
         raise Exception('ERROR: inconsistent dimensions: shape(data) = ', np.shape(data), ', shape(flag) = ', np.shape(flag), ', stop-start = ', stop-start)
 
-    if len(np.shape(data)) > 1: data = data.T # Conform to expected geometry            
+    if len(np.shape(data)) > 1: data = data.T # Conform to expected geometry
+
+    if (debug > 3): print('Read {} samples from extension {}. Number of flagged samples = {} ({:.2f}%)'.format(n,extname,np.sum(flag),np.sum(flag)*100./n)) # DEBUG
 
     return (data, flag)
 

@@ -137,6 +137,9 @@ class OpMadam(Operator):
         # apply detector flags to the pointing matrix, since that is the
         # only way to pass flag information to madam
 
+        #nflag = np.sum(flags!=0) # DEBUG
+        #print('Flagging {} samples ({:.2f}%) of pixel numbers due to flags.'.format(nflag,nflag*100./len(flags))) # DEBUG
+        
         pixels[flags != 0] = -1
         pixweights[np.repeat(flags, nnz) != 0] = 0.0
 

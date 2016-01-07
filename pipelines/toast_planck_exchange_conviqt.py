@@ -133,7 +133,8 @@ ob['intervals'] = tod.valid_intervals
 ob['baselines'] = None
 ob['noise'] = None
 
-print( '{:4} : Processing {} chunks : {}. Local offset : {}, samples {} / {}.'.format( comm.comm_world.rank, len(tod.local_chunks), tod.local_chunks, tod.local_offset, tod.local_samples, tod.total_samples ) )
+#times = tod.read_times( n=tod.local_samples )
+#print( '{:4} : Processing {} chunks : {}. Local offset : {}, samples {} / {}. Between {} and {}.'.format( comm.comm_world.rank, len(tod.local_chunks), tod.local_chunks, tod.local_offset, tod.local_samples, tod.total_samples, times[0], times[-1] ) )
 
 data.obs.append(ob)
 
@@ -165,7 +166,10 @@ for det in tod.detectors:
     skyfile = args.skyfile.replace('DETECTOR',det)
     beamfile = args.beamfile.replace('DETECTOR',det)
     epsilon = RIMO[det].epsilon
-    psipol = np.radians(RIMO[det].psi_pol)
+    # Getting the right polarization angle can be a sensitive matter. Dxx beams are always defined
+    # without psi_uv or psi_pol rotation but some Pxx beams may require psi_pol to be removed and psi_uv left in.
+    psipol = np.radians(RIMO[det].psi_uv + RIMO[det].psi_pol)
+    #psipol = np.radians(RIMO[det].psi_pol) # This would work if a Pxx beam that is defined in the psi_uv frame, provided that the convolver has Dxx=True...
     detectordata.append((det, skyfile, beamfile, epsilon, psipol))
 
 conviqt = toast.tod.OpSimConviqt(int(args.skylmax), int(args.beamlmax), int(args.beammmax), detectordata, lmaxout=int(args.lmax))
