@@ -1,4 +1,6 @@
 
+import mpi4py.MPI as MPI
+
 import toast
 
 # Split COMM_WORLD into groups of 4 processes each
