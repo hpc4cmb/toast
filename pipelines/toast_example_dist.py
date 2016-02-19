@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 
 import mpi4py.MPI as MPI
 
