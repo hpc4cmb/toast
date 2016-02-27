@@ -106,6 +106,9 @@ class OpMadam(Operator):
         # get the total list of intervals
         intervals = data.obs[0]['intervals']
 
+        # get the noise object
+        nse = data.obs[0]['noise']
+
         todcomm = tod.mpicomm
         todfcomm = todcomm.py2f()
 
@@ -173,13 +176,18 @@ class OpMadam(Operator):
         for d in range(ndet):
             detweights[d] = detw[tod.detectors[d]]
 
+        nse_psdfreqs = nse.freq
+        npsdbin = len(nse_psdfreqs)
+        psdfreqs = np.copy(nse_psdfreqs)
+
         npsd = np.ones(ndet, dtype=np.int64)
         npsdtot = np.sum(npsd)
         psdstarts = np.zeros(npsdtot, dtype=np.float64)
-        npsdbin = 1
+
         npsdval = npsdbin * npsdtot
-        psdfreqs = np.zeros(npsdtot, dtype=np.float64)
-        psdvals = np.ones(npsdval, dtype=np.float64)
+        psdvals = np.zeros(npsdval, dtype=np.float64)
+        for d in range(ndet):
+            psdvals[d*npsdbin:(d+1)*npsdbin] = nse.psd(tod.detectors[d])
 
         # destripe
 
