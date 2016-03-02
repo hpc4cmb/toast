@@ -30,117 +30,121 @@ try:
     else:
         MPI_Comm = ct.c_void_p
 except Exception as e:
-    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You may need to install from a git checkout. ({})'.format(e))
+    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You need to have at version 2.0. ({})'.format(e))
 
-libconviqt = ct.CDLL('libconviqt.so')
+try:
+    libconviqt = ct.CDLL('libconviqt.so')
+except:
+    libconviqt = None
 
-# Beam functions
+if libconviqt is not None:
+    # Beam functions
 
-libconviqt.conviqt_beam_new.restype = ct.c_void_p
-libconviqt.conviqt_beam_new.argtypes = []
+    libconviqt.conviqt_beam_new.restype = ct.c_void_p
+    libconviqt.conviqt_beam_new.argtypes = []
 
-libconviqt.conviqt_beam_del.restype = ct.c_int
-libconviqt.conviqt_beam_del.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_beam_del.restype = ct.c_int
+    libconviqt.conviqt_beam_del.argtypes = [ct.c_void_p]
 
-libconviqt.conviqt_beam_read.restype = ct.c_int
-libconviqt.conviqt_beam_read.argtypes = [
-    ct.c_void_p,
-    ct.c_long,
-    ct.c_long,
-    ct.c_byte,
-    ct.c_char_p,
-    MPI_Comm
-]
+    libconviqt.conviqt_beam_read.restype = ct.c_int
+    libconviqt.conviqt_beam_read.argtypes = [
+        ct.c_void_p,
+        ct.c_long,
+        ct.c_long,
+        ct.c_byte,
+        ct.c_char_p,
+        MPI_Comm
+    ]
 
-# Sky functions
+    # Sky functions
 
-libconviqt.conviqt_sky_new.restype = ct.c_void_p
-libconviqt.conviqt_sky_new.argtypes = []
+    libconviqt.conviqt_sky_new.restype = ct.c_void_p
+    libconviqt.conviqt_sky_new.argtypes = []
 
-libconviqt.conviqt_sky_del.restype = ct.c_int
-libconviqt.conviqt_sky_del.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_sky_del.restype = ct.c_int
+    libconviqt.conviqt_sky_del.argtypes = [ct.c_void_p]
 
-libconviqt.conviqt_sky_read.restype = ct.c_int
-libconviqt.conviqt_sky_read.argtypes = [
-    ct.c_void_p,
-    ct.c_long,
-    ct.c_byte,
-    ct.c_char_p,
-    ct.c_double,
-    MPI_Comm
-]
+    libconviqt.conviqt_sky_read.restype = ct.c_int
+    libconviqt.conviqt_sky_read.argtypes = [
+        ct.c_void_p,
+        ct.c_long,
+        ct.c_byte,
+        ct.c_char_p,
+        ct.c_double,
+        MPI_Comm
+    ]
 
-# Detector functions
+    # Detector functions
 
-libconviqt.conviqt_detector_new.restype = ct.c_void_p
-libconviqt.conviqt_detector_new.argtypes = []
+    libconviqt.conviqt_detector_new.restype = ct.c_void_p
+    libconviqt.conviqt_detector_new.argtypes = []
 
-libconviqt.conviqt_detector_new_with_id.restype = ct.c_void_p
-libconviqt.conviqt_detector_new_with_id.argtypes = [ct.c_char_p]
+    libconviqt.conviqt_detector_new_with_id.restype = ct.c_void_p
+    libconviqt.conviqt_detector_new_with_id.argtypes = [ct.c_char_p]
 
-libconviqt.conviqt_detector_del.restype = ct.c_int
-libconviqt.conviqt_detector_del.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_detector_del.restype = ct.c_int
+    libconviqt.conviqt_detector_del.argtypes = [ct.c_void_p]
 
-libconviqt.conviqt_detector_set_epsilon.restype = ct.c_int
-libconviqt.conviqt_detector_set_epsilon.argtypes = [
-    ct.c_void_p,
-    ct.c_double
-]
+    libconviqt.conviqt_detector_set_epsilon.restype = ct.c_int
+    libconviqt.conviqt_detector_set_epsilon.argtypes = [
+        ct.c_void_p,
+        ct.c_double
+    ]
 
-libconviqt.conviqt_detector_get_epsilon.restype = ct.c_int
-libconviqt.conviqt_detector_get_epsilon.argtypes = [
-    ct.c_void_p,
-    ct.POINTER(ct.c_double)
-]
+    libconviqt.conviqt_detector_get_epsilon.restype = ct.c_int
+    libconviqt.conviqt_detector_get_epsilon.argtypes = [
+        ct.c_void_p,
+        ct.POINTER(ct.c_double)
+    ]
 
-libconviqt.conviqt_detector_get_id.restype = ct.c_int
-libconviqt.conviqt_detector_get_id.argtypes = [
-    ct.c_void_p,
-    ct.c_char_p
-]
+    libconviqt.conviqt_detector_get_id.restype = ct.c_int
+    libconviqt.conviqt_detector_get_id.argtypes = [
+        ct.c_void_p,
+        ct.c_char_p
+    ]
 
-# Pointing functions
+    # Pointing functions
 
-libconviqt.conviqt_pointing_new.restype = ct.c_void_p
-libconviqt.conviqt_pointing_new.argtypes = []
+    libconviqt.conviqt_pointing_new.restype = ct.c_void_p
+    libconviqt.conviqt_pointing_new.argtypes = []
 
-libconviqt.conviqt_pointing_del.restype = ct.c_int
-libconviqt.conviqt_pointing_del.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_pointing_del.restype = ct.c_int
+    libconviqt.conviqt_pointing_del.argtypes = [ct.c_void_p]
 
-libconviqt.conviqt_pointing_alloc.restype = ct.c_int
-libconviqt.conviqt_pointing_alloc.argtypes = [
-    ct.c_void_p,
-    ct.c_long
-]
+    libconviqt.conviqt_pointing_alloc.restype = ct.c_int
+    libconviqt.conviqt_pointing_alloc.argtypes = [
+        ct.c_void_p,
+        ct.c_long
+    ]
 
-libconviqt.conviqt_pointing_data.restype = ct.POINTER(ct.c_double)
-libconviqt.conviqt_pointing_data.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_pointing_data.restype = ct.POINTER(ct.c_double)
+    libconviqt.conviqt_pointing_data.argtypes = [ct.c_void_p]
 
-# Convolver functions
+    # Convolver functions
 
-libconviqt.conviqt_convolver_new.restype = ct.c_void_p
-libconviqt.conviqt_convolver_new.argtypes = [
-    ct.c_void_p,
-    ct.c_void_p,
-    ct.c_void_p,
-    ct.c_byte,
-    ct.c_long,
-    ct.c_long,
-    ct.c_long,
-    ct.c_long,
-    ct.c_long,
-    MPI_Comm
-]
+    libconviqt.conviqt_convolver_new.restype = ct.c_void_p
+    libconviqt.conviqt_convolver_new.argtypes = [
+        ct.c_void_p,
+        ct.c_void_p,
+        ct.c_void_p,
+        ct.c_byte,
+        ct.c_long,
+        ct.c_long,
+        ct.c_long,
+        ct.c_long,
+        ct.c_long,
+        MPI_Comm
+    ]
 
-libconviqt.conviqt_convolver_convolve.restype = ct.c_int
-libconviqt.conviqt_convolver_convolve.argtypes = [
-    ct.c_void_p,
-    ct.c_void_p,
-    ct.c_byte
-]
+    libconviqt.conviqt_convolver_convolve.restype = ct.c_int
+    libconviqt.conviqt_convolver_convolve.argtypes = [
+        ct.c_void_p,
+        ct.c_void_p,
+        ct.c_byte
+    ]
 
-libconviqt.conviqt_convolver_del.restype = ct.c_int
-libconviqt.conviqt_convolver_del.argtypes = [ct.c_void_p]
+    libconviqt.conviqt_convolver_del.restype = ct.c_int
+    libconviqt.conviqt_convolver_del.argtypes = [ct.c_void_p]
 
 
 class OpSimConviqt(Operator):
@@ -191,11 +195,20 @@ class OpSimConviqt(Operator):
         self._flavor = flavor        
         
 
+    @property
+    def available(self):
+        return (libconviqt is not None)
+
+
     def exec(self, data):
         """
         Calling exec will perform the convolution over the communicator, one detector at a time.
         All MPI tasks must have the same list of detectors.
         """
+
+        if libconviqt is None:
+            raise RuntimeError("The conviqt library was not found")
+
         # the two-level pytoast communicator
         #comm = data.comm
         # the global communicator

@@ -96,9 +96,11 @@ class OpMadamTest(MPITestCase):
         pars[ 'path_output' ] = self.outdir
 
         madam = OpMadam(params=pars)
-        madam.exec(self.data)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
+        if madam.available:
+            madam.exec(self.data)
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
+        else:
+            print("libmadam not available, skipping tests")
 

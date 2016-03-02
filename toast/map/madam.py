@@ -19,31 +19,35 @@ from ..tod import TOD
 from ..tod import Interval
 
 
-libmadam = ct.CDLL('libmadam.so')
+try:
+    libmadam = ct.CDLL('libmadam.so')
+except:
+    libmadam = None
 
-libmadam.destripe.restype = None
-libmadam.destripe.argtypes = [
-    ct.c_int,
-    ct.c_char_p,
-    ct.c_long,
-    ct.c_char_p,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    ct.c_long,
-    ct.c_long,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    ct.c_long,
-    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-    ct.c_long,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    ct.c_long,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    ct.c_long,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
-]
+if libmadam is not None:
+    libmadam.destripe.restype = None
+    libmadam.destripe.argtypes = [
+        ct.c_int,
+        ct.c_char_p,
+        ct.c_long,
+        ct.c_char_p,
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,
+        ct.c_long,
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,
+        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,
+        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
+    ]
 
 
 class OpMadam(Operator):
@@ -76,6 +80,11 @@ class OpMadam(Operator):
         return self._timedist
 
 
+    @property
+    def available(self):
+        return (libmadam is not None)
+    
+
     def _dict2parstring(self, d):
         s = ''
         for key, value in d.items():
@@ -91,6 +100,9 @@ class OpMadam(Operator):
 
 
     def exec(self, data):
+        if libmadam is None:
+            raise RuntimeError("Cannot find libmadam")
+
         # the two-level pytoast communicator
         comm = data.comm
 
