@@ -61,6 +61,8 @@ class TOD(object):
             test = np.sum(sizes)
             if samples != test:
                 raise RuntimeError("Sum of sizes ({}) does not equal total samples ({})".format(test, samples))
+        else:
+            self._sizes = [samples]
 
         (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 

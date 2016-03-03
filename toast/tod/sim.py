@@ -332,6 +332,15 @@ class OpSimNoise(Operator):
         for obs in data.obs:
             tod = obs['tod']
             nse = obs['noise']
+            chunks = tod.chunks
+            if chunks is None:
+                
+            nchunk = len(chunks)
+
+            # for purposes of incrementing the random seed, find
+            # the number of detectors
+            alldets = tod.detectors
+            ndet = len(alldets)
 
             # compute effective sample rate
 
