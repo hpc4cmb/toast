@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-from .mpirunner import MPITestCase
+
 import sys
 import os
 
@@ -11,6 +11,8 @@ from toast.tod.tod import *
 from toast.tod.pointing import *
 from toast.tod.sim import *
 from toast.tod.noise import *
+
+from toast.mpirunner import MPITestCase
 
 
 class OpSimNoiseTest(MPITestCase):

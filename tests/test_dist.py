@@ -3,12 +3,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from mpi4py import MPI
-from .mpirunner import MPITestCase
+
 import sys
 import os
 
 from toast.dist import *
-
+from toast.mpirunner import MPITestCase
 
 class DataTest(MPITestCase):
 
