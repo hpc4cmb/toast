@@ -13,7 +13,7 @@ from Cython.Build import cythonize
 
 from setuptools.command.test import test as TestCommand
 
-from tests.mpirunner import MPITestRunner
+from toast.mpirunner import MPITestRunner
 
 
 def get_version():
