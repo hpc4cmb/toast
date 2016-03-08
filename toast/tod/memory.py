@@ -65,21 +65,21 @@ class OpCopy(Operator):
 
             outtod = TOD(mpicomm=tod.mpicomm, timedist=self.timedist, 
                 detectors=tod.detectors, flavors=tod.flavors, 
-                samples=tod.total_samples, sizes=tod.chunks)
+                samples=tod.total_samples, sizes=tod.total_chunks)
             
             if tod.timedist == self.timedist:
                 # we have the same distribution, and just need
                 # to read and write
-                stamps = tod.read_times(local_start=0, n=tod.local_samples)
+                stamps = tod.read_times(local_start=0, n=tod.local_samples[1])
                 outtod.write_times(local_start=0, stamps=stamps)
 
                 for det in tod.local_dets:
-                    pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
+                    pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
                     #print("copy input pdata, pflags have size: {}, {}".format(len(pdata), len(pflags)))
                     outtod.write_pntg(detector=det, local_start=0, data=pdata, flags=pflags)
 
                     for flv in tod.flavors:
-                        data, flags = tod.read(detector=det, flavor=flv, local_start=0, n=tod.local_samples)
+                        data, flags = tod.read(detector=det, flavor=flv, local_start=0, n=tod.local_samples[1])
                         outtod.write(detector=det, flavor=flv, local_start=0, data=data, flags=flags)
                         
                     for name in tod.pointings:
@@ -88,23 +88,23 @@ class OpCopy(Operator):
                         
             else:
                 # we have to read our local piece and communicate
-                stamps = tod.read_times(local_start=0, n=tod.local_samples)
-                stamps = _shuffle_times(stamps, tod.local_dets, tod.local_offset, tod.local_samples)
+                stamps = tod.read_times(local_start=0, n=tod.local_samples[1])
+                stamps = _shuffle_times(stamps, tod.local_dets, tod.local_offset, tod.local_samples[1])
                 outtod.write_times(local_start=0, stamps=stamps)
                 
                 for det in tod.local_dets:
-                    pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
-                    pdata, pflags = _shuffle(pdata, pflags, tod.local_dets, tod.local_offset, tod.local_samples)
+                    pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
+                    pdata, pflags = _shuffle(pdata, pflags, tod.local_dets, tod.local_offset, tod.local_samples[1])
                     outtod.write_pntg(detector=det, local_start=0, data=pdata, flags=pflags)
                     
                     for flv in tod.flavors:
-                        data, flags = tod.read(detector=det, flavor=flv, local_start=0, n=tod.local_samples)
-                        data, flags = _shuffle(data, flags, tod.local_dets, tod.local_offset, tod.local_samples)
+                        data, flags = tod.read(detector=det, flavor=flv, local_start=0, n=tod.local_samples[1])
+                        data, flags = _shuffle(data, flags, tod.local_dets, tod.local_offset, tod.local_samples[1])
                         outtod.write(detector=det, flavor=flv, local_start=0, data=data, flags=flags)
                     
                     for name in tod.pointings:
                         pixels, weights = tod.read_pmat(name=name, detector=det, local_start=0, n=0)
-                        pixels, weights = _shuffle_pointing(pixels, weights, tod.local_dets, tod.local_offset, tod.local_samples)
+                        pixels, weights = _shuffle_pointing(pixels, weights, tod.local_dets, tod.local_samples[0], tod.local_samples[1])
                         outtod.write_pmat(name=name, detector=det, local_start=0, pixels=pixels, weights=weights)
 
             ob['tod'] = outtod

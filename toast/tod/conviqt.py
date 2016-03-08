@@ -248,8 +248,8 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
                 
                 # We need the three pointing angles to describe the pointing. read_pntg returns the attitude quaternions.
-                flags = tod.read_flags(detector=det, local_start=0, n=tod.local_samples)
-                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
+                flags = tod.read_flags(detector=det, local_start=0, n=tod.local_samples[1])
+                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
 
                 pdata = pdata.reshape(-1,4).copy()
                 pdata[ pflags != 0 ] = nullquat
@@ -274,12 +274,12 @@ class OpSimConviqt(Operator):
 
                 pnt = libconviqt.conviqt_pointing_new()
 
-                err = libconviqt.conviqt_pointing_alloc( pnt, tod.local_samples*5)
+                err = libconviqt.conviqt_pointing_alloc( pnt, tod.local_samples[1]*5)
                 if err != 0: raise Exception('Failed to allocate pointing array')
 
                 ppnt = libconviqt.conviqt_pointing_data(pnt)
 
-                for row in range(tod.local_samples):
+                for row in range(tod.local_samples[1]):
                     ppnt[row*5 + 0] = phi[row]
                     ppnt[row*5 + 1] = theta[row]
                     ppnt[row*5 + 2] = psi[row]
@@ -297,8 +297,8 @@ class OpSimConviqt(Operator):
 
                 ppnt = libconviqt.conviqt_pointing_data( pnt )
 
-                convolved_data = np.zeros(tod.local_samples)
-                for row in range(tod.local_samples):
+                convolved_data = np.zeros(tod.local_samples[1])
+                for row in range(tod.local_samples[1]):
                     convolved_data[row] = ppnt[row*5+3]
 
                 libconviqt.conviqt_convolver_del(convolver)

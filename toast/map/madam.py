@@ -127,7 +127,7 @@ class OpMadam(Operator):
         # create madam-compatible buffers
 
         ndet = len(tod.detectors)
-        nlocal = tod.local_samples
+        nlocal = tod.local_samples[1]
         nnz = tod.pmat_nnz(self._pmat, tod.detectors[0])
 
         parstring = self._dict2parstring(self._params)
@@ -160,7 +160,7 @@ class OpMadam(Operator):
 
         # extract only the intervals that are local to this process.
 
-        local_bounds = [ (t.first - tod.local_offset) for t in intervals if (t.first >= tod.local_offset) and (t.first < tod.local_offset + tod.local_samples) ]
+        local_bounds = [ (t.first - tod.local_samples[0]) for t in intervals if (t.first >= tod.local_offset) and (t.first < tod.local_samples[0] + tod.local_samples[1]) ]
         
         nperiod = None
         if len(local_bounds) > 0:

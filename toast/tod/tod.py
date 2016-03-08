@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from ..dist import distribute_det_samples
+from ..dist import distribute_samples
 
 
 class TOD(object):
@@ -61,10 +61,8 @@ class TOD(object):
             test = np.sum(sizes)
             if samples != test:
                 raise RuntimeError("Sum of sizes ({}) does not equal total samples ({})".format(test, samples))
-        else:
-            self._sizes = [samples]
 
-        (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_det_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
+        (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
         self.stamps = None
         self.data = {}
@@ -76,10 +74,23 @@ class TOD(object):
 
     @property
     def detectors(self):
+        """
+        The total list of detectors.
+        """
         return self._dets
 
     @property
+    def local_dets(self):
+        """
+        The detectors assigned to this process.
+        """
+        return self._dist_dets
+
+    @property
     def flavors(self):
+        """
+        The total list of timestream flavors.
+        """
         return self._flavors
 
     @property
@@ -87,28 +98,31 @@ class TOD(object):
         return self._timedist
 
     @property
-    def chunks(self):
+    def total_chunks(self):
         return self._sizes
 
     @property
-    def local_chunks(self):
+    def dist_chunks(self):
         return self._dist_sizes
+
+    @property
+    def local_chunks(self):
+        if self._dist_sizes is None:
+            return None
+        else:
+            return self._dist_sizes[self._mpicomm.rank]
 
     @property
     def total_samples(self):
         return self._nsamp
 
     @property
+    def dist_samples(self):
+        return self._dist_samples
+
+    @property
     def local_samples(self):
-        return self._dist_samples[1]
-
-    @property
-    def local_offset(self):
-        return self._dist_samples[0]
-
-    @property
-    def local_dets(self):
-        return self._dist_dets
+        return self._dist_samples[self._mpicomm.rank]
 
     @property
     def mpicomm(self):
@@ -140,8 +154,8 @@ class TOD(object):
             self.data[detector] = {}
             self.flags[detector] = {}
         if flavor not in self.data[detector].keys():
-            self.data[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.float64)
-            self.flags[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+            self.data[detector][flavor] = np.zeros(self.local_samples[1], dtype=np.float64)
+            self.flags[detector][flavor] = np.zeros(self.local_samples[1], dtype=np.uint8)
         n = data.shape[0]
         self.data[detector][flavor][start:start+n] = data
         self.flags[detector][flavor][start:start+n] = flags
@@ -153,8 +167,8 @@ class TOD(object):
             self.data[detector] = {}
             self.flags[detector] = {}
         if flavor not in self.data[detector].keys():
-            self.data[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.float64)
-            self.flags[detector][flavor] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+            self.data[detector][flavor] = np.zeros(self.local_samples[1], dtype=np.float64)
+            self.flags[detector][flavor] = np.zeros(self.local_samples[1], dtype=np.uint8)
         n = data.shape[0]
         self.flags[detector][flavor][start:start+n] = flags
         return
@@ -190,8 +204,8 @@ class TOD(object):
 
     def _put_pntg(self, detector, start, data, flags):
         if detector not in self.pntg.keys():
-            self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
-            self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+            self.pntg[detector] = np.zeros(4*self.local_samples[1], dtype=np.float64)
+            self.pflags[detector] = np.zeros(self.local_samples[1], dtype=np.uint8)
         n = flags.shape[0]
         self.pntg[detector][4*start:4*(start+n)] = data
         self.pflags[detector][start:(start+n)] = flags
@@ -200,8 +214,8 @@ class TOD(object):
 
     def _put_pntg_flags(self, detector, start, flags):
         if detector not in self.pntg.keys():
-            self.pntg[detector] = np.zeros(4*self._dist_samples[1], dtype=np.float64)
-            self.pflags[detector] = np.zeros(self._dist_samples[1], dtype=np.uint8)
+            self.pntg[detector] = np.zeros(4*self.local_samples[1], dtype=np.float64)
+            self.pflags[detector] = np.zeros(self.local_samples[1], dtype=np.uint8)
         n = flags.shape[0]
         self.pflags[detector][start:(start+n)] = flags
         return
@@ -226,7 +240,7 @@ class TOD(object):
 
     def _put_times(self, start, stamps):
         if self.stamps is None:
-            self.stamps = np.zeros(self._dist_samples[1], dtype=np.float64)
+            self.stamps = np.zeros(self.local_samples[1], dtype=np.float64)
         n = stamps.shape[0]
         self.stamps[start:start+n] = stamps
         return
@@ -241,7 +255,7 @@ class TOD(object):
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.flavors:
             raise ValueError('flavor {} not found'.format(flavor))
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get(detector, flavor, local_start, n)
 
@@ -255,7 +269,7 @@ class TOD(object):
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.flavors:
             raise ValueError('flavor {} not found'.format(flavor))
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_flags(detector, flavor, local_start, n)
 
@@ -273,7 +287,7 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
             raise ValueError('data and flags arrays must be the same length')
-        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples):
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put(detector, flavor, local_start, data, flags)
         return
@@ -292,14 +306,14 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
             raise ValueError('data and flags arrays must be the same length')
-        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples):
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put_flags(detector, flavor, local_start, flags)
         return
 
 
     def read_times(self, local_start=0, n=0):
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_times(local_start, n)
 
@@ -307,7 +321,7 @@ class TOD(object):
     def write_times(self, local_start=0, stamps=None):
         if stamps is None:
             raise ValueError('you must specify the vector of time stamps')
-        if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples):
+        if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps)
         return
@@ -318,7 +332,7 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n)
 
@@ -328,7 +342,7 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg_flags(detector, local_start, n)
 
@@ -342,7 +356,7 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape[0] != 4 * flags.shape[0]:
             raise ValueError('data and flags arrays must represent the same number of samples')
-        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples):
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
         return
@@ -357,7 +371,7 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape[0] != 4 * flags.shape[0]:
             raise ValueError('data and flags arrays must represent the same number of samples')
-        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples):
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg_flags(detector, local_start, flags)
         return
@@ -374,7 +388,7 @@ class TOD(object):
             raise ValueError('pointing matrix {} not found'.format(name))
         if detector not in self.pmat[name].keys():
             raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector, name))
-        if (local_start < 0) or (local_start + n > self.local_samples):
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         if 'pixels' not in self.pmat[name][detector]:
             raise RuntimeError('detector {} in pointing matrix {} not yet written'.format(detector, name))
@@ -396,14 +410,14 @@ class TOD(object):
         nnz = int(nw / npix)
         if nnz * npix != nw:
             raise ValueError('number of pointing weights {} is not a multiple of pixels length {}'.format(nw, npix))
-        if (local_start < 0) or (local_start + npix > self.local_samples):
+        if (local_start < 0) or (local_start + npix > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+npix-1))
         if name not in self.pmat.keys():
             self.pmat[name] = {}
         if detector not in self.pmat[name].keys():
             self.pmat[name][detector] = {}
-            self.pmat[name][detector]['pixels'] = np.zeros(self.local_samples, dtype=np.int64)
-            self.pmat[name][detector]['weights'] = np.zeros(nnz*self.local_samples, dtype=np.float64)
+            self.pmat[name][detector]['pixels'] = np.zeros(self.local_samples[1], dtype=np.int64)
+            self.pmat[name][detector]['weights'] = np.zeros(nnz*self.local_samples[1], dtype=np.float64)
         self.pmat[name][detector]['pixels'][local_start:local_start+npix] = pixels
         self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = weights
         return

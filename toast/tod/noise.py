@@ -9,8 +9,6 @@ import unittest
 
 import numpy as np
 
-from ..dist import distribute_det_samples
-
 
 class Noise(object):
     """

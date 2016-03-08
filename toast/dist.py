@@ -159,41 +159,33 @@ def distribute_discrete(sizes, groups, pow=1.0):
         pow (float): The power to use for weighting
 
     Returns:
-        two lists: the first is a list of tuples.  There is
-        one tuple per group.  The first element of the tuple
-        is the first item assigned to the group, and the 
-        second element is the number of items assigned to 
-        the group.  The second list contains one list per 
-        group giving the sizes of the blocks assigned to
-        that group.
+        A list of tuples.  There is one tuple per group.  
+        The first element of the tuple is the first item 
+        assigned to the group, and the second element is 
+        the number of items assigned to the group.
     """
     chunks = np.array(sizes, dtype=np.int64)
+    print("discrete chunks = ", chunks)
     weights = np.power(chunks.astype(np.float64), pow)
     max_per_proc = distribute_partition(weights.astype(np.int64), groups)
 
     dist = []
-    gchunks = []
 
-    gcur = []
     off = 0
     cur = 0
     curweight = 0
     for i in range(weights.shape[0]):
         if curweight + weights[i] > max_per_proc:
             dist.append( (off, cur) )
-            gchunks.append(gcur)
             off += cur
             cur = 0
             curweight = 0
-            gcur = []
-        cur += chunks[i]
+        cur += 1
         curweight += weights[i]
-        gcur.append(chunks[i])
 
     dist.append( (off, cur) )
-    gchunks.append(gcur)
 
-    return dist, gchunks
+    return dist
 
 
 def distribute_uniform(totalsize, groups):
@@ -228,21 +220,28 @@ def distribute_uniform(totalsize, groups):
     return ret
 
 
-def distribute_det_samples(mpicomm, timedist, detectors, samples, sizes=None):
+def distribute_samples(mpicomm, timedist, detectors, samples, sizes=None):
     dist_dets = detectors
-    dist_samples = (0, samples)
-    dist_sizes = sizes
+    dist_samples = None
+    dist_sizes = None
 
     if timedist:
         if sizes is not None:
-            dist_all, dist_allsizes = distribute_discrete(sizes, mpicomm.size)
-            dist_sizes = dist_allsizes[mpicomm.rank]
+            dist_sizes = distribute_discrete(sizes, mpicomm.size)
+            dist_samples = []
+            off = 0
+            for ds in dist_sizes:
+                cursamp = np.sum(sizes[ds[0]:ds[0]+ds[1]])
+                dist_samples.append( (off, cursamp) )
+                off += cursamp
+            print("dist_sizes = ", dist_sizes)
+            print("dist_samples = ", dist_samples)
         else:
-            dist_all = distribute_uniform(samples, mpicomm.size)
-        dist_samples = dist_all[mpicomm.rank]
+            dist_samples = distribute_uniform(samples, mpicomm.size)
     else:
         dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]
         dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
+        dist_samples = [ (0, samples) for x in range(mpicomm.size) ]
 
     return (dist_dets, dist_samples, dist_sizes)
 
@@ -317,18 +316,18 @@ class Data(object):
             # rank zero of the group will print general information,
             # and each process will get its statistics.
 
-            nsamp = tod.local_samples
+            nsamp = tod.local_samples[1]
             dets = tod.local_dets
 
             procstr = "  proc {}\n".format(gcomm.rank)
             my_chunks = 1
             if tod.local_chunks is not None:
                 my_chunks = len(tod.local_chunks)
-            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_offset, (tod.local_offset + nsamp - 1), my_chunks)
+            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_samples[0], (tod.local_samples[0] + nsamp - 1), my_chunks)
             
             if tod.local_chunks is not None:
                 for chk in tod.local_chunks:
-                    procstr = "{}      {}\n".format(procstr, chk)
+                    procstr = "{}      {}\n".format(procstr, chk[1])
 
             if nsamp > 0:
     

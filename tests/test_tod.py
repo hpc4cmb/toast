@@ -48,8 +48,8 @@ class TODTest(MPITestCase):
         self.assertEqual(sorted(self.tod.local_dets), sorted(self.dets))
         self.assertEqual(self.tod.flavors, self.flavscheck)
         self.assertEqual(self.tod.total_samples, self.totsamp)
-        self.assertEqual(self.tod.local_offset, self.myoff)
-        self.assertEqual(self.tod.local_samples, self.mynsamp)
+        self.assertEqual(self.tod.local_samples[0], self.myoff)
+        self.assertEqual(self.tod.local_samples[1], self.mynsamp)
         self.assertTrue(self.tod.timedist)
 
         stop = MPI.Wtime()

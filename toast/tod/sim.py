@@ -19,8 +19,6 @@ import healpy as hp
 
 import quaternionarray as qa
 
-from ..dist import distribute_det_samples
-
 from .tod import TOD
 
 from ..operator import Operator
@@ -70,7 +68,7 @@ class TODFake(TOD):
 
 
     def _get_times(self, start, n):
-        start_abs = self.local_offset + start
+        start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
         stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
@@ -84,7 +82,7 @@ class TODFake(TOD):
 
     def _get_pntg(self, detector, start, n):
         # compute the absolute sample offset
-        start_abs = self.local_offset + start
+        start_abs = self.local_samples[0] + start
 
         detquat = np.asarray(self._fp[detector])
 
@@ -175,7 +173,7 @@ class OpSimGradient(Operator):
             intrvl = obs['intervals']
 
             for det in tod.local_dets:
-                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples)
+                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
                 dir = qa.rotate(pdata.reshape(-1, 4), zaxis)
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=False)
                 x, y, z = hp.pix2vec(self._nside, pixels, nest=False)
@@ -183,7 +181,7 @@ class OpSimGradient(Operator):
                 z *= 0.5
                 z *= range
                 z += self._min
-                data, flags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples)
+                data, flags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples[1])
                 data += z
                 tod.write(detector=det, flavor=self._flavor, local_start=0, data=data, flags=flags)
 
@@ -299,7 +297,10 @@ class OpSimNoise(Operator):
 
     Args:
         flavor (str): the TOD flavor to accumulate the noise data to.
-        stream (int): random stream for first detector.
+        stream (int): random stream offset.  This should be the same for
+            all processes within a group, and should be offset between
+            groups in such a way to ensure different streams between every
+            detector, in every chunk, of every TOD, across every observation.
         accum (bool): should output be accumulated or overwritten.
     """
 
@@ -328,14 +329,13 @@ class OpSimNoise(Operator):
 
     def exec(self, data):
         comm = data.comm
+        rngobs = 0
 
         for obs in data.obs:
             tod = obs['tod']
             nse = obs['noise']
-            chunks = tod.chunks
-            if chunks is None:
-                
-            nchunk = len(chunks)
+            if tod.local_chunks is None:
+                raise RuntimeError('noise simulation for uniform distributed samples not implemented')
 
             # for purposes of incrementing the random seed, find
             # the number of detectors
@@ -344,106 +344,122 @@ class OpSimNoise(Operator):
 
             # compute effective sample rate
 
-            times = tod.read_times(local_start=0, n=tod.local_samples)
+            times = tod.read_times(local_start=0, n=tod.local_samples[1])
             dt = np.mean(times[1:-1] - times[0:-2])
             rate = 1.0 / dt
 
             # eventually we'll redistribute, to allow long correlations...
-            
-            nsedata = np.zeros(tod.local_samples)
 
-            fftlen = 2
-            while fftlen <= (self._oversample * tod.local_samples):
-                fftlen *= 2
-            half = int(fftlen / 2)
-            norm = rate * half;
-            df = rate / fftlen
+            # iterate over each chunk (stationary interval)
 
-            freq = np.linspace(df, df*half, num=half, endpoint=True)
-            logfreq = np.log10(freq)
+            tod_offset = 0
+            print(tod.local_chunks)
 
-            tempdata = np.zeros(tod.local_samples, dtype=np.float64)
-            tempflags = np.zeros(tod.local_samples, dtype=np.uint8)
-            tdata = np.zeros(fftlen, dtype=np.float64)
-            fdata = np.zeros(fftlen, dtype=np.float64)
+            for curchunk in range(tod.local_chunks[1]):
+                abschunk = tod.local_chunks[0] + curchunk
+                print("abschunk = ", abschunk)
+                chksamp = tod.total_chunks[abschunk]
+                nsedata = np.zeros(chksamp, dtype=np.float64)
 
-            # ignore zero frequency
-            trimzero = False
-            if nse.freq[0] == 0:
-                trimzero = True
+                fftlen = 2
+                while fftlen <= (self._oversample * chksamp):
+                    fftlen *= 2
+                half = int(fftlen / 2)
+                norm = rate * half;
+                df = rate / fftlen
 
-            if trimzero:
-                rawfreq = nse.freq[1:]
-            else:
-                rawfreq = nse.freq
-            lograwfreq = np.log10(rawfreq)
+                freq = np.linspace(df, df*half, num=half, endpoint=True)
+                logfreq = np.log10(freq)
 
-            idet = 0
-            for det in tod.local_dets:
+                tempdata = np.zeros(chksamp, dtype=np.float64)
+                tempflags = np.zeros(chksamp, dtype=np.uint8)
+                tdata = np.zeros(fftlen, dtype=np.float64)
+                fdata = np.zeros(fftlen, dtype=np.float64)
 
-                # interpolate the psd
+                # ignore zero frequency
+                trimzero = False
+                if nse.freq[0] == 0:
+                    trimzero = True
 
                 if trimzero:
-                    rawpsd = nse.psd(det)[1:]
+                    rawfreq = nse.freq[1:]
                 else:
-                    rawpsd = nse.psd(det)
+                    rawfreq = nse.freq
+                lograwfreq = np.log10(rawfreq)
 
-                #np.savetxt("out_simnoise_rawpsd.txt", np.transpose(np.vstack((rawfreq, rawpsd))))
+                idet = 0
+                for det in tod.local_dets:
 
-                lograwpsd = np.log10(rawpsd)
+                    # interpolate the psd
 
-                interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
+                    if trimzero:
+                        rawpsd = nse.psd(det)[1:]
+                    else:
+                        rawpsd = nse.psd(det)
 
-                logpsd = interp(logfreq)
+                    #np.savetxt("out_simnoise_rawpsd.txt", np.transpose(np.vstack((rawfreq, rawpsd))))
 
-                psd = np.power(10.0, logpsd)
+                    lograwpsd = np.log10(rawpsd)
 
-                # High-pass filter the PSD to not contain power below
-                # fmin to limit the correlation length.  Also cut
-                # Nyquist.
-                fmin = rate / float(tod.local_samples)
-                psd[freq < fmin] = 0.0
-                psd[-1] = 0.0
+                    interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
 
-                #np.savetxt("out_simnoise_psd.txt", np.transpose(np.vstack((freq, psd))))
+                    logpsd = interp(logfreq)
 
-                # gaussian Re/Im randoms
+                    psd = np.power(10.0, logpsd)
 
-                # FIXME: Setting the seed like this does NOT guarantee uncorrelated
-                # results from the generator.  This is just a place holder until
-                # the streamed rng is implemented.
+                    # High-pass filter the PSD to not contain power below
+                    # fmin to limit the correlation length.  Also cut
+                    # Nyquist.
+                    fmin = rate / float(chksamp)
+                    psd[freq < fmin] = 0.0
+                    psd[-1] = 0.0
 
-                np.random.seed(self._rngstream + idet)
+                    #np.savetxt("out_simnoise_psd.txt", np.transpose(np.vstack((freq, psd))))
 
-                fdata = np.zeros(fftlen)
-                fdata = np.random.normal(loc=0.0, scale=1.0, size=fftlen)
-                #np.savetxt("out_simnoise_fdata_uni.txt", fdata, delimiter='\n')
+                    # gaussian Re/Im randoms
 
-                # scale by PSD
+                    # FIXME: Setting the seed like this does NOT guarantee uncorrelated
+                    # results from the generator.  This is just a place holder until
+                    # the streamed rng is implemented.
 
-                scale = np.sqrt(psd * norm)
+                    seed = self._rngstream + rngobs + (abschunk * ndet) + idet
+                    np.random.seed(seed)
 
-                fdata[0] *= 0.0
-                fdata[1:half] *= scale[0:-1]
-                fdata[half] *= np.sqrt(2 * scale[-1])
-                fdata[half+1:] *= scale[-2::-1]
+                    fdata = np.zeros(fftlen)
+                    fdata = np.random.normal(loc=0.0, scale=1.0, size=fftlen)
+                    #np.savetxt("out_simnoise_fdata_uni.txt", fdata, delimiter='\n')
 
-                #np.savetxt("out_simnoise_fdata.txt", fdata, delimiter='\n')
+                    # scale by PSD
 
-                # make the noise TOD
+                    scale = np.sqrt(psd * norm)
 
-                tdata = sft.irfft(fdata)
-                #np.savetxt("out_simnoise_tdata.txt", tdata, delimiter='\n')
+                    fdata[0] *= 0.0
+                    fdata[1:half] *= scale[0:-1]
+                    fdata[half] *= np.sqrt(2 * scale[-1])
+                    fdata[half+1:] *= scale[-2::-1]
 
-                if self._accum:
-                    tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples)
-                    tempdata += tdata[0:tod.local_samples]
-                else:
-                    tempdata = tdata[0:tod.local_samples]
+                    #np.savetxt("out_simnoise_fdata.txt", fdata, delimiter='\n')
 
-                tod.write(detector=det, flavor=self._flavor, local_start=0, data=tempdata, flags=tempflags)
+                    # make the noise TOD
 
-                idet += 1
+                    tdata = sft.irfft(fdata)
+                    #np.savetxt("out_simnoise_tdata.txt", tdata, delimiter='\n')
+
+                    if self._accum:
+                        tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=tod_offset, n=chksamp)
+                        tempdata += tdata[0:chksamp]
+                    else:
+                        tempdata = tdata[0:chksamp]
+
+                    tod.write(detector=det, flavor=self._flavor, local_start=tod_offset, data=tempdata, flags=tempflags)
+
+                    idet += 1
+
+                tod_offset += chksamp
+
+            # increment the observation rng stream offset
+            # by the number of chunks times number of detectors
+            rngobs += (ndet * len(tod.total_chunks))
 
         return
 

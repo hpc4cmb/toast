@@ -56,7 +56,7 @@ class OpLocalPixels(Operator):
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
-                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=tod.local_offset, n=tod.local_samples)
+                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=tod.local_samples[0], n=tod.local_samples[1])
                 local.update(set(pixels))
 
         return local
