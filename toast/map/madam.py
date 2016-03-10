@@ -160,7 +160,7 @@ class OpMadam(Operator):
 
         # extract only the intervals that are local to this process.
 
-        local_bounds = [ (t.first - tod.local_samples[0]) for t in intervals if (t.first >= tod.local_offset) and (t.first < tod.local_samples[0] + tod.local_samples[1]) ]
+        local_bounds = [ (t.first - tod.local_samples[0]) for t in intervals if (t.first >= tod.local_samples[0]) and (t.first < tod.local_samples[0] + tod.local_samples[1]) ]
         
         nperiod = None
         if len(local_bounds) > 0:
@@ -188,18 +188,29 @@ class OpMadam(Operator):
         for d in range(ndet):
             detweights[d] = detw[tod.detectors[d]]
 
-        nse_psdfreqs = nse.freq
-        npsdbin = len(nse_psdfreqs)
-        psdfreqs = np.copy(nse_psdfreqs)
+        if nse:
+            nse_psdfreqs = nse.freq
+            npsdbin = len(nse_psdfreqs)
+            psdfreqs = np.copy(nse_psdfreqs)
 
-        npsd = np.ones(ndet, dtype=np.int64)
-        npsdtot = np.sum(npsd)
-        psdstarts = np.zeros(npsdtot, dtype=np.float64)
+            npsd = np.ones(ndet, dtype=np.int64)
+            npsdtot = np.sum(npsd)
+            psdstarts = np.zeros(npsdtot, dtype=np.float64)
 
-        npsdval = npsdbin * npsdtot
-        psdvals = np.zeros(npsdval, dtype=np.float64)
-        for d in range(ndet):
-            psdvals[d*npsdbin:(d+1)*npsdbin] = nse.psd(tod.detectors[d])
+            npsdval = npsdbin * npsdtot
+            psdvals = np.zeros(npsdval, dtype=np.float64)
+            for d in range(ndet):
+                psdvals[d*npsdbin:(d+1)*npsdbin] = nse.psd(tod.detectors[d])
+        else:
+            npsd = np.ones(ndet, dtype=np.int64)
+            npsdtot = np.sum(npsd)
+            psdstarts = np.zeros(npsdtot)
+            npsdbin = 10
+            fsample = 10.
+            psdfreqs = np.arange(npsdbin) * fsample / npsdbin
+            npsdval = npsdbin * npsdtot            
+            psdvals = np.ones( npsdval )
+            
 
         # destripe
 
