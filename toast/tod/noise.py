@@ -35,6 +35,8 @@ class Noise(object):
                 if psds[det].shape[0] != self._nfreq:
                     raise RuntimeError("PSD length must match the number of frequencies")
                 self._psds[det] = np.copy(psds[det])
+        # the last frequency point should be nyquist
+        self._rate = 2.0 * self._freq[-1]
 
 
     @property
@@ -53,6 +55,11 @@ class Noise(object):
     @property
     def freq(self):
         return self._freq
+
+
+    @property
+    def rate(self):
+        return self._rate
     
 
     def psd(self, detector):
