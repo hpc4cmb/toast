@@ -11,9 +11,13 @@ from .interval import Interval
 
 from .memory import OpCopy
 
-from .pointing import OpPointingFake
+from .pointing import OpPointingHpixSimple
 
-from .sim import TODFake, OpSimGradient, OpSimNoise
+from .sim_tod import TODHpixSpiral
+
+from .sim_noise import AnalyticNoise
+
+from .sim_detdata import (OpSimNoise, OpSimGradient)
 
 from .noise import Noise
 

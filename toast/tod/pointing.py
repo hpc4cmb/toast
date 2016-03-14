@@ -18,7 +18,7 @@ from ..dist import Comm, Data
 from .tod import TOD
 
 
-class OpPointingFake(Operator):
+class OpPointingHpixSimple(Operator):
     """
     Operator which generates fake, uniform, pointing matrices.
 

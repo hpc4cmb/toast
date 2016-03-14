@@ -9,7 +9,7 @@ import os
 
 from toast.tod.tod import *
 from toast.tod.memory import *
-from toast.tod.sim import *
+from toast.tod.sim_tod import *
 
 from toast.mpirunner import MPITestCase
 
@@ -55,7 +55,7 @@ class OpCopyTest(MPITestCase):
         for i in range(nobs):
             # create the TOD for this observation
 
-            tod = TODFake(
+            tod = TODHpixSpiral(
                 mpicomm = self.data.comm.comm_group, 
                 detectors = self.dets,
                 samples = self.totsamp

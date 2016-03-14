@@ -9,8 +9,9 @@ import os
 
 from toast.tod.tod import *
 from toast.tod.pointing import *
-from toast.tod.sim import *
 from toast.tod.noise import *
+from toast.tod.sim_noise import *
+from toast.tod.sim_detdata import *
 
 from toast.mpirunner import MPITestCase
 

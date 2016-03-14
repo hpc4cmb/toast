@@ -10,7 +10,8 @@ import os
 from toast.tod.tod import *
 from toast.tod.memory import *
 from toast.tod.pointing import *
-from toast.tod.sim import *
+from toast.tod.sim_tod import *
+from toast.tod.sim_detdata import *
 from toast.map.madam import *
 
 from toast.mpirunner import MPITestCase
@@ -45,7 +46,7 @@ class OpMadamTest(MPITestCase):
         for i in range(nobs):
             # create the TOD for this observation
 
-            tod = TODFake(
+            tod = TODHpixSpiral(
                 mpicomm=self.toastcomm.comm_group, 
                 detectors=self.dets,
                 samples=self.totsamp,
@@ -75,7 +76,7 @@ class OpMadamTest(MPITestCase):
         grad.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingFake(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         with open(os.path.join(self.outdir,"out_test_madam.log"), "w") as f:
