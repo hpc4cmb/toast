@@ -116,10 +116,16 @@ class OpMadam(Operator):
             raise RuntimeError("Madam requires data to be distributed by time")
 
         # get the total list of intervals
-        intervals = data.obs[0]['intervals']
+        if 'intervals' in data.obs[0].keys():
+            intervals = data.obs[0]['intervals']
+        else:
+            intervals = []
 
         # get the noise object
-        nse = data.obs[0]['noise']
+        if 'noise' in data.obs[0].keys():
+            nse = data.obs[0]['noise']
+        else:
+            nse = None
 
         todcomm = tod.mpicomm
         todfcomm = todcomm.py2f()
@@ -188,7 +194,7 @@ class OpMadam(Operator):
         for d in range(ndet):
             detweights[d] = detw[tod.detectors[d]]
 
-        if nse:
+        if nse is not None:
             nse_psdfreqs = nse.freq
             npsdbin = len(nse_psdfreqs)
             psdfreqs = np.copy(nse_psdfreqs)
