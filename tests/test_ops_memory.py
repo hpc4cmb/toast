@@ -77,7 +77,7 @@ class OpCopyTest(MPITestCase):
         op = OpCopy(timedist=True)
 
         op.exec(self.data)
-        with open(os.path.join(self.outdir,"out_test_copy.log"), "w") as f:
+        with open(os.path.join(self.outdir,"out_test_copy_info"), "w") as f:
             self.data.info(f)
         
         stop = MPI.Wtime()

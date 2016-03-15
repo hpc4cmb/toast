@@ -7,11 +7,16 @@ from mpi4py import MPI
 import sys
 import os
 
+import numpy as np
+import numpy.testing as nt
+
 from toast.tod.tod import *
 from toast.tod.pointing import *
 from toast.tod.noise import *
 from toast.tod.sim_noise import *
 from toast.tod.sim_detdata import *
+from toast.tod.sim_tod import *
+from toast.tod.memory import *
 
 from toast.mpirunner import MPITestCase
 
@@ -34,7 +39,16 @@ class OpSimNoiseTest(MPITestCase):
         self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
 
-        self.dets = ["fake"]
+        self.dets = ["f1a", "f1b", "f2a", "f2b"]
+        self.fp = {}
+        for d in self.dets:
+            self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
+
+        self.rate = 10.0
+        self.fmin = 0.05
+        self.fknee = [0.1, 0.1, 0.2, 0.2]
+        self.alpha = [1.5, 1.5, 1.5, 1.5]
+        self.NET = [10.0, 10.0, 50.0, 50.0]
         self.totsamp = 10000
 
         chunksize = int(self.totsamp / self.comm.size)
@@ -45,16 +59,13 @@ class OpSimNoiseTest(MPITestCase):
             off += chunksize
         self.sizes.append(self.totsamp - off)
 
-        self.tod = TOD(mpicomm=self.toastcomm.comm_group, timedist=True, detectors=self.dets, flavors=None, samples=self.totsamp, sizes=self.sizes)
+        # Construct an empty TOD (no pointing needed)
 
-        self.tod.write_times(local_start=0, stamps=np.linspace(0.0, 0.01*float(self.tod.local_samples[1]), num=self.tod.local_samples[1]))
+        self.tod = TODHpixSpiral(mpicomm=self.toastcomm.comm_group, detectors=self.fp, samples=self.totsamp, firsttime=0.0, rate=self.rate, nside=512, sizes=self.sizes)
 
-        self.freq = np.array([0.0, 0.1, 0.2, 0.4, 0.8, 1.6, 2.4, 3.2, 4.0, 5.0, 6.0, 7.0], dtype=np.float64)
-        self.psd = np.zeros_like(self.freq)
-        self.psd[0] = 200.0
-        self.psd[1:] = 10.0 + 100.0 / (self.freq[1:]**1.2)
+        # construct an analytic noise model
 
-        self.nse = Noise(detectors=self.dets, freq=self.freq, psds={self.dets[0] : self.psd})
+        self.nse = AnalyticNoise(rate=self.rate, fmin=self.fmin, detectors=self.dets, fknee=self.fknee, alpha=self.alpha, NET=self.NET)
 
         ob = {}
         ob['id'] = 'noisetest-{}'.format(self.toastcomm.group)
@@ -69,12 +80,57 @@ class OpSimNoiseTest(MPITestCase):
     def test_sim(self):
         start = MPI.Wtime()
 
+        # cache data
+
+        cache = OpCopy()
+        cache.exec(self.data)
+
+        # generate timestreams
+
         op = OpSimNoise(stream=123456)
         op.exec(self.data)
 
-        np.savetxt(os.path.join(self.outdir,"out_test_simnoise.txt"), self.tod.read(detector='fake', local_start=0, n=self.tod.local_samples[1]), delimiter='\n')
+        ob = self.data.obs[0]
+        tod = ob['tod']
+        nse = ob['noise']
+
+        with open(os.path.join(self.outdir,"out_test_simnoise_info"), "w") as f:
+            self.data.info(f)
+
+        # verify that timestreams with the same PSD *DO NOT* have the same
+        # values (this is a crude test that the random seeds are being incremented)
+
+        check1, flag1 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
+        check2, flag2 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1]) 
+        dif = np.fabs(check1 - check2)
+        check = np.mean(dif)
+        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+        check3, flag3 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
+        check4, flag4 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1]) 
+        dif = np.fabs(check3 - check4)
+        check = np.mean(dif)
+        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+        # verify that the white noise part of the spectrum is normalized correctly
+
+        np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([nse.freq, nse.psd(self.dets[0]), nse.psd(self.dets[1]), nse.psd(self.dets[2]), nse.psd(self.dets[3])]), delimiter=' ')
+
+        fsamp = nse.rate
+        cutoff = 0.9 * (fsamp / 2.0)
+        indx = np.where(nse.freq > cutoff)
+        for det in tod.local_dets:
+            NET = self.nse.NET(det)
+            knee = self.nse.fknee(det)
+            avg = np.mean(nse.psd(det)[indx])
+            print("avg = ", avg)
+            NETsq = NET*NET
+            print("NETsq = ", NETsq)
+            self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.01)
+
+        np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')
         
         stop = MPI.Wtime()
         elapsed = stop - start
-        self.print_in_turns("copy test took {:.3f} s".format(elapsed))
+        self.print_in_turns("simnoise test took {:.3f} s".format(elapsed))
 

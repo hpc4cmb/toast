@@ -322,12 +322,16 @@ class Data(object):
             procstr = "  proc {}\n".format(gcomm.rank)
             my_chunks = 1
             if tod.local_chunks is not None:
-                my_chunks = len(tod.local_chunks)
+                my_chunks = tod.local_chunks[1]
             procstr = "{}    sample range {} --> {} in {} chunks:\n".format(procstr, tod.local_samples[0], (tod.local_samples[0] + nsamp - 1), my_chunks)
             
             if tod.local_chunks is not None:
-                for chk in tod.local_chunks:
-                    procstr = "{}      {}\n".format(procstr, chk[1])
+                chkoff = tod.local_samples[0]
+                for chk in range(tod.local_chunks[1]):
+                    abschk = tod.local_chunks[0] + chk
+                    chkstart = chkoff
+                    chkstop = chkstart + tod.total_chunks[abschk] - 1
+                    procstr = "{}      {} --> {}\n".format(procstr, chkstart, chkstop)
 
             if nsamp > 0:
     

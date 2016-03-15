@@ -100,7 +100,7 @@ class DataTest(MPITestCase):
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
         self.data = Data(self.toastcomm)
-        with open(os.path.join(self.outdir,"out_test_construct.log"), "w") as f:
+        with open(os.path.join(self.outdir,"out_test_construct_info"), "w") as f:
             self.data.info(f)
 
         stop = MPI.Wtime()

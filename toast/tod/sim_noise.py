@@ -68,13 +68,13 @@ class AnalyticNoise(Noise):
 
         self._alpha = {}
         for a in enumerate(alpha):
-            if a < 0.0:
+            if a[1] < 0.0:
                 raise RuntimeError("alpha exponents should be positive in this formalism")
-            self._alpha[detectors[f[0]]] = f[1]
+            self._alpha[detectors[a[0]]] = a[1]
 
         self._NET = {}
         for n in enumerate(NET):
-            self._NET[detectors[f[0]]] = f[1]
+            self._NET[detectors[n[0]]] = n[1]
 
         # for purposes of determining the common frequency sampling
         # points, use the lowest knee frequency.
@@ -93,11 +93,11 @@ class AnalyticNoise(Noise):
         psds = {}
 
         for d in self._detectors:
-            ktemp = np.power(self._knee[d], self._alpha[d])
+            ktemp = np.power(self._fknee[d], self._alpha[d])
             mtemp = np.power(self._fmin, self._alpha[d])
-            temp = np.power(self._freq, self._alpha[d])
-            psd[d] = (temp + ktemp) / (temp + mtemp)
-            psd[d] *= (self._NET[d] * self._NET[d])
+            temp = np.power(freq, self._alpha[d])
+            psds[d] = (temp + ktemp) / (temp + mtemp)
+            psds[d] *= (self._NET[d] * self._NET[d])
 
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freq=freq, psds=psds)

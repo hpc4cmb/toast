@@ -41,9 +41,10 @@ class TODHpixSpiral(TOD):
         samples (int): maximum allowed samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
+        sizes (list): specify the indivisible chunks in which to split the samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, nside=512):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, nside=512, sizes=None):
         if detectors is None:
             self._fp = {TOD.DEFAULT_FLAVOR : np.array([0.0, 0.0, 1.0, 0.0])}
         else:
@@ -51,7 +52,7 @@ class TODHpixSpiral(TOD):
 
         self._detlist = sorted(list(self._fp.keys()))
         
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, flavors=None, samples=samples)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, flavors=None, samples=samples, sizes=sizes)
 
         self._firsttime = firsttime
         self._rate = rate

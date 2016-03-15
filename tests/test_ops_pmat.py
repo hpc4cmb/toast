@@ -15,7 +15,7 @@ from toast.map.pixels import *
 from toast.mpirunner import MPITestCase
 
 
-class OpPointingFakeTest(MPITestCase):
+class OpPointingHpixTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
@@ -71,7 +71,7 @@ class OpPointingFakeTest(MPITestCase):
             self.data.obs.append(ob)
 
 
-    def test_fake(self):
+    def test_hpix_simple(self):
         start = MPI.Wtime()
 
         op = OpPointingHpixSimple()
@@ -80,10 +80,10 @@ class OpPointingFakeTest(MPITestCase):
         lc = OpLocalPixels()
         local = lc.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_fake.log"), "w") as f:
+        with open(os.path.join(self.outdir,"out_test_hpix_simple_info"), "w") as f:
             self.data.info(f)
         
         stop = MPI.Wtime()
         elapsed = stop - start
-        self.print_in_turns("copy test took {:.3f} s".format(elapsed))
+        self.print_in_turns("pmat test took {:.3f} s".format(elapsed))
 
