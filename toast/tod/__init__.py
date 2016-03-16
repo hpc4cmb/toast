@@ -13,7 +13,8 @@ from .memory import OpCopy
 
 from .pointing import OpPointingHpixSimple
 
-from .sim_tod import TODHpixSpiral
+from .sim_tod import (satellite_scanning, TODHpixSpiral,
+    TODSatellite)
 
 from .sim_noise import AnalyticNoise
 
