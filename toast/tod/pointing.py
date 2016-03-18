@@ -27,7 +27,7 @@ class OpPointingHpixSimple(Operator):
 
     """
 
-    def __init__(self, nside=64, nest=True):
+    def __init__(self, nside=64, nest=False):
         self._nside = nside
         self._nest = nest
 

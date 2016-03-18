@@ -6,6 +6,7 @@ from mpi4py import MPI
 
 import sys
 import os
+import shutil
 
 from toast.tod.tod import *
 from toast.tod.memory import *
@@ -23,6 +24,10 @@ class OpMadamTest(MPITestCase):
         self.outdir = "tests_output"
         if not os.path.isdir(self.outdir):
             os.mkdir(self.outdir)
+        self.mapdir = "madam"
+        if os.path.isdir(self.mapdir):
+            shutil.rmtree(self.mapdir)
+        os.mkdir(self.mapdir)
 
         # Note: self.comm is set by the test infrastructure
 
@@ -96,7 +101,7 @@ class OpMadamTest(MPITestCase):
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
         pars[ 'run_submap_test' ] = 'F'
-        pars[ 'path_output' ] = self.outdir
+        pars[ 'path_output' ] = self.mapdir
 
         madam = OpMadam(params=pars)
         if madam.available:

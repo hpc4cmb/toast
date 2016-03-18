@@ -93,11 +93,9 @@ class OpSimNoise(Operator):
             # iterate over each chunk (stationary interval)
 
             tod_offset = 0
-            print(tod.local_chunks)
 
             for curchunk in range(tod.local_chunks[1]):
                 abschunk = tod.local_chunks[0] + curchunk
-                print("abschunk = ", abschunk)
                 chksamp = tod.total_chunks[abschunk]
                 nsedata = np.zeros(chksamp, dtype=np.float64)
 
@@ -215,13 +213,14 @@ class OpSimGradient(Operator):
         
     """
 
-    def __init__(self, nside=512, flavor=None, min=-100.0, max=100.0):
+    def __init__(self, nside=512, flavor=None, min=-100.0, max=100.0, nest=False):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
         self._flavor = flavor
         self._min = min
         self._max = max
+        self._nest = nest
 
     def exec(self, data):
         comm = data.comm
@@ -238,8 +237,8 @@ class OpSimGradient(Operator):
             for det in tod.local_dets:
                 pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
                 dir = qa.rotate(pdata.reshape(-1, 4), zaxis)
-                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=False)
-                x, y, z = hp.pix2vec(self._nside, pixels, nest=False)
+                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
+                x, y, z = hp.pix2vec(self._nside, pixels, nest=self._nest)
                 z += 1.0
                 z *= 0.5
                 z *= range
@@ -249,6 +248,19 @@ class OpSimGradient(Operator):
                 tod.write(detector=det, flavor=self._flavor, local_start=0, data=data, flags=flags)
 
         return
+
+    def sigmap(self):
+        """
+        Return the underlying signal map.
+        """
+        range = self._max - self._min
+        pix = np.arange(0, 12*self._nside*self._nside, dtype=np.int64)
+        x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
+        z += 1.0
+        z *= 0.5
+        z *= range
+        z += self._min
+        return z
 
 
 # class OpSimScan(Operator):

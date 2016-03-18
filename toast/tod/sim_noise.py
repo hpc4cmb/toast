@@ -93,11 +93,15 @@ class AnalyticNoise(Noise):
         psds = {}
 
         for d in self._detectors:
-            ktemp = np.power(self._fknee[d], self._alpha[d])
-            mtemp = np.power(self._fmin, self._alpha[d])
-            temp = np.power(freq, self._alpha[d])
-            psds[d] = (temp + ktemp) / (temp + mtemp)
-            psds[d] *= (self._NET[d] * self._NET[d])
+            if self._fknee[d] > 0:
+                ktemp = np.power(self._fknee[d], self._alpha[d])
+                mtemp = np.power(self._fmin, self._alpha[d])
+                temp = np.power(freq, self._alpha[d])
+                psds[d] = (temp + ktemp) / (temp + mtemp)
+                psds[d] *= (self._NET[d] * self._NET[d])
+            else:
+                psds[d] = np.ones_like(freq)
+                psds[d] *= (self._NET[d] * self._NET[d])
 
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freq=freq, psds=psds)

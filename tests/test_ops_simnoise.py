@@ -97,21 +97,6 @@ class OpSimNoiseTest(MPITestCase):
         with open(os.path.join(self.outdir,"out_test_simnoise_info"), "w") as f:
             self.data.info(f)
 
-        # verify that timestreams with the same PSD *DO NOT* have the same
-        # values (this is a crude test that the random seeds are being incremented)
-
-        check1, flag1 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
-        check2, flag2 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1]) 
-        dif = np.fabs(check1 - check2)
-        check = np.mean(dif)
-        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
-
-        check3, flag3 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
-        check4, flag4 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1]) 
-        dif = np.fabs(check3 - check4)
-        check = np.mean(dif)
-        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
-
         # verify that the white noise part of the spectrum is normalized correctly
 
         np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([nse.freq, nse.psd(self.dets[0]), nse.psd(self.dets[1]), nse.psd(self.dets[2]), nse.psd(self.dets[3])]), delimiter=' ')
@@ -128,7 +113,25 @@ class OpSimNoiseTest(MPITestCase):
             print("NETsq = ", NETsq)
             self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.01)
 
+        # write timestreams to disk for debugging
+
+        check1, flag1 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
+        check2, flag2 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1])
+        check3, flag3 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
+        check4, flag4 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1])
+
         np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')
+
+        # verify that timestreams with the same PSD *DO NOT* have the same
+        # values (this is a crude test that the random seeds are being incremented)
+
+        dif = np.fabs(check1 - check2)
+        check = np.mean(dif)
+        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+        dif = np.fabs(check3 - check4)
+        check = np.mean(dif)
+        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
         
         stop = MPI.Wtime()
         elapsed = stop - start
