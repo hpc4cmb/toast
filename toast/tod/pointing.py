@@ -65,3 +65,41 @@ class OpPointingHpixSimple(Operator):
         return
 
 
+class OpPointingLocal(Operator):
+    """
+    Operator which generates local pointing.
+
+    Args:
+        localpix (array): an array mapping local index to global pixel.
+        name (str): the pointing matrix to use
+    """
+
+    def __init__(self, localpix=None, name=None):
+        self._name = name
+        self._glob2loc = None
+        if localpix is not None:
+            self._glob2loc = {}
+            for g in enumerate(localpix):
+                self._glob2loc[g[1]] = g[0]
+
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
+
+
+    def exec(self, data):
+        # the two-level pytoast communicator
+        comm = data.comm
+        # the global communicator
+        cworld = comm.comm_world
+        # the communicator within the group
+        cgroup = comm.comm_group
+        # the communicator with all processes with
+        # the same rank within their group
+        crank = comm.comm_rank
+
+        for obs in data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                tod.set_pmat_local(name=self._name, detector=det, glob2loc=self._glob2loc)
+        return
+

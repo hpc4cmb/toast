@@ -263,104 +263,57 @@ class OpSimGradient(Operator):
         return z
 
 
-# class OpSimScan(Operator):
-#     """
-#     Operator which generates sky signal by scanning from a map.
+class OpSimScan(Operator):
+    """
+    Operator which generates sky signal by scanning from a map.
 
+    The signal to use should already be in a distributed pixel structure,
+    and local pointing should already exist.
 
-#     Args:
+    Args:
         
-#     """
-
-#     def __init__(self, mapfile=None, local=None, pname=None, flavor=None, accum=False):
-#         # We call the parent class constructor, which currently does nothing
-#         super().__init__()
-#         self._mapfile = mapfile
-#         self._local = local
-#         self._pname = pname
-#         self._flavor = flavor
-#         self._accum = accum
-#         self._bufsize = 2000000
+    """
+    def __init__(self, distmap=None, pname=None, flavor=None, accum=False):
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
+        self._map = distmap
+        self._pname = pname
+        self._flavor = flavor
+        self._accum = accum
 
 
-#     def exec(self, data):
-#         comm = data.comm
-#         # the global communicator
-#         cworld = comm.comm_world
-#         # the communicator within the group
-#         cgroup = comm.comm_group
-#         # the communicator with all processes with
-#         # the same rank within their group
-#         crank = comm.comm_rank
+    def exec(self, data):
+        comm = data.comm
+        # the global communicator
+        cworld = comm.comm_world
+        # the communicator within the group
+        cgroup = comm.comm_group
+        # the communicator with all processes with
+        # the same rank within their group
+        crank = comm.comm_rank
 
-#         # open the file and read maps in chunks.  broadcast
-#         # to local maps.
+        for obs in data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                nnz = tod.pmat_nnz(self, name=pname, detector=det)
+                if nnz != self._map.nnz:
+                    raise RuntimeError("pointing matrix has different number of nonzeros than signal map")
+                pixels, weights = tod.read_pmat_local(name=self._pname, detector=det, local_start=0, n=tod.local_samples[1])
 
-#         mapdata = None
-#         mapnnz = 0
-#         map_npix = 0
-#         if cworld.rank == 0:
-#             mapdata = hp.read_map(self._mapfile)
-#             mapnnz = mapdata.shape[0]
-#             map_npix = mapdata.shape[1]
+                # FIXME: can we speed this up?
+                view = weights.reshape(-1, nnz)
+                f = (np.dot(view[x[0]], self._map.data[x[1]]) for x in enumerate(pixels))
+                maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
 
-#         mapnnz = cworld.bcast(mapnnz, root=0)
-#         map_npix = cworld.bcast(map_npix, root=0)
+                if self._accum:
+                    tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples[1])
+                    tempdata += maptod
+                else:
+                    tempdata = maptod
 
-#         local_npix = len(self._local)
-#         local_pixels = np.array(self._local, dtype=np.int64)
-#         local_map = sp.csr_matrix((np.ones(local_npix, dtype=np.float64), (np.zeros(local_npix, dtype=np.int64), local_pixels), shape=(1,map_npix))
+                tod.write(detector=det, flavor=self._flavor, local_start=0, data=tempdata, flags=tempflags)
 
-
-# local_map = sp.csr_matrix((np.ones(5*2, dtype=np.float64), (np.tile(np.array([2, 6, 9, 15, 17]), 2), np.array([0,1,0,1,0,1,0,1,0,1]))), shape=(20,2) )
-
-
-# local = set([2, 6, 9, 15, 17])
-
-# In [4]: pixels = np.array([2, 6, 9, 15, 17], dtype=np.int64)
-
-# In [5]: weights = np.array([2.0, 2.0, 6.0, 6.0, 9.0, 9.0, 15.0, 15.0, 17.0, 17.0])
-
-# In [6]: nnz = 2
-
-
-# np.array([ np.dot(local_map[pixels,:].toarray()[i], weights.reshape(-1,2)[i]) for i in range(len(pixels)) ])
-
-
-
-#         off = 0
-#         nbcast = self._bufsize
-#         buf_data = np.zeros(nbcast, dtype=np.float64)
-
-#         while off < map_npix:
-#             if off + nbcast > map_npix:
-#                 nbcast = map_npix - off
-#             if cworld.rank == 0:
-#                 buf_data = mapdata[off:off+nbcast]
-#             cworld.Bcast(buf_data, root=0)
-#             buf_mask = np.where((local_pixels > off) and (local_pixels < off+nbcast))
-#             buf_elem = local_pixels[buf_mask]
-#             rel_elem = buf_elem - off
-
-#             local_map[buf_elem] = buf_data[rel_elem]
-
-#             off += nbcast
-
-
-
-
-
-#         for obs in data.obs:
-#             tod = obs['tod']
-
-#             for det in tod.local_dets:
-#                 nnz = tod.pmat_nnz(self, name=pname, detector=det)
-
-#                 pixels, weights = tod.read_pmat(name=self._pname, detector=det, local_start=tod.local_offset, n=tod.local_samples)
-                
-
-#         return
-
+        return
 
 
 
