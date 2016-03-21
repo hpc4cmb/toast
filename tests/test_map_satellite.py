@@ -276,18 +276,24 @@ class MapSatelliteTest(MPITestCase):
 
         # get locally hit pixels
         lc = OpLocalPixels()
-        local = lc.exec(self.data)
+        localpix = lc.exec(self.data)
 
-        # construct local pointing matrix
-        lp = OpPointingLocal(localpix=local)
-        lp.exec(self.data)
-
-        # construct a distributed map which just has a gradient signal
+        # construct a sky gradient operator, just to get the signal
+        # map- we are not going to use the operator on the data.
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         sig = grad.sigmap()
+
+        # pick a submap size and find the local submaps.
+        submapsize = np.floor_divide(self.sim_nside, 16)
+        allsm = np.floor_divide(localpix, submapsize)
+        sm = set(allsm)
+        localsm = np.array(sm)
+
+        # construct a distributed map which has the gradient        
         npix = 12 * self.sim_nside * self.sim_nside
-        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, localpix=local)
-        distsig.data[:,:] = np.array([ sig[x] for x in local ]).reshape(-1, 1)
+        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
+        lsub, lpix = distsig.global_to_local(localpix)
+        distsig.data[lsub,lpix,:] = [ sig[x] for x in localpix ]
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)

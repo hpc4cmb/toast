@@ -435,61 +435,6 @@ class TOD(object):
         return
 
 
-    def read_pmat_local(self, name=None, detector=None, local_start=0, n=0):
-        if name is None:
-            name = self.DEFAULT_FLAVOR
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if name not in self.pmat.keys():
-            raise ValueError('pointing matrix {} not found'.format(name))
-        if detector not in self.pmat[name].keys():
-            raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector, name))
-        if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        if 'local' not in self.pmat[name][detector]:
-            raise RuntimeError('detector {} in local pointing matrix {} not yet created'.format(detector, name))
-        nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
-        return (self.pmat[name][detector]['local'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
-
-
-    def set_pmat_local(self, name=None, detector=None, glob2loc=None):
-        if name is None:
-            name = self.DEFAULT_FLAVOR
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if name not in self.pmat.keys():
-            raise ValueError('pointing matrix {} not found'.format(name))
-        if detector not in self.pmat[name].keys():
-            raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector, name))
-        if glob2loc is None:
-            return
-        if 'local' not in self.pmat[name][detector].keys():
-            self.pmat[name][detector]['local'] = np.copy(self.pmat[name][detector]['pixels'])
-        good = (self.pmat[name][detector]['pixels'] >= 0)
-
-        f = (glob2loc[x] for x in self.pmat[name][detector]['pixels'][good])
-
-        self.pmat[name][detector]['local'][good] = np.fromiter(f, np.float64, count=len(good))
-        return
-
-
-    def clear_pmat_local(self, name=None, detector=None):
-        if name is None:
-            name = self.DEFAULT_FLAVOR
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if name in self.pmat.keys():
-            if 'local' in self.pmat[name][detector].keys():
-                del self.pmat[name][detector]['local']
-        return
-
-
     def pmat_nnz(self, name=None, detector=None):
         if name is None:
             name = self.DEFAULT_FLAVOR

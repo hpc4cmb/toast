@@ -68,42 +68,44 @@ class DistPixels(object):
     A distributed map with multiple values per pixel.
 
     Pixel domain data is distributed across an MPI communicator.  each
-    process has a local map containing a non-unique, arbitrary slice of
-    the global data.  Multiple processes may have copies of the same
-    pixels in their local maps.  However, each pixel is uniquely
-    "owned" by a single process.  This ownership is used for all
-    operations where only a single contribution from each pixel is
-    needed (e.g. serializing the data to disk).
+    process has a local data stored in one or more "submaps".  The size
+    of the submap can be tuned to balance storage (smaller submap size
+    means fewer wasted pixels stored) and ease of indexing (larger
+    submap means faster global-to-local pixel lookups).
 
-    For other operations (e.g. all-to-all accumulation of data), the
-    contributions from pixels on all processes are used.  This
-    communication can be done either by reduction to the "owner" process
-    and then re-broadcast, or with a brute-force all-reduce across all
-    processes.
+    Although multiple processes may have the same submap of data stored
+    locally, the lowest-rank process that has a given submap is the
+    "owner" for operations like serialization. 
 
     Args:
         comm (mpi4py.MPI.Comm): the MPI communicator containing all 
             processes.
         size (int): the total number of pixels.
         nnz (int): the number of values per pixel.
-        localpix (array): an array mapping local index to global pixel.
+        submap (int): the locally stored data is in units of this size.
+        local (array): the list of local submaps (integers).
     """
-    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, localpix=None):
+    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=1, local=None):
         self._comm = comm
         self._size = size
         self._nnz = nnz
         self._dtype = dtype
-        self._local = localpix
-        if localpix is None:
-            # our local map has all pixels
-            self._nlocal = self._size
-        else:
-            self._nlocal = len(localpix)
-            if localpix.max() > self._size:
-                raise RuntimeError("local pixels out of range")
+        self._submap = submap
+        self._local = local
+        self._glob2loc = {}
 
-        # this is the directly-accessible local map
-        self.data = np.zeros((self._nlocal, self._nnz), dtype=self._dtype)
+        # our data is a 3D array of submap, pixel, values
+        # we allocate this as a contiguous block
+        if self._local is None:
+            self.data = None
+            self._nsub = 0
+        else:
+            self._nsub = len(self._local)
+            for g in enumerate(self._local):
+                self._glob2loc[g[1]] = g[0]
+            if (self._submap * self._local.max()) > self._size:
+                 raise RuntimeError("local submap indices out of range")
+            self.data = np.zeros( (self._nsub * self._submap * self._nnz), order='C', dtype=self._dtype).reshape(self._nsub, self._submap, self._nnz)
 
 
     @property
@@ -123,8 +125,31 @@ class DistPixels(object):
         return self._dtype
 
     @property
-    def localpix(self):
+    def local(self):
         return self._local
+
+    @property
+    def submap(self):
+        return self._submap
+    
+    @property
+    def nsubmap(self):
+        return self._nsub
+
+
+    def global_to_local(self, global):
+        sm = np.floor_divide(global, self._submap)
+        pix = np.mod(global, self._submap)
+        f = (self._glob2loc[x] for x in sm)
+        lsm = np.fromiter(f, np.int64, count=len(sm))
+        return (lsm, pix)
+
+
+    def duplicate(self):
+        ret = DistPixels(comm=self._comm, size=self._size, nnz=self._nnz, dtype=self._dtype, submap=self._submap, local=self._local)
+        if self.data is not None:
+            ret.data = np.copy(self.data)
+        return ret
 
 
     def read_healpix_fits(self, path):
