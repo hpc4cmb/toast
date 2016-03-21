@@ -300,11 +300,13 @@ class OpSimScan(Operator):
                 nnz = tod.pmat_nnz(name=self._pname, detector=det)
                 if nnz != self._map.nnz:
                     raise RuntimeError("pointing matrix has different number of nonzeros than signal map")
-                pixels, weights = tod.read_pmat_local(name=self._pname, detector=det, local_start=0, n=tod.local_samples[1])
+                pixels, weights = tod.read_pmat(name=self._pname, detector=det, local_start=0, n=tod.local_samples[1])
+
+                sm, lpix = self._map.global_to_local(pixels)
 
                 # FIXME: can we speed this up?
                 view = weights.reshape(-1, nnz)
-                f = (np.dot(view[x[0]], self._map.data[x[1]]) for x in enumerate(pixels))
+                f = ( np.dot(view[x], self._map.data[sm[x], lpix[x]]) for x in range(tod.local_samples[1]) )
                 maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
 
                 if self._accum:

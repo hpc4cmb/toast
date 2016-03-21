@@ -137,9 +137,9 @@ class DistPixels(object):
         return self._nsub
 
 
-    def global_to_local(self, global):
-        sm = np.floor_divide(global, self._submap)
-        pix = np.mod(global, self._submap)
+    def global_to_local(self, gl):
+        sm = np.floor_divide(gl, self._submap)
+        pix = np.mod(gl, self._submap)
         f = (self._glob2loc[x] for x in sm)
         lsm = np.fromiter(f, np.int64, count=len(sm))
         return (lsm, pix)
