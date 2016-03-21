@@ -13,6 +13,8 @@ from Cython.Build import cythonize
 
 from setuptools.command.test import test as TestCommand
 
+import numpy as np
+
 from toast.mpirunner import MPITestRunner
 
 
@@ -32,7 +34,17 @@ current_version = get_version()
 
 # extensions to build
 
-extensions = cythonize ( [] )
+ext_map_helper = Extension (
+    'toast.map._helpers',
+    include_dirs = [np.get_include()],
+    sources = [
+        'toast/map/_helpers.pyx'
+    ]
+)
+
+extensions = cythonize([
+    ext_map_helper,
+])
 
 
 # scripts to install
@@ -86,7 +98,7 @@ if "clean" in sys.argv:
     # Just in case the build directory was created by accident,
     # note that shell=True should be OK here because the command is constant.
     subprocess.Popen("rm -rf build", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf pympit/*.c", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf pympit/*.so", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf pympit/*.pyc", shell=True, executable="/bin/bash")
+    subprocess.Popen("rm -rf toast/map/*.c", shell=True, executable="/bin/bash")
+    subprocess.Popen("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
+    subprocess.Popen("rm -rf toast/map/*.pyc", shell=True, executable="/bin/bash")
 

@@ -60,6 +60,13 @@ class Noise(object):
     @property
     def rate(self):
         return self._rate
+
+
+    def weight(self, detector):
+        pd = self.psd(detector)
+        mn = np.mean(pd)
+        rms = np.sqrt(mn * self.rate / float(2 * len(pd) - 1))
+        return 1.0 / (rms * rms)
     
 
     def psd(self, detector):

@@ -8,3 +8,5 @@
 from .madam import OpMadam
 
 from .pixels import OpLocalPixels, DistPixels
+
+from .noise import OpInvCovariance

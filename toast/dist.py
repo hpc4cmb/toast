@@ -165,7 +165,6 @@ def distribute_discrete(sizes, groups, pow=1.0):
         the number of items assigned to the group.
     """
     chunks = np.array(sizes, dtype=np.int64)
-    print("discrete chunks = ", chunks)
     weights = np.power(chunks.astype(np.float64), pow)
     max_per_proc = distribute_partition(weights.astype(np.int64), groups)
 
@@ -234,8 +233,6 @@ def distribute_samples(mpicomm, timedist, detectors, samples, sizes=None):
                 cursamp = np.sum(sizes[ds[0]:ds[0]+ds[1]])
                 dist_samples.append( (off, cursamp) )
                 off += cursamp
-            print("dist_sizes = ", dist_sizes)
-            print("dist_samples = ", dist_samples)
         else:
             dist_samples = distribute_uniform(samples, mpicomm.size)
     else:
