@@ -13,8 +13,6 @@ import scipy.fftpack as sft
 import scipy.interpolate as si
 import scipy.sparse as sp
 
-import astropy.io.fits as af
-
 import healpy as hp
 
 import quaternionarray as qa

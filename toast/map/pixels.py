@@ -50,13 +50,12 @@ class OpLocalPixels(Operator):
         crank = comm.comm_rank
 
         # initialize the local pixel set
-
         local = set()
 
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
-                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=tod.local_samples[0], n=tod.local_samples[1])
+                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=0, n=tod.local_samples[1])
                 local.update(set(pixels))
 
         ret = np.zeros(len(local), dtype=np.int64)
@@ -94,13 +93,13 @@ class DistPixels(object):
         self._size = size
         self._nnz = nnz
         self._dtype = dtype
-        self._local = local
-        if local is None:
+        self._local = localpix
+        if localpix is None:
             # our local map has all pixels
             self._nlocal = self._size
         else:
-            self._nlocal = len(local)
-            if local.max() > self._size:
+            self._nlocal = len(localpix)
+            if localpix.max() > self._size:
                 raise RuntimeError("local pixels out of range")
 
         # this is the directly-accessible local map

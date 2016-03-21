@@ -24,7 +24,7 @@ class OpMadamTest(MPITestCase):
         self.outdir = "tests_output"
         if not os.path.isdir(self.outdir):
             os.mkdir(self.outdir)
-        self.mapdir = "madam"
+        self.mapdir = os.path.join(self.outdir, "madam")
         if os.path.isdir(self.mapdir):
             shutil.rmtree(self.mapdir)
         os.mkdir(self.mapdir)

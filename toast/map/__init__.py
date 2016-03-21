@@ -7,4 +7,4 @@
 
 from .madam import OpMadam
 
-from .pixels import OpLocalPixels
+from .pixels import OpLocalPixels, DistPixels

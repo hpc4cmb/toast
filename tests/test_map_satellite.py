@@ -20,7 +20,7 @@ from toast.tod.pointing import *
 from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_noise import *
-from toast.map.madam import *
+from toast.map import *
 
 from toast.mpirunner import MPITestCase
 
@@ -261,4 +261,94 @@ class MapSatelliteTest(MPITestCase):
 
         else:
             print("libmadam not available, skipping tests")
-        
+
+
+    def test_scanmap(self):
+        start = MPI.Wtime()
+
+        # cache the data in memory
+        cache = OpCopy()
+        cache.exec(self.data)
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing.exec(self.data)
+
+        # get locally hit pixels
+        lc = OpLocalPixels()
+        local = lc.exec(self.data)
+
+        # construct local pointing matrix
+        lp = OpPointingLocal(localpix=local)
+        lp.exec(self.data)
+
+        # construct a distributed map which just has a gradient signal
+        grad = OpSimGradient(nside=self.sim_nside, nest=True)
+        sig = grad.sigmap()
+        npix = 12 * self.sim_nside * self.sim_nside
+        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, localpix=local)
+        distsig.data[:,:] = np.array([ sig[x] for x in local ]).reshape(-1, 1)
+
+        # create TOD from map
+        scansim = OpSimScan(distmap=distsig)
+        scansim.exec(self.data)
+
+        with open(os.path.join(self.outdir,"out_test_satellite_scanmap_info"), "w") as f:
+            self.data.info(f)
+
+        # make a binned map with madam
+        madam_out = os.path.join(self.mapdir, "madam_scansim")
+        if os.path.isdir(madam_out):
+            shutil.rmtree(madam_out)
+        os.mkdir(madam_out)
+
+        pars = {}
+        pars[ 'kfirst' ] = 'F'
+        pars[ 'base_first' ] = 1.0
+        pars[ 'fsample' ] = self.rate
+        pars[ 'nside_map' ] = self.map_nside
+        pars[ 'nside_cross' ] = self.map_nside
+        pars[ 'nside_submap' ] = self.map_nside
+        pars[ 'write_map' ] = 'F'
+        pars[ 'write_binmap' ] = 'T'
+        pars[ 'write_matrix' ] = 'F'
+        pars[ 'write_wcov' ] = 'F'
+        pars[ 'write_hits' ] = 'T'
+        pars[ 'kfilter' ] = 'F'
+        pars[ 'run_submap_test' ] = 'F'
+        pars[ 'path_output' ] = madam_out
+
+        madam = OpMadam(params=pars)
+        if madam.available:
+            madam.exec(self.data)
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
+
+            if self.comm.rank == 0:
+                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hits = hp.read_map(hitsfile, nest=True)
+
+                outfile = "{}.png".format(hitsfile)
+                hp.mollview(hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+
+                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                bins = hp.read_map(binfile, nest=True)
+
+                outfile = "{}.png".format(binfile)
+                hp.mollview(bins, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+
+                # compare binned map to input signal
+
+                tothits = np.sum(hits)
+                self.assertTrue(self.totsamp, tothits)
+                mask = (bins > -1.0e20)
+                nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
+
+        else:
+            print("libmadam not available, skipping tests")
+

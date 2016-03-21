@@ -470,8 +470,10 @@ class TOD(object):
         if 'local' not in self.pmat[name][detector].keys():
             self.pmat[name][detector]['local'] = np.copy(self.pmat[name][detector]['pixels'])
         good = (self.pmat[name][detector]['pixels'] >= 0)
-        mapping = lambda x : glob2loc[x]
-        self.pmat[name][detector]['local'][good] = map(mapping, self.pmat[name][detector]['pixels'][good])
+
+        f = (glob2loc[x] for x in self.pmat[name][detector]['pixels'][good])
+
+        self.pmat[name][detector]['local'][good] = np.fromiter(f, np.float64, count=len(good))
         return
 
 

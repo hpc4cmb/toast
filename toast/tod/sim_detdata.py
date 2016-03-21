@@ -13,8 +13,6 @@ import scipy.fftpack as sft
 import scipy.interpolate as si
 import scipy.sparse as sp
 
-import astropy.io.fits as af
-
 import healpy as hp
 
 import quaternionarray as qa
@@ -294,8 +292,12 @@ class OpSimScan(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
+
+            tempdata = np.zeros(tod.local_samples[1], dtype=np.float64)
+            tempflags = np.zeros(tod.local_samples[1], dtype=np.uint8)
+
             for det in tod.local_dets:
-                nnz = tod.pmat_nnz(self, name=pname, detector=det)
+                nnz = tod.pmat_nnz(name=self._pname, detector=det)
                 if nnz != self._map.nnz:
                     raise RuntimeError("pointing matrix has different number of nonzeros than signal map")
                 pixels, weights = tod.read_pmat_local(name=self._pname, detector=det, local_start=0, n=tod.local_samples[1])
