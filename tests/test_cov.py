@@ -21,6 +21,7 @@ from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_noise import *
 from toast.map import *
+import toast.map._helpers as mh
 
 from toast.mpirunner import MPITestCase
 
@@ -105,6 +106,65 @@ class CovarianceTest(MPITestCase):
             self.data.obs.append(ob)
 
 
+    def test_accum(self):
+        nsm = 2
+        npix = 3
+        nnz = 4
+        scale = 2.0
+        nsamp = nsm * npix
+        nelem = int(nnz * (nnz+1) / 2)
+        fakedata = np.zeros((nsm, npix, nelem), dtype=np.float64)
+        fakehits = np.zeros((nsm, npix, 1), dtype=np.int64)
+        checkdata = np.zeros((nsm, npix, nelem), dtype=np.float64)
+        checkhits = np.zeros((nsm, npix, 1), dtype=np.int64)
+        sm = np.repeat(np.arange(nsm, dtype=np.int64), npix)
+        pix = np.tile(np.arange(npix, dtype=np.int64), nsm)
+        wt = np.tile(np.arange(nnz, dtype=np.float64), nsamp).reshape(-1, nnz)
+
+        mh._accumulate_inverse_covariance(fakedata, sm, pix, wt, scale, fakehits)
+
+        for i in range(nsamp):
+            checkhits[sm[i], pix[i], 0] += 1
+            off = 0
+            for j in range(nnz):
+                for k in range(j, nnz):
+                    checkdata[sm[i], pix[i], off] += scale * wt[i,j] * wt[i,k]
+                    off += 1
+
+        nt.assert_equal(fakehits, checkhits)
+        nt.assert_almost_equal(fakedata, checkdata)
+        return
+
+
+    def test_invert(self):
+        nsm = 2
+        npix = 3
+        nnz = 4
+        scale = 2.0
+        nsamp = nsm * npix
+        nelem = int(nnz * (nnz+1) / 2)
+        threshold = 1.0e-6
+        fakedata = np.zeros((nsm, npix, nelem), dtype=np.float64)
+        checkdata = np.zeros((nsm, npix, nelem), dtype=np.float64)
+        rowdata = 10.0 * np.arange(nnz, 0, -1)
+
+        for i in range(nsm):
+            for j in range(npix):
+                off = 0
+                for k in range(nnz):
+                    for m in range(k, nnz):
+                        fakedata[i,j,off] = rowdata[m-k]
+                        checkdata[i,j,off] = fakedata[i,j,off]
+                        off += 1
+
+        # invert twice
+        mh._invert_covariance(fakedata, threshold)
+        mh._invert_covariance(fakedata, threshold)
+
+        nt.assert_almost_equal(fakedata, checkdata)
+        return
+
+
     def test_invnpp(self):
         start = MPI.Wtime()
 
@@ -134,8 +194,8 @@ class CovarianceTest(MPITestCase):
         build_invnpp = OpInvCovariance(invnpp=invnpp)
         build_invnpp.exec(self.data)
 
-        
-        
+        # invert it
+        covariance_invert(invnpp.data, 1.0e-3)
 
         # write this out...
 

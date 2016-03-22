@@ -13,7 +13,9 @@ from ..dist import Comm, Data
 from ..operator import Operator
 from .pixels import DistPixels
 
-from ._helpers import accumulate_inverse_covariance
+from ._helpers import (_accumulate_inverse_covariance,
+    _invert_covariance)
+
 
 
 class OpInvCovariance(Operator):
@@ -68,9 +70,15 @@ class OpInvCovariance(Operator):
                 if nse is not None:
                     detweight = nse.weight(det)
                 if self._hits is not None:
-                    accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, self._hits.data)
+                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, self._hits.data)
                 else:
                     fakehits = np.zeros((1,1,1), dtype=np.int64)
-                    accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, fakehits)
+                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, fakehits)
         return
 
+
+def covariance_invert(npp, threshold):
+    if len(npp.shape) != 3:
+        raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    _invert_covariance(npp, threshold)
+    return
