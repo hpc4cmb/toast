@@ -185,8 +185,12 @@ class OpMadam(Operator):
         # or else we get these from the white noise level.
         detw = {}
         if self._detw is None:
-            for d in range(ndet):
-                detw[tod.detectors[d]] = 1.0
+            if nse is not None:
+                for d in range(ndet):
+                    detw[tod.detectors[d]] = nse.weight(tod.detectors[d])
+            else:
+                for d in range(ndet):
+                    detw[tod.detectors[d]] = 1.0
         else:
             detw = self._detw
 

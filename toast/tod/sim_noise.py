@@ -117,11 +117,3 @@ class AnalyticNoise(Noise):
     def NET(self, det):
         return self._NET[det]
 
-
-    def weight(self, det):
-        # use the NET instead of the full integrated PSD
-        # NET**2 = rms**2 * rate
-        rms = self.NET(det) / self.rate
-        return 1.0 / (rms * rms)
-
-

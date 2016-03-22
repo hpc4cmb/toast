@@ -27,6 +27,11 @@ class Noise(object):
         self._freq = freq
         self._nfreq = freq.shape[0]
         self._psds = {}
+        self._weights = {}
+        
+        # the last frequency point should be nyquist
+        self._rate = 2.0 * self._freq[-1]
+
         if detectors is not None:
             self._dets = detectors
             if psds is None:
@@ -35,8 +40,9 @@ class Noise(object):
                 if psds[det].shape[0] != self._nfreq:
                     raise RuntimeError("PSD length must match the number of frequencies")
                 self._psds[det] = np.copy(psds[det])
-        # the last frequency point should be nyquist
-        self._rate = 2.0 * self._freq[-1]
+                mn = np.mean(self._psds[det])
+                rms = np.sqrt(mn * self._rate / float(2 * self._nfreq - 1))
+                self._weights[det] = 1.0 / (rms * rms)
 
 
     @property
@@ -63,10 +69,7 @@ class Noise(object):
 
 
     def weight(self, detector):
-        pd = self.psd(detector)
-        mn = np.mean(pd)
-        rms = np.sqrt(mn * self.rate / float(2 * len(pd) - 1))
-        return 1.0 / (rms * rms)
+        return self._weights[detector]
     
 
     def psd(self, detector):
