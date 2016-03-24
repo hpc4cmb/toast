@@ -45,6 +45,11 @@ class MapSatelliteTest(MPITestCase):
             'bore' : np.array([0.0, 0.0, 1.0, 0.0])
             }
 
+        # this is an upolarized detector...
+        self.epsilon = {
+            'bore' : 1.0,
+        }
+
         self.sim_nside = 64
         self.totsamp = 200000
         self.map_nside = 64
@@ -117,7 +122,7 @@ class MapSatelliteTest(MPITestCase):
         grad.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)
 
         with open(os.path.join(self.outdir,"out_test_satellite_grad_info"), "w") as f:
@@ -172,7 +177,7 @@ class MapSatelliteTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                self.assertTrue(self.totsamp, tothits)
+                nt.assert_equal(self.totsamp, tothits)
 
                 sig = grad.sigmap()
                 mask = (bins > -1.0e20)
@@ -194,7 +199,7 @@ class MapSatelliteTest(MPITestCase):
         nsig.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)
 
         with open(os.path.join(self.outdir,"out_test_satellite_noise_info"), "w") as f:
@@ -250,7 +255,7 @@ class MapSatelliteTest(MPITestCase):
                 # number of hits and the timestream rms
 
                 tothits = np.sum(hits)
-                self.assertTrue(self.totsamp, tothits)
+                nt.assert_equal(self.totsamp, tothits)
 
                 mask = (bins > -1.0e20)
                 weighted = bins[mask] * np.sqrt(hits[mask])
@@ -271,7 +276,7 @@ class MapSatelliteTest(MPITestCase):
         cache.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -351,7 +356,7 @@ class MapSatelliteTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                self.assertTrue(self.totsamp, tothits)
+                nt.assert_equal(self.totsamp, tothits)
                 mask = (bins > -1.0e20)
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
 

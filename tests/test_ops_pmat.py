@@ -74,7 +74,7 @@ class OpPointingHpixTest(MPITestCase):
     def test_hpix_simple(self):
         start = MPI.Wtime()
 
-        op = OpPointingHpixSimple()
+        op = OpPointingHpix()
         op.exec(self.data)
 
         lc = OpLocalPixels()

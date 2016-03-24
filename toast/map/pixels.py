@@ -85,7 +85,7 @@ class DistPixels(object):
         submap (int): the locally stored data is in units of this size.
         local (array): the list of local submaps (integers).
     """
-    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=1, local=None):
+    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None):
         self._comm = comm
         self._size = size
         self._nnz = nnz

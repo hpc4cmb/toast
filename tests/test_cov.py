@@ -173,7 +173,7 @@ class CovarianceTest(MPITestCase):
         cache.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         # get locally hit pixels

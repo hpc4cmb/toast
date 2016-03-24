@@ -11,7 +11,7 @@ from .interval import Interval
 
 from .memory import OpCopy
 
-from .pointing import OpPointingHpixSimple
+from .pointing import OpPointingHpix
 
 from .sim_tod import (satellite_scanning, TODHpixSpiral,
     TODSatellite)

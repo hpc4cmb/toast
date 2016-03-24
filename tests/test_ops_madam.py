@@ -81,7 +81,7 @@ class OpMadamTest(MPITestCase):
         grad.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpixSimple(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         with open(os.path.join(self.outdir,"out_test_madam_info"), "w") as f:
