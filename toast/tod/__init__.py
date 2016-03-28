@@ -18,6 +18,8 @@ from .sim_tod import (satellite_scanning, TODHpixSpiral,
 
 from .sim_noise import AnalyticNoise
 
+from .sim_interval import regular_intervals
+
 from .sim_detdata import (OpSimNoise, OpSimGradient)
 
 from .noise import Noise
