@@ -110,6 +110,22 @@ class MapSatelliteTest(MPITestCase):
             self.data.obs.append(ob)
 
 
+    def test_boresight_null(self):
+        # verify that if all angles are zero, we get fixed pointing
+        # along the x-axis.
+
+        nsim = 1000
+
+        zaxis = np.array([0,0,1], dtype=np.float64)
+
+        borequat = satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=0.0, precperiod=20.0, precangle=0.0)
+
+        data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1,3))
+
+        np.testing.assert_almost_equal(data, np.tile(np.array([1.0, 0.0, 0.0]), nsim).reshape(-1,3))
+        return
+
+
     def test_grad(self):
         start = MPI.Wtime()
 
