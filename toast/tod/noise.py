@@ -68,10 +68,6 @@ class Noise(object):
         return self._rate
 
 
-    def weight(self, detector):
-        return self._weights[detector]
-    
-
     def psd(self, detector):
         if detector not in self._dets:
             raise RuntimeError("psd for detector {} not found".format(detector))

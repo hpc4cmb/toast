@@ -322,7 +322,7 @@ class TODSatellite(TOD):
                 This will be the fixed quaternion used
                 to rotate the Z coordinate axis to the 
                 precession axis.  If a 2D array of shape
-                (nsim, 4) is given, this is the time-varying
+                (local samples, 4) is given, this is the time-varying
                 rotation of the Z axis to the precession axis.
         """
         if qprec is not None:

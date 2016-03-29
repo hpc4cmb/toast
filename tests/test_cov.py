@@ -173,7 +173,7 @@ class CovarianceTest(MPITestCase):
         cache.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -186,12 +186,23 @@ class CovarianceTest(MPITestCase):
         sm = set(allsm)
         localsm = np.array(sorted(sm), dtype=np.int64)
 
-        # construct a distributed map to store the covariance
+        # construct a distributed map to store the covariance and hits
         npix = 12 * self.sim_nside * self.sim_nside
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
+        
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=6, dtype=np.float64, submap=submapsize, local=localsm)
 
-        # accumulate the inverse covariance
-        build_invnpp = OpInvCovariance(invnpp=invnpp)
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.int64, submap=submapsize, local=localsm)
+
+        # accumulate the inverse covariance.  Use detector weights
+        # based on the analytic NET.
+
+        tod = self.data.obs[0]['tod']
+        nse = self.data.obs[0]['noise']
+        detweights = {}
+        for d in tod.local_dets:
+            detweights[d] = 1.0 / (nse.NET(d)**2)
+
+        build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(self.data)
 
         # invert it

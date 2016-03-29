@@ -205,6 +205,16 @@ class MapSatelliteTest(MPITestCase):
         with open(os.path.join(self.outdir,"out_test_satellite_noise_info"), "w") as f:
             self.data.info(f)
 
+        # For noise weighting in madam, we know we are using an analytic noise
+        # and so we can use noise weights based on the NET.  This is instrument
+        # specific.
+
+        tod = self.data.obs[0]['tod']
+        nse = self.data.obs[0]['noise']
+        detweights = {}
+        for d in tod.local_dets:
+            detweights[d] = 1.0 / (nse.NET(d)**2)
+
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_noise")
         if os.path.isdir(madam_out):
@@ -227,7 +237,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, detweights=detweights)
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()

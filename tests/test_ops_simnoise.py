@@ -108,9 +108,7 @@ class OpSimNoiseTest(MPITestCase):
             NET = self.nse.NET(det)
             knee = self.nse.fknee(det)
             avg = np.mean(nse.psd(det)[indx])
-            print("avg = ", avg)
             NETsq = NET*NET
-            print("NETsq = ", NETsq)
             self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.01)
 
         # write timestreams to disk for debugging

@@ -182,15 +182,11 @@ class OpMadam(Operator):
             periods[p] = int(local_bounds[p])
 
         # detweights is either a dictionary of weights specified at construction time,
-        # or else we get these from the white noise level.
+        # or else we use uniform weighting.
         detw = {}
         if self._detw is None:
-            if nse is not None:
-                for d in range(ndet):
-                    detw[tod.detectors[d]] = nse.weight(tod.detectors[d])
-            else:
-                for d in range(ndet):
-                    detw[tod.detectors[d]] = 1.0
+            for d in range(ndet):
+                detw[tod.detectors[d]] = 1.0
         else:
             detw = self._detw
 

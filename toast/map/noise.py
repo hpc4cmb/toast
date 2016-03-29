@@ -31,9 +31,10 @@ class OpInvCovariance(Operator):
         hits (DistPixels):  (optional) the hits to accumulate.
     """
 
-    def __init__(self, pmat=None, invnpp=None, hits=None):
+    def __init__(self, detweights=None, pmat=None, invnpp=None, hits=None):
         
         self._pmat = pmat
+        self._detweights = detweights
 
         if invnpp is None:
             raise RuntimeError("you must specify the invnpp to accumulate")
@@ -61,14 +62,15 @@ class OpInvCovariance(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
-            nse = obs['noise']
             for det in tod.local_dets:
                 pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=0, n=tod.local_samples[1])
                 sm, lpix = self._invnpp.global_to_local(pixels)
-                wt = weights.reshape(-1, self._invnpp.nnz)
+                wt = weights.reshape(pixels.shape[0], -1)
                 detweight = 1.0
-                if nse is not None:
-                    detweight = nse.weight(det)
+                if self._detweights is not None:
+                    if det not in self._detweights.keys():
+                        raise RuntimeError("no detector weights found for {}".format(det))
+                    detweight = self._detweights[det]
                 if self._hits is not None:
                     _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, self._hits.data)
                 else:
