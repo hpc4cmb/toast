@@ -57,6 +57,16 @@ class CovarianceTest(MPITestCase):
 
         self.NET = 7.0
 
+        self.fknee = {
+            'bore' : 0.0,
+        }
+        self.alpha = {
+            'bore' : 1.0,
+        }
+        self.netd = {
+            'bore' : self.NET
+        }
+
         # madam only supports a single observation
         nobs = 1
 
@@ -92,9 +102,9 @@ class CovarianceTest(MPITestCase):
                 rate=self.rate, 
                 fmin=0.0,
                 detectors=self.detnames,
-                fknee=[0.0,], 
-                alpha=[1.0,], 
-                NET=[self.NET,])
+                fknee=self.fknee,
+                alpha=self.alpha,
+                NET=self.netd)
 
             ob = {}
             ob['id'] = 'test'

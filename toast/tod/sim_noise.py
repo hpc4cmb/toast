@@ -37,9 +37,9 @@ class AnalyticNoise(Noise):
         rate (float): sample rate in Hertz.
         fmin (float): minimum frequency for high pass
         detectors (list): list of detectors.
-        fknee (array like): list of knee frequencies.
-        alpha (array like): list of alpha exponents (positive, not negative!).
-        NET (array like): list of detector NETs.
+        fknee (dict): dictionary of knee frequencies.
+        alpha (dict): dictionary of alpha exponents (positive, not negative!).
+        NET (dict): dictionary of detector NETs.
     """
 
     def __init__(self, rate=None, fmin=None, detectors=None, fknee=None, alpha=None, NET=None):
@@ -50,9 +50,9 @@ class AnalyticNoise(Noise):
         if detectors is None:
             raise RuntimeError("you must specify the detector list")
         if fknee is None:
-            raise RuntimeError("you must specify the knee frequency list")
+            raise RuntimeError("you must specify the knee frequencies")
         if alpha is None:
-            raise RuntimeError("you must specify the exponent list")
+            raise RuntimeError("you must specify the exponents")
         if NET is None:
             raise RuntimeError("you must specify the NET")
 
@@ -60,23 +60,20 @@ class AnalyticNoise(Noise):
         self._fmin = fmin
         self._detectors = detectors
         
-        self._fknee = {}
-        for f in enumerate(fknee):
-            self._fknee[detectors[f[0]]] = f[1]
+        self._fknee = fknee
+        self._alpha = alpha
+        self._NET = NET
 
-        self._alpha = {}
-        for a in enumerate(alpha):
-            if a[1] < 0.0:
+        for d in detectors:
+            if self._alpha[d] < 0.0:
                 raise RuntimeError("alpha exponents should be positive in this formalism")
-            self._alpha[detectors[a[0]]] = a[1]
-
-        self._NET = {}
-        for n in enumerate(NET):
-            self._NET[detectors[n[0]]] = n[1]
 
         # for purposes of determining the common frequency sampling
         # points, use the lowest knee frequency.
-        lowknee = np.min(fknee)
+        lowknee = rate
+        for d in detectors:
+            if self._fknee[d] < lowknee:
+                lowknee = self._fknee[d]
 
         tempfreq = []
         cur = self._fmin

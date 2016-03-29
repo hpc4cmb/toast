@@ -46,9 +46,26 @@ class OpSimNoiseTest(MPITestCase):
 
         self.rate = 10.0
         self.fmin = 0.05
-        self.fknee = [0.1, 0.1, 0.2, 0.2]
-        self.alpha = [1.5, 1.5, 1.5, 1.5]
-        self.NET = [10.0, 10.0, 50.0, 50.0]
+        self.fknee = {}
+        self.alpha = {}
+        self.NET = {}
+
+        self.fknee["f1a"] = 0.1
+        self.alpha["f1a"] = 1.5
+        self.NET["f1a"] = 10.0
+
+        self.fknee["f1b"] = 0.1
+        self.alpha["f1b"] = 1.5
+        self.NET["f1b"] = 10.0
+
+        self.fknee["f2a"] = 0.2
+        self.alpha["f2a"] = 1.5
+        self.NET["f2a"] = 50.0
+
+        self.fknee["f2b"] = 0.2
+        self.alpha["f2b"] = 1.5
+        self.NET["f2b"] = 50.0
+
         self.totsamp = 10000
 
         chunksize = int(self.totsamp / self.comm.size)
