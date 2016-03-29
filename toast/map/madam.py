@@ -58,7 +58,7 @@ class OpMadam(Operator):
         params (dictionary): parameters to pass to madam.
     """
 
-    def __init__(self, flavor=None, pmat=None, detweights=None, highmem=False, params={}):
+    def __init__(self, flavor=None, pmat=None, detweights=None, purge=True, params={}):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -71,7 +71,7 @@ class OpMadam(Operator):
         if self._pmat is None:
             self._pmat = TOD.DEFAULT_FLAVOR
         self._detw = detweights
-        self._highmem = highmem
+        self._purge = purge
         self._params = params
 
 
@@ -151,7 +151,7 @@ class OpMadam(Operator):
             dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
             signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=nlocal)
             pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=nlocal)
-            if not self._highmem:
+            if self._purge:
                 tod.clear(detector=tod.detectors[d], flavor=self._flavor)
                 tod.clear_pmat(name=self._pmat, detector=tod.detectors[d])
         
