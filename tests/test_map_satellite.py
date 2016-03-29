@@ -409,7 +409,7 @@ class MapSatelliteTest(MPITestCase):
 
         # make a pointing matrix with a HWP that rotates 2*PI every sample
         hwprate = self.rate * 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon, hwprate=hwprate)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon, hwprpm=hwprate)
         pointing.exec(self.data)
 
         # get locally hit pixels

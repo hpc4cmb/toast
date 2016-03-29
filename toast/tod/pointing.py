@@ -36,7 +36,7 @@ class OpPointingHpix(Operator):
         mode (string): either "I" or "IQU"
         epsilon (dict): dictionary of cross-polar response per detector. A
             None value means epsilon is zero for all detectors.
-        hwprate: if None, a constantly rotating HWP is not included.  Otherwise
+        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
             it is the rate (in RPM) of constant rotation.
         hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
             is the step in degrees.
@@ -45,22 +45,22 @@ class OpPointingHpix(Operator):
             after building the pointing matrix.
     """
 
-    def __init__(self, nside=64, nest=False, mode='I', epsilon=None, hwprate=None, hwpstep=None, hwpsteptime=None, purge_pntg=False):
+    def __init__(self, nside=64, nest=False, mode='I', epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, purge_pntg=False):
         self._nside = nside
         self._nest = nest
         self._mode = mode
         self._epsilon = epsilon
         self._purge = purge_pntg
 
-        if (hwprate is not None) and (hwpstep is not None):
+        if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped HWP")
 
         if (hwpstep is not None) and (hwpsteptime is None):
             raise RuntimeError("for a stepped HWP, you must specify the time between steps")
 
-        if hwprate is not None:
+        if hwprpm is not None:
             # convert to radians / second
-            self._hwprate = hwprate * 2.0 * np.pi / 60.0
+            self._hwprate = hwprpm * 2.0 * np.pi / 60.0
         else:
             self._hwprate = None
 
