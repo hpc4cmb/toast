@@ -213,7 +213,7 @@ class MapSatelliteTest(MPITestCase):
         nse = self.data.obs[0]['noise']
         detweights = {}
         for d in tod.local_dets:
-            detweights[d] = 1.0 / (nse.NET(d)**2)
+            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_noise")

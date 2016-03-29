@@ -200,7 +200,7 @@ class CovarianceTest(MPITestCase):
         nse = self.data.obs[0]['noise']
         detweights = {}
         for d in tod.local_dets:
-            detweights[d] = 1.0 / (nse.NET(d)**2)
+            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
         build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(self.data)
