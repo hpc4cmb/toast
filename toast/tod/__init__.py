@@ -14,7 +14,7 @@ from .memory import OpCopy
 from .pointing import OpPointingHpix
 
 from .sim_tod import (satellite_scanning, TODHpixSpiral,
-    TODSatellite)
+    TODSatellite, slew_precession_axis)
 
 from .sim_noise import AnalyticNoise
 

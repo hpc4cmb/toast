@@ -24,6 +24,56 @@ from .noise import Noise
 from ..operator import Operator
 
 
+def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
+    """
+    Generate quaternions for constantly slewing precession axis.
+
+    This constructs quaternions which rotates the Z coordinate axis
+    to the X/Y plane, and then slowly rotates this.  This can be used
+    to generate quaternions for the precession axis used in satellite
+    scanning simulations.
+
+    Args:
+        nsim (int): The number of samples to simulate.
+        firstsamp (int): The offset in samples from the start
+            of rotation.
+        samplerate (float): The sampling rate in Hz.
+        degday (float): The rotation rate in degrees per day.
+
+    Returns:
+        Array of quaternions stored as an ndarray of
+        shape (nsim, 4).
+    """
+    # this is the increment in radians per sample
+    angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
+
+    # Compute the time-varying quaternions representing the rotation
+    # from the coordinate frame to the precession axis frame.  The
+    # angle of rotation is fixed (PI/2), but the axis starts at the Y
+    # coordinate axis and sweeps.
+
+    satang = np.arange(nsim, dtype=np.float64)
+    satang *= angincr
+    satang += angincr * firstsamp + (np.pi / 2)
+
+    cang = np.cos(satang)
+    sang = np.sin(satang)
+
+    # this is the time-varying rotation axis
+    sataxis = np.concatenate((cang.reshape(-1,1), sang.reshape(-1,1), np.zeros((nsim, 1))), axis=1)
+
+    # the rotation about the axis is always pi/2
+    csatrot = np.cos(0.25 * np.pi)
+    ssatrot = np.sin(0.25 * np.pi)
+
+    # now construct the axis-angle quaternions for the precession
+    # axis
+    sataxis = np.multiply(np.repeat(ssatrot, nsim).reshape(-1,1), sataxis)
+    satquat = np.concatenate((sataxis, np.repeat(csatrot, nsim).reshape(-1,1)), axis=1)
+
+    return satquat
+
+
 def satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0):
     """
     Generate boresight quaternions for a generic satellite.
