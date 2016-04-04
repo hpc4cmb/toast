@@ -22,12 +22,14 @@ class OpMadamTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
         self.mapdir = os.path.join(self.outdir, "madam")
-        if os.path.isdir(self.mapdir):
-            shutil.rmtree(self.mapdir)
-        os.mkdir(self.mapdir)
+        if self.comm.rank == 0:
+            if os.path.isdir(self.mapdir):
+                shutil.rmtree(self.mapdir)
+            os.mkdir(self.mapdir)
 
         # Note: self.comm is set by the test infrastructure
 
@@ -62,7 +64,7 @@ class OpMadamTest(MPITestCase):
             ob = {}
             ob['id'] = 'test'
             ob['tod'] = tod
-            ob['intervals'] = []
+            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = None
 
@@ -84,8 +86,12 @@ class OpMadamTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_madam_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_madam_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         pars = {}
         pars[ 'kfirst' ] = 'F'

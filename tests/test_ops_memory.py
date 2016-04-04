@@ -20,8 +20,9 @@ class OpCopyTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
 
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
@@ -31,7 +32,7 @@ class OpCopyTest(MPITestCase):
         else:
             self.groupsize = 1
             self.ngroup = 1
-        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
+        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
 
         spread = 0.1 * np.pi / 180.0
@@ -64,7 +65,7 @@ class OpCopyTest(MPITestCase):
             ob = {}
             ob['id'] = 'test'
             ob['tod'] = tod
-            ob['intervals'] = []
+            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = None
 
@@ -77,9 +78,14 @@ class OpCopyTest(MPITestCase):
         op = OpCopy(timedist=True)
 
         op.exec(self.data)
-        with open(os.path.join(self.outdir,"out_test_copy_info"), "w") as f:
-            self.data.info(f)
-        
+
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_copy_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
+
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("copy test took {:.3f} s".format(elapsed))

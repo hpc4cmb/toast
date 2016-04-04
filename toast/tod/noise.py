@@ -22,7 +22,7 @@ class Noise(object):
             for each detector.
     """
 
-    def __init__(self, detectors=None, freq=np.ndarray([0.0]), psds=None):
+    def __init__(self, detectors=None, freq=np.array([0.0,], dtype=np.float64), psds=None):
         self._dets = []
         self._freq = freq
         self._nfreq = freq.shape[0]

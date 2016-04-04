@@ -14,8 +14,9 @@ class DataTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
 
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
@@ -100,6 +101,14 @@ class DataTest(MPITestCase):
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
         
         self.data = Data(self.toastcomm)
+
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_construct_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
+
         with open(os.path.join(self.outdir,"out_test_construct_info"), "w") as f:
             self.data.info(f)
 

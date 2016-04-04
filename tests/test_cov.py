@@ -30,11 +30,13 @@ class CovarianceTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
         self.mapdir = os.path.join(self.outdir, "covariance")
-        if not os.path.isdir(self.mapdir):
-            os.mkdir(self.mapdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.mapdir):
+                os.mkdir(self.mapdir)
 
         # Note: self.comm is set by the test infrastructure
 

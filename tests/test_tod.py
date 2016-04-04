@@ -18,8 +18,9 @@ class TODTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
             
         # Note: self.comm is set by the test infrastructure
         self.dets = ['1a', '1b', '2a', '2b']

@@ -29,11 +29,13 @@ class MapSatelliteTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
         self.mapdir = os.path.join(self.outdir, "map_satellite")
-        if not os.path.isdir(self.mapdir):
-            os.mkdir(self.mapdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.mapdir):
+                os.mkdir(self.mapdir)
 
         # Note: self.comm is set by the test infrastructure
 
@@ -74,8 +76,11 @@ class MapSatelliteTest(MPITestCase):
         # madam only supports a single observation
         nobs = 1
 
-        # give every process one chunk
-        nchunk = self.toastcomm.group_size
+        # in order to make sure that the noise realization is reproducible
+        # all all concurrencies, we set the chunksize to something independent
+        # of the number of ranks.
+
+        nchunk = 10
         chunksize = int(self.totsamp / nchunk)
         chunks = np.ones(nchunk, dtype=np.int64)
         chunks *= chunksize
@@ -113,7 +118,7 @@ class MapSatelliteTest(MPITestCase):
             ob = {}
             ob['id'] = 'test'
             ob['tod'] = tod
-            ob['intervals'] = []
+            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = nse
 
@@ -151,14 +156,19 @@ class MapSatelliteTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_satellite_grad_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_satellite_grad_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_grad")
-        if os.path.isdir(madam_out):
-            shutil.rmtree(madam_out)
-        os.mkdir(madam_out)
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
 
         pars = {}
         pars[ 'kfirst' ] = 'F'
@@ -228,8 +238,12 @@ class MapSatelliteTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_satellite_noise_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_satellite_noise_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # For noise weighting in madam, we know we are using an analytic noise
         # and so we can use noise weights based on the NET.  This is instrument
@@ -243,9 +257,10 @@ class MapSatelliteTest(MPITestCase):
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_noise")
-        if os.path.isdir(madam_out):
-            shutil.rmtree(madam_out)
-        os.mkdir(madam_out)
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
 
         pars = {}
         pars[ 'kfirst' ] = 'F'
@@ -292,12 +307,20 @@ class MapSatelliteTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(self.totsamp, tothits)
+                print("tothits = ", tothits)
 
                 mask = (bins > -1.0e20)
-                weighted = bins[mask] * np.sqrt(hits[mask])
+                print("num good pix = ", len(mask))
+                rthits = np.sqrt(hits[mask].astype(np.float64))
+                print("rthits = ", rthits)
+                print("bmap = ", bins[mask])
+                weighted = bins[mask] * rthits
                 pixrms = np.std(weighted)
                 todrms = self.NET * np.sqrt(self.rate)
                 relerr = np.absolute(pixrms - todrms) / todrms
+                print("pixrms = ", pixrms)
+                print("todrms = ", todrms)
+                print("relerr = ", relerr)
                 self.assertTrue(relerr < 0.01)
 
         else:
@@ -340,14 +363,19 @@ class MapSatelliteTest(MPITestCase):
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_satellite_scanmap_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_satellite_scanmap_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_scansim")
-        if os.path.isdir(madam_out):
-            shutil.rmtree(madam_out)
-        os.mkdir(madam_out)
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
 
         pars = {}
         pars[ 'kfirst' ] = 'F'
@@ -437,14 +465,19 @@ class MapSatelliteTest(MPITestCase):
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_satellite_hwpfast_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_satellite_hwpfast_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_hwpfast")
-        if os.path.isdir(madam_out):
-            shutil.rmtree(madam_out)
-        os.mkdir(madam_out)
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
 
         pars = {}
         pars[ 'kfirst' ] = 'F'
@@ -535,14 +568,19 @@ class MapSatelliteTest(MPITestCase):
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
-        with open(os.path.join(self.outdir,"out_test_satellite_hwpconst_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_satellite_hwpconst_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.mapdir, "madam_hwpconst")
-        if os.path.isdir(madam_out):
-            shutil.rmtree(madam_out)
-        os.mkdir(madam_out)
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
 
         pars = {}
         pars[ 'kfirst' ] = 'F'

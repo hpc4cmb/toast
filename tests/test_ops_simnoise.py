@@ -25,8 +25,9 @@ class OpSimNoiseTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "tests_output"
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
 
         # Note: self.comm is set by the test infrastructure
         self.worldsize = self.comm.size
@@ -36,7 +37,7 @@ class OpSimNoiseTest(MPITestCase):
         else:
             self.groupsize = 1
             self.ngroup = 1
-        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
+        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
 
         self.dets = ["f1a", "f1b", "f2a", "f2b"]
@@ -68,17 +69,21 @@ class OpSimNoiseTest(MPITestCase):
 
         self.totsamp = 10000
 
-        chunksize = int(self.totsamp / self.comm.size)
-        self.sizes = []
-        off = 0
-        for i in range(self.comm.size - 1):
-            self.sizes.append(chunksize)
-            off += chunksize
-        self.sizes.append(self.totsamp - off)
+        # in order to make sure that the noise realization is reproducible
+        # all all concurrencies, we set the chunksize to something independent
+        # of the number of ranks.
+
+        nchunk = 10
+        chunksize = int(self.totsamp / nchunk)
+        chunks = np.ones(nchunk, dtype=np.int64)
+        chunks *= chunksize
+        remain = self.totsamp - (nchunk * chunksize)
+        for r in range(remain):
+            chunks[r] += 1
 
         # Construct an empty TOD (no pointing needed)
 
-        self.tod = TODHpixSpiral(mpicomm=self.toastcomm.comm_group, detectors=self.fp, samples=self.totsamp, firsttime=0.0, rate=self.rate, nside=512, sizes=self.sizes)
+        self.tod = TODHpixSpiral(mpicomm=self.toastcomm.comm_group, detectors=self.fp, samples=self.totsamp, firsttime=0.0, rate=self.rate, nside=512, sizes=chunks)
 
         # construct an analytic noise model
 
@@ -87,7 +92,7 @@ class OpSimNoiseTest(MPITestCase):
         ob = {}
         ob['id'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['tod'] = self.tod
-        ob['intervals'] = []
+        ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = self.nse
 
@@ -111,12 +116,17 @@ class OpSimNoiseTest(MPITestCase):
         tod = ob['tod']
         nse = ob['noise']
 
-        with open(os.path.join(self.outdir,"out_test_simnoise_info"), "w") as f:
-            self.data.info(f)
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_simnoise_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
 
         # verify that the white noise part of the spectrum is normalized correctly
 
-        np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([nse.freq, nse.psd(self.dets[0]), nse.psd(self.dets[1]), nse.psd(self.dets[2]), nse.psd(self.dets[3])]), delimiter=' ')
+        if self.comm.rank == 0:
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([nse.freq, nse.psd(self.dets[0]), nse.psd(self.dets[1]), nse.psd(self.dets[2]), nse.psd(self.dets[3])]), delimiter=' ')
 
         fsamp = nse.rate
         cutoff = 0.9 * (fsamp / 2.0)
@@ -135,7 +145,8 @@ class OpSimNoiseTest(MPITestCase):
         check3, flag3 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
         check4, flag4 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1])
 
-        np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')
+        if self.comm.rank == 0:
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')
 
         # verify that timestreams with the same PSD *DO NOT* have the same
         # values (this is a crude test that the random seeds are being incremented)
