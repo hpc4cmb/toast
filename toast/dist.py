@@ -305,8 +305,8 @@ class Data(object):
             if gcomm.rank == 0:
                 groupstr = "observation {}:\n".format(id)
                 groupstr = "{}  {} total samples, {} detectors\n".format(groupstr, tod.total_samples, len(tod.detectors))
-                groupstr = "{}  {} intervals:\n".format(groupstr, len(intrvl))
                 if intrvl is not None:
+                    groupstr = "{}  {} intervals:\n".format(groupstr, len(intrvl))
                     for it in intrvl:
                         groupstr = "{}    {} --> {} ({} --> {})\n".format(groupstr, it.first, it.last, it.start, it.stop)
 
