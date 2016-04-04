@@ -313,6 +313,16 @@ def main():
         print("Noise simulation took {:.3f} s".format(elapsed))
     start = stop
 
+    # in debug mode, print out data distribution information
+
+    if args.debug:
+        handle = None
+        if comm.comm_world.rank == 0:
+            handle = open(os.path.join(args.outdir,"distdata.txt"), "w")
+        data.info(handle)
+        if comm.comm_world.rank == 0:
+            handle.close()
+
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
     # baseline is too long, this will not be the best choice.
