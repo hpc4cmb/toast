@@ -64,6 +64,12 @@ class TOD(object):
 
         (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
 
+        if self._mpicomm.rank == 0:
+            # check that all processes have some data, otherwise print warning
+            for r in range(self._mpicomm.size):
+                if len(self._dist_samples[r]) == 0:
+                    print("WARNING: process {} has no data assigned in TOD.  Use fewer processes.".format(r))
+
         self.stamps = None
         self.data = {}
         self.flags = {}
@@ -110,7 +116,11 @@ class TOD(object):
         if self._dist_sizes is None:
             return None
         else:
-            return self._dist_sizes[self._mpicomm.rank]
+            mysizes = self._dist_sizes[self._mpicomm.rank]
+            if len(mysizes) == 0:
+                return [(-1, -1)]
+            else:
+                return mysizes
 
     @property
     def total_samples(self):
@@ -122,7 +132,11 @@ class TOD(object):
 
     @property
     def local_samples(self):
-        return self._dist_samples[self._mpicomm.rank]
+        mysamples = self._dist_samples[self._mpicomm.rank]
+        if len(mysamples) == 0:
+            return [(-1, -1)]
+        else:
+            return mysamples
 
     @property
     def mpicomm(self):
@@ -255,6 +269,8 @@ class TOD(object):
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.flavors:
             raise ValueError('flavor {} not found'.format(flavor))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get(detector, flavor, local_start, n)
@@ -269,6 +285,8 @@ class TOD(object):
             raise ValueError('detector {} not found'.format(detector))
         if flavor not in self.flavors:
             raise ValueError('flavor {} not found'.format(flavor))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_flags(detector, flavor, local_start, n)
@@ -287,6 +305,8 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
             raise ValueError('data and flags arrays must be the same length')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put(detector, flavor, local_start, data, flags)
@@ -306,6 +326,8 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
             raise ValueError('data and flags arrays must be the same length')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
         self._put_flags(detector, flavor, local_start, flags)
@@ -313,6 +335,8 @@ class TOD(object):
 
 
     def read_times(self, local_start=0, n=0):
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read times- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_times(local_start, n)
@@ -321,6 +345,8 @@ class TOD(object):
     def write_times(self, local_start=0, stamps=None):
         if stamps is None:
             raise ValueError('you must specify the vector of time stamps')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write times- process has no assigned local samples')
         if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps)
@@ -332,6 +358,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read pntg- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n)
@@ -342,6 +370,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read pntg flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_pntg_flags(detector, local_start, n)
@@ -356,6 +386,8 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape[0] != 4 * flags.shape[0]:
             raise ValueError('data and flags arrays must represent the same number of samples')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write pntg- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg(detector, local_start, data, flags)
@@ -371,6 +403,8 @@ class TOD(object):
             raise ValueError('both data and flags must be specified')
         if data.shape[0] != 4 * flags.shape[0]:
             raise ValueError('data and flags arrays must represent the same number of samples')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write pntg flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_pntg_flags(detector, local_start, flags)
@@ -388,6 +422,8 @@ class TOD(object):
             raise ValueError('pointing matrix {} not found'.format(name))
         if detector not in self.pmat[name].keys():
             raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector, name))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read pmat- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         if 'pixels' not in self.pmat[name][detector]:
@@ -410,6 +446,8 @@ class TOD(object):
         nnz = int(nw / npix)
         if nnz * npix != nw:
             raise ValueError('number of pointing weights {} is not a multiple of pixels length {}'.format(nw, npix))
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write pmat- process has no assigned local samples')
         if (local_start < 0) or (local_start + npix > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+npix-1))
         if name not in self.pmat.keys():
