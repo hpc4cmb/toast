@@ -74,7 +74,7 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     return satquat
 
 
-def satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0):
+def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0):
     """
     Generate boresight quaternions for a generic satellite.
 
@@ -146,6 +146,7 @@ def satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, 
     #print("satrot = ", satrot[-1])
 
     precang = np.arange(nsim, dtype=np.float64)
+    precang += float(firstsamp)
     precang *= 2.0 * np.pi * precrate / samplerate
     #print("precang = ", precang[-1])
 
@@ -169,6 +170,7 @@ def satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, 
     # Construct quaternion from axis / angle form.
 
     spinang = np.arange(nsim, dtype=np.float64)
+    spinang += float(firstsamp)
     spinang *= 2.0 * np.pi * spinrate / samplerate
     #print("spinang = ", spinang[-1])
 
@@ -380,7 +382,7 @@ class TODSatellite(TOD):
                 raise RuntimeError("precession quaternion has incorrect dimensions")
 
         # generate and cache the boresight pointing
-        self._boresight = satellite_scanning(nsim=self.local_samples[1], qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod, spinangle=self._spinangle, precperiod=self._precperiod, precangle=self._precangle)
+        self._boresight = satellite_scanning(nsim=self.local_samples[1], firstsamp=self.local_samples[0], qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod, spinangle=self._spinangle, precperiod=self._precperiod, precangle=self._precangle)
 
 
     def _get(self, detector, flavor, start, n):
