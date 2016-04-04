@@ -116,10 +116,11 @@ class OpMadam(Operator):
             raise RuntimeError("Madam requires data to be distributed by time")
 
         # get the total list of intervals
+        intervals = None
         if 'intervals' in data.obs[0].keys():
             intervals = data.obs[0]['intervals']
-        else:
-            intervals = []
+        if intervals is None:
+            intervals = [Interval(start=0.0, stop=0.0, first=0, last=(tod.total_samples-1))]
 
         # get the noise object
         if 'noise' in data.obs[0].keys():
@@ -157,25 +158,16 @@ class OpMadam(Operator):
         
         # apply detector flags to the pointing matrix, since that is the
         # only way to pass flag information to madam
-
-        #nflag = np.sum(flags!=0) # DEBUG
-        #print('Flagging {} samples ({:.2f}%) of pixel numbers due to flags.'.format(nflag,nflag*100./len(flags))) # DEBUG
         
         pixels[flags != 0] = -1
         pixweights[np.repeat(flags, nnz) != 0] = 0.0
 
-        # extract only the intervals that are local to this process.
+        # The "pointing periods" we pass to madam are simply the intersection
+        # of our local data and the list of valid intervals.
 
-        local_bounds = [ (t.first - tod.local_samples[0]) for t in intervals if (t.first >= tod.local_samples[0]) and (t.first < tod.local_samples[0] + tod.local_samples[1]) ]
+        local_bounds = [ (t.first - tod.local_samples[0]) if (t.first > tod.local_samples[0]) else 0 for t in intervals if (t.last >= tod.local_samples[0]) and (t.first < (tod.local_samples[0] + tod.local_samples[1])) ]
         
-        nperiod = None
-        if len(local_bounds) > 0:
-            if local_bounds[0] > 0:
-                local_bounds.insert(0, 0)
-            nperiod = len(local_bounds)
-        else:
-            nperiod = 1
-            local_bounds = [0,]
+        nperiod = len(local_bounds)
 
         periods = np.zeros(nperiod, dtype=np.int64)
         for p in range(nperiod):
