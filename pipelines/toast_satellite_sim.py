@@ -24,6 +24,9 @@ def view_focalplane(fp, outfile):
     # To avoid python overhead in large MPI jobs, place the
     # matplotlib import inside this function, which is only called
     # when the --debug option is specified.
+    import matplotlib
+    # Force matplotlib to not use any Xwindows backend.
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
     # field of view, in degrees
@@ -285,22 +288,6 @@ def main():
         print("Data read and cache took {:.3f} s".format(elapsed))
     start = stop
 
-    # make a Healpix pointing matrix.  By setting purge_pntg=True,
-    # we purge the detector quaternion pointing to save memory.
-    # If we ever change this pipeline in a way that needs this
-    # pointing at a later stage, we need to set this to False
-    # and run at higher concurrency.
-
-    pointing = tt.OpPointingHpix(nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime, purge_pntg=True)
-    pointing.exec(data)
-
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print("Pointing matrix generation took {:.3f} s".format(elapsed))
-    start = stop
-
     # simulate noise
 
     nse = tt.OpSimNoise(stream=0)
@@ -322,6 +309,22 @@ def main():
         data.info(handle)
         if comm.comm_world.rank == 0:
             handle.close()
+
+    # make a Healpix pointing matrix.  By setting purge_pntg=True,
+    # we purge the detector quaternion pointing to save memory.
+    # If we ever change this pipeline in a way that needs this
+    # pointing at a later stage, we need to set this to False
+    # and run at higher concurrency.
+
+    pointing = tt.OpPointingHpix(nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime, purge_pntg=True)
+    pointing.exec(data)
+
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print("Pointing matrix generation took {:.3f} s".format(elapsed))
+    start = stop
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
