@@ -335,6 +335,7 @@ class Data(object):
                     chkstart = chkoff
                     chkstop = chkstart + tod.total_chunks[abschk] - 1
                     procstr = "{}      {} --> {}\n".format(procstr, chkstart, chkstop)
+                    chkoff += tod.total_chunks[abschk]
 
             if nsamp > 0:
     
