@@ -176,6 +176,5 @@ class DataTest(MPITestCase):
 
         stop = MPI.Wtime()
         elapsed = stop - start
-        self.assertTrue(False)
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
 
