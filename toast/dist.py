@@ -166,23 +166,46 @@ def distribute_discrete(sizes, groups, pow=1.0):
     """
     chunks = np.array(sizes, dtype=np.int64)
     weights = np.power(chunks.astype(np.float64), pow)
-    max_per_proc = distribute_partition(weights.astype(np.int64), groups)
+    max_per_proc = float(distribute_partition(weights.astype(np.int64), groups))
+
+    print("nchunk = {}, max_per_proc = {}".format(len(chunks), max_per_proc))
 
     dist = []
 
     off = 0
-    cur = 0
-    curweight = 0
-    for i in range(weights.shape[0]):
-        if curweight + weights[i] > max_per_proc:
-            dist.append( (off, cur) )
-            off += cur
-            cur = 0
-            curweight = 0
-        cur += 1
-        curweight += weights[i]
+    curweight = 0.0
+    proc = 0
+    for cur in range(0, weights.shape[0]):
+        if curweight + weights[cur] >= max_per_proc:
+            print("proc {} : curweight = {}, weight[i] = {}, append ({}, {})".format(proc, curweight, weights[cur], off, cur-off))
+            dist.append( (off, cur-off) )
+            under = max_per_proc - curweight
+            curweight = weights[cur] + under
+            off = cur
+            proc += 1
+        else:
+            curweight += weights[cur]
 
-    dist.append( (off, cur) )
+    dist.append( (off, weights.shape[0]-off) )
+    print("proc {} : curweight = {}, append ({}, {})".format(proc, curweight, off, weights.shape[0]-off))
+
+    # off = 0
+    # cur = 0
+    # curweight = 0
+    # proc = 0
+    # for i in range(weights.shape[0]):
+    #     if curweight + weights[i] > max_per_proc:
+    #         print("proc {} : curweight = {}, weight[i] = {}, append ({}, {})".format(proc, curweight, weights[i], off, cur))
+    #         dist.append( (off, cur) )
+    #         off += cur
+    #         cur = 0
+    #         curweight = 0
+    #         proc += 1
+    #     cur += 1
+    #     curweight += weights[i]
+    #
+    # dist.append( (off, cur) )
+    # print("curweight = {}, append ({}, {})".format(curweight, off, cur))
 
     return dist
 
