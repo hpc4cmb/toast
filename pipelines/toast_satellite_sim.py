@@ -344,30 +344,29 @@ def main():
         # buffers.  This is ok, as long as madam is the last step of 
         # the pipeline.
 
-        pars = None
+        pars = {}
 
-        if comm.comm_world.rank == 0:
-            cross = int(nside / 2)
-            submap = int(nside / 8)
-            pars = {}
-            pars[ 'temperature_only' ] = 'F'
-            pars[ 'force_pol' ] = 'T'
-            pars[ 'kfirst' ] = 'T'
-            pars[ 'base_first' ] = baseline
-            pars[ 'nside_map' ] = nside
-            pars[ 'nside_cross' ] = cross
-            pars[ 'nside_submap' ] = submap
-            pars[ 'write_map' ] = 'T'
-            pars[ 'write_binmap' ] = 'T'
-            pars[ 'write_matrix' ] = 'T'
-            pars[ 'write_wcov' ] = 'T'
-            pars[ 'write_hits' ] = 'T'
-            pars[ 'kfilter' ] = 'F'
-            pars[ 'run_submap_test' ] = 'T'                
-            pars[ 'fsample' ] = samplerate
-            pars[ 'path_output' ] = args.outdir
+        cross = int(nside / 2)
+        submap = int(nside / 8)
 
-        pars = comm.comm_world.bcast(pars, root=0)
+        pars[ 'temperature_only' ] = 'F'
+        pars[ 'force_pol' ] = 'T'
+        pars[ 'kfirst' ] = 'T'
+        pars[ 'base_first' ] = baseline
+        pars[ 'nside_map' ] = nside
+        pars[ 'nside_cross' ] = cross
+        pars[ 'nside_submap' ] = submap
+        pars[ 'write_map' ] = 'T'
+        pars[ 'write_binmap' ] = 'T'
+        pars[ 'write_matrix' ] = 'T'
+        pars[ 'write_wcov' ] = 'T'
+        pars[ 'write_hits' ] = 'T'
+        pars[ 'kfilter' ] = 'F'
+        if args.noisefilter:
+            pars[ 'kfilter' ] = 'T'
+        pars[ 'run_submap_test' ] = 'T'                
+        pars[ 'fsample' ] = samplerate
+        pars[ 'path_output' ] = args.outdir
 
         madam = tm.OpMadam(params=pars, detweights=detweights, purge=True)
         madam.exec(data)
