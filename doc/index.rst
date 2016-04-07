@@ -15,8 +15,13 @@ Contents:
 .. toctree::
     :maxdepth: 2
     
-    tod.rst
+    install.rst
+    programs.rst
+    datamodel.rst
     dist.rst
+    tod.rst
+    intervals.rst
+    noise.rst
 
 
 Indices and tables

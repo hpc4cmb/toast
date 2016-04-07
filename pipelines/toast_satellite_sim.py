@@ -264,7 +264,9 @@ def main():
 
     # Constantly slewing precession axis
 
-    precquat = tt.slew_precession_axis(nsim=tod.local_samples[1], firstsamp=tod.local_samples[0], samplerate=samplerate, degday=1.0)
+    degday = 360.0 / 365.25
+
+    precquat = tt.slew_precession_axis(nsim=tod.local_samples[1], firstsamp=tod.local_samples[0], samplerate=samplerate, degday=degday)
 
     # we set the precession axis now, which will trigger calculation
     # of the boresight pointing.

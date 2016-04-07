@@ -14,7 +14,7 @@ from ..operator import Operator
 from .pixels import DistPixels
 
 from ._helpers import (_accumulate_inverse_covariance,
-    _invert_covariance)
+    _invert_covariance, _cond_covariance)
 
 
 
@@ -84,3 +84,13 @@ def covariance_invert(npp, threshold):
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
     _invert_covariance(npp, threshold)
     return
+
+
+def covariance_rcond(npp):
+    if len(npp.shape) != 3:
+        raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    rcond = np.zeros((npp.shape[0], npp.shape[1], 1), dtype=np.float64)
+    _cond_covariance(npp, rcond)
+    return rcond
+
+    

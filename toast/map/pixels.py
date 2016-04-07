@@ -9,6 +9,8 @@ import unittest
 
 import numpy as np
 
+import healpy as hp
+
 from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
@@ -152,16 +154,25 @@ class DistPixels(object):
         return ret
 
 
-    def read_healpix_fits(self, path):
-        # For performance reasons, we can't use healpy to read this
-        # map, since we want to read in a buffered way all maps and
-        # Bcast.
+    def read_healpix_fits(self, path, buffer=5000000):
+
+        elems = hp.read_map(path, dtype=self._dtype, memmap=True)
+
+        nblock = len(elems)
+        nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+
+        # with memmap enabled, we read the underlying file
+        # in chunks based on the internal FITS blocksize (2880 bytes)
+
+        nsmbuf = buffer 
 
 
-        
         return
 
 
     def write_healpix_fits(self, path):
-        raise RuntimeError('writing to healpix FITS not yet implemented')
+        # healpy will be slow, since it must read the whole file NNZ
+        # times as it grabs each column.  The long term solution is to
+        # use a better format like HDF5.
+
         return

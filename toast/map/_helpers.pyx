@@ -122,3 +122,64 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
     free(iwork)
     return
 
+
+def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] cond):
+    cdef i64_t nsubmap = data.shape[0]
+    cdef i64_t npix = data.shape[1]
+    cdef i64_t nblock = data.shape[2]
+    cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+    cdef i64_t i
+    cdef i64_t j
+    cdef i64_t k
+    cdef i64_t m
+    cdef i64_t off
+
+    if cond.shape[2] != 1:
+        raise RuntimeError("condition number map should have one non-zero per pixel")
+    if cond.shape[1] != npix:
+        raise RuntimeError("condition number map should have the same number of pixels as covariance")
+    if cond.shape[0] != nsubmap:
+        raise RuntimeError("condition number map should have the same number of submaps as covariance")
+
+    cdef double * fdata = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * work = <double*>malloc(3*nnz*sizeof(double))
+    cdef int * iwork = <int*>malloc(nnz*sizeof(int))
+    cdef int fnnz = nnz
+    cdef double norm
+    cdef double rcond
+    cdef int info
+    cdef double inverse
+    cdef char uplo = 'L'
+
+    if nnz == 1:
+        # shortcut
+        for i in range(nsubmap):
+            for j in range(npix):
+                cond[i,j,0] = 1.0
+    else:
+        for i in range(nsubmap):
+            for j in range(npix):
+                # copy to fortran compatible buffer
+                off = 0
+                memset(fdata, 0, nnz*nnz*sizeof(f64_t))
+                for k in range(nnz):
+                    for m in range(k, nnz):
+                        fdata[k*nnz+m] = data[i,j,off]
+                        off += 1
+
+                # factor and check condition number
+                norm = fdata[0]
+                info = 0
+                cython_lapack.dpotrf(&uplo, &fnnz, fdata, &fnnz, &info)
+
+                cond[i,j,0] = 0.0
+                if info == 0:
+                    # cholesky worked, compute condition number
+                    cython_lapack.dpocon(&uplo, &fnnz, fdata, &fnnz, &norm, &rcond, work, iwork, &info)
+                    if info == 0:
+                        cond[i,j,0] = rcond
+    free(fdata)
+    free(work)
+    free(iwork)
+    return
+
