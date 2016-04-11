@@ -34,6 +34,8 @@ class OpPointingHpix(Operator):
         nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
         nest (bool): if True, use NESTED ordering.
         mode (string): either "I" or "IQU"
+        cal (dict): dictionary of calibration values per detector. A None
+            value means a value of 1.0 for all detectors.
         epsilon (dict): dictionary of cross-polar response per detector. A
             None value means epsilon is zero for all detectors.
         hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
@@ -45,10 +47,11 @@ class OpPointingHpix(Operator):
             after building the pointing matrix.
     """
 
-    def __init__(self, nside=64, nest=False, mode='I', epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, purge_pntg=False):
+    def __init__(self, nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, purge_pntg=False):
         self._nside = nside
         self._nest = nest
         self._mode = mode
+        self._cal = cal
         self._epsilon = epsilon
         self._purge = purge_pntg
 
@@ -151,6 +154,10 @@ class OpPointingHpix(Operator):
                 if self._epsilon is not None:
                     eps = self._epsilon[det]
 
+                cal = 1.0
+                if self._cal is not None:
+                    cal = self._cal[det]
+
                 oneplus = 0.5 * (1.0 + eps)
                 oneminus = 0.5 * (1.0 - eps)
 
@@ -165,7 +172,7 @@ class OpPointingHpix(Operator):
                 if self._mode == 'I':
                     
                     weights = np.ones(nsamp, dtype=np.float64)
-                    weights *= oneplus
+                    weights *= (cal * oneplus)
                     tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
 
                 elif self._mode == 'IQU':
@@ -185,11 +192,11 @@ class OpPointingHpix(Operator):
                     sang = np.sin(detang)
                      
                     Ival = np.ones_like(cang)
-                    Ival *= oneplus
+                    Ival *= (cal * oneplus)
                     Qval = cang
-                    Qval *= oneminus
+                    Qval *= (cal * oneminus)
                     Uval = sang
-                    Uval *= oneminus
+                    Uval *= (cal * oneminus)
 
                     weights = np.ravel(np.column_stack((Ival, Qval, Uval)))
 

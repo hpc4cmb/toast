@@ -22,6 +22,7 @@ Contents:
     tod.rst
     intervals.rst
     noise.rst
+    dev.rst
 
 
 Indices and tables
