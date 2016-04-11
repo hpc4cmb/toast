@@ -25,10 +25,17 @@ class OpPointingHpix(Operator):
 
     Given the individual detector pointing, this computes the pointing weights
     assuming that the detector is a linear polarizer followed by a total
-    power measurement.
+    power measurement.  An optional dictionary of calibration factors may
+    be specified.  Additional options include specifying a constant cross-polar
+    response (eps) and a rotating, perfect half-wave plate.  The timestream 
+    model is then (see Jones, et al, 2006):
 
-    Additional options include specifying a constant cross-polar response 
-    and a rotating, perfect half-wave plate.
+    d = cal * [ (1+eps)/2 * I + (1-eps)/2 * [Q * cos(2a) + U * sin(2a)]]
+
+    Or, if a HWP is included in the response with time varying angle "w", then
+    the total response is:
+
+    d = cal * [ (1+eps)/2 * I + (1-eps)/2 * [Q * cos(4(a+w)) + U * sin(4(a+w))]]
 
     Args:
         nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
