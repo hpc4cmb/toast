@@ -6,6 +6,7 @@
 from mpi4py import MPI
 
 import unittest
+import gc
 
 import numpy as np
 
@@ -187,7 +188,7 @@ class TOD(object):
         self.flags[detector][flavor][start:start+n] = flags
         return
 
-
+    #@profile
     def clear(self, detector=None, flavor=None):
         if flavor is None:
             flavor = self.DEFAULT_FLAVOR
@@ -201,6 +202,7 @@ class TOD(object):
             if flavor in self.data[detector].keys():
                 del self.data[detector][flavor]
                 del self.flags[detector][flavor]
+        gc.collect()
         return
 
 
@@ -234,7 +236,7 @@ class TOD(object):
         self.pflags[detector][start:(start+n)] = flags
         return
 
-
+    #@profile
     def clear_pntg(self, detector=None):
         if detector is None:
             raise ValueError('you must specify the detector')
@@ -243,6 +245,7 @@ class TOD(object):
         if detector in self.pntg.keys():
             del self.pntg[detector]
             del self.pflags[detector]
+        gc.collect()
         return
 
 
@@ -460,7 +463,7 @@ class TOD(object):
         self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = weights
         return
 
-
+    #@profile
     def clear_pmat(self, name=None, detector=None):
         if name is None:
             name = self.DEFAULT_FLAVOR
@@ -470,6 +473,7 @@ class TOD(object):
             raise ValueError('detector {} not found'.format(detector))
         if name in self.pmat.keys():
             del self.pmat[name][detector]
+        gc.collect()
         return
 
 

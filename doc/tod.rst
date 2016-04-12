@@ -4,14 +4,7 @@ Time Ordered Data
 =================================
 
 
-.. autoclass:: toast.tod.Streams
+.. autoclass:: toast.tod
     :members:
-
-.. autoclass:: toast.tod.StreamsWhiteNoise
-    :members:
-
-.. autoclass:: toast.tod.Pointing
-    :members:
-
 
 

@@ -10,6 +10,8 @@ import os
 from toast.tod.tod import *
 from toast.tod.memory import *
 from toast.tod.sim_tod import *
+from toast.tod.sim_detdata import *
+from toast.tod.pointing import *
 
 from toast.mpirunner import MPITestCase
 
@@ -47,13 +49,14 @@ class OpCopyTest(MPITestCase):
             }
         self.flavs = ['proc1', 'proc2']
         self.flavscheck = [TOD.DEFAULT_FLAVOR] + self.flavs
-        self.totsamp = 100
+        self.totsamp = 10000
         self.rms = 10.0
+        self.nside = 64
 
         # every process group creates some number of observations
-        nobs = self.toastcomm.group + 1
+        self.nobs = self.toastcomm.group + 1
 
-        for i in range(nobs):
+        for i in range(self.nobs):
             # create the TOD for this observation
 
             tod = TODHpixSpiral(
@@ -76,8 +79,15 @@ class OpCopyTest(MPITestCase):
         start = MPI.Wtime()
 
         op = OpCopy(timedist=True)
-
         op.exec(self.data)
+
+        # add simple sky gradient signal
+        grad = OpSimGradient(nside=self.nside, nest=True)
+        grad.exec(self.data)
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(nside=self.nside, nest=True)
+        pointing.exec(self.data)
 
         handle = None
         if self.comm.rank == 0:
@@ -85,6 +95,12 @@ class OpCopyTest(MPITestCase):
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
+
+        for i in range(self.nobs):
+            tod = self.data.obs[i]['tod']
+            for d in tod.detectors:
+                tod.clear_pntg(detector=d)
+                tod.clear(detector=d)
 
         stop = MPI.Wtime()
         elapsed = stop - start

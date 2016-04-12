@@ -17,7 +17,6 @@ Contents:
     
     install.rst
     programs.rst
-    datamodel.rst
     dist.rst
     tod.rst
     intervals.rst
