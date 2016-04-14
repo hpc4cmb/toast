@@ -32,18 +32,41 @@ def get_version():
 current_version = get_version()
 
 
+# the core library of C functions
+
+ctoast_dir = os.path.join(os.getcwd(), 'toast', 'ctoast')
+
+libctoast = ('ctoast', 
+    {
+    'sources': [
+        'toast/ctoast/pytoast_mem.c',
+        ],
+    'include_dirs': [ctoast_dir],
+    }
+)
+
+
 # extensions to build
 
 ext_map_helper = Extension (
     'toast.map._helpers',
-    include_dirs = [np.get_include()],
+    include_dirs = [np.get_include(), ctoast_dir], 
     sources = [
         'toast/map/_helpers.pyx'
     ]
 )
 
+ext_cache = Extension (
+    'toast.tod._cache',
+    include_dirs = [np.get_include(), ctoast_dir],
+    sources = [
+        'toast/tod/_cache.pyx'
+    ]
+)
+
 extensions = cythonize([
     ext_map_helper,
+    ext_cache
 ])
 
 
@@ -83,22 +106,22 @@ setup (
     author = 'Theodore Kisner',
     author_email = 'mail@theodorekisner.com',
     url = 'https://github.com/tskisner/pytoast',
+    libraries = [libctoast],
     ext_modules = extensions,
-    packages = [ 'toast', 'toast.tod', 'toast.map' ],
+    packages = ['toast', 'toast.tod', 'toast.map'],
     scripts = scripts,
     license = 'BSD',
     requires = ['Python (>3.4.0)', ],
     cmdclass={'test': MPITestCommand}
 )
 
-# extra cleanup of cython generated sources
+
+# extra cleanup of build products
 
 if "clean" in sys.argv:
-    print("Deleting cython files...")
-    # Just in case the build directory was created by accident,
     # note that shell=True should be OK here because the command is constant.
     subprocess.Popen("rm -rf build", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf toast/map/*.c", shell=True, executable="/bin/bash")
+    subprocess.Popen("rm -rf dist", shell=True, executable="/bin/bash")
+    subprocess.Popen("rm -rf toast/tod/*.so", shell=True, executable="/bin/bash")
     subprocess.Popen("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf toast/map/*.pyc", shell=True, executable="/bin/bash")
 

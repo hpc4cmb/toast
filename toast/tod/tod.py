@@ -6,7 +6,6 @@
 from mpi4py import MPI
 
 import unittest
-import gc
 
 import numpy as np
 

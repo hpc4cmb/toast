@@ -1,0 +1,7 @@
+
+This sources in this directory are pure C files, and are compiled into a
+library using setuptools in the top-level setup.py.
+
+There is also a stand-alone Makefile and test code, for low-level
+exploration of compile options.  Actual "unit tests" are implemented
+through tests on the python wrappers.
