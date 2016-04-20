@@ -6,6 +6,7 @@ import numpy as np
 
 from ._cache import _alloc, _free
 
+
 class Cache(object):
     """
     Timestream data cache with explicit memory management.
@@ -23,6 +24,14 @@ class Cache(object):
         for n, r in self._refs.items():
             _free(r)
         self._refs.clear()
+
+
+    def clear(self):
+        # free all buffers
+        for n, r in self._refs.items():
+            _free(r)
+        self._refs.clear()
+        return
 
 
     def create(self, name, type, shape):
@@ -44,6 +53,11 @@ class Cache(object):
         _free(self._refs[name])
         del self._refs[name]
         return
+
+
+    def exists(self, name):
+        result = (name in self._refs.keys())
+        return result
 
 
     def reference(self, name):

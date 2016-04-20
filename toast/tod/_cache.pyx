@@ -7,7 +7,7 @@ from libc.stdlib cimport malloc, free
 np.import_array()
 
 ctypedef np.float64_t f64_t
-ctypedef np.float64_t f32_t
+ctypedef np.float32_t f32_t
 ctypedef np.int64_t i64_t
 ctypedef np.uint64_t u64_t
 ctypedef np.int32_t i32_t
