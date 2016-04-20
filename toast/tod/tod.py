@@ -59,7 +59,7 @@ class TOD(object):
         self._pref_detdata = 'toast_tod_detdata_'
         self._pref_detflags = 'toast_tod_detflags_'
         self._pref_detpntg = 'toast_tod_detpntg_'
-        self._pref_detpflags = 'toast_tod_detpflags_'
+        self._common = 'toast_tod_common_flags'
         self._stamps = 'toast_tod_stamps'
         
         self.cache = Cache()
@@ -133,9 +133,12 @@ class TOD(object):
             raise ValueError('detector {} data not yet written'.format(detector))
         if not self.cache.exists(cacheflags):
             raise ValueError('detector {} flags not yet written'.format(detector))
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
         dataref = self.cache.reference(cachedata)[start:start+n]
         flagsref = self.cache.reference(cacheflags)[start:start+n]
-        return dataref, flagsref
+        comref = self.cache.reference(self._common)[start:start+n]
+        return dataref, flagsref, comref
 
 
     def _get_flags(self, detector, start, n):
@@ -144,8 +147,11 @@ class TOD(object):
         cacheflags = "{}{}".format(self._pref_detflags, detector)
         if not self.cache.exists(cacheflags):
             raise ValueError('detector {} flags not yet written'.format(detector))
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
         flagsref = self.cache.reference(cachename)[start:start+n]
-        return flagsref
+        comref = self.cache.reference(self._common)[start:start+n]
+        return flagsref, comref
 
 
     def _put(self, detector, start, data, flags):
@@ -187,58 +193,36 @@ class TOD(object):
         if detector not in self.local_dets:
             raise ValueError('detector {} not assigned to local process'.format(detector))
         cachepntg = "{}{}".format(self._pref_detpntg, detector)
-        cachepflags = "{}{}".format(self._pref_detpflags, detector)
         if not self.cache.exists(cachepntg):
             raise ValueError('detector {} pointing data not yet written'.format(detector))
-        if not self.cache.exists(cachepflags):
-            raise ValueError('detector {} pointing flags not yet written'.format(detector))
-
-        pntgref = self.cache.reference(cachepntg)[4*start:4*(start+n)]
-        pflagsref = self.cache.reference(cachepflags)[start:start+n]
-        
-        return pntgref, pflagsref
+        pntgref = self.cache.reference(cachepntg)[start:start+n,:]
+        return pntgref
 
 
-    def _get_pntg_flags(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachepflags = "{}{}".format(self._pref_detpflags, detector)
-        if not self.cache.exists(cachepflags):
-            raise ValueError('detector {} pointing flags not yet written'.format(detector))
-        pflagsref = self.cache.reference(cachepflags)[start:start+n]
-        return pflagsref
-
-
-    def _put_pntg(self, detector, start, data, flags):
+    def _put_pntg(self, detector, start, data):
         if detector not in self.local_dets:
             raise ValueError('detector {} not assigned to local process'.format(detector))
         cachepntg = "{}{}".format(self._pref_detpntg, detector)
-        cachepflags = "{}{}".format(self._pref_detpflags, detector)
         if not self.cache.exists(cachepntg):
-            self.cache.create(cachepntg, np.float64, (4*self.local_samples[1],))
-        if not self.cache.exists(cachepflags):
-            self.cache.create(cachepflags, np.uint8, (self.local_samples[1],))
-
-        n = flags.shape[0]
-        pntgref = self.cache.reference(cachepntg)[4*start:4*(start+n)]
-        pflagsref = self.cache.reference(cachepflags)[start:start+n]
-
+            self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
+        pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
         pntgref[:] = data
-        pflagsref[:] = flags
         return
 
 
-    def _put_pntg_flags(self, detector, start, flags):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachepflags = "{}{}".format(self._pref_detpflags, detector)
-        if not self.cache.exists(cachepflags):
-            self.cache.create(cachepflags, np.uint8, (self.local_samples[1],))
+    def _get_common_flags(self, start, n):
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
+        comref = self.cache.reference(self._common)[start:start+n]
+        return comref
 
+
+    def _put_common_flags(self, start, flags):
+        if not self.cache.exists(self._common):
+            self.cache.create(self._common, np.uint8, (self.local_samples[1],))
         n = flags.shape[0]
-        pflagsref = self.cache.reference(cachepflags)[start:start+n]
-
-        pflagsref[:] = flags
+        comref = self.cache.reference(self._common)[start:start+n]
+        comref[:] = flags
         return
 
 
@@ -304,10 +288,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if (data is None) or (flags is None):
-            raise ValueError('both data and flags must be specified')
-        if data.shape != flags.shape:
-            raise ValueError('data and flags arrays must be the same length')
+        if flags is None:
+            raise ValueError('flags must be specified')
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot write flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
@@ -347,110 +329,40 @@ class TOD(object):
         return self._get_pntg(detector, local_start, n)
 
 
-    def read_pntg_flags(self, detector=None, local_start=0, n=0):
+    def write_pntg(self, detector=None, local_start=0, data=None):
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if data is None:
+            raise ValueError('data must be specified')
+        if len(data.shape) != 2:
+            raise ValueError('data should be a 2D array')
+        if data.shape[1] != 4:
+            raise ValueError('data should have second dimension of size 4')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write pntg- process has no assigned local samples')
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range is invalid')
+        self._put_pntg(detector, local_start, data)
+        return
+
+
+    def read_common_flags(self, local_start=0, n=0):
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read pntg flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_pntg_flags(detector, local_start, n)
+        return self._get_common_flags(local_start, n)
 
 
-    def write_pntg(self, detector=None, local_start=0, data=None, flags=None):
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if (data is None) or (flags is None):
-            raise ValueError('both data and flags must be specified')
-        if data.shape[0] != 4 * flags.shape[0]:
-            raise ValueError('data and flags arrays must represent the same number of samples')
-        if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write pntg- process has no assigned local samples')
-        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
-        self._put_pntg(detector, local_start, data, flags)
-        return
-
-
-    def write_pntg_flags(self, detector=None, local_start=0, flags=None):
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if (data is None) or (flags is None):
-            raise ValueError('both data and flags must be specified')
-        if data.shape[0] != 4 * flags.shape[0]:
-            raise ValueError('data and flags arrays must represent the same number of samples')
+    def write_common_flags(self, local_start=0, flags=None):
+        if flags is None:
+            raise ValueError('flags must be specified')
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot write pntg flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
-        self._put_pntg_flags(detector, local_start, flags)
+        self._put_common_flags(local_start, flags)
         return
-
-
-    # def read_pmat(self, name=None, detector=None, local_start=0, n=0):
-    #     if name is None:
-    #         name = self.DEFAULT_FLAVOR
-    #     if detector is None:
-    #         raise ValueError('you must specify the detector')
-    #     if detector not in self.local_dets:
-    #         raise ValueError('detector {} not found'.format(detector))
-    #     if name not in self.pmat.keys():
-    #         raise ValueError('pointing matrix {} not found'.format(name))
-    #     if detector not in self.pmat[name].keys():
-    #         raise RuntimeError('detector {} not found in pointing matrix {}'.format(detector, name))
-    #     if self.local_samples[1] <= 0:
-    #         raise RuntimeError('cannot read pmat- process has no assigned local samples')
-    #     if (local_start < 0) or (local_start + n > self.local_samples[1]):
-    #         raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-    #     if 'pixels' not in self.pmat[name][detector]:
-    #         raise RuntimeError('detector {} in pointing matrix {} not yet written'.format(detector, name))
-    #     nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
-    #     return (self.pmat[name][detector]['pixels'][local_start:local_start+n], self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+n)])
-
-
-    # def write_pmat(self, name=None, detector=None, local_start=0, pixels=None, weights=None):
-    #     if name is None:
-    #         name = self.DEFAULT_FLAVOR
-    #     if detector is None:
-    #         raise ValueError('you must specify the detector')
-    #     if detector not in self.local_dets:
-    #         raise ValueError('detector {} not found'.format(detector))
-    #     if (pixels is None) or (weights is None):
-    #         raise ValueError('both pixels and weights must be specified')
-    #     npix = pixels.shape[0]
-    #     nw = weights.shape[0]
-    #     nnz = int(nw / npix)
-    #     if nnz * npix != nw:
-    #         raise ValueError('number of pointing weights {} is not a multiple of pixels length {}'.format(nw, npix))
-    #     if self.local_samples[1] <= 0:
-    #         raise RuntimeError('cannot write pmat- process has no assigned local samples')
-    #     if (local_start < 0) or (local_start + npix > self.local_samples[1]):
-    #         raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+npix-1))
-    #     if name not in self.pmat.keys():
-    #         self.pmat[name] = {}
-    #     if detector not in self.pmat[name].keys():
-    #         self.pmat[name][detector] = {}
-    #         self.pmat[name][detector]['pixels'] = np.zeros(self.local_samples[1], dtype=np.int64)
-    #         self.pmat[name][detector]['weights'] = np.zeros(nnz*self.local_samples[1], dtype=np.float64)
-    #     self.pmat[name][detector]['pixels'][local_start:local_start+npix] = pixels
-    #     self.pmat[name][detector]['weights'][nnz*local_start:nnz*(local_start+npix)] = weights
-    #     return
-
-
-
-    # def pmat_nnz(self, name=None, detector=None):
-    #     if name is None:
-    #         name = self.DEFAULT_FLAVOR
-    #     if detector is None:
-    #         raise ValueError('you must specify the detector')
-    #     if name not in self.pmat.keys():
-    #         raise ValueError('pointing matrix {} not found'.format(name))
-    #     nnz = int(len(self.pmat[name][detector]['weights']) / len(self.pmat[name][detector]['pixels']))
-    #     return nnz
 

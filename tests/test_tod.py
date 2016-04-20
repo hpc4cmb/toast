@@ -29,14 +29,15 @@ class TODTest(MPITestCase):
         self.totsamp = self.mynsamp * self.comm.size
         self.tod = TOD(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
         self.rms = 10.0
-        self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4)))
+        self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4))).reshape(-1,4)
         self.pflagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
 
         self.datavec = np.random.normal(loc=0.0, scale=self.rms, size=self.mynsamp)
         self.flagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
         for d in self.dets:
-            self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec, flags=self.pflagvec)
+            self.tod.write_common_flags(local_start=0, flags=self.pflagvec)
             self.tod.write(detector=d, local_start=0, data=self.datavec, flags=self.flagvec)
+            self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec)
 
 
     def test_props(self):
@@ -58,8 +59,9 @@ class TODTest(MPITestCase):
         start = MPI.Wtime()
 
         for d in self.dets:
-            data, flags = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
+            data, flags, common = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
             np.testing.assert_equal(flags, self.flagvec)
+            np.testing.assert_equal(common, self.pflagvec)
             np.testing.assert_almost_equal(data, self.datavec)
 
         stop = MPI.Wtime()
@@ -71,8 +73,7 @@ class TODTest(MPITestCase):
         start = MPI.Wtime()
 
         for d in self.dets:
-            pntg, pflags = self.tod.read_pntg(detector=d, local_start=0, n=self.mynsamp)
-            np.testing.assert_equal(pflags, self.pflagvec)
+            pntg = self.tod.read_pntg(detector=d, local_start=0, n=self.mynsamp)
             np.testing.assert_almost_equal(pntg, self.pntgvec)
 
         stop = MPI.Wtime()

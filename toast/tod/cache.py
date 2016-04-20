@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import numpy as np
 
 from ._cache import _alloc, _free
@@ -26,11 +27,22 @@ class Cache(object):
         self._refs.clear()
 
 
-    def clear(self):
-        # free all buffers
-        for n, r in self._refs.items():
-            _free(r)
-        self._refs.clear()
+    def clear(self, pattern=None):
+        if pattern is None:
+            # free all buffers
+            for n, r in self._refs.items():
+                _free(r)
+            self._refs.clear()
+        else:
+            pat = re.compile(pattern)
+            names = []
+            for n, r in self._refs.items():
+                mat = pat.match(n)
+                if mat is not None:
+                    names.append(n)
+            for n in names:
+                _free(self._refs[n])
+                del self._refs[n]
         return
 
 
@@ -39,7 +51,7 @@ class Cache(object):
         Create a named data buffer of the give type and shape.
         """
         dims = np.asarray(shape, dtype=np.uint64)
-        self._refs[name] = _alloc(dims, type)
+        self._refs[name] = _alloc(dims, type).reshape(shape)
         return
 
 
