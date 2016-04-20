@@ -140,8 +140,13 @@ class DistPixels(object):
 
 
     def global_to_local(self, gl):
-        sm = np.floor_divide(gl, self._submap)
-        pix = np.mod(gl, self._submap)
+        safe_gl = np.zeros_like(gl)
+        good = (gl >= 0)
+        bad = (gl < 0)
+        safe_gl[good] = gl[good]
+        sm = np.floor_divide(safe_gl, self._submap)
+        pix = np.mod(safe_gl, self._submap)
+        pix[bad] = -1
         f = (self._glob2loc[x] for x in sm)
         lsm = np.fromiter(f, np.int64, count=len(sm))
         return (lsm, pix)

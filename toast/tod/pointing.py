@@ -38,6 +38,11 @@ class OpPointingHpix(Operator):
     d = cal * [ (1+eps)/2 * I + (1-eps)/2 * [Q * cos(4(a+w)) + U * sin(4(a+w))]]
 
     Args:
+        pixels (str): write pixels to the cache with name <pixels>_<detector>.
+            If the named cache objects do not exist, then they are created.
+        weights (str): write pixel weights to the cache with name 
+            <weights>_<detector>.  If the named cache objects do not exist, 
+            then they are created. 
         nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
         nest (bool): if True, use NESTED ordering.
         mode (string): either "I" or "IQU"
@@ -50,11 +55,11 @@ class OpPointingHpix(Operator):
         hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
             is the step in degrees.
         hwpsteptime: The time in minutes between HWP steps.
-        purge_pntg (bool): If True, clear the detector quaternion pointing
-            after building the pointing matrix.
     """
 
-    def __init__(self, nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, purge_pntg=False):
+    def __init__(self, pixels='pixels', weights='pweights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None):
+        self._pixels = pixels
+        self._pweights = pweights
         self._nside = nside
         self._nest = nest
         self._mode = mode
@@ -168,19 +173,22 @@ class OpPointingHpix(Operator):
                 oneplus = 0.5 * (1.0 + eps)
                 oneminus = 0.5 * (1.0 - eps)
 
-                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=nsamp)
-                pdata.reshape(-1,4)[pflags != 0,:] = nullquat
+                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=nsamp))
+                flags, common = tod.read_flags(detector=det, local_start=0, n=nsamp)
+                totflags = np.copy(flags)
+                totflags |= common
 
-                dir = qa.rotate(pdata.reshape(-1, 4), np.tile(zaxis, nsamp).reshape(-1,3))
+                pdata[totflags != 0,:] = nullquat
+
+                dir = qa.rotate(pdata, np.tile(zaxis, nsamp).reshape(-1,3))
 
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
-                pixels[pflags != 0] = -1
+                pixels[totflags != 0] = -1
 
                 if self._mode == 'I':
                     
                     weights = np.ones(nsamp, dtype=np.float64)
                     weights *= (cal * oneplus)
-                    tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
 
                 elif self._mode == 'IQU':
 
@@ -205,14 +213,21 @@ class OpPointingHpix(Operator):
                     Uval = sang
                     Uval *= (cal * oneminus)
 
-                    weights = np.ravel(np.column_stack((Ival, Qval, Uval)))
+                    weights = np.ravel(np.column_stack((Ival, Qval, Uval))).reshape(-1,3)
 
-                    tod.write_pmat(detector=det, local_start=0, pixels=pixels, weights=weights)
                 else:
                     raise RuntimeError("invalid mode for healpix pointing")
 
-                if self._purge:
-                    tod.clear_pntg(detector=det)
+                pixelsname = "{}_{}".format(self._pixels, det)
+                weightsname = "{}_{}".format(self._weights, det)
+                if not tod.cache.exists(pixelsname):
+                    tod.cache.create(pixelsname, np.float64, (tod.local_samples[1],))
+                if not tod.cache.exists(pixelsname):
+                    tod.cache.create(pixelsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+                pixelsref = tod.cache.reference(pixelsname)
+                weightsref = tod.cache.reference(weightsname)
+                pixelsref[:] = pixels
+                weightsref[:,:] = weights
 
         return
 

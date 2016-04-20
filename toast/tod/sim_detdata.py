@@ -27,22 +27,21 @@ from ..operator import Operator
 
 class OpSimNoise(Operator):
     """
-    Operator which generates noise timestreams and accumulates that data
-    to a particular timestream flavor.
+    Operator which generates noise timestreams.
 
     This passes through each observation and every process generates data
     for its assigned samples.
 
     Args:
-        flavor (str): the TOD flavor to accumulate the noise data to.
+        out (str): accumulate data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
         stream (int): random stream offset.  This should be the same for
             all processes within a group, and should be offset between
             groups in such a way to ensure different streams between every
             detector, in every chunk, of every TOD, across every observation.
-        accum (bool): should output be accumulated or overwritten.
     """
 
-    def __init__(self, flavor=None, stream=None, accum=False):
+    def __init__(self, out='noise', stream=None, accum=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -50,13 +49,8 @@ class OpSimNoise(Operator):
         if stream is None:
             raise RuntimeError("you must specify the random stream index")
 
-        if flavor is None:
-            self._flavor = TOD.DEFAULT_FLAVOR
-        self._flavor = flavor
-
+        self._out = out
         self._oversample = 2
-        self._accum = accum
-
         self._rngstream = stream
 
 
@@ -181,13 +175,13 @@ class OpSimNoise(Operator):
                     tdata = sft.irfft(fdata)
                     #np.savetxt("out_simnoise_tdata.txt", tdata, delimiter='\n')
 
-                    if self._accum:
-                        tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=tod_offset, n=chksamp)
-                        tempdata += tdata[0:chksamp]
-                    else:
-                        tempdata = tdata[0:chksamp]
+                    # write to cache
 
-                    tod.write(detector=det, flavor=self._flavor, local_start=tod_offset, data=tempdata, flags=tempflags)
+                    cachename = "{}_{}".format(self._out, det)
+                    if not tod.cache.exists(cachename):
+                        tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                    ref = tod.cache.reference(cachename)[tod_offset:tod_offset+chksamp]
+                    ref[:] += tdata
 
                     idet += 1
 
@@ -208,14 +202,17 @@ class OpSimGradient(Operator):
     This passes through each observation and ...
 
     Args:
+        out (str): accumulate data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
+
         
     """
 
-    def __init__(self, nside=512, flavor=None, min=-100.0, max=100.0, nest=False):
+    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
-        self._flavor = flavor
+        self._out = out
         self._min = min
         self._max = max
         self._nest = nest
@@ -224,6 +221,8 @@ class OpSimGradient(Operator):
         comm = data.comm
 
         zaxis = np.array([0,0,1], dtype=np.float64)
+        nullquat = np.array([0,0,0,1], dtype=np.float64)
+
         range = self._max - self._min
 
         for obs in data.obs:
@@ -233,17 +232,27 @@ class OpSimGradient(Operator):
             intrvl = obs['intervals']
 
             for det in tod.local_dets:
-                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
-                dir = qa.rotate(pdata.reshape(-1, 4), zaxis)
+                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1]))
+                flags, common = tod.read_flags(detector=det, local_start=0, n=tod.local_samples[1])
+                totflags = np.copy(flags)
+                totflags |= common
+
+                pdata[totflags != 0,:] = nullquat
+
+                dir = qa.rotate(pdata, zaxis)
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
                 x, y, z = hp.pix2vec(self._nside, pixels, nest=self._nest)
                 z += 1.0
                 z *= 0.5
                 z *= range
                 z += self._min
-                data, flags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples[1])
-                data += z
-                tod.write(detector=det, flavor=self._flavor, local_start=0, data=data, flags=flags)
+                z[totflags != 0] = 0.0
+
+                cachename = "{}_{}".format(self._out, det)
+                if not tod.cache.exists(cachename):
+                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                ref = tod.cache.reference(cachename)
+                ref[:] += z
 
         return
 
@@ -269,15 +278,21 @@ class OpSimScan(Operator):
     and local pointing should already exist.
 
     Args:
-        
+        distmap (DistPixels): the distributed map domain data.
+        pixels (str): the name of the cache object (<pixels>_<detector>)
+            containing the pixel indices to use.
+        weights (str): the name of the cache object (<weights>_<detector>)
+            containing the pointing weights to use.
+        out (str): accumulate data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
     """
-    def __init__(self, distmap=None, pname=None, flavor=None, accum=False):
+    def __init__(self, distmap=None, pixels='pixels', weights='weights', out='scan'):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap
-        self._pname = pname
-        self._flavor = flavor
-        self._accum = accum
+        self._pixels = pixels
+        self._weights = weights
+        self._out = out
 
 
     def exec(self, data):
@@ -293,29 +308,27 @@ class OpSimScan(Operator):
         for obs in data.obs:
             tod = obs['tod']
 
-            tempdata = np.zeros(tod.local_samples[1], dtype=np.float64)
-            tempflags = np.zeros(tod.local_samples[1], dtype=np.uint8)
-
             for det in tod.local_dets:
-                nnz = tod.pmat_nnz(name=self._pname, detector=det)
-                if nnz != self._map.nnz:
-                    raise RuntimeError("pointing matrix has different number of nonzeros than signal map")
-                pixels, weights = tod.read_pmat(name=self._pname, detector=det, local_start=0, n=tod.local_samples[1])
+
+                # get the pixels and weights from the cache
+
+                pixelsname = "{}_{}".format(self._pixels, det)
+                weightsname = "{}_{}".format(self._weights, det)
+                pixels = tod.cache.reference(pixelsname)
+                weights = tod.cache.reference(weightsname)
+
+                nnz = weights.shape[1]
 
                 sm, lpix = self._map.global_to_local(pixels)
 
-                # FIXME: can we speed this up?
-                view = weights.reshape(-1, nnz)
-                f = ( np.dot(view[x], self._map.data[sm[x], lpix[x]]) for x in range(tod.local_samples[1]) )
+                f = ( np.dot(weights[x], self._map.data[sm[x], lpix[x]]) if (lpix[x] >= 0) else 0 for x in range(tod.local_samples[1]) )
                 maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
 
-                if self._accum:
-                    tempdata, tempflags = tod.read(detector=det, flavor=self._flavor, local_start=0, n=tod.local_samples[1])
-                    tempdata += maptod
-                else:
-                    tempdata = maptod
-
-                tod.write(detector=det, flavor=self._flavor, local_start=0, data=tempdata, flags=tempflags)
+                cachename = "{}_{}".format(self._out, det)
+                if not tod.cache.exists(cachename):
+                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                ref = tod.cache.reference(cachename)
+                ref[:] += maptod
 
         return
 

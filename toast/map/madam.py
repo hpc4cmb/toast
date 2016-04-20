@@ -56,20 +56,27 @@ class OpMadam(Operator):
 
     Args:
         params (dictionary): parameters to pass to madam.
+        detweights (dictionary): individual noise weights to use for each
+            detector.
+        pixels (str): the name of the cache object (<pixels>_<detector>)
+            containing the pixel indices to use.
+        weights (str): the name of the cache object (<weights>_<detector>)
+            containing the pointing weights to use.
+        name (str): the name of the cache object (<name>_<detector>) to
+            use for the detector timestream.  If None, use the TOD.
+        purge (bool): if True, clear any cached data that is copied intersection
+            the Madam buffers.
     """
 
-    def __init__(self, flavor=None, pmat=None, detweights=None, purge=True, params={}):
+    def __init__(self, params={}, detweights=None, pixels='pixels', weights='weights', name=None, purge=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
         self._timedist = True
-        self._flavor = flavor
-        if self._flavor is None:
-            self._flavor = TOD.DEFAULT_FLAVOR
-        self._pmat = pmat
-        if self._pmat is None:
-            self._pmat = TOD.DEFAULT_FLAVOR
+        self._name = name
+        self._pixels = pixels
+        self._weights = weights
         self._detw = detweights
         self._purge = purge
         self._params = params

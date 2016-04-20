@@ -216,13 +216,13 @@ class TODHpixSpiral(TOD):
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, nside=512, sizes=None):
         if detectors is None:
-            self._fp = {TOD.DEFAULT_FLAVOR : np.array([0.0, 0.0, 1.0, 0.0])}
+            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
         else:
             self._fp = detectors
 
         self._detlist = sorted(list(self._fp.keys()))
         
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, flavors=None, samples=samples, sizes=sizes)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, samples=samples, sizes=sizes)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -230,13 +230,22 @@ class TODHpixSpiral(TOD):
         self._npix = 12 * self._nside * self._nside
 
 
-    def _get(self, detector, flavor, start, n):
+    def _get(self, detector, start, n):
         # This class just returns data streams of zeros
-        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8) )
+        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8) )
 
 
-    def _put(self, detector, flavor, start, data, flags):
+    def _get_flags(self, detector, start, n):
+        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+
+
+    def _put(self, detector, start, data, flags):
         raise RuntimeError('cannot write data to simulated data streams')
+        return
+
+
+    def _put_flags(self, detector, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
         return
 
 
@@ -303,15 +312,24 @@ class TODHpixSpiral(TOD):
         #     print(check)
         #     raise RuntimeError('FAIL on TODFake')
 
-        flags = np.zeros(n, dtype=np.uint8)
-        data = qa.mult(boresight, detquat).flatten()
+        data = qa.mult(boresight, detquat)
 
-        return (data, flags)
+        return data
 
 
-    def _put_pntg(self, detector, start, data, flags):
+    def _put_pntg(self, detector, start, data):
         raise RuntimeError('cannot write data to simulated pointing')
         return
+
+
+    def _get_common_flags(self, start, n):
+        return np.zeros(n, dtype=np.uint8)
+
+
+    def _put_common_flags(self, start, flags):
+        raise RuntimeError('cannot write common flags to simulated data')
+        return
+
 
 
 class TODSatellite(TOD):
@@ -342,14 +360,14 @@ class TODSatellite(TOD):
     def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, sizes=None):
 
         if detectors is None:
-            self._fp = {TOD.DEFAULT_FLAVOR : np.array([0.0, 0.0, 1.0, 0.0])}
+            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
         else:
             self._fp = detectors
 
         self._detlist = sorted(list(self._fp.keys()))
         
         # call base class constructor to distribute data
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, flavors=None, samples=samples, sizes=sizes)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, samples=samples, sizes=sizes)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -385,13 +403,22 @@ class TODSatellite(TOD):
         self._boresight = satellite_scanning(nsim=self.local_samples[1], firstsamp=self.local_samples[0], qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod, spinangle=self._spinangle, precperiod=self._precperiod, precangle=self._precangle)
 
 
-    def _get(self, detector, flavor, start, n):
+    def _get(self, detector, start, n):
         # This class just returns data streams of zeros
-        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8) )
+        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8) )
 
 
-    def _put(self, detector, flavor, start, data, flags):
+    def _put(self, detector, start, data, flags):
         raise RuntimeError('cannot write data to simulated data streams')
+        return
+
+
+    def _get_flags(self, detector, start, n):
+        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+
+
+    def _put_flags(self, detector, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
         return
 
 
@@ -412,13 +439,19 @@ class TODSatellite(TOD):
         if self._boresight is None:
             raise RuntimeError("you must set the precession axis before reading detector pointing")
         detquat = self._fp[detector]
-        flags = np.zeros(n, dtype=np.uint8)
-        data = qa.mult(self._boresight, detquat).flatten()
-        return (data, flags)
+        data = qa.mult(self._boresight, detquat)
+        return data
 
 
-    def _put_pntg(self, detector, start, data, flags):
+    def _put_pntg(self, detector, start, data):
         raise RuntimeError('cannot write data to simulated pointing')
         return
 
 
+    def _get_common_flags(self, start, n):
+        return np.zeros(n, dtype=np.uint8)
+
+
+    def _put_common_flags(self, start, flags):
+        raise RuntimeError('cannot write common flags to simulated data')
+        return
