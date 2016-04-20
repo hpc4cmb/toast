@@ -24,12 +24,10 @@ class TODTest(MPITestCase):
             
         # Note: self.comm is set by the test infrastructure
         self.dets = ['1a', '1b', '2a', '2b']
-        self.flavs = ['proc1', 'proc2']
-        self.flavscheck = [TOD.DEFAULT_FLAVOR] + self.flavs
         self.mynsamp = 10
         self.myoff = self.mynsamp * self.comm.rank
         self.totsamp = self.mynsamp * self.comm.size
-        self.tod = TOD(mpicomm=self.comm, timedist=True, detectors=self.dets, flavors=self.flavs, samples=self.totsamp)
+        self.tod = TOD(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
         self.rms = 10.0
         self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4)))
         self.pflagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
@@ -38,8 +36,7 @@ class TODTest(MPITestCase):
         self.flagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
         for d in self.dets:
             self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec, flags=self.pflagvec)
-            for f in self.flavs:
-                self.tod.write(detector=d, flavor=f, local_start=0, data=self.datavec, flags=self.flagvec)
+            self.tod.write(detector=d, local_start=0, data=self.datavec, flags=self.flagvec)
 
 
     def test_props(self):
@@ -47,7 +44,6 @@ class TODTest(MPITestCase):
         
         self.assertEqual(sorted(self.tod.detectors), sorted(self.dets))
         self.assertEqual(sorted(self.tod.local_dets), sorted(self.dets))
-        self.assertEqual(self.tod.flavors, self.flavscheck)
         self.assertEqual(self.tod.total_samples, self.totsamp)
         self.assertEqual(self.tod.local_samples[0], self.myoff)
         self.assertEqual(self.tod.local_samples[1], self.mynsamp)
@@ -62,10 +58,9 @@ class TODTest(MPITestCase):
         start = MPI.Wtime()
 
         for d in self.dets:
-            for f in self.flavs:
-                data, flags = self.tod.read(detector=d, flavor=f, local_start=0, n=self.mynsamp)
-                np.testing.assert_equal(flags, self.flagvec)
-                np.testing.assert_almost_equal(data, self.datavec)
+            data, flags = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
+            np.testing.assert_equal(flags, self.flagvec)
+            np.testing.assert_almost_equal(data, self.datavec)
 
         stop = MPI.Wtime()
         elapsed = stop - start

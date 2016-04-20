@@ -168,7 +168,7 @@ class TOD(object):
         return
 
 
-    def _put_flags(self, detector, flavor, start, flags):
+    def _put_flags(self, detector, start, flags):
         if detector not in self.local_dets:
             raise ValueError('detector {} not assigned to local process'.format(detector))
         cacheflags = "{}{}".format(self._pref_detflags, detector)
@@ -258,47 +258,35 @@ class TOD(object):
         return
 
 
-    def read(self, detector=None, flavor=None, local_start=0, n=0):
-        if flavor is None:
-            flavor = self.DEFAULT_FLAVOR
+    def read(self, detector=None, local_start=0, n=0):
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if flavor not in self.flavors:
-            raise ValueError('flavor {} not found'.format(flavor))
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get(detector, flavor, local_start, n)
+        return self._get(detector, local_start, n)
 
 
-    def read_flags(self, detector=None, flavor=None, local_start=0, n=0):
-        if flavor is None:
-            flavor = self.DEFAULT_FLAVOR
+    def read_flags(self, detector=None, local_start=0, n=0):
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if flavor not in self.flavors:
-            raise ValueError('flavor {} not found'.format(flavor))
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_flags(detector, flavor, local_start, n)
+        return self._get_flags(detector, local_start, n)
 
 
-    def write(self, detector=None, flavor=None, local_start=0, data=None, flags=None):
-        if flavor is None:
-            flavor = self.DEFAULT_FLAVOR
+    def write(self, detector=None, local_start=0, data=None, flags=None):
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if flavor not in self.flavors:
-            raise ValueError('flavor {} not found'.format(flavor))
         if (data is None) or (flags is None):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
@@ -307,19 +295,15 @@ class TOD(object):
             raise RuntimeError('cannot write- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
-        self._put(detector, flavor, local_start, data, flags)
+        self._put(detector, local_start, data, flags)
         return
 
 
-    def write_flags(self, detector=None, flavor=None, local_start=0, flags=None):
-        if flavor is None:
-            flavor = self.DEFAULT_FLAVOR
+    def write_flags(self, detector=None, local_start=0, flags=None):
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
-        if flavor not in self.flavors:
-            raise ValueError('flavor {} not found'.format(flavor))
         if (data is None) or (flags is None):
             raise ValueError('both data and flags must be specified')
         if data.shape != flags.shape:
@@ -328,7 +312,7 @@ class TOD(object):
             raise RuntimeError('cannot write flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
-        self._put_flags(detector, flavor, local_start, flags)
+        self._put_flags(detector, local_start, flags)
         return
 
 
