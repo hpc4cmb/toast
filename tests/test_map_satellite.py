@@ -26,6 +26,7 @@ from toast.mpirunner import MPITestCase
 
 class MapSatelliteTest(MPITestCase):
 
+
     def setUp(self):
         self.outdir = "tests_output"
         if self.comm.rank == 0:

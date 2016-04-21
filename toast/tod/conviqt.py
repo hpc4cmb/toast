@@ -157,22 +157,31 @@ class OpSimConviqt(Operator):
         
     """
 
-    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, flavor=None, dxx=True):
+    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt'):
         """
         Set up on-the-fly signal convolution. Inputs:
-        lmax : sky maximum ell (and m). Actual resolution in the Healpix FITS file may differ.
-        beamlmax : beam maximum ell. Actual resolution in the Healpix FITS file may differ.
-        beammmax : beam maximum m. Actual resolution in the Healpix FITS file may differ.
-        detectordata : list of (detector_name, detector_sky_file, detector_beam_file, epsilon, psipol[radian]) tuples
+        lmax : sky maximum ell (and m). Actual resolution in the Healpix FITS 
+            file may differ.
+        beamlmax : beam maximum ell. Actual resolution in the Healpix FITS 
+            file may differ.
+        beammmax : beam maximum m. Actual resolution in the Healpix FITS file 
+            may differ.
+        detectordata : list of (detector_name, detector_sky_file, 
+            detector_beam_file, epsilon, psipol[radian]) tuples
         pol(True) : boolean to determine if polarized simulation is needed
-        fwhm(5.0) : width of a symmetric gaussian beam [in arcmin] already present in the skyfile (will be deconvolved away).
+        fwhm(5.0) : width of a symmetric gaussian beam [in arcmin] already 
+            present in the skyfile (will be deconvolved away).
         nbetafac(6000) : conviqt resolution parameter (expert mode)
         mcsamples(0) : reserved input for future Monte Carlo mode
         lmaxout(6000) : Convolution resolution
         order(5) : conviqt order parameter (expert mode)
         calibrate(True) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
-        dxx(True) : The beam frame is either Dxx or Pxx. Pxx includes the rotation to polarization sensitive basis, Dxx does not.
-                    When Dxx=True, detector orientation from attitude quaternions is corrected for the polarization angle.
+        dxx(True) : The beam frame is either Dxx or Pxx. Pxx includes the 
+            rotation to polarization sensitive basis, Dxx does not.  When 
+            Dxx=True, detector orientation from attitude quaternions is 
+            corrected for the polarization angle.
+        out (str): the name of the cache object (<name>_<detector>) to
+            use for output of the detector timestream.
         """
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -192,7 +201,7 @@ class OpSimConviqt(Operator):
         self._calibrate = calibrate
         self._dxx = dxx
 
-        self._flavor = flavor        
+        self._out = out
         
 
     @property
@@ -248,17 +257,18 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
                 
                 # We need the three pointing angles to describe the pointing. read_pntg returns the attitude quaternions.
-                flags = tod.read_flags(detector=det, local_start=0, n=tod.local_samples[1])
-                pdata, pflags = tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1])
+                flags, common = tod.read_flags(detector=det, local_start=0, n=tod.local_samples[1])
+                totflags = np.copy(flags)
+                totflags |= common
+                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1]))
 
-                pdata = pdata.reshape(-1,4).copy()
-                pdata[ pflags != 0 ] = nullquat
+                pdata[totflags != 0] = nullquat
                 
                 vec_dir = qa.rotate( pdata, zaxis ).T.copy()
                 
                 theta, phi = hp.vec2dir(*vec_dir)
-                theta[ pflags != 0 ] = 0
-                phi[ pflags != 0 ] = 0
+                theta[totflags != 0] = 0
+                phi[totflags != 0] = 0
 
                 vec_orient = qa.rotate( pdata, xaxis ).T.copy()
 
@@ -303,7 +313,11 @@ class OpSimConviqt(Operator):
 
                 libconviqt.conviqt_convolver_del(convolver)
 
-                tod.write(detector=det, flavor=self._flavor, local_start=0, data=convolved_data, flags=flags|pflags)
+                cachename = "{}_{}".format(self._out, det)
+                if not tod.cache.exists(cachename):
+                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                ref = tod.cache.reference(cachename)
+                ref[:] = convolved_data
 
                 libconviqt.conviqt_pointing_del(pnt)
                 libconviqt.conviqt_detector_del(detector)

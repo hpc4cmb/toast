@@ -278,18 +278,6 @@ def main():
         print("Construct boresight pointing:  {:.2f} seconds".format(stop-start))
     start = stop
 
-    # cache the data in memory
-    
-    cache = tt.OpCopy()
-    cache.exec(data)
-
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print("Data read and cache took {:.3f} s".format(elapsed))
-    start = stop
-
     # simulate noise
 
     nse = tt.OpSimNoise(stream=0)
@@ -318,14 +306,14 @@ def main():
     # pointing at a later stage, we need to set this to False
     # and run at higher concurrency.
 
-    pointing = tt.OpPointingHpix(nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime, purge_pntg=True)
+    pointing = tt.OpPointingHpix(nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
     pointing.exec(data)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print("Pointing matrix generation took {:.3f} s".format(elapsed))
+        print("Pointing generation took {:.3f} s".format(elapsed))
     start = stop
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
@@ -370,7 +358,7 @@ def main():
         pars[ 'fsample' ] = samplerate
         pars[ 'path_output' ] = args.outdir
 
-        madam = tm.OpMadam(params=pars, detweights=detweights, purge=True)
+        madam = tm.OpMadam(params=pars, detweights=detweights, name='noise', purge=True)
         madam.exec(data)
 
     comm.comm_world.barrier()
