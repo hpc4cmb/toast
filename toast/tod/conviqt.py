@@ -151,38 +151,36 @@ class OpSimConviqt(Operator):
     """
     Operator which uses libconviqt to generate beam-convolved timestreams.
 
-    This passes through each observation and ...
+    This passes through each observation and loops over each detector.  
+    For each detector, it produces the beam-convolved timestream.
 
     Args:
-        
-    """
-
-    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt'):
-        """
-        Set up on-the-fly signal convolution. Inputs:
-        lmax : sky maximum ell (and m). Actual resolution in the Healpix FITS 
+        lmax (int): sky maximum ell (and m). Actual resolution in the Healpix FITS 
             file may differ.
-        beamlmax : beam maximum ell. Actual resolution in the Healpix FITS 
+        beamlmax (int): beam maximum ell. Actual resolution in the Healpix FITS 
             file may differ.
-        beammmax : beam maximum m. Actual resolution in the Healpix FITS file 
+        beammmax (int): beam maximum m. Actual resolution in the Healpix FITS file 
             may differ.
-        detectordata : list of (detector_name, detector_sky_file, 
+        detectordata (list): list of (detector_name, detector_sky_file, 
             detector_beam_file, epsilon, psipol[radian]) tuples
-        pol(True) : boolean to determine if polarized simulation is needed
-        fwhm(5.0) : width of a symmetric gaussian beam [in arcmin] already 
+        pol (bool) : boolean to determine if polarized simulation is needed
+        fwhm (float) : width of a symmetric gaussian beam [in arcmin] already 
             present in the skyfile (will be deconvolved away).
-        nbetafac(6000) : conviqt resolution parameter (expert mode)
-        mcsamples(0) : reserved input for future Monte Carlo mode
-        lmaxout(6000) : Convolution resolution
-        order(5) : conviqt order parameter (expert mode)
-        calibrate(True) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
-        dxx(True) : The beam frame is either Dxx or Pxx. Pxx includes the 
+        nbetafac (int) : conviqt resolution parameter (expert mode)
+        mcsamples (0) : reserved input for future Monte Carlo mode
+        lmaxout (int) : Convolution resolution
+        order (int) : conviqt order parameter (expert mode)
+        calibrate (bool) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
+        dxx (bool) : The beam frame is either Dxx or Pxx. Pxx includes the 
             rotation to polarization sensitive basis, Dxx does not.  When 
             Dxx=True, detector orientation from attitude quaternions is 
             corrected for the polarization angle.
         out (str): the name of the cache object (<name>_<detector>) to
             use for output of the detector timestream.
-        """
+    """
+
+    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt'):
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 

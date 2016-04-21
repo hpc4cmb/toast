@@ -20,7 +20,8 @@ from .sim_noise import AnalyticNoise
 
 from .sim_interval import regular_intervals
 
-from .sim_detdata import (OpSimNoise, OpSimGradient)
+from .sim_detdata import (OpSimNoise, OpSimGradient,
+    OpSimScan)
 
 from .noise import Noise
 

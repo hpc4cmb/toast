@@ -45,6 +45,9 @@ Simulated Detector Data
 .. autoclass:: toast.tod.OpSimScan
     :members:
 
+This operator uses an externally installed libconviqt.
+
 .. autoclass:: toast.tod.OpSimConviqt
     :members:
+
 

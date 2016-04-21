@@ -21,6 +21,7 @@ Contents:
     noise.rst
     pointing.rst
     sim.rst
+    maptools.rst
     nersc.rst
     dev.rst
 
