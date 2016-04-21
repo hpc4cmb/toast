@@ -16,22 +16,25 @@ class Cache(object):
 
     """
 
-    def __init__(self):
+    def __init__(self, pymem=False):
+        self._pymem = pymem
         self._refs = {}
 
 
     def __del__(self):
         # free all buffers at destruction time
-        for n, r in self._refs.items():
-            _free(r)
+        if not self._pymem:
+            for n, r in self._refs.items():
+                _free(r)
         self._refs.clear()
 
 
     def clear(self, pattern=None):
         if pattern is None:
             # free all buffers
-            for n, r in self._refs.items():
-                _free(r)
+            if not self._pymem:
+                for n, r in self._refs.items():
+                    _free(r)
             self._refs.clear()
         else:
             pat = re.compile(pattern)
@@ -41,7 +44,8 @@ class Cache(object):
                 if mat is not None:
                     names.append(n)
             for n in names:
-                _free(self._refs[n])
+                if not self._pymem:
+                    _free(self._refs[n])
                 del self._refs[n]
         return
 
@@ -50,8 +54,11 @@ class Cache(object):
         """
         Create a named data buffer of the give type and shape.
         """
-        dims = np.asarray(shape, dtype=np.uint64)
-        self._refs[name] = _alloc(dims, type).reshape(shape)
+        if self._pymem:
+            self._refs[name] = np.zeros(shape, dtype=type)
+        else:
+            dims = np.asarray(shape, dtype=np.uint64)
+            self._refs[name] = _alloc(dims, type).reshape(shape)
         return
 
 
@@ -62,7 +69,8 @@ class Cache(object):
         """
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist".format(name))
-        _free(self._refs[name])
+        if not self._pymem:
+            _free(self._refs[name])
         del self._refs[name]
         return
 

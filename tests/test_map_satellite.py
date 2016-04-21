@@ -182,7 +182,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars, name='grad')
+        madam = OpMadam(params=pars, name='grad', purge=True)
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()

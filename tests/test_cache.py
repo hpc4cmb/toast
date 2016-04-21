@@ -15,8 +15,9 @@ from toast.tod.cache import *
 class CacheTest(MPITestCase):
 
     def setUp(self):
-        self.nsamp = 10000
+        self.nsamp = 1000000
         self.cache = Cache()
+        self.pycache = Cache(pymem=True)
         self.types = {
             'f64': np.float64,
             'f32': np.float32,
@@ -32,6 +33,7 @@ class CacheTest(MPITestCase):
 
     def tearDown(self):
         del self.cache
+        del self.pycache
 
 
     def test_create(self):
@@ -50,6 +52,20 @@ class CacheTest(MPITestCase):
 
         for k, v in self.types.items():
             self.cache.destroy('test-{}'.format(k))
+
+        for k, v in self.types.items():
+            self.pycache.create('test-{}'.format(k), v, (self.nsamp,4))
+
+        for k, v in self.types.items():
+            data = self.pycache.reference('test-{}'.format(k))
+            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
+
+        for k, v in self.types.items():
+            data = self.pycache.reference('test-{}'.format(k))
+            print(data)
+
+        for k, v in self.types.items():
+            self.pycache.destroy('test-{}'.format(k))
 
         #self.assertTrue(False)
 
