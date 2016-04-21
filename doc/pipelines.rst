@@ -1,6 +1,6 @@
-.. _programs:
+.. _pipelines:
 
-Programs
+Pipelines
 =================================
 
 Before delving into the structure of the pytoast package, it is sometimes

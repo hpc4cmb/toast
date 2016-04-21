@@ -1,10 +1,12 @@
 .. _tod:
 
-Time Ordered Data
+Telescope TOD
 =================================
 
 
-.. autoclass:: toast.tod
+.. autoclass:: toast.tod.TOD
     :members:
 
+.. autoclass:: toast.tod.Cache
+    :members:
 

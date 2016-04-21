@@ -1,10 +1,10 @@
-.. _tod:
+.. _pointing:
 
-Time Ordered Data
+Pointing Matrices
 =================================
 
+A "pointing matrix" in pytoast terms is the sparse matrix given by
 
-.. autoclass:: toast.tod
+.. autoclass:: toast.tod.OpPointingHpix
     :members:
-
 

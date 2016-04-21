@@ -30,12 +30,14 @@ class OpPointingHpix(Operator):
     response (eps) and a rotating, perfect half-wave plate.  The timestream 
     model is then (see Jones, et al, 2006):
 
-    d = cal * [ (1+eps)/2 * I + (1-eps)/2 * [Q * cos(2a) + U * sin(2a)]]
+    .. math::
+        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a} + U \\sin{2a}\\right]\\right]
 
     Or, if a HWP is included in the response with time varying angle "w", then
     the total response is:
 
-    d = cal * [ (1+eps)/2 * I + (1-eps)/2 * [Q * cos(4(a+w)) + U * sin(4(a+w))]]
+    .. math::
+        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{4(a+w)} + U \\sin{4(a+w)}\\right]\\right]
 
     Args:
         pixels (str): write pixels to the cache with name <pixels>_<detector>.

@@ -3,6 +3,7 @@
 import mpi4py.MPI as MPI
 
 import toast
+import toast.tod as tt
 
 # Split COMM_WORLD into groups of 4 processes each
 cm = toast.Comm(world=MPI.COMM_WORLD, groupsize=4)
@@ -13,19 +14,17 @@ dd = toast.Data(comm=cm)
 # Each process group appends some observations.
 # For this example, each observation is going to have the same
 # number of samples, and the same list of detectors.  We just
-# use the base TOD class, which contains the data directly as 
-# numpy arrays.
+# use the base TOD class, which contains the data in memory.
 
 obs_samples = 100
 obs_dets = ['detA', 'detB', 'detC']
 
 for i in range(10):
-    tod = TOD(mpicomm=cm.comm_group, detectors=obs_dets, samples=obs_samples)
+    tod = tt.TOD(mpicomm=cm.comm_group, detectors=obs_dets, samples=obs_samples)
     ob = {}
     ob['id'] = '{}'.format(i)
     ob['tod'] = tod
     ob['intervals'] = None
-    ob['baselines'] = None
     ob['noise'] = None
     dd.obs.append(ob)
 
