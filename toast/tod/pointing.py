@@ -57,15 +57,14 @@ class OpPointingHpix(Operator):
         hwpsteptime: The time in minutes between HWP steps.
     """
 
-    def __init__(self, pixels='pixels', weights='pweights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None):
+    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None):
         self._pixels = pixels
-        self._pweights = pweights
+        self._weights = weights
         self._nside = nside
         self._nest = nest
         self._mode = mode
         self._cal = cal
         self._epsilon = epsilon
-        self._purge = purge_pntg
 
         if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped HWP")
@@ -187,7 +186,7 @@ class OpPointingHpix(Operator):
 
                 if self._mode == 'I':
                     
-                    weights = np.ones(nsamp, dtype=np.float64)
+                    weights = np.ones((nsamp,1), dtype=np.float64)
                     weights *= (cal * oneplus)
 
                 elif self._mode == 'IQU':
@@ -221,9 +220,9 @@ class OpPointingHpix(Operator):
                 pixelsname = "{}_{}".format(self._pixels, det)
                 weightsname = "{}_{}".format(self._weights, det)
                 if not tod.cache.exists(pixelsname):
-                    tod.cache.create(pixelsname, np.float64, (tod.local_samples[1],))
-                if not tod.cache.exists(pixelsname):
-                    tod.cache.create(pixelsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+                    tod.cache.create(pixelsname, np.int64, (tod.local_samples[1],))
+                if not tod.cache.exists(weightsname):
+                    tod.cache.create(weightsname, np.float64, (tod.local_samples[1],weights.shape[1]))
                 pixelsref = tod.cache.reference(pixelsname)
                 weightsref = tod.cache.reference(weightsname)
                 pixelsref[:] = pixels

@@ -45,8 +45,6 @@ class OpPointingHpixTest(MPITestCase):
             '2b' : np.array([0.0, -axiscoef, 0.0, angterm])
             }
 
-        self.flavs = ['proc1', 'proc2']
-        self.flavscheck = [TOD.DEFAULT_FLAVOR] + self.flavs
         self.totsamp = 100
         self.rms = 10.0
 

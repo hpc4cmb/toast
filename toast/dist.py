@@ -346,36 +346,19 @@ class Data(object):
                 for dt in dets:
                     procstr = "{}    det {}:\n".format(procstr, dt)
 
-                    pdata, pflags = tod.read_pntg(detector=dt, local_start=0, n=nsamp)
+                    pdata = tod.read_pntg(detector=dt, local_start=0, n=nsamp)
 
-                    procstr = "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] ({}) --> [{:.3e} {:.3e} {:.3e} {:.3e}] ({})\n".format(procstr, pdata[0], pdata[1], pdata[2], pdata[3], pflags[0], pdata[-4], pdata[-3], pdata[-2], pdata[-1], pflags[-1])
-                    good = np.where(pflags == 0)[0]
-                    procstr = "{}      {} good pointings\n".format(procstr, len(good))
+                    procstr = "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] --> [{:.3e} {:.3e} {:.3e} {:.3e}]\n".format(procstr, pdata[0,0], pdata[0,1], pdata[0,2], pdata[0,3], pdata[-1,0], pdata[-1,1], pdata[-1,2], pdata[-1,3])
 
-                    for flv in tod.flavors:
-                        data, flags = tod.read(detector=dt, flavor=flv, local_start=0, n=nsamp)
-                        procstr = "{}      flavor {}:  {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, flv, data[0], flags[0], data[-1], flags[-1])
-                        good = np.where(flags == 0)[0]
-                        procstr = "{}        {} good samples\n".format(procstr, len(good))
-                        min = np.min(data[good])
-                        max = np.max(data[good])
-                        mean = np.mean(data[good])
-                        rms = np.std(data[good])
-                        procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
-
-                    for name in tod.pointings:
-                        pixels, weights = tod.read_pmat(name=name, detector=dt, local_start=0, n=nsamp)
-                        nnz = int(len(weights) / len(pixels))
-                        procstr = "{}      pmat {}:\n".format(procstr, name)
-                        procstr = "{}        {} : ".format(procstr, pixels[0])
-                        for i in range(nnz):
-                            procstr = "{} {:.3e}".format(procstr, weights[i])
-                        procstr = "{} -->\n".format(procstr)
-                        procstr = "{}        {} : ".format(procstr, pixels[-1])
-                        for i in range(nnz):
-                            procstr = "{} {:.3e}".format(procstr, weights[-(nnz-i)])
-                        procstr = "{}\n".format(procstr)
-                        procstr = "{}        {} good elements\n".format(procstr, len(np.where(pixels >= 0)[0]))
+                    data, flags, common = tod.read(detector=dt, local_start=0, n=nsamp)
+                    procstr = "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, data[0], flags[0], data[-1], flags[-1])
+                    good = np.where((flags | common) == 0)[0]
+                    procstr = "{}        {} good samples\n".format(procstr, len(good))
+                    min = np.min(data[good])
+                    max = np.max(data[good])
+                    mean = np.mean(data[good])
+                    rms = np.std(data[good])
+                    procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
 
             recvstr = ""
             if gcomm.rank == 0:

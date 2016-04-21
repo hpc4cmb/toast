@@ -138,36 +138,56 @@ class OpMadam(Operator):
         todcomm = tod.mpicomm
         todfcomm = todcomm.py2f()
 
-        # create madam-compatible buffers
+        # to get the number of Non-zero pointing weights per pixel,
+        # we use the fact that for Madam, all processes have all detectors
+        # for some slice of time.  So we can get this information from the
+        # shape of the data from the first detector
+
+        nnzname = "{}_{}".format(self._weights, tod.detectors[0])
+        nnz = tod.cache.reference(nnzname).shape[1]
 
         ndet = len(tod.detectors)
         nlocal = tod.local_samples[1]
-        nnz = tod.pmat_nnz(self._pmat, tod.detectors[0])
 
         parstring = self._dict2parstring(self._params)
         detstring = self._dets2detstring(tod.detectors)
 
         timestamps = tod.read_times(local_start=0, n=nlocal)
 
-        signal = np.zeros(ndet * nlocal, dtype=np.float64)
-        flags = np.zeros(ndet * nlocal, dtype=np.uint8)
-        pixels = np.zeros(ndet * nlocal, dtype=np.int64)
-        pixweights = np.zeros(ndet * nlocal * nnz, dtype=np.float64)
+        # create madam-compatible buffers
+
+        madam_signal = np.zeros(ndet * nlocal, dtype=np.float64)
+        madam_pixels = np.zeros(ndet * nlocal, dtype=np.int64)
+        madam_pixweights = np.zeros(ndet * nlocal * nnz, dtype=np.float64)
 
         for d in range(ndet):
+
+            # get the pixels and weights from the cache
+
+            pixelsname = "{}_{}".format(self._pixels, tod.detectors[d])
+            weightsname = "{}_{}".format(self._weights, tod.detectors[d])
+            pixels = tod.cache.reference(pixelsname)
+            weights = tod.cache.reference(weightsname)
+
             dslice = slice(d * nlocal, (d+1) * nlocal)
             dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
-            signal[dslice], flags[dslice] = tod.read(detector=tod.detectors[d], flavor=self._flavor, local_start=0, n=nlocal)
-            pixels[dslice], pixweights[dwslice] = tod.read_pmat(name=self._pmat, detector=tod.detectors[d], local_start=0, n=nlocal)
+
+            madam_pixels[dslice] = pixels
+            madam_pixweights[dwslice] = weights.flatten()
+
+            cachename = None
+            if self._name is not None:
+                cachename = "{}_{}".format(self._name, tod.detectors[d])
+                signal = tod.cache.reference(cachename)
+            else:
+                signal, flags, common = tod.read(detector=tod.detectors[d], local_start=0, n=nlocal)
+            madam_signal[dslice] = signal
+
             if self._purge:
-                tod.clear(detector=tod.detectors[d], flavor=self._flavor)
-                tod.clear_pmat(name=self._pmat, detector=tod.detectors[d])
-        
-        # apply detector flags to the pointing matrix, since that is the
-        # only way to pass flag information to madam
-        
-        pixels[flags != 0] = -1
-        pixweights[np.repeat(flags, nnz) != 0] = 0.0
+                tod.cache.clear(pattern=pixelsname)
+                tod.cache.clear(pattern=weightsname)
+                if self._name is not None:
+                    tod.cache.clear(pattern=cachename)
 
         # The "pointing periods" we pass to madam are simply the intersection
         # of our local data and the list of valid intervals.
@@ -219,6 +239,6 @@ class OpMadam(Operator):
 
         # destripe
 
-        libmadam.destripe(todfcomm, parstring.encode(), ndet, detstring.encode(), detweights, nlocal, nnz, timestamps, pixels, pixweights, signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
+        libmadam.destripe(todfcomm, parstring.encode(), ndet, detstring.encode(), detweights, nlocal, nnz, timestamps, madam_pixels, madam_pixweights, madam_signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
 
         return

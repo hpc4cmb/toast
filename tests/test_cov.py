@@ -15,7 +15,6 @@ import numpy.testing as nt
 import healpy as hp
 
 from toast.tod.tod import *
-from toast.tod.memory import *
 from toast.tod.pointing import *
 from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
@@ -179,10 +178,6 @@ class CovarianceTest(MPITestCase):
 
     def test_invnpp(self):
         start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')

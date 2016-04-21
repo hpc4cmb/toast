@@ -9,7 +9,6 @@ import os
 import shutil
 
 from toast.tod.tod import *
-from toast.tod.memory import *
 from toast.tod.pointing import *
 from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
@@ -74,10 +73,6 @@ class OpMadamTest(MPITestCase):
     def test_madam_gradient(self):
         start = MPI.Wtime()
 
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
-
         # add simple sky gradient signal
         grad = OpSimGradient(nside=self.sim_nside)
         grad.exec(self.data)
@@ -109,7 +104,7 @@ class OpMadamTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = self.mapdir
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, name='grad')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()

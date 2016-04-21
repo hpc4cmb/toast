@@ -42,7 +42,7 @@ class CacheTest(MPITestCase):
 
         for k, v in self.types.items():
             data = self.cache.reference('test-{}'.format(k))
-            data[:] = np.repeat(np.arange(self.nsamp, dtype=v), 4)
+            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
 
         for k, v in self.types.items():
             data = self.cache.reference('test-{}'.format(k))
@@ -51,7 +51,7 @@ class CacheTest(MPITestCase):
         for k, v in self.types.items():
             self.cache.destroy('test-{}'.format(k))
 
-        self.assertTrue(False)
+        #self.assertTrue(False)
 
         stop = MPI.Wtime()
         elapsed = stop - start

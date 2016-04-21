@@ -21,18 +21,17 @@ class OpLocalPixels(Operator):
     Operator which computes the set of locally hit pixels.
 
     Args:
-        pmat (string): Name of the pointing matrix to use.
+        pixels (str): the name of the cache object (<pixels>_<detector>)
+            containing the pixel indices to use.
     """
 
-    def __init__(self, pmat=None):
+    def __init__(self, pixels='pixels'):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
         self._timedist = True
-        self._pmat = pmat
-        if self._pmat is None:
-            self._pmat = TOD.DEFAULT_FLAVOR
+        self._pixels = pixels
 
 
     @property
@@ -57,7 +56,8 @@ class OpLocalPixels(Operator):
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
-                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=0, n=tod.local_samples[1])
+                pixelsname = "{}_{}".format(self._pixels, det)
+                pixels = tod.cache.reference(pixelsname)
                 local.update(set(pixels))
 
         ret = np.zeros(len(local), dtype=np.int64)

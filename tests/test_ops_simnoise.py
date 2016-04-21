@@ -16,7 +16,6 @@ from toast.tod.noise import *
 from toast.tod.sim_noise import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_tod import *
-from toast.tod.memory import *
 
 from toast.mpirunner import MPITestCase
 
@@ -102,11 +101,6 @@ class OpSimNoiseTest(MPITestCase):
     def test_sim(self):
         start = MPI.Wtime()
 
-        # cache data
-
-        cache = OpCopy()
-        cache.exec(self.data)
-
         # generate timestreams
 
         op = OpSimNoise(stream=123456)
@@ -140,10 +134,10 @@ class OpSimNoiseTest(MPITestCase):
 
         # write timestreams to disk for debugging
 
-        check1, flag1 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
-        check2, flag2 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1])
-        check3, flag3 = tod.read(detector=self.dets[0], local_start=0, n=tod.local_samples[1])
-        check4, flag4 = tod.read(detector=self.dets[1], local_start=0, n=tod.local_samples[1])
+        check1 = tod.cache.reference("noise_{}".format(self.dets[0]))
+        check2 = tod.cache.reference("noise_{}".format(self.dets[1]))
+        check3 = tod.cache.reference("noise_{}".format(self.dets[2]))
+        check4 = tod.cache.reference("noise_{}".format(self.dets[3]))
 
         if self.comm.rank == 0:
             np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')

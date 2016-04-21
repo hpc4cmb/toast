@@ -15,7 +15,6 @@ import numpy.testing as nt
 import healpy as hp
 
 from toast.tod.tod import *
-from toast.tod.memory import *
 from toast.tod.pointing import *
 from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
@@ -144,10 +143,6 @@ class MapSatelliteTest(MPITestCase):
     def test_grad(self):
         start = MPI.Wtime()
 
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
-
         # add simple sky gradient signal
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
@@ -186,7 +181,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, name='grad')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()
@@ -225,10 +220,6 @@ class MapSatelliteTest(MPITestCase):
 
     def test_noise(self):
         start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
 
         # generate noise timestreams from the noise model
         nsig = OpSimNoise(stream=12345)
@@ -278,7 +269,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars, detweights=detweights)
+        madam = OpMadam(params=pars, detweights=detweights, name='noise')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()
@@ -329,10 +320,6 @@ class MapSatelliteTest(MPITestCase):
 
     def test_scanmap(self):
         start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
@@ -393,7 +380,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, name='scan')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()
@@ -430,10 +417,6 @@ class MapSatelliteTest(MPITestCase):
 
     def test_hwpfast(self):
         start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
 
         # make a pointing matrix with a HWP that rotates 2*PI every sample
         hwprate = self.rate * 60.0
@@ -495,7 +478,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, name='scan')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()
@@ -532,10 +515,6 @@ class MapSatelliteTest(MPITestCase):
 
     def test_hwpconst(self):
         start = MPI.Wtime()
-
-        # cache the data in memory
-        cache = OpCopy()
-        cache.exec(self.data)
 
         # make a pointing matrix with a HWP that is constant
         hwpstep = 2.0 * np.pi
@@ -598,7 +577,7 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars)
+        madam = OpMadam(params=pars, name='scan')
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()

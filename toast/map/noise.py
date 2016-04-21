@@ -26,14 +26,20 @@ class OpInvCovariance(Operator):
     computed.  Each process has a local piece of the inverse covariance.
 
     Args:
-        pmat (string):  Name of the pointing matrix to use.
         invnpp (DistPixels):  The matrix to accumulate.
         hits (DistPixels):  (optional) the hits to accumulate.
+        detweights (dictionary): individual noise weights to use for each
+            detector.
+        pixels (str): the name of the cache object (<pixels>_<detector>)
+            containing the pixel indices to use.
+        weights (str): the name of the cache object (<weights>_<detector>)
+            containing the pointing weights to use.
     """
 
-    def __init__(self, detweights=None, pmat=None, invnpp=None, hits=None):
+    def __init__(self, invnpp=None, hits=None, detweights=None, pixels='pixels', weights='weights'):
         
-        self._pmat = pmat
+        self._pixels = pixels
+        self._weights = weights
         self._detweights = detweights
 
         if invnpp is None:
@@ -41,9 +47,6 @@ class OpInvCovariance(Operator):
         self._invnpp = invnpp
 
         self._hits = hits
-
-        self._nnz = invnpp.nnz
-        self._nelem = np.floor_divide((self._nnz * (self._nnz + 1)), 2)
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -63,19 +66,28 @@ class OpInvCovariance(Operator):
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
-                pixels, weights = tod.read_pmat(name=self._pmat, detector=det, local_start=0, n=tod.local_samples[1])
+
+                # get the pixels and weights from the cache
+
+                pixelsname = "{}_{}".format(self._pixels, det)
+                weightsname = "{}_{}".format(self._weights, det)
+                pixels = tod.cache.reference(pixelsname)
+                weights = tod.cache.reference(weightsname)
+
                 sm, lpix = self._invnpp.global_to_local(pixels)
-                wt = weights.reshape(pixels.shape[0], -1)
+                
                 detweight = 1.0
+                
                 if self._detweights is not None:
                     if det not in self._detweights.keys():
                         raise RuntimeError("no detector weights found for {}".format(det))
                     detweight = self._detweights[det]
+
                 if self._hits is not None:
-                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, self._hits.data)
+                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, weights, detweight, self._hits.data)
                 else:
                     fakehits = np.zeros((1,1,1), dtype=np.int64)
-                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, wt, detweight, fakehits)
+                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, weights, detweight, fakehits)
         return
 
 
