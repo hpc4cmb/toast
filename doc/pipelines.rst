@@ -44,17 +44,29 @@ requires the use of libmadam (the --madam option).
 Example:  Proposed CoRE Satellite Boresight
 ----------------------------------------------
 
-TODO
+Here is one example using this script to generate one day of scanning with a single boresight detector, and using one proposed scan strategy for a LiteCoRE satellite::
+
+    toast_satellite_sim.py --samplerate 175.86 --spinperiod 1.0 --spinangle 45.0 
+    --precperiod 5760.0 --precangle 50.0 --hwprpm 0.0 --obs 23.0 --gap 1.0 
+    --obschunks 24 --numobs 1 --nside 1024 --baseline 5.0 --madam --noisefilter 
+    --fp fp_core.pkl --outdir out_core_nohwp_fast
 
 
 Example:  Proposed LiteBIRD Satellite Boresight
 ------------------------------------------------------
 
-TODO
+Here is how you could do a similar thing with a boresight detector and one proposed lightbird scanning strategy for a day::
+
+    toast_satellite_sim.py --samplerate 23.0 --spinperiod 10.0 --spinangle 30.0 
+    --precperiod 93.0 --precangle 65.0 --hwprpm 88.0 --obs 23.0 --gap 1.0 
+    --obschunks 24 --numobs 1 --nside 1024 --baseline 60.0 --madam --fp fp_lb.pkl
+    --debug --outdir out_lb_hwp
 
 
 Creating Your Own Pipeline
 ------------------------------
 
-PyTOAST is designed to give you tools to piece together your own data processing workflow.
+PyTOAST is designed to give you tools to piece together your own data processing workflow.  Here is a slightly modified version of the pipeline script above.  This takes a boresight detector with 1/f noise properties, simulates a sort-of Planck scanning strategy, generates a noise timestream, and then generates a fake signal timestream and adds it to the noise.  Then it uses madam to make a map.
+
+.. literalinclude:: ../examples/toast_example_customize.py
 
