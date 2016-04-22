@@ -52,7 +52,7 @@ If you don't specify the prefix, it will install to your main virtualenv
 location, or to the main python install location on the system.  This
 might not be what you want.  Installing in "development" mode is somewhat
 more complex, due to the use of compiled C libraries and extensions.  See
-more details in :ref:`dev`.
+more details in the :ref:`dev`.
 
 After installation, you can run a set of unit tests with::
 

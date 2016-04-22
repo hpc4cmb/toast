@@ -90,16 +90,28 @@ class TOD(object):
     def total_chunks(self):
         """
         (list): the full list of sample sizes that were used in computing
-            the data distribution.
+            the data distribution (i.e. what was passed to the constructor
+            as the "sizes" parameter).
         """
         return self._sizes
 
     @property
     def dist_chunks(self):
+        """
+        (list): this is a list of 2-tuples, one for each process.  Each
+        element of the list is the same as the information returned by
+        the "local_chunks" member for the given process.
+        """
         return self._dist_sizes
 
     @property
     def local_chunks(self):
+        """
+        (2-tuple): the first element of the tuple is the index of the 
+        first chunk assigned to this process (i.e. the index in the list
+        given by the "total_chunks" member).  The second element of the
+        tuple is the number of chunks assigned to this process.
+        """
         if self._dist_sizes is None:
             return None
         else:
@@ -118,6 +130,11 @@ class TOD(object):
 
     @property
     def dist_samples(self):
+        """
+        (list): This is a list of 2-tuples, with one element per process.
+            Each tuple is the same information returned by the "local_samples"
+            member for the corresponding process.
+        """
         return self._dist_samples
 
     @property
@@ -262,6 +279,15 @@ class TOD(object):
 
 
     def read(self, detector=None, local_start=0, n=0):
+        """
+        Read detector data and flags.
+
+        This returns the timestream data for a single detector, as well
+        as the detector-specific flags and the common flags.
+
+        Args:
+            detector (str):
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:

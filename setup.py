@@ -120,8 +120,11 @@ setup (
 
 if "clean" in sys.argv:
     # note that shell=True should be OK here because the command is constant.
-    subprocess.Popen("rm -rf build", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf dist", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf toast/tod/*.so", shell=True, executable="/bin/bash")
-    subprocess.Popen("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
-
+    subprocess.call("rm -rf build", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf dist", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/tod/*.so", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/tod/*.dylib", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/map/*.dylib", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf test_output", shell=True, executable="/bin/bash")
+    subprocess.call('find . -name "__pycache__" -exec rm -rf "{}" \; >/dev/null 2>&1', shell=True, executable="/bin/bash")
