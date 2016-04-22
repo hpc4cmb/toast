@@ -4,6 +4,8 @@ __pycache__/
 
 # C extensions
 *.so
+toast/tod/_cache.c
+toast/map/_helpers.c
 
 # Distribution / packaging
 .Python
@@ -42,6 +44,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *,cover
+tests_output
 
 # Translations
 *.mo
@@ -51,7 +54,7 @@ coverage.xml
 *.log
 
 # Sphinx documentation
-docs/_build/
+doc/_build/
 
 # PyBuilder
 target/
