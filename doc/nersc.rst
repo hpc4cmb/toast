@@ -9,17 +9,25 @@ To use PyTOAST at NERSC, you need to have a Python3 software stack with all depe
 Temporary Solution
 --------------------
 
-For now, you can use a python 3.4 software stack built by Ted on edison::
+For now, you can use a python 3.4 software stack built by Ted on edison and cori.  On edison::
 
-    %> module use xxxxx
+    %> module use /scratch1/scratchdirs/kisner/software/modulefiles
     %> module load pytoast
 
 OR::
 
-    %> module use xxxxx
+    %> module use /scratch1/scratchdirs/kisner/software/modulefiles
     %> module load pytoast-deps
 
-And then build and install your own copy of pytoast.
+And then build and install your own copy of pytoast.  On cori, the path is different::
+
+    %> module use /global/cscratch1/sd/kisner/software/modulefiles
+    %> module load pytoast
+
+OR::
+
+    %> module use /global/cscratch1/sd/kisner/software/modulefiles
+    %> module load pytoast-deps
 
 
 NERSC Intel Python / Anaconda

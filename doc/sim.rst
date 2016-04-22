@@ -3,7 +3,7 @@
 Simulations
 =================================
 
-
+There are several classes included in pytoast that can simulate different types of data.
 
 Simulated Telescope
 -----------------------

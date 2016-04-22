@@ -3,7 +3,7 @@
 Telescope TOD
 =================================
 
-The TOD base class represents the timestream information describing a telescope that is acquiring data.  The base class enforces a minimal set of methods for reading and writing detector data and flags, detector pointing, and timestamps.  The base class also provide methods for returning information about the data distribution, including which samples are local to a given process.
+The TOD base class represents the timestream information associated with a telescope.  The base class enforces a minimal set of methods for reading and writing detector data and flags, detector pointing, and timestamps.  The base class also provide methods for returning information about the data distribution, including which samples are local to a given process.
 
 .. autoclass:: toast.tod.TOD
     :members:

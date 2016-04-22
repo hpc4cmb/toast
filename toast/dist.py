@@ -264,6 +264,9 @@ class Data(object):
 
         self._comm = comm
         self.obs = []
+        """
+        The list of observations.
+        """
 
 
     @property

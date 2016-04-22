@@ -63,6 +63,9 @@ class TOD(object):
         self._stamps = 'toast_tod_stamps'
         
         self.cache = Cache()
+        """
+        The timestream data cache.
+        """
 
 
     @property
@@ -286,7 +289,14 @@ class TOD(object):
         as the detector-specific flags and the common flags.
 
         Args:
-            detector (str):
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.
+
+        Returns:
+            A 3-tuple of arrays, containing the data, the detector flags, and
+            the common flags.
         """
         if detector is None:
             raise ValueError('you must specify the detector')
@@ -300,6 +310,21 @@ class TOD(object):
 
 
     def read_flags(self, detector=None, local_start=0, n=0):
+        """
+        Read detector flags.
+
+        This returns the detector-specific flags and the common flags.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.
+
+        Returns:
+            A 2-tuple of arrays, containing the detector flags and the common
+                flags.
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -312,6 +337,18 @@ class TOD(object):
 
 
     def write(self, detector=None, local_start=0, data=None, flags=None):
+        """
+        Write detector data and flags.
+
+        This writes the detector data and the detector-specific flags.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): the data array.
+            flags (array): the detector flags.
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -329,6 +366,17 @@ class TOD(object):
 
 
     def write_flags(self, detector=None, local_start=0, flags=None):
+        """
+        Write detector flags.
+
+        This writes the detector-specific flags.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            flags (array): the detector flags.
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -344,6 +392,20 @@ class TOD(object):
 
 
     def read_times(self, local_start=0, n=0):
+        """
+        Read timestamps.
+
+        This reads the common set of timestamps that apply to all detectors
+        in the TOD.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.
+
+        Returns:
+            (array): a numpy array containing the timestamps.
+        """
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read times- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
@@ -352,6 +414,17 @@ class TOD(object):
 
 
     def write_times(self, local_start=0, stamps=None):
+        """
+        Write timestamps.
+
+        This writes the common set of timestamps that apply to all detectors
+        in the TOD.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            stamps (array): the array of timestamps to write.
+        """
         if stamps is None:
             raise ValueError('you must specify the vector of time stamps')
         if self.local_samples[1] <= 0:
@@ -363,6 +436,20 @@ class TOD(object):
 
 
     def read_pntg(self, detector=None, local_start=0, n=0):
+        """
+        Read detector quaternion pointing.
+
+        This returns the pointing for a single detector in quaternions.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.
+
+        Returns:
+            A 2D array of shape (n, 4)
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -375,6 +462,17 @@ class TOD(object):
 
 
     def write_pntg(self, detector=None, local_start=0, data=None):
+        """
+        Write detector quaternion pointing.
+
+        This writes the quaternion pointing for a single detector.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): 2D array of quaternions with shape[1] == 4.
+        """
         if detector is None:
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
@@ -394,18 +492,43 @@ class TOD(object):
 
 
     def read_common_flags(self, local_start=0, n=0):
+        """
+        Read common flags.
+
+        This reads the common set of flags that should be applied to all
+        detectors.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.
+
+        Returns:
+            (array): a numpy array containing the flags.
+        """
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot read pntg flags- process has no assigned local samples')
+            raise RuntimeError('cannot read common flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n)
 
 
     def write_common_flags(self, local_start=0, flags=None):
+        """
+        Write common flags.
+
+        This writes the common set of flags that should be applied to all
+        detectors.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            flags (array): array containing the flags to write.
+        """
         if flags is None:
             raise ValueError('flags must be specified')
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write pntg flags- process has no assigned local samples')
+            raise RuntimeError('cannot write common flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_common_flags(local_start, flags)

@@ -27,6 +27,12 @@ Diagonal Noise Covariance
 .. autofunction:: toast.map.covariance_rcond
 
 
+Native Mapmaking
+-----------------------
+
+Still to-do.  See `git milestone here <https://github.com/tskisner/pytoast/milestones/Native%20Mapmaking%20Tools>`_
+
+
 External Madam Interface
 ----------------------------------
 
