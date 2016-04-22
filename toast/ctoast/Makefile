@@ -5,12 +5,12 @@
 # from within python.
 
 CC = gcc
-CFLAGS = -O0 -g -fPIC -I.
+CFLAGS = -O3 -fPIC -I.
 LIBS = -lm
 
 HEADERS = pytoast.h
 
-LIBOBJ = pytoast_mem.o
+LIBOBJ = pytoast_mem.o pytoast_qarray.o
 
 all : test_ctoast
 
