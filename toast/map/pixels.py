@@ -36,10 +36,22 @@ class OpLocalPixels(Operator):
 
     @property
     def timedist(self):
+        """
+        (bool): Whether this operator requires data that time-distributed.
+        """
         return self._timedist
 
 
     def exec(self, data):
+        """
+        Iterate over all observations and detectors and compute local pixels.
+
+        Args:
+            data (toast.Data): The distributed data.
+
+        Returns:
+            (array): An array of the locally hit pixel indices.
+        """
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator
@@ -112,34 +124,65 @@ class DistPixels(object):
 
     @property
     def comm(self):
+        """
+        (mpi4py.MPI.Comm): The MPI communicator used.
+        """
         return self._comm
 
     @property
     def size(self):
+        """
+        (int): The global number of pixels.
+        """
         return self._size
 
     @property
     def nnz(self):
+        """
+        (int): The number of non-zero values per pixel.
+        """
         return self._nnz
 
     @property
     def dtype(self):
+        """
+        (numpy.dtype): The data type of the values.
+        """
         return self._dtype
 
     @property
     def local(self):
+        """
+        (array): The list of local submaps or None if process has no data.
+        """
         return self._local
 
     @property
     def submap(self):
+        """
+        (int): The number of pixels in each submap.
+        """
         return self._submap
     
     @property
     def nsubmap(self):
+        """
+        (int): The number of submaps stored on this process.
+        """
         return self._nsub
 
 
     def global_to_local(self, gl):
+        """
+        Convert global pixel indices into the local submap and pixel.
+
+        Args:
+            gl (int): The global pixel number.
+
+        Returns:
+            A tuple containing the local submap index (int) and the
+            pixel index local to that submap (int).
+        """
         safe_gl = np.zeros_like(gl)
         good = (gl >= 0)
         bad = (gl < 0)
@@ -153,6 +196,12 @@ class DistPixels(object):
 
 
     def duplicate(self):
+        """
+        Perform a deep copy of the distributed data.
+
+        Returns:
+            (DistPixels): A copy of the object.
+        """
         ret = DistPixels(comm=self._comm, size=self._size, nnz=self._nnz, dtype=self._dtype, submap=self._submap, local=self._local)
         if self.data is not None:
             ret.data = np.copy(self.data)

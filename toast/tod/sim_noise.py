@@ -103,14 +103,26 @@ class AnalyticNoise(Noise):
 
     @property
     def fmin(self):
+        """
+        (float): the minimum frequency in Hz, used as a high pass.
+        """
         return self._fmin
 
     def fknee(self, det):
+        """
+        (float): the knee frequency in Hz.
+        """
         return self._fknee[det]
 
     def alpha(self, det):
+        """
+        (float): the (positive!) slope exponent.
+        """
         return self._alpha[det]
 
     def NET(self, det):
+        """
+        (float): the NET.
+        """
         return self._NET[det]
 

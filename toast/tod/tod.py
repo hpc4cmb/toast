@@ -68,23 +68,30 @@ class TOD(object):
     @property
     def detectors(self):
         """
-        The total list of detectors.
+        (list): The total list of detectors.
         """
         return self._dets
 
     @property
     def local_dets(self):
         """
-        The detectors assigned to this process.
+        (list): The detectors assigned to this process.
         """
         return self._dist_dets
 
     @property
     def timedist(self):
+        """
+        (bool): if True, the data is time-distributed.
+        """
         return self._timedist
 
     @property
     def total_chunks(self):
+        """
+        (list): the full list of sample sizes that were used in computing
+            the data distribution.
+        """
         return self._sizes
 
     @property
@@ -104,6 +111,9 @@ class TOD(object):
 
     @property
     def total_samples(self):
+        """
+        (int): the total number of samples in this TOD.
+        """
         return self._nsamp
 
     @property
@@ -112,6 +122,12 @@ class TOD(object):
 
     @property
     def local_samples(self):
+        """
+        (2-tuple): The first element of the tuple is the first global
+            sample assigned to this process.  The second element of
+            the tuple is the number of samples assigned to this
+            process.
+        """
         mysamples = self._dist_samples[self._mpicomm.rank]
         if len(mysamples) == 0:
             return [(-1, -1)]
@@ -120,6 +136,9 @@ class TOD(object):
 
     @property
     def mpicomm(self):
+        """
+        (mpi4py.MPI.Comm): the communicator assigned to this TOD.
+        """
         return self._mpicomm
 
     # The base class methods that get and put just use the cache.

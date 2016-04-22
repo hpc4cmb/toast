@@ -84,11 +84,17 @@ class OpMadam(Operator):
 
     @property
     def timedist(self):
+        """
+        (bool): Whether this operator requires data that time-distributed.
+        """
         return self._timedist
 
 
     @property
     def available(self):
+        """
+        (bool): True if libmadam is found in the library search path.
+        """
         return (libmadam is not None)
     
 
@@ -107,6 +113,12 @@ class OpMadam(Operator):
 
 
     def exec(self, data):
+        """
+        Copy data to Madam-compatible buffers and make a map.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         if libmadam is None:
             raise RuntimeError("Cannot find libmadam")
 

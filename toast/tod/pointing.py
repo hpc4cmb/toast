@@ -94,18 +94,37 @@ class OpPointingHpix(Operator):
 
     @property
     def nside(self):
+        """
+        (int): the HEALPix NSIDE value used.
+        """
         return self._nside
 
     @property
     def nest(self):
+        """
+        (bool): if True, the pointing is NESTED ordering.
+        """
         return self._nest
 
     @property
     def mode(self):
+        """
+        (str): the pointing mode "I", "IQU", etc.
+        """
         return self._mode
 
 
     def exec(self, data):
+        """
+        Create pixels and weights.
+
+        This iterates over all observations and detectors, and creates
+        the pixel and weight arrays representing the pointing matrix.
+        This data is stored in the TOD cache.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

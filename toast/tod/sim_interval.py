@@ -29,6 +29,9 @@ def regular_intervals(n, start, first, rate, duration, gap):
         rate (float): the sample rate in Hz.
         duration (float): the length of the interval in seconds.
         gap (float): the length of the gap in seconds.
+
+    Returns:
+        (list): a list of Interval objects.
     """
     dursamples = int(duration * rate) + 1
     gapsamples = int(gap * rate) + 1

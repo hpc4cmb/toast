@@ -13,7 +13,8 @@ class Cache(object):
     Timestream data cache with explicit memory management.
 
     Args:
-
+        pymem (bool): if True, use python memory rather than external
+            allocations in C.  Only used for testing.
     """
 
     def __init__(self, pymem=False):
@@ -30,6 +31,14 @@ class Cache(object):
 
 
     def clear(self, pattern=None):
+        """
+        Clear one or more buffers.
+
+        Args:
+            pattern (str): a regular expression to match against the buffer
+                names when determining what should be cleared.  If None,
+                then all buffers are cleared.
+        """
         if pattern is None:
             # free all buffers
             if not self._pymem:
@@ -53,6 +62,11 @@ class Cache(object):
     def create(self, name, type, shape):
         """
         Create a named data buffer of the give type and shape.
+
+        Args:
+            name (str): the name to assign to the buffer.
+            type (numpy.dtype): one of the supported numpy types.
+            shape (tuple): a tuple containing the shape of the buffer.
         """
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
@@ -64,8 +78,13 @@ class Cache(object):
 
     def destroy(self, name):
         """
-        Deallocate the specified buffer.  Only call this if all numpy arrays
-        that reference the memory are out of use.
+        Deallocate the specified buffer.
+
+        Only call this if all numpy arrays that reference the memory 
+        are out of use.
+
+        Args:
+            name (str): the name of the buffer to destroy.
         """
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist".format(name))
@@ -76,14 +95,33 @@ class Cache(object):
 
 
     def exists(self, name):
+        """
+        Check whether a buffer exists.
+
+        Args:
+            name (str): the name of the buffer to search for.
+
+        Returns:
+            (bool): True if the buffer exists.
+        """
         result = (name in self._refs.keys())
         return result
 
 
     def reference(self, name):
         """
-        Return a numpy array that contains a reference to the specified data
-        buffer.
+        Return a numpy array pointing to the buffer.
+
+        The returned array will wrap a pointer to the raw buffer, but will
+        not claim ownership.  When the numpy array is garbage collected, it
+        will NOT attempt to free the memory (you must manually use the 
+        destroy method).
+
+        Args:
+            name (str): the name of the buffer to return.
+
+        Returns:
+            (array): a numpy array wrapping the raw data buffer.
         """
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist".format(name))

@@ -204,15 +204,22 @@ class OpSimConviqt(Operator):
 
     @property
     def available(self):
+        """
+        (bool): True if libconviqt is found in the library search path.
+        """
         return (libconviqt is not None)
 
 
     def exec(self, data):
         """
-        Calling exec will perform the convolution over the communicator, one detector at a time.
-        All MPI tasks must have the same list of detectors.
-        """
+        Loop over all observations and perform the convolution.
 
+        This is done one detector at a time.  For each detector, all data
+        products are read from disk.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         if libconviqt is None:
             raise RuntimeError("The conviqt library was not found")
 

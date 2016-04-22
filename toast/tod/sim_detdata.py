@@ -41,7 +41,7 @@ class OpSimNoise(Operator):
             detector, in every chunk, of every TOD, across every observation.
     """
 
-    def __init__(self, out='noise', stream=None, accum=False):
+    def __init__(self, out='noise', stream=None):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -60,6 +60,21 @@ class OpSimNoise(Operator):
 
 
     def exec(self, data):
+        """
+        Generate noise timestreams.
+
+        This iterates over all observations and detectors.  For each
+        locally stored piece of the data, we query which chunks of the
+        original data distribution we have.  A "stream" index is
+        computed using the observation number, the detector number, and
+        the absolute chunk index.  For each chunk assigned to this process,
+        generate a noise realization.  The PSD that is valid for the
+        current chunk (obtained from the Noise object for each observation)
+        is used when generating the timestream.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         comm = data.comm
         rngobs = 0
 
@@ -196,16 +211,19 @@ class OpSimNoise(Operator):
 
 class OpSimGradient(Operator):
     """
-    Operator which generates fake sky signal as a gradient between the poles
-    and accumulates this.
+    Generate a fake sky signal as a gradient between the poles.
 
-    This passes through each observation and ...
+    This passes through each observation and creates a fake signal timestream
+    based on the cartesian Z coordinate of the HEALPix pixel containing the
+    detector pointing.
 
     Args:
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-
-        
+        nside (int): the HEALPix NSIDE value to use.
+        min (float): the minimum value to use at the South Pole.
+        max (float): the maximum value to use at the North Pole.
+        nest (bool): whether to use NESTED ordering.
     """
 
     def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False):
@@ -217,7 +235,18 @@ class OpSimGradient(Operator):
         self._max = max
         self._nest = nest
 
+
     def exec(self, data):
+        """
+        Create the gradient timestreams.
+
+        This pixelizes each detector's pointing and then assigns a 
+        timestream value based on the cartesian Z coordinate of the pixel
+        center.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         comm = data.comm
 
         zaxis = np.array([0,0,1], dtype=np.float64)
@@ -258,7 +287,7 @@ class OpSimGradient(Operator):
 
     def sigmap(self):
         """
-        Return the underlying signal map.
+        (array): Return the underlying signal map (full map on all processes).
         """
         range = self._max - self._min
         pix = np.arange(0, 12*self._nside*self._nside, dtype=np.int64)
@@ -296,6 +325,15 @@ class OpSimScan(Operator):
 
 
     def exec(self, data):
+        """
+        Create the timestreams by scanning from the map.
+
+        This loops over all observations and detectors and uses the pointing
+        matrix to project the distributed map into a timestream.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world

@@ -53,6 +53,12 @@ class OpInvCovariance(Operator):
 
 
     def exec(self, data):
+        """
+        Iterate over all observations and detectors and accumulate.
+        
+        Args:
+            data (toast.Data): The distributed data.
+        """
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator
@@ -92,6 +98,17 @@ class OpInvCovariance(Operator):
 
 
 def covariance_invert(npp, threshold):
+    """
+    Invert the local piece of a diagonal noise covariance.
+
+    This does an in-place inversion of the covariance.  The threshold is
+    applied to the condition number of each block of the matrix.  Pixels
+    failing the cut are set to zero.
+
+    Args:
+        npp (3D array): The data member of a distributed covariance.
+        threshold (float): The condition number threshold to apply.
+    """
     if len(npp.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
     _invert_covariance(npp, threshold)
@@ -99,6 +116,19 @@ def covariance_invert(npp, threshold):
 
 
 def covariance_rcond(npp):
+    """
+    Return the local piece of the inverse condition number map.
+
+    This computes the local piece of the inverse condition number map
+    from the supplied covariance matrix data.
+
+    Args:
+        npp (3D array): The data member of a distributed covariance.
+
+    Returns:
+        rcond (3D array): The local data piece of the distributed
+            inverse condition number map.
+    """
     if len(npp.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
     rcond = np.zeros((npp.shape[0], npp.shape[1], 1), dtype=np.float64)

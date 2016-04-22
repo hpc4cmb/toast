@@ -47,6 +47,9 @@ class Noise(object):
 
     @property
     def detectors(self):
+        """
+        (list): list of strings containing the detector names.
+        """
         return self._dets
 
 
@@ -60,15 +63,30 @@ class Noise(object):
 
     @property
     def freq(self):
+        """
+        (array): the frequency bins that are used for all PSDs.
+        """
         return self._freq
 
 
     @property
     def rate(self):
+        """
+        (float): the sample rate in Hz.
+        """
         return self._rate
 
 
     def psd(self, detector):
+        """
+        Get the PSD for a detector.
+
+        Args:
+            detector (str): the detector name.
+
+        Returns:
+            (array): an array containing the PSD for the detector.
+        """
         if detector not in self._dets:
             raise RuntimeError("psd for detector {} not found".format(detector))
         return self._psds[detector]
