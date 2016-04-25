@@ -21,9 +21,7 @@ cdef extern from "pytoast.h":
     void pytoast_qnorm_inplace(int n, int m, double* q)
     void pytoast_qrotate(int n, const double* v, const double* q_in, double* v_out)
     void pytoast_qmult(int n, const double* p, const double* q, double* r)
-    void pytoast_nlerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp)
-    void pytoast_slerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp)
-    void pytoast_compute_t(int n_time, const double* targettime, const double* time, double* t_matrix)
+    void pytoast_slerp(int n_time, int n_targettime, const double* time, const double* targettime, const double* q_in, double* q_interp)
     void pytoast_qexp(int n, const double* q_in, double* q_out)
     void pytoast_qln(int n, const double* q_in, double* q_out)
     void pytoast_qpow(int n, const double* p, const double* q_in, double* q_out)
@@ -95,26 +93,12 @@ def mult(np.ndarray[f64_t, ndim=2] p, np.ndarray[f64_t, ndim=2] q):
     return out
 
 
-def nlerp(np.ndarray[f64_t, ndim=1] targettime, np.ndarray[f64_t, ndim=1] time, np.ndarray[f64_t, ndim=2] q):
-    """Nlerp, q quaternion array interpolated from time to targettime"""
-    cdef int n = q.shape[0]
-    cdef np.ndarray[f64_t, ndim=2] out = np.zeros_like(q)
-    pytoast_nlerp(n, <double*>targettime.data, <double*>time.data, <double*>q.data, <double*>out.data)
-    return out
-
-
 def slerp(np.ndarray[f64_t, ndim=1] targettime, np.ndarray[f64_t, ndim=1] time, np.ndarray[f64_t, ndim=2] q):
     """Slerp, q quaternion array interpolated from time to targettime"""
-    cdef int n = q.shape[0]
-    cdef np.ndarray[f64_t, ndim=2] out = np.zeros_like(q)
-    pytoast_slerp(n, <double*>targettime.data, <double*>time.data, <double*>q.data, <double*>out.data)
-    return out
-
-
-def compute_t(np.ndarray[f64_t, ndim=1] targettime, np.ndarray[f64_t, ndim=1] time):
-    cdef int n = time.shape[0]
-    cdef np.ndarray[f64_t, ndim=2] out = np.zeros_like(time)
-    pytoast_compute_t(n, <double*>targettime.data, <double*>time.data, <double*>out.data)
+    cdef int ntime = time.shape[0]
+    cdef int ntarget = targettime.shape[0]
+    cdef np.ndarray[f64_t, ndim=2] out = np.zeros((ntarget, 4), dtype=f64)
+    pytoast_slerp(ntime, ntarget, <double*>time.data, <double*>targettime.data, <double*>q.data, <double*>out.data)
     return out
 
 

@@ -128,25 +128,18 @@ int main(int argc, char *argv[]) {
     pytoast_qln(2,q,q_rot);
     print_qarray(verb,2,q_rot,"ln(q)");
 
-    /* Testing compute_t, nlerp & slerp functions */
-    double *t_matrix = malloc( 4 * sizeof(double) );
-    pytoast_compute_t(n_time,targettime,time,t_matrix);
+    /* Testing slerp function */
     
     print_array(verb,1,2,time,"time");
     print_array(verb,1,4,targettime,"targettime");
-    print_array(verb,1,4,t_matrix,"t_matrix");
 
     pytoast_qnorm_inplace(2,4,q);
     print_qarray(verb,2,q,"q (unit before interpolation)");
-    
-    pytoast_nlerp(n_time, targettime, time, q, q_interp);
-    pytoast_nlerp(n_time, targettime, time, q, q_interp);
-    print_qarray(verb,4,q_interp,"q_interp (nlerp)");
 
-    pytoast_slerp(n_time, targettime, time, q, q_interp);
-    pytoast_slerp(n_time, targettime, time, q, q_interp);
-    pytoast_slerp(n_time, targettime, time, q, q_interp);
-    pytoast_slerp(n_time, targettime, time, q, q_interp);
+    pytoast_slerp(2, 4, time, targettime, q, q_interp);
+    pytoast_slerp(2, 4, time, targettime, q, q_interp);
+    pytoast_slerp(2, 4, time, targettime, q, q_interp);
+    pytoast_slerp(2, 4, time, targettime, q, q_interp);
     print_qarray(verb,4,q_interp,"q_interp (slerp)");
 
 
@@ -154,10 +147,10 @@ int main(int argc, char *argv[]) {
     int n_loop_1 = 60000;
     double chrono_1 = (double)clock();
     for (i = 0; i < n_loop_1; i++) {
-        pytoast_slerp(n_time, targettime, time, q, q_interp);
+        pytoast_slerp(2, 4, time, targettime, q, q_interp);
     }
     chrono_1 = ((double)clock() - chrono_1)/CLOCKS_PER_SEC;
-    printf("Time 1 (nlerp) = %f s\n", chrono_1);
+    printf("Time 1 (slerp) = %f s\n", chrono_1);
 
 
     int n_loop_2 = 30000000;

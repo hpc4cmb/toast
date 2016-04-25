@@ -78,24 +78,9 @@ p, q and r are n by 4 arrays
 void pytoast_qmult(int n, const double* p, const double* q, double* r);
 
 /*
-Normalized interpolation of q quaternion array from time to targettime
-targettime is a n_time-array, time is a 2-array (start and end time), q_in is 
-a 2 by 4 array, q_interp is a n_time by 4 array
-*/
-void pytoast_nlerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
-
-/*
 Spherical interpolation of q quaternion array from time to targettime
-targettime is a n_time-array, time is a 2-array (start and end time), q_in 
-is a 2 by 4 array, q_interp is a n_time by 4 array
 */
-void pytoast_slerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
-
-/*
-Compute the time vector used for interpolation
-targettime is a n_time-array, time is a 2-array (start and end time), t_matrix is a n_time-array
-*/
-void pytoast_compute_t(int n_time, const double* targettime, const double* time, double* t_matrix);
+void pytoast_slerp(int n_time, int n_targettime, const double* time, const double* targettime, const double* q_in, double* q_interp);
 
 /*
 Exponential of a quaternion array

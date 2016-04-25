@@ -82,19 +82,6 @@ class QarrayTest(MPITestCase):
         vec_result = qarray.rotate(np.vstack([self.q1,self.q2]), np.vstack([self.vec_2d, self.vec_2d]))
         np.testing.assert_array_almost_equal(vec_result , np.vstack([self.rot_by_q1, self.rot_by_q2]))
 
-    def test_nlerp(self):
-        q = qarray.norm(np.array([[2., 3, 4, 5],
-                      [6, 7, 8, 9]]))
-        time = np.array([0., 9])
-        targettime = np.array([0, 3, 4.5, 9])
-        q_interp = qarray.nlerp(targettime, time, q)
-        self.assertEquals(q_interp.shape[1], 4) 
-
-        np.testing.assert_array_almost_equal(q_interp[0], q[0])
-        np.testing.assert_array_almost_equal(q_interp[-1], q[-1])
-        np.testing.assert_array_almost_equal(q_interp[1], qarray.norm( ( (q[0]*2 + q[1])/3 ).reshape(1,4) )[0], decimal=4)
-        np.testing.assert_array_almost_equal(q_interp[2], qarray.norm( ((q[0] + q[1])/2).reshape(1,4) )[0], decimal=4)
-
     def test_slerp(self):
         q = qarray.norm(np.array([[2., 3, 4, 5],
                       [6, 7, 8, 9]]))

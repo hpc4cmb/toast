@@ -157,118 +157,69 @@ void pytoast_qmult(int n, const double* p, const double* q, double* r) {
     return;
 }
 
-/*
-Normalized interpolation of q quaternion array from time to targettime.
-targettime is a n_time-array, time is a 2-array (start and end time), q_in is
-a 2 by 4 array, q_interp is a n_time by 4 array.
-*/
-void pytoast_nlerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
-    int i, j;
-    double* t_matrix = (double*)malloc(n_time * sizeof(double));
-    if (t_matrix == NULL) {
-        fprintf(stderr, "cannot allocate %d doubles\n", n_time);
-        exit(1);
-    }
-
-    pytoast_compute_t(n_time, targettime, time, t_matrix);
-
-    for (i = 0; i < n_time; ++i) {
-        for (j = 0; j < 4; ++j) {
-            q_interp[4*i + j] = q_in[4*0 + j] * (1 - t_matrix[i]) + q_in[4*1 + j] * t_matrix[i];
-        }
-    }
-
-    pytoast_qnorm_inplace(n_time, 4, q_interp);
-
-    free(t_matrix);
-    return;
-}
 
 /*
 Spherical interpolation of q quaternion array from time to targettime
 targettime is a n_time-array, time is a 2-array (start and end time), q_in 
 is a 2 by 4 array, q_interp is a n_time by 4 array.
 */
-void pytoast_slerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
-    int i, j;
-    /* Allocating temporary arrays */
-    double* t_matrix;
-    double* q_tmp1;
-    double* q_tmp2;
-
-    t_matrix = (double*)malloc(n_time * sizeof(double));
-    if (t_matrix == NULL) {
-        fprintf(stderr, "cannot allocate %d doubles\n", n_time);
-        exit(1);
-    }
-    q_tmp1 = (double*)malloc(n_time * 4 * sizeof(double));
-    if (q_tmp1 == NULL) {
-        fprintf(stderr, "cannot allocate %d doubles\n", 4*n_time);
-        exit(1);
-    }
-    q_tmp2 = (double*)malloc(n_time * 4 * sizeof(double));
-    if (q_tmp2 == NULL) {
-        fprintf(stderr, "cannot allocate %d doubles\n", 4*n_time);
-        exit(1);
-    }
-
-    pytoast_compute_t(n_time, targettime, time, t_matrix);
-
-    /*
-    Think of removing first and last row from all the arrays 
-    (since not interpolated)
-    */
-    for (i = 0; i < n_time; ++i) {
-        for (j = 0; j < 4; ++j) {
-            q_tmp1[4*i + j] = q_in[4*1 + j];
-        }
-    }
-
-    for (i = 0; i < n_time-1; ++i) {
-        for (j = 0; j < 4; ++j) {
-            q_tmp2[4*i + j] = q_in[4*0 + j];
-        }
-    }
-    for (j = 0; j < 4; ++j) {
-        q_tmp2[4*(n_time-1) + j] = q_in[4*1 + j];
-    }
-
-    pytoast_qinv(n_time, q_tmp2);
-    pytoast_qmult(n_time, q_tmp1, q_tmp2, q_interp);
-    pytoast_qpow(n_time, t_matrix, q_interp, q_tmp1);
-    pytoast_qinv(n_time, q_tmp2); /* q_tmp2 back to where it was at first */
-    pytoast_qmult(n_time, q_tmp1, q_tmp2, q_interp);
-
-    /* First and last rows reinit */
-    for (j = 0; j < 4; ++j) {
-        q_interp[4*0 + j] = q_in[4*0 + j];
-        q_interp[4*(n_time-1) + j] = q_in[4*1 + j];
-    }
-    free(q_tmp2);
-    free(q_tmp1);
-    free(t_matrix);
-    return;
-}
-
-/*
-Compute the time vector used for interpolation
-targettime is a n_time-array, time is a 2-array (start and end time), t_matrix is a n_time-array
-*/
-void pytoast_compute_t(int n_time, const double* targettime, const double* time, double* t_matrix) {
+void pytoast_slerp(int n_time, int n_targettime, const double* time, const double* targettime, const double* q_in, double* q_interp) {
     int i;
-    double t_span = time[1] - time[0];
-    for (i = 0; i < n_time; ++i) {
-        t_matrix[i] = (targettime[i] - time[0])/t_span;
-        /*
-        Consistency checks
-        if (t_matrix[i]<0 || t_matrix[i]>1) {
-           fprintf(stderr, "targettime inconsistent (extrapolation) at %s:%d\n", __FILE__, __LINE__);
-           return;
+    /* Allocating temporary arrays */
+    int off;
+    double diff;
+    double frac;
+    double costheta;
+    double const * qlow;
+    double const * qhigh;
+    double theta;
+    double invsintheta;
+    double norm;
+    double *q;
+    double ratio1;
+    double ratio2;
+
+    off = 0;
+
+    for (i = 0; i < n_targettime; ++i) {
+        /* scroll forward to the correct time sample */
+        while ((off+1 < n_time) && (time[off+1] < targettime[i])) {
+            ++off;
         }
-        */
+        diff = time[off+1] - time[off];
+        frac = (targettime[i] - time[off]) / diff;
+
+        qlow = &(q_in[4*off]);
+        qhigh = &(q_in[4*(off + 1)]);
+        q = &(q_interp[4*i]);
+
+        costheta = qlow[0] * qhigh[0] + qlow[1] * qhigh[1] + qlow[2] * qhigh[2] + qlow[3] * qhigh[3];
+        if ( fabs ( costheta - 1.0 ) < 1.0e-10 ) {
+            q[0] = qlow[0];
+            q[1] = qlow[1];
+            q[2] = qlow[2];
+            q[3] = qlow[3];
+        } else {
+            theta = acos(costheta);
+            invsintheta = 1.0 / sqrt ( 1.0 - costheta * costheta );
+            ratio1 = sin ( ( 1.0 - frac ) * theta ) * invsintheta;
+            ratio2 = sin ( frac * theta ) * invsintheta;
+            q[0] = ratio1 * qlow[0] + ratio2 * qhigh[0];
+            q[1] = ratio1 * qlow[1] + ratio2 * qhigh[1];
+            q[2] = ratio1 * qlow[2] + ratio2 * qhigh[2];
+            q[3] = ratio1 * qlow[3] + ratio2 * qhigh[3];
+        }
+        
+        norm = 1.0 / sqrt ( q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3] );
+        q[0] *= norm;
+        q[1] *= norm;
+        q[2] *= norm;
+        q[3] *= norm;
     }
+
     return;
 }
+
 
 /*
 Exponential of a quaternion array
