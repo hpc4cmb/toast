@@ -16,7 +16,7 @@ Dot product of a lists of arrays, returns a column array.  Arrays a and b
 must be n by 4, but only the m first columns will be used for the dot 
 product (n-array)
 */
-void pytoast_qarraylist_dot(const int n, const int m, const double* a, const double* b, double* dotprod) {
+void pytoast_qarraylist_dot(int n, int m, const double* a, const double* b, double* dotprod) {
     int i, j;
     for (i = 0; i < n; ++i) {
         dotprod[i]=0.0;
@@ -31,7 +31,7 @@ void pytoast_qarraylist_dot(const int n, const int m, const double* a, const dou
 Inverse of quaternion array q
 q is a n by 4 array
 */
-void pytoast_qinv(const int n, double* q) {
+void pytoast_qinv(int n, double* q) {
     int i, j;
     for (i = 0; i < n; ++i) {
         for (j = 0; j < 3; ++j) {
@@ -45,8 +45,8 @@ void pytoast_qinv(const int n, double* q) {
 Norm of quaternion array list
 v must be a n by 4 array, only the first m rows will be considered, l2 is a n-array
 */
-void pytoast_qamplitude(const int n, const int m, const double* v, double* l2) {
-    int i, j;
+void pytoast_qamplitude(int n, int m, const double* v, double* l2) {
+    int i;
     pytoast_qarraylist_dot(n, m, v, v, l2);
     for (i = 0; i < n; ++i) {
         l2[i] = sqrt(l2[i]);
@@ -58,7 +58,7 @@ void pytoast_qamplitude(const int n, const int m, const double* v, double* l2) {
 Normalize quaternion array q or array list to unit quaternions
 q_in must be a n by 4 arrray, only the first m rows will be considered, results are output to q_out
 */
-void pytoast_qnorm(const int n, const int m, const double* q_in, double* q_out) {
+void pytoast_qnorm(int n, int m, const double* q_in, double* q_out) {
     int i, j;
     double* l2 = (double*)malloc(n * sizeof(double));
     if (l2 == NULL) {
@@ -86,7 +86,7 @@ void pytoast_qnorm(const int n, const int m, const double* q_in, double* q_out) 
 Normalize quaternion array q or array list to unit quaternions
 q must be a n by 4 arrray, only the first m rows will be considered, results are written to q
 */
-void pytoast_qnorm_inplace(const int n, const int m, double* q) {
+void pytoast_qnorm_inplace(int n, int m, double* q) {
     int i, j;
     double* l2 = (double*)malloc(n * sizeof(double));
     if (l2 == NULL) {
@@ -107,8 +107,8 @@ void pytoast_qnorm_inplace(const int n, const int m, double* q) {
 Rotate vector v by n-quaternion array q and returns array with rotate n-vectors
 v is a 3D-vector and q is a n by 4 array, v_out is a n by 3 array.
 */
-void pytoast_qrotate(const int n, const double* v, const double* q_in, double* v_out) {
-    int i, j;
+void pytoast_qrotate(int n, const double* v, const double* q_in, double* v_out) {
+    int i;
     /* Allocating temporary unit quaternion array */
     double *q_unit = (double*)malloc(n * 4 * sizeof(double));
     if (q_unit == NULL) {
@@ -142,8 +142,8 @@ void pytoast_qrotate(const int n, const double* v, const double* q_in, double* v
 Multiply arrays of quaternions
 p, q and r are n by 4 arrays
 */
-void pytoast_qmult(const int n, const double* p, const double* q, double* r) {
-    int i, j;
+void pytoast_qmult(int n, const double* p, const double* q, double* r) {
+    int i;
     for (i = 0; i < n; ++i) {
         r[4*i + 0] =  p[4*i + 0] * q[4*i + 3] + p[4*i + 1] * q[4*i + 2] 
             - p[4*i + 2] * q[4*i + 1] + p[4*i + 3] * q[4*i + 0];
@@ -162,7 +162,7 @@ Normalized interpolation of q quaternion array from time to targettime.
 targettime is a n_time-array, time is a 2-array (start and end time), q_in is
 a 2 by 4 array, q_interp is a n_time by 4 array.
 */
-void pytoast_nlerp(const int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
+void pytoast_nlerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
     int i, j;
     double* t_matrix = (double*)malloc(n_time * sizeof(double));
     if (t_matrix == NULL) {
@@ -189,7 +189,7 @@ Spherical interpolation of q quaternion array from time to targettime
 targettime is a n_time-array, time is a 2-array (start and end time), q_in 
 is a 2 by 4 array, q_interp is a n_time by 4 array.
 */
-void pytoast_slerp(const int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
+void pytoast_slerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp) {
     int i, j;
     /* Allocating temporary arrays */
     double* t_matrix;
@@ -254,8 +254,8 @@ void pytoast_slerp(const int n_time, const double* targettime, const double* tim
 Compute the time vector used for interpolation
 targettime is a n_time-array, time is a 2-array (start and end time), t_matrix is a n_time-array
 */
-void pytoast_compute_t(const int n_time, const double* targettime, const double* time, double* t_matrix) {
-    int i, j;
+void pytoast_compute_t(int n_time, const double* targettime, const double* time, double* t_matrix) {
+    int i;
     double t_span = time[1] - time[0];
     for (i = 0; i < n_time; ++i) {
         t_matrix[i] = (targettime[i] - time[0])/t_span;
@@ -274,7 +274,7 @@ void pytoast_compute_t(const int n_time, const double* targettime, const double*
 Exponential of a quaternion array
 q_in and q_out are n by 4 arrays
 */
-void pytoast_qexp(const int n, const double* q_in, double* q_out) {
+void pytoast_qexp(int n, const double* q_in, double* q_out) {
     int i, j;
     double* normv;
     double exp_q_w;
@@ -304,7 +304,7 @@ void pytoast_qexp(const int n, const double* q_in, double* q_out) {
 Natural logarithm of a quaternion array
 q_in and q_out are n by 4 arrays
 */
-void pytoast_qln(const int n, const double* q_in, double* q_out) {
+void pytoast_qln(int n, const double* q_in, double* q_out) {
     int i, j;
     double* normq;
     double tmp;
@@ -335,7 +335,7 @@ void pytoast_qln(const int n, const double* q_in, double* q_out) {
 Real power of quaternion array
 p is a n-array, q_in and q_out are n by 4 arrays
 */
-void pytoast_qpow(const int n, const double* p, const double* q_in, double* q_out) {
+void pytoast_qpow(int n, const double* p, const double* q_in, double* q_out) {
     int i, j;
     /* Allocating temporary quaternion array */
     double* q_tmp = (double*)malloc(n * 4 * sizeof(double));
@@ -361,7 +361,7 @@ void pytoast_qpow(const int n, const double* p, const double* q_in, double* q_ou
 Creates rotation quaternions of angles (in [rad]) around axes [already normalized]
 axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 */
-void pytoast_from_axisangle(const int n, const double* axis, const double* angle, double* q_out) {
+void pytoast_from_axisangle(int n, const double* axis, const double* angle, double* q_out) {
     int i, j;
     double sin_a;
     for (i = 0; i < n; ++i) {
@@ -379,7 +379,6 @@ Returns the axis and angle of rotation of a quaternion
 q is a 4-array, axis is a 3-array, angle is 1-array
 */
 void pytoast_to_axisangle(const double* q, double* axis, double* angle) {
-    int i, j;
     double tmp;
 
     angle[0] = 2 * acos(q[3]);
@@ -401,7 +400,6 @@ Creates the rotation matrix corresponding to a quaternion
 q is a 4 array, rotmat is a 3 by 3 array
 */
 void pytoast_to_rotmat(const double* q, double* rotmat) {
-    int i, j;
     double xx = q[0] * q[0];
     double xy = q[0] * q[1];
     double xz = q[0] * q[2];
@@ -431,7 +429,6 @@ Creates the quaternion from a rotation matrix
 rotmat is a 3 by 3 array, q is a 4-array.
 */
 void pytoast_from_rotmat(const double* rotmat, double* q) {
-    int i, j;
     double tr = rotmat[0] + rotmat[4] + rotmat[8];
     double S;
     if (tr > 0) { 
@@ -467,7 +464,6 @@ Creates the quaternion from two normalized vectors (be careful with colinear vec
 vec1 and vec2 are 3-arrays, q is a 4-array
 */
 void pytoast_from_vectors(const double* vec1, const double* vec2, double* q) {
-    int i, j;
     double dotprod = vec1[0]*vec2[0] + vec1[1]*vec2[1] + vec1[2]*vec2[2];
     double vec1prod = vec1[0]*vec1[0] + vec1[1]*vec1[1] + vec1[2]*vec1[2];
     double vec2prod = vec2[0]*vec2[0] + vec2[1]*vec2[1] + vec2[2]*vec2[2];

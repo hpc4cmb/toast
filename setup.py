@@ -40,6 +40,7 @@ libctoast = ('ctoast',
     {
     'sources': [
         'toast/ctoast/pytoast_mem.c',
+        'toast/ctoast/pytoast_qarray.c',
         ],
     'include_dirs': [ctoast_dir],
     }

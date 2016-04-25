@@ -39,87 +39,87 @@ void pytoast_mem_aligned_free(void * mem);
 Dot product of a lists of arrays, returns a column array
 Arrays a and b must be n by 4, but only the m first columns will be used for the dot product (n-array)
 */
-void pytoast_qarraylist_dot(const int n, const int m, const double* a, const double* b, double* dotprod);
+void pytoast_qarraylist_dot(int n, int m, const double* a, const double* b, double* dotprod);
 
 /*
 Inverse of quaternion array q
 q is a n by 4 array
 */
-void pytoast_qinv(const int n, double* q);
+void pytoast_qinv(int n, double* q);
 
 /*
 Norm of quaternion array list
 v must be a n by 4 array, only the first m rows will be considered, l2 is a n-array
 */
-void pytoast_qamplitude(const int n, const int m, const double* v, double* l2);
+void pytoast_qamplitude(int n, int m, const double* v, double* l2);
 
 /*
 Normalize quaternion array q or array list to unit quaternions
 q_in must be a n by 4 arrray, only the first m rows will be considered, results are output to q_out
 */
-void pytoast_qnorm(const int n, const int m, const double* q_in, double* q_out);
+void pytoast_qnorm(int n, int m, const double* q_in, double* q_out);
 
 /*
 Normalize quaternion array q or array list to unit quaternions
 q must be a n by 4 arrray, only the first m rows will be considered, results are written to q
 */
-void pytoast_qnorm_inplace(const int n, const int m, double* q);
+void pytoast_qnorm_inplace(int n, int m, double* q);
 
 /*
 Rotate vector v by n-quaternion array q and returns array with rotate n-vectors
 v is a 3D-vector and q is a n by 4 array, v_out is a n by 3 array.
 */
-void pytoast_qrotate(const int n, const double* v, const double* q_in, double* v_out);
+void pytoast_qrotate(int n, const double* v, const double* q_in, double* v_out);
 
 /*
 Multiply arrays of quaternions
 p, q and r are n by 4 arrays
 */
-void pytoast_qmult(const int n, const double* p, const double* q, double* r);
+void pytoast_qmult(int n, const double* p, const double* q, double* r);
 
 /*
 Normalized interpolation of q quaternion array from time to targettime
 targettime is a n_time-array, time is a 2-array (start and end time), q_in is 
 a 2 by 4 array, q_interp is a n_time by 4 array
 */
-void pytoast_nlerp(const int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
+void pytoast_nlerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
 
 /*
 Spherical interpolation of q quaternion array from time to targettime
 targettime is a n_time-array, time is a 2-array (start and end time), q_in 
 is a 2 by 4 array, q_interp is a n_time by 4 array
 */
-void pytoast_slerp(const int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
+void pytoast_slerp(int n_time, const double* targettime, const double* time, const double* q_in, double* q_interp);
 
 /*
 Compute the time vector used for interpolation
 targettime is a n_time-array, time is a 2-array (start and end time), t_matrix is a n_time-array
 */
-void pytoast_compute_t(const int n_time, const double* targettime, const double* time, double* t_matrix);
+void pytoast_compute_t(int n_time, const double* targettime, const double* time, double* t_matrix);
 
 /*
 Exponential of a quaternion array
 q_in and q_out are n by 4 arrays
 */
-void pytoast_qexp(const int n, const double* q_in, double* q_out);
+void pytoast_qexp(int n, const double* q_in, double* q_out);
 
 /*
 Natural logarithm of a quaternion array
 q_in and q_out are n by 4 arrays
 */
-void pytoast_qln(const int n, const double* q_in, double* q_out);
+void pytoast_qln(int n, const double* q_in, double* q_out);
 
 /*
 Real power of quaternion array
 p is a n-array, q_in and q_out are n by 4 arrays
 */
-void pytoast_qpow(const int n, const double* p, const double* q_in, double* q_out);
+void pytoast_qpow(int n, const double* p, const double* q_in, double* q_out);
 
 /*
 Creates rotation quaternions of angles (in [rad]) around axes [already normalized]
 axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 */
-void pytoast_from_axisangle(const int n, const double* axis, const double* angle, double* q_out);
+void pytoast_from_axisangle(int n, const double* axis, const double* angle, double* q_out);
 
 /*
 Returns the axis and angle of rotation of a quaternion
