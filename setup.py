@@ -64,9 +64,18 @@ ext_cache = Extension (
     ]
 )
 
+ext_qarray = Extension (
+    'toast.tod.qarray',
+    include_dirs = [np.get_include(), ctoast_dir],
+    sources = [
+        'toast/tod/qarray.pyx'
+    ]
+)
+
 extensions = cythonize([
     ext_map_helper,
-    ext_cache
+    ext_cache,
+    ext_qarray
 ])
 
 
