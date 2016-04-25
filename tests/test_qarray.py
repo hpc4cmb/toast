@@ -1,119 +1,18 @@
-import numpy as np
-import numpy.ctypeslib as npc
-import unittest
+# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by 
+# a BSD-style license that can be found in the LICENSE file.
+
+from mpi4py import MPI
 
 import sys
 import os
-sys.path.append(os.getcwd())
 
-import ctypes as ct
-from ctypes.util import find_library
+from toast.mpirunner import MPITestCase
 
-c_qarray = ct.CDLL("./benchmark/libqarray.so")
-
-c_qarray.qarraylist_dot.argtypes = [
-    ct.c_int,
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
-
-c_qarray.qinv.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qamplitude.argtypes = [
-    ct.c_int,
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
-
-c_qarray.qnorm.argtypes = [
-    ct.c_int,
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qnorm_inplace.argtypes = [
-    ct.c_int,
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qrotate.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qmult.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.nlerp.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.slerp.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.compute_t.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
-
-c_qarray.qexp.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qln.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.qpow.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.from_axisangle.argtypes = [
-    ct.c_int,
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.to_axisangle.argtypes = [
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
-
-c_qarray.to_rotmat.argtypes = [
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS')]
-
-c_qarray.from_rotmat.argtypes = [
-    npc.ndpointer(dtype=np.float64, ndim=2, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
-
-c_qarray.from_vectors.argtypes = [
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')]
+from toast.tod.qarray import *
 
 
-class TestQuaternionArray(unittest.TestCase):
-    
+class QarrayTest(MPITestCase):
 
     def setUp(self):
         #data
@@ -131,7 +30,7 @@ class TestQuaternionArray(unittest.TestCase):
         self.mult_result = -1*np.array([[-0.44954009, -0.53339352, -0.37370443,  0.61135101]])
         self.rot_by_q1 = np.array([[0.4176698, 0.84203849, 0.34135482]])
         self.rot_by_q2 = np.array([[0.8077876, 0.3227185, 0.49328689]])
-
+        
     def test_arraylist_dot_onedimarrays(self):
         q_result = np.zeros(1)
         c_qarray.qarraylist_dot(1, 3, self.vec_2d, (self.vec_2d +1), q_result)
@@ -316,6 +215,3 @@ class TestQuaternionArray(unittest.TestCase):
         c_qarray.from_vectors(v1, v2, q_result)
         np.testing.assert_array_almost_equal(q_result, np.array([0, 0, np.sin(np.radians(15)), np.cos(np.radians(15))]))
 
-if __name__ == '__main__':
-    # better to use nose
-    unittest.main()
