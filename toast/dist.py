@@ -3,7 +3,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-from mpi4py import MPI
+import os
+
+if 'PYTOAST_NOMPI' in os.environ.keys():
+    from . import fakempi as MPI
+else:
+    from mpi4py import MPI
 
 import unittest
 

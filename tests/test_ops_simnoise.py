@@ -2,10 +2,14 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-from mpi4py import MPI
 
 import sys
 import os
+
+if 'PYTOAST_NOMPI' in os.environ.keys():
+    from toast import fakempi as MPI
+else:
+    from mpi4py import MPI
 
 import numpy as np
 import numpy.testing as nt
