@@ -2,8 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-from mpi4py import MPI
-
+import os
 import sys
 
 import contextlib
@@ -11,6 +10,11 @@ import contextlib
 from unittest import TestCase
 from unittest import TextTestRunner
 from unittest import TestResult, TextTestResult
+
+if 'PYTOAST_NOMPI' in os.environ.keys():
+    from . import fakempi as MPI
+else:
+    from mpi4py import MPI
 
 
 def testcase_name(test_method):

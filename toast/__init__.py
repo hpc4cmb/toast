@@ -4,7 +4,6 @@ package designed to allow the processing of data from telescopes that acquire
 data as timestreams (rather than images).
 """
 
-from mpi4py import MPI
 
 from ._version import __version__
 
