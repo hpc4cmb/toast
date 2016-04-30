@@ -296,7 +296,7 @@ class TOD(object):
             detector (str): the name of the detector.
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
-            n (int): the number of samples to read.
+            n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
             A 3-tuple of arrays, containing the data, the detector flags, and
@@ -306,6 +306,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if n == 0:
+            n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
@@ -323,7 +325,7 @@ class TOD(object):
             detector (str): the name of the detector.
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
-            n (int): the number of samples to read.
+            n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
             A 2-tuple of arrays, containing the detector flags and the common
@@ -333,6 +335,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if n == 0:
+            n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
@@ -405,11 +409,13 @@ class TOD(object):
         Args:
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
-            n (int): the number of samples to read.
+            n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
             (array): a numpy array containing the timestamps.
         """
+        if n == 0:
+            n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read times- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
@@ -449,7 +455,7 @@ class TOD(object):
             detector (str): the name of the detector.
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
-            n (int): the number of samples to read.
+            n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
             A 2D array of shape (n, 4)
@@ -458,6 +464,8 @@ class TOD(object):
             raise ValueError('you must specify the detector')
         if detector not in self.local_dets:
             raise ValueError('detector {} not found'.format(detector))
+        if n == 0:
+            n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read pntg- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
@@ -505,13 +513,15 @@ class TOD(object):
         Args:
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
-            n (int): the number of samples to read.
+            n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
             (array): a numpy array containing the flags.
         """
         if self.local_samples[1] <= 0:
             raise RuntimeError('cannot read common flags- process has no assigned local samples')
+        if n == 0:
+            n = self.local_samples[1] - local_start
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n)
