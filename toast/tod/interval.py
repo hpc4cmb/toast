@@ -24,6 +24,9 @@ class Interval(object):
         self._first = first
         self._last = last
 
+    def __repr__(self):
+        return '<Interval {} - {} ({} - {})>'.format(self._start, self._stop, self._first, self._last)
+
     @property
     def start(self):
         """
