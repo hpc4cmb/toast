@@ -214,6 +214,14 @@ class DistPixels(object):
 
     def read_healpix_fits(self, path, buffer=5000000):
 
+        hdulist = af.open(path, memmap=True)
+        head = hdulist[1].header
+        data = hdulist[1].data
+
+
+
+
+
         elems = hp.read_map(path, dtype=self._dtype, memmap=True)
 
         nblock = len(elems)
@@ -224,6 +232,8 @@ class DistPixels(object):
 
         nsmbuf = buffer 
 
+
+        hdulist.close()
 
         return
 
