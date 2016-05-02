@@ -1,0 +1,16 @@
+# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by 
+# a BSD-style license that can be found in the LICENSE file.
+
+
+import unittest
+
+import numpy as np
+
+import healpy as hp
+
+import quaternionarray as qa
+
+
+
+
