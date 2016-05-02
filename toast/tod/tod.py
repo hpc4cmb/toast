@@ -192,7 +192,7 @@ class TOD(object):
             raise ValueError('detector {} flags not yet written'.format(detector))
         if not self.cache.exists(self._common):
             raise ValueError('common flags not yet written')
-        flagsref = self.cache.reference(cachename)[start:start+n]
+        flagsref = self.cache.reference(cacheflags)[start:start+n]
         comref = self.cache.reference(self._common)[start:start+n]
         return flagsref, comref
 
