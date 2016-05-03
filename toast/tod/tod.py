@@ -23,8 +23,10 @@ class TOD(object):
     Base class for an object that provides detector pointing and
     timestreams for a single observation.
 
-    Each TOD class has one or more detectors, and this class provides 
-    pointing quaternions and flags for each detector.
+    This class provides high-level functions that are common to all derived
+    classes.  It also defines the internal methods that should be overridden
+    by all derived classes.  These internal methods throw an exception if they
+    are called.  A TOD base class should never be directly instantiated.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
@@ -60,12 +62,6 @@ class TOD(object):
                 if len(self._dist_samples[r]) == 0:
                     print("WARNING: process {} has no data assigned in TOD.  Use fewer processes.".format(r))
 
-        self._pref_detdata = 'toast_tod_detdata_'
-        self._pref_detflags = 'toast_tod_detflags_'
-        self._pref_detpntg = 'toast_tod_detpntg_'
-        self._common = 'toast_tod_common_flags'
-        self._stamps = 'toast_tod_stamps'
-        
         self.cache = Cache()
         """
         The timestream data cache.
@@ -166,111 +162,73 @@ class TOD(object):
         return self._mpicomm
 
 
-    # The base class methods that get and put just use the cache.
-
     def _get(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachedata = "{}{}".format(self._pref_detdata, detector)
-        if not self.cache.exists(cachedata):
-            raise ValueError('detector {} data not yet written'.format(detector))
-        dataref = self.cache.reference(cachedata)[start:start+n]
-        return dataref
+        raise RuntimeError("Fell through to TOD._get base class method")
+        return None
 
 
     def _put(self, detector, start, data):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachedata = "{}{}".format(self._pref_detdata, detector)
-        
-        if not self.cache.exists(cachedata):
-            self.cache.create(cachedata, np.float64, (self.local_samples[1],))
-        
-        n = data.shape[0]
-        refdata = self.cache.reference(cachedata)[start:start+n]
-
-        refdata[:] = data
+        raise RuntimeError("Fell through to TOD._put base class method")
         return
 
 
     def _get_pntg(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachepntg = "{}{}".format(self._pref_detpntg, detector)
-        if not self.cache.exists(cachepntg):
-            raise ValueError('detector {} pointing data not yet written'.format(detector))
-        pntgref = self.cache.reference(cachepntg)[start:start+n,:]
-        return pntgref
+        raise RuntimeError("Fell through to TOD._get_pntg base class method")
+        return None
 
 
     def _put_pntg(self, detector, start, data):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cachepntg = "{}{}".format(self._pref_detpntg, detector)
-        if not self.cache.exists(cachepntg):
-            self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
-        pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
-        pntgref[:] = data
+        raise RuntimeError("Fell through to TOD._put_pntg base class method")
         return
 
 
     def _get_flags(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
-        if not self.cache.exists(cacheflags):
-            raise ValueError('detector {} flags not yet written'.format(detector))
-        if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
-        flagsref = self.cache.reference(cacheflags)[start:start+n]
-        comref = self.cache.reference(self._common)[start:start+n]
-        return flagsref, comref
+        raise RuntimeError("Fell through to TOD._get_flags base class method")
+        return None
 
 
     def _put_det_flags(self, detector, start, flags):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
-        
-        if not self.cache.exists(cacheflags):
-            self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
-        
-        n = flags.shape[0]
-        refflags = self.cache.reference(cacheflags)[start:start+n]
-
-        refflags[:] = flags
+        raise RuntimeError("Fell through to TOD._put_det_flags base class method")
         return
 
 
     def _get_common_flags(self, start, n):
-        if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
-        comref = self.cache.reference(self._common)[start:start+n]
-        return comref
+        raise RuntimeError("Fell through to TOD._get_common_flags base class method")
+        return None
 
 
     def _put_common_flags(self, start, flags):
-        if not self.cache.exists(self._common):
-            self.cache.create(self._common, np.uint8, (self.local_samples[1],))
-        n = flags.shape[0]
-        comref = self.cache.reference(self._common)[start:start+n]
-        comref[:] = flags
+        raise RuntimeError("Fell through to TOD._put_common_flags base class method")
         return
 
 
     def _get_times(self, start, n):
-        if not self.cache.exists(self._stamps):
-            raise ValueError('timestamps not yet written')
-        ref = self.cache.reference(self._stamps)[start:start+n]
-        return ref
+        raise RuntimeError("Fell through to TOD._get_times base class method")
+        return None
 
 
     def _put_times(self, start, stamps):
-        if not self.cache.exists(self._stamps):
-            self.cache.create(self._stamps, np.float64, (self.local_samples[1],))
-        n = stamps.shape[0]
-        ref = self.cache.reference(self._stamps)[start:start+n]
-        ref[:] = stamps
+        raise RuntimeError("Fell through to TOD._put_times base class method")
+        return None
+
+
+    def _get_position(self, start, n):
+        raise RuntimeError("Fell through to TOD._get_position base class method")
+        return None
+
+
+    def _put_position(self, start, pos):
+        raise RuntimeError("Fell through to TOD._put_position base class method")
+        return
+
+
+    def _get_velocity(self, start, n):
+        raise RuntimeError("Fell through to TOD._get_velocity base class method")
+        return None
+
+    
+    def _put_velocity(self, start, vel):
+        raise RuntimeError("Fell through to TOD._put_velocity base class method")
         return
 
 
@@ -538,6 +496,278 @@ class TOD(object):
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_det_flags(detector, local_start, flags)
+        return
+
+
+    # Read and write telescope position
+
+    def read_position(self, local_start=0, n=0):
+        """
+        Read telescope position.
+
+        This reads the telescope position in solar system barycenter 
+        coordinates (in Kilometers).
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            (array): a 2D numpy array containing the x,y,z coordinates at each
+                sample.
+        """
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read position- process has no assigned local samples')
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_position(local_start, n)
+
+
+    def write_position(self, local_start=0, pos=None):
+        """
+        Write telescope position.
+
+        This writes the telescope position in solar system barycenter
+        coordinates (in Kilometers).
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            pos (array): the 2D array of x,y,z coordinates at each sample.
+        """
+        if pos is None:
+            raise ValueError('you must specify the array of coordinates')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write position- process has no assigned local samples')
+        if (local_start < 0) or (local_start + pos.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+pos.shape[0]-1))
+        self._put_position(local_start, pos)
+        return
+
+
+    # Read and write telescope velocity
+
+    def read_velocity(self, local_start=0, n=0):
+        """
+        Read telescope velocity.
+
+        This reads the telescope velocity in solar system barycenter 
+        coordinates (in Kilometers/s).
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            (array): a 2D numpy array containing the x,y,z velocity components
+                at each sample.
+        """
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read position- process has no assigned local samples')
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_velocity(local_start, n)
+
+
+    def write_velocity(self, local_start=0, vel=None):
+        """
+        Write telescope velocity.
+
+        This writes the telescope velocity in solar system barycenter
+        coordinates (in Kilometers/s).
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            vel (array): the 2D array of x,y,z velocity components at each
+                sample.
+        """
+        if vel is None:
+            raise ValueError('you must specify the array of velocities.')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write times- process has no assigned local samples')
+        if (local_start < 0) or (local_start + vel.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+vel.shape[0]-1))
+        self._put_velocity(local_start, vel)
+        return
+
+
+
+class TODCache(TOD):
+    """
+    TOD class that uses a memory cache for storage.
+
+    This class simply uses a manually managed Cache object to store time
+    ordered data.  You must "write" the data before you can "read" it.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data 
+            is distributed.
+        timedist (bool): if True, the data is distributed by time, otherwise 
+            by detector.
+        detectors (list): list of names to use for the detectors.
+        samples (int): the number of global samples represented by this TOD 
+            object.
+        sizes (list): specify the indivisible chunks in which to split the 
+            samples.
+    """
+
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0, sizes=None):
+
+        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=samples, sizes=sizes)
+
+        self._pref_detdata = 'toast_tod_detdata_'
+        self._pref_detflags = 'toast_tod_detflags_'
+        self._pref_detpntg = 'toast_tod_detpntg_'
+        self._common = 'toast_tod_common_flags'
+        self._stamps = 'toast_tod_stamps'
+        self._pos = 'toast_tod_pos'
+        self._vel = 'toast_tod_vel'
+
+
+    # This class just use a Cache object to store things.
+
+    def _get(self, detector, start, n):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cachedata = "{}{}".format(self._pref_detdata, detector)
+        if not self.cache.exists(cachedata):
+            raise ValueError('detector {} data not yet written'.format(detector))
+        dataref = self.cache.reference(cachedata)[start:start+n]
+        return dataref
+
+
+    def _put(self, detector, start, data):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cachedata = "{}{}".format(self._pref_detdata, detector)
+        
+        if not self.cache.exists(cachedata):
+            self.cache.create(cachedata, np.float64, (self.local_samples[1],))
+        
+        n = data.shape[0]
+        refdata = self.cache.reference(cachedata)[start:start+n]
+
+        refdata[:] = data
+        return
+
+
+    def _get_pntg(self, detector, start, n):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cachepntg = "{}{}".format(self._pref_detpntg, detector)
+        if not self.cache.exists(cachepntg):
+            raise ValueError('detector {} pointing data not yet written'.format(detector))
+        pntgref = self.cache.reference(cachepntg)[start:start+n,:]
+        return pntgref
+
+
+    def _put_pntg(self, detector, start, data):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cachepntg = "{}{}".format(self._pref_detpntg, detector)
+        if not self.cache.exists(cachepntg):
+            self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
+        pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
+        pntgref[:] = data
+        return
+
+
+    def _get_flags(self, detector, start, n):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cacheflags = "{}{}".format(self._pref_detflags, detector)
+        if not self.cache.exists(cacheflags):
+            raise ValueError('detector {} flags not yet written'.format(detector))
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
+        flagsref = self.cache.reference(cacheflags)[start:start+n]
+        comref = self.cache.reference(self._common)[start:start+n]
+        return flagsref, comref
+
+
+    def _put_det_flags(self, detector, start, flags):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cacheflags = "{}{}".format(self._pref_detflags, detector)
+        
+        if not self.cache.exists(cacheflags):
+            self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
+        
+        n = flags.shape[0]
+        refflags = self.cache.reference(cacheflags)[start:start+n]
+
+        refflags[:] = flags
+        return
+
+
+    def _get_common_flags(self, start, n):
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
+        comref = self.cache.reference(self._common)[start:start+n]
+        return comref
+
+
+    def _put_common_flags(self, start, flags):
+        if not self.cache.exists(self._common):
+            self.cache.create(self._common, np.uint8, (self.local_samples[1],))
+        n = flags.shape[0]
+        comref = self.cache.reference(self._common)[start:start+n]
+        comref[:] = flags
+        return
+
+
+    def _get_times(self, start, n):
+        if not self.cache.exists(self._stamps):
+            raise ValueError('timestamps not yet written')
+        ref = self.cache.reference(self._stamps)[start:start+n]
+        return ref
+
+
+    def _put_times(self, start, stamps):
+        if not self.cache.exists(self._stamps):
+            self.cache.create(self._stamps, np.float64, (self.local_samples[1],))
+        n = stamps.shape[0]
+        ref = self.cache.reference(self._stamps)[start:start+n]
+        ref[:] = stamps
+        return
+
+
+    def _get_position(self, start, n):
+        if not self.cache.exists(self._pos):
+            raise ValueError('telescope position not yet written')
+        ref = self.cache.reference(self._pos)[start:start+n]
+        return ref
+
+
+    def _put_position(self, start, pos):
+        if not self.cache.exists(self._pos):
+            self.cache.create(self._pos, np.float64, (self.local_samples[1], 3))
+        n = pos.shape[0]
+        ref = self.cache.reference(self._pos)[start:start+n,:]
+        ref[:,:] = pos
+        return
+
+
+    def _get_velocity(self, start, n):
+        if not self.cache.exists(self._vel):
+            raise ValueError('telescope velocity not yet written')
+        ref = self.cache.reference(self._vel)[start:start+n]
+        return ref
+
+    
+    def _put_velocity(self, start, vel):
+        if not self.cache.exists(self._vel):
+            self.cache.create(self._vel, np.float64, (self.local_samples[1], 3))
+        n = vel.shape[0]
+        ref = self.cache.reference(self._vel)[start:start+n,:]
+        ref[:,:] = vel
         return
 
 
