@@ -31,7 +31,7 @@ class TODTest(MPITestCase):
         self.mynsamp = 10
         self.myoff = self.mynsamp * self.comm.rank
         self.totsamp = self.mynsamp * self.comm.size
-        self.tod = TOD(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
+        self.tod = TODCache(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
         self.rms = 10.0
         self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4))).reshape(-1,4)
         self.pflagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)

@@ -335,6 +335,25 @@ class TODHpixSpiral(TOD):
         return
 
 
+    def _get_position(self, start, n):
+        return np.zeros((n,3), dtype=np.float64)
+
+
+    def _put_position(self, start, pos):
+        raise RuntimeError('cannot write data to simulated position')
+        return
+
+
+    def _get_velocity(self, start, n):
+        return np.zeros((n,3), dtype=np.float64)
+
+    
+    def _put_velocity(self, start, vel):
+        raise RuntimeError('cannot write data to simulated velocity')
+        return
+
+
+
 class TODSatellite(TOD):
     """
     Provide a simple generator of satellite detector pointing.
@@ -458,4 +477,23 @@ class TODSatellite(TOD):
     def _put_pntg(self, detector, start, data):
         raise RuntimeError('cannot write data to simulated pointing')
         return
+
+
+    def _get_position(self, start, n):
+        return np.zeros((n,3), dtype=np.float64)
+
+
+    def _put_position(self, start, pos):
+        raise RuntimeError('cannot write data to simulated position')
+        return
+
+
+    def _get_velocity(self, start, n):
+        return np.zeros((n,3), dtype=np.float64)
+
+    
+    def _put_velocity(self, start, vel):
+        raise RuntimeError('cannot write data to simulated velocity')
+        return
+
 
