@@ -196,7 +196,7 @@ class OpMadam(Operator):
                 cachename = "{}_{}".format(self._name, tod.detectors[d])
                 signal = tod.cache.reference(cachename)
             else:
-                signal, flags, common = tod.read(detector=tod.detectors[d], local_start=0, n=nlocal)
+                signal = tod.read(detector=tod.detectors[d], local_start=0, n=nlocal)
             madam_signal[dslice] = signal
 
             if self._purge:

@@ -236,11 +236,7 @@ class TODHpixSpiral(TOD):
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
-        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8) )
-
-
-    def _get_flags(self, detector, start, n):
-        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+        return np.zeros(n, dtype=np.float64)
 
 
     def _put(self, detector, start, data, flags):
@@ -248,7 +244,20 @@ class TODHpixSpiral(TOD):
         return
 
 
-    def _put_flags(self, detector, start, flags):
+    def _get_flags(self, detector, start, n):
+        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+
+
+    def _put_det_flags(self, detector, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
+        return
+
+
+    def _get_common_flags(self, start, n):
+        return np.zeros(n, dtype=np.uint8)
+
+
+    def _put_common_flags(self, start, flags):
         raise RuntimeError('cannot write flags to simulated data streams')
         return
 
@@ -326,16 +335,6 @@ class TODHpixSpiral(TOD):
         return
 
 
-    def _get_common_flags(self, start, n):
-        return np.zeros(n, dtype=np.uint8)
-
-
-    def _put_common_flags(self, start, flags):
-        raise RuntimeError('cannot write common flags to simulated data')
-        return
-
-
-
 class TODSatellite(TOD):
     """
     Provide a simple generator of satellite detector pointing.
@@ -409,7 +408,7 @@ class TODSatellite(TOD):
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
-        return ( np.zeros(n, dtype=np.float64), np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8) )
+        return np.zeros(n, dtype=np.float64)
 
 
     def _put(self, detector, start, data, flags):
@@ -421,7 +420,16 @@ class TODSatellite(TOD):
         return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
 
 
-    def _put_flags(self, detector, start, flags):
+    def _put_det_flags(self, detector, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
+        return
+
+
+    def _get_common_flags(self, start, n):
+        return np.zeros(n, dtype=np.uint8)
+
+
+    def _put_common_flags(self, start, flags):
         raise RuntimeError('cannot write flags to simulated data streams')
         return
 
@@ -451,11 +459,3 @@ class TODSatellite(TOD):
         raise RuntimeError('cannot write data to simulated pointing')
         return
 
-
-    def _get_common_flags(self, start, n):
-        return np.zeros(n, dtype=np.uint8)
-
-
-    def _put_common_flags(self, start, flags):
-        raise RuntimeError('cannot write common flags to simulated data')
-        return

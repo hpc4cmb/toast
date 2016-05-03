@@ -40,7 +40,8 @@ class TODTest(MPITestCase):
         self.flagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
         for d in self.dets:
             self.tod.write_common_flags(local_start=0, flags=self.pflagvec)
-            self.tod.write(detector=d, local_start=0, data=self.datavec, flags=self.flagvec)
+            self.tod.write_det_flags(detector=d, local_start=0, flags=self.flagvec)
+            self.tod.write(detector=d, local_start=0, data=self.datavec)
             self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec)
 
 
@@ -63,7 +64,8 @@ class TODTest(MPITestCase):
         start = MPI.Wtime()
 
         for d in self.dets:
-            data, flags, common = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
+            data = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
+            flags, common = self.tod.read_flags(detector=d, local_start=0, n=self.mynsamp)
             np.testing.assert_equal(flags, self.flagvec)
             np.testing.assert_equal(common, self.pflagvec)
             np.testing.assert_almost_equal(data, self.datavec)

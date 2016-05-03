@@ -358,7 +358,8 @@ class Data(object):
 
                     procstr = "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] --> [{:.3e} {:.3e} {:.3e} {:.3e}]\n".format(procstr, pdata[0,0], pdata[0,1], pdata[0,2], pdata[0,3], pdata[-1,0], pdata[-1,1], pdata[-1,2], pdata[-1,3])
 
-                    data, flags, common = tod.read(detector=dt, local_start=0, n=nsamp)
+                    data = tod.read(detector=dt, local_start=0, n=nsamp)
+                    flags, common = tod.read_flags(detector=dt, local_start=0, n=nsamp)
                     procstr = "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, data[0], flags[0], data[-1], flags[-1])
                     good = np.where((flags | common) == 0)[0]
                     procstr = "{}        {} good samples\n".format(procstr, len(good))

@@ -165,70 +165,31 @@ class TOD(object):
         """
         return self._mpicomm
 
+
     # The base class methods that get and put just use the cache.
 
     def _get(self, detector, start, n):
         if detector not in self.local_dets:
             raise ValueError('detector {} not assigned to local process'.format(detector))
         cachedata = "{}{}".format(self._pref_detdata, detector)
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
         if not self.cache.exists(cachedata):
             raise ValueError('detector {} data not yet written'.format(detector))
-        if not self.cache.exists(cacheflags):
-            raise ValueError('detector {} flags not yet written'.format(detector))
-        if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
         dataref = self.cache.reference(cachedata)[start:start+n]
-        flagsref = self.cache.reference(cacheflags)[start:start+n]
-        comref = self.cache.reference(self._common)[start:start+n]
-        return dataref, flagsref, comref
+        return dataref
 
 
-    def _get_flags(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
-        if not self.cache.exists(cacheflags):
-            raise ValueError('detector {} flags not yet written'.format(detector))
-        if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
-        flagsref = self.cache.reference(cacheflags)[start:start+n]
-        comref = self.cache.reference(self._common)[start:start+n]
-        return flagsref, comref
-
-
-    def _put(self, detector, start, data, flags):
+    def _put(self, detector, start, data):
         if detector not in self.local_dets:
             raise ValueError('detector {} not assigned to local process'.format(detector))
         cachedata = "{}{}".format(self._pref_detdata, detector)
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
         
         if not self.cache.exists(cachedata):
             self.cache.create(cachedata, np.float64, (self.local_samples[1],))
-        if not self.cache.exists(cacheflags):
-            self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
         
         n = data.shape[0]
         refdata = self.cache.reference(cachedata)[start:start+n]
-        refflags = self.cache.reference(cacheflags)[start:start+n]
 
         refdata[:] = data
-        refflags[:] = flags
-        return
-
-
-    def _put_flags(self, detector, start, flags):
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not assigned to local process'.format(detector))
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
-        
-        if not self.cache.exists(cacheflags):
-            self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
-        
-        n = data.shape[0]
-        refflags = self.cache.reference(cacheflags)[start:start+n]
-
-        refflags[:] = flags
         return
 
 
@@ -250,6 +211,34 @@ class TOD(object):
             self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
         pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
         pntgref[:] = data
+        return
+
+
+    def _get_flags(self, detector, start, n):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cacheflags = "{}{}".format(self._pref_detflags, detector)
+        if not self.cache.exists(cacheflags):
+            raise ValueError('detector {} flags not yet written'.format(detector))
+        if not self.cache.exists(self._common):
+            raise ValueError('common flags not yet written')
+        flagsref = self.cache.reference(cacheflags)[start:start+n]
+        comref = self.cache.reference(self._common)[start:start+n]
+        return flagsref, comref
+
+
+    def _put_det_flags(self, detector, start, flags):
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not assigned to local process'.format(detector))
+        cacheflags = "{}{}".format(self._pref_detflags, detector)
+        
+        if not self.cache.exists(cacheflags):
+            self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
+        
+        n = flags.shape[0]
+        refflags = self.cache.reference(cacheflags)[start:start+n]
+
+        refflags[:] = flags
         return
 
 
@@ -285,119 +274,7 @@ class TOD(object):
         return
 
 
-    def read(self, detector=None, local_start=0, n=0):
-        """
-        Read detector data and flags.
-
-        This returns the timestream data for a single detector, as well
-        as the detector-specific flags and the common flags.
-
-        Args:
-            detector (str): the name of the detector.
-            local_start (int): the sample offset relative to the first locally
-                assigned sample.
-            n (int): the number of samples to read.  If zero, read to end.
-
-        Returns:
-            A 3-tuple of arrays, containing the data, the detector flags, and
-            the common flags.
-        """
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if n == 0:
-            n = self.local_samples[1] - local_start
-        if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot read- process has no assigned local samples')
-        if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get(detector, local_start, n)
-
-
-    def read_flags(self, detector=None, local_start=0, n=0):
-        """
-        Read detector flags.
-
-        This returns the detector-specific flags and the common flags.
-
-        Args:
-            detector (str): the name of the detector.
-            local_start (int): the sample offset relative to the first locally
-                assigned sample.
-            n (int): the number of samples to read.  If zero, read to end.
-
-        Returns:
-            A 2-tuple of arrays, containing the detector flags and the common
-                flags.
-        """
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if n == 0:
-            n = self.local_samples[1] - local_start
-        if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot read flags- process has no assigned local samples')
-        if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_flags(detector, local_start, n)
-
-
-    def write(self, detector=None, local_start=0, data=None, flags=None):
-        """
-        Write detector data and flags.
-
-        This writes the detector data and the detector-specific flags.
-
-        Args:
-            detector (str): the name of the detector.
-            local_start (int): the sample offset relative to the first locally
-                assigned sample.
-            data (array): the data array.
-            flags (array): the detector flags.
-        """
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if (data is None) or (flags is None):
-            raise ValueError('both data and flags must be specified')
-        if data.shape != flags.shape:
-            raise ValueError('data and flags arrays must be the same length')
-        if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write- process has no assigned local samples')
-        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
-        self._put(detector, local_start, data, flags)
-        return
-
-
-    def write_flags(self, detector=None, local_start=0, flags=None):
-        """
-        Write detector flags.
-
-        This writes the detector-specific flags.
-
-        Args:
-            detector (str): the name of the detector.
-            local_start (int): the sample offset relative to the first locally
-                assigned sample.
-            flags (array): the detector flags.
-        """
-        if detector is None:
-            raise ValueError('you must specify the detector')
-        if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
-        if flags is None:
-            raise ValueError('flags must be specified')
-        if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write flags- process has no assigned local samples')
-        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
-        self._put_flags(detector, local_start, flags)
-        return
-
+    # Read and write the common timestamps
 
     def read_times(self, local_start=0, n=0):
         """
@@ -444,6 +321,64 @@ class TOD(object):
         self._put_times(local_start, stamps)
         return
 
+
+    # Read and write detector data
+
+    def read(self, detector=None, local_start=0, n=0):
+        """
+        Read detector data.
+
+        This returns the timestream data for a single detector.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            An array containing the data.
+        """
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read- process has no assigned local samples')
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get(detector, local_start, n)
+        
+
+    def write(self, detector=None, local_start=0, data=None):
+        """
+        Write detector data.
+
+        This writes the detector data.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): the data array.
+        """
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if data is None:
+            raise ValueError('data array must be specified')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write- process has no assigned local samples')
+        if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
+        self._put(detector, local_start, data)
+        return
+
+
+    # Read and write detector quaternion pointing
 
     def read_pntg(self, detector=None, local_start=0, n=0):
         """
@@ -503,6 +438,37 @@ class TOD(object):
         return
 
 
+    # Read and write detector flags
+
+    def read_flags(self, detector=None, local_start=0, n=0):
+        """
+        Read detector flags.
+
+        This returns the detector-specific flags and the common flags.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            A 2-tuple of arrays, containing the detector flags and the common
+                flags.
+        """
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read flags- process has no assigned local samples')
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
+        return self._get_flags(detector, local_start, n)
+
+
     def read_common_flags(self, local_start=0, n=0):
         """
         Read common flags.
@@ -547,4 +513,32 @@ class TOD(object):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
         self._put_common_flags(local_start, flags)
         return
+
+
+    def write_det_flags(self, detector=None, local_start=0, flags=None):
+        """
+        Write detector flags.
+
+        This writes the detector-specific flags.
+
+        Args:
+            detector (str): the name of the detector.
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            flags (array): the detector flags.
+        """
+        if detector is None:
+            raise ValueError('you must specify the detector')
+        if detector not in self.local_dets:
+            raise ValueError('detector {} not found'.format(detector))
+        if flags is None:
+            raise ValueError('flags must be specified')
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot write flags- process has no assigned local samples')
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
+        self._put_det_flags(detector, local_start, flags)
+        return
+
+
 
