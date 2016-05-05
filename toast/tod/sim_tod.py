@@ -293,17 +293,17 @@ class TODHpixSpiral(TOD):
 
         # z axis is obviously normalized
         zaxis = np.array([0,0,1], dtype=np.float64)
-        ztiled = np.tile(zaxis, x.shape[0]).reshape(-1,3)
+        ztiled = np.tile(zaxis, x.shape[0]).reshape((-1,3))
 
         # ... so dir is already normalized
-        dir = np.ravel(np.column_stack((x, y, z))).reshape(-1,3)
+        dir = np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
         # get the rotation axis
         v = np.cross(ztiled, dir)
-        v = v / np.sqrt(np.sum(v * v, axis=1)).reshape(-1,1)
+        v = v / np.sqrt(np.sum(v * v, axis=1)).reshape((-1,1))
 
         # this is the vector-wise dot product
-        zdot = np.sum(ztiled * dir, axis=1).reshape(-1,1)
+        zdot = np.sum(ztiled * dir, axis=1).reshape((-1,1))
         ang = 0.5 * np.arccos(zdot)
 
         # angle element
