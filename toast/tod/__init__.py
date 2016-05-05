@@ -5,8 +5,6 @@
 
 # import functions in our public API
 
-from .cache import Cache
-
 from .tod import TOD
 
 from .interval import Interval

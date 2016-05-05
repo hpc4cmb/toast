@@ -58,10 +58,18 @@ ext_map_helper = Extension (
 )
 
 ext_cache = Extension (
-    'toast.tod._cache',
+    'toast._cache',
     include_dirs = [np.get_include(), ctoast_dir],
     sources = [
-        'toast/tod/_cache.pyx'
+        'toast/_cache.pyx'
+    ]
+)
+
+ext_rng = Extension (
+    'toast._rng',
+    include_dirs = [np.get_include(), ctoast_dir],
+    sources = [
+        'toast/_rng.pyx'
     ]
 )
 
@@ -76,7 +84,8 @@ ext_qarray = Extension (
 extensions = cythonize([
     ext_map_helper,
     ext_cache,
-    ext_qarray
+    ext_qarray,
+    ext_rng
 ])
 
 
@@ -134,7 +143,9 @@ if "clean" in sys.argv:
     subprocess.call("rm -rf dist", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/tod/*.so", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/*.so", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/tod/*.dylib", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/map/*.dylib", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/*.dylib", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf test_output", shell=True, executable="/bin/bash")
     subprocess.call('find . -name "__pycache__" -exec rm -rf "{}" \; >/dev/null 2>&1', shell=True, executable="/bin/bash")

@@ -13,7 +13,7 @@ else:
 
 from toast.mpirunner import MPITestCase
 
-from toast.tod.cache import *
+from toast.cache import *
 
 
 class CacheTest(MPITestCase):

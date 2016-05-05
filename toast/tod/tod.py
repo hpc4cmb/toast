@@ -15,7 +15,7 @@ import numpy as np
 
 from ..dist import distribute_samples
 
-from .cache import Cache
+from ..cache import Cache
 
 
 class TOD(object):
