@@ -3,7 +3,7 @@
 Installation
 ====================
 
-PyTOAST is written in python3 and depends on several commonly available
+TOAST is written in python3 and depends on several commonly available
 packages.  It also has some optional functionality for calling externally
 installed packages.
 

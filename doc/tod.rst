@@ -10,6 +10,6 @@ The TOD base class represents the timestream information associated with a teles
 
 The base TOD class contains a member which is an instance of a Cache object.  This is similar to a dictionary of arrays, but by default the memory used in these arrays is allocated in C, rather than using the python memory pool.  This allows us to do aligned memory allocation and explicitly manage the lifetime of the memory.
 
-.. autoclass:: toast.tod.Cache
+.. autoclass:: toast.cache.Cache
     :members:
 

@@ -1,6 +1,6 @@
-# Python Time Ordered Astrophysics Scalable Tools
+# Time Ordered Astrophysics Scalable Tools
 
 See the full documentation here:
 
-http://tskisner.github.io/pytoast/
+http://hpc4cmb.github.io/toast/
 

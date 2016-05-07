@@ -3,7 +3,7 @@
 Pipelines
 =================================
 
-Before delving into the structure of the pytoast package, it is sometimes
+Before delving into the structure of the toast package, it is sometimes
 useful to look at (and use!) an example.  One such program is the simple script
 below which simulates a fake satellite scanning strategy with a focalplane of
 detectors and then makes a map.
@@ -66,7 +66,7 @@ Here is how you could do a similar thing with a boresight detector and one propo
 Creating Your Own Pipeline
 ------------------------------
 
-PyTOAST is designed to give you tools to piece together your own data processing workflow.  Here is a slightly modified version of the pipeline script above.  This takes a boresight detector with 1/f noise properties, simulates a sort-of Planck scanning strategy, generates a noise timestream, and then generates a fake signal timestream and adds it to the noise.  Then it uses madam to make a map.
+TOAST is designed to give you tools to piece together your own data processing workflow.  Here is a slightly modified version of the pipeline script above.  This takes a boresight detector with 1/f noise properties, simulates a sort-of Planck scanning strategy, generates a noise timestream, and then generates a fake signal timestream and adds it to the noise.  Then it uses madam to make a map.
 
 .. literalinclude:: ../examples/toast_example_customize.py
 

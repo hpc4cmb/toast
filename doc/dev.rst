@@ -3,7 +3,7 @@
 Developer's Guide
 ====================
 
-PyTOAST aims to follow Python best practices whenever reasonably possible.  If you are submitting a pull request to contribute some code, please ensure that you are using indents consisting of 4 spaces (no tabs).  Also look at `PEP-8 <https://www.python.org/dev/peps/pep-0008/>`_.  Contributions correcting existing code are also welcome!
+TOAST aims to follow Python best practices whenever reasonably possible.  If you are submitting a pull request to contribute some code, please ensure that you are using indents consisting of 4 spaces (no tabs).  Also look at `PEP-8 <https://www.python.org/dev/peps/pep-0008/>`_.  Contributions correcting existing code are also welcome!
 
 When documenting classes and methods, we use `google-style docstrings <http://google.github.io/styleguide/pyguide.html?showone=Comments#Comments>`_.
 

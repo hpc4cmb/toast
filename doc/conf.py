@@ -48,7 +48,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'PyTOAST'
+project = u'TOAST'
 copyright = u'2015-2016, Theodore Kisner, Reijo Keskitalo'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -184,7 +184,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'PyTOASTdoc'
+htmlhelp_basename = 'TOASTdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -204,7 +204,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'PyTOAST.tex', u'PyTOAST Documentation',
+  ('index', 'TOAST.tex', u'TOAST Documentation',
    u'Theodore Kisner, Reijo Keskitalo', 'manual'),
 ]
 
@@ -234,7 +234,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'pytoast', u'PyTOAST Documentation',
+    ('index', 'toast', u'TOAST Documentation',
      [u'Theodore Kisner, Reijo Keskitalo'], 1)
 ]
 
@@ -248,8 +248,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'PyTOAST', u'PyTOAST Documentation',
-   u'Theodore Kisner, Reijo Keskitalo', 'PyTOAST', 'One line description of project.',
+  ('index', 'TOAST', u'TOAST Documentation',
+   u'Theodore Kisner, Reijo Keskitalo', 'TOAST', 'One line description of project.',
    'Miscellaneous'),
 ]
 
