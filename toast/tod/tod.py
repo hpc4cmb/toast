@@ -234,7 +234,7 @@ class TOD(object):
 
     # Read and write the common timestamps
 
-    def read_times(self, local_start=0, n=0):
+    def read_times(self, local_start=0, n=0, **kwargs):
         """
         Read timestamps.
 
@@ -255,10 +255,10 @@ class TOD(object):
             raise RuntimeError('cannot read times- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_times(local_start, n)
+        return self._get_times(local_start, n, **kwargs)
 
 
-    def write_times(self, local_start=0, stamps=None):
+    def write_times(self, local_start=0, stamps=None, **kwargs):
         """
         Write timestamps.
 
@@ -276,13 +276,13 @@ class TOD(object):
             raise RuntimeError('cannot write times- process has no assigned local samples')
         if (local_start < 0) or (local_start + stamps.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+stamps.shape[0]-1))
-        self._put_times(local_start, stamps)
+        self._put_times(local_start, stamps, **kwargs)
         return
 
 
     # Read and write detector data
 
-    def read(self, detector=None, local_start=0, n=0):
+    def read(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector data.
 
@@ -307,10 +307,10 @@ class TOD(object):
             raise RuntimeError('cannot read- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get(detector, local_start, n)
+        return self._get(detector, local_start, n, **kwargs)
         
 
-    def write(self, detector=None, local_start=0, data=None):
+    def write(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector data.
 
@@ -332,13 +332,13 @@ class TOD(object):
             raise RuntimeError('cannot write- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+data.shape[0]-1))
-        self._put(detector, local_start, data)
+        self._put(detector, local_start, data, **kwargs)
         return
 
 
     # Read and write detector quaternion pointing
 
-    def read_pntg(self, detector=None, local_start=0, n=0):
+    def read_pntg(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector quaternion pointing.
 
@@ -363,10 +363,10 @@ class TOD(object):
             raise RuntimeError('cannot read pntg- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_pntg(detector, local_start, n)
+        return self._get_pntg(detector, local_start, n, **kwargs)
 
 
-    def write_pntg(self, detector=None, local_start=0, data=None):
+    def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector quaternion pointing.
 
@@ -392,13 +392,13 @@ class TOD(object):
             raise RuntimeError('cannot write pntg- process has no assigned local samples')
         if (local_start < 0) or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range is invalid')
-        self._put_pntg(detector, local_start, data)
+        self._put_pntg(detector, local_start, data, **kwargs)
         return
 
 
     # Read and write detector flags
 
-    def read_flags(self, detector=None, local_start=0, n=0):
+    def read_flags(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector flags.
 
@@ -424,10 +424,10 @@ class TOD(object):
             raise RuntimeError('cannot read flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_flags(detector, local_start, n)
+        return self._get_flags(detector, local_start, n, **kwargs)
 
 
-    def read_common_flags(self, local_start=0, n=0):
+    def read_common_flags(self, local_start=0, n=0, **kwargs):
         """
         Read common flags.
 
@@ -448,10 +448,10 @@ class TOD(object):
             n = self.local_samples[1] - local_start
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_common_flags(local_start, n)
+        return self._get_common_flags(local_start, n, **kwargs)
 
 
-    def write_common_flags(self, local_start=0, flags=None):
+    def write_common_flags(self, local_start=0, flags=None, **kwargs):
         """
         Write common flags.
 
@@ -469,11 +469,11 @@ class TOD(object):
             raise RuntimeError('cannot write common flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
-        self._put_common_flags(local_start, flags)
+        self._put_common_flags(local_start, flags, **kwargs)
         return
 
 
-    def write_det_flags(self, detector=None, local_start=0, flags=None):
+    def write_det_flags(self, detector=None, local_start=0, flags=None, **kwargs):
         """
         Write detector flags.
 
@@ -495,13 +495,13 @@ class TOD(object):
             raise RuntimeError('cannot write flags- process has no assigned local samples')
         if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+flags.shape[0]-1))
-        self._put_det_flags(detector, local_start, flags)
+        self._put_det_flags(detector, local_start, flags, **kwargs)
         return
 
 
     # Read and write telescope position
 
-    def read_position(self, local_start=0, n=0):
+    def read_position(self, local_start=0, n=0, **kwargs):
         """
         Read telescope position.
 
@@ -523,10 +523,10 @@ class TOD(object):
             raise RuntimeError('cannot read position- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_position(local_start, n)
+        return self._get_position(local_start, n, **kwargs)
 
 
-    def write_position(self, local_start=0, pos=None):
+    def write_position(self, local_start=0, pos=None, **kwargs):
         """
         Write telescope position.
 
@@ -544,13 +544,13 @@ class TOD(object):
             raise RuntimeError('cannot write position- process has no assigned local samples')
         if (local_start < 0) or (local_start + pos.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+pos.shape[0]-1))
-        self._put_position(local_start, pos)
+        self._put_position(local_start, pos, **kwargs)
         return
 
 
     # Read and write telescope velocity
 
-    def read_velocity(self, local_start=0, n=0):
+    def read_velocity(self, local_start=0, n=0, **kwargs):
         """
         Read telescope velocity.
 
@@ -572,10 +572,10 @@ class TOD(object):
             raise RuntimeError('cannot read position- process has no assigned local samples')
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+n-1))
-        return self._get_velocity(local_start, n)
+        return self._get_velocity(local_start, n, **kwargs)
 
 
-    def write_velocity(self, local_start=0, vel=None):
+    def write_velocity(self, local_start=0, vel=None, **kwargs):
         """
         Write telescope velocity.
 
@@ -594,7 +594,7 @@ class TOD(object):
             raise RuntimeError('cannot write times- process has no assigned local samples')
         if (local_start < 0) or (local_start + vel.shape[0] > self.local_samples[1]):
             raise ValueError('local sample range {} - {} is invalid'.format(local_start, local_start+vel.shape[0]-1))
-        self._put_velocity(local_start, vel)
+        self._put_velocity(local_start, vel, **kwargs)
         return
 
 
