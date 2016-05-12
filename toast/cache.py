@@ -61,19 +61,43 @@ class Cache(object):
 
     def create(self, name, type, shape):
         """
-        Create a named data buffer of the give type and shape.
+        Create a named data buffer of the given type and shape.
 
         Args:
             name (str): the name to assign to the buffer.
             type (numpy.dtype): one of the supported numpy types.
             shape (tuple): a tuple containing the shape of the buffer.
         """
+
+        if self.exists(name):
+            raise RuntimeError("Data buffer {} already exists".format(name))
+        
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
         else:
             dims = np.asarray(shape, dtype=np.uint64)
             self._refs[name] = _alloc(dims, type).reshape(shape)
-        return
+            
+        return self._refs[name]
+
+
+    def put(self, name, data, replace=False):
+        """
+        Create a named data buffer to hold the provided data.
+
+        Args:
+            name (str): the name to assign to the buffer.
+            data (numpy.ndarray): Numpy array
+            replace (bool): Overwrite any existing keys
+        """
+
+        if self.exists(name) and replace:
+            self.destroy(name)
+
+        ref = self.create(name, data.dtype, data.shape)
+        ref[:] = data
+        
+        return ref
 
 
     def destroy(self, name):
@@ -127,3 +151,15 @@ class Cache(object):
             raise RuntimeError("Data buffer {} does not exist".format(name))
         return self._refs[name]
 
+    
+    def keys(self):
+        """
+        Return a list of all the keys in the cache.
+
+        Args:
+
+        Returns:
+            (list): List of key strings.
+        """
+
+        return self._refs.keys()
