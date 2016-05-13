@@ -188,8 +188,7 @@ class OpPointingHpix(Operator):
                 if self._cal is not None:
                     cal = self._cal[det]
 
-                oneplus = 0.5 * (1.0 + eps)
-                oneminus = 0.5 * (1.0 - eps)
+                eta = (1 - eps) / ( 1 + eps )
 
                 pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=nsamp))
                 flags, common = tod.read_flags(detector=det, local_start=0, n=nsamp)
@@ -206,7 +205,7 @@ class OpPointingHpix(Operator):
                 if self._mode == 'I':
                     
                     weights = np.ones((nsamp,1), dtype=np.float64)
-                    weights *= (cal * oneplus)
+                    weights *= cal
 
                 elif self._mode == 'IQU':
 
@@ -216,20 +215,20 @@ class OpPointingHpix(Operator):
                     bx = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])
                         
                     detang = np.arctan2(by, bx)
+
                     if hwpang is not None:
-                        detang += hwpang
-                        detang *= 4.0
-                    else:
-                        detang *= 2.0
+                        detang += 2.0*hwpang
+                    detang *= 2.0
+
                     cang = np.cos(detang)
                     sang = np.sin(detang)
                      
                     Ival = np.ones_like(cang)
-                    Ival *= (cal * oneplus)
+                    Ival *= cal
                     Qval = cang
-                    Qval *= (cal * oneminus)
+                    Qval *= (eta * cal)
                     Uval = sang
-                    Uval *= (cal * oneminus)
+                    Uval *= (eta * cal)
 
                     weights = np.ravel(np.column_stack((Ival, Qval, Uval))).reshape(-1,3)
 
