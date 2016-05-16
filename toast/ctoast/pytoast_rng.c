@@ -7,60 +7,145 @@ a BSD-style license that can be found in the LICENSE file.
 
 /* Interface function for counter-based random number generation */
 
-#include <Random123/threefry.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <float.h>
-#include <limits.h>
+#include <stdint.h>
+#include <math.h>
 
-/* We might consider implementing a version returning 4 random number at a time for better efficiency */
+#include "threefry.h"
+#include "pytoast.h"
 
-void generate_cbrn(const unsigned long int size, const unsigned long int offset, const unsigned long int counter1, const unsigned long int counter2, double* rand_array) {
+/* We might consider implementing a version returning 4 random number per rng call (using threefry4x64) for better efficiency */
+
+#if NO_SINCOS /* enable this if sincos are not in the math library - MacOS X 10.10.5 (2015) doesn't have sincos */
+void sincos(double x, double *s, double *c) {
+    *s = sin(x);
+    *c = cos(x);
+}
+#endif /* sincos is not in the math library */
+
+/*
+ * Converts unsigned 64-bit integer to double.
+ * Output is as dense as possible in (0,1), never 0.0.
+ */
+double u01(uint64_t in) {
+    double factor = 1. / (UINT64_MAX + 1.);
+    double halffactor = 0.5 * factor;
+    return (in * factor + halffactor);
+}
+
+/*
+ * Converts unsigned 64-bit integer to double.
+ * Output is as dense as possible in (-1,1), never 0.0.
+ */
+double uneg11(uint64_t in) {
+    double factor = 1. / (INT64_MAX + 1.);
+    double halffactor = 0.5 * factor;
+    return (((int64_t)in) * factor + halffactor);
+}
+
+/*
+ * Returns gaussian random variables generated with threefry2x64 and transformed with Box-Muller.
+ *
+ * size: even number of variables to return
+ * offset: variables are stored starting from rand_array[offset]
+ * counter1 and counter2: first and second 64-bit component of the counter
+ * rand_array: array of size at least [offset+size] where the random variables are written
+ */
+void generate_grv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
     int i;
     threefry2x64_ctr_t rand;
 
     /* Box-Muller transform variables */
-    const double epsilon = DBL_MIN;
-    const double two_pi = 2.0*3.14159265358979323846;
-    double* x, y;
-    double r;
+    const double PI = 3.1415926535897932;
+    double x, y, r;
 
-    threefry2x64_key_t key={{0, 0}};
+    threefry2x64_key_t key={{key1, key2}};
     threefry2x64_ctr_t ctr={{counter1, counter2}};
 
-    /* Use a union to avoid strict aliasing issues. */
-    /* 
-    enum { int32s_per_counter = sizeof(ctr)/sizeof(int32_t) };
-    assert( int32s_per_counter%2 == 0 );
-    */
+    for (i = 0; i < (size - (size%2)); i+=2) {
+        rand = threefry2x64(ctr, key);
+        rand_array[i+offset] = rand.v[0];
+        rand_array[i+1+offset] = rand.v[1];
 
-    for (i = 0; i < size; i+=2) {
+        sincos(PI*uneg11(rand_array[i+offset]), &x, &y);
+        r = sqrt(-2. * log(u01(rand_array[i+1+offset])));
 
-        /* Use a union to avoid strict aliasing issues. */
-        /*
-        union{
-            threefry2x64_ctr_t ct;
-            int32_t i32[int32s_per_counter];
-        }u;
-        */
+        rand_array[i+offset] = x * r;
+        rand_array[i+1+offset] = y * r;
 
-
-        do
-        {
-            ctr.v[0]++;
-            rand = threefry2x64(ctr, key);
-            /* Change the conversion for anti-aliasing reasons */
-            rand_array[i+offset] = rand.v[0] / ULLONG_MAX;
-            rand_array[i+1+offset] = rand.v[1] / ULLONG_MAX;
-        }
-        while ( (rand_array[i+offset] <= epsilon) && (rand_array[i+1+offset] <= epsilon) );
-
-        sincos(two_pi*rand_array[i+1+offset], x, y);
-
-        r = sqrt(-2. * log(rand_array[i+offset]));
-
-        rand_array[i+offset] = x*r;
-        rand_array[i+1+offset] = y*r;
-
+        ctr.v[1]++;
     }
 }
+
+/*
+ * Returns uniform random variables in (0,1) \ {0} generated with threefry2x64.
+ *
+ * size: even number of variables to return
+ * offset: variables are stored starting from rand_array[offset]
+ * counter1 and counter2: first and second 64-bit component of the counter
+ * rand_array: array of size at least [offset+size] where the random variables are written
+ */
+void generate_neg11rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
+    int i;
+    threefry2x64_ctr_t rand;
+
+    threefry2x64_key_t key={{key1, key2}};
+    threefry2x64_ctr_t ctr={{counter1, counter2}};
+
+    for (i = 0; i < (size - (size%2)); i+=2) {
+        rand = threefry2x64(ctr, key);
+        rand_array[i+offset] = uneg11(rand.v[0]);
+        rand_array[i+1+offset] = uneg11(rand.v[1]);
+
+        ctr.v[1]++;
+    }
+}
+
+/*
+ * Returns uniform random variables in (-1,1) \ {0} generated with threefry2x64.
+ *
+ * size: even number of variables to return
+ * offset: variables are stored starting from rand_array[offset]
+ * counter1 and counter2: first and second 64-bit component of the counter
+ * rand_array: array of size at least [offset+size] where the random variables are written
+ */
+void generate_01rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
+    int i;
+    threefry2x64_ctr_t rand;
+
+    threefry2x64_key_t key={{key1, key2}};
+    threefry2x64_ctr_t ctr={{counter1, counter2}};
+
+    for (i = 0; i < (size - (size%2)); i+=2) {
+        rand = threefry2x64(ctr, key);
+        rand_array[i+offset] = u01(rand.v[0]);
+        rand_array[i+1+offset] = u01(rand.v[1]);
+
+        ctr.v[1]++;
+    }
+}
+
+
+/*
+ * Returns uniform natural random variables (unsigned 64-bit integers) generated with threefry2x64.
+ *
+ * size: even number of variables to return
+ * offset: variables are stored starting from rand_array[offset]
+ * counter1 and counter2: first and second 64-bit component of the counter
+ * rand_array: array of size at least [offset+size] where the random variables are written
+ */
+void generate_uint64rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, uint64_t* rand_array) {
+    int i;
+    threefry2x64_ctr_t rand;
+
+    threefry2x64_key_t key={{key1, key2}};
+    threefry2x64_ctr_t ctr={{counter1, counter2}};
+
+    for (i = 0; i < (size - (size%2)); i+=2) {
+        rand = threefry2x64(ctr, key);
+        rand_array[i+offset] = rand.v[0];
+        rand_array[i+1+offset] = rand.v[1];
+
+        ctr.v[1]++;
+    }
+}
+

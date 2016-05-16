@@ -7,12 +7,14 @@
 CC = gcc
 CFLAGS = -O3 -fPIC -I.
 LIBS = -lm
+RNGDIR = $(HOME)/0_CORI/1_rng/include_r123
+RNGINC = $(RNGDIR:%=-I%)
 
 HEADERS = pytoast.h
 
-LIBOBJ = pytoast_mem.o pytoast_qarray.o
+LIBOBJ = pytoast_mem.o pytoast_qarray.o pytoast_rng.o
 
-all : test_mem test_qarray
+all : test_mem test_qarray test_rng
 
 
 test_mem : test_mem.o libctoast.a
@@ -21,11 +23,14 @@ test_mem : test_mem.o libctoast.a
 test_qarray : test_qarray.o libctoast.a
 	$(CC) -o test_qarray test_qarray.o libctoast.a $(LIBS)
 
+test_rng : test_rng.o
+	$(CC) -o test_rng test_rng.o $(LIBS)
+
 libctoast.a : $(LIBOBJ)
 	ar rcs libctoast.a $(LIBOBJ)
 
 %.o : %.c $(HEADERS)
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) $(CFLAGS) $(RNGINC) -o $@ -c $<
 
 clean :
-	@rm -f test_mem test_qarray *.a *.o *~
+	@rm -f test_mem test_qarray test_rng *.a *.o *~

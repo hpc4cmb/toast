@@ -8,11 +8,13 @@ import os
 
 import numpy as np
 
+# from toast.mpirunner import MPITestCase
 import unittest
 
 from toast.rng import *
 
 
+# class RNGTest(MPITestCase):
 class RNGTest(unittest.TestCase):
 
     def setUp(self):
@@ -30,16 +32,20 @@ class RNGTest(unittest.TestCase):
     def test_rng_gaussian(self):
         CBRNG.random(self.array,self.counter)
         self.assertTrue((self.array > -10).all() and (self.array < 10).all())
+        # np.testing.assert_array_almost_equal(self.array, self.array_gaussian)
 
     def test_rng_m11(self):
         CBRNG.random(self.array,self.counter,"uniform_m11")
         self.assertTrue((self.array > -1).all() and (self.array < 1).all())
+        # np.testing.assert_array_almost_equal(self.array, self.array_m11)
 
     def test_rng_01(self):
         CBRNG.random(self.array,self.counter,"uniform_01")
         self.assertTrue((self.array > 0).all() and (self.array < 1).all())
+        # np.testing.assert_array_almost_equal(self.array, self.array_01)
 
     def test_rng_uint64(self):
         self.array = np.zeros(self.size,dtype=np.uint64)
         CBRNG.random(self.array,self.counter,"uniform_uint64")
         self.assertTrue(type(self.array[0]) == np.uint64)
+        # np.testing.assert_array_almost_equal(self.array, self.array_uint64)
