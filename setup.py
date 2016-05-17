@@ -41,8 +41,9 @@ libctoast = ('ctoast',
     'sources': [
         'toast/ctoast/pytoast_mem.c',
         'toast/ctoast/pytoast_qarray.c',
+        'toast/ctoast/pytoast_rng.c',
         ],
-    'include_dirs': [ctoast_dir],
+    'include_dirs': [ctoast_dir, os.path.join(ctoast_dir, 'Random123')],
     }
 )
 
