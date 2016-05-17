@@ -5,10 +5,8 @@
 # from within python.
 
 CC = gcc
-CFLAGS = -O3 -fPIC -I.
+CFLAGS = -O3 -fPIC -I. -I./Random123
 LIBS = -lm
-RNGDIR = $(HOME)/0_CORI/1_rng/include_r123
-RNGINC = $(RNGDIR:%=-I%)
 
 HEADERS = pytoast.h
 
@@ -24,13 +22,13 @@ test_qarray : test_qarray.o libctoast.a
 	$(CC) -o test_qarray test_qarray.o libctoast.a $(LIBS)
 
 test_rng : test_rng.o
-	$(CC) -o test_rng test_rng.o $(LIBS)
+	$(CC) -o test_rng test_rng.o libctoast.a $(LIBS)
 
 libctoast.a : $(LIBOBJ)
 	ar rcs libctoast.a $(LIBOBJ)
 
 %.o : %.c $(HEADERS)
-	$(CC) $(CFLAGS) $(RNGINC) -o $@ -c $<
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean :
 	@rm -f test_mem test_qarray test_rng *.a *.o *~
