@@ -72,17 +72,22 @@ class OpMadam(Operator):
             the Madam buffers.
     """
 
-    def __init__(self, params={}, detweights=None, pixels='pixels', weights='weights', name=None, purge=False):
+    def __init__(self, params={}, detweights=None, pixels='pixels', weights='weights', name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=True, purge=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
         self._timedist = True
         self._name = name
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
         self._pixels = pixels
         self._weights = weights
         self._detw = detweights
         self._purge = purge
+        self._apply_flags = apply_flags
         self._params = params
 
 
@@ -178,6 +183,35 @@ class OpMadam(Operator):
 
         for d in range(ndet):
 
+            dslice = slice(d * nlocal, (d+1) * nlocal)
+            dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
+            
+            # Get the signal.
+
+            cachename = None
+            if self._name is not None:
+                cachename = "{}_{}".format(self._name, tod.detectors[d])
+                signal = tod.cache.reference(cachename)
+            else:
+                signal = tod.read(detector=tod.detectors[d])
+            madam_signal[dslice] = signal
+
+            # Optionally get the flags, otherwise they are assumed to be have been applied
+            # to the pixel numbers.
+
+            if self._apply_flags:
+
+                if self._flag_name is not None:
+                    cacheflagname = "{}_{}".format(self._flag_name, tod.detectors[d])
+                    detflags = tod.cache.reference(cacheflagname)
+                    flags = (detflags & self._flag_mask) != 0
+                    if self._common_flag_name is not None:
+                        commonflags = tod.cache.reference(self._common_flag_name)
+                        flags[(commonflags & self._common_flag_mask) != 0] = True
+                else:
+                    detflags, commonflags = tod.read_flags(detector=tod.detectors[d])
+                    flags = np.logical_or((detflags & self._flag_mask) != 0, (commonflags & self._common_flag_mask) != 0)
+
             # get the pixels and weights from the cache
 
             pixelsname = "{}_{}".format(self._pixels, tod.detectors[d])
@@ -185,25 +219,24 @@ class OpMadam(Operator):
             pixels = tod.cache.reference(pixelsname)
             weights = tod.cache.reference(weightsname)
 
-            dslice = slice(d * nlocal, (d+1) * nlocal)
-            dwslice = slice(d * nlocal * nnz, (d+1) * nlocal * nnz)
+            if self._apply_flags:
+                pixels = pixels.copy() # Don't change the cached pixel numbers
+                pixels[flags] = -1
 
             madam_pixels[dslice] = pixels
             madam_pixweights[dwslice] = weights.flatten()
-
-            cachename = None
-            if self._name is not None:
-                cachename = "{}_{}".format(self._name, tod.detectors[d])
-                signal = tod.cache.reference(cachename)
-            else:
-                signal = tod.read(detector=tod.detectors[d], local_start=0, n=nlocal)
-            madam_signal[dslice] = signal
 
             if self._purge:
                 tod.cache.clear(pattern=pixelsname)
                 tod.cache.clear(pattern=weightsname)
                 if self._name is not None:
                     tod.cache.clear(pattern=cachename)
+                if self._flag_name is not None:
+                    tod.cache.clear(pattern=cacheflagname)
+                    
+        if self._purge:
+            if self._common_flag_name is not None:
+                tod.cache.clear(pattern=self._common_flag_name)
 
         # The "pointing periods" we pass to madam are simply the intersection
         # of our local data and the list of valid intervals.
