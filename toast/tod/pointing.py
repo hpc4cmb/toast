@@ -55,13 +55,15 @@ class OpPointingHpix(Operator):
         hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
             is the step in degrees.
         hwpsteptime: The time in minutes between HWP steps.
+        common_flag_name (str): the optional name of a cache object to use for
+            the common flags.
         common_flag_mask (byte): the bitmask to use when flagging the pointing
             matrix using the common flags.
         apply_flags (bool): whether to read the TOD common flags, bitwise OR
             with the common_flag_mask, and then flag the pointing matrix.
     """
 
-    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, common_flag_mask=255, apply_flags=False):
+    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, common_flag_name=None, common_flag_mask=255, apply_flags=False):
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -71,6 +73,7 @@ class OpPointingHpix(Operator):
         self._epsilon = epsilon
         self._common_flag_mask = common_flag_mask
         self._apply_flags = apply_flags
+        self._common_flag_name = common_flag_name
 
         if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped HWP")
@@ -188,7 +191,10 @@ class OpPointingHpix(Operator):
 
             common = None
             if self._apply_flags:
-                common = tod.read_common_flags(detector=det)
+                if self._common_flag_name is not None:
+                    common = tod.cache.reference(self._common_flag_name)
+                else:
+                    common = tod.read_common_flags()
                 common = (common & self._common_flag_mask)
 
             for det in tod.local_dets:
