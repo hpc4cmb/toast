@@ -55,6 +55,20 @@ class Comm(object):
         """
         return self._rank
 
+    
+    def Get_size(self):
+        """
+        The size of the communicator.
+        """
+        return self._size
+
+
+    def Get_rank(self):
+        """
+        The rank within the communicator.
+        """
+        return self._rank
+
 
     def Split(self, color=0, key=0):
         return Comm()
@@ -186,7 +200,7 @@ class Comm(object):
         """
         Reduce
         """
-        recvbuf = sendbuf
+        recvbuf[:] = sendbuf
         return
 
 
@@ -194,7 +208,7 @@ class Comm(object):
         """
         All Reduce
         """
-        recvbuf = sendbuf
+        recvbuf[:] = sendbuf
         return
 
 
@@ -240,7 +254,7 @@ class Comm(object):
 
     def gather(self, sendobj, root=0):
         """Gather"""
-        return sendobj
+        return [sendobj]
 
 
     def scatter(self, sendobj, root=0):
@@ -250,7 +264,7 @@ class Comm(object):
 
     def allgather(self, sendobj):
         """Gather to All"""
-        return sendobj
+        return [sendobj]
 
 
     def alltoall(self, sendobj):
