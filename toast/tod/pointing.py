@@ -55,9 +55,15 @@ class OpPointingHpix(Operator):
         hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
             is the step in degrees.
         hwpsteptime: The time in minutes between HWP steps.
+        common_flag_name (str): the optional name of a cache object to use for
+            the common flags.
+        common_flag_mask (byte): the bitmask to use when flagging the pointing
+            matrix using the common flags.
+        apply_flags (bool): whether to read the TOD common flags, bitwise OR
+            with the common_flag_mask, and then flag the pointing matrix.
     """
 
-    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None):
+    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, common_flag_name=None, common_flag_mask=255, apply_flags=False):
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -65,6 +71,9 @@ class OpPointingHpix(Operator):
         self._mode = mode
         self._cal = cal
         self._epsilon = epsilon
+        self._common_flag_mask = common_flag_mask
+        self._apply_flags = apply_flags
+        self._common_flag_name = common_flag_name
 
         if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped HWP")
@@ -178,6 +187,16 @@ class OpPointingHpix(Operator):
                     curoff += fill
                     fill = stepsamples
 
+            # read the common flags and apply bitmask
+
+            common = None
+            if self._apply_flags:
+                if self._common_flag_name is not None:
+                    common = tod.cache.reference(self._common_flag_name)
+                else:
+                    common = tod.read_common_flags()
+                common = (common & self._common_flag_mask)
+
             for det in tod.local_dets:
 
                 eps = 0.0
@@ -190,17 +209,17 @@ class OpPointingHpix(Operator):
 
                 eta = (1 - eps) / ( 1 + eps )
 
-                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=nsamp))
-                flags, common = tod.read_flags(detector=det, local_start=0, n=nsamp)
-                totflags = np.copy(flags)
-                totflags |= common
+                pdata = np.copy(tod.read_pntg(detector=det))
 
-                pdata[totflags != 0,:] = nullquat
+                if self._apply_flags:
+                    pdata[common != 0,:] = nullquat
 
                 dir = qa.rotate(pdata, np.tile(zaxis, nsamp).reshape(-1,3))
 
                 pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
-                pixels[totflags != 0] = -1
+
+                if self._apply_flags:
+                    pixels[common != 0] = -1
 
                 if self._mode == 'I':
                     
