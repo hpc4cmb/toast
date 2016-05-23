@@ -290,7 +290,7 @@ COMM_WORLD = Comm()
 
 
 def Wtime():
-    return time.clock()
+    return time.time()
 
 
 def _sizeof(comm=Comm()):
