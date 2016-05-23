@@ -92,6 +92,9 @@ class Cache(object):
         """
 
         if self.exists(name) and replace:
+            ref = self.reference(name)
+            if data is ref:
+                return ref
             self.destroy(name)
 
         ref = self.create(name, data.dtype, data.shape)
