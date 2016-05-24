@@ -113,6 +113,7 @@ class Cache(object):
         Args:
             name (str): the name of the buffer to destroy.
         """
+
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist".format(name))
         if not self._pymem:
@@ -166,3 +167,21 @@ class Cache(object):
         """
 
         return self._refs.keys()
+
+
+    def report(self):
+        """
+        Report memory usage.
+        """
+
+        print('Cache memory usage:')
+        
+        tot = 0
+        for key in self.keys():
+            ref = self.reference(key)
+            sz = ref.nbytes
+            tot += sz
+            print(' - {:25} {:5.2f} MB'.format(key,sz/2**20))
+                  
+        print(' {:27} {:5.2f} MB'.format('TOTAL',tot/2**20))
+            
