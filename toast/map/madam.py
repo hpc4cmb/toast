@@ -57,6 +57,12 @@ if libmadam is not None:
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
     ]
 
+# Some keys may be defined multiple times in the Madam parameter files.
+# Assume that such entries are aggregated into a list in a parameter
+# dictionary
+
+repeated_keys = ['detset', 'detset_nopol', 'survey']
+
 
 class OpMadam(Operator):
     """
@@ -114,7 +120,11 @@ class OpMadam(Operator):
     def _dict2parstring(self, d):
         s = ''
         for key, value in d.items():
-            s += '{} = {};'.format(key, value)
+            if key in repeated_keys:
+                for separate_value in value:
+                    s += '{} = {};'.format(key, separate_value)
+            else:
+                s += '{} = {};'.format(key, value)
         return s
 
 
