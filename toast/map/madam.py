@@ -25,12 +25,12 @@ from ..tod import Interval
 
 try:
     path = ct.util.find_library('madam')
-    libmadam = ct.CDLL(path)
-except:
-    try:
+    if path is not None:
+        libmadam = ct.CDLL(path)
+    else:
         libmadam = ct.CDLL('libmadam.so')
-    except:
-        libmadam = None
+except:
+    libmadam = None
 
 if libmadam is not None:
     libmadam.destripe.restype = None
