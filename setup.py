@@ -50,11 +50,11 @@ libctoast = ('ctoast',
 
 # extensions to build
 
-ext_map_helper = Extension (
-    'toast.map._helpers',
+ext_map_noise = Extension (
+    'toast.map._noise',
     include_dirs = [np.get_include(), ctoast_dir], 
     sources = [
-        'toast/map/_helpers.pyx'
+        'toast/map/_noise.pyx'
     ]
 )
 
@@ -83,7 +83,7 @@ ext_qarray = Extension (
 )
 
 extensions = cythonize([
-    ext_map_helper,
+    ext_map_noise,
     ext_cache,
     ext_qarray,
     ext_rng

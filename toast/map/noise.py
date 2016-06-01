@@ -11,7 +11,7 @@ from ..dist import Comm, Data
 from ..operator import Operator
 from .pixels import DistPixels
 
-from ._helpers import (_accumulate_inverse_covariance,
+from ._noise import (_accumulate_inverse_covariance,
     _invert_covariance, _cond_covariance)
 
 

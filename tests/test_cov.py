@@ -24,7 +24,7 @@ from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_noise import *
 from toast.map import *
-import toast.map._helpers as mh
+import toast.map._noise as nh
 
 from toast.mpirunner import MPITestCase
 
@@ -51,14 +51,23 @@ class CovarianceTest(MPITestCase):
             'bore' : np.array([0.0, 0.0, 1.0, 0.0])
             }
 
-        self.sim_nside = 64
+        self.sim_nside = 32
+        self.sim_npix = 12 * self.sim_nside**2
+
         self.totsamp = 200000
-        self.map_nside = 64
+
+        self.map_nside = 32
+        self.map_npix = 12 * self.map_nside**2
+        
         self.rate = 40.0
         self.spinperiod = 10.0
         self.spinangle = 30.0
         self.precperiod = 50.0
         self.precangle = 65.0
+
+        self.subnside = int(self.map_nside / 4)
+        self.subnpix = 12 * self.subnside**2
+        self.nsubmap = int( self.map_npix / self.subnpix )
 
         self.NET = 7.0
 
@@ -136,7 +145,7 @@ class CovarianceTest(MPITestCase):
         pix = np.tile(np.arange(npix, dtype=np.int64), nsm)
         wt = np.tile(np.arange(nnz, dtype=np.float64), nsamp).reshape(-1, nnz)
 
-        mh._accumulate_inverse_covariance(fakedata, sm, pix, wt, scale, fakehits)
+        nh._accumulate_inverse_covariance(fakedata, sm, pix, wt, scale, fakehits)
 
         for i in range(nsamp):
             checkhits[sm[i], pix[i], 0] += 1
@@ -173,8 +182,8 @@ class CovarianceTest(MPITestCase):
                         off += 1
 
         # invert twice
-        mh._invert_covariance(fakedata, threshold)
-        mh._invert_covariance(fakedata, threshold)
+        nh._invert_covariance(fakedata, threshold)
+        nh._invert_covariance(fakedata, threshold)
 
         nt.assert_almost_equal(fakedata, checkdata)
         return
@@ -191,18 +200,16 @@ class CovarianceTest(MPITestCase):
         lc = OpLocalPixels()
         localpix = lc.exec(self.data)
 
-        # pick a submap size and find the locally hit submaps.
-        submapsize = np.floor_divide(self.sim_nside, 16)
-        allsm = np.floor_divide(localpix, submapsize)
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, self.subnpix)
         sm = set(allsm)
         localsm = np.array(sorted(sm), dtype=np.int64)
 
         # construct a distributed map to store the covariance and hits
-        npix = 12 * self.sim_nside * self.sim_nside
-        
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=6, dtype=np.float64, submap=submapsize, local=localsm)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.int64, submap=submapsize, local=localsm)
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
@@ -216,10 +223,98 @@ class CovarianceTest(MPITestCase):
         build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(self.data)
 
+        invnpp.allreduce()
+        hits.allreduce()
+
+        # invert it
+        checkdata = np.copy(invnpp.data)
+        covariance_invert(invnpp.data, 1.0e-3)
+        covariance_invert(invnpp.data, 1.0e-3)
+
+        nt.assert_almost_equal(invnpp.data, checkdata)
+
+        return
+
+
+    def test_fitsio(self):
+        start = MPI.Wtime()
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')
+        pointing.exec(self.data)
+
+        # get locally hit pixels
+        lc = OpLocalPixels()
+        localpix = lc.exec(self.data)
+
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, self.subnpix)
+        sm = set(allsm)
+        localsm = np.array(sorted(sm), dtype=np.int64)
+
+        # construct a distributed map to store the covariance and hits
+
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+
+        # accumulate the inverse covariance.  Use detector weights
+        # based on the analytic NET.
+
+        tod = self.data.obs[0]['tod']
+        nse = self.data.obs[0]['noise']
+        detweights = {}
+        for d in tod.local_dets:
+            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
+
+        build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp.exec(self.data)
+
+        #self.assertTrue(False)
+
+        invnpp.allreduce()
+        hits.allreduce()
+
         # invert it
         covariance_invert(invnpp.data, 1.0e-3)
 
+        checkdata = np.copy(invnpp.data)
+
+        checkhits = np.copy(hits.data)
+
         # write this out...
+
+        subsum = [ np.sum(invnpp.data[x,:,:]) for x in range(len(invnpp.local)) ]
+
+        print("proc {} submap sum = {} ({})".format(self.toastcomm.comm_group.rank, " ".join([ "{}:{}".format(x,y) for x,y in zip(invnpp.local, subsum) ]), np.sum(subsum)))
+
+        outfile = os.path.join(self.mapdir, 'covtest.fits')
+        if self.toastcomm.comm_group.rank == 0:
+            if os.path.isfile(outfile):
+                os.remove(outfile)
+
+        hitfile = os.path.join(self.mapdir, 'covtest_hits.fits')
+        if self.toastcomm.comm_group.rank == 0:
+            if os.path.isfile(hitfile):
+                os.remove(hitfile)
+
+        invnpp.write_healpix_fits(outfile)
+
+        print("proc {} invnpp.data on write sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
+
+        invnpp.data.fill(0.0)
+        invnpp.read_healpix_fits(outfile)
+
+        print("proc {} invnpp.data on read sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
+
+        nt.assert_almost_equal(invnpp.data, checkdata)
+
+        hits.write_healpix_fits(hitfile)
+
+        hits.data.fill(0)
+        hits.read_healpix_fits(hitfile)
+
+        nt.assert_equal(hits.data, checkhits)
 
         return
 
