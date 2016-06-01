@@ -24,7 +24,7 @@ from ..tod import Interval
 
 
 try:
-    path = ct.util.find_library('madam')
+    path = find_library('madam')
     if path is not None:
         libmadam = ct.CDLL(path)
     else:
