@@ -104,7 +104,7 @@ class Cache(object):
             mydata = data
 
         ref = self.create(name, mydata.dtype, mydata.shape)
-        ref[:] = data
+        ref[:] = mydata
         
         return ref
 
