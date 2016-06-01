@@ -95,9 +95,15 @@ class Cache(object):
             ref = self.reference(name)
             if data is ref:
                 return ref
+            # Destroy the existing cache object but first make a copy
+            # of the supplied data in case it is a view of a subset
+            # of the cache data.
+            mydata = data.copy()
             self.destroy(name)
+        else:
+            mydata = data
 
-        ref = self.create(name, data.dtype, data.shape)
+        ref = self.create(name, mydata.dtype, mydata.shape)
         ref[:] = data
         
         return ref
