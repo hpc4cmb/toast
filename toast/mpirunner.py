@@ -294,7 +294,8 @@ class MPITestRunner(TextTestRunner):
         if self.rank == 0:
             self.stream = stream
         else:
-            self.stream = NoopStream()
+            self.stream = stream
+            #self.stream = NoopStream()
         TextTestRunner.__init__(self, self.stream, descriptions, verbosity,
                                 failfast=failfast, buffer=buffer)
         self.verbosity = verbosity

@@ -19,6 +19,8 @@ from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
 
+from ..cache import Cache
+
 
 class OpLocalPixels(Operator):
     """
@@ -109,8 +111,13 @@ class DistPixels(object):
         self._nnz = nnz
         self._dtype = dtype
         self._submap = submap
+
+        if self._size % self._submap != 0:
+            raise RuntimeError("submap size must evenly divide into total number of pixels")
+
         self._local = local
         self._glob2loc = {}
+        self._cache = Cache()
 
         # our data is a 3D array of submap, pixel, values
         # we allocate this as a contiguous block
@@ -123,7 +130,7 @@ class DistPixels(object):
                 self._glob2loc[g[1]] = g[0]
             if (self._submap * self._local.max()) > self._size:
                  raise RuntimeError("local submap indices out of range")
-            self.data = np.zeros( (self._nsub * self._submap * self._nnz), order='C', dtype=self._dtype).reshape(self._nsub, self._submap, self._nnz)
+            self.data = self._cache.create("data", dtype, (self._nsub, self._submap, self._nnz))
 
 
     @property
@@ -212,25 +219,243 @@ class DistPixels(object):
         return ret
 
 
-    def read_healpix_fits(self, path, buffer=5000000):
+    def _comm_nsubmap(self, bytes):
+        """
+        Given some number of desired bytes, compute the number of
+        submaps to communicate.
+        """
+        dbytes = self._dtype(1).itemsize
+        nsub = int(bytes / (dbytes * self._submap * self._nnz))
+        if nsub == 0:
+            nsub = 1
+        allsub = int(self._size / self._submap)
+        if nsub > allsub:
+            nsub = allsub
+        return nsub
 
-        elems = hp.read_map(path, dtype=self._dtype, memmap=True)
 
-        nblock = len(elems)
-        nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+    def allreduce(self, comm_bytes=1000):
+        """
+        Perform a buffered allreduce of the pixel domain data.
 
-        # with memmap enabled, we read the underlying file
-        # in chunks based on the internal FITS blocksize (2880 bytes)
+        Args:
+            comm_bytes (int): The approximate message size to use.
+        """
+        comm_submap = self._comm_nsubmap(comm_bytes)
+        nsub = int(self._size / self._submap)
 
-        nsmbuf = buffer 
+        sendbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+        sendview = sendbuf.reshape(comm_submap, self._submap, self._nnz)
 
+        recvbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+        recvview = recvbuf.reshape(comm_submap, self._submap, self._nnz)
+
+        owners = np.zeros(nsub, dtype=np.int32)
+        owners.fill(self._comm.size)
+        for m in self._local:
+            owners[m] = self._comm.rank
+        allowners = np.zeros_like(owners)
+        self._comm.Allreduce(owners, allowners, op=MPI.MIN)
+
+        submap_off = 0
+        ncomm = comm_submap
+
+        while submap_off < nsub:
+            if submap_off + ncomm > nsub:
+                ncomm = nsub - submap_off
+            if np.sum(allowners[submap_off:submap_off+ncomm]) != ncomm * self._comm.size:
+                # At least one submap has some hits.  Do the allreduce.
+                # Otherwise we would skip this buffer to avoid reducing a
+                # bunch of zeros.
+                for c in range(ncomm):
+                    glob = submap_off + c
+                    if glob in self._local:
+                        # copy our data in.
+                        loc = self._glob2loc[glob]
+                        sendview[c,:,:] = self.data[loc,:,:]
+
+                self._comm.Allreduce(sendbuf, recvbuf, op=MPI.SUM)
+
+                for c in range(ncomm):
+                    glob = submap_off + c
+                    if glob in self._local:
+                        # copy the reduced data
+                        loc = self._glob2loc[glob]
+                        self.data[loc,:,:] = recvview[c,:,:]
+
+                sendbuf.fill(0)
+                recvbuf.fill(0)
+
+            submap_off += ncomm
 
         return
 
 
-    def write_healpix_fits(self, path):
-        # healpy will be slow, since it must read the whole file NNZ
-        # times as it grabs each column.  The long term solution is to
-        # use a better format like HDF5.
+    def read_healpix_fits(self, path, comm_bytes=1000):
+        """
+        Read and broadcast a HEALPix FITS table.
+
+        The root process opens the FITS file in memmap mode and iterates over
+        chunks of the map in a way to minimize cache misses in the internal
+        FITS buffer.  Chunks of submaps are broadcast to all processes, and
+        each process copies data to its local submaps.
+
+        Args:
+            path (str): The path to the FITS file.
+            comm_bytes (int): The approximate message size to use.
+        """
+        comm_submap = self._comm_nsubmap(comm_bytes)
+        
+        # we make the assumption that FITS binary tables are still stored in
+        # blocks of 2880 bytes just like always...
+        dbytes = self._dtype(1).itemsize
+        rowbytes = self._nnz * dbytes
+        optrows = int(2880 / rowbytes)
+
+        # get a tuple of all columns in the table.  We choose memmap here so
+        # that we can (hopefully) read through all columns in chunks such that
+        # we only ever have a couple FITS blocks in memory.
+        fdata = None
+        if self._comm.rank == 0:
+            fdata = hp.read_map(path, field=None, dtype=self._dtype, memmap=True)
+            if self._nnz == 1:
+                fdata = (fdata, )
+
+        buf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+        view = buf.reshape(comm_submap, self._submap, self._nnz)
+        
+        in_off = 0
+        out_off = 0
+        submap_off = 0
+        
+        rows = optrows
+        while in_off < self._size:
+            if in_off + rows > self._size:
+                rows = self._size - in_off
+            # is this the last block for this communication?
+            islast = False
+            copyrows = rows
+            if out_off + rows > (comm_submap * self._submap):
+                copyrows = (comm_submap * self._submap) - out_off
+                islast = True
+
+            if self._comm.rank == 0:
+                for col in range(self._nnz):
+                    coloff = (out_off * self._nnz) + col
+                    buf[coloff:coloff+(copyrows*self._nnz):self._nnz] = fdata[col][in_off:in_off+copyrows]
+            
+            out_off += copyrows
+            in_off += copyrows
+
+            if islast:
+                self._comm.Bcast(buf, root=0)
+                # loop over these submaps, and copy any that we are assigned
+                for sm in range(submap_off, submap_off+comm_submap):
+                    if sm in self._glob2loc.keys():
+                        loc = self._glob2loc[sm]
+                        self.data[loc,:,:] = view[sm-submap_off,:,:]
+                out_off = 0
+                submap_off += comm_submap
+                buf.fill(0)
+                islast = False
+
+        # flush the remaining buffer
+
+        if out_off > 0:
+            self._comm.Bcast(buf, root=0)
+            # loop over these submaps, and copy any that we are assigned
+            for sm in range(submap_off, submap_off+comm_submap):
+                if sm in self._glob2loc.keys():
+                    loc = self._glob2loc[sm]
+                    self.data[loc,:,:] = view[sm-submap_off,:,:]
+
+        return
+
+
+    def write_healpix_fits(self, path, comm_bytes=1000):
+        """
+        Write data to a HEALPix format FITS table.
+
+        The data across all processes is assumed to be synchronized (the
+        data for a given submap shared between processes is identical).  The
+        lowest rank process sharing each submap sends their copy to the root
+        process for writing.
+
+        Args:
+            path (str): The path to the FITS file.
+            comm_bytes (int): The approximate message size to use.
+        """
+
+        # We will reduce some number of whole submaps at a time.
+        # Find the number of submaps that fit into the requested
+        # communication size.
+        dbytes = self._dtype(1).itemsize
+        comm_submap = int(comm_bytes / (dbytes * self._submap * self._nnz))
+        if comm_submap == 0:
+            comm_submap = 1
+
+        nsubmap = int(self._size / self._submap)
+        if nsubmap * self._submap < self._size:
+            nsubmap += 1
+
+        # Determine which processes "own" each submap.
+
+        owners = np.zeros(nsubmap, dtype=np.int32)
+        owners.fill(self._comm.size)
+        for m in self._local:
+            owners[m] = self._comm.rank
+        allowners = np.zeros_like(owners)
+        self._comm.Allreduce(owners, allowners, op=MPI.MIN)
+
+        # this function requires lots of RAM, since it accumulates the
+        # full map on one process before writing.
+
+        # use a cache to store the local map, so that we can be sure to
+        # free the memory afterwards
+        
+        fdata = None
+        temp = None
+        if self._comm.rank == 0:
+            fdata = []
+            temp = Cache()
+            for col in range(self._nnz):
+                name = "col{}".format(col)
+                temp.create(name, self._dtype, (self._size,))
+                fdata.append(temp.reference(name))
+
+        sendbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+        sendview = sendbuf.reshape(comm_submap, self._submap, self._nnz)
+
+        recvbuf = None
+        recvview = None
+        if self._comm.rank == 0:
+            recvbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+            recvview = recvbuf.reshape(comm_submap, self._submap, self._nnz)
+
+        submap_off = 0
+        ncomm = comm_submap
+        while submap_off < nsubmap:
+            if submap_off + ncomm > nsubmap:
+                ncomm = nsubmap - submap_off
+            if np.sum(allowners[submap_off:submap_off+ncomm]) != ncomm * self._comm.size:
+                # at least one submap has some hits.  reduce.
+                for c in range(ncomm):
+                    if allowners[submap_off + c] == self._comm.rank:
+                        sendview[c,:,:] = self.data[self._glob2loc[submap_off + c],:,:]
+                self._comm.Reduce(sendbuf, recvbuf, op=MPI.SUM, root=0)
+                if self._comm.rank == 0:
+                    # copy into FITS buffers
+                    for c in range(ncomm):
+                        sampoff = (submap_off + c) * self._submap
+                        for col in range(self._nnz):
+                            fdata[col][sampoff:sampoff+self._submap] = recvview[c,:,col]
+                sendbuf.fill(0)
+                if self._comm.rank == 0:
+                    recvbuf.fill(0)
+
+            submap_off += ncomm
+
+        if self._comm.rank == 0:
+            hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False)
 
         return
