@@ -185,30 +185,13 @@ def main():
 
     # construct the list of intervals
 
-    intervals = tt.regular_intervals(int(args.numobs), 0.0, 0, samplerate, 3600*float(args.obs), 3600*float(args.gap))
-
-    # Since we are using a single observation (for madam compatibility),
-    # the observation may be very long.  Each interval within the observation
-    # may also be long (e.g. a day).  Sub-divide each interval into 
-    # smaller pieces for purposes of data distribution.
-
-    intsamp = None
-    if len(intervals) == 1:
-        intsamp = intervals[0].last - intervals[0].first + 1
-    else:
-        # include also the samples in the gap
-        intsamp = intervals[1].first - intervals[0].first
-
     obschunks = int(args.obschunks)
-    intchunk = int(intsamp / obschunks)
-    distint = []
-    for c in range(obschunks - 1):
-        distint.append(intchunk)
-    distint.append(intsamp - (intchunk * (obschunks-1)))
+
+    intervals = tt.regular_intervals(int(args.numobs), 0.0, 0, samplerate, 3600*float(args.obs), 3600*float(args.gap), chunks=obschunks)
 
     distsizes = []
     for it in intervals:
-        distsizes.extend(distint)
+        distsizes.append(it.last - it.first + 1)
 
     totsamples = np.sum(distsizes)
 
