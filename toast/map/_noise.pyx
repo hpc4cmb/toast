@@ -141,15 +141,19 @@ def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] c
     if cond.shape[0] != nsubmap:
         raise RuntimeError("condition number map should have the same number of submaps as covariance")
 
+    cdef int lwork = (nnz + 2) * nnz
     cdef double * fdata = <double*>malloc(nnz*nnz*sizeof(double))
-    cdef double * work = <double*>malloc(3*nnz*sizeof(double))
-    cdef int * iwork = <int*>malloc(nnz*sizeof(int))
+    cdef double * evals = <double*>malloc(nnz*sizeof(double))
+    cdef double * work = <double*>malloc(lwork*sizeof(double))
     cdef int fnnz = nnz
     cdef double norm
     cdef double rcond
     cdef int info
     cdef double inverse
     cdef char uplo = 'L'
+    cdef char jobz = 'V'
+    cdef double emin
+    cdef double emax
 
     if nnz == 1:
         # shortcut
@@ -162,24 +166,31 @@ def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] c
                 # copy to fortran compatible buffer
                 off = 0
                 memset(fdata, 0, nnz*nnz*sizeof(f64_t))
+                memset(evals, 0, nnz*sizeof(f64_t))
                 for k in range(nnz):
                     for m in range(k, nnz):
                         fdata[k*nnz+m] = data[i,j,off]
+                        if k != m:
+                            fdata[m*nnz+k] = data[i,j,off]
                         off += 1
 
-                # factor and check condition number
-                norm = fdata[0]
-                info = 0
-                cython_lapack.dpotrf(&uplo, &fnnz, fdata, &fnnz, &info)
+                # eigendecomposition
 
-                cond[i,j,0] = 0.0
+                cython_lapack.dsyev(&jobz, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
+
                 if info == 0:
-                    # cholesky worked, compute condition number
-                    cython_lapack.dpocon(&uplo, &fnnz, fdata, &fnnz, &norm, &rcond, work, iwork, &info)
-                    if info == 0:
-                        cond[i,j,0] = rcond
+                    emin = 1.0e100
+                    emax = 0
+                    for t in range(nnz):
+                        if evals[t] > emax:
+                            emax = evals[t]
+                        if evals[t] < emin:
+                            emin = evals[t]
+                    cond[i,j,0] = emin / emax
+                else:
+                    cond[i,j,0] = 0.0
+
     free(fdata)
     free(work)
-    free(iwork)
+    free(evals)
     return
-

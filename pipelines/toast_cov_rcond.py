@@ -27,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
+    parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
     
     args = parser.parse_args()
 
@@ -50,18 +51,22 @@ def main():
     # just for that.  Instead, we open the file with healpy in memmap
     # mode so that nothing is actually read except the header.
 
-    fake, head = hp.read_map(infile, h=True, memmap=True)
-
     nside = 0
     nnz = 0
-    for key, val in head:
-        if key == 'NSIDE':
-            nside = int(val)
-        if key == 'TFIELDS':
-            nnz = int(val)
+    if comm.rank == 0:
+        fake, head = hp.read_map(infile, h=True, memmap=True)
+        for key, val in head:
+            if key == 'NSIDE':
+                nside = int(val)
+            if key == 'TFIELDS':
+                nnz = int(val)
+    nside = comm.bcast(nside, root=0)
+    nnz = comm.bcast(nnz, root=0)
 
     npix = 12 * nside**2
     subnside = int(nside / 16)
+    if subnside == 0:
+        subnside = 1
     subnpix = 12 * subnside**2
     nsubmap = int( npix / subnpix )
 
@@ -70,12 +75,21 @@ def main():
     dist = toast.distribute_uniform(nsubmap, comm.size)
     local = np.arange(dist[comm.rank][0], dist[comm.rank][0] + dist[comm.rank][1])
 
-    print("proc {} has submaps {} -> {}".format(comm.rank, dist[comm.rank][0], dist[comm.rank][0] + dist[comm.rank][1]))
+    if comm.rank == 0:
+        if os.path.isfile(outfile):
+            os.remove(outfile)
+    comm.barrier()
 
     # create the covariance and inverse condition number map
 
-    cov = tm.DistPixels(comm=comm, size=npix, nnz=nnz, submap=subnpix, local=local)
-    rcond = tm.DistPixels(comm=comm, size=npix, nnz=1, submap=subnpix, local=local)
+    cov = None
+    rcond = None
+    if args.single:
+        cov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=nnz, submap=subnpix, local=local)
+        rcond = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=1, submap=subnpix, local=local)
+    else:
+        cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
+        rcond = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=1, submap=subnpix, local=local)
 
     # read the covariance
 
@@ -83,7 +97,7 @@ def main():
 
     # every process computes its local piece
 
-    rcond.data[:] = tm.covariance_rcond(cov.data)
+    rcond.data[:] = tm.covariance_rcond(cov.data.astype(np.float64))
 
     # write the map
 
