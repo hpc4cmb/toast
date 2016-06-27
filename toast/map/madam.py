@@ -173,7 +173,6 @@ class OpMadam(Operator):
             nse = None
 
         todcomm = tod.mpicomm
-        todfcomm = todcomm.py2f()
 
         # to get the number of Non-zero pointing weights per pixel,
         # we use the fact that for Madam, all processes have all detectors
@@ -306,6 +305,8 @@ class OpMadam(Operator):
             
 
         # destripe
+
+        todfcomm = todcomm.py2f()
 
         libmadam.destripe(todfcomm, parstring.encode(), ndet, detstring.encode(), detweights, nlocal, nnz, timestamps, madam_pixels, madam_pixweights, madam_signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
 
