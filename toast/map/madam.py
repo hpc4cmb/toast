@@ -78,16 +78,18 @@ class OpMadam(Operator):
             containing the pointing weights to use.
         name (str): the name of the cache object (<name>_<detector>) to
             use for the detector timestream.  If None, use the TOD.
+        timestamps_name (str): the name of the cache object to use for time stamps.
         purge (bool): if True, clear any cached data that is copied intersection
             the Madam buffers.
     """
 
-    def __init__(self, params={}, detweights=None, pixels='pixels', weights='weights', name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=True, purge=False):
+    def __init__(self, params={}, timestamps_name=None, detweights=None, pixels='pixels', weights='weights', name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=True, purge=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
         self._timedist = True
+        self._timestamps_name = timestamps_name
         self._name = name
         self._flag_name = flag_name
         self._flag_mask = flag_mask
@@ -187,7 +189,10 @@ class OpMadam(Operator):
         parstring = self._dict2parstring(self._params)
         detstring = self._dets2detstring(tod.detectors)
 
-        timestamps = tod.read_times(local_start=0, n=nlocal)
+        if self._timestamps_name is not None:
+            timestamps = tod.cache.reference(self._timestamps_name)
+        else:
+            timestamps = tod.read_times()
 
         # create madam-compatible buffers
 
