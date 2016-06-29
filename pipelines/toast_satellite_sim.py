@@ -113,6 +113,7 @@ def main():
     parser.add_argument( '--noisefilter', required=False, default=False, action='store_true', help='Destripe with the noise filter enabled' )
 
     parser.add_argument( '--madam', required=False, default=False, action='store_true', help='If specified, use libmadam for map-making' )
+    parser.add_argument( '--madampar', required=False, default=None, help='Madam parameter file' )
     
     parser.add_argument( '--fp', required=False, default=None, help='Pickle file containing a dictionary of detector properties.  The keys of this dict are the detector names, and each value is also a dictionary with keys "quat" (4 element ndarray), "fwhm" (float, arcmin), "fknee" (float, Hz), "alpha" (float), and "NET" (float).  For optional plotting, the key "color" can specify a valid matplotlib color string.' )
     
@@ -320,24 +321,40 @@ def main():
         pars = {}
 
         cross = int(nside / 2)
-        submap = int(nside / 8)
+        submap = 16
+        if submap > nside:
+            submap = nside
 
         pars[ 'temperature_only' ] = 'F'
         pars[ 'force_pol' ] = 'T'
         pars[ 'kfirst' ] = 'T'
-        pars[ 'base_first' ] = baseline
-        pars[ 'nside_map' ] = nside
-        pars[ 'nside_cross' ] = cross
-        pars[ 'nside_submap' ] = submap
+        pars[ 'concatenate_messages' ] = 'T'
         pars[ 'write_map' ] = 'T'
         pars[ 'write_binmap' ] = 'T'
         pars[ 'write_matrix' ] = 'T'
         pars[ 'write_wcov' ] = 'T'
         pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
+        pars[ 'run_submap_test' ] = 'T'
+        pars[ 'nside_cross' ] = cross
+        pars[ 'nside_submap' ] = submap
+
+        if args.madampar is not None:
+            pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
+            comment = re.compile(r'^#.*')
+            with open(args.madampar, 'r') as f:
+                for line in f:
+                    if comment.match(line) is None:
+                        result = pat.match(line)
+                        if result is not None:
+                            key, value = result.group(1), result.group(2)
+                            pars[key] = value
+
+        pars[ 'base_first' ] = baseline
+        pars[ 'nside_map' ] = nside
         if args.noisefilter:
             pars[ 'kfilter' ] = 'T'
-        pars[ 'run_submap_test' ] = 'T'                
+        else:
+            pars[ 'kfilter' ] = 'F'
         pars[ 'fsample' ] = samplerate
         pars[ 'path_output' ] = args.outdir
 
