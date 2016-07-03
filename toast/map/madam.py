@@ -78,12 +78,17 @@ class OpMadam(Operator):
             containing the pointing weights to use.
         name (str): the name of the cache object (<name>_<detector>) to
             use for the detector timestream.  If None, use the TOD.
+        name_out (str): the name of the cache object (<name>_<detector>) to
+            use to output destriped detector timestream.  No output if None.
         timestamps_name (str): the name of the cache object to use for time stamps.
-        purge (bool): if True, clear any cached data that is copied intersection
+        purge (bool): if True, clear any cached data that is copied into the
             the Madam buffers.
     """
 
-    def __init__(self, params={}, timestamps_name=None, detweights=None, pixels='pixels', weights='weights', name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=True, purge=False):
+    def __init__(self, params={}, timestamps_name=None, detweights=None,
+                 pixels='pixels', weights='weights', name=None, name_out=None,
+                 flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255,
+                 apply_flags=True, purge=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -91,6 +96,7 @@ class OpMadam(Operator):
         self._timedist = True
         self._timestamps_name = timestamps_name
         self._name = name
+        self._name_out = name_out
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._common_flag_name = common_flag_name
@@ -309,5 +315,14 @@ class OpMadam(Operator):
         todfcomm = todcomm.py2f()
 
         libmadam.destripe(todfcomm, parstring.encode(), ndet, detstring.encode(), detweights, nlocal, nnz, timestamps, madam_pixels, madam_pixweights, madam_signal, nperiod, periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval, psdvals)
+
+        if self._name_out is not None:
+
+            for d, det in enumerate( tod.local_dets ):
+
+                dslice = slice(d * nlocal, (d+1) * nlocal)
+                signal = madam_signal[dslice]
+                cachename = "{}_{}".format(self._name_out, det)
+                tod.cache.put( cachename, signal, replace=True )
 
         return
