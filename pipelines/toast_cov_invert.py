@@ -27,10 +27,11 @@ def main():
 
     global_start = MPI.Wtime()
 
-    parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
+    parser = argparse.ArgumentParser( description='Read a toast covariance matrix and invert it.' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
-    parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
+    parser.add_argument( '--output', required=False, default=None, help='The output inverse covariance FITS file.' )
     parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
+    parser.add_argument( '--threshold', required=False, default=1e-3, type=np.float, help='Reciprocal condition number threshold' )
     
     args = parser.parse_args()
 
@@ -46,7 +47,7 @@ def main():
             print("input file should have .fits extension")
             sys.exit(0)
         inroot = inmat.group(1)
-        outfile = "{}_rcond.fits".format(inroot)
+        outfile = "{}_inv.fits".format(inroot)
 
     # We need to read the header to get the size of the matrix.
     # This would be a trivial function call in astropy.fits or
@@ -86,13 +87,12 @@ def main():
     # create the covariance and inverse condition number map
 
     cov = None
-    rcond = None
+    invcov = None
+    cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
     if args.single:
-        cov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=nnz, submap=subnpix, local=local)
-        rcond = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=1, submap=subnpix, local=local)
+        invcov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=nnz, submap=subnpix, local=local)
     else:
-        cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
-        rcond = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=1, submap=subnpix, local=local)
+        invcov = cov
 
     # read the covariance
 
@@ -100,11 +100,14 @@ def main():
 
     # every process computes its local piece
 
-    rcond.data[:] = tm.covariance_rcond(cov.data.astype(np.float64))
+    tm.covariance_invert(cov.data, args.threshold)
+
+    if args.single:
+        invcov.data[:] = cov.data.astype(np.float32)
 
     # write the map
 
-    rcond.write_healpix_fits(outfile)
+    invcov.write_healpix_fits(outfile)
 
 
 

@@ -86,7 +86,8 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
         # shortcut
         for i in range(nsubmap):
             for j in range(npix):
-                data[i,j,:] = 1.0 / data[i,j,:]
+                if ( data[i,j,0] != 0 ):
+                    data[i,j,0] = 1.0 / data[i,j,0]
     else:
         for i in range(nsubmap):
             for j in range(npix):
@@ -117,6 +118,12 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
                                     for m in range(k, nnz):
                                         data[i,j,off] = fdata[k*nnz+m]
                                         off += 1
+                        else:
+                            info = 1
+
+                if info != 0:
+                    data[i,j,:] = 0
+
     free(fdata)
     free(work)
     free(iwork)

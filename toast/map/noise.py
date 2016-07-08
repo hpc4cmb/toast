@@ -132,5 +132,3 @@ def covariance_rcond(npp):
     rcond = np.zeros((npp.shape[0], npp.shape[1], 1), dtype=np.float64)
     _cond_covariance(npp, rcond)
     return rcond
-
-    
