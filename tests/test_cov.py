@@ -231,7 +231,11 @@ class CovarianceTest(MPITestCase):
         covariance_invert(invnpp.data, 1.0e-3)
         covariance_invert(invnpp.data, 1.0e-3)
 
-        nt.assert_almost_equal(invnpp.data, checkdata)
+        # Matrices that failed the rcond test are set to zero
+        nonzero = invnpp.data != 0
+        if np.sum(nonzero) == 0: raise Exception('All matrices failed the rcond test.')
+
+        nt.assert_almost_equal(invnpp.data[nonzero], checkdata[nonzero])
 
         return
 
