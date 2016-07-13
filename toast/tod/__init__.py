@@ -23,8 +23,9 @@ from .sim_detdata import (OpSimNoise, OpSimGradient,
 
 from .noise import Noise
 
-from .conviqt import OpSimConviqt
-
 from .pointing_math import quat2angle, aberrate
 
 from .tod_math import calibrate
+
+from .conviqt import OpSimConviqt
+

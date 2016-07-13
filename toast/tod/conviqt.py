@@ -25,6 +25,7 @@ from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
 from ..tod import Interval
+from ..tod import quat2angle
 
 # Define portably the MPI communicator datatype
 
@@ -34,12 +35,16 @@ try:
     else:
         MPI_Comm = ct.c_void_p
 except Exception as e:
-    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You need to have at version 2.0. ({})'.format(e))
+    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You need to have at least version 2.0. ({})'.format(e))
 
 try:
     libconviqt = ct.CDLL('libconviqt.so')
 except:
-    libconviqt = None
+    path = find_library('conviqt')
+    if path is not None:
+        libconviqt = ct.CDLL(path)
+    else:
+        libconviqt = None
 
 if libconviqt is not None:
     # Beam functions
@@ -183,7 +188,7 @@ class OpSimConviqt(Operator):
             use for output of the detector timestream.
     """
 
-    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt'):
+    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt', quat_name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -202,6 +207,12 @@ class OpSimConviqt(Operator):
         self._order = order
         self._calibrate = calibrate
         self._dxx = dxx
+        self._quat_name = quat_name
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
+        self._apply_flags = apply_flags
 
         self._out = out
         
@@ -266,26 +277,32 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
                 
                 # We need the three pointing angles to describe the pointing. read_pntg returns the attitude quaternions.
-                flags, common = tod.read_flags(detector=det, local_start=0, n=tod.local_samples[1])
-                totflags = np.copy(flags)
-                totflags |= common
-                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=tod.local_samples[1]))
+                if self._quat_name is not None:
+                    cachename = '{}_{}'.format( self._quat_name, det )
+                    pdata = tod.cache.reference(cachename).copy()
+                else:
+                    pdata = tod.read_pntg(detector=det).copy()
 
-                pdata[totflags != 0] = nullquat
+                if self._apply_flags:
+                    common, flags = None, None
+                    if self._common_flag_name is not None:
+                        common = tod.cache.reference(self._common_flag_name)
+                    if self._flag_name is not None:
+                        cachename = '{}_{}'.format( self._flag_name, det )
+                        flags = tod.cache.reference(cachename)
+                    else:
+                        flags, common_temp = tod.read_flags(detector=det)
+                        if common is None: common = common_temp
+                    if common is None:
+                        common = tod.read_common_flags()
+                    common = (common & self._common_flag_mask)
+                    flags = (flags & self._flag_mask)
+                    totflags = np.copy(flags)
+                    totflags |= common
+                    pdata[totflags != 0] = nullquat
+
+                theta, phi, psi = quat2angle( pdata )
                 
-                vec_dir = qa.rotate( pdata, zaxis ).T.copy()
-                
-                theta, phi = hp.vec2dir(*vec_dir)
-                theta[totflags != 0] = 0
-                phi[totflags != 0] = 0
-
-                vec_orient = qa.rotate( pdata, xaxis ).T.copy()
-
-                ypa = vec_orient[0]*vec_dir[1] - vec_orient[1]*vec_dir[0]
-                xpa = -vec_dir[2]*(vec_orient[0]*vec_dir[0] + vec_orient[1]*vec_dir[1]) + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
-
-                psi = np.arctan2(ypa, xpa)
-
                 # Is the psi angle in Pxx or Dxx? Pxx will include the detector polarization angle, Dxx will not.
 
                 if self._dxx:
@@ -293,7 +310,7 @@ class OpSimConviqt(Operator):
 
                 pnt = libconviqt.conviqt_pointing_new()
 
-                err = libconviqt.conviqt_pointing_alloc( pnt, tod.local_samples[1]*5)
+                err = libconviqt.conviqt_pointing_alloc( pnt, tod.local_samples[1]*5 )
                 if err != 0: raise Exception('Failed to allocate pointing array')
 
                 ppnt = libconviqt.conviqt_pointing_data(pnt)
