@@ -12,16 +12,14 @@
 
 
 /*
-Dot product of a lists of arrays, returns a column array.  Arrays a and b 
-must be n by 4, but only the m first columns will be used for the dot 
-product (n-array)
+Dot product of a lists of arrays, returns a column array.
 */
-void pytoast_qarraylist_dot(int n, int m, const double* a, const double* b, double* dotprod) {
+void pytoast_qarraylist_dot(int n, int m, int d, const double* a, const double* b, double* dotprod) {
     int i, j;
     for (i = 0; i < n; ++i) {
-        dotprod[i]=0.0;
-        for (j = 0; j < m; ++j) {
-            dotprod[i] += a[4*i + j] * b[4*i + j];
+        dotprod[i] = 0.0;
+        for (j = 0; j < d; ++j) {
+            dotprod[i] += a[m*i + j] * b[m*i + j];
         }
     }
     return;
@@ -43,11 +41,10 @@ void pytoast_qinv(int n, double* q) {
 
 /*
 Norm of quaternion array list
-v must be a n by 4 array, only the first m rows will be considered, l2 is a n-array
 */
-void pytoast_qamplitude(int n, int m, const double* v, double* l2) {
+void pytoast_qamplitude(int n, int m, int d, const double* v, double* l2) {
     int i;
-    pytoast_qarraylist_dot(n, m, v, v, l2);
+    pytoast_qarraylist_dot(n, m, d, v, v, l2);
     for (i = 0; i < n; ++i) {
         l2[i] = sqrt(l2[i]);
     }
@@ -55,27 +52,19 @@ void pytoast_qamplitude(int n, int m, const double* v, double* l2) {
 }
 
 /*
-Normalize quaternion array q or array list to unit quaternions
-q_in must be a n by 4 arrray, only the first m rows will be considered, results are output to q_out
+Normalize quaternion array q or array list to unit quaternions.
 */
-void pytoast_qnorm(int n, int m, const double* q_in, double* q_out) {
+void pytoast_qnorm(int n, int m, int d, const double* q_in, double* q_out) {
     int i, j;
     double* l2 = (double*)malloc(n * sizeof(double));
     if (l2 == NULL) {
         fprintf(stderr, "cannot allocate %d doubles\n", n);
         exit(1);
     }
-    pytoast_qamplitude(n, m, q_in, l2);
+    pytoast_qamplitude(n, m, d, q_in, l2);
     for (i = 0; i < n; ++i) {
-        for (j = 0; j < m; ++j) {
-            if (l2[i]<1e-8) {
-                /*
-                fprintf(stderr, "too small denominator (l2[%d]=%f) at %s:%d\n", i, l2[i], __FILE__, __LINE__);
-                fprintf(stderr, "q[%d,:] = [ %f , %f , %f , %f ]\n", i, q_in[4*i], q_in[4*i+1], q_in[4*i+2], q_in[4*i+3]);
-                */
-            } else {
-                q_out[4*i + j] = q_in[4*i + j] / l2[i];
-            }
+        for (j = 0; j < d; ++j) {
+            q_out[m*i + j] = q_in[m*i + j] / l2[i];
         }
     }
     free(l2);
@@ -84,19 +73,18 @@ void pytoast_qnorm(int n, int m, const double* q_in, double* q_out) {
 
 /*
 Normalize quaternion array q or array list to unit quaternions
-q must be a n by 4 arrray, only the first m rows will be considered, results are written to q
 */
-void pytoast_qnorm_inplace(int n, int m, double* q) {
+void pytoast_qnorm_inplace(int n, int m, int d, double* q) {
     int i, j;
     double* l2 = (double*)malloc(n * sizeof(double));
     if (l2 == NULL) {
         fprintf(stderr, "cannot allocate %d doubles\n", n);
         exit(1);
     }
-    pytoast_qamplitude(n, m, q, l2);
+    pytoast_qamplitude(n, m, d, q, l2);
     for (i = 0; i < n; ++i) {
-        for (j = 0; j < m; ++j) {
-            q[4*i + j] /= l2[i];
+        for (j = 0; j < d; ++j) {
+            q[m*i + j] /= l2[i];
         }
     }
     free(l2);
@@ -104,39 +92,46 @@ void pytoast_qnorm_inplace(int n, int m, double* q) {
 }
 
 /*
-Rotate vector v by n-quaternion array q and returns array with rotate n-vectors
-v is a 3D-vector and q is a n by 4 array, v_out is a n by 3 array.
+Rotate an array of vectors by an array of quaternions and return the
+resulting array of vectors.
 */
 void pytoast_qrotate(int n, const double* v, const double* q_in, double* v_out) {
     int i;
+    double xw,yw,zw,x2,xy,xz,y2,yz,z2;
+    int vf;
+    int qf;
+    double * q_unit;
+
     /* Allocating temporary unit quaternion array */
-    double *q_unit = (double*)malloc(n * 4 * sizeof(double));
+    q_unit = (double*)malloc(n * 4 * sizeof(double));
     if (q_unit == NULL) {
         fprintf(stderr, "cannot allocate %d doubles\n", 4*n);
         exit(1);
     }
-    double xw,yw,zw,x2,xy,xz,y2,yz,z2;
 
-    pytoast_qnorm(n, 4, q_in, q_unit);
+    pytoast_qnorm(n, 4, 4, q_in, q_unit);
 
     for (i = 0; i < n; ++i) {
-        xw =  q_unit[4*i + 3]*q_unit[4*i + 0];
-        yw =  q_unit[4*i + 3]*q_unit[4*i + 1];
-        zw =  q_unit[4*i + 3]*q_unit[4*i + 2];
-        x2 = -q_unit[4*i + 0]*q_unit[4*i + 0];
-        xy =  q_unit[4*i + 0]*q_unit[4*i + 1];
-        xz =  q_unit[4*i + 0]*q_unit[4*i + 2];
-        y2 = -q_unit[4*i + 1]*q_unit[4*i + 1];
-        yz =  q_unit[4*i + 1]*q_unit[4*i + 2];
-        z2 = -q_unit[4*i + 2]*q_unit[4*i + 2];
+        vf = 3 * i;
+        qf = 4 * i;
+        xw =  q_unit[qf + 3] * q_unit[qf + 0];
+        yw =  q_unit[qf + 3] * q_unit[qf + 1];
+        zw =  q_unit[qf + 3] * q_unit[qf + 2];
+        x2 = -q_unit[qf + 0] * q_unit[qf + 0];
+        xy =  q_unit[qf + 0] * q_unit[qf + 1];
+        xz =  q_unit[qf + 0] * q_unit[qf + 2];
+        y2 = -q_unit[qf + 1] * q_unit[qf + 1];
+        yz =  q_unit[qf + 1] * q_unit[qf + 2];
+        z2 = -q_unit[qf + 2] * q_unit[qf + 2];
 
-        v_out[3*i + 0] = 2*( (y2 + z2)*v[0] + (xy - zw)*v[1] + (yw + xz)*v[2] ) + v[0];
-        v_out[3*i + 1] = 2*( (zw + xy)*v[0] + (x2 + z2)*v[1] + (yz - xw)*v[2] ) + v[1];
-        v_out[3*i + 2] = 2*( (xz - yw)*v[0] + (xw + yz)*v[1] + (x2 + y2)*v[2] ) + v[2];
+        v_out[vf + 0] = 2*( (y2 + z2)*v[vf + 0] + (xy - zw)*v[vf + 1] + (yw + xz)*v[vf + 2] ) + v[vf + 0];
+        v_out[vf + 1] = 2*( (zw + xy)*v[vf + 0] + (x2 + z2)*v[vf + 1] + (yz - xw)*v[vf + 2] ) + v[vf + 1];
+        v_out[vf + 2] = 2*( (xz - yw)*v[vf + 0] + (xw + yz)*v[vf + 1] + (x2 + y2)*v[vf + 2] ) + v[vf + 2];
     }
     free(q_unit);
     return;
 }
+
 
 /*
 Multiply arrays of quaternions
@@ -144,15 +139,17 @@ p, q and r are n by 4 arrays
 */
 void pytoast_qmult(int n, const double* p, const double* q, double* r) {
     int i;
+    int qf;
     for (i = 0; i < n; ++i) {
-        r[4*i + 0] =  p[4*i + 0] * q[4*i + 3] + p[4*i + 1] * q[4*i + 2] 
-            - p[4*i + 2] * q[4*i + 1] + p[4*i + 3] * q[4*i + 0];
-        r[4*i + 1] = -p[4*i + 0] * q[4*i + 2] + p[4*i + 1] * q[4*i + 3] 
-            + p[4*i + 2] * q[4*i + 0] + p[4*i + 3] * q[4*i + 1];
-        r[4*i + 2] =  p[4*i + 0] * q[4*i + 1] - p[4*i + 1] * q[4*i + 0] 
-            + p[4*i + 2] * q[4*i + 3] + p[4*i + 3] * q[4*i + 2];
-        r[4*i + 3] = -p[4*i + 0] * q[4*i + 0] - p[4*i + 1] * q[4*i + 1] 
-            - p[4*i + 2] * q[4*i + 2] + p[4*i + 3] * q[4*i + 3];
+        qf = 4 * i;
+        r[qf + 0] =  p[qf + 0] * q[qf + 3] + p[qf + 1] * q[qf + 2] 
+            - p[qf + 2] * q[qf + 1] + p[qf + 3] * q[qf + 0];
+        r[qf + 1] = -p[qf + 0] * q[qf + 2] + p[qf + 1] * q[qf + 3] 
+            + p[qf + 2] * q[qf + 0] + p[qf + 3] * q[qf + 1];
+        r[qf + 2] =  p[qf + 0] * q[qf + 1] - p[qf + 1] * q[qf + 0] 
+            + p[qf + 2] * q[qf + 3] + p[qf + 3] * q[qf + 2];
+        r[qf + 3] = -p[qf + 0] * q[qf + 0] - p[qf + 1] * q[qf + 1] 
+            - p[qf + 2] * q[qf + 2] + p[qf + 3] * q[qf + 3];
     }
     return;
 }
@@ -235,7 +232,7 @@ void pytoast_qexp(int n, const double* q_in, double* q_out) {
         fprintf(stderr, "cannot allocate %d doubles\n", n);
         exit(1);
     }
-    pytoast_qamplitude(n, 3, q_in, normv);
+    pytoast_qamplitude(n, 4, 3, q_in, normv);
     
     for (i = 0; i < n; ++i) {
         exp_q_w = exp(q_in[4*i + 3]);
@@ -266,11 +263,11 @@ void pytoast_qln(int n, const double* q_in, double* q_out) {
         exit(1);
     }
 
-    pytoast_qamplitude(n, 4, q_in, normq);
+    pytoast_qamplitude(n, 4, 4, q_in, normq);
     for (i = 0; i < n; ++i) {
         q_out[4*i + 3] = log(normq[i]);
     }
-    pytoast_qnorm(n, 3, q_in, q_out);
+    pytoast_qnorm(n, 4, 3, q_in, q_out);
 
     for (i = 0; i < n; ++i) {
         tmp = acos(q_in[4*i + 3]/normq[i]);
@@ -431,7 +428,7 @@ void pytoast_from_vectors(const double* vec1, const double* vec2, double* q) {
     q[1] = vec1[0]*vec2[2] - vec1[2]*vec2[0];
     q[2] = vec1[0]*vec2[1] - vec1[1]*vec2[0];
     q[3] = sqrt(vec1prod * vec2prod) + dotprod;
-    pytoast_qnorm_inplace(1,4,q);
+    pytoast_qnorm_inplace(1, 4, 4, q);
 
     return;
 }

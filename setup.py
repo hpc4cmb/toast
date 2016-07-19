@@ -75,10 +75,10 @@ ext_rng = Extension (
 )
 
 ext_qarray = Extension (
-    'toast.tod.qarray',
+    'toast.tod._qarray',
     include_dirs = [np.get_include(), ctoast_dir],
     sources = [
-        'toast/tod/qarray.pyx'
+        'toast/tod/_qarray.pyx'
     ]
 )
 

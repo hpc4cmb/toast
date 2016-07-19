@@ -13,7 +13,7 @@ import scipy.sparse as sp
 
 import healpy as hp
 
-import quaternionarray as qa
+from . import qarray as qa
 
 from .tod import TOD
 

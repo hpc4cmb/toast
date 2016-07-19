@@ -139,6 +139,9 @@ class MapSatelliteTest(MPITestCase):
 
         borequat = satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=0.0, precperiod=20.0, precangle=0.0)
 
+        print("borequat dims = ",borequat.shape)
+        print(borequat)
+
         data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1,3))
 
         np.testing.assert_almost_equal(data, np.tile(np.array([1.0, 0.0, 0.0]), nsim).reshape(-1,3))

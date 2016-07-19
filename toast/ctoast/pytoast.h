@@ -39,9 +39,8 @@ void pytoast_mem_aligned_free(void * mem);
 
 /*
 Dot product of a lists of arrays, returns a column array
-Arrays a and b must be n by 4, but only the m first columns will be used for the dot product (n-array)
 */
-void pytoast_qarraylist_dot(int n, int m, const double* a, const double* b, double* dotprod);
+void pytoast_qarraylist_dot(int n, int m, int d, const double* a, const double* b, double* dotprod);
 
 /*
 Inverse of quaternion array q
@@ -51,25 +50,21 @@ void pytoast_qinv(int n, double* q);
 
 /*
 Norm of quaternion array list
-v must be a n by 4 array, only the first m rows will be considered, l2 is a n-array
 */
-void pytoast_qamplitude(int n, int m, const double* v, double* l2);
+void pytoast_qamplitude(int n, int m, int d, const double* v, double* l2);
 
 /*
 Normalize quaternion array q or array list to unit quaternions
-q_in must be a n by 4 arrray, only the first m rows will be considered, results are output to q_out
 */
-void pytoast_qnorm(int n, int m, const double* q_in, double* q_out);
+void pytoast_qnorm(int n, int m, int d, const double* q_in, double* q_out);
 
 /*
 Normalize quaternion array q or array list to unit quaternions
-q must be a n by 4 arrray, only the first m rows will be considered, results are written to q
 */
-void pytoast_qnorm_inplace(int n, int m, double* q);
+void pytoast_qnorm_inplace(int n, int m, int d, double* q);
 
 /*
 Rotate vector v by n-quaternion array q and returns array with rotate n-vectors
-v is a 3D-vector and q is a n by 4 array, v_out is a n by 3 array.
 */
 void pytoast_qrotate(int n, const double* v, const double* q_in, double* v_out);
 

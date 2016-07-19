@@ -18,7 +18,6 @@ class RNGTest(MPITestCase):
     def setUp(self):
         #data
         self.size = 6
-        self.array = np.zeros(self.size)
         self.counter = [1357111317,888118218888]
         self.key = [0xfeedbead,0xbaadcafe]
         self.counter00 = [0,0]
@@ -39,46 +38,44 @@ class RNGTest(MPITestCase):
 
     def test_rng_gaussian(self):
         # Testing with any counter and any key
-        CBRNG.random(array=self.array,counter=self.counter,key=self.key)
-        self.assertTrue((self.array > -10).all() and (self.array < 10).all())
-        np.testing.assert_array_almost_equal(self.array, self.array_gaussian)
+        result = random(self.size, counter=self.counter, key=self.key)
+        self.assertTrue((result > -10).all() and (result < 10).all())
+        np.testing.assert_array_almost_equal(result, self.array_gaussian)
 
         # Testing with counter=[0,0] and key=[0,0]
-        CBRNG.random(array=self.array,counter=self.counter00,key=self.key00)
-        self.assertTrue((self.array > -10).all() and (self.array < 10).all())
-        np.testing.assert_array_almost_equal(self.array, self.array00_gaussian)
+        result = random(self.size, counter=self.counter00, key=self.key00)
+        self.assertTrue((result > -10).all() and (result < 10).all())
+        np.testing.assert_array_almost_equal(result, self.array00_gaussian)
 
     def test_rng_m11(self):
         # Testing with any counter and any key
-        CBRNG.random(array=self.array,counter=self.counter,sampler="uniform_m11",key=self.key)
-        self.assertTrue((self.array > -1).all() and (self.array < 1).all())
-        np.testing.assert_array_almost_equal(self.array, self.array_m11)
+        result = random(self.size, counter=self.counter, sampler="uniform_m11", key=self.key)
+        self.assertTrue((result > -1).all() and (result < 1).all())
+        np.testing.assert_array_almost_equal(result, self.array_m11)
 
         # Testing with counter=[0,0] and key=[0,0]
-        CBRNG.random(array=self.array,counter=self.counter00,sampler="uniform_m11",key=self.key00)
-        self.assertTrue((self.array > -1).all() and (self.array < 1).all())
-        np.testing.assert_array_almost_equal(self.array, self.array00_m11)
+        result = random(self.size, counter=self.counter00, sampler="uniform_m11", key=self.key00)
+        self.assertTrue((result > -1).all() and (result < 1).all())
+        np.testing.assert_array_almost_equal(result, self.array00_m11)
 
     def test_rng_01(self):
         # Testing with any counter and any key
-        CBRNG.random(array=self.array,counter=self.counter,sampler="uniform_01",key=self.key)
-        self.assertTrue((self.array > 0).all() and (self.array < 1).all())
-        np.testing.assert_array_almost_equal(self.array, self.array_01)
+        result = random(self.size, counter=self.counter, sampler="uniform_01", key=self.key)
+        self.assertTrue((result > 0).all() and (result < 1).all())
+        np.testing.assert_array_almost_equal(result, self.array_01)
 
         # Testing with counter=[0,0] and key=[0,0]
-        CBRNG.random(array=self.array,counter=self.counter00,sampler="uniform_01",key=self.key00)
-        self.assertTrue((self.array > 0).all() and (self.array < 1).all())
-        np.testing.assert_array_almost_equal(self.array, self.array00_01)
+        result = random(self.size, counter=self.counter00, sampler="uniform_01", key=self.key00)
+        self.assertTrue((result > 0).all() and (result < 1).all())
+        np.testing.assert_array_almost_equal(result, self.array00_01)
 
     def test_rng_uint64(self):
         # Testing with any counter and any key
-        self.array = np.zeros(self.size,dtype=np.uint64)
-        CBRNG.random(array=self.array,counter=self.counter,sampler="uniform_uint64",key=self.key)
-        self.assertTrue(type(self.array[0]) == np.uint64)
-        np.testing.assert_array_almost_equal(self.array, self.array_uint64)
+        result = random(self.size, counter=self.counter, sampler="uniform_uint64", key=self.key)
+        self.assertTrue(type(result[0]) == np.uint64)
+        np.testing.assert_array_equal(result, self.array_uint64)
 
         # Testing with counter=[0,0] and key=[0,0]
-        self.array = np.zeros(self.size,dtype=np.uint64)
-        CBRNG.random(array=self.array,counter=self.counter00,sampler="uniform_uint64",key=self.key00)
-        self.assertTrue(type(self.array[0]) == np.uint64)
-        np.testing.assert_array_almost_equal(self.array, self.array00_uint64)
+        result = random(self.size, counter=self.counter00, sampler="uniform_uint64", key=self.key00)
+        self.assertTrue(type(result[0]) == np.uint64)
+        np.testing.assert_array_equal(result, self.array00_uint64)

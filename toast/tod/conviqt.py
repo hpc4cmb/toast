@@ -19,7 +19,7 @@ import healpy as hp
 import numpy as np
 import numpy.ctypeslib as npc
 
-import quaternionarray as qa
+from . import qarray as qa
 
 from ..dist import Comm, Data
 from ..operator import Operator
