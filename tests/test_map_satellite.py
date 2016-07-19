@@ -57,7 +57,7 @@ class MapSatelliteTest(MPITestCase):
         }
 
         self.sim_nside = 64
-        self.totsamp = 200000
+        self.totsamp = 400000
         self.map_nside = 64
         self.rate = 40.0
         self.spinperiod = 10.0
@@ -320,7 +320,7 @@ class MapSatelliteTest(MPITestCase):
                 print("pixrms = ", pixrms)
                 print("todrms = ", todrms)
                 print("relerr = ", relerr)
-                self.assertTrue(relerr < 0.01)
+                self.assertTrue(relerr < 0.02)
 
         else:
             print("libmadam not available, skipping tests")

@@ -107,7 +107,7 @@ class OpSimNoiseTest(MPITestCase):
 
         # generate timestreams
 
-        op = OpSimNoise(stream=123456)
+        op = OpSimNoise(stream=123456, realization=10)
         op.exec(self.data)
 
         ob = self.data.obs[0]
@@ -144,7 +144,7 @@ class OpSimNoiseTest(MPITestCase):
         check4 = tod.cache.reference("noise_{}".format(self.dets[3]))
 
         if self.comm.rank == 0:
-            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter='\n')
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter=' ')
 
         # verify that timestreams with the same PSD *DO NOT* have the same
         # values (this is a crude test that the random seeds are being incremented)

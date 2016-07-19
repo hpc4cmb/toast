@@ -21,6 +21,8 @@ from .noise import Noise
 
 from ..operator import Operator
 
+from .. import rng as rng
+
 
 
 class OpSimNoise(Operator):
@@ -37,9 +39,12 @@ class OpSimNoise(Operator):
             all processes within a group, and should be offset between
             groups in such a way to ensure different streams between every
             detector, in every chunk, of every TOD, across every observation.
+        realization (int): if simulating multiple realizations, the realization
+            index.  This is used in combination with the stream when calling
+            the RNG.
     """
 
-    def __init__(self, out='noise', stream=None):
+    def __init__(self, out='noise', stream=None, realization=0):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -50,6 +55,7 @@ class OpSimNoise(Operator):
         self._out = out
         self._oversample = 2
         self._rngstream = stream
+        self._realization = realization
 
 
     @property
@@ -161,16 +167,9 @@ class OpSimNoise(Operator):
 
                     # gaussian Re/Im randoms
 
-                    # FIXME: Setting the seed like this does NOT guarantee uncorrelated
-                    # results from the generator.  This is just a place holder until
-                    # the streamed rng is implemented.
+                    detstream = self._rngstream + rngobs + (abschunk * ndet) + idet
 
-                    seed = self._rngstream + rngobs + (abschunk * ndet) + idet
-                    np.random.seed(seed)
-
-                    fdata = np.zeros(fftlen)
-                    fdata = np.random.normal(loc=0.0, scale=1.0, size=fftlen)
-                    #np.savetxt("out_simnoise_fdata_uni.txt", fdata, delimiter='\n')
+                    fdata = rng.random(fftlen, (detstream, self._realization), sampler="gaussian")
 
                     # scale by PSD
 
