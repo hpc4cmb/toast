@@ -369,6 +369,15 @@ class Data(object):
                     rms = np.std(data[good])
                     procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
 
+                for cname in tod.cache.keys():
+                    procstr = "{}    cache {}:\n".format(procstr, cname)
+                    ref = tod.cache.reference(cname)
+                    min = np.min(ref)
+                    max = np.max(ref)
+                    mean = np.mean(ref)
+                    rms = np.std(ref)
+                    procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
+
             recvstr = ""
             if gcomm.rank == 0:
                 groupstr = "{}{}".format(groupstr, procstr)
