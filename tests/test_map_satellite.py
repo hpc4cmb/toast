@@ -107,7 +107,9 @@ class MapSatelliteTest(MPITestCase):
                 precangle=self.precangle, 
                 sizes=chunks)
 
-            tod.set_prec_axis()
+            precquat = slew_precession_axis(nsim=self.totsamp, firstsamp=0, samplerate=self.rate, degday=1.0)
+
+            tod.set_prec_axis(qprec=precquat)
 
             # add analytic noise model with white noise
 
