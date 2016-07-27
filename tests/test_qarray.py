@@ -155,6 +155,11 @@ class QarrayTest(MPITestCase):
         v2 = np.array([np.cos(angle), np.sin(angle), 0])
         np.testing.assert_array_almost_equal(qarray.from_vectors(v1, v2), np.array([0, 0, np.sin(np.radians(15)), np.cos(np.radians(15))]))
 
+        nulquat = np.array([0.0, 0.0, 0.0, 1.0])
+        zaxis = np.array([0.0, 0.0, 1.0])
+        check = qarray.from_vectors(zaxis, zaxis)
+        np.testing.assert_array_almost_equal(check, nulquat)
+
 
     def test_fp(self):
         xaxis = np.array([1,0,0], dtype=np.float64)

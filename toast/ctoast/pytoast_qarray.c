@@ -415,20 +415,20 @@ void pytoast_from_vectors(const double* vec1, const double* vec2, double* q) {
     double dotprod = vec1[0]*vec2[0] + vec1[1]*vec2[1] + vec1[2]*vec2[2];
     double vec1prod = vec1[0]*vec1[0] + vec1[1]*vec1[1] + vec1[2]*vec1[2];
     double vec2prod = vec2[0]*vec2[0] + vec2[1]*vec2[1] + vec2[2]*vec2[2];
-    /*
-    if (dotprod < -0.999999) {
-        
-    } else if (dotprod > 0.999999) {
-        
+
+    /* shortcut for coincident vectors */
+    if (fabs(dotprod) < 1.0e-12) {
+        q[0] = 0.0;
+        q[1] = 0.0;
+        q[2] = 0.0;
+        q[3] = 1.0;
     } else {
-        
+        q[0] = vec1[1]*vec2[2] - vec1[2]*vec2[1];
+        q[1] = vec1[2]*vec2[0] - vec1[0]*vec2[2];
+        q[2] = vec1[0]*vec2[1] - vec1[1]*vec2[0];
+        q[3] = sqrt(vec1prod * vec2prod) + dotprod;
+        pytoast_qnorm_inplace(1, 4, 4, q);
     }
-    */
-    q[0] = vec1[1]*vec2[2] - vec1[2]*vec2[1];
-    q[1] = vec1[0]*vec2[2] - vec1[2]*vec2[0];
-    q[2] = vec1[0]*vec2[1] - vec1[1]*vec2[0];
-    q[3] = sqrt(vec1prod * vec2prod) + dotprod;
-    pytoast_qnorm_inplace(1, 4, 4, q);
 
     return;
 }
