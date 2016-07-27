@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
-import mpi4py.MPI as MPI
-
 import os
+if 'PYTOAST_NOMPI' in os.environ.keys():
+    from toast import fakempi as MPI
+else:
+    from mpi4py import MPI
+
 import re
 import argparse
 
