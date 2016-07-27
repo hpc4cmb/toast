@@ -104,10 +104,9 @@ axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 void pytoast_from_axisangle(int n, const double* axis, const double* angle, double* q_out);
 
 /*
-Returns the axis and angle of rotation of a quaternion
-q is a 4-array, axis is a 3-array, angle is 1-array
+Returns the axes and angles of rotation of a quaternion array.
 */
-void pytoast_to_axisangle(const double* q, double* axis, double* angle);
+void pytoast_to_axisangle(int n, const double* q, double* axis, double* angle);
 
 /*
 Creates the rotation matrix corresponding to a quaternion

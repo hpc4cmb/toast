@@ -326,19 +326,26 @@ void pytoast_from_axisangle(int n, const double* axis, const double* angle, doub
 Returns the axis and angle of rotation of a quaternion
 q is a 4-array, axis is a 3-array, angle is 1-array
 */
-void pytoast_to_axisangle(const double* q, double* axis, double* angle) {
+void pytoast_to_axisangle(int n, const double* q, double* axis, double* angle) {
     double tmp;
+    int i;
+    int vf;
+    int qf;
 
-    angle[0] = 2 * acos(q[3]);
-    if (angle[0] < 1e-4) {
-        axis[0] = 0;
-        axis[1] = 0;
-        axis[2] = 0;
-    } else {
-        tmp = sin(angle[0]/2.);
-        axis[0] = q[0]/tmp;
-        axis[1] = q[1]/tmp;
-        axis[2] = q[2]/tmp;
+    for (i = 0; i < n; ++i) {
+        qf = 4 * i;
+        vf = 3 * i;
+        angle[i] = 2 * acos(q[qf+3]);
+        if (angle[i] < 1e-4) {
+            axis[vf+0] = 0;
+            axis[vf+1] = 0;
+            axis[vf+2] = 0;
+        } else {
+            tmp = sin(angle[i]/2.);
+            axis[vf+0] = q[qf+0]/tmp;
+            axis[vf+1] = q[qf+1]/tmp;
+            axis[vf+2] = q[qf+2]/tmp;
+        }
     }
     return;
 }
