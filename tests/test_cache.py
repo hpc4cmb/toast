@@ -77,3 +77,32 @@ class CacheTest(MPITestCase):
         elapsed = stop - start
         self.print_in_turns("cache create test took {:.3f} s".format(elapsed))
 
+
+    def test_alias(self):
+        start = MPI.Wtime()
+
+        self.cache.put('test', np.arange(10))
+
+        self.cache.add_alias('test-alias', 'test')
+
+        self.cache.add_alias('test-alias-2', 'test')
+
+        data = self.cache.reference('test-alias')
+        print(data)
+
+        self.cache.destroy('test-alias')
+
+        data = self.cache.reference('test-alias-2')
+        print(data)
+
+        self.cache.destroy('test')
+
+        if self.cache.exists('test-alias-2'):
+            raise Exception('Alias exists after destroying target.')
+
+        #self.assertTrue(False)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("cache alias test took {:.3f} s".format(elapsed))
+

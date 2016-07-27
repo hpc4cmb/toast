@@ -20,6 +20,7 @@ class Cache(object):
     def __init__(self, pymem=False):
         self._pymem = pymem
         self._refs = {}
+        self._aliases = {}
 
 
     def __del__(self):
@@ -28,6 +29,7 @@ class Cache(object):
             for n, r in self._refs.items():
                 _free(r)
         self._refs.clear()
+        self._aliases.clear()
 
 
     def clear(self, pattern=None):
@@ -45,6 +47,7 @@ class Cache(object):
                 for n, r in self._refs.items():
                     _free(r)
             self._refs.clear()
+            self._aliases.clear()
         else:
             pat = re.compile(pattern)
             names = []
@@ -53,9 +56,7 @@ class Cache(object):
                 if mat is not None:
                     names.append(n)
             for n in names:
-                if not self._pymem:
-                    _free(self._refs[n])
-                del self._refs[n]
+                self.destroy(n)
         return
 
 
@@ -70,7 +71,7 @@ class Cache(object):
         """
 
         if self.exists(name):
-            raise RuntimeError("Data buffer {} already exists".format(name))
+            raise RuntimeError("Data buffer or alias {} already exists".format(name))
         
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
@@ -84,6 +85,9 @@ class Cache(object):
     def put(self, name, data, replace=False):
         """
         Create a named data buffer to hold the provided data.
+        If replace is True, existing buffer of the same name is first
+        destroyed. If replace is True and the name is an alias, it is
+        promoted to a new data buffer.
 
         Args:
             name (str): the name to assign to the buffer.
@@ -109,6 +113,24 @@ class Cache(object):
         return ref
 
 
+    def add_alias(self, alias, name):
+        """
+        Add an alias to a name that already exists in the cache.
+
+        Args:
+            alias (str): alias to create
+            name (str): an existing key in the cache
+        """
+
+        if name not in self._refs.keys():
+            raise RuntimeError("Data buffer {} does not exist for alias {}".format(name, alias))
+
+        if alias in self._refs.keys():
+            raise RuntimeError("Proposed alias {} would shadow existing buffer.".format(alias))
+
+        self._aliases[alias] = name
+
+
     def destroy(self, name):
         """
         Deallocate the specified buffer.
@@ -117,18 +139,33 @@ class Cache(object):
         are out of use.
 
         Args:
-            name (str): the name of the buffer to destroy.
+            name (str): the name of the buffer or alias to destroy.
         """
+
+        if name in self._aliases.keys():
+            # Alias is a soft link. Do not remove the buffer
+            del self._aliases[name]
+            return
 
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist".format(name))
+
+        # Remove aliases to the buffer
+        aliases_to_remove = []
+        for key, value in self._aliases.items():
+            if value == name:
+                aliases_to_remove.append( key )
+        for key in aliases_to_remove:
+            del self._aliases[key]
+
+        # Remove actual buffer
         if not self._pymem:
             _free(self._refs[name])
         del self._refs[name]
         return
 
 
-    def exists(self, name):
+    def exists(self, name, return_ref=False):
         """
         Check whether a buffer exists.
 
@@ -136,10 +173,18 @@ class Cache(object):
             name (str): the name of the buffer to search for.
 
         Returns:
-            (bool): True if the buffer exists.
+            (array): a numpy array wrapping the raw data buffer or None if it does not exist.
         """
-        result = (name in self._refs.keys())
-        return result
+        ref = None
+        if name in self._refs.keys():
+            ref = self._refs[name]
+        elif name in self._aliases.keys():
+            ref = self._refs[self._aliases[name]]
+
+        if return_ref:
+            return ref
+        else:
+            return ref is not None
 
 
     def reference(self, name):
@@ -157,9 +202,10 @@ class Cache(object):
         Returns:
             (array): a numpy array wrapping the raw data buffer.
         """
-        if name not in self._refs.keys():
-            raise RuntimeError("Data buffer {} does not exist".format(name))
-        return self._refs[name]
+        ref = self.exists(name, return_ref=True)
+        if ref is None:
+            raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
+        return ref
 
     
     def keys(self):
@@ -173,6 +219,19 @@ class Cache(object):
         """
 
         return self._refs.keys()
+
+
+    def aliases(self):
+        """
+        Return a dictionary of all the aliases to keys in the cache.
+
+        Args:
+
+        Returns:
+            (dict): Dictionary of aliases.
+        """
+
+        return self._aliases.copy()
 
 
     def report(self):
