@@ -5,6 +5,8 @@
 
 # import functions in our public API
 
+from . import qarray as qarray
+
 from .tod import TOD
 
 from .interval import Interval

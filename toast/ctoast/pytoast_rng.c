@@ -56,7 +56,7 @@ double uneg11(uint64_t in) {
  * rand_array: array of size at least [offset+size] where the random variables are written
  */
 void generate_grv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
-    int i;
+    uint64_t i;
     threefry2x64_ctr_t rand;
 
     /* Box-Muller transform variables */
@@ -90,7 +90,7 @@ void generate_grv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t co
  * rand_array: array of size at least [offset+size] where the random variables are written
  */
 void generate_neg11rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
-    int i;
+    uint64_t i;
     threefry2x64_ctr_t rand;
 
     threefry2x64_key_t key={{key1, key2}};
@@ -114,7 +114,7 @@ void generate_neg11rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_
  * rand_array: array of size at least [offset+size] where the random variables are written
  */
 void generate_01rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array) {
-    int i;
+    uint64_t i;
     threefry2x64_ctr_t rand;
 
     threefry2x64_key_t key={{key1, key2}};
@@ -139,7 +139,7 @@ void generate_01rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t c
  * rand_array: array of size at least [offset+size] where the random variables are written
  */
 void generate_uint64rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, uint64_t* rand_array) {
-    int i;
+    uint64_t i;
     threefry2x64_ctr_t rand;
 
     threefry2x64_key_t key={{key1, key2}};

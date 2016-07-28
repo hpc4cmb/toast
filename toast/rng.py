@@ -8,25 +8,38 @@ import numpy as np
 from ._rng import *
 
 
-# define a more pythonic class here to represent the random
-# number generator, which uses stuff from _rng.
-
-class CBRNG:
+def random(samples, counter, sampler="gaussian", key=(0xcafebead,0xbaadfeed)):
     """
-    Counter-based random number generator class
+    High level interface to internal Random123 library.
 
+    This provides an interface for calling the internal functions to generate
+    random values from common distributions.
 
+    Args:
+        samples (int): The number of samples to return.
+        counter (tuple): Two uint64 values which (along with the key) define
+            the state of the generator.
+        sampler (string): The distribution to sample from.  Allowed values are
+            "gaussian", "uniform_01", "uniform_m11", and "uniform_uint64".
+        key (tuple): Two uint64 values which (along with the counter) define
+            the state of the generator.
+    Returns:
+        array: The random values of appropriate type for the sampler.
     """
+    ret = None
+    if sampler == "gaussian":
+        ret = np.zeros(samples, dtype=np.float64)
+        cbrng_normal(samples, 0, counter[0], counter[1], key[0], key[1], ret)
+    elif sampler == "uniform_01":
+        ret = np.zeros(samples, dtype=np.float64)
+        cbrng_uniform_01_f64(samples, 0, counter[0], counter[1], key[0], key[1], ret)
+    elif sampler == "uniform_m11":
+        ret = np.zeros(samples, dtype=np.float64)
+        cbrng_uniform_m11_f64(samples, 0, counter[0], counter[1], key[0], key[1], ret)
+    elif sampler == "uniform_uint64":
+        ret = np.zeros(samples, dtype=np.uint64)
+        cbrng_uniform_uint64(samples, 0, counter[0], counter[1], key[0], key[1], ret)
+    else:
+        raise ValueError("Undefined sampler. Choose among: gaussian, uniform_01, uniform_m11, uniform_uint64")
+    return ret
 
-    def random(array, counter, sampler="gaussian" , key=[0xcafebead,0xbaadfeed]):
-        if sampler == "gaussian":
-            cbrng_normal(np.shape(array)[0], 0, counter[0], counter[1], key[0], key[1], array)
-        elif sampler == "uniform_01":
-            cbrng_uniform_01_f64(np.shape(array)[0], 0, counter[0], counter[1], key[0], key[1], array)
-        elif sampler == "uniform_m11":
-            cbrng_uniform_m11_f64(np.shape(array)[0], 0, counter[0], counter[1], key[0], key[1], array)
-        elif sampler == "uniform_uint64":
-            cbrng_uniform_uint64(np.shape(array)[0], 0, counter[0], counter[1], key[0], key[1], array)
-        else:
-            print("Undefined sampler. Choose among: gaussian, uniform_01, uniform_m11, uniform_uint64")
-        return

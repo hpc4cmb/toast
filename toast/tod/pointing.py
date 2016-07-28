@@ -9,7 +9,7 @@ import numpy as np
 
 import healpy as hp
 
-import quaternionarray as qa
+from . import qarray as qa
 
 from ..operator import Operator
 from ..dist import Comm, Data

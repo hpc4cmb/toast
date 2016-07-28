@@ -57,7 +57,7 @@ class MapSatelliteTest(MPITestCase):
         }
 
         self.sim_nside = 64
-        self.totsamp = 200000
+        self.totsamp = 400000
         self.map_nside = 64
         self.rate = 40.0
         self.spinperiod = 10.0
@@ -107,7 +107,9 @@ class MapSatelliteTest(MPITestCase):
                 precangle=self.precangle, 
                 sizes=chunks)
 
-            tod.set_prec_axis()
+            precquat = slew_precession_axis(nsim=self.totsamp, firstsamp=0, samplerate=self.rate, degday=1.0)
+
+            tod.set_prec_axis(qprec=precquat)
 
             # add analytic noise model with white noise
 
@@ -138,6 +140,9 @@ class MapSatelliteTest(MPITestCase):
         zaxis = np.array([0,0,1], dtype=np.float64)
 
         borequat = satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=0.0, precperiod=20.0, precangle=0.0)
+
+        print("borequat dims = ",borequat.shape)
+        print(borequat)
 
         data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1,3))
 
@@ -317,7 +322,7 @@ class MapSatelliteTest(MPITestCase):
                 print("pixrms = ", pixrms)
                 print("todrms = ", todrms)
                 print("relerr = ", relerr)
-                self.assertTrue(relerr < 0.01)
+                self.assertTrue(relerr < 0.02)
 
         else:
             print("libmadam not available, skipping tests")

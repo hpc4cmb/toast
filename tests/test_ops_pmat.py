@@ -94,3 +94,22 @@ class OpPointingHpixTest(MPITestCase):
         elapsed = stop - start
         self.print_in_turns("pmat test took {:.3f} s".format(elapsed))
 
+
+    def test_hpix_hwpnull(self):
+        start = MPI.Wtime()
+
+        op = OpPointingHpix(mode='IQU')
+        op.exec(self.data)
+
+        handle = None
+        if self.comm.rank == 0:
+            handle = open(os.path.join(self.outdir,"out_test_hpix_hwpnull_info"), "w")
+        self.data.info(handle)
+        if self.comm.rank == 0:
+            handle.close()
+        
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("pmat test took {:.3f} s".format(elapsed))
+
+
