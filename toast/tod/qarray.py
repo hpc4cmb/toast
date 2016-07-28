@@ -10,6 +10,10 @@ from . import _qarray as qc
 
 def arraylist_dot(a, b):
     """Dot product of a lists of arrays, returns a column array"""
+    if not isinstance(a, np.ndarray):
+        a = np.array(a, dtype=np.float64)
+    if not isinstance(b, np.ndarray):
+        b = np.array(b, dtype=np.float64)
     na = None
     ma = None
     if a.ndim == 1:
@@ -45,6 +49,8 @@ def arraylist_dot(a, b):
 
 def inv(q):
     """Inverse of quaternion array q"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -55,6 +61,8 @@ def inv(q):
 
 def amplitude(v):
     """Amplitude of a vector array"""
+    if not isinstance(v, np.ndarray):
+        v = np.array(v, dtype=np.float64)
     nv = None
     nm = None
     if v.ndim == 1:
@@ -68,6 +76,8 @@ def amplitude(v):
 
 def norm(q):
     """Normalize quaternion array to unit quaternions"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -82,6 +92,10 @@ def rotate(q, v):
     array of vectors (v).  If the number of dimensions of both q and v 
     are 2, then they must have the same leading dimension.
     """
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
+    if not isinstance(v, np.ndarray):
+        v = np.array(v, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -111,6 +125,10 @@ def mult(p, q):
     """Multiply arrays of quaternions, see:
     http://en.wikipedia.org/wiki/Quaternions#Quaternions_and_the_geometry_of_R3
     """
+    if not isinstance(p, np.ndarray):
+        p = np.array(p, dtype=np.float64)
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -138,11 +156,19 @@ def mult(p, q):
 
 def slerp(targettime, time, q):
     """Slerp, q quaternion array interpolated from time to targettime"""
+    if not isinstance(targettime, np.ndarray):
+        targettime = np.array(targettime, dtype=np.float64)
+    if not isinstance(time, np.ndarray):
+        time = np.array(time, dtype=np.float64)
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     return qc.slerp(targettime, time, q.flatten().astype(np.float64, copy=False))
 
 
 def exp(q):
     """Exponential of a quaternion array"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -153,6 +179,8 @@ def exp(q):
 
 def ln(q):
     """Natural logarithm of a quaternion array"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -163,6 +191,8 @@ def ln(q):
 
 def pow(q, p):
     """Real power of a quaternion array"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -196,6 +226,8 @@ def pow(q, p):
     
 def rotation(axis, angle):
     """Rotation quaternions of angles [rad] around axes [already normalized]"""
+    if not isinstance(axis, np.ndarray):
+        axis = np.array(axis, dtype=np.float64)
     nax = None
     if axis.ndim == 1:
         nax = 1
@@ -228,6 +260,8 @@ def rotation(axis, angle):
 
 
 def to_axisangle(q):
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
@@ -238,13 +272,21 @@ def to_axisangle(q):
 
 def to_rotmat(q):
     """Rotation matrix"""
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     return qc.to_rotmat(q.flatten().astype(np.float64, copy=False))
                                 
 
 def from_rotmat(rotmat):
+    if not isinstance(rotmat, np.ndarray):
+        rotmat = np.array(rotmat, dtype=np.float64)
     return qc.from_rotmat(rotmat.flatten().astype(np.float64, copy=False))
 
 
 def from_vectors(v1, v2):
+    if not isinstance(v1, np.ndarray):
+        v1 = np.array(v1, dtype=np.float64)
+    if not isinstance(v2, np.ndarray):
+        v2 = np.array(v2, dtype=np.float64)
     return qc.from_vectors(v1.flatten().astype(np.float64, copy=False), v2.flatten().astype(np.float64, copy=False))
 
