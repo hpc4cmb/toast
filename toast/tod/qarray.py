@@ -8,6 +8,41 @@ import numpy as np
 from . import _qarray as qc
 
 
+def arraylist_dot(a, b):
+    """Dot product of a lists of arrays, returns a column array"""
+    na = None
+    ma = None
+    if a.ndim == 1:
+        na = 1
+        ma = a.shape[0]
+    else:
+        na = a.shape[0]
+        ma = a.shape[1]
+    nb = None
+    mb = None
+    if b.ndim == 1:
+        nb = 1
+        mb = b.shape[0]
+    else:
+        nb = b.shape[0]
+        mb = b.shape[1]
+
+    if ma != mb:
+        raise RuntimeError("vector elements of both arrays must have the same length.")
+    if (na > 1) and (nb > 1) and (na != nb):
+        raise RuntimeError("vector arrays must have length one or matching lengths.")
+    n = np.max([na, nb])
+
+    aa = a
+    if na != n:
+        aa = np.tile(a, n)
+    bb = b
+    if nb != n:
+        bb = np.tile(b, n)
+
+    return qc.arraylist_dot(n, ma, ma, aa.flatten().astype(np.float64, copy=False), bb.flatten().astype(np.float64, copy=False))
+
+
 def inv(q):
     """Inverse of quaternion array q"""
     nq = None
@@ -15,7 +50,7 @@ def inv(q):
         nq = 1
     else:
         nq = q.shape[0]
-    return qc.inv(nq, q.flatten())
+    return qc.inv(nq, q.flatten().astype(np.float64, copy=False))
 
 
 def amplitude(v):
@@ -28,7 +63,7 @@ def amplitude(v):
     else:
         nv = v.shape[0]
         nm = v.shape[1]
-    return qc.amplitude(nv, nm, v.flatten())
+    return qc.amplitude(nv, nm, v.flatten().astype(np.float64, copy=False))
 
 
 def norm(q):
@@ -38,7 +73,7 @@ def norm(q):
         nq = 1
     else:
         nq = q.shape[0]
-    return qc.norm(nq, q.flatten())
+    return qc.norm(nq, q.flatten().astype(np.float64, copy=False))
 
 
 def rotate(q, v):
@@ -69,7 +104,7 @@ def rotate(q, v):
     if nq != n:
         qq = np.tile(q, n)
 
-    return qc.rotate(n, qq.flatten(), vv.flatten())
+    return qc.rotate(n, qq.flatten().astype(np.float64, copy=False), vv.flatten().astype(np.float64, copy=False))
 
 
 def mult(p, q):
@@ -98,12 +133,12 @@ def mult(p, q):
     if nq != n:
         qq = np.tile(q, n)
 
-    return qc.mult(n, pp.flatten(), qq.flatten())
+    return qc.mult(n, pp.flatten().astype(np.float64, copy=False), qq.flatten().astype(np.float64, copy=False))
 
 
 def slerp(targettime, time, q):
     """Slerp, q quaternion array interpolated from time to targettime"""
-    return qc.slerp(targettime, time, q.flatten())
+    return qc.slerp(targettime, time, q.flatten().astype(np.float64, copy=False))
 
 
 def exp(q):
@@ -113,7 +148,7 @@ def exp(q):
         nq = 1
     else:
         nq = q.shape[0]    
-    return qc.exp(nq, q.flatten())
+    return qc.exp(nq, q.flatten().astype(np.float64, copy=False))
 
 
 def ln(q):
@@ -123,7 +158,7 @@ def ln(q):
         nq = 1
     else:
         nq = q.shape[0]    
-    return qc.ln(nq, q.flatten())
+    return qc.ln(nq, q.flatten().astype(np.float64, copy=False))
 
 
 def pow(q, p):
@@ -156,7 +191,7 @@ def pow(q, p):
     if nq != n:
         qq = np.tile(q, n)
 
-    return qc.pow(qq.flatten(), pp.flatten())
+    return qc.pow(qq.flatten().astype(np.float64, copy=False), pp.flatten().astype(np.float64, copy=False))
 
     
 def rotation(axis, angle):
@@ -189,7 +224,7 @@ def rotation(axis, angle):
     else:
         ang = np.tile(angle, n) 
 
-    return qc.rotation(ax.flatten(), ang.flatten())
+    return qc.rotation(ax.flatten().astype(np.float64, copy=False), ang.flatten().astype(np.float64, copy=False))
 
 
 def to_axisangle(q):
@@ -198,18 +233,18 @@ def to_axisangle(q):
         nq = 1
     else:
         nq = q.shape[0]
-    return qc.to_axisangle(nq, q.flatten())
+    return qc.to_axisangle(nq, q.flatten().astype(np.float64, copy=False))
 
 
 def to_rotmat(q):
     """Rotation matrix"""
-    return qc.to_rotmat(q.flatten())
+    return qc.to_rotmat(q.flatten().astype(np.float64, copy=False))
                                 
 
 def from_rotmat(rotmat):
-    return qc.from_rotmat(rotmat.flatten())
+    return qc.from_rotmat(rotmat.flatten().astype(np.float64, copy=False))
 
 
 def from_vectors(v1, v2):
-    return qc.from_vectors(v1.flatten(), v2.flatten())
+    return qc.from_vectors(v1.flatten().astype(np.float64, copy=False), v2.flatten().astype(np.float64, copy=False))
 

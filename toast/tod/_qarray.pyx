@@ -14,6 +14,7 @@ ctypedef np.int32_t i32_t
 
 
 cdef extern from "pytoast.h":
+    void pytoast_qarraylist_dot(int n, int m, int d, const double* a, const double* b, double* dotprod);
     void pytoast_qinv(int n, double* q)
     void pytoast_qamplitude(int n, int m, int d, const double* v, double* l2)
     void pytoast_qnorm(int n, int m, int d, const double* q_in, double* q_out)
@@ -28,6 +29,14 @@ cdef extern from "pytoast.h":
     void pytoast_to_rotmat(const double* q, double* rotmat)
     void pytoast_from_rotmat(const double* rotmat, double* q)
     void pytoast_from_vectors(const double* vec1, const double* vec2, double* q)
+
+
+def arraylist_dot(int n, int m, int d, np.ndarray[f64_t, ndim=1] a, np.ndarray[f64_t, ndim=1] b):
+    a = np.ascontiguousarray(a)
+    b = np.ascontiguousarray(b)
+    cdef np.ndarray[f64_t, ndim=1, mode='c'] out = np.zeros(n, dtype=f64)
+    pytoast_qarraylist_dot(n, m, d, <double*>a.data, <double*>b.data, <double*>out.data)
+    return out
 
 
 def inv(int n, np.ndarray[f64_t, ndim=1] q):

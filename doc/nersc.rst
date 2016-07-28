@@ -3,35 +3,19 @@
 Using at NERSC
 ====================
 
-To use TOAST at NERSC, you need to have a Python3 software stack with all dependencies installed.  There are several ways to achieve this.
+To use TOAST at NERSC, you need to have a Python3 software stack with all dependencies installed.  There is already such a software stack installed on edison and cori.
 
+Module Files
+---------------
 
-Temporary Solution
+To get access to the needed module files, add the machine-specific module file location to your search path::
+
+    %> module use /global/common/${NERSC_HOST}/contrib/hpcosmo/modulefiles
+
+Load Dependencies
 --------------------
 
-For now, you can use a python 3.4 software stack built by Ted on edison and cori.  On edison::
+In order to load a full python-3.5 stack, and also all dependencies needed by toast, do::
 
-    %> module use /scratch1/scratchdirs/kisner/software/modulefiles
-    %> module load toast
-
-OR::
-
-    %> module use /scratch1/scratchdirs/kisner/software/modulefiles
     %> module load toast-deps
-
-And then build and install your own copy of toast.  On cori, the path is different::
-
-    %> module use /global/cscratch1/sd/kisner/software/modulefiles
-    %> module load toast
-
-OR::
-
-    %> module use /global/cscratch1/sd/kisner/software/modulefiles
-    %> module load toast-deps
-
-
-NERSC Intel Python / Anaconda
----------------------------------
-
-We will be moving towards a solution using NERSC-supported python3 within a conda environment, with some extra packages.  TBD.
 

@@ -33,6 +33,17 @@ class QarrayTest(MPITestCase):
         self.rot_by_q2 = np.array([0.8077876, 0.3227185, 0.49328689])
 
 
+    def test_arraylist_dot_onedimarrays(self):
+        np.testing.assert_array_almost_equal(qarray.arraylist_dot(self.vec, self.vec +1), np.dot(self.vec, self.vec +1))
+
+    def test_arraylist_dot_1dimbymultidim(self):
+        np.testing.assert_array_almost_equal(qarray.arraylist_dot(self.vec2, self.vec), np.dot(self.vec2,self.vec))
+
+    def test_arraylist_dot_multidim(self):
+        result = np.hstack(np.dot(v1,v2) for v1,v2 in zip(self.vec2, self.vec2+1))
+        np.testing.assert_array_almost_equal(qarray.arraylist_dot(self.vec2, self.vec2 +1), result)
+
+
     def test_inv(self):
         np.testing.assert_array_almost_equal(qarray.inv(self.q1) , self.q1inv)
 
