@@ -174,7 +174,7 @@ def main():
 
     if args.debug:
         if comm.comm_world.rank == 0:
-            outfile = os.path.join(args.outdir, 'focalplane.png')
+            outfile = "{}_focalplane.png".format(args.outdir)
             view_focalplane(fp, outfile)
 
     # Since madam only supports a single observation, we use
