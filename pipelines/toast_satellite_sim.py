@@ -172,10 +172,6 @@ def main():
         print("Create focalplane:  {:.2f} seconds".format(stop-start))
     start = stop
 
-    if args.outdir != '.':
-        if not os.path.isdir(args.outdir):
-            os.mkdir(args.outdir)
-
     if args.debug:
         if comm.comm_world.rank == 0:
             outfile = os.path.join(args.outdir, 'focalplane.png')
