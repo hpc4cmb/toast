@@ -2,6 +2,7 @@
 import numpy as np
 cimport numpy as np
 cimport scipy.linalg.cython_lapack as cython_lapack
+cimport scipy.linalg.cython_blas as cython_blas
 
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
@@ -127,6 +128,62 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
     free(fdata)
     free(work)
     free(iwork)
+    return
+
+
+def _multiply_covariance(np.ndarray[f64_t, ndim=3] data1, np.ndarray[f64_t, ndim=3] data2):
+    cdef i64_t nsubmap = data1.shape[0]
+    cdef i64_t npix = data1.shape[1]
+    cdef i64_t nblock = data1.shape[2]
+    cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+    cdef i64_t i
+    cdef i64_t j
+    cdef i64_t k
+    cdef i64_t m
+    cdef i64_t off
+
+    cdef double * fdata1 = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * fdata2 = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * fdata3 = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * work = <double*>malloc(3*nnz*sizeof(double))
+    cdef int fnnz = nnz
+    cdef double fone = 1
+    cdef double fzero = 0
+    cdef char side = 'L'
+    cdef char uplo = 'L'
+
+    if nnz == 1:
+        # shortcut
+        for i in range(nsubmap):
+            for j in range(npix):
+                data1[i,j,0] *= data2[i,j,0]
+    else:
+        for i in range(nsubmap):
+            for j in range(npix):
+                # copy to fortran compatible buffer
+                memset(fdata1, 0, nnz*nnz*sizeof(f64_t))
+                memset(fdata2, 0, nnz*nnz*sizeof(f64_t))
+                memset(fdata3, 0, nnz*nnz*sizeof(f64_t))
+                off = 0
+                for k in range(nnz):
+                    for m in range(k, nnz):
+                        fdata1[k*nnz+m] = data1[i,j,off]
+                        fdata2[k*nnz+m] = data2[i,j,off]
+                        if k != m:
+                            # Second argument to dsymm must be full
+                            fdata2[m*nnz+k] = data2[i,j,off]
+                        off += 1
+                        
+                cython_blas.dsymm(&side, &uplo, &fnnz, &fnnz, &fone, fdata1, &fnnz, fdata2, &fnnz, &fzero, fdata3, &fnnz)
+
+                off = 0
+                for k in range(nnz):
+                    for m in range(k, nnz):
+                        data1[i,j,off] = fdata3[k*nnz+m]
+                        off += 1
+    free(fdata1)
+    free(fdata2)
+    free(fdata3)
     return
 
 

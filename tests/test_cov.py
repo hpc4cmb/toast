@@ -240,6 +240,70 @@ class CovarianceTest(MPITestCase):
         return
 
 
+    def test_multiply(self):
+        start = MPI.Wtime()
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')
+        pointing.exec(self.data)
+
+        # get locally hit pixels
+        lc = OpLocalPixels()
+        localpix = lc.exec(self.data)
+
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, self.subnpix)
+        sm = set(allsm)
+        localsm = np.array(sorted(sm), dtype=np.int64)
+
+        # construct a distributed map to store the covariance and hits
+
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+
+        # accumulate the inverse covariance.  Use detector weights
+        # based on the analytic NET.
+
+        tod = self.data.obs[0]['tod']
+        nse = self.data.obs[0]['noise']
+        detweights = {}
+        for d in tod.local_dets:
+            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
+
+        build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp.exec(self.data)
+
+        invnpp.allreduce()
+        hits.allreduce()
+
+        # invert it
+        checkdata = np.copy(invnpp.data)
+        covariance_invert(invnpp.data, 1.0e-3)
+
+        # multiply the two
+        covariance_multiply(checkdata, invnpp.data)
+
+        # check that the multiplied matrices are unit matrices
+        nsubmap, npix, nblock = checkdata.shape
+        nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+        for i in range(nsubmap):
+            for j in range(npix):
+                if np.all( invnpp.data[i,j] == 0 ):
+                    # Matrix failed to invert
+                    continue
+                off = 0                
+                for k in range(nnz):
+                    for m in range(k, nnz):
+                        if k == m:
+                            nt.assert_almost_equal( checkdata[i,j,off], 1. )
+                        else:
+                            nt.assert_almost_equal( checkdata[i,j,off], 0. )
+                        off += 1
+
+        return
+
+
     def test_fitsio(self):
         start = MPI.Wtime()
 

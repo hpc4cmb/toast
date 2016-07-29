@@ -12,7 +12,7 @@ from ..operator import Operator
 from .pixels import DistPixels
 
 from ._noise import (_accumulate_inverse_covariance,
-    _invert_covariance, _cond_covariance)
+    _invert_covariance, _cond_covariance, _multiply_covariance)
 
 
 
@@ -86,6 +86,8 @@ class OpInvCovariance(Operator):
                     if det not in self._detweights.keys():
                         raise RuntimeError("no detector weights found for {}".format(det))
                     detweight = self._detweights[det]
+                    if detweight == 0:
+                        continue
 
                 if self._hits is not None:
                     _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, weights, detweight, self._hits.data)
@@ -110,6 +112,25 @@ def covariance_invert(npp, threshold):
     if len(npp.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
     _invert_covariance(npp, threshold)
+    return
+
+
+def covariance_multiply(npp1, npp2):
+    """
+    Multiply two local piece of diagonal noise covariance.
+
+    This does an in-place multiplication of the covariance.
+    The results are returned in place of the first argument, npp1.
+
+    Args:
+        npp1 (3D array): The data member of a distributed covariance.
+        npp2 (3D array): The data member of a distributed covariance.
+    """
+    if len(npp1.shape) != 3 or len(npp2.shape) != 3:
+        raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    if np.any( npp1.shape != npp2.shape ):
+        raise RuntimeError("Dimensions of the distributed matrices must agree but {} != {}".format(npp1.shape, npp2.shape))
+    _multiply_covariance(npp1, npp2)
     return
 
 
