@@ -104,8 +104,9 @@ class DistPixels(object):
         nnz (int): the number of values per pixel.
         submap (int): the locally stored data is in units of this size.
         local (array): the list of local submaps (integers).
+        localpix (array): the list of local pixels (integers).
     """
-    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None):
+    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None, localpix=None):
         self._comm = comm
         self._size = size
         self._nnz = nnz
@@ -114,6 +115,12 @@ class DistPixels(object):
 
         if self._size % self._submap != 0:
             raise RuntimeError("submap size must evenly divide into total number of pixels")
+
+        if localpix is not None:
+            if local is not None: raise RuntimeError("Must not set local with localpix")
+            allsm = np.floor_divide(localpix, self._submap)
+            sm = set(allsm)
+            local = np.array(sorted(sm), dtype=np.int64)
 
         self._local = local
         self._glob2loc = {}
