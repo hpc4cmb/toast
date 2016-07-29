@@ -117,6 +117,9 @@ def main():
 
     parser.add_argument( '--madam', required=False, default=False, action='store_true', help='If specified, use libmadam for map-making' )
     parser.add_argument( '--madampar', required=False, default=None, help='Madam parameter file' )
+
+    parser.add_argument( '--MC_start', required=False, default=0, help='First Monte Carlo noise realization' )
+    parser.add_argument( '--MC_count', required=False, default=1, help='Number of Monte Carlo noise realizations' )
     
     parser.add_argument( '--fp', required=False, default=None, help='Pickle file containing a dictionary of detector properties.  The keys of this dict are the detector names, and each value is also a dictionary with keys "quat" (4 element ndarray), "fwhm" (float, arcmin), "fknee" (float, Hz), "alpha" (float), and "NET" (float).  For optional plotting, the key "color" can specify a valid matplotlib color string.' )
     
@@ -169,13 +172,9 @@ def main():
         print("Create focalplane:  {:.2f} seconds".format(stop-start))
     start = stop
 
-    if args.outdir != '.':
-        if not os.path.isdir(args.outdir):
-            os.mkdir(args.outdir)
-
     if args.debug:
         if comm.comm_world.rank == 0:
-            outfile = os.path.join(args.outdir, 'focalplane.png')
+            outfile = "{}_focalplane.png".format(args.outdir)
             view_focalplane(fp, outfile)
 
     # Since madam only supports a single observation, we use
@@ -265,33 +264,7 @@ def main():
         print("Construct boresight pointing:  {:.2f} seconds".format(stop-start))
     start = stop
 
-    # simulate noise
-
-    nse = tt.OpSimNoise(stream=0)
-    nse.exec(data)
-
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print("Noise simulation took {:.3f} s".format(elapsed))
-    start = stop
-
-    # in debug mode, print out data distribution information
-
-    if args.debug:
-        handle = None
-        if comm.comm_world.rank == 0:
-            handle = open(os.path.join(args.outdir,"distdata.txt"), "w")
-        data.info(handle)
-        if comm.comm_world.rank == 0:
-            handle.close()
-
-    # make a Healpix pointing matrix.  By setting purge_pntg=True,
-    # we purge the detector quaternion pointing to save memory.
-    # If we ever change this pipeline in a way that needs this
-    # pointing at a later stage, we need to set this to False
-    # and run at higher concurrency.
+    # make a Healpix pointing matrix.
 
     pointing = tt.OpPointingHpix(nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
     pointing.exec(data)
@@ -359,17 +332,57 @@ def main():
         else:
             pars[ 'kfilter' ] = 'F'
         pars[ 'fsample' ] = samplerate
-        pars[ 'path_output' ] = args.outdir
 
-        madam = tm.OpMadam(params=pars, detweights=detweights, name='noise', purge=True)
-        madam.exec(data)
+        # Loop over Monte Carlos
+
+        firstmc = int(args.MC_start)
+        nmc = int(args.MC_count)
+
+        for mc in range(firstmc, firstmc+nmc):
+            # clear all noise data from the cache, so that we can generate
+            # new noise timestreams.
+            tod.cache.clear("noise_.*")
+
+            # simulate noise
+
+            nse = tt.OpSimNoise(out="noise", stream=0, realization=mc)
+            nse.exec(data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("Noise simulation took {:.3f} s".format(elapsed))
+            start = stop
+
+            # create output directory for this realization
+            pars[ 'path_output' ] = "{}_{:03d}".format(args.outdir, mc)
+            if comm.comm_world.rank == 0:
+                if not os.path.isdir(pars['path_output']):
+                    os.makedirs(pars['path_output'])
+
+            # in debug mode, print out data distribution information
+            if args.debug:
+                handle = None
+                if comm.comm_world.rank == 0:
+                    handle = open(os.path.join(pars['path_output'],"distdata.txt"), "w")
+                data.info(handle)
+                if comm.comm_world.rank == 0:
+                    handle.close()
+
+            madam = tm.OpMadam(params=pars, detweights=detweights, name='noise')
+            madam.exec(data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("Mapmaking took {:.3f} s".format(elapsed))
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
-    elapsed = stop - start
+    elapsed = stop - global_start
     if comm.comm_world.rank == 0:
-        print("Mapmaking took {:.3f} s".format(elapsed))
-        elapsed = stop - global_start
         print("Total Time:  {:.2f} seconds".format(elapsed))
 
 
