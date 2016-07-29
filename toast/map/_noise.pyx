@@ -145,7 +145,6 @@ def _multiply_covariance(np.ndarray[f64_t, ndim=3] data1, np.ndarray[f64_t, ndim
     cdef double * fdata1 = <double*>malloc(nnz*nnz*sizeof(double))
     cdef double * fdata2 = <double*>malloc(nnz*nnz*sizeof(double))
     cdef double * fdata3 = <double*>malloc(nnz*nnz*sizeof(double))
-    cdef double * work = <double*>malloc(3*nnz*sizeof(double))
     cdef int fnnz = nnz
     cdef double fone = 1
     cdef double fzero = 0
