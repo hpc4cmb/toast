@@ -118,6 +118,7 @@ class DistPixels(object):
         self._local = local
         self._glob2loc = {}
         self._cache = Cache()
+        self._commsize = 5000000
 
         # our data is a 3D array of submap, pixel, values
         # we allocate this as a contiguous block
@@ -234,13 +235,15 @@ class DistPixels(object):
         return nsub
 
 
-    def allreduce(self, comm_bytes=1000):
+    def allreduce(self, comm_bytes=None):
         """
         Perform a buffered allreduce of the pixel domain data.
 
         Args:
             comm_bytes (int): The approximate message size to use.
         """
+        if comm_bytes is None:
+            comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
         nsub = int(self._size / self._submap)
 
@@ -291,7 +294,7 @@ class DistPixels(object):
         return
 
 
-    def read_healpix_fits(self, path, comm_bytes=1000):
+    def read_healpix_fits(self, path, comm_bytes=None):
         """
         Read and broadcast a HEALPix FITS table.
 
@@ -304,6 +307,8 @@ class DistPixels(object):
             path (str): The path to the FITS file.
             comm_bytes (int): The approximate message size to use.
         """
+        if comm_bytes is None:
+            comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
         
         # we make the assumption that FITS binary tables are still stored in
@@ -372,7 +377,7 @@ class DistPixels(object):
         return
 
 
-    def write_healpix_fits(self, path, comm_bytes=1000):
+    def write_healpix_fits(self, path, comm_bytes=None):
         """
         Write data to a HEALPix format FITS table.
 
@@ -385,7 +390,8 @@ class DistPixels(object):
             path (str): The path to the FITS file.
             comm_bytes (int): The approximate message size to use.
         """
-
+        if comm_bytes is None:
+            comm_bytes = self._commsize
         # We will reduce some number of whole submaps at a time.
         # Find the number of submaps that fit into the requested
         # communication size.
