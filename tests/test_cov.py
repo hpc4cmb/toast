@@ -240,6 +240,32 @@ class CovarianceTest(MPITestCase):
         return
 
 
+    def test_distpix_init(self):
+        start = MPI.Wtime()
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')
+        pointing.exec(self.data)
+
+        # get locally hit pixels
+        lc = OpLocalPixels()
+        localpix = lc.exec(self.data)
+
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, self.subnpix)
+        sm = set(allsm)
+        localsm = np.array(sorted(sm), dtype=np.int64)
+
+        # construct a distributed map to store the covariance and hits
+
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp2 = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, localpix=localpix)
+
+        nt.assert_equal( invnpp.local, invnpp2.local )
+
+        return
+
+
     def test_multiply(self):
         start = MPI.Wtime()
 
