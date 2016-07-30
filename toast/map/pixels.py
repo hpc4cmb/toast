@@ -105,13 +105,15 @@ class DistPixels(object):
         submap (int): the locally stored data is in units of this size.
         local (array): the list of local submaps (integers).
         localpix (array): the list of local pixels (integers).
+        nest (bool): nested pixel order flag
     """
-    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None, localpix=None):
+    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None, localpix=None, nest=False):
         self._comm = comm
         self._size = size
         self._nnz = nnz
         self._dtype = dtype
         self._submap = submap
+        self._nest = nest
 
         if self._size % self._submap != 0:
             raise RuntimeError("submap size must evenly divide into total number of pixels")
@@ -469,6 +471,6 @@ class DistPixels(object):
             submap_off += ncomm
 
         if self._comm.rank == 0:
-            hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False)
+            hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False, nest=self._nest)
 
         return
