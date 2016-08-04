@@ -190,8 +190,7 @@ class OpSimNoiseTest(MPITestCase):
             print("det {} PSD integral = {}".format(det, psum))
             err = variance * np.sqrt(2.0/(ntod-1))
             print("det {} expected error on variance = {}".format(det, err))
-            #self.assertTrue(np.absolute(psum - variance) < err)
-        self.assertTrue(False)
+            self.assertTrue(np.absolute(psum - variance) < err)
         
         stop = MPI.Wtime()
         elapsed = stop - start
