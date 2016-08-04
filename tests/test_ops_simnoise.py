@@ -55,6 +55,7 @@ class OpSimNoiseTest(MPITestCase):
         self.NET = {}
 
         self.fknee["f1a"] = 0.1
+        #self.fknee["f1a"] = 0.0
         self.alpha["f1a"] = 1.5
         self.NET["f1a"] = 10.0
 
@@ -156,6 +157,41 @@ class OpSimNoiseTest(MPITestCase):
         dif = np.fabs(check3 - check4)
         check = np.mean(dif)
         self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+        # Verify that Parseval's theorem holds- that the variance of the TOD
+        # equals the integral of the PSD.
+
+        for det in tod.local_dets:
+            td = tod.cache.reference("noise_{}".format(det))
+            ntod = len(td)
+            dclevel = np.mean(td)
+            variance = np.vdot(td-dclevel, td-dclevel) / ntod
+            print("det {} tod variance = {}".format(det, variance))
+            freq = nse.freq
+            pd = nse.psd(det)
+            npsd = len(freq)
+            nyq = self.rate / 2.0
+            psum = 0.0
+            for f in range(npsd):
+                left = 0.0
+                right = 0.0
+                fq = freq[f]
+                if f == 0:
+                    left = fq
+                    right = 0.5 * (freq[f+1] - fq)
+                elif f == npsd-1:
+                    left = 0.5 * (fq - freq[f-1])
+                    right = nyq - fq
+                else:
+                    left = 0.5 * (fq - freq[f-1])
+                    right = 0.5 * (freq[f+1] - fq)
+                band = left + right
+                psum += pd[f] * band
+            print("det {} PSD integral = {}".format(det, psum))
+            err = variance * np.sqrt(2.0/(ntod-1))
+            print("det {} expected error on variance = {}".format(det, err))
+            #self.assertTrue(np.absolute(psum - variance) < err)
+        self.assertTrue(False)
         
         stop = MPI.Wtime()
         elapsed = stop - start
