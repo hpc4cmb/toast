@@ -169,7 +169,7 @@ class OpSimNoise(Operator):
 
                     detstream = self._rngstream + rngobs + (abschunk * ndet) + idet
 
-                    fdata = rng.random(fftlen, (detstream, self._realization), sampler="gaussian")
+                    fdata = rng.random(fftlen, sampler="gaussian", key=(self._realization, detstream), counter=(0,0))
 
                     # scale by PSD
 

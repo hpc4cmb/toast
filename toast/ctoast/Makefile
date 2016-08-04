@@ -12,14 +12,14 @@ HEADERS = pytoast.h
 
 LIBOBJ = pytoast_mem.o pytoast_qarray.o pytoast_rng.o
 
-all : test_mem test_qarray test_rng
+all : test_mem test_rng
 
 
 test_mem : test_mem.o libctoast.a
 	$(CC) -o test_mem test_mem.o libctoast.a $(LIBS)
 
-test_qarray : test_qarray.o libctoast.a
-	$(CC) -o test_qarray test_qarray.o libctoast.a $(LIBS)
+# test_qarray : test_qarray.o libctoast.a
+# 	$(CC) -o test_qarray test_qarray.o libctoast.a $(LIBS)
 
 test_rng : test_rng.o
 	$(CC) -o test_rng test_rng.o libctoast.a $(LIBS)
