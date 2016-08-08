@@ -8,7 +8,7 @@ import numpy as np
 from ._rng import *
 
 
-def random(samples, counter, sampler="gaussian", key=(0xcafebead,0xbaadfeed)):
+def random(samples, counter=(0,0), sampler="gaussian", key=(0,0)):
     """
     High level interface to internal Random123 library.
 
@@ -18,11 +18,11 @@ def random(samples, counter, sampler="gaussian", key=(0xcafebead,0xbaadfeed)):
     Args:
         samples (int): The number of samples to return.
         counter (tuple): Two uint64 values which (along with the key) define
-            the state of the generator.
+            the starting state of the generator.
         sampler (string): The distribution to sample from.  Allowed values are
             "gaussian", "uniform_01", "uniform_m11", and "uniform_uint64".
         key (tuple): Two uint64 values which (along with the counter) define
-            the state of the generator.
+            the starting state of the generator.
     Returns:
         array: The random values of appropriate type for the sampler.
     """

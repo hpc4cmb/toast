@@ -17,23 +17,23 @@ class RNGTest(MPITestCase):
 
     def setUp(self):
         #data
-        self.size = 6
+        self.size = 11
         self.counter = [1357111317,888118218888]
-        self.key = [0xfeedbead,0xbaadcafe]
+        self.key = [3405692589,3131965165]
         self.counter00 = [0,0]
         self.key00 = [0,0]
 
-        # C test output with counter=[1357111317,888118218888] and key=[0xfeedbead,0xbaadcafe]
-        self.array_gaussian = np.array([ 2.275196 , -1.671555 , -0.389303 , -1.649345 , -0.123563 , -0.675699 ], np.float64)
-        self.array_m11 = np.array([ 0.701690 , 0.037174 , -0.926218 , 0.475780 , -0.942428 , -0.420310 ], np.float64)
-        self.array_01 = np.array([ 0.350845 , 0.018587 , 0.536891 , 0.237890 , 0.528786 , 0.789845 ], np.float64)
-        self.array_uint64 = np.array([ 6471948635099375789 , 342865335310108017 , 9903888746739875372 , 4388295497737174248 , 9754383911267064809 , 14570067135682199833 ], np.uint64)
+        # C test output with counter=[1357111317,888118218888] and key=[3405692589,3131965165]
+        self.array_gaussian = np.array([-0.602799, 2.141513, -0.433604, 0.493275, -0.037459, -0.926340, -0.536562, -0.064849, -0.662582, -1.024292, -0.170119], np.float64)
+        self.array_m11 = np.array([-0.951008, 0.112014, -0.391117, 0.858437, -0.232332, -0.929797, 0.513278, -0.722889, -0.439833, 0.814677, 0.466897], np.float64)
+        self.array_01 = np.array([0.524496, 0.056007, 0.804442, 0.429218, 0.883834, 0.535102, 0.256639, 0.638556, 0.780084, 0.407338, 0.233448], np.float64)
+        self.array_uint64 = np.array([9675248043493244317, 1033143684219887964, 14839328367301273822, 7917682351778602270, 16303863741333868668, 9870884412429777903, 4734154306332135586, 11779270208507399991, 14390002533568630569, 7514066637753215609, 4306362335420736255], np.uint64)
 
         # C test output with counter=[0,0] and key=[0,0]
-        self.array00_gaussian = np.array([ -1.286392 , 0.085829 , -1.131298 , -0.845273 , 1.076501 , -0.115413 ], np.float64)
-        self.array00_m11 = np.array([ -0.478794 , 0.871153 , -0.704256 , 0.737851 , 0.533997 , -0.886999 ], np.float64)
-        self.array00_01 = np.array([ 0.760603 , 0.435576 , 0.647872 , 0.368925 , 0.266998 , 0.556500 ], np.float64)
-        self.array00_uint64 = np.array([ 14030652003081164901 , 8034964082011408461 , 11951131804325250240 , 6805473726779904618 , 4925249918008276254 , 10265621268231006908 ], np.uint64)
+        self.array00_gaussian = np.array([-0.680004, -0.633214, -1.523790, -1.847484, -0.427139, 0.991348, 0.601200, 0.481707, -0.085967, 0.110980, -1.220734], np.float64)
+        self.array00_m11 = np.array([-0.478794, -0.704256, 0.533997, 0.004571, 0.392376, -0.785938, -0.373569, 0.866371, 0.325575, -0.266422, 0.937621], np.float64)
+        self.array00_01 = np.array([0.760603, 0.647872, 0.266998, 0.002285, 0.196188, 0.607031, 0.813215, 0.433185, 0.162788, 0.866789, 0.468810], np.float64)
+        self.array00_uint64 = np.array([14030652003081164901, 11951131804325250240, 4925249918008276254, 42156276261651215, 3619028682724454876, 11197741606642300638, 15001177968947004470, 7990859118804543502, 3002902877118036975, 15989435820833075781, 8648023362736035120], np.uint64)
 
 
     def test_rng_gaussian(self):
@@ -46,6 +46,11 @@ class RNGTest(MPITestCase):
         result = random(self.size, counter=self.counter00, key=self.key00)
         self.assertTrue((result > -10).all() and (result < 10).all())
         np.testing.assert_array_almost_equal(result, self.array00_gaussian)
+
+        # Test reproducibility
+        result1 = random(20, counter=[0,0], key=[0,0])
+        result2 = random(20, counter=[0,5], key=[0,0])
+        np.testing.assert_array_almost_equal(result1[5:], result2[:-5])
 
     def test_rng_m11(self):
         # Testing with any counter and any key

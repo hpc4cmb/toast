@@ -129,26 +129,17 @@ void pytoast_from_vectors(const double* vec1, const double* vec2, double* q);
 
 /* counter-based random number generation with Random123 library */
 
-#if !defined(NO_SINCOS) && defined(__APPLE__)
-/* MacOS X 10.10.5 (2015) doesn't have sincos */
-#define NO_SINCOS 1
-#endif
+double pytoast_uneg11(uint64_t in);
 
-#if NO_SINCOS /* enable this if sincos are not in the math library */
-void sincos(double x, double *s, double *c);
-#endif /* sincos is not in the math library */
+double pytoast_u01(uint64_t in);
 
-double uneg11(uint64_t in);
+void pytoast_generate_grv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
 
-double u01(uint64_t in);
+void pytoast_generate_neg11rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
 
-void generate_grv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
+void pytoast_generate_01rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
 
-void generate_neg11rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
-
-void generate_01rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, double* rand_array);
-
-void generate_uint64rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, uint64_t* rand_array);
+void pytoast_generate_uint64rv(uint64_t size, uint64_t offset, uint64_t counter1, uint64_t counter2, uint64_t key1, uint64_t key2, uint64_t* rand_array);
 
 
 #endif

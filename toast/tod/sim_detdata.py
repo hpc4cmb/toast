@@ -88,7 +88,7 @@ class OpSimNoise(Operator):
             if tod.local_chunks is None:
                 raise RuntimeError('noise simulation for uniform distributed samples not implemented')
 
-            # for purposes of incrementing the random seed, find
+            # for purposes of incrementing the random stream, find
             # the number of detectors
             alldets = tod.detectors
             ndet = len(alldets)
@@ -114,7 +114,7 @@ class OpSimNoise(Operator):
                 while fftlen <= (self._oversample * chksamp):
                     fftlen *= 2
                 half = int(fftlen / 2)
-                norm = rate * half;
+                norm = rate * float(half)
                 df = rate / fftlen
 
                 freq = np.linspace(df, df*half, num=half, endpoint=True)
@@ -169,15 +169,15 @@ class OpSimNoise(Operator):
 
                     detstream = self._rngstream + rngobs + (abschunk * ndet) + idet
 
-                    fdata = rng.random(fftlen, (detstream, self._realization), sampler="gaussian")
+                    fdata = rng.random(fftlen, sampler="gaussian", key=(self._realization, detstream), counter=(0,0))
 
                     # scale by PSD
 
                     scale = np.sqrt(psd * norm)
 
-                    fdata[0] *= 0.0
+                    fdata[0] *= np.sqrt(2.0) * scale[0]
                     fdata[1:half] *= scale[0:-1]
-                    fdata[half] *= np.sqrt(2 * scale[-1])
+                    fdata[half] *= np.sqrt(2.0) * scale[-1]
                     fdata[half+1:] *= scale[-2::-1]
 
                     #np.savetxt("out_simnoise_fdata.txt", fdata, delimiter='\n')
