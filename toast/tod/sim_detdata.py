@@ -88,7 +88,7 @@ class OpSimNoise(Operator):
             if tod.local_chunks is None:
                 raise RuntimeError('noise simulation for uniform distributed samples not implemented')
 
-            # for purposes of incrementing the random seed, find
+            # for purposes of incrementing the random stream, find
             # the number of detectors
             alldets = tod.detectors
             ndet = len(alldets)

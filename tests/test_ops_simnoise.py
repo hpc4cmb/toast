@@ -14,6 +14,8 @@ else:
 import numpy as np
 import numpy.testing as nt
 
+import scipy.interpolate as si
+
 from toast.tod.tod import *
 from toast.tod.pointing import *
 from toast.tod.noise import *
@@ -49,26 +51,26 @@ class OpSimNoiseTest(MPITestCase):
             self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
 
         self.rate = 20.0
-        self.fmin = 0.02
+        self.fmin = 0.05
         self.fknee = {}
         self.alpha = {}
         self.NET = {}
 
         self.fknee["f1a"] = 0.1
-        self.alpha["f1a"] = 1.5
+        self.alpha["f1a"] = 1.0
         self.NET["f1a"] = 10.0
 
         self.fknee["f1b"] = 0.1
-        self.alpha["f1b"] = 1.5
+        self.alpha["f1b"] = 1.0
         self.NET["f1b"] = 10.0
 
-        self.fknee["f2a"] = 0.2
-        self.alpha["f2a"] = 1.5
-        self.NET["f2a"] = 50.0
+        self.fknee["f2a"] = 0.15
+        self.alpha["f2a"] = 1.0
+        self.NET["f2a"] = 10.0
 
-        self.fknee["f2b"] = 0.2
-        self.alpha["f2b"] = 1.5
-        self.NET["f2b"] = 50.0
+        self.fknee["f2b"] = 0.15
+        self.alpha["f2b"] = 1.0
+        self.NET["f2b"] = 10.0
 
         self.totsamp = 50000
 
@@ -85,6 +87,8 @@ class OpSimNoiseTest(MPITestCase):
         remain = self.totsamp - (nchunk * chunksize)
         for r in range(remain):
             chunks[r] += 1
+
+        self.chunksize = chunksize
 
         # Construct an empty TOD (no pointing needed)
 
@@ -113,48 +117,59 @@ class OpSimNoiseTest(MPITestCase):
 
         # verify that the white noise part of the spectrum is normalized correctly
 
-        if self.comm.rank == 0:
-            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([nse.freq, nse.psd(self.dets[0]), nse.psd(self.dets[1]), nse.psd(self.dets[2]), nse.psd(self.dets[3])]), delimiter=' ')
-
         fsamp = nse.rate
-        cutoff = 0.9 * (fsamp / 2.0)
+        cutoff = 0.95 * (fsamp / 2.0)
         indx = np.where(nse.freq > cutoff)
         for det in tod.local_dets:
             NET = self.nse.NET(det)
             knee = self.nse.fknee(det)
             avg = np.mean(nse.psd(det)[indx])
             NETsq = NET*NET
-            self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.01)
-
-        psdnorm = {}
-        freq = nse.freq
-        npsd = len(freq)
-        nyq = self.rate / 2.0
+            print("det {} NETsq = {}, average white noise level = {}".format(det, NETsq, avg))
+            self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.02)
 
         ntod = self.totsamp
 
+        # Reconstruct the fft length that was used when generating the TOD.
+        # Then interpolate the PSD to this sampling before integrating.
+
+        oversample = 2 # this matches default in OpSimNoise...
+
+        fftlen = 2
+        half = 1
+        while fftlen <= (oversample * self.chunksize):
+            fftlen *= 2
+            half *= 2
+
+        rawfreq = nse.freq
+        nyquist = fsamp / 2.0
+
+        df = fsamp / fftlen
+        freq = np.linspace(df, df*half, num=half, endpoint=True)
+
+        logfreq = np.log10(freq)
+        lograwfreq = np.log10(rawfreq)
+
+        psds = {}
+        psdnorm = {}
         todvar = {}
+
         for det in tod.local_dets:
             todvar[det] = np.zeros(self.MC, dtype=np.float64)
-            pd = nse.psd(det)
-            psum = 0.0
-            for f in range(npsd):
-                left = 0.0
-                right = 0.0
-                fq = freq[f]
-                if f == 0:
-                    left = fq
-                    right = 0.5 * (freq[f+1] - fq)
-                elif f == npsd-1:
-                    left = 0.5 * (fq - freq[f-1])
-                    right = nyq - fq
-                else:
-                    left = 0.5 * (fq - freq[f-1])
-                    right = 0.5 * (freq[f+1] - fq)
-                band = left + right
-                psum += pd[f] * band
-                psdnorm[det] = 2.0 * psum
 
+            rawpsd = nse.psd(det)
+            lograwpsd = np.log10(rawpsd)
+
+            interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
+            logpsd = interp(logfreq)
+            psds[det] = np.power(10.0, logpsd)
+
+            # Factor of 2 comes from the negative frequency values.
+            psdnorm[det] = 2.0 * np.sum(psds[det] * df)
+            print("psd[{}] integral = {}".format(det, psdnorm[det]))
+
+        if self.comm.rank == 0:
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([freq, psds[self.dets[0]], psds[self.dets[1]], psds[self.dets[2]], psds[self.dets[3]]]), delimiter=' ')
 
         for r in range(self.MC):
 
@@ -203,6 +218,7 @@ class OpSimNoiseTest(MPITestCase):
 
         for det in tod.local_dets:
             histcenter = psdnorm[det]
+            print("tod[{}] mean variance = {}".format(det, np.mean(todvar[det])))
             sig = np.mean(todvar[det]) * np.sqrt(2.0/(ntod-1))
 
             histrange = 3.0*sig
@@ -219,8 +235,8 @@ class OpSimNoiseTest(MPITestCase):
 
             over3sig = np.where(np.absolute(todvar[det] - histcenter) > 3.0*sig)[0]
             overfrac = float(len(over3sig)) / self.MC
+            print(overfrac)
             self.assertTrue(overfrac < 0.1)
-
 
         stop = MPI.Wtime()
         elapsed = stop - start
