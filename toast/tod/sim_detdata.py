@@ -114,7 +114,7 @@ class OpSimNoise(Operator):
                 while fftlen <= (self._oversample * chksamp):
                     fftlen *= 2
                 half = int(fftlen / 2)
-                norm = 0.5 * rate * float(half)
+                norm = rate * float(half)
                 df = rate / fftlen
 
                 freq = np.linspace(df, df*half, num=half, endpoint=True)

@@ -48,14 +48,13 @@ class OpSimNoiseTest(MPITestCase):
         for d in self.dets:
             self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
 
-        self.rate = 10.0
-        self.fmin = 0.05
+        self.rate = 20.0
+        self.fmin = 0.02
         self.fknee = {}
         self.alpha = {}
         self.NET = {}
 
         self.fknee["f1a"] = 0.1
-        #self.fknee["f1a"] = 0.0
         self.alpha["f1a"] = 1.5
         self.NET["f1a"] = 10.0
 
@@ -71,7 +70,9 @@ class OpSimNoiseTest(MPITestCase):
         self.alpha["f2b"] = 1.5
         self.NET["f2b"] = 50.0
 
-        self.totsamp = 10000
+        self.totsamp = 50000
+
+        self.MC = 100
 
         # in order to make sure that the noise realization is reproducible
         # all all concurrencies, we set the chunksize to something independent
@@ -106,21 +107,9 @@ class OpSimNoiseTest(MPITestCase):
     def test_sim(self):
         start = MPI.Wtime()
 
-        # generate timestreams
-
-        op = OpSimNoise(stream=0)
-        op.exec(self.data)
-
         ob = self.data.obs[0]
         tod = ob['tod']
         nse = ob['noise']
-
-        handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_simnoise_info"), "w")
-        self.data.info(handle)
-        if self.comm.rank == 0:
-            handle.close()
 
         # verify that the white noise part of the spectrum is normalized correctly
 
@@ -137,40 +126,17 @@ class OpSimNoiseTest(MPITestCase):
             NETsq = NET*NET
             self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.01)
 
-        # write timestreams to disk for debugging
+        psdnorm = {}
+        freq = nse.freq
+        npsd = len(freq)
+        nyq = self.rate / 2.0
 
-        check1 = tod.cache.reference("noise_{}".format(self.dets[0]))
-        check2 = tod.cache.reference("noise_{}".format(self.dets[1]))
-        check3 = tod.cache.reference("noise_{}".format(self.dets[2]))
-        check4 = tod.cache.reference("noise_{}".format(self.dets[3]))
+        ntod = self.totsamp
 
-        if self.comm.rank == 0:
-            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter=' ')
-
-        # verify that timestreams with the same PSD *DO NOT* have the same
-        # values (this is a crude test that the random seeds are being incremented)
-
-        dif = np.fabs(check1 - check2)
-        check = np.mean(dif)
-        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
-
-        dif = np.fabs(check3 - check4)
-        check = np.mean(dif)
-        self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
-
-        # Verify that Parseval's theorem holds- that the variance of the TOD
-        # equals the integral of the PSD.
-
+        todvar = {}
         for det in tod.local_dets:
-            td = tod.cache.reference("noise_{}".format(det))
-            ntod = len(td)
-            dclevel = np.mean(td)
-            variance = np.vdot(td-dclevel, td-dclevel) / ntod
-            print("det {} tod variance = {}".format(det, variance))
-            freq = nse.freq
+            todvar[det] = np.zeros(self.MC, dtype=np.float64)
             pd = nse.psd(det)
-            npsd = len(freq)
-            nyq = self.rate / 2.0
             psum = 0.0
             for f in range(npsd):
                 left = 0.0
@@ -187,11 +153,75 @@ class OpSimNoiseTest(MPITestCase):
                     right = 0.5 * (freq[f+1] - fq)
                 band = left + right
                 psum += pd[f] * band
-            print("det {} PSD integral = {}".format(det, psum))
-            err = variance * np.sqrt(2.0/(ntod-1))
-            print("det {} expected error on variance = {}".format(det, err))
-            self.assertTrue(np.absolute(psum - variance) < err)
-        
+                psdnorm[det] = 2.0 * psum
+
+
+        for r in range(self.MC):
+
+            # generate timestreams
+
+            op = OpSimNoise(stream=0, realization=r)
+            op.exec(self.data)
+
+            if r == 0:
+                # write timestreams to disk for debugging
+                check1 = tod.cache.reference("noise_{}".format(self.dets[0]))
+                check2 = tod.cache.reference("noise_{}".format(self.dets[1]))
+                check3 = tod.cache.reference("noise_{}".format(self.dets[2]))
+                check4 = tod.cache.reference("noise_{}".format(self.dets[3]))
+                if self.comm.rank == 0:
+                    np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter=' ')
+
+                # verify that timestreams with the same PSD *DO NOT* have the same
+                # values (this is a crude test that the RNG state is being incremented)
+
+                dif = np.fabs(check1 - check2)
+                check = np.mean(dif)
+                self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+                dif = np.fabs(check3 - check4)
+                check = np.mean(dif)
+                self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+
+            for det in tod.local_dets:
+                # compute the TOD variance
+                td = tod.cache.reference("noise_{}".format(det))
+                dclevel = np.mean(td)
+                variance = np.vdot(td-dclevel, td-dclevel) / ntod
+                todvar[det][r] = variance
+
+            tod.cache.clear()
+
+
+        if self.comm.rank == 0:
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod_var.txt"), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]]]), delimiter=' ')
+
+        # Verify that Parseval's theorem holds- that the variance of the TOD
+        # equals the integral of the PSD.  We do this for an ensemble of realizations
+        # and compare the TOD variance to the integral of the PSD accounting
+        # for the error on the variance due to finite numbers of samples.
+
+        for det in tod.local_dets:
+            histcenter = psdnorm[det]
+            sig = np.mean(todvar[det]) * np.sqrt(2.0/(ntod-1))
+
+            histrange = 3.0*sig
+            histmin = histcenter - histrange
+            histmax = histcenter + histrange
+            nbins = 10
+            histbins = np.arange(nbins, dtype=np.float64)
+            histbins -= 0.5 * nbins
+            histbins *= 2.0 * histrange / nbins
+            histbins += histcenter
+            hist = np.histogram(todvar[det], bins=nbins, range=(histmin, histmax))[0]
+            if self.comm.rank == 0:
+                np.savetxt(os.path.join(self.outdir,"out_test_simnoise_var_{}.txt".format(det)), np.transpose([histbins, hist]), delimiter=' ')
+
+            over3sig = np.where(np.absolute(todvar[det] - histcenter) > 3.0*sig)[0]
+            overfrac = float(len(over3sig)) / self.MC
+            self.assertTrue(overfrac < 0.1)
+
+
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("simnoise test took {:.3f} s".format(elapsed))
