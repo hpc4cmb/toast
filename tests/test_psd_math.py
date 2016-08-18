@@ -26,10 +26,26 @@ class PSDTest(MPITestCase):
         self.nsamp = 100000
         self.stationary_period = 10000
         self.lagmax = 1000
-        self.times = np.arange(self.nsamp)
-        self.signal = np.random.randn(self.nsamp)
+        self.fsample = 4.0
+        self.times = np.arange(self.nsamp) / self.fsample
+        self.sigma = 10.
+        self.signal = np.random.randn(self.nsamp) * self.sigma
         self.flags = np.zeros(self.nsamp, dtype=np.bool)
+        self.flags[self.nsamp/4:self.nsamp/2] = True
 
 
     def test_autocov_psd(self):
-        autocovs = autocov_psd(self.times, self.signal, self.flags, self.lagmax, self.stationary_period, comm=self.comm)
+        autocovs = autocov_psd(self.times, self.signal, self.flags, self.lagmax, self.stationary_period, self.fsample, comm=self.comm)
+
+        for i in range(len(autocovs)):
+            t0, t1, freq, psd = autocovs[i]
+
+            n = len(psd)
+            mn = np.mean( np.abs( psd ) )
+            err = np.std( np.abs( psd ) )
+
+            ref = self.sigma**2 / self.fsample
+            if np.abs(mn - ref) > err / np.sqrt(n) * 4.:
+                raise RuntimeError('White noise input failed to produce a properly normalized white noise spectrum')
+
+        return
