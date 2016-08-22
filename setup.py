@@ -82,10 +82,21 @@ ext_qarray = Extension (
     ]
 )
 
+ext_psd_tools = Extension (
+    'toast.fod._psd_tools',
+    include_dirs = [np.get_include(), ctoast_dir],
+    sources = [
+        'toast/fod/_psd_tools.pyx'
+    ],
+    extra_compile_args=['-fopenmp'],
+    extra_link_args=['-fopenmp'],
+)
+
 extensions = cythonize([
     ext_map_noise,
     ext_cache,
     ext_qarray,
+    ext_psd_tools,
     ext_rng
 ])
 
@@ -128,7 +139,7 @@ setup (
     url = 'https://github.com/tskisner/pytoast',
     libraries = [libctoast],
     ext_modules = extensions,
-    packages = ['toast', 'toast.tod', 'toast.map'],
+    packages = ['toast', 'toast.tod', 'toast.map', 'toast.fod'],
     scripts = scripts,
     license = 'BSD',
     requires = ['Python (>3.4.0)', ],
@@ -144,9 +155,11 @@ if "clean" in sys.argv:
     subprocess.call("rm -rf dist", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/tod/*.so", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/map/*.so", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/fod/*.so", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/*.so", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/tod/*.dylib", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/map/*.dylib", shell=True, executable="/bin/bash")
+    subprocess.call("rm -rf toast/fod/*.dylib", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf toast/*.dylib", shell=True, executable="/bin/bash")
     subprocess.call("rm -rf test_output", shell=True, executable="/bin/bash")
     subprocess.call('find . -name "__pycache__" -exec rm -rf "{}" \; >/dev/null 2>&1', shell=True, executable="/bin/bash")
