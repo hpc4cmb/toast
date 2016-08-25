@@ -62,6 +62,52 @@ def _accumulate_inverse_covariance(
     return
 
 
+def _accumulate_noiseweighted(
+        np.ndarray[f64_t, ndim=3] data,
+        np.ndarray[i64_t, ndim=1] submap_indx,
+        np.ndarray[i64_t, ndim=1] pix_indx,
+        np.ndarray[f64_t, ndim=2] weights,
+        f64_t scale,
+        np.ndarray[i64_t, ndim=3] hits
+    ):
+    '''
+    For a vector of pointing weights, build and accumulate the upper triangle
+    of the diagonal inverse pixel covariance.
+    '''
+    cdef i64_t nsamp = weights.shape[0]
+    cdef i64_t nnz = weights.shape[1]
+    cdef i64_t i
+    cdef i64_t elem
+    cdef i64_t alt
+    cdef i64_t off
+    cdef i32_t do_hits = 1
+    cdef i64_t nblock = int(nnz * (nnz+1) / 2)
+
+    if data.shape[2] != nblock:
+        raise RuntimeError("inverse covariance does not have correct shape for NNZ from weights")
+    if submap_indx.shape[0] != nsamp:
+        raise RuntimeError("submap index list does not have same length as weights")
+    if pix_indx.shape[0] != nsamp:
+        raise RuntimeError("pixel index list does not have same length as weights")
+    if (hits.shape[0] != data.shape[0]) or (hits.shape[0] != data.shape[0]):
+        do_hits = 0
+
+    for i in range(nsamp):
+        if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+            off = 0
+            for elem in range(nnz):
+                for alt in range(elem, nnz):
+                    data[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
+                    off += 1
+
+    if do_hits > 0:
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                hits[submap_indx[i], pix_indx[i]] += 1
+
+    return
+
+
 def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
     cdef i64_t nsubmap = data.shape[0]
     cdef i64_t npix = data.shape[1]
