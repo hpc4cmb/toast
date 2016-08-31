@@ -141,6 +141,8 @@ class OpMadam(Operator):
         self._mcmode = mcmode
         if mcmode:
             self._params['mcmode'] = True
+        else:
+            self._params['mcmode'] = False
         self._cached = False
 
 
