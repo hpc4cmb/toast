@@ -7,7 +7,7 @@ import sys
 import os
 import shutil
 
-if 'PYTOAST_NOMPI' in os.environ.keys():
+if 'TOAST_NO_MPI' in os.environ.keys():
     from toast import fakempi as MPI
 else:
     from mpi4py import MPI

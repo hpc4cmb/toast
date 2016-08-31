@@ -4,7 +4,7 @@
 
 
 import os
-if 'PYTOAST_NOMPI' in os.environ.keys():
+if 'TOAST_NO_MPI' in os.environ.keys():
     from .. import fakempi as MPI
 else:
     from mpi4py import MPI
@@ -22,15 +22,14 @@ from ..operator import Operator
 from ..tod import TOD
 from ..tod import Interval
 
-
-try:
-    libmadam = ct.CDLL('libmadam.so')
-except:
-    path = find_library('madam')
-    if path is not None:
-        libmadam = ct.CDLL(path)
-    else:
-        libmadam = None
+libmadam = None
+if 'TOAST_NO_MPI' not in os.environ.keys():
+    try:
+        libmadam = ct.CDLL('libmadam.so')
+    except:
+        path = find_library('madam')
+        if path is not None:
+            libmadam = ct.CDLL(path)
 
 if libmadam is not None:
     libmadam.destripe.restype = None

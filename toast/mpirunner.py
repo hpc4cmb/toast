@@ -11,7 +11,7 @@ from unittest import TestCase
 from unittest import TextTestRunner
 from unittest import TestResult, TextTestResult
 
-if 'PYTOAST_NOMPI' in os.environ.keys():
+if 'TOAST_NO_MPI' in os.environ.keys():
     from . import fakempi as MPI
 else:
     from mpi4py import MPI

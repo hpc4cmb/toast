@@ -4,7 +4,7 @@
 
 
 import os
-if 'PYTOAST_NOMPI' in os.environ.keys():
+if 'TOAST_NO_MPI' in os.environ.keys():
     from .. import fakempi as MPI
 else:
     from mpi4py import MPI
@@ -37,14 +37,14 @@ try:
 except Exception as e:
     raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You need to have at least version 2.0. ({})'.format(e))
 
-try:
-    libconviqt = ct.CDLL('libconviqt.so')
-except:
-    path = find_library('conviqt')
-    if path is not None:
-        libconviqt = ct.CDLL(path)
-    else:
-        libconviqt = None
+libconviqt = None
+if 'TOAST_NO_MPI' not in os.environ.keys():
+    try:
+        libconviqt = ct.CDLL('libconviqt.so')
+    except:
+        path = find_library('conviqt')
+        if path is not None:
+            libconviqt = ct.CDLL(path)
 
 if libconviqt is not None:
     # Beam functions
