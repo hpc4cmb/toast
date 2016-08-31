@@ -12,8 +12,8 @@ from ..operator import Operator
 from .pixels import DistPixels
 
 from ._noise import (_accumulate_inverse_covariance,
-    _invert_covariance, _cond_covariance, _multiply_covariance)
-
+    _invert_covariance, _cond_covariance, _multiply_covariance,
+    _accumulate_noiseweighted, _apply_covariance)
 
 
 class OpInvCovariance(Operator):
@@ -184,6 +184,13 @@ class OpNoiseWeighted(Operator):
                 pixels = tod.cache.reference(pixelsname)
                 weights = tod.cache.reference(weightsname)
 
+                cachename = None
+                if self._name is not None:
+                    cachename = "{}_{}".format(self._name, det)
+                    signal = tod.cache.reference(cachename)
+                else:
+                    signal = tod.read(detector=det)
+
                 sm, lpix = self._zmap.global_to_local(pixels)
                 
                 detweight = 1.0
@@ -196,10 +203,10 @@ class OpNoiseWeighted(Operator):
                         continue
 
                 if self._hits is not None:
-                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, weights, detweight, self._hits.data)
+                    _accumulate_noiseweighted(self._zmap.data, sm, signal, lpix, weights, detweight, self._hits.data)
                 else:
                     fakehits = np.zeros((1,1,1), dtype=np.int64)
-                    _accumulate_inverse_covariance(self._invnpp.data, sm, lpix, weights, detweight, fakehits)
+                    _accumulate_noiseweighted(self._zmap.data, sm, signal, lpix, weights, detweight, fakehits)
         return
 
 
@@ -237,6 +244,23 @@ def covariance_multiply(npp1, npp2):
     if np.any( npp1.shape != npp2.shape ):
         raise RuntimeError("Dimensions of the distributed matrices must agree but {} != {}".format(npp1.shape, npp2.shape))
     _multiply_covariance(npp1, npp2)
+    return
+
+
+def covariance_apply(npp, m):
+    """
+    Multiply two local piece of diagonal noise covariance.
+
+    This does an in-place multiplication of the covariance.
+    The results are returned in place of the first argument, npp1.
+
+    Args:
+        npp (3D array): The data member of a distributed covariance.
+        m (3D array): The data member of a distributed map.
+    """
+    if len(npp.shape) != 3 or len(m.shape) != 3:
+        raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    _apply_covariance(npp, m)
     return
 
 
