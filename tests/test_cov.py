@@ -123,7 +123,7 @@ class CovarianceTest(MPITestCase):
             ob = {}
             ob['id'] = 'test'
             ob['tod'] = tod
-            ob['intervals'] = []
+            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = nse
 

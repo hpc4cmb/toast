@@ -65,6 +65,8 @@ class BinnedTest(MPITestCase):
         self.precperiod = 50.0
         self.precangle = 65.0
 
+        self.hwprpm = 50
+
         self.subnside = int(self.map_nside / 4)
         self.subnpix = 12 * self.subnside**2
         self.nsubmap = int( self.map_npix / self.subnpix )
@@ -128,7 +130,7 @@ class BinnedTest(MPITestCase):
             ob = {}
             ob['id'] = 'test'
             ob['tod'] = tod
-            ob['intervals'] = []
+            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = nse
 
@@ -172,7 +174,7 @@ class BinnedTest(MPITestCase):
         nsig.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU')
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
         pointing.exec(self.data)
 
         handle = None
@@ -216,7 +218,7 @@ class BinnedTest(MPITestCase):
         hits.allreduce()
 
         # invert it
-        covariance_invert(invnpp.data, 1.0e-3)
+        covariance_invert(invnpp.data, 1.0e-6)
 
         # accumulate the noise weighted map
 
@@ -232,6 +234,12 @@ class BinnedTest(MPITestCase):
 
         # compare with MADAM
 
+        madam_out = os.path.join(self.mapdir, "madam")
+        if self.comm.rank == 0:
+            if os.path.isdir(madam_out):
+                shutil.rmtree(madam_out)
+            os.mkdir(madam_out)
+
         pars = {}
         pars[ 'temperature_only' ] = 'F'
         pars[ 'force_pol' ] = 'T'
@@ -241,6 +249,8 @@ class BinnedTest(MPITestCase):
         pars[ 'nside_map' ] = self.map_nside
         pars[ 'nside_cross' ] = self.map_nside
         pars[ 'nside_submap' ] = self.map_nside
+        pars[ 'pixlim_cross' ] = 1.0e-6
+        pars[ 'pixlim_map' ] = 1.0e-6
         pars[ 'write_map' ] = 'F'
         pars[ 'write_binmap' ] = 'T'
         pars[ 'write_matrix' ] = 'F'
@@ -248,7 +258,7 @@ class BinnedTest(MPITestCase):
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
         pars[ 'run_submap_test' ] = 'F'
-        pars[ 'path_output' ] = self.mapdir
+        pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, detweights=detweights, name="noise")
 
@@ -256,7 +266,7 @@ class BinnedTest(MPITestCase):
             madam.exec(self.data)
 
             if self.comm.rank == 0:
-                hitsfile = os.path.join(self.mapdir, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -264,7 +274,7 @@ class BinnedTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(self.mapdir, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, 'madam_bmap.fits')
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
