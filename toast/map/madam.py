@@ -83,12 +83,14 @@ class OpMadam(Operator):
         timestamps_name (str): the name of the cache object to use for time stamps.
         purge (bool): if True, clear any cached data that is copied into the
             the Madam buffers.
+        dets (iterable):  List of detectors to map. If left as None, all available
+             detectors are mapped.
     """
 
     def __init__(self, params={}, timestamps_name=None, detweights=None,
                  pixels='pixels', weights='weights', name=None, name_out=None,
                  flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255,
-                 apply_flags=True, purge=False):
+                 apply_flags=True, purge=False, dets=None):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -107,6 +109,10 @@ class OpMadam(Operator):
         self._purge = purge
         self._apply_flags = apply_flags
         self._params = params
+        if dets is not None:
+            self._dets = set( dets )
+        else:
+            self._dets = None
 
 
     @property
@@ -172,13 +178,18 @@ class OpMadam(Operator):
         if intervals is None:
             intervals = [Interval(start=0.0, stop=0.0, first=0, last=(tod.total_samples-1))]
 
+        if self._dets is None:
+            detectors = tod.detectors
+        else:
+            detectors = [det for det in tod.detectors if det in self._dets]
+
         # get the noise object
         if 'noise' in data.obs[0].keys():
             nse = data.obs[0]['noise']
         else:
             nse = None
 
-        todcomm = tod.mpicomm
+        todcomm = tod.mpicomm        
 
         # to get the number of Non-zero pointing weights per pixel,
         # we use the fact that for Madam, all processes have all detectors
@@ -188,11 +199,11 @@ class OpMadam(Operator):
         nnzname = "{}_{}".format(self._weights, tod.detectors[0])
         nnz = tod.cache.reference(nnzname).shape[1]
 
-        ndet = len(tod.detectors)
+        ndet = len(detectors)
         nlocal = tod.local_samples[1]
 
         parstring = self._dict2parstring(self._params)
-        detstring = self._dets2detstring(tod.detectors)
+        detstring = self._dets2detstring(detectors)
 
         if self._timestamps_name is not None:
             timestamps = tod.cache.reference(self._timestamps_name)
@@ -214,10 +225,10 @@ class OpMadam(Operator):
 
             cachename = None
             if self._name is not None:
-                cachename = "{}_{}".format(self._name, tod.detectors[d])
+                cachename = "{}_{}".format(self._name, detectors[d])
                 signal = tod.cache.reference(cachename)
             else:
-                signal = tod.read(detector=tod.detectors[d])
+                signal = tod.read(detector=detectors[d])
             madam_signal[dslice] = signal
 
             # Optionally get the flags, otherwise they are assumed to be have been applied
@@ -226,20 +237,20 @@ class OpMadam(Operator):
             if self._apply_flags:
 
                 if self._flag_name is not None:
-                    cacheflagname = "{}_{}".format(self._flag_name, tod.detectors[d])
+                    cacheflagname = "{}_{}".format(self._flag_name, detectors[d])
                     detflags = tod.cache.reference(cacheflagname)
                     flags = (detflags & self._flag_mask) != 0
                     if self._common_flag_name is not None:
                         commonflags = tod.cache.reference(self._common_flag_name)
                         flags[(commonflags & self._common_flag_mask) != 0] = True
                 else:
-                    detflags, commonflags = tod.read_flags(detector=tod.detectors[d])
+                    detflags, commonflags = tod.read_flags(detector=detectors[d])
                     flags = np.logical_or((detflags & self._flag_mask) != 0, (commonflags & self._common_flag_mask) != 0)
 
             # get the pixels and weights from the cache
 
-            pixelsname = "{}_{}".format(self._pixels, tod.detectors[d])
-            weightsname = "{}_{}".format(self._weights, tod.detectors[d])
+            pixelsname = "{}_{}".format(self._pixels, detectors[d])
+            weightsname = "{}_{}".format(self._weights, detectors[d])
             pixels = tod.cache.reference(pixelsname)
             weights = tod.cache.reference(weightsname)
 
@@ -278,13 +289,13 @@ class OpMadam(Operator):
         detw = {}
         if self._detw is None:
             for d in range(ndet):
-                detw[tod.detectors[d]] = 1.0
+                detw[detectors[d]] = 1.0
         else:
             detw = self._detw
 
         detweights = np.zeros(ndet, dtype=np.float64)
         for d in range(ndet):
-            detweights[d] = detw[tod.detectors[d]]
+            detweights[d] = detw[detectors[d]]
 
         if nse is not None:
             nse_psdfreqs = nse.freq
@@ -298,7 +309,7 @@ class OpMadam(Operator):
             npsdval = npsdbin * npsdtot
             psdvals = np.zeros(npsdval, dtype=np.float64)
             for d in range(ndet):
-                psdvals[d*npsdbin:(d+1)*npsdbin] = nse.psd(tod.detectors[d])
+                psdvals[d*npsdbin:(d+1)*npsdbin] = nse.psd(detectors[d])
         else:
             npsd = np.ones(ndet, dtype=np.int64)
             npsdtot = np.sum(npsd)
@@ -318,7 +329,7 @@ class OpMadam(Operator):
 
         if self._name_out is not None:
 
-            for d, det in enumerate( tod.local_dets ):
+            for d, det in enumerate( detectors ):
 
                 dslice = slice(d * nlocal, (d+1) * nlocal)
                 signal = madam_signal[dslice]

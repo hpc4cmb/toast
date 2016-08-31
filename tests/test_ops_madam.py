@@ -108,7 +108,7 @@ class OpMadamTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = self.mapdir
 
-        madam = OpMadam(params=pars, name='grad')
+        madam = OpMadam(params=pars, name='grad', dets=self.dets)
         if madam.available:
             madam.exec(self.data)
             stop = MPI.Wtime()
