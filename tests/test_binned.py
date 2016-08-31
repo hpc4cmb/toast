@@ -286,16 +286,22 @@ class BinnedTest(MPITestCase):
                 toastbins = hp.read_map(toastfile, nest=True)
 
                 outfile = "{}.png".format(toastfile)
-                hp.mollview(bins, xsize=1600, nest=True)
+                hp.mollview(toastbins, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
 
                 # compare binned map to madam output
 
+                diffmap = toastbins - bins
+                outfile = "{}_diff_madam.png".format(toastfile)
+                hp.mollview(diffmap, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+
                 tothits = np.sum(hits)
                 nt.assert_equal(self.totsamp, tothits)
 
-                mask = (bins > -1.0e20)
+                mask = (bins > -1.0e10)
 
                 nt.assert_almost_equal(bins[mask], toastbins[mask], decimal=4)
 

@@ -37,6 +37,7 @@ class OpInvCovariance(Operator):
             If None, use the TOD.
         common_flag_mask (int): the integer bit mask (0-255) that should be 
             used with the common flags in a bitwise AND.
+        apply_flags (bool): whether to apply flags to the pixel numbers.
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
@@ -45,7 +46,13 @@ class OpInvCovariance(Operator):
 
     def __init__(self, invnpp=None, hits=None, detweights=None, flag_name=None, 
                 flag_mask=255, common_flag_name=None, common_flag_mask=255, 
-                pixels='pixels', weights='weights'):
+                pixels='pixels', weights='weights', apply_flags=True):
+
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
+        self._apply_flags = apply_flags
         
         self._pixels = pixels
         self._weights = weights
@@ -89,6 +96,25 @@ class OpInvCovariance(Operator):
                 pixels = tod.cache.reference(pixelsname)
                 weights = tod.cache.reference(weightsname)
 
+                # get flags
+
+                if self._apply_flags:
+                    if self._flag_name is not None:
+                        cacheflagname = "{}_{}".format(self._flag_name, det)
+                        detflags = tod.cache.reference(cacheflagname)
+                        flags = (detflags & self._flag_mask) != 0
+                        if self._common_flag_name is not None:
+                            commonflags = tod.cache.reference(self._common_flag_name)
+                            flags[(commonflags & self._common_flag_mask) != 0] = True
+                    else:
+                        detflags, commonflags = tod.read_flags(detector=det)
+                        flags = np.logical_or((detflags & self._flag_mask) != 0, (commonflags & self._common_flag_mask) != 0)
+
+                    pixels = pixels.copy() # Don't change the cached pixel numbers
+                    pixels[flags] = -1
+
+                # local pointing
+
                 sm, lpix = self._invnpp.global_to_local(pixels)
                 
                 detweight = 1.0
@@ -131,6 +157,7 @@ class OpNoiseWeighted(Operator):
             If None, use the TOD.
         common_flag_mask (int): the integer bit mask (0-255) that should be 
             used with the common flags in a bitwise AND.
+        apply_flags (bool): whether to apply flags to the pixel numbers.
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
@@ -139,8 +166,14 @@ class OpNoiseWeighted(Operator):
 
     def __init__(self, zmap=None, hits=None, detweights=None, name=None, flag_name=None, 
                 flag_mask=255, common_flag_name=None, common_flag_mask=255, pixels='pixels', 
-                weights='weights'):
+                weights='weights', apply_flags=True):
         
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
+        self._apply_flags = apply_flags
+
         self._name = name
         self._pixels = pixels
         self._weights = weights
@@ -190,6 +223,25 @@ class OpNoiseWeighted(Operator):
                     signal = tod.cache.reference(cachename)
                 else:
                     signal = tod.read(detector=det)
+
+                # get flags
+
+                if self._apply_flags:
+                    if self._flag_name is not None:
+                        cacheflagname = "{}_{}".format(self._flag_name, det)
+                        detflags = tod.cache.reference(cacheflagname)
+                        flags = (detflags & self._flag_mask) != 0
+                        if self._common_flag_name is not None:
+                            commonflags = tod.cache.reference(self._common_flag_name)
+                            flags[(commonflags & self._common_flag_mask) != 0] = True
+                    else:
+                        detflags, commonflags = tod.read_flags(detector=det)
+                        flags = np.logical_or((detflags & self._flag_mask) != 0, (commonflags & self._common_flag_mask) != 0)
+
+                    pixels = pixels.copy() # Don't change the cached pixel numbers
+                    pixels[flags] = -1
+
+                # local pointing
 
                 sm, lpix = self._zmap.global_to_local(pixels)
                 

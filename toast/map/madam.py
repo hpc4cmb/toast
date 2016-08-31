@@ -88,6 +88,7 @@ class OpMadam(Operator):
             If None, use the TOD.
         common_flag_mask (int): the integer bit mask (0-255) that should be 
             used with the common flags in a bitwise AND.
+        apply_flags (bool): whether to apply flags to the pixel numbers.
         timestamps_name (str): the name of the cache object to use for time stamps.
         purge (bool): if True, clear any cached data that is copied into the
             the Madam buffers.
