@@ -107,7 +107,7 @@ class DistPixels(object):
         localpix (array): the list of local pixels (integers).
         nest (bool): nested pixel order flag
     """
-    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None, localpix=None, nest=False):
+    def __init__(self, comm=MPI.COMM_WORLD, size=0, nnz=1, dtype=np.float64, submap=None, local=None, localpix=None, nest=True):
         self._comm = comm
         self._size = size
         self._nnz = nnz

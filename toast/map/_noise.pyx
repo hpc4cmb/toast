@@ -253,6 +253,8 @@ def _apply_covariance(np.ndarray[f64_t, ndim=3] cov, np.ndarray[f64_t, ndim=3] m
                     if m != k:
                         tempval[m] += cov[i,j,x] * mdata[i,j,k]
                     x += 1
+            for k in range(nnz):
+                mdata[i,j,k] = tempval[k]
     return
 
 
@@ -319,7 +321,10 @@ def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] c
                             emax = evals[t]
                         if evals[t] < emin:
                             emin = evals[t]
-                    cond[i,j,0] = emin / emax
+                    if emax > 0:
+                        cond[i,j,0] = emin / emax
+                    else:
+                        cond[i,j,0] = 0.0
                 else:
                     cond[i,j,0] = 0.0
 
