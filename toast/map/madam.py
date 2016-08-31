@@ -79,6 +79,16 @@ class OpMadam(Operator):
             use for the detector timestream.  If None, use the TOD.
         name_out (str): the name of the cache object (<name>_<detector>) to
             use to output destriped detector timestream.  No output if None.
+        flag_name (str): the name of the cache object (<flag_name>_<detector>) to
+            use for the detector flags.  If None, use the TOD.
+        flag_mask (int): the integer bit mask (0-255) that should be 
+            used with the detector flags in a bitwise AND.
+        common_flag_name (str): the name of the cache object 
+            (<common_flag_name>_<detector>) to use for the common flags.  
+            If None, use the TOD.
+        common_flag_mask (int): the integer bit mask (0-255) that should be 
+            used with the common flags in a bitwise AND.
+        apply_flags (bool): whether to apply flags to the pixel numbers.
         timestamps_name (str): the name of the cache object to use for time stamps.
         purge (bool): if True, clear any cached data that is copied into the
             the Madam buffers.

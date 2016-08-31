@@ -43,7 +43,7 @@ def _accumulate_inverse_covariance(
         raise RuntimeError("submap index list does not have same length as weights")
     if pix_indx.shape[0] != nsamp:
         raise RuntimeError("pixel index list does not have same length as weights")
-    if (hits.shape[0] != data.shape[0]) or (hits.shape[0] != data.shape[0]):
+    if (hits.shape[0] != data.shape[0]) or (hits.shape[1] != data.shape[1]):
         do_hits = 0
 
     for i in range(nsamp):
@@ -53,6 +53,51 @@ def _accumulate_inverse_covariance(
                 for alt in range(elem, nnz):
                     data[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
                     off += 1
+
+    if do_hits > 0:
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                hits[submap_indx[i], pix_indx[i]] += 1
+
+    return
+
+
+def _accumulate_noiseweighted(
+        np.ndarray[f64_t, ndim=3] data,
+        np.ndarray[i64_t, ndim=1] submap_indx,
+        np.ndarray[f64_t, ndim=1] signal,
+        np.ndarray[i64_t, ndim=1] pix_indx,
+        np.ndarray[f64_t, ndim=2] weights,
+        f64_t scale,
+        np.ndarray[i64_t, ndim=3] hits
+    ):
+    '''
+    For a vector of pointing weights, build and accumulate the noise
+    weighted map.
+    '''
+    cdef i64_t nsamp = weights.shape[0]
+    cdef i64_t nnz = weights.shape[1]
+    cdef i64_t i
+    cdef i64_t elem
+    cdef i64_t alt
+    cdef i64_t off
+    cdef i32_t do_hits = 1
+    cdef f64_t zsig = 0
+
+    if data.shape[2] != nnz:
+        raise RuntimeError("noise weighted map does not have same NNZ as weights")
+    if submap_indx.shape[0] != nsamp:
+        raise RuntimeError("submap index list does not have same length as weights")
+    if pix_indx.shape[0] != nsamp:
+        raise RuntimeError("pixel index list does not have same length as weights")
+    if (hits.shape[0] != data.shape[0]) or (hits.shape[1] != data.shape[1]):
+        do_hits = 0
+
+    for i in range(nsamp):
+        if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+            zsig = scale * signal[i]
+            for elem in range(nnz):
+                data[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
 
     if do_hits > 0:
         for i in range(nsamp):
@@ -186,6 +231,33 @@ def _multiply_covariance(np.ndarray[f64_t, ndim=3] data1, np.ndarray[f64_t, ndim
     return
 
 
+def _apply_covariance(np.ndarray[f64_t, ndim=3] cov, np.ndarray[f64_t, ndim=3] mdata):
+    cdef i64_t nsubmap = cov.shape[0]
+    cdef i64_t npix = cov.shape[1]
+    cdef i64_t nblock = cov.shape[2]
+    cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
+    cdef i64_t i
+    cdef i64_t j
+    cdef i64_t k
+    cdef i64_t m
+    cdef np.ndarray[f64_t, ndim=1] tempval = np.zeros(nnz, dtype=f64)
+
+    # we do this manually now, but could use dsymv if needed...
+    for i in range(nsubmap):
+        for j in range(npix):
+            x = 0
+            tempval.fill(0.0)
+            for k in range(nnz):
+                for m in range(k, nnz):
+                    tempval[k] += cov[i,j,x] * mdata[i,j,k]
+                    if m != k:
+                        tempval[m] += cov[i,j,x] * mdata[i,j,k]
+                    x += 1
+            for k in range(nnz):
+                mdata[i,j,k] = tempval[k]
+    return
+
+
 def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] cond):
     cdef i64_t nsubmap = data.shape[0]
     cdef i64_t npix = data.shape[1]
@@ -249,7 +321,10 @@ def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] c
                             emax = evals[t]
                         if evals[t] < emin:
                             emin = evals[t]
-                    cond[i,j,0] = emin / emax
+                    if emax > 0:
+                        cond[i,j,0] = emin / emax
+                    else:
+                        cond[i,j,0] = 0.0
                 else:
                     cond[i,j,0] = 0.0
 

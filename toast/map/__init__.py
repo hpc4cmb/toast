@@ -9,5 +9,6 @@ from .madam import OpMadam
 
 from .pixels import OpLocalPixels, DistPixels
 
-from .noise import (OpInvCovariance,
-    covariance_invert, covariance_rcond, covariance_multiply)
+from .noise import (OpInvCovariance, OpNoiseWeighted,
+    covariance_invert, covariance_rcond, covariance_multiply,
+    covariance_apply)
