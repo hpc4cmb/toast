@@ -236,8 +236,8 @@ class OpMadam(Operator):
 
         nnzname = "{}_{}".format(self._weights, tod.detectors[0])
         nnz_full = tod.cache.reference(nnzname).shape[1]
-        
-        if self._params['temperature_only']:
+
+        if 'temperature_only' in self._params and self._params['temperature_only'] in ['T','True','TRUE','true',True]:
             if nnz_full not in [1,3]:
                 raise RuntimeError('OpMadam: Don\'t know how to make a temperature map with nnz={}'.format(nnz_full))
             nnz = 1
@@ -245,7 +245,7 @@ class OpMadam(Operator):
         else:
             nnz = nnz_full
             nnz_stride = 1
-            
+
 
         ndet = len(detectors)
         nlocal = tod.local_samples[1]
