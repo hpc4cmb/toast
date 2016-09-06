@@ -282,10 +282,12 @@ class OpMadam(Operator):
             # Optionally get the flags, otherwise they are assumed to be have been applied
             # to the pixel numbers.
 
+            if self._flag_name is not None:
+                cacheflagname = "{}_{}".format(self._flag_name, detectors[d])
+
             if self._apply_flags:
 
                 if self._flag_name is not None:
-                    cacheflagname = "{}_{}".format(self._flag_name, detectors[d])
                     detflags = tod.cache.reference(cacheflagname)
                     flags = (detflags & self._flag_mask) != 0
                     if self._common_flag_name is not None:
