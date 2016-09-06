@@ -16,11 +16,11 @@ except:
 
 import numpy as np
 
-import quaternionarray as qa
-
 import toast
 import toast.tod as tt
 import toast.map as tm
+
+import toast.tod.qarray as qa
 
 
 def view_focalplane(fp, outfile):
