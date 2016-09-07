@@ -331,7 +331,7 @@ class DistPixels(object):
         # we only ever have a couple FITS blocks in memory.
         fdata = None
         if self._comm.rank == 0:
-            fdata = hp.read_map(path, field=None, dtype=self._dtype, memmap=True)
+            fdata = hp.read_map(path, field=None, dtype=self._dtype, memmap=True, nest=self._nest)
             if self._nnz == 1:
                 fdata = (fdata, )
 
