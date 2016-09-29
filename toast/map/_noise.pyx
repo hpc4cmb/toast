@@ -16,98 +16,121 @@ ctypedef np.int64_t i64_t
 ctypedef np.int32_t i32_t
 
 
-def _accumulate_inverse_covariance(
-        np.ndarray[f64_t, ndim=3] data,
-        np.ndarray[i64_t, ndim=1] submap_indx,
-        np.ndarray[i64_t, ndim=1] pix_indx,
-        np.ndarray[f64_t, ndim=2] weights,
-        f64_t scale,
-        np.ndarray[i64_t, ndim=3] hits
-    ):
-    '''
-    For a vector of pointing weights, build and accumulate the upper triangle
-    of the diagonal inverse pixel covariance.
-    '''
-    cdef i64_t nsamp = weights.shape[0]
-    cdef i64_t nnz = weights.shape[1]
-    cdef i64_t i
-    cdef i64_t elem
-    cdef i64_t alt
-    cdef i64_t off
-    cdef i32_t do_hits = 1
-    cdef i64_t nblock = int(nnz * (nnz+1) / 2)
-
-    if data.shape[2] != nblock:
-        raise RuntimeError("inverse covariance does not have correct shape for NNZ from weights")
-    if submap_indx.shape[0] != nsamp:
-        raise RuntimeError("submap index list does not have same length as weights")
-    if pix_indx.shape[0] != nsamp:
-        raise RuntimeError("pixel index list does not have same length as weights")
-    if (hits.shape[0] != data.shape[0]) or (hits.shape[1] != data.shape[1]):
-        do_hits = 0
-
-    for i in range(nsamp):
-        if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-            off = 0
-            for elem in range(nnz):
-                for alt in range(elem, nnz):
-                    data[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
-                    off += 1
-
-    if do_hits > 0:
-        for i in range(nsamp):
-            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-                hits[submap_indx[i], pix_indx[i]] += 1
-
-    return
-
-
-def _accumulate_noiseweighted(
-        np.ndarray[f64_t, ndim=3] data,
-        np.ndarray[i64_t, ndim=1] submap_indx,
+def _accumulate_diagonal(
+        np.ndarray[f64_t, ndim=3] zmap, 
+        int do_zmap, 
+        np.ndarray[i64_t, ndim=3] hits, 
+        int do_hits, 
+        np.ndarray[f64_t, ndim=3] invnpp, 
+        int do_invnpp,
         np.ndarray[f64_t, ndim=1] signal,
-        np.ndarray[i64_t, ndim=1] pix_indx,
-        np.ndarray[f64_t, ndim=2] weights,
-        f64_t scale,
-        np.ndarray[i64_t, ndim=3] hits
+        np.ndarray[i64_t, ndim=1] submap_indx, 
+        np.ndarray[i64_t, ndim=1] pix_indx, 
+        np.ndarray[f64_t, ndim=2] weights, 
+        f64_t scale
     ):
     '''
-    For a vector of pointing weights, build and accumulate the noise
-    weighted map.
+    For a vector of pointing weights, build and accumulate the diagonal
+    inverse noise covariance, the hit map, and the noise weighted map.
     '''
     cdef i64_t nsamp = weights.shape[0]
     cdef i64_t nnz = weights.shape[1]
+    cdef i64_t nblock = int(nnz * (nnz+1) / 2)
     cdef i64_t i
     cdef i64_t elem
     cdef i64_t alt
     cdef i64_t off
-    cdef i32_t do_hits = 1
     cdef f64_t zsig = 0
 
-    if data.shape[2] != nnz:
-        raise RuntimeError("noise weighted map does not have same NNZ as weights")
     if submap_indx.shape[0] != nsamp:
         raise RuntimeError("submap index list does not have same length as weights")
     if pix_indx.shape[0] != nsamp:
         raise RuntimeError("pixel index list does not have same length as weights")
-    if (hits.shape[0] != data.shape[0]) or (hits.shape[1] != data.shape[1]):
-        do_hits = 0
 
-    for i in range(nsamp):
-        if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-            zsig = scale * signal[i]
-            for elem in range(nnz):
-                data[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+    if (do_zmap != 0) and (zmap.shape[2] != nnz):
+        raise RuntimeError("noise weighted map does not have same NNZ as weights")
 
-    if do_hits > 0:
+    if (do_hits != 0) and (hits.shape[2] != 1):
+        raise RuntimeError("hit map does not have NNZ of one")
+
+    if (do_invnpp != 0) and (invnpp.shape[2] != nblock):
+        raise RuntimeError("inverse covariance does not have correct shape for NNZ from weights")
+
+    # Here we repeat code slightly, so that we can do a single loop over
+    # samples.
+
+    if (do_zmap != 0) and (do_hits != 0) and (do_invnpp != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                hits[submap_indx[i], pix_indx[i]] += 1
+                zsig = scale * signal[i]
+                off = 0
+                for elem in range(nnz):
+                    zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+                    for alt in range(elem, nnz):
+                        invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
+                        off += 1
+
+    elif (do_zmap != 0) and (do_hits != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                hits[submap_indx[i], pix_indx[i]] += 1
+                zsig = scale * signal[i]
+                for elem in range(nnz):
+                    zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+
+    elif (do_hits != 0) and (do_invnpp != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                hits[submap_indx[i], pix_indx[i]] += 1
+                off = 0
+                for elem in range(nnz):
+                    for alt in range(elem, nnz):
+                        invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
+                        off += 1
+    
+    elif (do_zmap != 0) and (do_invnpp != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                zsig = scale * signal[i]
+                off = 0
+                for elem in range(nnz):
+                    zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+                    for alt in range(elem, nnz):
+                        invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
+                        off += 1
+    
+    elif (do_zmap != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                zsig = scale * signal[i]
+                for elem in range(nnz):
+                    zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+
+    elif (do_hits != 0):
+
         for i in range(nsamp):
             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
                 hits[submap_indx[i], pix_indx[i]] += 1
 
+    elif (do_invnpp != 0):
+
+        for i in range(nsamp):
+            if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
+                off = 0
+                for elem in range(nnz):
+                    for alt in range(elem, nnz):
+                        invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
+                        off += 1
     return
 
 
-def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
+def _eigendecompose_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] cond, f64_t threshold, i32_t do_invert, i32_t do_rcond):
     cdef i64_t nsubmap = data.shape[0]
     cdef i64_t npix = data.shape[1]
     cdef i64_t nblock = data.shape[2]
@@ -118,22 +141,61 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
     cdef i64_t m
     cdef i64_t off
 
+    if do_rcond != 0:
+        if cond.shape[2] != 1:
+            raise RuntimeError("condition number map should have one non-zero per pixel")
+        if cond.shape[1] != npix:
+            raise RuntimeError("condition number map should have the same number of pixels as covariance")
+        if cond.shape[0] != nsubmap:
+            raise RuntimeError("condition number map should have the same number of submaps as covariance")
+
+    if (do_invert == 0) and (do_rcond == 0):
+        # nothing to do!
+        return
+
     cdef double * fdata = <double*>malloc(nnz*nnz*sizeof(double))
-    cdef double * work = <double*>malloc(3*nnz*sizeof(double))
-    cdef int * iwork = <int*>malloc(nnz*sizeof(int))
+    cdef double * ftemp = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * finv = <double*>malloc(nnz*nnz*sizeof(double))
+    cdef double * evals = <double*>malloc(nnz*sizeof(double))
+    
+    # we assume a large value here, since the work space needed
+    # will still be small.
+    cdef int NB = 256
+    
+    cdef int lwork = NB * 2 + nnz
+    cdef double * work = <double*>malloc(lwork*sizeof(double))
     cdef int fnnz = nnz
-    cdef double norm
+
+    cdef double emin
+    cdef double emax
     cdef double rcond
+    
     cdef int info
-    cdef double inverse
+    cdef double fzero = 0.0
+    cdef double fone = 1.0
+    
+    cdef char jobz_vec = 'V'
+    cdef char jobz_val = 'N'
     cdef char uplo = 'L'
+    cdef char transN = 'N'
+    cdef char transT = 'T'
 
     if nnz == 1:
         # shortcut
-        for i in range(nsubmap):
-            for j in range(npix):
-                if ( data[i,j,0] != 0 ):
-                    data[i,j,0] = 1.0 / data[i,j,0]
+        if do_invert == 0:
+            cond[:,:,:] = data[:,:,:]
+        else:
+            if do_rcond == 0:
+                for i in range(nsubmap):
+                    for j in range(npix):
+                        if data[i,j,0] != 0:
+                            data[i,j,0] = 1.0 / data[i,j,0]
+            else: 
+                for i in range(nsubmap):
+                    for j in range(npix):
+                        cond[i,j,0] = data[i,j,0]
+                        if data[i,j,0] != 0:
+                            data[i,j,0] = 1.0 / data[i,j,0]
     else:
         for i in range(nsubmap):
             for j in range(npix):
@@ -145,34 +207,56 @@ def _invert_covariance(np.ndarray[f64_t, ndim=3] data, f64_t threshold):
                         fdata[k*nnz+m] = data[i,j,off]
                         off += 1
 
-                # factor and check condition number
-                norm = fdata[0]
-                info = 0
-                cython_lapack.dpotrf(&uplo, &fnnz, fdata, &fnnz, &info)
+                # eigendecompose
+                if do_invert == 0:
+                    cython_lapack.dsyev(&jobz_val, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
+                else:
+                    cython_lapack.dsyev(&jobz_vec, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
+
+                rcond = 0.0
 
                 if info == 0:
-                    # cholesky worked, compute condition number
-                    cython_lapack.dpocon(&uplo, &fnnz, fdata, &fnnz, &norm, &rcond, work, iwork, &info)
-                    if info == 0:
-                        # compare to threshold
-                        if rcond >= threshold:
-                            # invert
-                            cython_lapack.dpotri(&uplo, &fnnz, fdata, &fnnz, &info)
-                            if info == 0:
-                                off = 0
-                                for k in range(nnz):
-                                    for m in range(k, nnz):
-                                        data[i,j,off] = fdata[k*nnz+m]
-                                        off += 1
-                        else:
-                            info = 1
+                    # it worked, compute condition number
+                    emin = 1.0e100
+                    emax = 0.0
+                    for k in range(nnz):
+                        if evals[k] < emin:
+                            emin = evals[k]
+                        if evals[k] > emax:
+                            emax = evals[k]
+                    if emax > 0.0:
+                        rcond = emin / emax
 
-                if info != 0:
-                    data[i,j,:] = 0
+                    # compare to threshold
+                    if rcond >= threshold:
+                        if do_invert != 0:
+                            for k in range(nnz):
+                                evals[k] = 1.0 / evals[k]
+                                for m in range(nnz):
+                                    ftemp[k*nnz+m] = evals[k] * fdata[k*nnz+m]
+                            cython_blas.dgemm(&transN, &transT, &fnnz, &fnnz, &fnnz, &fone, ftemp, &fnnz, fdata, &fnnz, &fzero, finv, &fnnz)
+
+                            off = 0
+                            for k in range(nnz):
+                                for m in range(k, nnz):
+                                    data[i,j,off] = finv[k*nnz+m]
+                                    off += 1
+                    else:
+                        # reject this pixel
+                        rcond = 0.0
+                        info = 1
+
+                if do_invert != 0:
+                    if info != 0:
+                        data[i,j,:] = 0.0
+                if do_rcond != 0:
+                    cond[i,j,0] = rcond
 
     free(fdata)
+    free(ftemp)
+    free(finv)
+    free(evals)
     free(work)
-    free(iwork)
     return
 
 
@@ -240,6 +324,7 @@ def _apply_covariance(np.ndarray[f64_t, ndim=3] cov, np.ndarray[f64_t, ndim=3] m
     cdef i64_t j
     cdef i64_t k
     cdef i64_t m
+    cdef i64_t x
     cdef np.ndarray[f64_t, ndim=1] tempval = np.zeros(nnz, dtype=f64)
 
     # we do this manually now, but could use dsymv if needed...
@@ -249,7 +334,7 @@ def _apply_covariance(np.ndarray[f64_t, ndim=3] cov, np.ndarray[f64_t, ndim=3] m
             tempval.fill(0.0)
             for k in range(nnz):
                 for m in range(k, nnz):
-                    tempval[k] += cov[i,j,x] * mdata[i,j,k]
+                    tempval[k] += cov[i,j,x] * mdata[i,j,m]
                     if m != k:
                         tempval[m] += cov[i,j,x] * mdata[i,j,k]
                     x += 1
@@ -286,7 +371,7 @@ def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] c
     cdef int info
     cdef double inverse
     cdef char uplo = 'L'
-    cdef char jobz = 'V'
+    cdef char jobz = 'N'
     cdef double emin
     cdef double emax
 

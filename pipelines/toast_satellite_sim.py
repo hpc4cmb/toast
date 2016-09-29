@@ -108,7 +108,7 @@ def main():
     parser.add_argument( '--gap', required=False, default=0.0, help='Cooler cycle time in hours between science obs' )
     parser.add_argument( '--numobs', required=False, default=1, help='Number of complete observations' )
     parser.add_argument( '--obschunks', required=False, default=1, help='Number of chunks to subdivide each observation into for data distribution' )
-    parser.add_argument( '--outdir', required=False, default='.', help='Output directory' )
+    parser.add_argument( '--outdir', required=False, default='out', help='Output directory' )
     parser.add_argument( '--debug', required=False, default=False, action='store_true', help='Write diagnostics' )
 
     parser.add_argument( '--nside', required=False, default=64, help='Healpix NSIDE' )
@@ -140,6 +140,7 @@ def main():
     hwpsteptime = float(args.hwpsteptime)
 
     nside = int(args.nside)
+    npix = 12 * nside * nside
     baseline = float(args.baseline)
 
     start = MPI.Wtime()
@@ -286,13 +287,167 @@ def main():
         detweights[d] = 1.0 / (samplerate * net * net)
 
     if not args.madam:
-        raise RuntimeError("Internal pytoast mapmaking not yet implemented, use the --madam option for now.")
+        if comm.comm_world.rank == 0:
+            print("Not using Madam, will only make a binned map!")
+
+        subnside = 16
+        if subnside > nside:
+            subnside = nside
+        subnpix = 12 * subnside * subnside
+
+        # get locally hit pixels
+        lc = tm.OpLocalPixels()
+        localpix = lc.exec(data)
+
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, subnpix)
+        sm = set(allsm)
+        localsm = np.array(sorted(sm), dtype=np.int64)
+
+        # construct distributed maps to store the covariance,
+        # noise weighted map, and hits
+
+        invnpp = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6, dtype=np.float64, submap=subnpix, local=localsm)
+        hits = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1, dtype=np.int64, submap=subnpix, local=localsm)
+        zmap = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3, dtype=np.float64, submap=subnpix, local=localsm)
+
+        # compute the hits and covariance once, since the pointing and noise
+        # weights are fixed.
+
+        invnpp.data.fill(0.0)
+        hits.data.fill(0)
+
+        build_invnpp = tm.OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp.exec(data)
+
+        invnpp.allreduce()
+        hits.allreduce()
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print("Building hits and N_pp^-1 took {:.3f} s".format(elapsed))
+        start = stop
+
+        hits.write_healpix_fits("{}_hits.fits".format(args.outdir))
+        invnpp.write_healpix_fits("{}_invnpp.fits".format(args.outdir))
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print("Writing hits and N_pp^-1 took {:.3f} s".format(elapsed))
+        start = stop
+
+        # invert it
+        tm.covariance_invert(invnpp.data, 1.0e-3)
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print("Inverting N_pp^-1 took {:.3f} s".format(elapsed))
+        start = stop
+
+        invnpp.write_healpix_fits("{}_npp.fits".format(args.outdir))
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print("Writing N_pp took {:.3f} s".format(elapsed))
+        start = stop
+
+        # in debug mode, print out data distribution information
+        if args.debug:
+            handle = None
+            if comm.comm_world.rank == 0:
+                handle = open("{}_distdata.txt".format(args.outdir), "w")
+            data.info(handle)
+            if comm.comm_world.rank == 0:
+                handle.close()
+            
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("Dumping debug data distribution took {:.3f} s".format(elapsed))
+            start = stop
+
+        mcstart = start
+
+        # Loop over Monte Carlos
+
+        firstmc = int(args.MC_start)
+        nmc = int(args.MC_count)
+
+        for mc in range(firstmc, firstmc+nmc):
+            # create output directory for this realization
+            outpath = "{}_{:03d}".format(args.outdir, mc)
+            if comm.comm_world.rank == 0:
+                if not os.path.isdir(outpath):
+                    os.makedirs(outpath)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("Creating output dir {:04d} took {:.3f} s".format(mc, elapsed))
+            start = stop
+
+            # clear all noise data from the cache, so that we can generate
+            # new noise timestreams.
+            tod.cache.clear("noise_.*")
+
+            # simulate noise
+
+            nse = tt.OpSimNoise(out="noise", stream=0, realization=mc)
+            nse.exec(data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Noise simulation {:04d} took {:.3f} s".format(mc, elapsed))
+            start = stop
+
+            zmap.data.fill(0.0)
+            build_zmap = tm.OpAccumDiag(zmap=zmap, name="noise")
+            build_zmap.exec(data)
+            zmap.allreduce()
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Building noise weighted map {:04d} took {:.3f} s".format(mc, elapsed))
+            start = stop
+
+            tm.covariance_apply(invnpp.data, zmap.data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Computing binned map {:04d} took {:.3f} s".format(mc, elapsed))
+            start = stop
+        
+            zmap.write_healpix_fits(os.path.join(outpath, "binned.fits"))
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Writing binned map {:04d} took {:.3f} s".format(mc, elapsed))
+            elapsed = stop - mcstart
+            if comm.comm_world.rank == 0:
+                print("  Mapmaking {:04d} took {:.3f} s".format(mc, elapsed))
+            start = stop
+
     else:
 
-        # Set up MADAM map making.  By setting purge=True, we will
-        # purge all data after copying it into the madam
-        # buffers.  This is ok, as long as madam is the last step of 
-        # the pipeline.
+        # Set up MADAM map making.
 
         pars = {}
 

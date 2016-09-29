@@ -146,7 +146,7 @@ class CovarianceTest(MPITestCase):
         pix = np.tile(np.arange(npix, dtype=np.int64), nsm)
         wt = np.tile(np.arange(nnz, dtype=np.float64), nsamp).reshape(-1, nnz)
 
-        nh._accumulate_inverse_covariance(fakedata, sm, pix, wt, scale, fakehits)
+        nh._accumulate_diagonal(np.zeros((1,1,1), dtype=np.float64), 0, fakehits, 1, fakedata, 1, np.zeros((1), dtype=np.float64), sm, pix, wt, scale)
 
         for i in range(nsamp):
             checkhits[sm[i], pix[i], 0] += 1
@@ -183,8 +183,8 @@ class CovarianceTest(MPITestCase):
                         off += 1
 
         # invert twice
-        nh._invert_covariance(fakedata, threshold)
-        nh._invert_covariance(fakedata, threshold)
+        nh._eigendecompose_covariance(fakedata, np.zeros((1,1,1), dtype=np.float64), threshold, 1, 0)
+        nh._eigendecompose_covariance(fakedata, np.zeros((1,1,1), dtype=np.float64), threshold, 1, 0)
 
         nt.assert_almost_equal(fakedata, checkdata)
         return
@@ -221,7 +221,7 @@ class CovarianceTest(MPITestCase):
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -298,7 +298,7 @@ class CovarianceTest(MPITestCase):
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -331,132 +331,132 @@ class CovarianceTest(MPITestCase):
         return
 
 
-    # def test_fitsio(self):
-    #     start = MPI.Wtime()
+    def test_fitsio(self):
+        start = MPI.Wtime()
 
-    #     # make a simple pointing matrix
-    #     pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
-    #     pointing.exec(self.data)
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
+        pointing.exec(self.data)
 
-    #     # get locally hit pixels
-    #     lc = OpLocalPixels()
-    #     localpix = lc.exec(self.data)
+        # get locally hit pixels
+        lc = OpLocalPixels()
+        localpix = lc.exec(self.data)
 
-    #     # find the locally hit submaps.
-    #     allsm = np.floor_divide(localpix, self.subnpix)
-    #     sm = set(allsm)
-    #     localsm = np.array(sorted(sm), dtype=np.int64)
+        # find the locally hit submaps.
+        allsm = np.floor_divide(localpix, self.subnpix)
+        sm = set(allsm)
+        localsm = np.array(sorted(sm), dtype=np.int64)
 
-    #     # construct a distributed map to store the covariance and hits
+        # construct a distributed map to store the covariance and hits
 
-    #     invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-    #     rcond = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm)
+        rcond = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-    #     hits = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
 
-    #     # accumulate the inverse covariance.  Use detector weights
-    #     # based on the analytic NET.
+        # accumulate the inverse covariance.  Use detector weights
+        # based on the analytic NET.
 
-    #     tod = self.data.obs[0]['tod']
-    #     nse = self.data.obs[0]['noise']
-    #     detweights = {}
-    #     for d in tod.local_dets:
-    #         detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
+        tod = self.data.obs[0]['tod']
+        nse = self.data.obs[0]['noise']
+        detweights = {}
+        for d in tod.local_dets:
+            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-    #     build_invnpp = OpInvCovariance(detweights=detweights, invnpp=invnpp, hits=hits)
-    #     build_invnpp.exec(self.data)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp.exec(self.data)
 
-    #     #self.assertTrue(False)
+        #self.assertTrue(False)
 
-    #     invnpp.allreduce()
-    #     hits.allreduce()
+        invnpp.allreduce()
+        hits.allreduce()
 
-    #     # invert it
-    #     covariance_invert(invnpp.data, 1.0e-3)
+        # invert it
+        covariance_invert(invnpp.data, 1.0e-3)
 
-    #     checkdata = np.copy(invnpp.data)
+        checkdata = np.copy(invnpp.data)
 
-    #     checkhits = np.copy(hits.data)
+        checkhits = np.copy(hits.data)
 
-    #     rcond.data = covariance_rcond(invnpp.data)
+        rcond.data = covariance_rcond(invnpp.data)
 
-    #     # write this out...
+        # write this out...
 
-    #     subsum = [ np.sum(invnpp.data[x,:,:]) for x in range(len(invnpp.local)) ]
+        subsum = [ np.sum(invnpp.data[x,:,:]) for x in range(len(invnpp.local)) ]
 
-    #     print("proc {} submap sum = {} ({})".format(self.toastcomm.comm_group.rank, " ".join([ "{}:{}".format(x,y) for x,y in zip(invnpp.local, subsum) ]), np.sum(subsum)))
+        print("proc {} submap sum = {} ({})".format(self.toastcomm.comm_group.rank, " ".join([ "{}:{}".format(x,y) for x,y in zip(invnpp.local, subsum) ]), np.sum(subsum)))
 
-    #     outfile = os.path.join(self.mapdir, 'covtest.fits')
-    #     if self.toastcomm.comm_group.rank == 0:
-    #         if os.path.isfile(outfile):
-    #             os.remove(outfile)
+        outfile = os.path.join(self.mapdir, 'covtest.fits')
+        if self.toastcomm.comm_group.rank == 0:
+            if os.path.isfile(outfile):
+                os.remove(outfile)
 
-    #     hitfile = os.path.join(self.mapdir, 'covtest_hits.fits')
-    #     if self.toastcomm.comm_group.rank == 0:
-    #         if os.path.isfile(hitfile):
-    #             os.remove(hitfile)
+        hitfile = os.path.join(self.mapdir, 'covtest_hits.fits')
+        if self.toastcomm.comm_group.rank == 0:
+            if os.path.isfile(hitfile):
+                os.remove(hitfile)
 
-    #     rcondfile = os.path.join(self.mapdir, 'covtest_rcond.fits')
-    #     if self.toastcomm.comm_group.rank == 0:
-    #         if os.path.isfile(rcondfile):
-    #             os.remove(rcondfile)
+        rcondfile = os.path.join(self.mapdir, 'covtest_rcond.fits')
+        if self.toastcomm.comm_group.rank == 0:
+            if os.path.isfile(rcondfile):
+                os.remove(rcondfile)
 
-    #     invnpp.write_healpix_fits(outfile)
-    #     rcond.write_healpix_fits(rcondfile)
+        invnpp.write_healpix_fits(outfile)
+        rcond.write_healpix_fits(rcondfile)
 
-    #     checkrcond = np.copy(rcond.data)
+        checkrcond = np.copy(rcond.data)
 
-    #     print("proc {} invnpp.data on write sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
+        print("proc {} invnpp.data on write sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
 
-    #     invnpp.data.fill(0.0)
-    #     invnpp.read_healpix_fits(outfile)
+        invnpp.data.fill(0.0)
+        invnpp.read_healpix_fits(outfile)
 
-    #     print("proc {} invnpp.data on read sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
+        print("proc {} invnpp.data on read sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
 
-    #     diffdata = invnpp.duplicate()
-    #     diffdata.data -= checkdata
+        diffdata = invnpp.duplicate()
+        diffdata.data -= checkdata
 
-    #     difffile = os.path.join(self.mapdir, 'readwrite_diff.fits')
-    #     diffdata.write_healpix_fits(difffile)
+        difffile = os.path.join(self.mapdir, 'readwrite_diff.fits')
+        diffdata.write_healpix_fits(difffile)
 
-    #     hits.write_healpix_fits(hitfile)
+        hits.write_healpix_fits(hitfile)
 
-    #     if self.comm.rank == 0:
-    #         dat = hp.read_map(outfile)
-    #         outfile = "{}.png".format(outfile)
-    #         hp.mollview(dat, xsize=1600)
-    #         plt.savefig(outfile)
-    #         plt.close()
+        if self.comm.rank == 0:
+            dat = hp.read_map(outfile)
+            outfile = "{}.png".format(outfile)
+            hp.mollview(dat, xsize=1600)
+            plt.savefig(outfile)
+            plt.close()
 
-    #         dat = hp.read_map(difffile)
-    #         outfile = "{}.png".format(difffile)
-    #         hp.mollview(dat, xsize=1600)
-    #         plt.savefig(outfile)
-    #         plt.close()
+            dat = hp.read_map(difffile)
+            outfile = "{}.png".format(difffile)
+            hp.mollview(dat, xsize=1600)
+            plt.savefig(outfile)
+            plt.close()
 
-    #         dat = hp.read_map(hitfile)
-    #         outfile = "{}.png".format(hitfile)
-    #         hp.mollview(dat, xsize=1600)
-    #         plt.savefig(outfile)
-    #         plt.close()
+            dat = hp.read_map(hitfile)
+            outfile = "{}.png".format(hitfile)
+            hp.mollview(dat, xsize=1600)
+            plt.savefig(outfile)
+            plt.close()
 
-    #         dat = hp.read_map(rcondfile)
-    #         outfile = "{}.png".format(rcondfile)
-    #         hp.mollview(dat, xsize=1600)
-    #         plt.savefig(outfile)
-    #         plt.close()
+            dat = hp.read_map(rcondfile)
+            outfile = "{}.png".format(rcondfile)
+            hp.mollview(dat, xsize=1600)
+            plt.savefig(outfile)
+            plt.close()
 
-    #     rcond.data.fill(0.0)
-    #     rcond.read_healpix_fits(rcondfile)
+        rcond.data.fill(0.0)
+        rcond.read_healpix_fits(rcondfile)
 
-    #     nt.assert_almost_equal(rcond.data, checkrcond, decimal=6)
-    #     #nt.assert_almost_equal(invnpp.data, checkdata, decimal=6)
+        nt.assert_almost_equal(rcond.data, checkrcond, decimal=6)
+        #nt.assert_almost_equal(invnpp.data, checkdata, decimal=6)
 
-    #     hits.data.fill(0)
-    #     hits.read_healpix_fits(hitfile)
+        hits.data.fill(0)
+        hits.read_healpix_fits(hitfile)
 
-    #     nt.assert_equal(hits.data, checkhits)
+        nt.assert_equal(hits.data, checkhits)
 
-    #     return
+        return
 
