@@ -30,6 +30,7 @@ def main():
     parser = argparse.ArgumentParser( description='Read a toast covariance matrix and invert it.' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse covariance FITS file.' )
+    parser.add_argument( '--rcond', required=False, default=None, help='Optionally write the inverse condition number map to this file.' )
     parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
     parser.add_argument( '--threshold', required=False, default=1e-3, type=np.float, help='Reciprocal condition number threshold' )
     
@@ -56,16 +57,18 @@ def main():
     # mode so that nothing is actually read except the header.
 
     nside = 0
-    nnz = 0
+    ncovnz = 0
     if comm.rank == 0:
         fake, head = hp.read_map(infile, h=True, memmap=True)
         for key, val in head:
             if key == 'NSIDE':
                 nside = int(val)
             if key == 'TFIELDS':
-                nnz = int(val)
+                ncovnz = int(val)
     nside = comm.bcast(nside, root=0)
-    nnz = comm.bcast(nnz, root=0)
+    ncovnz = comm.bcast(nnz, root=0)
+
+    nnz = int( ( (np.sqrt(8.0*ncovnz) - 1.0) / 2.0 ) + 0.5 )
 
     npix = 12 * nside**2
     subnside = int(nside / 16)
@@ -88,11 +91,15 @@ def main():
 
     cov = None
     invcov = None
-    cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
+    rcond = None
+
+    cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=ncovnz, submap=subnpix, local=local)
     if args.single:
-        invcov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=nnz, submap=subnpix, local=local)
+        invcov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=ncovnz, submap=subnpix, local=local)
     else:
         invcov = cov
+    if args.rcond is not None:
+        rcond = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
 
     # read the covariance
 
@@ -100,14 +107,21 @@ def main():
 
     # every process computes its local piece
 
-    tm.covariance_invert(cov.data, args.threshold)
+    tm.covariance_invert(cov.data, args.threshold, rcond=rcond)
 
     if args.single:
         invcov.data[:] = cov.data.astype(np.float32)
 
-    # write the map
+    # write the inverted covariance
 
     invcov.write_healpix_fits(outfile)
+
+    # write the condition number
+
+    if args.rcond is not None:
+        rcond.write_healpix_fits(args.rcond)
+
+    return
 
 
 
