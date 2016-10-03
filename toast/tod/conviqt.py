@@ -140,8 +140,6 @@ if libconviqt is not None:
         ct.c_long,
         ct.c_long,
         ct.c_long,
-        ct.c_long,
-        ct.c_long,
         MPI_Comm
     ]
 
@@ -164,9 +162,7 @@ class OpSimConviqt(Operator):
     For each detector, it produces the beam-convolved timestream.
 
     Args:
-        lmax (int): sky maximum ell (and m). Actual resolution in the Healpix FITS 
-            file may differ.
-        beamlmax (int): beam maximum ell. Actual resolution in the Healpix FITS 
+        lmax (int): Maximum ell (and m). Actual resolution in the Healpix FITS 
             file may differ.
         beammmax (int): beam maximum m. Actual resolution in the Healpix FITS file 
             may differ.
@@ -175,9 +171,6 @@ class OpSimConviqt(Operator):
         pol (bool) : boolean to determine if polarized simulation is needed
         fwhm (float) : width of a symmetric gaussian beam [in arcmin] already 
             present in the skyfile (will be deconvolved away).
-        nbetafac (int) : conviqt resolution parameter (expert mode)
-        mcsamples (0) : reserved input for future Monte Carlo mode
-        lmaxout (int) : Convolution resolution
         order (int) : conviqt order parameter (expert mode)
         calibrate (bool) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
         dxx (bool) : The beam frame is either Dxx or Pxx. Pxx includes the 
@@ -188,22 +181,18 @@ class OpSimConviqt(Operator):
             use for output of the detector timestream.
     """
 
-    def __init__(self, lmax, beamlmax, beammmax, detectordata, pol=True, fwhm=4.0, nbetafac=6000, mcsamples=0, lmaxout=6000, order=13, calibrate=True, dxx=True, out='conviqt', quat_name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=False):
+    def __init__(self, lmax, beammmax, detectordata, pol=True, fwhm=4.0, order=13, calibrate=True, dxx=True, out='conviqt', quat_name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
         self._lmax = lmax
-        self._beamlmax = beamlmax
         self._beammmax = beammmax
         self._detectordata = {}
         for entry in detectordata:
             self._detectordata[entry[0]] = entry[1:]
         self._pol = pol
         self._fwhm = fwhm
-        self._nbetafac = nbetafac
-        self._mcsamples = mcsamples
-        self._lmaxout = lmaxout
         self._order = order
         self._calibrate = calibrate
         self._dxx = dxx
@@ -270,7 +259,7 @@ class OpSimConviqt(Operator):
                 if err != 0: raise Exception('Failed to load ' + skyfile)
 
                 beam = libconviqt.conviqt_beam_new()
-                err = libconviqt.conviqt_beam_read(beam, self._beamlmax, self._beammmax, self._pol, beamfile.encode(), comm)
+                err = libconviqt.conviqt_beam_read(beam, self._lmax, self._beammmax, self._pol, beamfile.encode(), comm)
                 if err != 0: raise Exception('Failed to load ' + beamfile)
 
                 detector = libconviqt.conviqt_detector_new_with_id(det.encode())
@@ -322,7 +311,7 @@ class OpSimConviqt(Operator):
                     ppnt[row*5 + 3] = 0 # This column will host the convolved data upon exit
                     ppnt[row*5 + 4] = 0 # libconviqt will assign the running indices to this column.
 
-                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._nbetafac, self._mcsamples, self._lmaxout, self._order, comm)
+                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._order, comm)
 
                 if convolver is None: raise Exception("Failed to instantiate convolver")
 
