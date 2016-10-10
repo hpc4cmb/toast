@@ -31,7 +31,7 @@ class PSDTest(MPITestCase):
         self.sigma = 10.
         self.signal = np.random.randn(self.nsamp) * self.sigma
         self.flags = np.zeros(self.nsamp, dtype=np.bool)
-        self.flags[self.nsamp/4:self.nsamp/2] = True
+        self.flags[int(self.nsamp/4):int(self.nsamp/2)] = True
 
 
     def test_autocov_psd(self):

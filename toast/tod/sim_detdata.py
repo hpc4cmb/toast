@@ -24,6 +24,82 @@ from ..operator import Operator
 from .. import rng as rng
 
 
+def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, psd):
+    
+    fftlen = 2
+    while fftlen <= (oversample * samples):
+        fftlen *= 2
+    half = int(fftlen / 2)
+    norm = rate * float(half)
+    df = rate / fftlen
+
+    interp_freq = np.linspace(df, df*half, num=half, endpoint=True)
+    loginterp_freq = np.log10(interp_freq)
+
+    # ignore zero frequency
+
+    trimzero = False
+    if freq[0] <= 0.0:
+        trimzero = True
+
+    if trimzero:
+        rawfreq = freq[1:]
+    else:
+        rawfreq = freq
+    lograwfreq = np.log10(rawfreq)
+
+    if trimzero:
+        rawpsd = psd[1:]
+    else:
+        rawpsd = psd
+    lograwpsd = np.log10(rawpsd)
+
+    # Ensure that the input frequency range includes all the frequencies
+    # we need.  Otherwise the extrapolation is not well defined.
+
+    if (rawfreq[0] > interp_freq[0]):
+        raise RuntimeError("input PSD does not go to low enough frequency to allow for interpolation")
+    if (rawfreq[-1] < interp_freq[-1]):
+        raise RuntimeError("input PSD does not go to high enough frequency to allow for interpolation")
+
+    # interpolate
+
+    interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=2)
+
+    loginterp_psd = interp(loginterp_freq)
+
+    interp_psd = np.power(10.0, loginterp_psd)
+
+    # High-pass filter the PSD to not contain power below
+    # fmin to limit the correlation length.  Also cut
+    # Nyquist.
+
+    fmin = rate / float(samples)
+    interp_psd[(interp_freq < fmin)] = 0.0
+    interp_psd[-1] = 0.0
+
+    # gaussian Re/Im randoms
+
+    fdata = rng.random(fftlen, sampler="gaussian", key=(realization, stream), counter=(0,0))
+
+    # scale by PSD
+
+    scale = np.sqrt(interp_psd * norm)
+
+    fdata[0] *= np.sqrt(2.0) * scale[0]
+    fdata[1:half] *= scale[0:-1]
+    fdata[half] *= np.sqrt(2.0) * scale[-1]
+    fdata[half+1:] *= scale[-2::-1]
+
+    # inverse FFT
+
+    tdata = sft.irfft(fdata)
+
+    # return the timestream and interpolated PSD for debugging.
+
+    return (tdata[0:samples], interp_freq, interp_psd)
+
+
 
 class OpSimNoise(Operator):
     """
@@ -108,84 +184,13 @@ class OpSimNoise(Operator):
             for curchunk in range(tod.local_chunks[1]):
                 abschunk = tod.local_chunks[0] + curchunk
                 chksamp = tod.total_chunks[abschunk]
-                nsedata = np.zeros(chksamp, dtype=np.float64)
-
-                fftlen = 2
-                while fftlen <= (self._oversample * chksamp):
-                    fftlen *= 2
-                half = int(fftlen / 2)
-                norm = rate * float(half)
-                df = rate / fftlen
-
-                freq = np.linspace(df, df*half, num=half, endpoint=True)
-                logfreq = np.log10(freq)
-
-                tempdata = np.zeros(chksamp, dtype=np.float64)
-                tempflags = np.zeros(chksamp, dtype=np.uint8)
-                tdata = np.zeros(fftlen, dtype=np.float64)
-                fdata = np.zeros(fftlen, dtype=np.float64)
-
-                # ignore zero frequency
-                trimzero = False
-                if nse.freq[0] == 0:
-                    trimzero = True
-
-                if trimzero:
-                    rawfreq = nse.freq[1:]
-                else:
-                    rawfreq = nse.freq
-                lograwfreq = np.log10(rawfreq)
 
                 idet = 0
                 for det in tod.local_dets:
 
-                    # interpolate the psd
-
-                    if trimzero:
-                        rawpsd = nse.psd(det)[1:]
-                    else:
-                        rawpsd = nse.psd(det)
-
-                    #np.savetxt("out_simnoise_rawpsd.txt", np.transpose(np.vstack((rawfreq, rawpsd))))
-
-                    lograwpsd = np.log10(rawpsd)
-
-                    interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
-
-                    logpsd = interp(logfreq)
-
-                    psd = np.power(10.0, logpsd)
-
-                    # High-pass filter the PSD to not contain power below
-                    # fmin to limit the correlation length.  Also cut
-                    # Nyquist.
-                    fmin = rate / float(chksamp)
-                    psd[freq < fmin] = 0.0
-                    psd[-1] = 0.0
-
-                    #np.savetxt("out_simnoise_psd.txt", np.transpose(np.vstack((freq, psd))))
-
-                    # gaussian Re/Im randoms
-
                     detstream = self._rngstream + rngobs + (abschunk * ndet) + idet
 
-                    fdata = rng.random(fftlen, sampler="gaussian", key=(self._realization, detstream), counter=(0,0))
-
-                    # scale by PSD
-
-                    scale = np.sqrt(psd * norm)
-
-                    fdata[0] *= np.sqrt(2.0) * scale[0]
-                    fdata[1:half] *= scale[0:-1]
-                    fdata[half] *= np.sqrt(2.0) * scale[-1]
-                    fdata[half+1:] *= scale[-2::-1]
-
-                    #np.savetxt("out_simnoise_fdata.txt", fdata, delimiter='\n')
-
-                    # make the noise TOD
-
-                    tdata = sft.irfft(fdata)
-                    #np.savetxt("out_simnoise_tdata.txt", tdata, delimiter='\n')
+                    (nsedata, freq, psd) = sim_noise_timestream(self._realization, detstream, rate, chksamp, self._oversample, nse.freq(det), nse.psd(det))
 
                     # write to cache
 
@@ -193,7 +198,7 @@ class OpSimNoise(Operator):
                     if not tod.cache.exists(cachename):
                         tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
                     ref = tod.cache.reference(cachename)[tod_offset:tod_offset+chksamp]
-                    ref[:] += tdata[0:chksamp]
+                    ref[:] += nsedata
 
                     idet += 1
 

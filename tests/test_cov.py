@@ -12,8 +12,6 @@ if 'TOAST_NO_MPI' in os.environ.keys():
 else:
     from mpi4py import MPI
 
-import matplotlib.pyplot as plt
-
 import numpy as np
 import numpy.testing as nt
 import healpy as hp
@@ -72,6 +70,12 @@ class CovarianceTest(MPITestCase):
 
         self.NET = 7.0
 
+        self.fmins = {
+            'bore' : 0.0,
+        }
+        self.rates = {
+            'bore' : self.rate,
+        }
         self.fknee = {
             'bore' : 0.0,
         }
@@ -114,8 +118,8 @@ class CovarianceTest(MPITestCase):
             # add analytic noise model with white noise
 
             nse = AnalyticNoise(
-                rate=self.rate, 
-                fmin=0.0,
+                rate=self.rates, 
+                fmin=self.fmins,
                 detectors=self.detnames,
                 fknee=self.fknee,
                 alpha=self.alpha,
@@ -423,6 +427,8 @@ class CovarianceTest(MPITestCase):
         hits.write_healpix_fits(hitfile)
 
         if self.comm.rank == 0:
+            import matplotlib.pyplot as plt
+
             dat = hp.read_map(outfile)
             outfile = "{}.png".format(outfile)
             hp.mollview(dat, xsize=1600)

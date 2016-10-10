@@ -12,8 +12,6 @@ if 'PYTOAST_NOMPI' in os.environ.keys():
 else:
     from mpi4py import MPI
 
-import matplotlib.pyplot as plt
-
 import numpy as np
 import numpy.testing as nt
 import healpy as hp
@@ -73,6 +71,12 @@ class BinnedTest(MPITestCase):
 
         self.NET = 7.0
 
+        self.fmins = {
+            'bore' : 0.0,
+        }
+        self.rates = {
+            'bore' : self.rate,
+        }
         self.fknee = {
             'bore' : 0.0,
         }
@@ -120,8 +124,8 @@ class BinnedTest(MPITestCase):
             # add analytic noise model with white noise
 
             nse = AnalyticNoise(
-                rate=self.rate, 
-                fmin=0.0,
+                rate=self.rates, 
+                fmin=self.fmins,
                 detectors=self.detnames,
                 fknee=self.fknee,
                 alpha=self.alpha,
@@ -269,6 +273,8 @@ class BinnedTest(MPITestCase):
             madam.exec(self.data)
 
             if self.comm.rank == 0:
+                import matplotlib.pyplot as plt
+                
                 hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
                 hits = hp.read_map(hitsfile, nest=True)
 

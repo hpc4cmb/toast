@@ -356,7 +356,14 @@ class OpMadam(Operator):
                 detweights[d] = detw[detectors[d]]
 
             if nse is not None:
-                nse_psdfreqs = nse.freq
+                # Madam requires all PSDs to be at the same binning.  Verify that this
+                # is true and then pass in the common binning.
+                nse_psdfreqs = nse.freq(detectors[0])
+                for d in range(1, ndet):
+                    check_psdfreqs = nse.freq(detectors[d])
+                    if not np.allclose(nse_psdfreqs, check_psdfreqs):
+                        raise RuntimeError("All PSDs passed to Madam must have the same frequency binning.")
+
                 npsdbin = len(nse_psdfreqs)
                 psdfreqs = np.copy(nse_psdfreqs)
 
