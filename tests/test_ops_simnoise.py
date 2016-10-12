@@ -45,34 +45,58 @@ class OpSimNoiseTest(MPITestCase):
         self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
 
-        self.dets = ["f1a", "f1b", "f2a", "f2b"]
+        self.dets = ["f1a", "f1b", "f2a", "f2b", "white", "high"]
         self.fp = {}
         for d in self.dets:
             self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
 
         self.rate = 20.0
-        self.fmin = 0.05
+
+        self.rates = {}
+        self.fmin = {}
         self.fknee = {}
         self.alpha = {}
         self.NET = {}
 
-        self.fknee["f1a"] = 0.1
+        self.rates["f1a"] = self.rate
+        self.fmin["f1a"] = 1.0e-5
+        self.fknee["f1a"] = 0.15
         self.alpha["f1a"] = 1.0
         self.NET["f1a"] = 10.0
 
+        self.rates["f1b"] = self.rate
+        self.fmin["f1b"] = 1.0e-5
         self.fknee["f1b"] = 0.1
         self.alpha["f1b"] = 1.0
         self.NET["f1b"] = 10.0
 
-        self.fknee["f2a"] = 0.15
+        self.rates["f2a"] = self.rate
+        self.fmin["f2a"] = 1.0e-5
+        self.fknee["f2a"] = 0.05
         self.alpha["f2a"] = 1.0
         self.NET["f2a"] = 10.0
 
-        self.fknee["f2b"] = 0.15
+        self.rates["f2b"] = self.rate
+        self.fmin["f2b"] = 1.0e-5
+        self.fknee["f2b"] = 0.001
         self.alpha["f2b"] = 1.0
         self.NET["f2b"] = 10.0
 
-        self.totsamp = 50000
+        self.rates["white"] = self.rate
+        self.fmin["white"] = 0.0
+        self.fknee["white"] = 0.0
+        self.alpha["white"] = 1.0
+        self.NET["white"] = 10.0
+
+        self.rates["high"] = self.rate
+        self.fmin["high"] = 1.0e-5
+        self.fknee["high"] = 2.0
+        self.alpha["high"] = 1.0
+        self.NET["high"] = 10.0
+
+        self.totsamp = 100000
+
+        self.oversample = 2
 
         self.MC = 100
 
@@ -80,7 +104,7 @@ class OpSimNoiseTest(MPITestCase):
         # all all concurrencies, we set the chunksize to something independent
         # of the number of ranks.
 
-        nchunk = 10
+        nchunk = 2
         chunksize = int(self.totsamp / nchunk)
         chunks = np.ones(nchunk, dtype=np.int64)
         chunks *= chunksize
@@ -96,7 +120,14 @@ class OpSimNoiseTest(MPITestCase):
 
         # construct an analytic noise model
 
-        self.nse = AnalyticNoise(rate=self.rate, fmin=self.fmin, detectors=self.dets, fknee=self.fknee, alpha=self.alpha, NET=self.NET)
+        self.nse = AnalyticNoise(
+            rate=self.rates, 
+            fmin=self.fmin, 
+            detectors=self.dets, 
+            fknee=self.fknee, 
+            alpha=self.alpha, 
+            NET=self.NET
+        )
 
         ob = {}
         ob['id'] = 'noisetest-{}'.format(self.toastcomm.group)
@@ -117,59 +148,87 @@ class OpSimNoiseTest(MPITestCase):
 
         # verify that the white noise part of the spectrum is normalized correctly
 
-        fsamp = nse.rate
-        cutoff = 0.95 * (fsamp / 2.0)
-        indx = np.where(nse.freq > cutoff)
         for det in tod.local_dets:
-            NET = self.nse.NET(det)
-            knee = self.nse.fknee(det)
+            fsamp = nse.rate(det)
+            cutoff = 0.95 * (fsamp / 2.0)
+            indx = np.where(nse.freq(det) > cutoff)
+
+            NET = nse.NET(det)
+            knee = nse.fknee(det)
             avg = np.mean(nse.psd(det)[indx])
             NETsq = NET*NET
             print("det {} NETsq = {}, average white noise level = {}".format(det, NETsq, avg))
-            self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.02)
+            if det != "high":
+                self.assertTrue((np.absolute(avg - NETsq)/NETsq) < 0.02)
+
+        if self.comm.rank == 0:
+            import matplotlib.pyplot as plt
+
+            for det in tod.local_dets:
+                savefile = os.path.join(self.outdir, "out_test_simnoise_rawpsd_{}.txt".format(det))
+                np.savetxt(savefile, np.transpose([nse.freq(det), nse.psd(det)]), delimiter=' ')
+
+                fig = plt.figure(figsize=(12,8), dpi=72)
+                ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                ax.loglog(nse.freq(det), nse.psd(det), marker='o', c="red", label='{}: rate={:0.1f} NET={:0.1f} fknee={:0.4f}, fmin={:0.4f}'.format(det, self.rates[det], self.NET[det], self.fknee[det], self.fmin[det]))
+                cur_ylim = ax.get_ylim()
+                ax.set_ylim([0.001*(nse.NET(det)**2), 10.0*cur_ylim[1]])
+                ax.legend(loc=1)
+                plt.title("Simulated PSD from toast.AnalyticNoise")
+
+                savefile = os.path.join(self.outdir, "out_test_simnoise_rawpsd_{}.png".format(det))
+                plt.savefig(savefile)
+                plt.close()
 
         ntod = self.totsamp
 
-        # Reconstruct the fft length that was used when generating the TOD.
-        # Then interpolate the PSD to this sampling before integrating.
-
-        oversample = 2 # this matches default in OpSimNoise...
+        # this replicates the calculation in sim_noise_timestream()
 
         fftlen = 2
         half = 1
-        while fftlen <= (oversample * self.chunksize):
+        while fftlen <= (self.oversample * self.chunksize):
             fftlen *= 2
             half *= 2
 
-        rawfreq = nse.freq
-        nyquist = fsamp / 2.0
-
-        df = fsamp / fftlen
-        freq = np.linspace(df, df*half, num=half, endpoint=True)
-
-        logfreq = np.log10(freq)
-        lograwfreq = np.log10(rawfreq)
-
+        freqs = {}
         psds = {}
         psdnorm = {}
         todvar = {}
 
+        idet = 0
         for det in tod.local_dets:
-            todvar[det] = np.zeros(self.MC, dtype=np.float64)
 
-            rawpsd = nse.psd(det)
-            lograwpsd = np.log10(rawpsd)
+            df = nse.rate(det) / float(fftlen)
 
-            interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=0)
-            logpsd = interp(logfreq)
-            psds[det] = np.power(10.0, logpsd)
+            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, idet, nse.rate(det), self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
 
             # Factor of 2 comes from the negative frequency values.
             psdnorm[det] = 2.0 * np.sum(psds[det] * df)
             print("psd[{}] integral = {}".format(det, psdnorm[det]))
 
+            todvar[det] = np.zeros(self.MC, dtype=np.float64)
+
+            idet += 1
+            
+
         if self.comm.rank == 0:
-            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_psd.txt"), np.transpose([freq, psds[self.dets[0]], psds[self.dets[1]], psds[self.dets[2]], psds[self.dets[3]]]), delimiter=' ')
+            import matplotlib.pyplot as plt
+
+            for det in tod.local_dets:
+                savefile = os.path.join(self.outdir, "out_test_simnoise_psd_{}.txt".format(det))
+                np.savetxt(savefile, np.transpose([freqs[det], psds[det]]), delimiter=' ')
+
+                fig = plt.figure(figsize=(12,8), dpi=72)
+                ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                ax.loglog(freqs[det], psds[det], marker='+', c="blue", label='{}: rate={:0.1f} NET={:0.1f} fknee={:0.4f}, fmin={:0.4f}'.format(det, self.rates[det], self.NET[det], self.fknee[det], self.fmin[det]))
+                cur_ylim = ax.get_ylim()
+                ax.set_ylim([0.001*(nse.NET(det)**2), 10.0*cur_ylim[1]])
+                ax.legend(loc=1)
+                plt.title("Interpolated PSD with High-pass from {:0.1f} second Simulation Interval".format((float(self.totsamp)/self.rate)))
+
+                savefile = os.path.join(self.outdir, "out_test_simnoise_psd_{}.png".format(det))
+                plt.savefig(savefile)
+                plt.close()
 
         for r in range(self.MC):
 
@@ -180,23 +239,25 @@ class OpSimNoiseTest(MPITestCase):
 
             if r == 0:
                 # write timestreams to disk for debugging
-                check1 = tod.cache.reference("noise_{}".format(self.dets[0]))
-                check2 = tod.cache.reference("noise_{}".format(self.dets[1]))
-                check3 = tod.cache.reference("noise_{}".format(self.dets[2]))
-                check4 = tod.cache.reference("noise_{}".format(self.dets[3]))
+
                 if self.comm.rank == 0:
-                    np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod.txt"), np.transpose([check1, check2, check3, check4]), delimiter=' ')
+                    import matplotlib.pyplot as plt
 
-                # verify that timestreams with the same PSD *DO NOT* have the same
-                # values (this is a crude test that the RNG state is being incremented)
+                    for det in tod.local_dets:
+                        check = tod.cache.reference("noise_{}".format(det))
 
-                dif = np.fabs(check1 - check2)
-                check = np.mean(dif)
-                self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+                        savefile = os.path.join(self.outdir, "out_test_simnoise_tod_mc0_{}.txt".format(det))
+                        np.savetxt(savefile, np.transpose([check]), delimiter=' ')
 
-                dif = np.fabs(check3 - check4)
-                check = np.mean(dif)
-                self.assertTrue(check > (0.01 / np.sqrt(self.totsamp)))
+                        fig = plt.figure(figsize=(12,8), dpi=72)
+                        ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                        ax.plot(np.arange(len(check)), check, c="black", label='Det {}'.format(det))
+                        ax.legend(loc=1)
+                        plt.title("First Realization of Simulated TOD from toast.sim_noise_timestream()")
+
+                        savefile = os.path.join(self.outdir, "out_test_simnoise_tod_mc0_{}.png".format(det))
+                        plt.savefig(savefile)
+                        plt.close()
 
             for det in tod.local_dets:
                 # compute the TOD variance
@@ -209,7 +270,31 @@ class OpSimNoiseTest(MPITestCase):
 
 
         if self.comm.rank == 0:
-            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod_var.txt"), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]]]), delimiter=' ')
+            np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod_var.txt"), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]], todvar[self.dets[4]]]), delimiter=' ')
+
+        if self.comm.rank == 0:
+            import matplotlib.pyplot as plt
+
+            for det in tod.local_dets:
+                savefile = os.path.join(self.outdir, "out_test_simnoise_tod_var_{}.txt".format(det))
+                np.savetxt(savefile, np.transpose([todvar[det]]), delimiter=' ')
+
+                sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
+                histrange = 4.0 * sig
+                histmin = psdnorm[det] - histrange
+                histmax = psdnorm[det] + histrange
+
+                fig = plt.figure(figsize=(12,8), dpi=72)
+
+                ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                n, bins, patches = plt.hist(todvar[det], 10, range=(histmin, histmax), facecolor="magenta", alpha=0.75, label="{}:  PSD integral = {:0.1f} expected sigma = {:0.1f}".format(det, psdnorm[det], sig))
+                ax.legend(loc=1)
+                plt.title("Distribution of TOD Variance for {} Realizations".format(self.MC))
+
+                savefile = os.path.join(self.outdir, "out_test_simnoise_tod_var_{}.png".format(det))
+                plt.savefig(savefile)
+                plt.close()
+
 
         # Verify that Parseval's theorem holds- that the variance of the TOD
         # equals the integral of the PSD.  We do this for an ensemble of realizations
@@ -217,26 +302,13 @@ class OpSimNoiseTest(MPITestCase):
         # for the error on the variance due to finite numbers of samples.
 
         for det in tod.local_dets:
-            histcenter = psdnorm[det]
-            print("tod[{}] mean variance = {}".format(det, np.mean(todvar[det])))
-            sig = np.mean(todvar[det]) * np.sqrt(2.0/(ntod-1))
-
-            histrange = 3.0*sig
-            histmin = histcenter - histrange
-            histmax = histcenter + histrange
-            nbins = 10
-            histbins = np.arange(nbins, dtype=np.float64)
-            histbins -= 0.5 * nbins
-            histbins *= 2.0 * histrange / nbins
-            histbins += histcenter
-            hist = np.histogram(todvar[det], bins=nbins, range=(histmin, histmax))[0]
-            if self.comm.rank == 0:
-                np.savetxt(os.path.join(self.outdir,"out_test_simnoise_var_{}.txt".format(det)), np.transpose([histbins, hist]), delimiter=' ')
-
-            over3sig = np.where(np.absolute(todvar[det] - histcenter) > 3.0*sig)[0]
+            sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
+            over3sig = np.where(np.absolute(todvar[det] - psdnorm[det]) > 3.0*sig)[0]
             overfrac = float(len(over3sig)) / self.MC
             print(overfrac)
-            self.assertTrue(overfrac < 0.1)
+            if det != "high":
+                self.assertTrue(overfrac < 0.1)
+
 
         stop = MPI.Wtime()
         elapsed = stop - start

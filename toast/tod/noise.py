@@ -15,32 +15,35 @@ class Noise(object):
 
     Args:
         detectors (list): names of detectors we have
-        freq (ndarray): array of frequencies for our PSDs
+        freqs (dict): dictionary of array of frequencies for our PSDs
         psds (dict): dictionary of arrays which contains the PSD values
             for each detector.
     """
 
-    def __init__(self, detectors=None, freq=np.array([0.0,], dtype=np.float64), psds=None):
+    def __init__(self, detectors=None, freqs=None, psds=None):
         self._dets = []
-        self._freq = freq
-        self._nfreq = freq.shape[0]
+        self._freqs = {}
         self._psds = {}
         self._weights = {}
-        
-        # the last frequency point should be nyquist
-        self._rate = 2.0 * self._freq[-1]
+        self._rate = {}
 
         if detectors is not None:
             self._dets = detectors
             if psds is None:
-                raise RutimeError("you must specify a psd for each detector")
+                raise RutimeError("you must provide a dictionary of PSD arrays for all detectors")
+            if freqs is None:
+                raise RutimeError("you must provide a dictionary of frequency arrays for all detectors")
             for det in self._dets:
-                if psds[det].shape[0] != self._nfreq:
+                if det not in psds:
+                    raise RuntimeError("no PSD specified for detector {}".format(det))
+                if det not in freqs:
+                    raise RuntimeError("no frequency array specified for detector {}".format(det))
+                if psds[det].shape[0] != freqs[det].shape[0]:
                     raise RuntimeError("PSD length must match the number of frequencies")
+                self._freqs[det] = np.copy(freqs[det])
                 self._psds[det] = np.copy(psds[det])
-                mn = np.mean(self._psds[det])
-                rms = np.sqrt(mn * self._rate / float(2 * self._nfreq - 1))
-                self._weights[det] = 1.0 / (rms * rms)
+                # last frequency point should be Nyquist
+                self._rate[det] = 2.0 * self._freqs[det][-1]
 
 
     @property
@@ -59,20 +62,30 @@ class Noise(object):
         pass
 
 
-    @property
-    def freq(self):
+    def freq(self, detector):
         """
-        (array): the frequency bins that are used for all PSDs.
+        Get the frequencies for a detector.
+
+        Args:
+            detector (str): the detector name.
+
+        Returns:
+            (array): the frequency bins that are used for the PSD.
         """
-        return self._freq
+        return self._freqs[detector]
 
 
-    @property
-    def rate(self):
+    def rate(self, detector):
         """
-        (float): the sample rate in Hz.
+        Get the sample rate for a detector.
+
+        Args:
+            detector (str): the detector name.
+
+        Returns:
+            (float): the sample rate in Hz.
         """
-        return self._rate
+        return self._rate[detector]
 
 
     def psd(self, detector):

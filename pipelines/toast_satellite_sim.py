@@ -221,16 +221,19 @@ def main():
 
     # Create the noise model for this observation
 
-    fmin = 2.0 / samplerate
+    fmin = {}
     fknee = {}
     alpha = {}
     NET = {}
+    rates = {}
     for d in detectors:
+        rates[d] = samplerate
+        fmin[d] = fp[d]['fmin']
         fknee[d] = fp[d]['fknee']
         alpha[d] = fp[d]['alpha']
         NET[d] = fp[d]['NET']
 
-    noise = tt.AnalyticNoise(rate=samplerate, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET)
+    noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET)
 
     # Create the (single) observation
 

@@ -32,21 +32,21 @@ class AnalyticNoise(Noise):
     minimum frequency, etc.
 
     Args:
-        rate (float): sample rate in Hertz.
-        fmin (float): minimum frequency for high pass
         detectors (list): list of detectors.
+        rate (dict): dictionary of sample rates in Hertz.
+        fmin (dict): dictionary of minimum frequencies for high pass
         fknee (dict): dictionary of knee frequencies.
         alpha (dict): dictionary of alpha exponents (positive, not negative!).
         NET (dict): dictionary of detector NETs.
     """
 
-    def __init__(self, rate=None, fmin=None, detectors=None, fknee=None, alpha=None, NET=None):
-        if rate is None:
-            raise RuntimeError("you must specify the sample rate")
-        if fmin is None:
-            raise RuntimeError("you must specify the frequency for high pass")
+    def __init__(self, detectors=None, rate=None, fmin=None, fknee=None, alpha=None, NET=None):
         if detectors is None:
             raise RuntimeError("you must specify the detector list")
+        if rate is None:
+            raise RuntimeError("you must specify the sample rates")
+        if fmin is None:
+            raise RuntimeError("you must specify the frequencies for high pass")
         if fknee is None:
             raise RuntimeError("you must specify the knee frequencies")
         if alpha is None:
@@ -54,10 +54,9 @@ class AnalyticNoise(Noise):
         if NET is None:
             raise RuntimeError("you must specify the NET")
 
+        self._detectors = detectors
         self._rate = rate
         self._fmin = fmin
-        self._detectors = detectors
-        
         self._fknee = fknee
         self._alpha = alpha
         self._NET = NET
@@ -66,41 +65,47 @@ class AnalyticNoise(Noise):
             if self._alpha[d] < 0.0:
                 raise RuntimeError("alpha exponents should be positive in this formalism")
 
-        # for purposes of determining the common frequency sampling
-        # points, use the lowest knee frequency.
-        lowknee = rate
-        for d in detectors:
-            if self._fknee[d] < lowknee:
-                lowknee = self._fknee[d]
-
-        tempfreq = []
-        cur = self._fmin
-        while cur < 10.0 * lowknee:
-            tempfreq.append(cur)
-            cur *= 2.0
-        nyquist = self._rate / 2.0
-        df = (nyquist - cur) / 10.0
-        tempfreq.extend([ (cur+x*df) for x in range(11) ])
-        freq = np.array(tempfreq, dtype=np.float64)
-
+        freqs = {}
         psds = {}
 
         for d in self._detectors:
-            if self._fknee[d] > 0:
+            if (self._fknee[d] > 0.0) and (self._fknee[d] < self._fmin[d]):
+                raise RuntimeError("If knee frequency is non-zero, it must be greater than f_min")
+
+            nyquist = self._rate[d] / 2.0
+
+            tempfreq = []
+
+            # this starting point corresponds to a high-pass of
+            # 30 years, so should be low enough for any interpolation!
+            cur = 1.0e-9
+
+            # this value seems to provide a good density of points
+            # in log space.
+            while cur < nyquist:
+                tempfreq.append(cur)
+                cur *= 1.4
+
+            # put a final point at Nyquist
+            tempfreq.append(nyquist)
+
+            freqs[d] = np.array(tempfreq, dtype=np.float64)
+
+            if self._fknee[d] > 0.0:
                 ktemp = np.power(self._fknee[d], self._alpha[d])
-                mtemp = np.power(self._fmin, self._alpha[d])
-                temp = np.power(freq, self._alpha[d])
+                mtemp = np.power(self._fmin[d], self._alpha[d])
+                temp = np.power(freqs[d], self._alpha[d])
                 psds[d] = (temp + ktemp) / (temp + mtemp)
                 psds[d] *= (self._NET[d] * self._NET[d])
             else:
-                psds[d] = np.ones_like(freq)
+                psds[d] = np.ones_like(freqs[d])
                 psds[d] *= (self._NET[d] * self._NET[d])
 
         # call the parent class constructor to store the psds
-        super().__init__(detectors=detectors, freq=freq, psds=psds)
+        super().__init__(detectors=detectors, freqs=freqs, psds=psds)
 
     @property
-    def fmin(self):
+    def fmin(self, det):
         """
         (float): the minimum frequency in Hz, used as a high pass.
         """
