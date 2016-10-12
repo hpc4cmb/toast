@@ -30,10 +30,14 @@ class Noise(object):
         if detectors is not None:
             self._dets = detectors
             if psds is None:
-                raise RutimeError("you must specify a psd for each detector")
+                raise RutimeError("you must provide a dictionary of PSD arrays for all detectors")
             if freqs is None:
-                raise RutimeError("you must specify a frequency array for each detector")
+                raise RutimeError("you must provide a dictionary of frequency arrays for all detectors")
             for det in self._dets:
+                if det not in psds:
+                    raise RuntimeError("no PSD specified for detector {}".format(det))
+                if det not in freqs:
+                    raise RuntimeError("no frequency array specified for detector {}".format(det))
                 if psds[det].shape[0] != freqs[det].shape[0]:
                     raise RuntimeError("PSD length must match the number of frequencies")
                 self._freqs[det] = np.copy(freqs[det])

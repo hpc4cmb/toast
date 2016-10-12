@@ -38,20 +38,11 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     # ignore zero frequency
 
-    trimzero = False
-    if freq[0] <= 0.0:
-        trimzero = True
+    good = (freq > 0.0)
+    rawfreq = freq[good]
+    rawpsd = psd[good]
 
-    if trimzero:
-        rawfreq = freq[1:]
-    else:
-        rawfreq = freq
     lograwfreq = np.log10(rawfreq)
-
-    if trimzero:
-        rawpsd = psd[1:]
-    else:
-        rawpsd = psd
     lograwpsd = np.log10(rawpsd)
 
     # Ensure that the input frequency range includes all the frequencies
@@ -64,18 +55,17 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     # interpolate
 
-    interp = si.InterpolatedUnivariateSpline(lograwfreq, lograwpsd, k=1, ext=2)
+    interp = si.interp1d(lograwfreq, lograwpsd, kind='linear')
 
     loginterp_psd = interp(loginterp_freq)
 
     interp_psd = np.power(10.0, loginterp_psd)
 
-    # High-pass filter the PSD to not contain power below
-    # fmin to limit the correlation length.  Also cut
-    # Nyquist.
+    # Set the zero frequency and Nyquist to zero.  Also set to zero
+    # modes at longer timescales than the length of the simulation.
 
-    fmin = rate / float(samples)
-    interp_psd[(interp_freq < fmin)] = 0.0
+    cutoff = rate / float(samples)
+    interp_psd[(interp_freq < cutoff)] = 0.0
     interp_psd[-1] = 0.0
 
     # gaussian Re/Im randoms
@@ -95,9 +85,16 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     tdata = sft.irfft(fdata)
 
-    # return the timestream and interpolated PSD for debugging.
+    # subtract the DC level- for just the samples that we are returning
 
-    return (tdata[0:samples], interp_freq, interp_psd)
+    offset = int((fftlen - samples) / 2)
+
+    DC = np.mean(tdata[offset:offset+samples])
+    tdata[offset:offset+samples] -= DC
+
+    # return the timestream and interpolated PSD for debugging.
+    
+    return (tdata[offset:offset+samples], interp_freq, interp_psd)
 
 
 
