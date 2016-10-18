@@ -50,12 +50,12 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     if (rawfreq[0] > interp_freq[0]):
         raise RuntimeError("input PSD does not go to low enough frequency to allow for interpolation")
-    if (rawfreq[-1] < interp_freq[-1]):
+    if (np.absolute(interp_freq[-1] - rawfreq[-1]) > df):
         raise RuntimeError("input PSD does not go to high enough frequency to allow for interpolation")
 
     # interpolate
 
-    interp = si.interp1d(lograwfreq, lograwpsd, kind='linear')
+    interp = si.interp1d(lograwfreq, lograwpsd, kind='linear', fill_value='extrapolate')
 
     loginterp_psd = interp(loginterp_freq)
 
