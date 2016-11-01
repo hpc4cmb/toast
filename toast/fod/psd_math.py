@@ -88,8 +88,10 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
         realflg = realization == ireal
 
-        sig = extended_signal[realflg]
+        sig = extended_signal[realflg].copy()
         flg = extended_flags[realflg]
+
+        sig -= np.mean( sig )
 
         good = flg == 0
         ngood = np.sum( good )
@@ -146,10 +148,12 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
         # Fourier transform for the PSD
 
-        psd = np.fft.rfft( autocov )
+        autocov = np.hstack( [autocov, autocov[:0:-1]] )
+
+        psd = np.abs(np.fft.rfft( autocov ))
         psdfreq = np.fft.rfftfreq( len(autocov), d=1/fsample )
         
-        # Set the white noise PSD normalization to sigm**2 / fsample
+        # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
 
         tstart = time_start + ireal*stationary_period

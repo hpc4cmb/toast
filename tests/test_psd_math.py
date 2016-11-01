@@ -60,8 +60,8 @@ class PSDTest(MPITestCase):
 
         self.rates["f1a"] = self.rate
         self.fmin["f1a"] = 1.0e-5
-        self.fknee["f1a"] = 5.00
-        self.alpha["f1a"] = 1.0
+        self.fknee["f1a"] = 20.00
+        self.alpha["f1a"] = 2.0
         self.NET["f1a"] = 10.0
 
         self.rates["f1b"] = self.rate
@@ -210,13 +210,14 @@ class PSDTest(MPITestCase):
                 noisetod = tod.cache.reference("noise_{}".format(det))
             
             autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), self.lagmax, self.stationary_period, fsamp, comm=self.comm)
+            #autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), 10, self.stationary_period, fsamp, comm=self.comm)
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
 
                 nn = 2
                 while nn*2 < noisetod.size: nn *= 2
-                fnoise = np.abs( np.fft.rfft( noisetod[:nn] )**2 ) / nn / fsamp
+                fnoise = np.abs( np.fft.rfft( noisetod[:nn] ) )**2 / nn / fsamp
                 ffreq = np.fft.rfftfreq( nn, 1/fsamp )
 
                 nbin = 300
@@ -229,7 +230,10 @@ class PSDTest(MPITestCase):
                 ax = fig.add_subplot(1, 1, 1, aspect='auto')
                 for i in range(len(autocovs)):
                     t0, t1, freq, psd = autocovs[i]
-                    ax.loglog( freq, psd, '-', color='magenta', label='autocov PSD' )
+                    bfreq, hits = log_bin( freq, nbin=nbin )
+                    bpsd, hits = log_bin( psd, nbin=nbin )
+                    ax.loglog( freq, psd, '.', color='magenta', label='autocov PSD' )
+                    ax.loglog( bfreq, bpsd, '-', color='red', label='autocov PSD (binned)' )
                 #ax.loglog( ffreq, fnoise, '.', color='green', label='FFT of the noise' )
                 ax.loglog( ffreqbin, fnoisebin, '.', color='green', label='FFT of the noise' )
                 #ax.loglog(freqs[det], psds[det], marker='+', c="blue", label='{}: rate={:0.1f} NET={:0.1f} fknee={:0.4f}, fmin={:0.4f}'.format(det, self.rates[det], self.NET[det], self.fknee[det], self.fmin[det]))
