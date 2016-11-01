@@ -29,61 +29,38 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
-    half = int(fftlen / 2)
+    half = fftlen // 2 + 1
     norm = rate * float(half)
-    df = rate / fftlen
 
-    interp_freq = np.linspace(df, df*half, num=half, endpoint=True)
-    loginterp_freq = np.log10(interp_freq)
-
-    # ignore zero frequency
-
-    good = (freq > 0.0)
-    rawfreq = freq[good]
-    rawpsd = psd[good]
-
-    lograwfreq = np.log10(rawfreq)
-    lograwpsd = np.log10(rawpsd)
+    interp_freq = np.fft.rfftfreq( fftlen, 1/rate )
 
     # Ensure that the input frequency range includes all the frequencies
     # we need.  Otherwise the extrapolation is not well defined.
 
-    if (rawfreq[0] > interp_freq[0]):
+    if np.amin(np.abs(freq)) > np.amin(np.abs(interp_freq[interp_freq!=0])):
         raise RuntimeError("input PSD does not go to low enough frequency to allow for interpolation")
-    if (np.absolute(interp_freq[-1] - rawfreq[-1]) > df):
+    if np.amax(np.abs(freq)) < np.amax(np.abs(interp_freq)):
         raise RuntimeError("input PSD does not go to high enough frequency to allow for interpolation")
 
     # interpolate
 
-    interp = si.interp1d(lograwfreq, lograwpsd, kind='linear', fill_value='extrapolate')
+    interp = si.interp1d(freq, psd, kind='linear', fill_value='extrapolate')
 
-    loginterp_psd = interp(loginterp_freq)
-
-    interp_psd = np.power(10.0, loginterp_psd)
-
-    # Set the zero frequency and Nyquist to zero.  Also set to zero
-    # modes at longer timescales than the length of the simulation.
-
-    cutoff = rate / float(samples)
-    interp_psd[(interp_freq < cutoff)] = 0.0
-    interp_psd[-1] = 0.0
+    interp_psd = interp(interp_freq)
 
     # gaussian Re/Im randoms
 
-    fdata = rng.random(fftlen, sampler="gaussian", key=(realization, stream), counter=(0,0))
+    fdata = rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(0,0)) + 1j*rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(0,0))
 
     # scale by PSD
 
     scale = np.sqrt(interp_psd * norm)
-
-    fdata[0] *= np.sqrt(2.0) * scale[0]
-    fdata[1:half] *= scale[0:-1]
-    fdata[half] *= np.sqrt(2.0) * scale[-1]
-    fdata[half+1:] *= scale[-2::-1]
+    scale[interp_freq == 0] *= np.sqrt(2)
+    fdata *= scale
 
     # inverse FFT
 
-    tdata = sft.irfft(fdata)
+    tdata = np.fft.irfft(fdata)
 
     # subtract the DC level- for just the samples that we are returning
 

@@ -190,7 +190,7 @@ class PSDTest(MPITestCase):
 
             (temp, freqs[det], psds[det]) = sim_noise_timestream(0, idet, nse.rate(det), self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
 
-            if True:
+            if False:
                 psdfreq = freqs[det]
                 psd = psds[det]
 
@@ -208,6 +208,10 @@ class PSDTest(MPITestCase):
                 #print(noisetod[:100])
             else:
                 noisetod = tod.cache.reference("noise_{}".format(det))
+
+            noisetod2 = noisetod.copy()
+            for i in range(1,noisetod.size):
+                noisetod[i] = .999*( noisetod[i-1] + noisetod2[i] - noisetod2[i-1] )
             
             autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), self.lagmax, self.stationary_period, fsamp, comm=self.comm)
             #autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), 10, self.stationary_period, fsamp, comm=self.comm)
