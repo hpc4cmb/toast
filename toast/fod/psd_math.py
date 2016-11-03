@@ -44,7 +44,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
     nsamp = signal.size
 
-    if lagmax > nsamp and rank > 0:
+    if lagmax > nsamp:
         raise RuntimeError('autocov_psd: Communicating TOD beyond nearest neighbors is not implemented. Reduce lagmax or the size of the MPI communicator.')
 
     if rank != ntask - 1:
