@@ -50,7 +50,7 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     # gaussian Re/Im randoms
 
-    fdata = rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(0,0)) + 1j*rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(0,0))
+    fdata = rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(0,0)) + 1j*rng.random(interp_psd.size, sampler="gaussian", key=(realization, stream), counter=(interp_psd.size,0))
 
     # scale by PSD
 
