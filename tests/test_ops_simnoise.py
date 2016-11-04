@@ -192,20 +192,32 @@ class OpSimNoiseTest(MPITestCase):
         psds = {}
         psdnorm = {}
         todvar = {}
-        # check = {}
-        # bns = []
-        # bval = self.rate / fftlen
-        # while bval < (self.rate / 2):
-        #     bns.append(bval)
-        #     bval *= 1.4
-        # bins = np.array(bns, dtype=np.float64)
-        # nbins = len(bins)
-        # print("nbins = ",nbins)
 
-        # checkfreq = np.fft.rfftfreq(fftlen, d=1/self.rate)
-        # print("checkfreq len = ",len(checkfreq))
-        # checkbinmap = np.searchsorted(bins, checkfreq, side='left')
-        # bcount = np.bincount(checkbinmap)
+        cfftlen = 2
+        while cfftlen <= ntod:
+            cfftlen *= 2
+
+        checkpsd = {}
+        binsamps = cfftlen // 4096
+        nbins = binsamps - 1
+        bstart = (self.rate / 2) / nbins
+        bins = np.linspace(bstart, self.rate / 2, num=(nbins-1), endpoint=True)
+        print("nbins = ",nbins)
+        print(bins)
+
+        checkfreq = np.fft.rfftfreq(cfftlen, d=1/self.rate)
+        print("checkfreq len = ",len(checkfreq))
+        print(checkfreq[:10])
+        print(checkfreq[-10:])
+        checkbinmap = np.searchsorted(bins, checkfreq, side='left')
+        print("checkbinmap len = ",len(checkbinmap))
+        print(checkbinmap[:10])
+        print(checkbinmap[-10:])
+        bcount = np.bincount(checkbinmap)
+        print("bcount len = ",len(bcount))
+        print(bcount)
+
+        bintruth = {}
 
         idet = 0
         for det in tod.local_dets:
@@ -219,7 +231,7 @@ class OpSimNoiseTest(MPITestCase):
             print("psd[{}] integral = {}".format(det, psdnorm[det]))
 
             todvar[det] = np.zeros(self.MC, dtype=np.float64)
-            # check[det] = np.zeros((nbins, self.MC), dtype=np.float64)
+            checkpsd[det] = np.zeros((nbins-1, self.MC), dtype=np.float64)
 
             idet += 1
 
@@ -241,6 +253,16 @@ class OpSimNoiseTest(MPITestCase):
                 savefile = os.path.join(self.outdir, "out_test_simnoise_psd_{}.png".format(det))
                 plt.savefig(savefile)
                 plt.close()
+
+                tmap = np.searchsorted(bins, freqs[det], side='left')
+                print("tmap = ",tmap)
+                tcount = np.bincount(tmap)
+                print("tcount = ",tcount)
+                tpsd = np.bincount(tmap, weights=psds[det])
+                print("tpsd = ",tpsd)
+                good = (tcount > 0)
+                tpsd[good] /= tcount[good]
+                bintruth[det] = tpsd
 
         for r in range(self.MC):
 
@@ -278,18 +300,20 @@ class OpSimNoiseTest(MPITestCase):
                 variance = np.vdot(td-dclevel, td-dclevel) / ntod
                 todvar[det][r] = variance
 
-                # # compute the PSD
-                # buffer = np.zeros(fftlen, dtype=np.float64)
-                # offset = (fftlen - len(td)) // 2
-                # buffer[offset:offset+len(td)] = td 
-                # checkpsd = np.abs(np.fft.rfft(buffer))**2 / self.rate
-                # print("checkpsd len = ",len(checkpsd))
-                # bpsd = np.bincount(checkbinmap, weights=checkpsd)
-                # bpsd /= bcount
-                # check[det][:,r] = bpsd
+                # compute the PSD
+                buffer = np.zeros(cfftlen, dtype=np.float64)
+                offset = (cfftlen - len(td)) // 2
+                buffer[offset:offset+len(td)] = td
+                rawpsd = np.fft.rfft(buffer)
+                norm = 1.0 / (self.rate * cfftlen)
+                norm *= 3**(0.25)
+                rawpsd = norm * np.abs(rawpsd)**2
+                bpsd = np.bincount(checkbinmap, weights=rawpsd)
+                good = (bcount > 0)
+                bpsd[good] /= bcount[good]
+                checkpsd[det][:,r] = bpsd[:]
 
             tod.cache.clear()
-
 
         if self.comm.rank == 0:
             np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod_var.txt"), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]], todvar[self.dets[4]]]), delimiter=' ')
@@ -309,7 +333,7 @@ class OpSimNoiseTest(MPITestCase):
                 fig = plt.figure(figsize=(12,8), dpi=72)
 
                 ax = fig.add_subplot(1, 1, 1, aspect='auto')
-                n, bins, patches = plt.hist(todvar[det], 10, range=(histmin, histmax), facecolor="magenta", alpha=0.75, label="{}:  PSD integral = {:0.1f} expected sigma = {:0.1f}".format(det, psdnorm[det], sig))
+                hn, hbins, hpatches = plt.hist(todvar[det], 10, range=(histmin, histmax), facecolor="magenta", alpha=0.75, label="{}:  PSD integral = {:0.1f} expected sigma = {:0.1f}".format(det, psdnorm[det], sig))
                 ax.legend(loc=1)
                 plt.title("Distribution of TOD Variance for {} Realizations".format(self.MC))
 
@@ -317,16 +341,23 @@ class OpSimNoiseTest(MPITestCase):
                 plt.savefig(savefile)
                 plt.close()
 
-                # fig = plt.figure(figsize=(12,8), dpi=72)
+                meanpsd = np.asarray([ np.mean(checkpsd[det][x,:]) for x in range(nbins-1) ])
+                print("Avg Ratio = ",np.mean(tpsd/meanpsd))
 
-                # ax = fig.add_subplot(1, 1, 1, aspect='auto')
-                # ax.scatter(np.repeat(bins, self.MC), check[det].flatten())
-                # ax.legend(loc=1)
-                # plt.title("Binned PSDs for {} Realizations".format(self.MC))
+                fig = plt.figure(figsize=(12,8), dpi=72)
 
-                # savefile = os.path.join(self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det))
-                # plt.savefig(savefile)
-                # plt.close()
+                ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                ax.plot(bins, bintruth[det], c='k')
+                ax.plot(bins, meanpsd, c='b', marker="o")
+                ax.scatter(np.repeat(bins, self.MC), checkpsd[det].flatten(), marker='x', color='r')
+                #ax.set_xscale('log')
+                #ax.set_yscale('log')
+                #ax.legend(loc=1)
+                plt.title("Binned PSDs for {} Realizations".format(self.MC))
+
+                savefile = os.path.join(self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det))
+                plt.savefig(savefile)
+                plt.close()
 
 
         # Verify that Parseval's theorem holds- that the variance of the TOD

@@ -30,7 +30,7 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
     while fftlen <= (oversample * samples):
         fftlen *= 2
     npsd = fftlen // 2 + 1
-    norm = rate * float(npsd)
+    norm = rate * float(npsd - 1)
 
     interp_freq = np.fft.rfftfreq( fftlen, 1/rate )
     if interp_freq.size != npsd:
@@ -85,7 +85,6 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
     # scale by PSD
 
     scale = np.sqrt(interp_psd * norm)
-    scale[-1] *= np.sqrt(2)
 
     fdata *= scale
 
