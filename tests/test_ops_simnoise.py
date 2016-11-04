@@ -90,8 +90,8 @@ class OpSimNoiseTest(MPITestCase):
 
         self.rates["high"] = self.rate
         self.fmin["high"] = 1.0e-5
-        self.fknee["high"] = 2.0
-        self.alpha["high"] = 1.0
+        self.fknee["high"] = 40.0
+        self.alpha["high"] = 2.0
         self.NET["high"] = 10.0
 
         self.totsamp = 100000
@@ -185,15 +185,27 @@ class OpSimNoiseTest(MPITestCase):
         # this replicates the calculation in sim_noise_timestream()
 
         fftlen = 2
-        half = 1
         while fftlen <= (self.oversample * self.chunksize):
             fftlen *= 2
-            half *= 2
 
         freqs = {}
         psds = {}
         psdnorm = {}
         todvar = {}
+        # check = {}
+        # bns = []
+        # bval = self.rate / fftlen
+        # while bval < (self.rate / 2):
+        #     bns.append(bval)
+        #     bval *= 1.4
+        # bins = np.array(bns, dtype=np.float64)
+        # nbins = len(bins)
+        # print("nbins = ",nbins)
+
+        # checkfreq = np.fft.rfftfreq(fftlen, d=1/self.rate)
+        # print("checkfreq len = ",len(checkfreq))
+        # checkbinmap = np.searchsorted(bins, checkfreq, side='left')
+        # bcount = np.bincount(checkbinmap)
 
         idet = 0
         for det in tod.local_dets:
@@ -207,9 +219,9 @@ class OpSimNoiseTest(MPITestCase):
             print("psd[{}] integral = {}".format(det, psdnorm[det]))
 
             todvar[det] = np.zeros(self.MC, dtype=np.float64)
+            # check[det] = np.zeros((nbins, self.MC), dtype=np.float64)
 
             idet += 1
-            
 
         if self.comm.rank == 0:
             import matplotlib.pyplot as plt
@@ -266,6 +278,16 @@ class OpSimNoiseTest(MPITestCase):
                 variance = np.vdot(td-dclevel, td-dclevel) / ntod
                 todvar[det][r] = variance
 
+                # # compute the PSD
+                # buffer = np.zeros(fftlen, dtype=np.float64)
+                # offset = (fftlen - len(td)) // 2
+                # buffer[offset:offset+len(td)] = td 
+                # checkpsd = np.abs(np.fft.rfft(buffer))**2 / self.rate
+                # print("checkpsd len = ",len(checkpsd))
+                # bpsd = np.bincount(checkbinmap, weights=checkpsd)
+                # bpsd /= bcount
+                # check[det][:,r] = bpsd
+
             tod.cache.clear()
 
 
@@ -280,7 +302,7 @@ class OpSimNoiseTest(MPITestCase):
                 np.savetxt(savefile, np.transpose([todvar[det]]), delimiter=' ')
 
                 sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
-                histrange = 4.0 * sig
+                histrange = 5.0 * sig
                 histmin = psdnorm[det] - histrange
                 histmax = psdnorm[det] + histrange
 
@@ -295,6 +317,17 @@ class OpSimNoiseTest(MPITestCase):
                 plt.savefig(savefile)
                 plt.close()
 
+                # fig = plt.figure(figsize=(12,8), dpi=72)
+
+                # ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                # ax.scatter(np.repeat(bins, self.MC), check[det].flatten())
+                # ax.legend(loc=1)
+                # plt.title("Binned PSDs for {} Realizations".format(self.MC))
+
+                # savefile = os.path.join(self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det))
+                # plt.savefig(savefile)
+                # plt.close()
+
 
         # Verify that Parseval's theorem holds- that the variance of the TOD
         # equals the integral of the PSD.  We do this for an ensemble of realizations
@@ -305,11 +338,13 @@ class OpSimNoiseTest(MPITestCase):
             sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
             over3sig = np.where(np.absolute(todvar[det] - psdnorm[det]) > 3.0*sig)[0]
             overfrac = float(len(over3sig)) / self.MC
-            print(overfrac)
-            if det != "high":
-                self.assertTrue(overfrac < 0.1)
+            print(det, " : ", overfrac)
+            if self.fknee[det] < 0.1:
+                pass
+                #self.assertTrue(overfrac < 0.1)
 
 
+        self.assertTrue(False)
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("simnoise test took {:.3f} s".format(elapsed))
