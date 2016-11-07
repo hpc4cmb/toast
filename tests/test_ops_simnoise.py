@@ -197,25 +197,28 @@ class OpSimNoiseTest(MPITestCase):
         while cfftlen <= ntod:
             cfftlen *= 2
 
+        #print("fftlen = ", fftlen)
+        #print("cfftlen = ", cfftlen)
+
         checkpsd = {}
         binsamps = cfftlen // 4096
         nbins = binsamps - 1
         bstart = (self.rate / 2) / nbins
         bins = np.linspace(bstart, self.rate / 2, num=(nbins-1), endpoint=True)
-        print("nbins = ",nbins)
-        print(bins)
+        #print("nbins = ",nbins)
+        #print(bins)
 
         checkfreq = np.fft.rfftfreq(cfftlen, d=1/self.rate)
-        print("checkfreq len = ",len(checkfreq))
-        print(checkfreq[:10])
-        print(checkfreq[-10:])
+        #print("checkfreq len = ",len(checkfreq))
+        #print(checkfreq[:10])
+        #print(checkfreq[-10:])
         checkbinmap = np.searchsorted(bins, checkfreq, side='left')
-        print("checkbinmap len = ",len(checkbinmap))
-        print(checkbinmap[:10])
-        print(checkbinmap[-10:])
+        #print("checkbinmap len = ",len(checkbinmap))
+        #print(checkbinmap[:10])
+        #print(checkbinmap[-10:])
         bcount = np.bincount(checkbinmap)
-        print("bcount len = ",len(bcount))
-        print(bcount)
+        #print("bcount len = ",len(bcount))
+        #print(bcount)
 
         bintruth = {}
 
@@ -255,11 +258,8 @@ class OpSimNoiseTest(MPITestCase):
                 plt.close()
 
                 tmap = np.searchsorted(bins, freqs[det], side='left')
-                print("tmap = ",tmap)
                 tcount = np.bincount(tmap)
-                print("tcount = ",tcount)
                 tpsd = np.bincount(tmap, weights=psds[det])
-                print("tpsd = ",tpsd)
                 good = (tcount > 0)
                 tpsd[good] /= tcount[good]
                 bintruth[det] = tpsd
@@ -305,9 +305,8 @@ class OpSimNoiseTest(MPITestCase):
                 offset = (cfftlen - len(td)) // 2
                 buffer[offset:offset+len(td)] = td
                 rawpsd = np.fft.rfft(buffer)
-                norm = 1.0 / (self.rate * cfftlen)
-                norm *= 3**(0.25)
-                rawpsd = norm * np.abs(rawpsd)**2
+                norm = 1.0 / (self.rate * self.totsamp)
+                rawpsd = norm * np.abs(rawpsd**2)
                 bpsd = np.bincount(checkbinmap, weights=rawpsd)
                 good = (bcount > 0)
                 bpsd[good] /= bcount[good]
@@ -342,22 +341,28 @@ class OpSimNoiseTest(MPITestCase):
                 plt.close()
 
                 meanpsd = np.asarray([ np.mean(checkpsd[det][x,:]) for x in range(nbins-1) ])
-                print("Avg Ratio = ",np.mean(tpsd/meanpsd))
 
                 fig = plt.figure(figsize=(12,8), dpi=72)
 
                 ax = fig.add_subplot(1, 1, 1, aspect='auto')
-                ax.plot(bins, bintruth[det], c='k')
-                ax.plot(bins, meanpsd, c='b', marker="o")
-                ax.scatter(np.repeat(bins, self.MC), checkpsd[det].flatten(), marker='x', color='r')
+                ax.plot(bins, bintruth[det], c='k', label="Input Truth")
+                ax.plot(bins, meanpsd, c='b', marker="o", label="Mean Binned PSD")
+                ax.scatter(np.repeat(bins, self.MC), checkpsd[det].flatten(), marker='x', color='r', label="Binned PSD")
                 #ax.set_xscale('log')
                 #ax.set_yscale('log')
-                #ax.legend(loc=1)
-                plt.title("Binned PSDs for {} Realizations".format(self.MC))
+                ax.legend(loc=1)
+                plt.title("Detector {} Binned PSDs for {} Realizations".format(det, self.MC))
 
                 savefile = os.path.join(self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det))
                 plt.savefig(savefile)
                 plt.close()
+
+                # The data will likely not be gaussian distributed.  Just check that the mean
+                # is "close enough" to the truth.
+                errest = np.absolute(np.mean((meanpsd - tpsd) / tpsd))
+                print("Det {} avg rel error = {}".format(det, errest))
+                if self.fknee[det] < 0.1:
+                    self.assertTrue(errest < 0.1)
 
 
         # Verify that Parseval's theorem holds- that the variance of the TOD
@@ -371,11 +376,9 @@ class OpSimNoiseTest(MPITestCase):
             overfrac = float(len(over3sig)) / self.MC
             print(det, " : ", overfrac)
             if self.fknee[det] < 0.1:
-                pass
-                #self.assertTrue(overfrac < 0.1)
+                self.assertTrue(overfrac < 0.1)
 
 
-        self.assertTrue(False)
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("simnoise test took {:.3f} s".format(elapsed))
