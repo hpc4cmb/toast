@@ -29,65 +29,72 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
-    half = int(fftlen / 2)
-    norm = rate * float(half)
-    df = rate / fftlen
+    npsd = fftlen // 2 + 1
+    norm = rate * float(npsd - 1)
 
-    interp_freq = np.linspace(df, df*half, num=half, endpoint=True)
-    loginterp_freq = np.log10(interp_freq)
-
-    # ignore zero frequency
-
-    good = (freq > 0.0)
-    rawfreq = freq[good]
-    rawpsd = psd[good]
-
-    lograwfreq = np.log10(rawfreq)
-    lograwpsd = np.log10(rawpsd)
+    interp_freq = np.fft.rfftfreq( fftlen, 1/rate )
+    if interp_freq.size != npsd:
+        raise RuntimeError("interpolated PSD frequencies do not have expected length")
 
     # Ensure that the input frequency range includes all the frequencies
     # we need.  Otherwise the extrapolation is not well defined.
 
-    if (rawfreq[0] > interp_freq[0]):
+    if np.amin(freq) < 0.0:
+        raise RuntimeError("input PSD frequencies should be >= zero")
+
+    if np.amin(psd) < 0.0:
+        raise RuntimeError("input PSD values should be >= zero")
+
+    increment = rate / fftlen
+
+    if freq[0] > increment:
         raise RuntimeError("input PSD does not go to low enough frequency to allow for interpolation")
-    if (np.absolute(interp_freq[-1] - rawfreq[-1]) > df):
-        raise RuntimeError("input PSD does not go to high enough frequency to allow for interpolation")
 
-    # interpolate
+    nyquist = rate / 2
+    if np.abs(freq[-1] - nyquist) > increment:
+        raise RuntimeError("last frequency element does not match Nyquist frequency for given sample rate")
 
-    interp = si.interp1d(lograwfreq, lograwpsd, kind='linear', fill_value='extrapolate')
+    # Perform a logarithmic interpolation.  In order to avoid zero values, we 
+    # shift the PSD by a fixed amount in frequency and amplitude.
 
+    psdshift = 0.01 * np.amin(psd[(psd > 0.0)])
+    freqshift = increment
+
+    loginterp_freq = np.log10(interp_freq + freqshift)
+    logfreq = np.log10(freq + freqshift)
+    logpsd = np.log10(psd + psdshift)
+
+    interp = si.interp1d(logfreq, logpsd, kind='linear', fill_value='extrapolate')
+    
     loginterp_psd = interp(loginterp_freq)
+    interp_psd = np.power(10.0, loginterp_psd) - psdshift
 
-    interp_psd = np.power(10.0, loginterp_psd)
+    # Zero out DC value
 
-    # Set the zero frequency and Nyquist to zero.  Also set to zero
-    # modes at longer timescales than the length of the simulation.
+    interp_psd[0] = 0.0
 
-    cutoff = rate / float(samples)
-    interp_psd[(interp_freq < cutoff)] = 0.0
-    interp_psd[-1] = 0.0
+    # gaussian Re/Im randoms, packed into a complex valued array
 
-    # gaussian Re/Im randoms
+    rngdata = rng.random(2*npsd, sampler="gaussian", key=(realization, stream), counter=(0,0))
+    fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
 
-    fdata = rng.random(fftlen, sampler="gaussian", key=(realization, stream), counter=(0,0))
+    # set the Nyquist frequency imaginary part to zero
+
+    fdata[-1] = fdata[-1].real + 0.0j
 
     # scale by PSD
 
     scale = np.sqrt(interp_psd * norm)
 
-    fdata[0] *= np.sqrt(2.0) * scale[0]
-    fdata[1:half] *= scale[0:-1]
-    fdata[half] *= np.sqrt(2.0) * scale[-1]
-    fdata[half+1:] *= scale[-2::-1]
+    fdata *= scale
 
     # inverse FFT
 
-    tdata = sft.irfft(fdata)
+    tdata = np.fft.irfft(fdata)
 
     # subtract the DC level- for just the samples that we are returning
 
-    offset = int((fftlen - samples) / 2)
+    offset = (fftlen - samples) // 2
 
     DC = np.mean(tdata[offset:offset+samples])
     tdata[offset:offset+samples] -= DC
@@ -95,7 +102,6 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
     # return the timestream and interpolated PSD for debugging.
     
     return (tdata[offset:offset+samples], interp_freq, interp_psd)
-
 
 
 class OpSimNoise(Operator):

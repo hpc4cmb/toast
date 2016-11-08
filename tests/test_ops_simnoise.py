@@ -90,8 +90,8 @@ class OpSimNoiseTest(MPITestCase):
 
         self.rates["high"] = self.rate
         self.fmin["high"] = 1.0e-5
-        self.fknee["high"] = 2.0
-        self.alpha["high"] = 1.0
+        self.fknee["high"] = 40.0
+        self.alpha["high"] = 2.0
         self.NET["high"] = 10.0
 
         self.totsamp = 100000
@@ -185,15 +185,42 @@ class OpSimNoiseTest(MPITestCase):
         # this replicates the calculation in sim_noise_timestream()
 
         fftlen = 2
-        half = 1
         while fftlen <= (self.oversample * self.chunksize):
             fftlen *= 2
-            half *= 2
 
         freqs = {}
         psds = {}
         psdnorm = {}
         todvar = {}
+
+        cfftlen = 2
+        while cfftlen <= ntod:
+            cfftlen *= 2
+
+        #print("fftlen = ", fftlen)
+        #print("cfftlen = ", cfftlen)
+
+        checkpsd = {}
+        binsamps = cfftlen // 4096
+        nbins = binsamps - 1
+        bstart = (self.rate / 2) / nbins
+        bins = np.linspace(bstart, self.rate / 2, num=(nbins-1), endpoint=True)
+        #print("nbins = ",nbins)
+        #print(bins)
+
+        checkfreq = np.fft.rfftfreq(cfftlen, d=1/self.rate)
+        #print("checkfreq len = ",len(checkfreq))
+        #print(checkfreq[:10])
+        #print(checkfreq[-10:])
+        checkbinmap = np.searchsorted(bins, checkfreq, side='left')
+        #print("checkbinmap len = ",len(checkbinmap))
+        #print(checkbinmap[:10])
+        #print(checkbinmap[-10:])
+        bcount = np.bincount(checkbinmap)
+        #print("bcount len = ",len(bcount))
+        #print(bcount)
+
+        bintruth = {}
 
         idet = 0
         for det in tod.local_dets:
@@ -207,9 +234,9 @@ class OpSimNoiseTest(MPITestCase):
             print("psd[{}] integral = {}".format(det, psdnorm[det]))
 
             todvar[det] = np.zeros(self.MC, dtype=np.float64)
+            checkpsd[det] = np.zeros((nbins-1, self.MC), dtype=np.float64)
 
             idet += 1
-            
 
         if self.comm.rank == 0:
             import matplotlib.pyplot as plt
@@ -229,6 +256,13 @@ class OpSimNoiseTest(MPITestCase):
                 savefile = os.path.join(self.outdir, "out_test_simnoise_psd_{}.png".format(det))
                 plt.savefig(savefile)
                 plt.close()
+
+                tmap = np.searchsorted(bins, freqs[det], side='left')
+                tcount = np.bincount(tmap)
+                tpsd = np.bincount(tmap, weights=psds[det])
+                good = (tcount > 0)
+                tpsd[good] /= tcount[good]
+                bintruth[det] = tpsd
 
         for r in range(self.MC):
 
@@ -266,8 +300,19 @@ class OpSimNoiseTest(MPITestCase):
                 variance = np.vdot(td-dclevel, td-dclevel) / ntod
                 todvar[det][r] = variance
 
-            tod.cache.clear()
+                # compute the PSD
+                buffer = np.zeros(cfftlen, dtype=np.float64)
+                offset = (cfftlen - len(td)) // 2
+                buffer[offset:offset+len(td)] = td
+                rawpsd = np.fft.rfft(buffer)
+                norm = 1.0 / (self.rate * self.totsamp)
+                rawpsd = norm * np.abs(rawpsd**2)
+                bpsd = np.bincount(checkbinmap, weights=rawpsd)
+                good = (bcount > 0)
+                bpsd[good] /= bcount[good]
+                checkpsd[det][:,r] = bpsd[:]
 
+            tod.cache.clear()
 
         if self.comm.rank == 0:
             np.savetxt(os.path.join(self.outdir,"out_test_simnoise_tod_var.txt"), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]], todvar[self.dets[4]]]), delimiter=' ')
@@ -280,20 +325,44 @@ class OpSimNoiseTest(MPITestCase):
                 np.savetxt(savefile, np.transpose([todvar[det]]), delimiter=' ')
 
                 sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
-                histrange = 4.0 * sig
+                histrange = 5.0 * sig
                 histmin = psdnorm[det] - histrange
                 histmax = psdnorm[det] + histrange
 
                 fig = plt.figure(figsize=(12,8), dpi=72)
 
                 ax = fig.add_subplot(1, 1, 1, aspect='auto')
-                n, bins, patches = plt.hist(todvar[det], 10, range=(histmin, histmax), facecolor="magenta", alpha=0.75, label="{}:  PSD integral = {:0.1f} expected sigma = {:0.1f}".format(det, psdnorm[det], sig))
+                hn, hbins, hpatches = plt.hist(todvar[det], 10, range=(histmin, histmax), facecolor="magenta", alpha=0.75, label="{}:  PSD integral = {:0.1f} expected sigma = {:0.1f}".format(det, psdnorm[det], sig))
                 ax.legend(loc=1)
                 plt.title("Distribution of TOD Variance for {} Realizations".format(self.MC))
 
                 savefile = os.path.join(self.outdir, "out_test_simnoise_tod_var_{}.png".format(det))
                 plt.savefig(savefile)
                 plt.close()
+
+                meanpsd = np.asarray([ np.mean(checkpsd[det][x,:]) for x in range(nbins-1) ])
+
+                fig = plt.figure(figsize=(12,8), dpi=72)
+
+                ax = fig.add_subplot(1, 1, 1, aspect='auto')
+                ax.plot(bins, bintruth[det], c='k', label="Input Truth")
+                ax.plot(bins, meanpsd, c='b', marker="o", label="Mean Binned PSD")
+                ax.scatter(np.repeat(bins, self.MC), checkpsd[det].flatten(), marker='x', color='r', label="Binned PSD")
+                #ax.set_xscale('log')
+                #ax.set_yscale('log')
+                ax.legend(loc=1)
+                plt.title("Detector {} Binned PSDs for {} Realizations".format(det, self.MC))
+
+                savefile = os.path.join(self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det))
+                plt.savefig(savefile)
+                plt.close()
+
+                # The data will likely not be gaussian distributed.  Just check that the mean
+                # is "close enough" to the truth.
+                errest = np.absolute(np.mean((meanpsd - tpsd) / tpsd))
+                print("Det {} avg rel error = {}".format(det, errest))
+                if self.fknee[det] < 0.1:
+                    self.assertTrue(errest < 0.1)
 
 
         # Verify that Parseval's theorem holds- that the variance of the TOD
@@ -305,8 +374,8 @@ class OpSimNoiseTest(MPITestCase):
             sig = np.mean(todvar[det]) * np.sqrt(2.0/(self.chunksize-1))
             over3sig = np.where(np.absolute(todvar[det] - psdnorm[det]) > 3.0*sig)[0]
             overfrac = float(len(over3sig)) / self.MC
-            print(overfrac)
-            if det != "high":
+            print(det, " : ", overfrac)
+            if self.fknee[det] < 0.1:
                 self.assertTrue(overfrac < 0.1)
 
 
