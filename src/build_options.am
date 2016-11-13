@@ -7,6 +7,13 @@ else
   AM_CXXFLAGS += -DNDEBUG
 endif
 
+# OpenMP
+
+if HAVE_AM_OPENMP
+  AM_CXXFLAGS += $(OPENMP_CXXFLAGS)
+  AM_LIBS += $(OPENMP_CXXFLAGS)
+endif
+
 
 # Always need the C math library
 
