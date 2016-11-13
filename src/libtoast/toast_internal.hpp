@@ -4,18 +4,17 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
+#ifndef TOAST_INTERNAL_HPP
+#define TOAST_INTERNAL_HPP
 
-#ifndef TOAST_TEST_HPP
-#define TOAST_TEST_HPP
-
-#include <toast_internal.hpp>
-
-#include <gtest/gtest.h>
-
-// #include <ctoast.h>
+#include <config.h>
+#include <toast.hpp>
 
 
+namespace toast {
 
+
+}
 
 
 #endif

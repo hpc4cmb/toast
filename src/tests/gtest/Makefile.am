@@ -5,8 +5,7 @@ AM_CPPFLAGS = \
 -I$(top_srcdir)/src/tests/gtest
 
 AM_CFLAGS =
-AM_CXXFLAGS =
-AM_FCFLAGS =
+AM_CXXFLAGS = -DGTEST_HAS_PTHREAD=0
 
 AM_LDFLAGS = 
 
@@ -17,6 +16,7 @@ include $(top_srcdir)/src/build_options.am
 
 
 noinst_HEADERS = \
+	gtest-internal-inl.h \
 	gtest/gtest-death-test.h \
 	gtest/gtest-message.h \
 	gtest/gtest-param-test.h \

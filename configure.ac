@@ -69,6 +69,17 @@ dnl | This is a C++ project...
 dnl +------------------------------------------------
 AC_LANG([C++])
 dnl +------------------------------------------------
+dnl | Check for OpenMP
+dnl +------------------------------------------------
+toast_openmp=yes
+ax_have_openmp=no
+AC_ARG_ENABLE(openmp, [AC_HELP_STRING([--disable-openmp], [Disable OpenMP])], [toast_openmp=$enable_openmp])
+if test $toast_openmp != no; then
+  AX_OPENMP([ax_have_openmp=yes;AC_DEFINE(HAVE_OPENMP,1,[Define if OpenMP is enabled])])
+fi
+AC_SUBST([OPENMP_CXXFLAGS])
+AM_CONDITIONAL([HAVE_AM_OPENMP], [test $ax_have_openmp = yes])
+dnl +------------------------------------------------
 dnl | Check for MPI
 dnl +------------------------------------------------
 toast_mpi=yes
@@ -133,6 +144,11 @@ AC_MSG_NOTICE([  Serial C++ Compiler       : $CXX])
 AC_MSG_NOTICE([  C++ Compile Flags         : $CXXFLAGS])
 AC_MSG_NOTICE([  Serial C Compiler         : $CC])
 AC_MSG_NOTICE([  C Compile Flags           : $CFLAGS])
+if test x"${ax_have_openmp}" = xyes; then
+  AC_MSG_NOTICE([  OpenMP                    : Detected ($OPENMP_CXXFLAGS)])
+else
+  AC_MSG_NOTICE([  OpenMP                    : Disabled])
+fi
 if test $toast_mpi = yes; then
   AC_MSG_NOTICE([  MPI C++ Compiler          : $MPICXX])
   AC_MSG_NOTICE([  MPI C Compiler            : $MPICC])
