@@ -1,0 +1,13 @@
+
+# Enable debugging
+
+if ENABLE_AM_DEBUG
+else
+  AM_CFLAGS += -DNDEBUG
+  AM_CXXFLAGS += -DNDEBUG
+endif
+
+
+# Always need the C math library
+
+AM_LIBS += -lm
