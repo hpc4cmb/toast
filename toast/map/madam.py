@@ -17,6 +17,8 @@ import unittest
 import numpy as np
 import numpy.ctypeslib as npc
 
+import healpy as hp
+
 from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
@@ -86,6 +88,8 @@ class OpMadam(Operator):
             detector.
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
+        pixels_nested (bool): Set to False if the pixel numbers are in ring ordering.
+            Default is True.
         weights (str): the name of the cache object (<weights>_<detector>)
             containing the pointing weights to use.
         name (str): the name of the cache object (<name>_<detector>) to
@@ -113,7 +117,7 @@ class OpMadam(Operator):
     """
 
     def __init__(self, params={}, timestamps_name=None, detweights=None,
-                 pixels='pixels', weights='weights', name=None, name_out=None,
+                 pixels='pixels', pixels_nested=True, weights='weights', name=None, name_out=None,
                  flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255,
                  apply_flags=True, purge=False, dets=None, mcmode=False):
         
@@ -129,6 +133,7 @@ class OpMadam(Operator):
         self._common_flag_name = common_flag_name
         self._common_flag_mask = common_flag_mask
         self._pixels = pixels
+        self._pixels_nested = pixels_nested
         self._weights = weights
         self._detw = detweights
         self._purge = purge
@@ -234,7 +239,11 @@ class OpMadam(Operator):
         # for some slice of time.  So we can get this information from the
         # shape of the data from the first detector
 
-        nnzname = "{}_{}".format(self._weights, tod.detectors[0])
+        if 'nside_map' not in self._params:
+            raise RuntimeError('OpMadam: "nside_map" must be set in the parameter dictionary')
+        nside = self._params['nside_map']
+
+        nnzname = "{}_{}".format(self._weights, detectors[0])
         nnz_full = tod.cache.reference(nnzname).shape[1]
 
         if 'temperature_only' in self._params and self._params['temperature_only'] in ['T','True','TRUE','true',True]:
@@ -303,6 +312,11 @@ class OpMadam(Operator):
             weightsname = "{}_{}".format(self._weights, detectors[d])
             pixels = tod.cache.reference(pixelsname)
             weights = tod.cache.reference(weightsname)
+
+            if not self._pixels_nested:
+                # Madam expects the pixels to be in nested ordering
+                pixels = pixels.copy() # Don't change the cached pixel numbers
+                pixels = hp.ring2nest( nside, pixels )
 
             if self._apply_flags:
                 pixels = pixels.copy() # Don't change the cached pixel numbers
