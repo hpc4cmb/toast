@@ -123,8 +123,8 @@ dnl | Set outputs
 dnl +------------------------------------------------
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([src/Makefile])
-#AC_CONFIG_FILES([src/libtoast/Makefile])
-#AC_CONFIG_FILES([src/libtoast/fakempi/Makefile])
+AC_CONFIG_FILES([src/libtoast/Makefile])
+AC_CONFIG_FILES([src/libtoast/fakempi/Makefile])
 #AC_CONFIG_FILES([src/libtoast/math/Makefile])
 #AC_CONFIG_FILES([src/libtoast/tod/Makefile])
 #AC_CONFIG_FILES([src/python/Makefile])
