@@ -14,7 +14,11 @@ if HAVE_AM_OPENMP
   AM_LIBS += $(OPENMP_CXXFLAGS)
 endif
 
+# FFTW
+
+AM_CPPFLAGS += $(FFTW_CPPFLAGS)
+AM_LIBS += $(FFTW) $(PTHREAD_LIBS)
 
 # Always need the C math library
 
-AM_LIBS += -lm
+AM_LIBS += $(MATH)
