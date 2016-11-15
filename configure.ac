@@ -60,6 +60,10 @@ dnl | C support
 dnl +-------------------------
 AC_PROG_CC
 dnl +-------------------------
+dnl | pthread support
+dnl +-------------------------
+AX_PTHREAD
+dnl +-------------------------
 dnl | C++ support
 dnl +-------------------------
 AC_PROG_CXX
@@ -108,6 +112,18 @@ if test x"$enable_debug" = x"yes"; then
 fi
 AM_CONDITIONAL([ENABLE_AM_DEBUG], [test $toast_debug = yes])
 dnl +------------------------------------------------
+dnl | Check for the C math library
+dnl +------------------------------------------------
+AC_LANG_PUSH([C])
+ACX_MATH
+AC_LANG_POP([C])
+dnl +------------------------------------------------
+dnl | Check for FFTW
+dnl +------------------------------------------------
+AC_LANG_PUSH([C])
+ACX_FFTW
+AC_LANG_POP([C])
+dnl +------------------------------------------------
 dnl | Check for Python
 dnl +------------------------------------------------
 AC_LANG_PUSH([C])
@@ -144,6 +160,8 @@ AC_MSG_NOTICE([  Serial C++ Compiler       : $CXX])
 AC_MSG_NOTICE([  C++ Compile Flags         : $CXXFLAGS])
 AC_MSG_NOTICE([  Serial C Compiler         : $CC])
 AC_MSG_NOTICE([  C Compile Flags           : $CFLAGS])
+AC_MSG_NOTICE([  Pthreads compile          : $PTHREAD_CFLAGS])
+AC_MSG_NOTICE([  Pthreads link             : $PTHREAD_LIBS])
 if test x"${ax_have_openmp}" = xyes; then
   AC_MSG_NOTICE([  OpenMP                    : Detected ($OPENMP_CXXFLAGS)])
 else
@@ -155,6 +173,13 @@ if test $toast_mpi = yes; then
 else
   AC_MSG_NOTICE([  MPI C++ Compiler          : Not found, using fake MPI])
   AC_MSG_NOTICE([  MPI C Compiler            : Not found, using fake MPI])
+fi
+AC_MSG_NOTICE([  C math library            : $MATH])
+if test $acx_fftw_ok = no; then
+  AC_MSG_NOTICE([  FFTW                      : Not found])
+else
+  AC_MSG_NOTICE([  FFTW compile              : $FFTW_CPPFLAGS])
+  AC_MSG_NOTICE([  FFTW link                 : $FFTW])
 fi
 if test $toast_python = yes; then
   AC_MSG_NOTICE([  Python                    : $PYTHON])
