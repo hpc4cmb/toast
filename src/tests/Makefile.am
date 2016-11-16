@@ -14,10 +14,8 @@ AM_CXXFLAGS =
 AM_LDFLAGS = 
 
 AM_LIBS = \
-$(top_builddir)/src/tests/gtest/libtoast_gtest.la
-
-# \
-#$(top_builddir)/src/libtoast/libtoast.la
+$(top_builddir)/src/tests/gtest/libtoast_gtest.la \
+$(top_builddir)/src/libtoast/libtoast.la
 
 # Add check flags
 
