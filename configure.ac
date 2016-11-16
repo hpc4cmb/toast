@@ -67,22 +67,10 @@ dnl +-------------------------
 dnl | C++ support
 dnl +-------------------------
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
 dnl +------------------------------------------------
 dnl | This is a C++ project...
 dnl +------------------------------------------------
 AC_LANG([C++])
-dnl +------------------------------------------------
-dnl | Check for OpenMP
-dnl +------------------------------------------------
-toast_openmp=yes
-ax_have_openmp=no
-AC_ARG_ENABLE(openmp, [AC_HELP_STRING([--disable-openmp], [Disable OpenMP])], [toast_openmp=$enable_openmp])
-if test $toast_openmp != no; then
-  AX_OPENMP([ax_have_openmp=yes;AC_DEFINE(HAVE_OPENMP,1,[Define if OpenMP is enabled])])
-fi
-AC_SUBST([OPENMP_CXXFLAGS])
-AM_CONDITIONAL([HAVE_AM_OPENMP], [test $ax_have_openmp = yes])
 dnl +------------------------------------------------
 dnl | Check for MPI
 dnl +------------------------------------------------
@@ -101,7 +89,28 @@ if test $toast_mpi = yes; then
     fi
   fi
 fi
-AM_CONDITIONAL([HAVE_AM_MPI], [test toast_mpi = yes])
+if test $toast_mpi = yes; then
+  CC="$MPICC"
+  CCLD="$MPICC"
+  CXX="$MPICXX"
+  CXXLD="$MPICXX"
+fi
+AM_CONDITIONAL([HAVE_AM_MPI], [test $toast_mpi = yes])
+dnl +------------------------------------------------
+dnl | Check for C++11 language support
+dnl +------------------------------------------------
+AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
+dnl +------------------------------------------------
+dnl | Check for OpenMP
+dnl +------------------------------------------------
+toast_openmp=yes
+ax_have_openmp=no
+AC_ARG_ENABLE(openmp, [AC_HELP_STRING([--disable-openmp], [Disable OpenMP])], [toast_openmp=$enable_openmp])
+if test $toast_openmp != no; then
+  AX_OPENMP([ax_have_openmp=yes;AC_DEFINE(HAVE_OPENMP,1,[Define if OpenMP is enabled])])
+fi
+AC_SUBST([OPENMP_CXXFLAGS])
+AM_CONDITIONAL([HAVE_AM_OPENMP], [test $ax_have_openmp = yes])
 dnl +-------------------------
 dnl | Should we enable expensive debugging checks?
 dnl +-------------------------
@@ -171,8 +180,8 @@ if test $toast_mpi = yes; then
   AC_MSG_NOTICE([  MPI C++ Compiler          : $MPICXX])
   AC_MSG_NOTICE([  MPI C Compiler            : $MPICC])
 else
-  AC_MSG_NOTICE([  MPI C++ Compiler          : Not found, using fake MPI])
-  AC_MSG_NOTICE([  MPI C Compiler            : Not found, using fake MPI])
+  AC_MSG_NOTICE([  MPI C++ Compiler          : Disabled, using fake MPI])
+  AC_MSG_NOTICE([  MPI C Compiler            : Disabled, using fake MPI])
 fi
 AC_MSG_NOTICE([  C math library            : $MATH])
 if test $acx_fftw_ok = no; then

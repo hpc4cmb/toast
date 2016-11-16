@@ -6,15 +6,11 @@ else
   SUBDIRS += fakempi
 endif
 
+
 # Initialize compile and linking flags
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast
-
-if HAVE_AM_MPI
-else
-  AM_CPPFLAGS += -I$(top_srcdir)/src/libtoast/fakempi
-endif
 
 AM_CFLAGS =
 AM_CXXFLAGS =
@@ -38,11 +34,13 @@ lib_LTLIBRARIES = libtoast.la
 
 libtoast_la_includedir = $(includedir)/toast
 
-libtoast_la_include_HEADERS = 
+libtoast_la_include_HEADERS = \
+    toast/memory.hpp
 	
 
 libtoast_la_SOURCES = \
-toast.cpp
+toast.cpp \
+toast_memory.cpp
 
 
 libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@

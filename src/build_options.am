@@ -1,4 +1,11 @@
 
+# Are we using our own fake MPI?
+
+if HAVE_AM_MPI
+else
+  AM_CPPFLAGS += -I$(top_srcdir)/src/libtoast/fakempi
+endif
+
 # Enable debugging
 
 if ENABLE_AM_DEBUG
