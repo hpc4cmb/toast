@@ -8,14 +8,14 @@ a BSD-style license that can be found in the LICENSE file.
 #define TOAST_MEMORY_HPP
 
 
-namespace toast {
+namespace toast { namespace mem {
 
     // Byte alignment for SIMD.  This should work for all modern systems, 
-    //including MIC
+    // including MIC
     static size_t const SIMD_ALIGN = 64;
 
-    void * aligned_mem_alloc ( size_t size, size_t align );
-    void aligned_mem_free ( void * ptr );
+    void * aligned_alloc ( size_t size, size_t align );
+    void aligned_free ( void * ptr );
   
     template < typename T >
     class simd_allocator {
@@ -62,7 +62,7 @@ namespace toast {
 
             // allocate but don't initialize num elements of type T
             pointer allocate ( size_type const num, const void *hint=0 ) {
-                pointer align_ptr = static_cast < pointer > ( aligned_mem_alloc ( num * sizeof(T), SIMD_ALIGN ) );
+                pointer align_ptr = static_cast < pointer > ( aligned_alloc ( num * sizeof(T), SIMD_ALIGN ) );
                 return align_ptr;
             }
 
@@ -80,7 +80,7 @@ namespace toast {
 
             // deallocate storage p of deleted elements
             void deallocate ( pointer p, size_type num ) {
-                aligned_mem_free ( static_cast < void * > (p) );
+                aligned_free ( static_cast < void * > (p) );
             }
 
     };
@@ -97,7 +97,7 @@ namespace toast {
     }
 
 
-}
+} }
 
 #endif
 

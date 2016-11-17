@@ -4,10 +4,11 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
-#ifndef TOAST_HPP
-#define TOAST_HPP
+#ifndef TOAST_MATH_INTERNAL_HPP
+#define TOAST_MATH_INTERNAL_HPP
 
-#include <mpi.h>
+#include <config.h>
+#include <toast/math.hpp>
 
 
 namespace toast {
@@ -15,7 +16,5 @@ namespace toast {
 
 }
 
-#include <toast/math.hpp>
 
 #endif
-
