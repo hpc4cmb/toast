@@ -4,23 +4,20 @@
 
 
 import os
+import unittest
+import ctypes as ct
+from ctypes.util import find_library
+
 if 'TOAST_NO_MPI' in os.environ.keys():
     from .. import fakempi as MPI
 else:
     from mpi4py import MPI
 
-import ctypes as ct
-from ctypes.util import find_library
-
-import unittest
-
 import healpy as hp
-
 import numpy as np
 import numpy.ctypeslib as npc
 
 from . import qarray as qa
-
 from ..dist import Comm, Data
 from ..operator import Operator
 from ..tod import TOD
@@ -35,7 +32,10 @@ try:
     else:
         MPI_Comm = ct.c_void_p
 except Exception as e:
-    raise Exception('Failed to set the portable MPI communicator datatype. MPI4py is probably too old. You need to have at least version 2.0. ({})'.format(e))
+    raise Exception(
+        'Failed to set the portable MPI communicator datatype. MPI4py is '
+        'probably too old. You need to have at least version 2.0. ({})'
+        ''.format(e))
 
 libconviqt = None
 if 'TOAST_NO_MPI' not in os.environ.keys():
@@ -158,30 +158,34 @@ class OpSimConviqt(Operator):
     """
     Operator which uses libconviqt to generate beam-convolved timestreams.
 
-    This passes through each observation and loops over each detector.  
+    This passes through each observation and loops over each detector.
     For each detector, it produces the beam-convolved timestream.
 
     Args:
-        lmax (int): Maximum ell (and m). Actual resolution in the Healpix FITS 
+        lmax (int): Maximum ell (and m). Actual resolution in the Healpix FITS
             file may differ.
-        beammmax (int): beam maximum m. Actual resolution in the Healpix FITS file 
+        beammmax (int): beam maximum m. Actual resolution in the Healpix FITS file
             may differ.
-        detectordata (list): list of (detector_name, detector_sky_file, 
+        detectordata (list): list of (detector_name, detector_sky_file,
             detector_beam_file, epsilon, psipol[radian]) tuples
         pol (bool) : boolean to determine if polarized simulation is needed
-        fwhm (float) : width of a symmetric gaussian beam [in arcmin] already 
+        fwhm (float) : width of a symmetric gaussian beam [in arcmin] already
             present in the skyfile (will be deconvolved away).
         order (int) : conviqt order parameter (expert mode)
         calibrate (bool) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
-        dxx (bool) : The beam frame is either Dxx or Pxx. Pxx includes the 
-            rotation to polarization sensitive basis, Dxx does not.  When 
-            Dxx=True, detector orientation from attitude quaternions is 
+        dxx (bool) : The beam frame is either Dxx or Pxx. Pxx includes the
+            rotation to polarization sensitive basis, Dxx does not.  When
+            Dxx=True, detector orientation from attitude quaternions is
             corrected for the polarization angle.
         out (str): the name of the cache object (<name>_<detector>) to
             use for output of the detector timestream.
     """
 
-    def __init__(self, lmax, beammmax, detectordata, pol=True, fwhm=4.0, order=13, calibrate=True, dxx=True, out='conviqt', quat_name=None, flag_name=None, flag_mask=255, common_flag_name=None, common_flag_mask=255, apply_flags=False):
+    def __init__(
+            self, lmax, beammmax, detectordata, pol=True, fwhm=4.0, order=13,
+            calibrate=True, dxx=True, out='conviqt', quat_name=None,
+            flag_name=None, flag_mask=255, common_flag_name=None,
+            common_flag_mask=255, apply_flags=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -204,7 +208,6 @@ class OpSimConviqt(Operator):
         self._apply_flags = apply_flags
 
         self._out = out
-        
 
     @property
     def available(self):
@@ -212,7 +215,6 @@ class OpSimConviqt(Operator):
         (bool): True if libconviqt is found in the library search path.
         """
         return (libconviqt is not None)
-
 
     def exec(self, data):
         """
@@ -238,7 +240,7 @@ class OpSimConviqt(Operator):
         #crank = comm.comm_rank
 
         xaxis, yaxis, zaxis = np.eye(3)
-        nullquat = np.array([0,0,0,1], dtype=np.float64)
+        nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         for obs in data.obs:
             tod = obs['tod']
@@ -248,26 +250,33 @@ class OpSimConviqt(Operator):
             comm = MPI_Comm.from_address(comm_ptr)
 
             for det in tod.local_dets:
-
                 try:
                     skyfile, beamfile, epsilon, psipol = self._detectordata[det]
                 except:
-                    raise Exception('ERROR: conviqt object not initialized to convolve detector {}. Available detectors are {}'.format(det, self._detectordata.keys()))
+                    raise Exception(
+                        'ERROR: conviqt object not initialized to convolve '
+                        'detector {}. Available detectors are {}'.format(
+                            det, self._detectordata.keys()))
                     
                 sky = libconviqt.conviqt_sky_new()
-                err = libconviqt.conviqt_sky_read(sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm)
+                err = libconviqt.conviqt_sky_read(
+                    sky, self._lmax, self._pol, skyfile.encode(), self._fwhm,
+                    comm)
                 if err != 0: raise Exception('Failed to load ' + skyfile)
 
                 beam = libconviqt.conviqt_beam_new()
-                err = libconviqt.conviqt_beam_read(beam, self._lmax, self._beammmax, self._pol, beamfile.encode(), comm)
+                err = libconviqt.conviqt_beam_read(
+                    beam, self._lmax, self._beammmax,
+                    self._pol, beamfile.encode(), comm)
                 if err != 0: raise Exception('Failed to load ' + beamfile)
 
                 detector = libconviqt.conviqt_detector_new_with_id(det.encode())
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
                 
-                # We need the three pointing angles to describe the pointing. read_pntg returns the attitude quaternions.
+                # We need the three pointing angles to describe the
+                # pointing. read_pntg returns the attitude quaternions.
                 if self._quat_name is not None:
-                    cachename = '{}_{}'.format( self._quat_name, det )
+                    cachename = '{}_{}'.format(self._quat_name, det)
                     pdata = tod.cache.reference(cachename).copy()
                 else:
                     pdata = tod.read_pntg(detector=det).copy()
@@ -277,7 +286,7 @@ class OpSimConviqt(Operator):
                     if self._common_flag_name is not None:
                         common = tod.cache.reference(self._common_flag_name)
                     if self._flag_name is not None:
-                        cachename = '{}_{}'.format( self._flag_name, det )
+                        cachename = '{}_{}'.format(self._flag_name, det)
                         flags = tod.cache.reference(cachename)
                     else:
                         flags, common_temp = tod.read_flags(detector=det)
@@ -290,17 +299,20 @@ class OpSimConviqt(Operator):
                     totflags |= common
                     pdata[totflags != 0] = nullquat
 
-                theta, phi, psi = quat2angle( pdata )
+                theta, phi, psi = quat2angle(pdata)
                 
-                # Is the psi angle in Pxx or Dxx? Pxx will include the detector polarization angle, Dxx will not.
+                # Is the psi angle in Pxx or Dxx? Pxx will include the
+                # detector polarization angle, Dxx will not.
 
                 if self._dxx:
                     psi -= psipol
 
                 pnt = libconviqt.conviqt_pointing_new()
 
-                err = libconviqt.conviqt_pointing_alloc( pnt, tod.local_samples[1]*5 )
-                if err != 0: raise Exception('Failed to allocate pointing array')
+                err = libconviqt.conviqt_pointing_alloc(pnt,
+                                                        tod.local_samples[1]*5)
+                if err != 0:
+                    raise Exception('Failed to allocate pointing array')
 
                 ppnt = libconviqt.conviqt_pointing_data(pnt)
 
@@ -308,30 +320,44 @@ class OpSimConviqt(Operator):
                     ppnt[row*5 + 0] = phi[row]
                     ppnt[row*5 + 1] = theta[row]
                     ppnt[row*5 + 2] = psi[row]
-                    ppnt[row*5 + 3] = 0 # This column will host the convolved data upon exit
-                    ppnt[row*5 + 4] = 0 # libconviqt will assign the running indices to this column.
+                    # This column will host the convolved data upon exit
+                    ppnt[row*5 + 3] = 0
+                    # libconviqt will assign the running indices to this column.
+                    ppnt[row*5 + 4] = 0
 
-                convolver = libconviqt.conviqt_convolver_new(sky, beam, detector, self._pol, self._lmax, self._beammmax, self._order, comm)
+                convolver = libconviqt.conviqt_convolver_new(
+                    sky, beam, detector, self._pol, self._lmax, self._beammmax,
+                    self._order, comm)
 
-                if convolver is None: raise Exception("Failed to instantiate convolver")
+                if convolver is None:
+                    raise Exception("Failed to instantiate convolver")
 
-                err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
-                if err != 0: raise Exception('Convolution FAILED!')
+                err = libconviqt.conviqt_convolver_convolve(convolver, pnt,
+                                                            self._calibrate)
+                if err != 0:
+                    raise Exception('Convolution FAILED!')
 
-                # The pointer to the data will have changed during the convolution call ...
+                # The pointer to the data will have changed during
+                # the convolution call ...
 
-                ppnt = libconviqt.conviqt_pointing_data( pnt )
+                ppnt = libconviqt.conviqt_pointing_data(pnt)
 
                 convolved_data = np.zeros(tod.local_samples[1])
                 for row in range(tod.local_samples[1]):
-                    convolved_data[row] = ppnt[row*5+3]
+                    convolved_data[row] = ppnt[row*5 + 3]
 
                 libconviqt.conviqt_convolver_del(convolver)
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                    tod.cache.create(cachename, np.float64,
+                                     (tod.local_samples[1],))
                 ref = tod.cache.reference(cachename)
+                if ref.size != convolved_data.size:
+                    raise RuntimeError(
+                        '{} already exists in tod.cache but has wrong size: {} '
+                        '!= {}'.format(cachename, ref.size, convolved_data.size))
+
                 ref[:] = convolved_data
 
                 libconviqt.conviqt_pointing_del(pnt)
@@ -340,4 +366,3 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_sky_del(sky)
 
         return
-
