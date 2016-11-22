@@ -51,7 +51,7 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
         raise RuntimeError("input PSD does not go to low enough frequency to allow for interpolation")
 
     nyquist = rate / 2
-    if np.abs(freq[-1] - nyquist) > increment:
+    if np.abs((freq[-1]-nyquist)/nyquist) > .01:
         raise RuntimeError("last frequency element does not match Nyquist frequency for given sample rate")
 
     # Perform a logarithmic interpolation.  In order to avoid zero values, we 
