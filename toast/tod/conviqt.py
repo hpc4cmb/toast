@@ -357,8 +357,7 @@ class OpSimConviqt(Operator):
                     raise RuntimeError(
                         '{} already exists in tod.cache but has wrong size: {} '
                         '!= {}'.format(cachename, ref.size, convolved_data.size))
-
-                ref[:] = convolved_data
+                ref[:] += convolved_data
 
                 libconviqt.conviqt_pointing_del(pnt)
                 libconviqt.conviqt_detector_del(detector)
