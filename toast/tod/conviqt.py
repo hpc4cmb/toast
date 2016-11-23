@@ -65,6 +65,12 @@ if libconviqt is not None:
         MPI_Comm
     ]
 
+    libconviqt.conviqt_beam_lmax.restype = ct.c_int
+    libconviqt.conviqt_beam_lmax.argtypes = [ct.c_void_p]
+
+    libconviqt.conviqt_beam_mmax.restype = ct.c_int
+    libconviqt.conviqt_beam_mmax.argtypes = [ct.c_void_p]
+
     # Sky functions
 
     libconviqt.conviqt_sky_new.restype = ct.c_void_p
@@ -82,6 +88,15 @@ if libconviqt is not None:
         ct.c_double,
         MPI_Comm
     ]
+
+    libconviqt.conviqt_sky_lmax.restype = ct.c_int
+    libconviqt.conviqt_sky_lmax.argtypes = [ct.c_void_p]
+
+    libconviqt.conviqt_sky_remove_monopole.restype = ct.c_int
+    libconviqt.conviqt_sky_remove_monopole.argtypes = [ct.c_void_p]
+
+    libconviqt.conviqt_sky_remove_dipole.restype = ct.c_int
+    libconviqt.conviqt_sky_remove_dipole.argtypes = [ct.c_void_p]
 
     # Detector functions
 
@@ -185,7 +200,8 @@ class OpSimConviqt(Operator):
             self, lmax, beammmax, detectordata, pol=True, fwhm=4.0, order=13,
             calibrate=True, dxx=True, out='conviqt', quat_name=None,
             flag_name=None, flag_mask=255, common_flag_name=None,
-            common_flag_mask=255, apply_flags=False):
+            common_flag_mask=255, apply_flags=False,
+            remove_monopole=False, remove_dipole=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -206,6 +222,8 @@ class OpSimConviqt(Operator):
         self._common_flag_name = common_flag_name
         self._common_flag_mask = common_flag_mask
         self._apply_flags = apply_flags
+        self._remove_monopole = remove_monopole
+        self._remove_dipole = remove_dipole
 
         self._out = out
 
@@ -262,13 +280,21 @@ class OpSimConviqt(Operator):
                 err = libconviqt.conviqt_sky_read(
                     sky, self._lmax, self._pol, skyfile.encode(), self._fwhm,
                     comm)
-                if err != 0: raise Exception('Failed to load ' + skyfile)
+                if err != 0:
+                    raise RuntimeError('Failed to load ' + skyfile)
+                if self._remove_monopole:
+                    err = libconviqt.conviqt_sky_remove_monopole(sky)
+                    if err != 0: raise RuntimeError('Failed to remove monopole')
+                if self._remove_dipole:
+                    err = libconviqt.conviqt_sky_remove_dipole(sky)
+                    if err != 0: raise RuntimeError('Failed to remove dipole')
 
                 beam = libconviqt.conviqt_beam_new()
                 err = libconviqt.conviqt_beam_read(
                     beam, self._lmax, self._beammmax,
                     self._pol, beamfile.encode(), comm)
-                if err != 0: raise Exception('Failed to load ' + beamfile)
+                if err != 0:
+                    raise Exception('Failed to load ' + beamfile)
 
                 detector = libconviqt.conviqt_detector_new_with_id(det.encode())
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
