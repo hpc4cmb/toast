@@ -314,7 +314,7 @@ class OpSimNoiseTest(MPITestCase):
 
             # generate timestreams
 
-            op = OpSimNoise(stream=0, realization=r)
+            op = OpSimNoise(realization=r)
             op.exec(self.data)
 
             if r == 0:

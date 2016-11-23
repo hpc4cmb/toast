@@ -141,7 +141,7 @@ tod.set_prec_axis(qprec=precquat)
 
 # simulate noise
 
-nse = tt.OpSimNoise(stream=0, out='simdata')
+nse = tt.OpSimNoise(out='simdata')
 nse.exec(data)
 
 # make a Healpix pointing matrix.

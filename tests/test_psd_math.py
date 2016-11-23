@@ -161,7 +161,7 @@ class PSDTest(MPITestCase):
         ntod = self.totsamp
 
         r = 0 # noise realization
-        op = OpSimNoise(stream=0, realization=r)
+        op = OpSimNoise(realization=r)
         op.exec(self.data)
 
         # this replicates the calculation in sim_noise_timestream()
