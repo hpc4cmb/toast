@@ -33,11 +33,13 @@ class TOD(object):
         timedist (bool): if True, the data is distributed by time, otherwise by
             detector.
         detectors (list): list of names to use for the detectors.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
         samples (int): the number of global samples represented by this TOD object.
         sizes (list): specify the indivisible chunks in which to split the samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0, sizes=None):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, detindx=None, samples=0, sizes=None):
 
         self._mpicomm = mpicomm
         self._timedist = timedist
@@ -46,6 +48,13 @@ class TOD(object):
             self._dets = detectors
         self._nsamp = samples
         self._sizes = sizes
+        if detindx is not None:
+            for d in self._dets:
+                if d not in detindx:
+                    raise RuntimeError("detindx must have a value for every detector")
+            self._detindx = detindx
+        else:
+            self._detindx = { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }
 
         # if sizes is specified, it must be consistent with
         # the total number of samples.
@@ -74,6 +83,13 @@ class TOD(object):
         (list): The total list of detectors.
         """
         return self._dets
+
+    @property
+    def detindx(self):
+        """
+        (dict): The detector indices.
+        """
+        return self._detindx
 
     @property
     def local_dets(self):

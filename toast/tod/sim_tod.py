@@ -211,14 +211,16 @@ class TODHpixSpiral(TOD):
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         detectors (dictionary): each key is the detector name, and each value
-                  is a quaternion tuple.
+            is a quaternion tuple.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
         samples (int): maximum allowed samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         sizes (list): specify the indivisible chunks in which to split the samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, nside=512, sizes=None):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None, samples=0, firsttime=0.0, rate=100.0, nside=512, sizes=None):
         if detectors is None:
             self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
         else:
@@ -226,7 +228,7 @@ class TODHpixSpiral(TOD):
 
         self._detlist = sorted(list(self._fp.keys()))
         
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, samples=samples, sizes=sizes)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, detindx=detindx, samples=samples, sizes=sizes)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -364,7 +366,9 @@ class TODSatellite(TOD):
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         detectors (dictionary): each key is the detector name, and each value
-                  is a quaternion tuple.
+            is a quaternion tuple.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
         samples (int): maximum allowed samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
@@ -379,7 +383,7 @@ class TODSatellite(TOD):
         sizes (list): specify the indivisible chunks in which to split the samples.
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, samples=0, firsttime=0.0, rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, sizes=None):
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None, samples=0, firsttime=0.0, rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, sizes=None):
 
         if detectors is None:
             self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
@@ -389,7 +393,7 @@ class TODSatellite(TOD):
         self._detlist = sorted(list(self._fp.keys()))
         
         # call base class constructor to distribute data
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, samples=samples, sizes=sizes)
+        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, detindx=detindx, samples=samples, sizes=sizes)
 
         self._firsttime = firsttime
         self._rate = rate

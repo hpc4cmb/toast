@@ -21,11 +21,13 @@ obs_dets = ['detA', 'detB', 'detC']
 
 for i in range(10):
     tod = tt.TOD(mpicomm=cm.comm_group, detectors=obs_dets, samples=obs_samples)
+    indx = cm.group * 10 + i
     ob = {}
-    ob['id'] = '{}'.format(i)
+    ob['name'] = '{}'.format(indx)
     ob['tod'] = tod
     ob['intervals'] = None
     ob['noise'] = None
+    ob['id'] = indx
     dd.obs.append(ob)
 
 # Now at the end we have 4 process groups, each of which is assigned

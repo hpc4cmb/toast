@@ -126,7 +126,8 @@ class CovarianceTest(MPITestCase):
                 NET=self.netd)
 
             ob = {}
-            ob['id'] = 'test'
+            ob['name'] = 'test'
+            ob['id'] = 0
             ob['tod'] = tod
             ob['intervals'] = None
             ob['baselines'] = None

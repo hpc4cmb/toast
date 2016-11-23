@@ -23,6 +23,8 @@ from toast.tod.sim_noise import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_tod import *
 
+from toast import rng as rng
+
 from toast.mpirunner import MPITestCase
 
 
@@ -104,7 +106,7 @@ class OpSimNoiseTest(MPITestCase):
         # all all concurrencies, we set the chunksize to something independent
         # of the number of ranks.
 
-        nchunk = 2
+        nchunk = 4
         chunksize = int(self.totsamp / nchunk)
         chunks = np.ones(nchunk, dtype=np.int64)
         chunks *= chunksize
@@ -130,13 +132,57 @@ class OpSimNoiseTest(MPITestCase):
         )
 
         ob = {}
-        ob['id'] = 'noisetest-{}'.format(self.toastcomm.group)
+        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
+        ob['id'] = 0
         ob['tod'] = self.tod
         ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = self.nse
 
         self.data.obs.append(ob)
+
+
+    def test_gauss(self):
+        # test that the same samples from different calls are reproducible.
+
+        ob = self.data.obs[0]
+        nse = ob['noise']
+
+        det = self.dets[-1]
+
+        psd = np.ones_like(nse.freq(det))
+        npsd = len(psd)
+        
+        detindx = len(self.dets) - 1
+        telescope = 5
+        realization = 1000
+        component = 3
+        obsindx = 1234
+
+        key1 = realization * 4294967296 + telescope * 65536 + component
+        key2 = obsindx * 4294967296 + detindx 
+        counter1 = 0
+
+        compoff = 500
+        ncomp = 10
+
+        counter2 = 0
+        d1 = rng.random(1000, sampler="gaussian", key=(key1, key2), 
+            counter=(counter1, counter2))
+        print(d1[compoff:compoff+ncomp])
+
+        counter2 = 100
+        d2 = rng.random(1000, sampler="gaussian", key=(key1, key2), 
+            counter=(counter1, counter2))
+        print(d2[compoff-100:compoff-100+ncomp])
+
+        counter2 = 300
+        d3 = rng.random(1000, sampler="gaussian", key=(key1, key2), 
+            counter=(counter1, counter2))
+        print(d3[compoff-300:compoff-300+ncomp])
+
+        np.testing.assert_array_almost_equal(d1[compoff:compoff+ncomp], d2[compoff-100:compoff-100+ncomp])
+        np.testing.assert_array_almost_equal(d1[compoff:compoff+ncomp], d3[compoff-300:compoff-300+ncomp])
 
 
     def test_sim(self):
@@ -227,7 +273,7 @@ class OpSimNoiseTest(MPITestCase):
 
             df = nse.rate(det) / float(fftlen)
 
-            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, idet, nse.rate(det), self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
+            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, 0, 0, 0, idet, nse.rate(det), 0, self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
 
             # Factor of 2 comes from the negative frequency values.
             psdnorm[det] = 2.0 * np.sum(psds[det] * df)

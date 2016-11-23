@@ -178,11 +178,6 @@ def main():
             outfile = "{}_focalplane.png".format(args.outdir)
             view_focalplane(fp, outfile)
 
-    # Since madam only supports a single observation, we use
-    # that here so that we can use the same data distribution whether
-    # or not we are using libmadam.  Normally we would have multiple 
-    # observations with some subset assigned to each process group.
-
     # The distributed timestream data
 
     data = toast.Data(comm)
@@ -238,11 +233,12 @@ def main():
     # Create the (single) observation
 
     ob = {}
-    ob['id'] = 'mission'
+    ob['name'] = 'mission'
     ob['tod'] = tod
     ob['intervals'] = intervals
     ob['baselines'] = None
     ob['noise'] = noise
+    ob['id'] = 0
 
     data.obs.append(ob)
 

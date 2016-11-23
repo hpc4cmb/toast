@@ -130,7 +130,8 @@ class PSDTest(MPITestCase):
         )
 
         ob = {}
-        ob['id'] = 'noisetest-{}'.format(self.toastcomm.group)
+        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
+        ob['id'] = 0
         ob['tod'] = self.tod
         ob['intervals'] = None
         ob['baselines'] = None
@@ -188,7 +189,7 @@ class PSDTest(MPITestCase):
 
             df = nse.rate(det) / float(fftlen)
 
-            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, idet, nse.rate(det), self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
+            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, 0, 0, 0, idet, nse.rate(det), 0, self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
 
             if False:
                 psdfreq = freqs[det]
