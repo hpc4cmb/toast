@@ -24,7 +24,47 @@ from ..operator import Operator
 from .. import rng as rng
 
 
-def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, psd):
+def sim_noise_timestream(realization, telescope, component, obsindx, detindx, rate, firstsamp, samples, oversample, freq, psd):
+    """
+    Generate a noise timestream, given a starting RNG state.
+
+    Use the RNG parameters to generate unit-variance Gaussian samples
+    and then modify the Fourier domain amplitudes to match the desired
+    PSD.
+
+    The RNG (Threefry2x64 from Random123) takes a "key" and a "counter"
+    which each consist of two unsigned 64bit integers.  These four
+    numbers together uniquely identify a single sample.  We construct
+    those four numbers in the following way:
+
+    key1 = realization * 2^32 + telescope * 2^16 + component
+    key2 = obsindx * 2^32 + detindx 
+    counter1 = currently unused (0)
+    counter2 = sample in stream
+
+    counter2 is incremented internally by the RNG function as it calls
+    the underlying Random123 library for each sample.
+
+    Args:
+        realization (int): the Monte Carlo realization.
+        telescope (int): a unique index assigned to a telescope.
+        component (int): a number representing the type of timestream
+            we are generating (detector noise, common mode noise,
+            atmosphere, etc).
+        obsindx (int): the global index of this observation.
+        detindx (int): the global index of this detector.
+        rate (float): the sample rate.
+        firstsamp (int): the start sample in the stream.
+        samples (int): the number of samples to generate.
+        oversample (int): the factor by which to expand the FFT length
+            beyond the number of samples.
+        freq (array): the frequency points of the PSD.
+        psd (array): the PSD values.
+
+    Returns (tuple):
+        the timestream array, the interpolated PSD frequencies, and
+            the interpolated PSD values.
+    """
     
     fftlen = 2
     while fftlen <= (oversample * samples):
@@ -75,7 +115,13 @@ def sim_noise_timestream(realization, stream, rate, samples, oversample, freq, p
 
     # gaussian Re/Im randoms, packed into a complex valued array
 
-    rngdata = rng.random(2*npsd, sampler="gaussian", key=(realization, stream), counter=(0,0))
+    key1 = realization * 4294967296 + telescope * 65536 + component
+    key2 = obsindx * 4294967296 + detindx 
+    counter1 = 0
+    counter2 = firstsamp * oversample
+
+    rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2), 
+        counter=(counter1, counter2))
     fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
 
     # set the Nyquist frequency imaginary part to zero
@@ -114,16 +160,12 @@ class OpSimNoise(Operator):
     Args:
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        stream (int): random stream offset.  This should be the same for
-            all processes within a group, and should be offset between
-            groups in such a way to ensure different streams between every
-            detector, in every chunk, of every TOD, across every observation.
         realization (int): if simulating multiple realizations, the realization
-            index.  This is used in combination with the stream when calling
-            the RNG.
+            index.
+        component (int): the component index to use for this noise simulation.
     """
 
-    def __init__(self, out='noise', stream=None, realization=0):
+    def __init__(self, out='noise', stream=None, realization=0, component=0):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -133,7 +175,7 @@ class OpSimNoise(Operator):
 
         self._out = out
         self._oversample = 2
-        self._rngstream = stream
+        self._component = component
         self._realization = realization
 
 
@@ -146,31 +188,30 @@ class OpSimNoise(Operator):
         """
         Generate noise timestreams.
 
-        This iterates over all observations and detectors.  For each
-        locally stored piece of the data, we query which chunks of the
-        original data distribution we have.  A "stream" index is
-        computed using the observation number, the detector number, and
-        the absolute chunk index.  For each chunk assigned to this process,
-        generate a noise realization.  The PSD that is valid for the
-        current chunk (obtained from the Noise object for each observation)
-        is used when generating the timestream.
+        This iterates over all observations and detectors and generates
+        the noise timestreams based on the noise object for the current
+        observation.
 
         Args:
             data (toast.Data): The distributed data.
         """
         comm = data.comm
-        rngobs = 0
 
         for obs in data.obs:
+            obsindx = 0
+            if 'id' in obs:
+                obsindx = obs['id']
+            else:
+                print("Warning: observation ID is not set, using zero!")
+
+            telescope = 0
+            if 'telescope' in obs:
+                telescope = obs['telescope']
+
             tod = obs['tod']
             nse = obs['noise']
             if tod.local_chunks is None:
                 raise RuntimeError('noise simulation for uniform distributed samples not implemented')
-
-            # for purposes of incrementing the random stream, find
-            # the number of detectors
-            alldets = tod.detectors
-            ndet = len(alldets)
 
             # compute effective sample rate
 
@@ -180,36 +221,36 @@ class OpSimNoise(Operator):
 
             # eventually we'll redistribute, to allow long correlations...
 
-            # iterate over each chunk (stationary interval)
 
-            tod_offset = 0
+            # Iterate over each chunk.
+
+            tod_first = tod.local_samples[0]
+            chunk_first = tod_first
 
             for curchunk in range(tod.local_chunks[1]):
                 abschunk = tod.local_chunks[0] + curchunk
-                chksamp = tod.total_chunks[abschunk]
+                chunk_samp = tod.total_chunks[abschunk]
+                local_offset = chunk_first - tod_first
 
                 idet = 0
                 for det in tod.local_dets:
 
-                    detstream = self._rngstream + rngobs + (abschunk * ndet) + idet
+                    detindx = tod.detindx[det]
 
-                    (nsedata, freq, psd) = sim_noise_timestream(self._realization, detstream, rate, chksamp, self._oversample, nse.freq(det), nse.psd(det))
+                    (nsedata, freq, psd) = sim_noise_timestream(self._realization, telescope, self._component, obsindx, detindx, rate, chunk_first, chunk_samp, self._oversample, nse.freq(det), nse.psd(det))
 
                     # write to cache
 
                     cachename = "{}_{}".format(self._out, det)
                     if not tod.cache.exists(cachename):
                         tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
-                    ref = tod.cache.reference(cachename)[tod_offset:tod_offset+chksamp]
+                    
+                    ref = tod.cache.reference(cachename)[local_offset:local_offset+chunk_samp]
                     ref[:] += nsedata
 
                     idet += 1
 
-                tod_offset += chksamp
-
-            # increment the observation rng stream offset
-            # by the number of chunks times number of detectors
-            rngobs += (ndet * len(tod.total_chunks))
+                chunk_first += chunk_samp
 
         return
 

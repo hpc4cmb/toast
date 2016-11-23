@@ -52,7 +52,7 @@ class BinnedTest(MPITestCase):
         self.sim_nside = 32
         self.sim_npix = 12 * self.sim_nside**2
 
-        self.totsamp = 20000000
+        self.totsamp = 2000000
 
         self.map_nside = 32
         self.map_npix = 12 * self.map_nside**2
@@ -132,7 +132,8 @@ class BinnedTest(MPITestCase):
                 NET=self.netd)
 
             ob = {}
-            ob['id'] = 'test'
+            ob['name'] = 'test'
+            ob['id'] = 0
             ob['tod'] = tod
             ob['intervals'] = None
             ob['baselines'] = None
@@ -430,7 +431,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[0][mask], binserial[0][mask], decimal=6)
+                nt.assert_almost_equal(bins[0][mask], binserial[0][mask], decimal=4)
 
                 diffmap = binserial[1] - bins[1]
                 mask = (bins[1] != 0)
@@ -440,7 +441,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[1][mask], binserial[1][mask], decimal=6)
+                nt.assert_almost_equal(bins[1][mask], binserial[1][mask], decimal=4)
 
                 diffmap = binserial[2] - bins[2]
                 mask = (bins[2] != 0)
@@ -450,7 +451,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=6)
+                nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=4)
 
 
             stop = MPI.Wtime()

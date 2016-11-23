@@ -118,11 +118,12 @@ data = toast.Data(comm)
 # Create the (single) observation
 
 ob = {}
-ob['id'] = 'mission'
+ob['name'] = 'mission'
 ob['tod'] = tod
 ob['intervals'] = intervals
 ob['baselines'] = None
 ob['noise'] = noise
+ob['id'] = 0
 
 data.obs.append(ob)
 
