@@ -175,7 +175,7 @@ class BinnedTest(MPITestCase):
         start = MPI.Wtime()
 
         # generate noise timestreams from the noise model
-        nsig = OpSimNoise(stream=0)
+        nsig = OpSimNoise()
         nsig.exec(self.data)
 
         # make a simple pointing matrix

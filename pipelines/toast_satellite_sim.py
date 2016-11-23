@@ -401,7 +401,7 @@ def main():
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", stream=0, realization=mc)
+            nse = tt.OpSimNoise(out="noise", realization=mc)
             nse.exec(data)
 
             comm.comm_world.barrier()
@@ -499,7 +499,7 @@ def main():
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", stream=0, realization=mc)
+            nse = tt.OpSimNoise(out="noise", realization=mc)
             nse.exec(data)
 
             comm.comm_world.barrier()
