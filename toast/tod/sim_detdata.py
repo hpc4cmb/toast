@@ -161,9 +161,10 @@ class OpSimNoise(Operator):
         realization (int): if simulating multiple realizations, the realization
             index.
         component (int): the component index to use for this noise simulation.
+        noise (str): PSD key in the observation dictionary.
     """
 
-    def __init__(self, out='noise', realization=0, component=0):
+    def __init__(self, out='noise', realization=0, component=0, noise='noise'):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -172,6 +173,7 @@ class OpSimNoise(Operator):
         self._oversample = 2
         self._realization = realization
         self._component = component
+        self._noisekey = noise
 
     @property
     def timedist(self):
@@ -202,7 +204,11 @@ class OpSimNoise(Operator):
                 telescope = obs['telescope']
 
             tod = obs['tod']
-            nse = obs['noise']
+            if self._noisekey in obs:
+                nse = obs[self._noisekey]
+            else:
+                raise RuntimeError('Observation does not contain noise under '
+                                   '"{}"'.format(self._noisekey))
             if tod.local_chunks is None:
                 raise RuntimeError('noise simulation for uniform distributed '
                                    'samples not implemented')
