@@ -10,7 +10,7 @@
 #
 #   To link an application with FFTW, you should link with:
 #
-#   	$FFTW
+#   	$FFTW $PTHREAD_LIBS $MATH
 #
 #   The user may use:
 # 
