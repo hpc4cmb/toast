@@ -297,12 +297,6 @@ class OpMadam(Operator):
             nlocal = tod.local_samples[1]
             period_ranges = []
 
-            if self._timestamps_name is not None:
-                timestamps = tod.cache.reference(self._timestamps_name)
-            else:
-                timestamps = tod.read_times()
-            madam_timestamps.append(timestamps)
-
             # get the total list of intervals
             intervals = None
             if 'intervals' in data.obs[0].keys():
@@ -325,6 +319,20 @@ class OpMadam(Operator):
                     period_lengths.append(local_stop - local_start)
                     period_ranges.append((local_start, local_stop))
             obs_period_ranges.append(period_ranges)
+
+            # Collect the timestamps for the valid intervals
+            if self._timestamps_name is not None:
+                timestamps = tod.cache.reference(self._timestamps_name)
+            else:
+                timestamps = tod.read_times()
+
+            local_offset = offset
+            for istart, istop in period_ranges:
+                nn = istop - istart
+                dslice = slice(d*nsamp + local_offset,
+                               d*nsamp + local_offset + nn)
+                madam_timestamps.append(timestamps[istart:istop])
+                local_offset += nn
 
             # get the noise object for this observation and create new
             # entries in the dictionary when the PSD actually changes
@@ -380,7 +388,7 @@ class OpMadam(Operator):
                             (detflags & self._flag_mask) != 0,
                             (commonflags & self._common_flag_mask) != 0)
 
-                # get the pixels and weights from the cache
+                # get the pixels and weights for the valid intervals from the cache
 
                 pixelsname = "{}_{}".format(self._pixels, detectors[d])
                 weightsname = "{}_{}".format(self._weights, detectors[d])
@@ -433,15 +441,19 @@ class OpMadam(Operator):
         madam_pixels = np.hstack(madam_pixels).astype(np.int64)
         madam_pixweights = np.hstack(madam_pixweights).astype(np.float64)
 
+        nperiod = len(period_lengths)
+        period_lengths = np.array(period_lengths, dtype=np.int64)
+        nsamp = np.sum(period_lengths, dtype=np.int64)
+        periods = np.zeros(nperiod, dtype=np.int64)
+        for i, n in enumerate(period_lengths[:-1]):
+            periods[i+1] = periods[i] + n
+
         if self._cached:
             # destripe
             libmadam.destripe_with_cache(
-                fcomm, ndet, nlocal, nnz, timestamps, madam_pixels,
+                fcomm, ndet, nsamp, nnz, madam_timestamps, madam_pixels,
                 madam_pixweights, madam_signal)
         else:
-            nperiod = len(period_lengths)
-            period_lengths = np.array(period_lengths, dtype=np.int64)
-
             # detweights is either a dictionary of weights specified at
             # construction time, or else we use uniform weighting.
             detw = {}
@@ -486,11 +498,6 @@ class OpMadam(Operator):
                 psdvals = np.ones(npsdval)
 
             # destripe
-
-            nsamp = np.sum(period_lengths, dtype=np.int64)
-            periods = np.zeros(nperiod, dtype=np.int64)
-            for i, n in enumerate(period_lengths[:-1]):
-                periods[i+1] = periods[i] + n
 
             libmadam.destripe(
                 fcomm, parstring.encode(), ndet, detstring.encode(), detweights,
