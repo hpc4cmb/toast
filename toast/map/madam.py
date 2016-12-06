@@ -411,7 +411,7 @@ class OpMadam(Operator):
                                    d*nsamp + local_offset + nn)
                     dwslice = slice((d*nsamp+local_offset) * nnz,
                                     (d*nsamp+local_offset+nn) * nnz)
-                    madam_signal[d].append(signal[istart:istop])
+                    madam_signal[d].append(signal[istart:istop].copy())
                     madam_pixels[d].append(pixels[istart:istop].copy())
                     madam_pixweights[d].append(
                         weights[istart:istop].flatten()[::nnz_stride].copy())
