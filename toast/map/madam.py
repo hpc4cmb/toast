@@ -302,8 +302,8 @@ class OpMadam(Operator):
 
             # get the total list of intervals
             intervals = None
-            if 'intervals' in data.obs[0].keys():
-                intervals = data.obs[0]['intervals']
+            if 'intervals' in obs.keys():
+                intervals = obs['intervals']
             if intervals is None:
                 intervals = [Interval(start=0.0, stop=0.0, first=0,
                                       last=(tod.total_samples-1))]
@@ -314,7 +314,7 @@ class OpMadam(Operator):
                 if (ival.last >= local_offset
                     and ival.first < (local_offset + local_nsamp)):
                     local_start = ival.first - local_offset
-                    local_stop = ival.last - local_offset
+                    local_stop = ival.last - local_offset + 1
                     if local_start < 0:
                         local_start = 0
                     if local_stop > local_nsamp:
@@ -419,7 +419,7 @@ class OpMadam(Operator):
                 if not self._pixels_nested:
                     # Madam expects the pixels to be in nested ordering
                     pixels = pixels.copy()
-                    pixels = hp.ring2nest( nside, pixels )
+                    pixels = hp.ring2nest(nside, pixels)
 
                 if self._apply_flags:
                     pixels = pixels.copy()
