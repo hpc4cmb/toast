@@ -127,11 +127,34 @@ AC_LANG_PUSH([C])
 ACX_MATH
 AC_LANG_POP([C])
 dnl +------------------------------------------------
-dnl | Check for FFTW
+dnl | Check for MKL
 dnl +------------------------------------------------
 AC_LANG_PUSH([C])
-ACX_FFTW
+ax_have_mkl=no
+ACX_MKL([ax_have_mkl=yes;AC_DEFINE(HAVE_MKL,1,[Define if using Intel MKL])], [])
 AC_LANG_POP([C])
+AM_CONDITIONAL([HAVE_AM_MKL], [test $ax_have_mkl = yes])
+dnl +------------------------------------------------
+dnl | Check for FFTW
+dnl +------------------------------------------------
+ax_have_fftw=no
+if test "$ax_have_mkl" = "no"; then
+  AC_LANG_PUSH([C])
+  ACX_FFTW([ax_have_fftw=yes;AC_DEFINE(HAVE_FFTW,1,[Define we have FFTW])], AC_MSG_ERROR([Could not find an FFT library!]))
+  AC_LANG_POP([C])
+fi
+AM_CONDITIONAL([HAVE_AM_FFTW], [test $ax_have_fftw = yes])
+dnl +------------------------------------------------
+dnl | Check for BLAS and LAPACK
+dnl +------------------------------------------------
+ax_have_lapack=no
+if test "$ax_have_mkl" = "no"; then
+  AC_LANG_PUSH([C])
+  AX_CHECK_BLAS([], AC_MSG_ERROR([Could not find a BLAS library!]))
+  AX_CHECK_LAPACK([ax_have_lapack=yes;AC_DEFINE(HAVE_LAPACK,1,[Define we have LAPACK])], AC_MSG_ERROR([Could not find a LAPACK library!]))
+  AC_LANG_POP([C])
+fi
+AM_CONDITIONAL([HAVE_AM_LAPACK], [test $ax_have_lapack = yes])
 dnl +------------------------------------------------
 dnl | Check for Python
 dnl +------------------------------------------------
@@ -171,11 +194,13 @@ AC_MSG_NOTICE([  Serial C Compiler         : $CC])
 AC_MSG_NOTICE([  C Compile Flags           : $CFLAGS])
 AC_MSG_NOTICE([  Pthreads compile          : $PTHREAD_CFLAGS])
 AC_MSG_NOTICE([  Pthreads link             : $PTHREAD_LIBS])
+
 if test x"${ax_have_openmp}" = xyes; then
   AC_MSG_NOTICE([  OpenMP                    : Detected ($OPENMP_CXXFLAGS)])
 else
   AC_MSG_NOTICE([  OpenMP                    : Disabled])
 fi
+
 if test $toast_mpi = yes; then
   AC_MSG_NOTICE([  MPI C++ Compiler          : $MPICXX])
   AC_MSG_NOTICE([  MPI C Compiler            : $MPICC])
@@ -183,13 +208,29 @@ else
   AC_MSG_NOTICE([  MPI C++ Compiler          : Disabled, using fake MPI])
   AC_MSG_NOTICE([  MPI C Compiler            : Disabled, using fake MPI])
 fi
+
 AC_MSG_NOTICE([  C math library            : $MATH])
-if test $acx_fftw_ok = no; then
-  AC_MSG_NOTICE([  FFTW                      : Not found])
+
+if test $ax_have_mkl = yes; then
+  AC_MSG_NOTICE([  MKL compile              : $MKL_CPPFLAGS])
+  AC_MSG_NOTICE([  MKL link                 : $MKL])
 else
-  AC_MSG_NOTICE([  FFTW compile              : $FFTW_CPPFLAGS])
-  AC_MSG_NOTICE([  FFTW link                 : $FFTW])
+
+  if test $ax_have_fftw = no; then
+    AC_MSG_NOTICE([  FFTW                      : Not found])
+  else
+    AC_MSG_NOTICE([  FFTW compile              : $FFTW_CPPFLAGS])
+    AC_MSG_NOTICE([  FFTW link                 : $FFTW])
+  fi
+
+  if test $ax_have_lapack = no; then
+    AC_MSG_NOTICE([  LAPACK/BLAS               : Not found])
+  else
+    AC_MSG_NOTICE([  LAPACK link               : $LAPACK_LIBS $BLAS_LIBS])
+  fi
+
 fi
+
 if test $toast_python = yes; then
   AC_MSG_NOTICE([  Python                    : $PYTHON])
 else

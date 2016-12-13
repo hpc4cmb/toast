@@ -21,11 +21,26 @@ if HAVE_AM_OPENMP
   AM_LIBS += $(OPENMP_CXXFLAGS)
 endif
 
-# FFTW
+# MKL, FFTW, LAPACK
 
-AM_CPPFLAGS += $(FFTW_CPPFLAGS)
-AM_LIBS += $(FFTW) $(PTHREAD_LIBS)
+if HAVE_AM_MKL
+  
+AM_CPPFLAGS += $(MKL_CPPFLAGS)
+AM_LIBS += $(MKL)
 
-# Always need the C math library
+else
+  
+if HAVE_AM_FFTW
+  AM_CPPFLAGS += $(FFTW_CPPFLAGS)
+  AM_LIBS += $(FFTW)
+endif
 
-AM_LIBS += $(MATH)
+if HAVE_AM_LAPACK
+  AM_LIBS += $(LAPACK_LIBS) $(BLAS_LIBS)
+endif
+
+endif
+
+# Always need the C math and pthreads libraries
+
+AM_LIBS += $(PTHREAD_LIBS) $(MATH)
