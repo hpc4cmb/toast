@@ -318,7 +318,7 @@ class OpMadam(Operator):
                 if (ival.last >= local_offset
                     and ival.first < (local_offset + local_nsamp)):
                     local_start = ival.first - local_offset
-                    local_stop = ival.last - local_offset + 1
+                    local_stop = ival.last - local_offset
                     if local_start < 0:
                         local_start = 0
                     if local_stop > local_nsamp - 1:
