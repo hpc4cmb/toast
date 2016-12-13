@@ -147,7 +147,7 @@ class OpMadam(Operator):
         self._apply_flags = apply_flags
         self._params = params
         if dets is not None:
-            self._dets = set( dets )
+            self._dets = set(dets)
         else:
             self._dets = None
         self._mcmode = mcmode
@@ -155,6 +155,10 @@ class OpMadam(Operator):
             self._params['mcmode'] = True
         else:
             self._params['mcmode'] = False
+        if self._name_out is not None:
+            self._params['write_tod'] = True
+        else:
+            self._params['write_tod'] = False
         self._cached = False
         self._noisekey = noise
 
@@ -317,10 +321,10 @@ class OpMadam(Operator):
                     local_stop = ival.last - local_offset
                     if local_start < 0:
                         local_start = 0
-                    if local_stop > local_nsamp:
-                        local_stop = local_nsamp
-                    period_lengths.append(local_stop - local_start)
-                    period_ranges.append((local_start, local_stop))
+                    if local_stop > local_nsamp - 1:
+                        local_stop = local_nsamp - 1
+                    period_lengths.append(local_stop - local_start + 1)
+                    period_ranges.append((local_start, local_stop + 1))
             obs_period_ranges.append(period_ranges)
 
         nperiod = len(period_lengths)
@@ -362,21 +366,24 @@ class OpMadam(Operator):
             # entries in the dictionary when the PSD actually changes
             if self._noisekey in obs.keys():
                 nse = obs[self._noisekey]
-                if psdfreqs is None:
-                    psdfreqs = nse.freq(detectors[0]).astype(np.float64).copy()
-                    npsdbin = len(psdfreqs)
-                for d in range(ndet):
-                    det = detectors[d]
-                    check_psdfreqs = nse.freq(det)
-                    if not np.allclose(psdfreqs, check_psdfreqs):
-                        raise RuntimeError('All PSDs passed to Madam must have'
-                                           ' the same frequency binning.')
-                    psd = nse.psd(det)
-                    if det not in psds:
-                        psds[det] = [(0, psd)]
-                    else:
-                        if not np.allclose(psds[det][-1][1], psd):
-                            psds[det] += [(timestamps[0], psd)]
+                if nse is not None:
+                    if psdfreqs is None:
+                        psdfreqs = nse.freq(detectors[0]).astype(
+                            np.float64).copy()
+                        npsdbin = len(psdfreqs)
+                    for d in range(ndet):
+                        det = detectors[d]
+                        check_psdfreqs = nse.freq(det)
+                        if not np.allclose(psdfreqs, check_psdfreqs):
+                            raise RuntimeError(
+                                'All PSDs passed to Madam must have'
+                                ' the same frequency binning.')
+                        psd = nse.psd(det)
+                        if det not in psds:
+                            psds[det] = [(0, psd)]
+                        else:
+                            if not np.allclose(psds[det][-1][1], psd):
+                                psds[det] += [(timestamps[0], psd)]
 
             for d in range(ndet):
                 # Get the signal.
@@ -419,7 +426,7 @@ class OpMadam(Operator):
                 if not self._pixels_nested:
                     # Madam expects the pixels to be in nested ordering
                     pixels = pixels.copy()
-                    pixels = hp.ring2nest( nside, pixels )
+                    pixels = hp.ring2nest(nside, pixels)
 
                 if self._apply_flags:
                     pixels = pixels.copy()
@@ -531,18 +538,19 @@ class OpMadam(Operator):
                 self._cached = True
 
         if self._name_out is not None:
+            global_offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     signal = np.ones(nlocal) * np.nan
-                    offset = 0
+                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart
                         signal[istart:istop] = madam_signal[offset:offset+nn]
                         offset += nn
                     cachename = "{}_{}".format(self._name_out, det)
                     tod.cache.put(cachename, signal, replace=True)
-                offset += nlocal
+                global_offset = offset
 
         return
