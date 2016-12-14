@@ -89,8 +89,10 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
 
     nyquist = rate / 2
     if np.abs((freq[-1]-nyquist)/nyquist) > .01:
-        raise RuntimeError("last frequency element does not match Nyquist "
-                           "frequency for given sample rate")
+        raise RuntimeError(
+            "last frequency element does not match Nyquist "
+            "frequency for given sample rate: {} != {}".format(
+                freq[-1], nyquist))
 
     # Perform a logarithmic interpolation.  In order to avoid zero values, we 
     # shift the PSD by a fixed amount in frequency and amplitude.
@@ -164,7 +166,8 @@ class OpSimNoise(Operator):
         noise (str): PSD key in the observation dictionary.
     """
 
-    def __init__(self, out='noise', realization=0, component=0, noise='noise'):
+    def __init__(self, out='noise', realization=0, component=0, noise='noise',
+                 rate=None):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -174,6 +177,7 @@ class OpSimNoise(Operator):
         self._realization = realization
         self._component = component
         self._noisekey = noise
+        self._rate = rate
 
     @property
     def timedist(self):
@@ -213,13 +217,10 @@ class OpSimNoise(Operator):
                 raise RuntimeError('noise simulation for uniform distributed '
                                    'samples not implemented')
 
-            # compute effective sample rate
-
-            times = tod.read_times(local_start=0, n=tod.local_samples[1])
-            dt = np.mean(times[1:-1] - times[0:-2])
-            rate = 1.0 / dt
-
             # eventually we'll redistribute, to allow long correlations...
+
+            if self._rate is None:
+                times = tod.read_times(local_start=0, n=tod.local_samples[1])
 
             # Iterate over each chunk.
 
@@ -230,6 +231,14 @@ class OpSimNoise(Operator):
                 abschunk = tod.local_chunks[0] + curchunk
                 chunk_samp = tod.total_chunks[abschunk]
                 local_offset = chunk_first - tod_first
+
+                if self._rate is None:
+                    # compute effective sample rate
+                    dt = np.median(np.diff(
+                            times[local_offset:local_offset+chunk_samp]))
+                    rate = 1.0 / dt
+                else:
+                    rate = self._rate
 
                 idet = 0
                 for det in tod.local_dets:
