@@ -12,6 +12,7 @@ if 'TOAST_NO_MPI' in os.environ.keys():
 else:
     from mpi4py import MPI
 
+import healpy as hp
 from toast.tod.tod import *
 from toast.tod.pointing import *
 from toast.tod.sim_tod import *
@@ -112,7 +113,15 @@ class OpMadamTest(MPITestCase):
 
         madam = OpMadam(params=pars, name='grad', dets=self.dets)
         if madam.available:
+            # Run Madam twice on the same data and ensure the result
+            # does not change
             madam.exec(self.data)
+            m0 = hp.read_map(os.path.join(self.mapdir,'madam_bmap.fits'))
+            madam.exec(self.data)
+            m1 = hp.read_map(os.path.join(self.mapdir,'madam_bmap_001.fits'))
+            if not np.allclose(m0, m1):
+                raise Exception(
+                    'Madam did not produce the same map from the same data.')
             stop = MPI.Wtime()
             elapsed = stop - start
             self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
