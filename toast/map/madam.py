@@ -595,7 +595,8 @@ class OpMadam(Operator):
                     offset = global_offset
                     for istart, istop in period_ranges:
                         nn = (istop - istart) * nnz
-                        weights[istart:istop] = madam_pixweights[offset:offset+nn]
+                        weights[istart*nnz:istop*nnz] \
+                            = madam_pixweights[offset:offset+nn]
                         offset += nn
                     cachename = "{}_{}".format(self._weights, det)
                     tod.cache.put(cachename, weights.reshape([-1, nnz]),
