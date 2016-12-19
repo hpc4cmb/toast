@@ -112,6 +112,14 @@ class OpMadam(Operator):
             time stamps.
         purge (bool): if True, clear any cached data that is copied into
             the Madam buffers.
+        purge_tod (bool): if True, clear any cached signal that is
+            copied into the Madam buffers.
+        purge_pixels (bool): if True, clear any cached pixels that are
+            copied into the Madam buffers.
+        purge_weights (bool): if True, clear any cached weights that are
+            copied into the Madam buffers.
+        purge_flags (bool): if True, clear any cached flags that are
+            copied into the Madam buffers.
         dets (iterable):  List of detectors to map. If left as None, all
             available detectors are mapped.
         mcmode (bool): If true, the operator is constructed in
@@ -126,8 +134,9 @@ class OpMadam(Operator):
                  name=None, name_out=None, flag_name=None, flag_mask=255,
                  common_flag_name=None, common_flag_mask=255,
                  apply_flags=True, purge=False, dets=None, mcmode=False,
-                 noise='noise'):
-        
+                 purge_tod=False, purge_pixels=False, purge_weights=False,
+                 purge_flags=False, noise='noise'):
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
@@ -144,6 +153,16 @@ class OpMadam(Operator):
         self._weights = weights
         self._detw = detweights
         self._purge = purge
+        if self._purge:
+            self._purge_tod = True
+            self._purge_pixels = True
+            self._purge_weights = True
+            self._purge_flags = True
+        else:
+            self._purge_tod = purge_tod
+            self._purge_pixels = purge_pixels
+            self._purge_weights = purge_weights
+            self._purge_flags = purge_flags
         self._apply_flags = apply_flags
         self._params = params
         if dets is not None:
@@ -417,11 +436,11 @@ class OpMadam(Operator):
                             (detflags & self._flag_mask) != 0,
                             (commonflags & self._common_flag_mask) != 0)
 
-                # get the pixels and weights for the valid intervals
-                #from the cache
+                # get the pixels for the valid intervals from the cache
 
                 pixelsname = "{}_{}".format(self._pixels, detectors[d])
                 pixels = tod.cache.reference(pixelsname)
+                pixels_dtype = pixels.dtype
 
                 if not self._pixels_nested:
                     # Madam expects the pixels to be in nested ordering
@@ -441,15 +460,18 @@ class OpMadam(Operator):
                     madam_pixels[dslice] = pixels[istart:istop]
                     offset += nn
 
-                if self._purge:
-                    tod.cache.clear(pattern=pixelsname)
-                    if self._name is not None:
-                        tod.cache.clear(pattern=cachename)
-                    if self._flag_name is not None:
-                        tod.cache.clear(pattern=cacheflagname)
-            if self._purge:
-                if self._common_flag_name is not None:
-                    tod.cache.clear(pattern=self._common_flag_name)
+                # Always purge the pixels but restore them from the Madam
+                # buffers when purge_pixels=False
+                tod.cache.clear(pattern=pixelsname)
+                
+                if self._purge_tod and self._name is not None:
+                    tod.cache.clear(pattern=cachename)
+
+                if self._purge_flags and self._flag_name is not None:
+                    tod.cache.clear(pattern=cacheflagname)
+
+            if self._purge_flags and self._common_flag_name is not None:
+                tod.cache.clear(pattern=self._common_flag_name)
             global_offset = offset
 
         # Now collect the pixel weights
@@ -465,6 +487,7 @@ class OpMadam(Operator):
                 # from the cache
                 weightsname = "{}_{}".format(self._weights, detectors[d])
                 weights = tod.cache.reference(weightsname)
+                weight_dtype = weights.dtype
                 offset = global_offset
                 for istart, istop in period_ranges:
                     nn = istop - istart
@@ -473,7 +496,13 @@ class OpMadam(Operator):
                     madam_pixweights[dwslice] \
                         = weights[istart:istop].flatten()[::nnz_stride]
                     offset += nn
-                if self._purge:
+                # Purge the weights but restore them from the Madam
+                # buffers when purge_weights=False.
+                # Handle special case when Madam only stores a subset of
+                # the weights.
+                if not self._purge_weights and (nnz != nnz_full):
+                    pass
+                else:
                     tod.cache.clear(pattern=weightsname)
             global_offset = offset
 
@@ -536,6 +565,44 @@ class OpMadam(Operator):
 
             if self._mcmode:
                 self._cached = True
+
+        if not self._purge_pixels:
+            # restore the pixels from the Madam buffers
+            global_offset = 0
+            for obs, period_ranges in zip(data.obs, obs_period_ranges):
+                tod = obs['tod']
+                nlocal = tod.local_samples[1]
+                for d, det in enumerate(detectors):
+                    pixels = -np.ones(nlocal, dtype=pixels_dtype)
+                    offset = global_offset
+                    for istart, istop in period_ranges:
+                        nn = istop - istart
+                        pixels[istart:istop] = madam_pixels[offset:offset+nn]
+                        offset += nn
+                    cachename = "{}_{}".format(self._pixels, det)
+                    tod.cache.put(cachename, pixels, replace=True)
+                global_offset = offset
+            del madam_pixels
+
+        if not self._purge_weights and nnz == nnz_full:
+            # restore the weights from the Madam buffers
+            global_offset = 0
+            for obs, period_ranges in zip(data.obs, obs_period_ranges):
+                tod = obs['tod']
+                nlocal = tod.local_samples[1]
+                for d, det in enumerate(detectors):
+                    weights = np.zeros(nlocal*nnz, dtype=weight_dtype)
+                    offset = global_offset
+                    for istart, istop in period_ranges:
+                        nn = (istop - istart) * nnz
+                        weights[istart*nnz:istop*nnz] \
+                            = madam_pixweights[offset:offset+nn]
+                        offset += nn
+                    cachename = "{}_{}".format(self._weights, det)
+                    tod.cache.put(cachename, weights.reshape([-1, nnz]),
+                                  replace=True)
+                global_offset = offset
+            del madam_pixweights
 
         if self._name_out is not None:
             global_offset = 0
