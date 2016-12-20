@@ -445,7 +445,8 @@ class OpMadam(Operator):
                 if not self._pixels_nested:
                     # Madam expects the pixels to be in nested ordering
                     pixels = pixels.copy()
-                    pixels = hp.ring2nest(nside, pixels)
+                    good = pixels >= 0
+                    pixels[good] = hp.ring2nest(nside, pixels[good])
 
                 if self._apply_flags:
                     pixels = pixels.copy()
@@ -568,31 +569,33 @@ class OpMadam(Operator):
 
         if not self._purge_pixels:
             # restore the pixels from the Madam buffers
-            global_offset = 0
+            offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     pixels = -np.ones(nlocal, dtype=pixels_dtype)
-                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart
                         pixels[istart:istop] = madam_pixels[offset:offset+nn]
                         offset += nn
+                    npix = 12*nside**2
+                    good = np.logical_and(pixels >= 0, pixels < npix)
+                    if not self._pixels_nested:
+                        pixels[good] = hp.nest2ring(nside, pixels[good])
+                    pixels[np.logical_not(good)] = -1
                     cachename = "{}_{}".format(self._pixels, det)
                     tod.cache.put(cachename, pixels, replace=True)
-                global_offset = offset
             del madam_pixels
 
         if not self._purge_weights and nnz == nnz_full:
             # restore the weights from the Madam buffers
-            global_offset = 0
+            offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     weights = np.zeros(nlocal*nnz, dtype=weight_dtype)
-                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = (istop - istart) * nnz
                         weights[istart*nnz:istop*nnz] \
@@ -601,23 +604,20 @@ class OpMadam(Operator):
                     cachename = "{}_{}".format(self._weights, det)
                     tod.cache.put(cachename, weights.reshape([-1, nnz]),
                                   replace=True)
-                global_offset = offset
             del madam_pixweights
 
         if self._name_out is not None:
-            global_offset = 0
+            offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     signal = np.ones(nlocal) * np.nan
-                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart
                         signal[istart:istop] = madam_signal[offset:offset+nn]
                         offset += nn
                     cachename = "{}_{}".format(self._name_out, det)
                     tod.cache.put(cachename, signal, replace=True)
-                global_offset = offset
 
         return
