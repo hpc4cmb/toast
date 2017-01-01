@@ -105,6 +105,7 @@ namespace toast {
 }
 
 #include <toast/memory.hpp>
+#include <toast/sf.hpp>
 #include <toast/rng.hpp>
 #include <toast/qarray.hpp>
 #include <toast/fft.hpp>
