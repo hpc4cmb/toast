@@ -145,6 +145,14 @@ if test "$ax_have_mkl" = "no"; then
 fi
 AM_CONDITIONAL([HAVE_AM_FFTW], [test $ax_have_fftw = yes])
 dnl +------------------------------------------------
+dnl | Check for WCSLIB
+dnl +------------------------------------------------
+ax_have_wcslib=no
+AC_LANG_PUSH([C])
+ACX_WCSLIB([ax_have_wcslib=yes;AC_DEFINE(HAVE_WCSLIB,1,[Define we have wcslib])], AC_MSG_WARN([Could not find wcslib- projections disabled]))
+AC_LANG_POP([C])
+AM_CONDITIONAL([HAVE_AM_WCSLIB], [test $ax_have_wcslib = yes])
+dnl +------------------------------------------------
 dnl | Check for BLAS and LAPACK
 dnl +------------------------------------------------
 ax_have_lapack=no
@@ -229,6 +237,13 @@ else
     AC_MSG_NOTICE([  LAPACK link               : $LAPACK_LIBS $BLAS_LIBS])
   fi
 
+fi
+
+if test $ax_have_wcslib = no; then
+  AC_MSG_NOTICE([  wcslib                    : Not found])
+else
+  AC_MSG_NOTICE([  wcslib compile            : $WCSLIB_CPPFLAGS])
+  AC_MSG_NOTICE([  wcslib link               : $WCSLIB])
 fi
 
 if test $toast_python = yes; then
