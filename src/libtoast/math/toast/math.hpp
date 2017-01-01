@@ -10,6 +10,9 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <limits>
 #include <exception>
+#include <memory>
+#include <vector>
+#include <map>
 
 #include <cstdlib>
 #include <cstdint>

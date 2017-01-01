@@ -29,12 +29,14 @@ libtoast_math_la_include_HEADERS = \
 toast/memory.hpp \
 toast/rng.hpp \
 toast/qarray.hpp \
-toast/math.hpp
+toast/math.hpp \
+toast/fft.hpp
 
 libtoast_math_la_SOURCES = \
 toast_memory.cpp \
 toast_rng.cpp \
-toast_qarray.cpp
+toast_qarray.cpp \
+toast_fft.cpp
 
 
 # install / uninstall Random123 headers
