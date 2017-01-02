@@ -70,7 +70,7 @@ class r1d_fftw : public toast::fft::r1d {
 
             fftw_r2r_kind kind;
 
-            if ( dir == toast::fft::FORWARD ) {
+            if ( dir == toast::fft::direction::forward ) {
                 rawin = traw_;
                 rawout = fraw_;
                 kind = FFTW_R2HC;
@@ -82,7 +82,7 @@ class r1d_fftw : public toast::fft::r1d {
 
             flags = flags | FFTW_DESTROY_INPUT;
 
-            if ( type == toast::fft::PLAN_BEST ) {
+            if ( type == toast::fft::plan_type::best ) {
                 flags = flags | FFTW_MEASURE;
             } else {
                 flags = flags | FFTW_ESTIMATE;
@@ -107,7 +107,7 @@ class r1d_fftw : public toast::fft::r1d {
             double * rawout;
             double norm;
 
-            if ( dir_ == toast::fft::FORWARD ) {
+            if ( dir_ == toast::fft::direction::forward ) {
                 rawout = fraw_;
                 norm = scale_;
             } else {
@@ -186,7 +186,7 @@ class r1d_mkl : public toast::fft::r1d {
 
             status = DftiSetValue ( descriptor_, DFTI_PACKED_FORMAT, DFTI_PERM_FORMAT );
 
-            if ( dir_ == toast::fft::FORWARD ) {
+            if ( dir_ == toast::fft::direction::forward ) {
                 status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, scale );
                 status = DftiSetValue ( descriptor_, DFTI_BACKWARD_SCALE, 1.0 );
             } else {
@@ -212,7 +212,7 @@ class r1d_mkl : public toast::fft::r1d {
         void exec ( ) {
             MKL_LONG status = 0;
 
-            if ( dir_ == toast::fft::FORWARD ) {
+            if ( dir_ == toast::fft::direction::forward ) {
                 status = DftiComputeForward ( descriptor_, traw_ );
                 cce2hc ( mult_, length_, traw_, fraw_ );
             } else {
@@ -330,18 +330,16 @@ toast::fft::r1d::r1d ( int64_t length, int64_t n, plan_type type, direction dir,
 }
 
 
-std::shared_ptr < toast::fft::r1d > toast::fft::r1d::create ( int64_t length, int64_t n, plan_type type, direction dir, double scale ) {
+toast::fft::r1d * toast::fft::r1d::create ( int64_t length, int64_t n, plan_type type, direction dir, double scale ) {
 
 #ifdef HAVE_MKL
 
-    std::shared_ptr < fft::r1d > result ( new r1d_mkl ( length, n, type, dir, scale ) );
-    return result;
+    return new r1d_mkl ( length, n, type, dir, scale );
 
 #else
 #  ifdef HAVE_FFTW
 
-    std::shared_ptr < fft::r1d > result ( new r1d_fftw ( length, n, type, dir, scale ) );
-    return result;
+    return new r1d_fftw ( length, n, type, dir, scale );
 
 #  else
 
@@ -350,7 +348,7 @@ std::shared_ptr < toast::fft::r1d > toast::fft::r1d::create ( int64_t length, in
 #  endif
 #endif
   
-    return std::shared_ptr < fft::r1d > ();
+    return NULL;
 }
 
 
@@ -391,13 +389,13 @@ void toast::fft::r1d_plan_store::cache ( int64_t len, int64_t n ) {
         std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator fit = frank_plan.find ( key );
         if ( fit == frank_plan.end() ) {
             // allocate plan and add to store
-            frank_plan[ key ] = toast::fft::r1d::create ( len, n, toast::fft::PLAN_FAST, toast::fft::FORWARD, 1.0 );
+            frank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::forward, 1.0 ) );
         }
 
         std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator rit = rrank_plan.find ( key );
         if ( rit == rrank_plan.end() ) {
             // allocate plan and add to store
-            rrank_plan[ key ] = toast::fft::r1d::create ( len, n, toast::fft::PLAN_FAST, toast::fft::BACKWARD, 1.0 );
+            rrank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::backward, 1.0 ) );
         }
 
     }
@@ -425,7 +423,7 @@ toast::fft::r1d_p toast::fft::r1d_plan_store::forward ( int64_t len, int64_t n )
             TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
         }
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d::create ( len, n, toast::fft::PLAN_FAST, toast::fft::FORWARD, 1.0 );
+        rank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::forward, 1.0 ) );
     }
 
     return rank_plan[ key ];
@@ -451,7 +449,7 @@ toast::fft::r1d_p toast::fft::r1d_plan_store::backward ( int64_t len, int64_t n 
             TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
         }
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d::create ( len, n, toast::fft::PLAN_FAST, toast::fft::BACKWARD, 1.0 );
+        rank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::backward, 1.0 ) );
     }
 
     return rank_plan[ key ];  
