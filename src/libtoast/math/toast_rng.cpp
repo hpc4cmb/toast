@@ -39,7 +39,7 @@ void toast::rng::dist_uint64 ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
 
 // Uniform double precision values on [0.0, 1.0]
 
-void toast::rng::dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void toast::rng::dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     RNG rng;
     RNG::ctr_type c = {{ counter1, counter2 }};
     RNG::ukey_type uk = {{ key1, key2 }};
@@ -57,7 +57,7 @@ void toast::rng::dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
 // Uniform double precision values on [-1.0, 1.0]
 
-void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     RNG rng;
     RNG::ctr_type c = {{ counter1, counter2 }};
     RNG::ukey_type uk = {{ key1, key2 }};
@@ -75,7 +75,7 @@ void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
 // Normal distribution.
 
-void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     RNG rng;
     RNG::ctr_type c = {{ counter1, counter2 }};
     RNG::ukey_type uk = {{ key1, key2 }};

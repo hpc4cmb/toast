@@ -1,6 +1,7 @@
-SUBDIRS = libtoast tests
+SUBDIRS = libtoast
 
-#if HAVE_AM_PYTHON
-#  SUBDIRS += python
-#endif
+if HAVE_AM_PYTHON
+  SUBDIRS += python
+endif
 
+SUBDIRS += tests

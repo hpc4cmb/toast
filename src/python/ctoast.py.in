@@ -1,0 +1,346 @@
+##
+##  Time Ordered Astrophysics Scalable Tools (TOAST)
+##
+## Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+## All rights reserved.  Use of this source code is governed by 
+## a BSD-style license that can be found in the LICENSE file.
+##
+
+import ctypes as ct
+
+from ctypes.util import find_library
+
+import numpy as np
+import numpy.ctypeslib as npc
+
+
+# open library
+
+library_path = "@LIBTOAST_PATH@"
+lib = ct.CDLL(library_path, mode=ct.RTLD_GLOBAL)
+
+# libc routines
+
+libc_path = find_library("libc")
+libc = ct.CDLL(libc_path, mode=ct.RTLD_GLOBAL)
+
+libc.free.restype = None
+libc.free.argtypes = [ ct.c_void_p ]
+
+
+#--------------------------------------
+# Math sub-library
+#--------------------------------------
+
+# special functions
+
+lib.ctoast_sf_sin.restype = None
+lib.ctoast_sf_sin.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_sin(ang):
+    n = len(ang)
+    sinout = np.zeros_like(ang)
+    lib.ctoast_sf_sin(n, ang, sinout)
+    return sinout
+
+lib.ctoast_sf_cos.restype = None
+lib.ctoast_sf_cos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_cos(ang):
+    n = len(ang)
+    cosout = np.zeros_like(ang)
+    lib.ctoast_sf_cos(n, ang, cosout)
+    return cosout
+
+lib.ctoast_sf_sincos.restype = None
+lib.ctoast_sf_sincos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_sincos(ang):
+    n = len(ang)
+    sinout = np.zeros_like(ang)
+    cosout = np.zeros_like(ang)
+    lib.ctoast_sf_sincos(n, ang, sinout, cosout)
+    return (sinout, cosout)
+
+lib.ctoast_sf_atan2.restype = None
+lib.ctoast_sf_atan2.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_atan2(y, x):
+    n = len(y)
+    if y.shape != x.shape:
+        raise RuntimeError("inputs must be the same length")
+    ang = np.zeros_like(y)
+    lib.ctoast_sf_atan2(n, y, x, ang)
+    return ang
+
+lib.ctoast_sf_sqrt.restype = None
+lib.ctoast_sf_sqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_sqrt(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_sqrt(n, input, out)
+    return out
+
+lib.ctoast_sf_rsqrt.restype = None
+lib.ctoast_sf_rsqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_rsqrt(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_rsqrt(n, input, out)
+    return out
+
+lib.ctoast_sf_exp.restype = None
+lib.ctoast_sf_exp.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_exp(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_exp(n, input, out)
+    return out
+
+lib.ctoast_sf_log.restype = None
+lib.ctoast_sf_log.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_log(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_log(n, input, out)
+    return out
+
+lib.ctoast_sf_fast_sin.restype = None
+lib.ctoast_sf_fast_sin.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_sin(ang):
+    n = len(ang)
+    sinout = np.zeros_like(ang)
+    lib.ctoast_sf_fast_sin(n, ang, sinout)
+    return sinout
+
+lib.ctoast_sf_fast_cos.restype = None
+lib.ctoast_sf_fast_cos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_cos(ang):
+    n = len(ang)
+    cosout = np.zeros_like(ang)
+    lib.ctoast_sf_fast_cos(n, ang, cosout)
+    return cosout
+
+lib.ctoast_sf_fast_sincos.restype = None
+lib.ctoast_sf_fast_sincos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_sincos(ang):
+    n = len(ang)
+    sinout = np.zeros_like(ang)
+    cosout = np.zeros_like(ang)
+    lib.ctoast_sf_fast_sincos(n, ang, sinout, cosout)
+    return (sinout, cosout)
+
+lib.ctoast_sf_fast_atan2.restype = None
+lib.ctoast_sf_fast_atan2.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_atan2(y, x):
+    n = len(y)
+    if y.shape != x.shape:
+        raise RuntimeError("inputs must be the same length")
+    ang = np.zeros_like(y)
+    lib.ctoast_sf_fast_atan2(n, y, x, ang)
+    return ang
+
+lib.ctoast_sf_fast_sqrt.restype = None
+lib.ctoast_sf_fast_sqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_sqrt(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_fast_sqrt(n, input, out)
+    return out
+
+lib.ctoast_sf_fast_rsqrt.restype = None
+lib.ctoast_sf_fast_rsqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_rsqrt(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_fast_rsqrt(n, input, out)
+    return out
+
+lib.ctoast_sf_fast_exp.restype = None
+lib.ctoast_sf_fast_exp.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_exp(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_fast_exp(n, input, out)
+    return out
+
+lib.ctoast_sf_fast_log.restype = None
+lib.ctoast_sf_fast_log.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def sf_fast_log(input):
+    n = len(input)
+    out = np.zeros_like(input)
+    lib.ctoast_sf_fast_log(n, input, out)
+    return out
+
+
+# RNG
+
+lib.ctoast_rng_dist_uint64.restype = None
+lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def rng_dist_uint64(n, key1, key2, counter1, counter2):
+    ret = np.zeros(n, dtype=np.uint64)
+    lib.ctoast_rng_dist_uint64(n, key1, key2, counter1, counter2, ret)
+    return ret
+
+lib.ctoast_rng_dist_uniform_01.restype = None
+lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
+    ret = np.zeros(n, dtype=np.float64)
+    lib.ctoast_rng_dist_uniform_01(n, key1, key2, counter1, counter2, ret)
+    return ret
+
+lib.ctoast_rng_dist_uniform_11.restype = None
+lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
+    ret = np.zeros(n, dtype=np.float64)
+    lib.ctoast_rng_dist_uniform_11(n, key1, key2, counter1, counter2, ret)
+    return ret
+
+lib.ctoast_rng_dist_normal.restype = None
+lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def rng_dist_normal(n, key1, key2, counter1, counter2):
+    ret = np.zeros(n, dtype=np.float64)
+    lib.ctoast_rng_dist_normal(n, key1, key2, counter1, counter2, ret)
+    return ret
+
+
+# Quaternion array
+
+# void ctoast_qarray_list_dot ( size_t n, size_t m, size_t d, double const * a, double const * b, double * dotprod );
+
+# void ctoast_qarray_inv ( size_t n, double * q );
+
+# void ctoast_qarray_amplitude ( size_t n, size_t m, size_t d, double const * v, double * norm );
+
+# void ctoast_qarray_normalize ( size_t n, size_t m, size_t d, double const * q_in, double * q_out );
+
+# void ctoast_qarray_normalize_inplace ( size_t n, size_t m, size_t d, double * q );
+
+# void ctoast_qarray_rotate ( size_t n, double const * q, double const * v_in, double * v_out );
+
+# void ctoast_qarray_mult ( size_t n, double const * p, double const * q, double * r );
+
+# void ctoast_qarray_slerp ( size_t n_time, size_t n_targettime, double const * time, double const * targettime, double const * q_in, double * q_interp );
+
+# void ctoast_qarray_exp ( size_t n, double const * q_in, double * q_out );
+
+# void ctoast_qarray_ln ( size_t n, double const * q_in, double * q_out );
+
+# void ctoast_qarray_pow ( size_t n, double const * p, double const * q_in, double * q_out );
+
+# void ctoast_qarray_from_axisangle ( size_t n, double const * axis, double const * angle, double * q_out );
+
+# void ctoast_qarray_to_axisangle ( size_t n, double const * q, double * axis, double * angle );
+
+# void ctoast_qarray_to_rotmat ( double const * q, double * rotmat );
+
+# void ctoast_qarray_from_rotmat ( const double * rotmat, double * q );
+
+# void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2, double * q );
+
+# # FFT
+
+# typedef enum {
+#     PLAN_FAST = 0,
+#     PLAN_BEST = 1
+# } ctoast_fft_plan_type;
+  
+# typedef enum {
+#     FORWARD = 0,
+#     BACKWARD = 1
+# } ctoast_fft_direction;
+
+# struct ctoast_fft_r1d_;
+# typedef struct ctoast_fft_r1d_ ctoast_fft_r1d;
+
+# ctoast_fft_r1d * ctoast_fft_r1d_alloc ( int64_t length, int64_t n, ctoast_fft_plan_type type, ctoast_fft_direction dir, double scale );
+# void ctoast_fft_r1d_free ( ctoast_fft_r1d * frd );
+
+# double ** ctoast_fft_r1d_tdata ( ctoast_fft_r1d * frd );
+
+# double ** ctoast_fft_r1d_fdata ( ctoast_fft_r1d * frd );
+
+# void ctoast_fft_r1d_exec ( ctoast_fft_r1d * frd );
+
+# struct ctoast_fft_r1d_plan_store_;
+# typedef struct ctoast_fft_r1d_plan_store_ ctoast_fft_r1d_plan_store;
+
+# ctoast_fft_r1d_plan_store * ctoast_fft_r1d_plan_store_get ( );
+
+# void ctoast_fft_r1d_plan_store_clear ( ctoast_fft_r1d_plan_store * pstore );
+
+# void ctoast_fft_r1d_plan_store_cache ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+
+# ctoast_fft_r1d * ctoast_fft_r1d_plan_store_forward ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+
+# ctoast_fft_r1d * ctoast_fft_r1d_plan_store_backward ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+
+# // Healpix
+
+# struct ctoast_healpix_pixels_;
+# typedef struct ctoast_healpix_pixels_ ctoast_healpix_pixels;
+
+# ctoast_healpix_pixels * ctoast_healpix_pixels_alloc ( int64_t nside );
+# void ctoast_healpix_pixels_free ( ctoast_healpix_pixels * hpix );
+
+# void ctoast_healpix_pixels_reset ( ctoast_healpix_pixels * hpix, int64_t nside );
+
+# void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, double * phi, int * region, double * z, double * rtz );
+
+# void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, int * region, double * z, double * rtz );
+
+# void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+
+# void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+
+# void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+
+# void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+
+# void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+
+# void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+
+# void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * ringpix, int64_t * nestpix );
+
+# void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * nestpix, int64_t * ringpix );
+
+# void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+
+# void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+
+# void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+
+# void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+
+
+# //--------------------------------------
+# // TOD sub-library
+# //--------------------------------------
+
+
+
+# //--------------------------------------
+# // Map functions
+# //--------------------------------------
+
+
+
+
+

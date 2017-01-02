@@ -184,7 +184,7 @@ AC_CONFIG_FILES([src/libtoast/fakempi/Makefile])
 AC_CONFIG_FILES([src/libtoast/math/Makefile])
 AC_CONFIG_FILES([src/libtoast/tod/Makefile])
 AC_CONFIG_FILES([src/libtoast/map/Makefile])
-#AC_CONFIG_FILES([src/python/Makefile])
+AC_CONFIG_FILES([src/python/Makefile])
 AC_CONFIG_FILES([src/tests/gtest/Makefile])
 AC_CONFIG_FILES([src/tests/Makefile])
 dnl +------------------------------------------------
