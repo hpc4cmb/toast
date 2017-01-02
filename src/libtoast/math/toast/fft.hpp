@@ -10,15 +10,15 @@ a BSD-style license that can be found in the LICENSE file.
 
 namespace toast { namespace fft {
 
-    typedef enum {
-        PLAN_FAST,
-        PLAN_BEST
-    } plan_type;
+    enum class plan_type {
+        fast,
+        best
+    };
   
-    typedef enum {
-        FORWARD,
-        BACKWARD
-    } direction;
+    enum class direction {
+        forward,
+        backward
+    };
   
 
     // This uses aligned memory allocation
@@ -29,7 +29,7 @@ namespace toast { namespace fft {
 
         public :
 
-            static std::shared_ptr < r1d > create ( int64_t length, int64_t n, plan_type type, direction dir, double scale );
+            static r1d * create ( int64_t length, int64_t n, plan_type type, direction dir, double scale );
 
             virtual ~r1d ( ) { }          
 

@@ -25,13 +25,16 @@ AM_LIBS =
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
 
-include_HEADERS = toast.hpp
-noinst_HEADERS = toast_internal.hpp
+
+include_HEADERS = toast.hpp ctoast.h
+
+noinst_HEADERS = toast_internal.hpp ctoast.hpp
 
 lib_LTLIBRARIES = libtoast.la
 
 libtoast_la_SOURCES = \
-toast.cpp
+toast.cpp \
+ctoast.cpp
 
 libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@
 
