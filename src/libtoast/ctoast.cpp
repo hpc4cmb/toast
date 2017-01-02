@@ -101,17 +101,17 @@ void ctoast_rng_dist_uint64 ( size_t n, uint64_t key1, uint64_t key2, uint64_t c
     return;
 }
 
-void ctoast_rng_dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void ctoast_rng_dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, data );
     return;
 }
 
-void ctoast_rng_dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void ctoast_rng_dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     toast::rng::dist_uniform_11 ( n, key1, key2, counter1, counter2, data );
     return;
 }
 
-void ctoast_rng_dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, uint64_t * data ) {
+void ctoast_rng_dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
     toast::rng::dist_normal ( n, key1, key2, counter1, counter2, data );
     return;
 }
