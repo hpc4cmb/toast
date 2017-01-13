@@ -21,13 +21,13 @@ from .sim_noise import AnalyticNoise
 from .sim_interval import regular_intervals
 
 from .sim_detdata import (OpSimNoise, OpSimGradient,
-    OpSimScan)
+    OpSimScan, OpSimDipole)
 
 from .noise import Noise
 
 from .pointing_math import quat2angle, aberrate
 
-from .tod_math import calibrate
+from .tod_math import calibrate, dipole, sim_noise_timestream
 
 from .conviqt import OpSimConviqt
 

@@ -6,148 +6,14 @@
 import unittest
 
 import numpy as np
-import scipy.fftpack as sft
-import scipy.interpolate as si
-import scipy.sparse as sp
+
 import healpy as hp
 
 from . import qarray as qa
 from .tod import TOD
 from .noise import Noise
 from ..operator import Operator
-from .. import rng as rng
-
-
-def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
-                         rate, firstsamp, samples, oversample, freq, psd):
-    """
-    Generate a noise timestream, given a starting RNG state.
-
-    Use the RNG parameters to generate unit-variance Gaussian samples
-    and then modify the Fourier domain amplitudes to match the desired
-    PSD.
-
-    The RNG (Threefry2x64 from Random123) takes a "key" and a "counter"
-    which each consist of two unsigned 64bit integers.  These four
-    numbers together uniquely identify a single sample.  We construct
-    those four numbers in the following way:
-
-    key1 = realization * 2^32 + telescope * 2^16 + component
-    key2 = obsindx * 2^32 + detindx 
-    counter1 = currently unused (0)
-    counter2 = sample in stream
-
-    counter2 is incremented internally by the RNG function as it calls
-    the underlying Random123 library for each sample.
-
-    Args:
-        realization (int): the Monte Carlo realization.
-        telescope (int): a unique index assigned to a telescope.
-        component (int): a number representing the type of timestream
-            we are generating (detector noise, common mode noise,
-            atmosphere, etc).
-        obsindx (int): the global index of this observation.
-        detindx (int): the global index of this detector.
-        rate (float): the sample rate.
-        firstsamp (int): the start sample in the stream.
-        samples (int): the number of samples to generate.
-        oversample (int): the factor by which to expand the FFT length
-            beyond the number of samples.
-        freq (array): the frequency points of the PSD.
-        psd (array): the PSD values.
-
-    Returns (tuple):
-        the timestream array, the interpolated PSD frequencies, and
-            the interpolated PSD values.
-    """
-    
-    fftlen = 2
-    while fftlen <= (oversample * samples):
-        fftlen *= 2
-    npsd = fftlen // 2 + 1
-    norm = rate * float(npsd - 1)
-
-    interp_freq = np.fft.rfftfreq(fftlen, 1/rate)
-    if interp_freq.size != npsd:
-        raise RuntimeError("interpolated PSD frequencies do not have expected "
-                           "length")
-
-    # Ensure that the input frequency range includes all the frequencies
-    # we need.  Otherwise the extrapolation is not well defined.
-
-    if np.amin(freq) < 0.0:
-        raise RuntimeError("input PSD frequencies should be >= zero")
-
-    if np.amin(psd) < 0.0:
-        raise RuntimeError("input PSD values should be >= zero")
-
-    increment = rate / fftlen
-
-    if freq[0] > increment:
-        raise RuntimeError("input PSD does not go to low enough frequency to "
-                           "allow for interpolation")
-
-    nyquist = rate / 2
-    if np.abs((freq[-1]-nyquist)/nyquist) > .01:
-        raise RuntimeError(
-            "last frequency element does not match Nyquist "
-            "frequency for given sample rate: {} != {}".format(
-                freq[-1], nyquist))
-
-    # Perform a logarithmic interpolation.  In order to avoid zero values, we 
-    # shift the PSD by a fixed amount in frequency and amplitude.
-
-    psdshift = 0.01 * np.amin(psd[(psd > 0.0)])
-    freqshift = increment
-
-    loginterp_freq = np.log10(interp_freq + freqshift)
-    logfreq = np.log10(freq + freqshift)
-    logpsd = np.log10(psd + psdshift)
-
-    interp = si.interp1d(logfreq, logpsd, kind='linear',
-                         fill_value='extrapolate')
-    
-    loginterp_psd = interp(loginterp_freq)
-    interp_psd = np.power(10.0, loginterp_psd) - psdshift
-
-    # Zero out DC value
-
-    interp_psd[0] = 0.0
-
-    # gaussian Re/Im randoms, packed into a complex valued array
-
-    key1 = realization * 4294967296 + telescope * 65536 + component
-    key2 = obsindx * 4294967296 + detindx 
-    counter1 = 0
-    counter2 = firstsamp * oversample
-
-    rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2), 
-        counter=(counter1, counter2))
-    fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
-
-    # set the Nyquist frequency imaginary part to zero
-
-    fdata[-1] = fdata[-1].real + 0.0j
-
-    # scale by PSD
-
-    scale = np.sqrt(interp_psd * norm)
-    fdata *= scale
-
-    # inverse FFT
-
-    tdata = np.fft.irfft(fdata)
-
-    # subtract the DC level- for just the samples that we are returning
-
-    offset = (fftlen - samples) // 2
-
-    DC = np.mean(tdata[offset:offset+samples])
-    tdata[offset:offset+samples] -= DC
-
-    # return the timestream and interpolated PSD for debugging.
-    
-    return (tdata[offset:offset+samples], interp_freq, interp_psd)
+from .tod_math import sim_noise_timestream, dipole
 
 
 class OpSimNoise(Operator):
@@ -434,3 +300,131 @@ class OpSimScan(Operator):
                 ref[:] += maptod
 
         return
+
+
+class OpSimDipole(Operator):
+    """
+    Operator which generates dipole signal for detectors.
+
+    This uses the detector pointing, the telescope velocity vectors, and
+    the solar system motion with respect to the CMB rest frame to compute
+    the observed CMB dipole signal.  The dipole timestream is either added
+    (default) or subtracted from a cache object.
+
+    The telescope velocity and detector quaternions are assumed to be in
+    the same coordinate system.
+
+    Args:
+        mode (str): this determines what components of the telescope motion
+            are included in the observed dipole.  Valid options are 'solar'
+            for just the solar system motion, 'orbital' for just the motion
+            of the telescope with respect to the solarsystem barycenter, and
+            'total' which is the sum of both (and the default).
+        coord (str): coordinate system of detector pointing.  Valid values
+            are 'C' for equatorial, 'E' for ecliptic and 'G' for galactic.
+        subtract (bool): if True, subtract timestream from cache object,
+            otherwise add it (default).
+        out (str): accumulate data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
+        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen 
+            2009 (see arXiv:0911.1955)
+        solar_speed (float): the amplitude of the solarsystem barycenter 
+            velocity with respect to the CMB in Km/s.  The default value is 
+            based on http://arxiv.org/abs/0803.0732.
+        solar_gal_lat (float): the latitude in degrees in galactic 
+            coordinates for the direction of motion of the solarsystem with 
+            respect to the CMB rest frame.
+        solar_gal_lon (float): the longitude in degrees in galactic 
+            coordinates for the direction of motion of the solarsystem with 
+            respect to the CMB rest frame.
+        freq (float): optional observing frequency in Hz (not GHz).
+    """
+    def __init__(self, mode='total', coord='C', subtract=False, out='dipole', 
+        cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26, solar_gal_lon=263.99,
+        freq=0):
+
+        self._mode = mode
+        self._coord = coord
+        self._subtract = subtract
+        self._out = out
+        self._cmb = cmb
+        self._freq = freq
+        self._solar_speed = solar_speed
+        self._solar_gal_theta = np.deg2rad(90.0 - solar_gal_lat)
+        self._solar_gal_phi = np.deg2rad(solar_gal_lon)
+
+        projected = self._solar_speed * np.sin(self._solar_gal_theta)
+        z = self._solar_speed * np.cos(self._solar_gal_theta)
+        x = projected * np.cos(self._solar_gal_phi)
+        y = projected * np.sin(self._solar_gal_phi)
+        self._solar_gal_vel = np.array([x, y, z])
+
+        # rotate solar system velocity to desired coordinate frame
+
+        if self._coord == 'G':
+            self._solar_vel = self._solar_gal_vel
+        else:
+            rotmat = hp.rotator.Rotator(coord=['G', self._coord]).mat
+            self._solar_vel = np.ravel(np.dot(rotmat, self._solar_gal_vel))
+
+        super().__init__()
+
+
+    def exec(self, data):
+        """
+        Create the timestreams.
+
+        This loops over all observations and detectors and uses the pointing,
+        the telescope motion, and the solar system motion to compute the 
+        observed dipole.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
+        comm = data.comm
+        # the global communicator
+        cworld = comm.comm_world
+        # the communicator within the group
+        cgroup = comm.comm_group
+        # the communicator with all processes with
+        # the same rank within their group
+        crank = comm.comm_rank
+
+        nullquat = np.array([0,0,0,1], dtype=np.float64)
+
+        for obs in data.obs:
+            tod = obs['tod']
+
+            nsamp = tod.local_samples[1]
+
+            vel = None
+            sol = None
+
+            if (self._mode == 'solar') or (self._mode == 'total'):
+                sol = self._solar_vel
+            if (self._mode == 'orbital') or (self._mode == 'total'):
+                vel = tod.read_velocity()
+
+            for det in tod.local_dets:
+
+                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=nsamp))
+                flags, common = tod.read_flags(detector=det, local_start=0, n=nsamp)
+                totflags = np.copy(flags)
+                totflags |= common
+
+                pdata[(totflags != 0),:] = nullquat
+
+                dipoletod = dipole(pdata, vel=vel, solar=sol, cmb=self._cmb, freq=self._freq)
+
+                cachename = "{}_{}".format(self._out, det)
+                if not tod.cache.exists(cachename):
+                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                ref = tod.cache.reference(cachename)
+
+                if self._subtract:
+                    ref[:] -= dipoletod
+                else:
+                    ref[:] += dipoletod
+
+        return
+
