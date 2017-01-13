@@ -403,6 +403,12 @@ class TODSatellite(TOD):
         self._precangle = precangle
         self._boresight = None
 
+        self._AU = 149597870.7
+        self._radperday = 0.01720209895
+        self._radpersec = self._radperday / 86400.0
+        self._radinc = self._radpersec / self._rate
+        self._earthspeed = self._radpersec * self._AU
+
 
     def set_prec_axis(self, qprec=None):
         """
@@ -484,7 +490,16 @@ class TODSatellite(TOD):
 
 
     def _get_position(self, start, n):
-        return np.zeros((n,3), dtype=np.float64)
+        # For this simple class, assume that the Earth is located
+        # along the X axis at time == 0.0s.  We also just use the
+        # mean values for distance and angular speed.  Classes for 
+        # real experiments should obviously use ephemeris data.
+        rad = np.fmod( (start - self.firsttime) * self._radpersec, 2.0 * np.pi )
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad
+        x = self._AU * np.cos(ang)
+        y = self._AU * np.sin(ang)
+        z = np.zeros_like(x)
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
 
     def _put_position(self, start, pos):
@@ -493,7 +508,16 @@ class TODSatellite(TOD):
 
 
     def _get_velocity(self, start, n):
-        return np.zeros((n,3), dtype=np.float64)
+        # For this simple class, assume that the Earth is located
+        # along the X axis at time == 0.0s.  We also just use the
+        # mean values for distance and angular speed.  Classes for 
+        # real experiments should obviously use ephemeris data.
+        rad = np.fmod( (start - self.firsttime) * self._radpersec, 2.0 * np.pi )
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
+        x = self._earthspeed * np.cos(ang)
+        y = self._earthspeed * np.sin(ang)
+        z = np.zeros_like(x)
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
     
     def _put_velocity(self, start, vel):
