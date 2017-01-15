@@ -291,7 +291,7 @@ class OpMadam(Operator):
         if 'nside_map' not in self._params:
             raise RuntimeError(
                 'OpMadam: "nside_map" must be set in the parameter dictionary')
-        nside = self._params['nside_map']
+        nside = int(self._params['nside_map'])
 
         parstring = self._dict2parstring(self._params)
 
