@@ -494,7 +494,7 @@ class TODSatellite(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for 
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self.firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
         y = self._AU * np.sin(ang)
@@ -512,7 +512,7 @@ class TODSatellite(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for 
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self.firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
         x = self._earthspeed * np.cos(ang)
         y = self._earthspeed * np.sin(ang)
