@@ -103,8 +103,7 @@ class OpMadam(Operator):
         flag_mask (int): the integer bit mask (0-255) that should be 
             used with the detector flags in a bitwise AND.
         common_flag_name (str): the name of the cache object 
-            (<common_flag_name>_<detector>) to use for the common flags.  
-            If None, use the TOD.
+            to use for the common flags.  If None, use the TOD.
         common_flag_mask (int): the integer bit mask (0-255) that should
             be used with the common flags in a bitwise AND.
         apply_flags (bool): whether to apply flags to the pixel numbers.

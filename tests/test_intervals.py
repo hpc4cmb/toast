@@ -11,6 +11,9 @@ if 'TOAST_NO_MPI' in os.environ.keys():
 else:
     from mpi4py import MPI
 
+import numpy as np
+import numpy.testing as nt
+
 from toast.dist import *
 from toast.tod.interval import *
 from toast.tod.sim_interval import *
@@ -29,7 +32,6 @@ class IntervalTest(MPITestCase):
         self.rate = 123.456
         self.duration = 24 * 3601.23
         self.gap = 3600.0
-        self.chunks = 24
         self.start = 5432.1
         self.first = 10
         self.nint = 3
@@ -38,18 +40,17 @@ class IntervalTest(MPITestCase):
     def test_regular(self):
         start = MPI.Wtime()
         
-        intrvls = regular_intervals(self.nint, self.start, self.first, self.rate, self.duration, self.gap, chunks=self.chunks)
+        intrvls = regular_intervals(self.nint, self.start, self.first, self.rate, self.duration, self.gap)
 
-        totsamp = self.duration + self.gap
+        goodsamp = self.nint * ( int(0.5 + self.duration * self.rate) + 1 )
 
-        # for i in range(len(intrvls)):
-        #     print("--- {} ---".format(i))
-        #     print(intrvls[i].first)
-        #     print(intrvls[i].last)
-        #     print(intrvls[i].start)
-        #     print(intrvls[i].stop)
+        check = 0
 
-        #self.assertTrue(False)
+        for it in intrvls:
+            print(it.first," ",it.last," ",it.start," ",it.stop)
+            check += it.last - it.first + 1
+
+        nt.assert_equal(check, goodsamp)
 
         stop = MPI.Wtime()
         elapsed = stop - start

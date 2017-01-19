@@ -182,18 +182,27 @@ def main():
 
     data = toast.Data(comm)
 
-    # construct the list of intervals
+    # construct the list of valid data intervals
+
+    intervals = tt.regular_intervals(int(args.numobs), 0.0, 0, samplerate, 3600*float(args.obs), 3600*float(args.gap))
+
+    # now divide the data up for distribution
 
     obschunks = int(args.obschunks)
+    if len(intervals) > 1:
+        itsamp = intervals[1].first - intervals[0].first
+    else:
+        itsamp = intervals[0].last - intervals[0].first + 1
 
-    intervals = tt.regular_intervals(int(args.numobs), 0.0, 0, samplerate, 3600*float(args.obs), 3600*float(args.gap), chunks=obschunks)
+    chnks = toast.distribute_uniform(itsamp, obschunks)
 
     distsizes = []
     for it in intervals:
-        distsizes.append(it.last - it.first + 1)
+        for c in chnks:
+            distsizes.append(c[1])
 
     totsamples = np.sum(distsizes)
-
+    
     # create the single TOD for this observation
 
     detectors = sorted(fp.keys())

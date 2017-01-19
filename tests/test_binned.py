@@ -17,10 +17,12 @@ import numpy.testing as nt
 import healpy as hp
 
 from toast.tod.tod import *
+from toast.tod.interval import *
 from toast.tod.pointing import *
 from toast.tod.sim_tod import *
 from toast.tod.sim_detdata import *
 from toast.tod.sim_noise import *
+from toast.tod.sim_interval import *
 from toast.map import *
 import toast.map._noise as nh
 
@@ -104,6 +106,21 @@ class BinnedTest(MPITestCase):
 
         self.chunksize = chunksize
 
+        # define some valid data intervals so that we can test flag handling
+        # in the gaps
+
+        nint = 4
+        intsamp = self.totsamp // nint
+        inttime = (intsamp - 1) / self.rate
+        durtime = inttime * 0.85
+        gaptime = inttime - durtime
+        intrvls = regular_intervals(nint, 0, 0, self.rate, durtime, gaptime)
+        self.validsamp = 0
+        for it in intrvls:
+            print(it.first," ",it.last," ",it.start," ",it.stop)
+            self.validsamp += it.last - it.first + 1
+        print(self.validsamp, " good samples")
+
         for i in range(nobs):
             # create the TOD for this observation
 
@@ -135,7 +152,7 @@ class BinnedTest(MPITestCase):
             ob['name'] = 'test'
             ob['id'] = 0
             ob['tod'] = tod
-            ob['intervals'] = None
+            ob['intervals'] = intrvls
             ob['baselines'] = None
             ob['noise'] = nse
 
@@ -173,6 +190,10 @@ class BinnedTest(MPITestCase):
 
     def test_binned(self):
         start = MPI.Wtime()
+
+        # flag data outside valid intervals
+        gapflagger = OpFlagGaps(common_flag_name='comflag')
+        gapflagger.exec(self.data)
 
         # generate noise timestreams from the noise model
         nsig = OpSimNoise()
@@ -219,7 +240,7 @@ class BinnedTest(MPITestCase):
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="noise")
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="noise", common_flag_name="comflag")
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -268,7 +289,8 @@ class BinnedTest(MPITestCase):
         pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
-        madam = OpMadam(params=pars, detweights=detweights, name="noise")
+        madam = OpMadam(params=pars, detweights=detweights, name="noise",
+            common_flag_name="comflag")
 
         if madam.available:
             madam.exec(self.data)
@@ -290,7 +312,7 @@ class BinnedTest(MPITestCase):
                 nt.assert_equal(hits, toasthits)
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp, tothits)
+                nt.assert_equal(self.validsamp, tothits)
 
                 covfile = os.path.join(madam_out, 'madam_wcov_inv.fits')
                 cov = hp.read_map(covfile, nest=True, field=None)
