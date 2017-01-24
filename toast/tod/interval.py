@@ -7,6 +7,8 @@ import unittest
 
 import numpy as np
 
+from ..operator import Operator
+
 
 class Interval(object):
     """
@@ -105,3 +107,82 @@ class Interval(object):
         e = self.last
         return (e - b + 1)
     
+
+class OpFlagGaps(Operator):
+    """
+    Operator which applies common flags to gaps between valid intervals.
+
+    Args:
+        common_flag_name (str): the name of the cache object 
+            to use for the common flags.  If None, use the TOD.
+        common_flag_value (int): the integer bit mask (0-255) 
+            that should be bitwise ORed with the existing flags.
+    """
+
+    def __init__(self, common_flag_name=None, common_flag_value=1):
+        self._common_flag_name = common_flag_name
+        self._common_flag_value = common_flag_value
+        super().__init__()
+
+    def exec(self, data):
+        """
+        Flag samples between valid intervals.
+
+        This iterates over all observations and flags samples
+        which lie outside the list of intervals.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
+        # the two-level pytoast communicator
+        comm = data.comm
+        # the global communicator
+        cworld = comm.comm_world
+        # the communicator within the group
+        cgroup = comm.comm_group
+        # the communicator with all processes with
+        # the same rank within their group
+        crank = comm.comm_rank
+
+        for obs in data.obs:
+            tod = obs['tod']
+            intrvls = obs['intervals']
+
+            if intrvls is None:
+                continue
+
+            local_offset = tod.local_samples[0]
+            local_nsamp = tod.local_samples[1]
+
+            # first, flag all samples
+            gapflags = np.zeros(local_nsamp, dtype=np.uint8)
+            gapflags.fill(self._common_flag_value)
+
+            # now un-flag samples in valid intervals
+            for ival in intrvls:
+                if (ival.last >= local_offset
+                    and ival.first < (local_offset + local_nsamp)):
+                    local_start = ival.first - local_offset
+                    local_stop = ival.last - local_offset
+                    if local_start < 0:
+                        local_start = 0
+                    if local_stop > local_nsamp - 1:
+                        local_stop = local_nsamp - 1
+                    gapflags[local_start:local_stop+1] = 0
+
+            if self._common_flag_name is None:
+                # set TOD common flags
+                flags = tod.read_common_flags(local_start=0, n=local_nsamp)
+                flags |= gapflags
+                tod.write_common_flags(local_start=0, flags=flags)
+            else:
+                # use the cache
+                if not tod.cache.exists(self._common_flag_name):
+                    tod.cache.create(self._common_flag_name, np.uint8, (local_nsamp,))
+                comref = tod.cache.reference(self._common_flag_name)
+                comref[:] |= gapflags
+
+        return
+
+
+

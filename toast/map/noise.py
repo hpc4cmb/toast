@@ -131,6 +131,14 @@ class OpAccumDiag(Operator):
         for obs in data.obs:
             tod = obs['tod']
 
+            commonflags = None
+            if self._apply_flags:
+                if self._common_flag_name is not None:
+                    commonflags = np.copy(tod.cache.reference(self._common_flag_name))
+                else:
+                    commonflags = np.copy(tod.read_common_flags())
+                commonflags &= self._common_flag_mask
+
             # FIXME:  put this into cython and thread over detectors.
 
             for det in tod.local_dets:
@@ -152,16 +160,19 @@ class OpAccumDiag(Operator):
                 # get flags
 
                 if self._apply_flags:
+                    detflags = None
                     if self._flag_name is not None:
                         cacheflagname = "{}_{}".format(self._flag_name, det)
                         detflags = tod.cache.reference(cacheflagname)
+
                         flags = (detflags & self._flag_mask) != 0
                         if self._common_flag_name is not None:
                             commonflags = tod.cache.reference(self._common_flag_name)
                             flags[(commonflags & self._common_flag_mask) != 0] = True
                     else:
-                        detflags, commonflags = tod.read_flags(detector=det)
-                        flags = np.logical_or((detflags & self._flag_mask) != 0, (commonflags & self._common_flag_mask) != 0)
+                        detflags, ctemp = tod.read_flags(detector=det)
+                        
+                    flags = np.logical_or((detflags & self._flag_mask) != 0, commonflags != 0)
 
                     pixels = pixels.copy() # Don't change the cached pixel numbers
                     pixels[flags] = -1

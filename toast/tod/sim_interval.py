@@ -13,7 +13,7 @@ from .interval import Interval
 
 
 
-def regular_intervals(n, start, first, rate, duration, gap, chunks=1):
+def regular_intervals(n, start, first, rate, duration, gap):
     """
     Function to generate regular intervals.
 
@@ -22,7 +22,7 @@ def regular_intervals(n, start, first, rate, duration, gap, chunks=1):
     length of the interval and the gap are rounded to the nearest sample
     and all intervals in the list are created using those lengths.
 
-    Optionally, the valid data span can be subdivided into some number
+    Optionally, the full data span can be subdivided into some number
     of contiguous subchunks.
 
     Args:
@@ -32,18 +32,16 @@ def regular_intervals(n, start, first, rate, duration, gap, chunks=1):
         rate (float): the sample rate in Hz.
         duration (float): the length of the interval in seconds.
         gap (float): the length of the gap in seconds.
-        chunks (int): divide the valid data in "duration" into this
-            number of contiguous chunks.
 
     Returns:
         (list): a list of Interval objects.
     """
     invrate = 1.0 / rate
 
-    # Compute the whole number of samples that fit completely within the
-    # requested time span.
-    totsamples = int((duration + gap) * rate) + 1
-    dursamples = int(duration * rate) + 1
+    # Compute the whole number of samples that fit within the
+    # requested time span (rounded to nearest sample).
+    totsamples = int(0.5 + (duration + gap) * rate) + 1
+    dursamples = int(0.5 + duration * rate) + 1
     gapsamples = totsamples - dursamples
 
     # Compute the actual time span for this number of samples
@@ -51,20 +49,14 @@ def regular_intervals(n, start, first, rate, duration, gap, chunks=1):
     durtime = (dursamples - 1) * invrate
     gaptime = tottime - durtime
 
-    # If we have sub-chunks, compute them now
-    chnks = distribute_uniform(dursamples, chunks)
-
     intervals = []
 
     for i in range(n):
         ifirst = first + i * totsamples
+        ilast = ifirst + dursamples - 1
         istart = start + i * tottime
-        for c in chnks:
-            cfirst = ifirst + c[0]
-            clast = cfirst + c[1] - 1
-            cstart = istart + (c[0] * invrate)
-            cstop = istart + ((c[0] + c[1] - 1) * invrate)
-            intervals.append(Interval(start=cstart, stop=cstop, first=cfirst, last=clast))
+        istop = istart + (dursamples - 1) * invrate
+        intervals.append(Interval(start=istart, stop=istop, first=ifirst, last=ilast))
 
     return intervals
 
