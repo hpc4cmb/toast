@@ -2,7 +2,7 @@
 # Initialize compile and linking flags
 
 AM_CPPFLAGS = \
--I$(top_srcdir)/src/tests/gtest
+-I$(top_srcdir)/src/libtoast/test/gtest
 
 AM_CFLAGS =
 AM_CXXFLAGS = \

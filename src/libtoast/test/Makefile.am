@@ -6,8 +6,8 @@ SUBDIRS = gtest
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
 -I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/tests/gtest \
--I$(top_srcdir)/src/tests
+-I$(top_srcdir)/src/libtoast/test/gtest \
+-I$(top_srcdir)/src/libtoast/test
 
 AM_CFLAGS =
 AM_CXXFLAGS =
@@ -15,8 +15,7 @@ AM_CXXFLAGS =
 AM_LDFLAGS = 
 
 AM_LIBS = \
-$(top_builddir)/src/tests/gtest/libtoast_gtest.la \
-$(top_builddir)/src/libtoast/libtoast.la
+$(top_builddir)/src/libtoast/test/gtest/libtoast_gtest.la
 
 # Add check flags
 
@@ -31,20 +30,15 @@ EXTRA_DIST = gen_healpix_data.py data_healpix.cpp
 
 noinst_HEADERS = toast_test.hpp
 
-bin_PROGRAMS = toast_test
-TESTS = toast_test
+noinst_LTLIBRARIES = libtoast_test.la
 
-toast_test_SOURCES = \
-toast_test.cpp \
+libtoast_test_la_SOURCES = \
 toast_test_qarray.cpp \
 toast_test_rng.cpp \
 toast_test_sf.cpp \
 toast_test_healpix.cpp \
-toast_test_fft.cpp
+toast_test_fft.cpp \
+toast_test_runner.cpp
 
-toast_test_LDADD = $(AM_LIBS)
-
-
-clean-local :
-	@rm -rf *.out
+libtoast_test_la_LIBADD = $(AM_LIBS)
 

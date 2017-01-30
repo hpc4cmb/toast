@@ -8,15 +8,12 @@ a BSD-style license that can be found in the LICENSE file.
 #include <toast_test.hpp>
 
 
-using namespace std;
-using namespace toast;
+int toast::test::runner ( int argc, char *argv[] ) {
 
+    toast::init ( argc, argv );
 
-int main ( int argc, char *argv[] ) {
+    ::testing::InitGoogleTest ( &argc, argv );
 
-	::testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
-
+    return RUN_ALL_TESTS();
 }
-
 

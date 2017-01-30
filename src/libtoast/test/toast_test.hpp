@@ -15,6 +15,11 @@ a BSD-style license that can be found in the LICENSE file.
 // #include <ctoast.h>
 
 
+namespace toast { namespace test {
+    int runner ( int argc, char *argv[] );
+}}
+
+
 class qarrayTest : public ::testing::Test {
 
     public :

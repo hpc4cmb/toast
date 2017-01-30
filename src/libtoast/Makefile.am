@@ -9,6 +9,7 @@ endif
 SUBDIRS += math
 SUBDIRS += tod
 SUBDIRS += map
+SUBDIRS += test
 
 
 # Initialize compile and linking flags
@@ -17,7 +18,9 @@ AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
 -I$(top_srcdir)/src/libtoast/math \
 -I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map
+-I$(top_srcdir)/src/libtoast/map \
+-I$(top_srcdir)/src/libtoast/test \
+-I$(top_srcdir)/src/libtoast/test/gtest
 
 AM_CFLAGS =
 AM_CXXFLAGS =
@@ -43,10 +46,10 @@ ctoast.cpp
 libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@
 
 libtoast_la_LIBADD = \
+$(top_builddir)/src/libtoast/test/libtoast_test.la \
 $(top_builddir)/src/libtoast/map/libtoast_map.la \
 $(top_builddir)/src/libtoast/tod/libtoast_tod.la \
 $(top_builddir)/src/libtoast/math/libtoast_math.la
-
 
 if HAVE_AM_MPI
 else
@@ -54,4 +57,16 @@ else
 endif
 
 libtoast_la_LIBADD += $(AM_LIBS)
+
+
+bin_PROGRAMS = toast_test
+TESTS = toast_test
+
+toast_test_SOURCES = \
+toast_test.cpp
+
+toast_test_LDADD = \
+$(top_builddir)/src/libtoast/libtoast.la \
+$(AM_LIBS)
+
 
