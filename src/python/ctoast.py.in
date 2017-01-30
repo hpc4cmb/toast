@@ -343,4 +343,13 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
 
 
 
+# //--------------------------------------
+# // Run C++ test suite
+# //--------------------------------------
+
+lib.ctoast_test_runner.restype = ct.c_int
+lib.ctoast_test_runner.argtypes = [ ct.c_int, ct.POINTER(ct.c_char_p) ]
+
+def test_runner(argc, argv):
+    return lib.ctoast_test_runner(argc, argv)
 

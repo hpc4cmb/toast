@@ -4,19 +4,16 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
-#ifndef TOAST_HPP
-#define TOAST_HPP
 
-#include <mpi.h>
+#include <toast_test.hpp>
 
 
-namespace toast {
+using namespace std;
+using namespace toast;
 
-    void init ( int argc, char * argv[] );
 
+int main ( int argc, char *argv[] ) {
+    return toast::test::runner ( argc, argv );
 }
 
-#include <toast/math.hpp>
-
-#endif
 

@@ -179,6 +179,8 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 // Run test suite
 //--------------------------------------
 
+int ctoast_test_runner ( int argc, char *argv[] );
+
 
 #ifdef __cplusplus
 }
