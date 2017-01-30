@@ -77,8 +77,10 @@ namespace toast {
             ~exception ( ) throw ();
             const char* what() const throw();
 
-        private:  
-            char msg_[BIGSTRLEN];
+        private:
+            // use C strings here for passing to what()
+            static size_t const msg_len_ = 1024; 
+            char msg_[ msg_len_ ];
 
     };  
 

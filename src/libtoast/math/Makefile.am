@@ -35,6 +35,7 @@ toast/sf.hpp \
 toast/healpix.hpp
 
 libtoast_math_la_SOURCES = \
+toast_math.cpp \
 toast_memory.cpp \
 toast_rng.cpp \
 toast_qarray.cpp \

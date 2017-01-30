@@ -27,13 +27,20 @@ AM_LIBS += $(CHECK_LIBS)
 include $(top_srcdir)/src/build_options.am
 
 
+EXTRA_DIST = gen_healpix_data.py data_healpix.cpp
+
 noinst_HEADERS = toast_test.hpp
 
 bin_PROGRAMS = toast_test
 TESTS = toast_test
 
 toast_test_SOURCES = \
-toast_test.cpp
+toast_test.cpp \
+toast_test_qarray.cpp \
+toast_test_rng.cpp \
+toast_test_sf.cpp \
+toast_test_healpix.cpp \
+toast_test_fft.cpp
 
 toast_test_LDADD = $(AM_LIBS)
 
