@@ -569,6 +569,7 @@ class TODGround(TOD):
             [degrees].
         sun_angle_min (float): Minimum angular distance for the patch and
             the Sun [degrees].
+        allow_sun_up (bool):  Permit scans while the Sun is above horizon.
         sizes (list): specify the indivisible chunks in which to split
             the samples.
     """
@@ -578,6 +579,8 @@ class TODGround(TOD):
     RIGHTLEFT_SCAN = 4
     LEFTRIGHT_TURNAROUND = LEFTRIGHT_SCAN + TURNAROUND
     RIGHTLEFT_TURNAROUND = RIGHTLEFT_SCAN + TURNAROUND
+    SUN_UP = 8
+    SUN_CLOSE = 16
 
     def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None,
                  samples=0, firsttime=0.0, rate=100.0,
@@ -585,7 +588,7 @@ class TODGround(TOD):
                  patch_lon=0, patch_lat=0, patch_coord='C',
                  throw=10, scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None,
-                 el_min=0, sun_angle_min=90,
+                 el_min=0, sun_angle_min=90, allow_sun_up=True,
                  sizes=None):
 
         if ephem is None:
@@ -648,6 +651,7 @@ class TODGround(TOD):
         self._CES_stop = CES_stop
         self._el_min = el_min
         self._sun_angle_min = sun_angle_min
+        self._allow_sun_up = allow_sun_up
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -657,7 +661,7 @@ class TODGround(TOD):
         self._observer.temp = 0 # in Celcius
         self._observer.compute_pressure()
 
-        # Find the patch elevation midway the observation
+        # Is the patch above the horizon?
         mean_time = (self._CES_start + self._CES_stop) / 2
         mean_time = self.to_MJD(mean_time)
         self._observer.date = mean_time
@@ -668,14 +672,25 @@ class TODGround(TOD):
             raise RuntimeError('TODGround: sky patch is below {} degrees '
                                'at {:.2f} degrees midway through the scan.'
                                ''.format(self._el_min, self._patch_el/degree))
+
+        # Is the Sun above the horizon?
         sun = ephem.Sun()
         sun.compute(self._observer)
-        angle = ephem.separation(sun, self._patch_center) / degree
-        if angle < self._sun_angle_min:
-            raise RuntimeError(
-                'TODGround: sky patch is closer than {} degrees to the Sun at '
-                '{:.2f} degrees midway through the scan.'
-                ''.format(self._sun_angle_min, angle))
+        if sun.alt > 0:
+            if not self._allow_sun_up:
+                raise RuntimeError(
+                    'Sun is above the horizon at {} degrees midway '
+                    'through the scan.'.format(sun.alt/degree))
+            else:
+                # Is the Sun too close to the patch?
+                angle = ephem.separation(sun, self._patch_center) / degree
+                if angle < self._sun_angle_min:
+                    raise RuntimeError(
+                        'TODGround: sky patch is closer than {} degrees to the '
+                        'Sun at {:.2f} degrees midway through the scan:\n'
+                        'Sun:   {} {}\n Patch: {} {}\n'
+                        ''.format(self._sun_angle_min, angle, sun.az, sun.alt,
+                                  self._patch_center.az, self._patch_center.alt))
 
         # Set the boresight pointing based on the given scan parameters
         self._boresight = None
@@ -756,14 +771,6 @@ class TODGround(TOD):
                 if i >= 0: az[i] = az_last
             if i == self._nsamp: break
 
-        self._commonflags = self.cache.put('commonflags', flags)
-
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.plot(az,'.')
-        plt.savefig('new_az.png')
-        plt.close()
-
         # Translate the azimuth and elevation into bore sight quaternions
         # in the desired frame. Use two (az, el) pairs to measure the
         # position angle
@@ -771,6 +778,7 @@ class TODGround(TOD):
         dir = ZAXIS
         orient = XAXIS
         boresight = []
+        sun = ephem.Sun()
 
         elquat = qa.rotation(ZAXIS, el)
         for i in range(self._nsamp):
@@ -784,7 +792,17 @@ class TODGround(TOD):
             el_orient, az_orient = hp.vec2ang(azel_orient)
 
             t = self.to_MJD(self._firsttime + i / self._rate)
+
             self._observer.date = t
+            sun.compute(self._observer)
+            if sun.alt > 0:
+                flags[i] |= self.SUN_UP
+
+            self._patch_center.compute(self._observer)
+            angle = ephem.separation(sun, self._patch_center) / degree
+            if angle < self._sun_angle_min:
+                flags[i] |= self.SUN_CLOSE
+
             ra_dir, dec_dir = self._observer.radec_of(az[i], el)
             ra_orient, dec_orient = self._observer.radec_of(az_orient, el_orient)
 
@@ -797,6 +815,8 @@ class TODGround(TOD):
             pa = np.arctan2(x, y)
             quat = self.radec2quat(ra_dir, dec_dir, pa)
             boresight.append(quat)
+
+        self._commonflags = self.cache.put('commonflags', flags)
 
         self._boresight = np.vstack(boresight)
 
