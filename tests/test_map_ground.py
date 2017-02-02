@@ -64,8 +64,8 @@ class MapGroundTest(MPITestCase):
         self.site_lon = '-67:47:10'
         self.site_lat = '-22:57:30'
         self.site_alt = 5200.
-        self.patch_lon = 15 * degree # '10.0'
-        self.patch_lat = -70 * degree # '-70.0'
+        self.patch_lon = 115 * degree # '10.0'
+        self.patch_lat = -60 * degree # '-70.0'
         self.patch_coord = 'C'
         self.throw = 4.
         self.scanrate = 0.05

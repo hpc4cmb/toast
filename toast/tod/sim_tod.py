@@ -565,6 +565,10 @@ class TODGround(TOD):
             degrees / second^2 for the turnarounds.
         CES_start (float): Start time of the constant elevation scan
         CES_stop (float): Stop time of the constant elevation scan
+        el_min (float): Minimum elevation for the patch to be observable
+            [degrees].
+        sun_angle_min (float): Minimum angular distance for the patch and
+            the Sun [degrees].
         sizes (list): specify the indivisible chunks in which to split
             the samples.
     """
@@ -581,6 +585,7 @@ class TODGround(TOD):
                  patch_lon=0, patch_lat=0, patch_coord='C',
                  throw=10, scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None,
+                 el_min=0, sun_angle_min=90,
                  sizes=None):
 
         if ephem is None:
@@ -641,6 +646,8 @@ class TODGround(TOD):
         self._scan_accel = scan_accel * degree
         self._CES_start = CES_start
         self._CES_stop = CES_stop
+        self._el_min = el_min
+        self._sun_angle_min = sun_angle_min
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -657,10 +664,18 @@ class TODGround(TOD):
         self._patch_center.compute(self._observer)
         self._patch_az = self._patch_center.az
         self._patch_el = self._patch_center.alt
-        if self._patch_el < 0:
-            raise RuntimeError('TODGround: sky patch at is below the horizon '
+        if self._patch_el < self._el_min * degree:
+            raise RuntimeError('TODGround: sky patch is below {} degrees '
                                'at {:.2f} degrees midway through the scan.'
-                               ''.format(self._patch_el*180/np.pi))
+                               ''.format(self._el_min, self._patch_el/degree))
+        sun = ephem.Sun()
+        sun.compute(self._observer)
+        angle = ephem.separation(sun, self._patch_center) / degree
+        if angle < self._sun_angle_min:
+            raise RuntimeError(
+                'TODGround: sky patch is closer than {} degrees to the Sun at '
+                '{:.2f} degrees midway through the scan.'
+                ''.format(self._sun_angle_min, angle))
 
         # Set the boresight pointing based on the given scan parameters
         self._boresight = None
