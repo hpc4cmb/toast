@@ -291,7 +291,7 @@ class Data(object):
         return
 
 
-    def info(self, handle):
+    def info(self, handle, flag_mask=255, common_flag_mask=255):
         """
         Print information about the distributed data to the
         specified file handle.  Only the rank 0 process writes.
@@ -361,7 +361,7 @@ class Data(object):
                     data = tod.read(detector=dt, local_start=0, n=nsamp)
                     flags, common = tod.read_flags(detector=dt, local_start=0, n=nsamp)
                     procstr = "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, data[0], flags[0], data[-1], flags[-1])
-                    good = np.where((flags | common) == 0)[0]
+                    good = np.where(((flags & flag_mask) | (common & common_flag_mask)) == 0)[0]
                     procstr = "{}        {} good samples\n".format(procstr, len(good))
                     min = np.min(data[good])
                     max = np.max(data[good])
