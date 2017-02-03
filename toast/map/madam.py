@@ -245,9 +245,6 @@ class OpMadam(Operator):
                 nsamp += tod.local_samples[1]
         else:
             tod = data.obs[0]['tod']
-            if not tod.timedist:
-                raise RuntimeError(
-                    "Madam requires data to be distributed by time")
             nsamp = tod.local_samples[1]
 
         # Determine the detectors and the pointing matrix non-zeros
@@ -257,9 +254,9 @@ class OpMadam(Operator):
         tod = data.obs[0]['tod']
 
         if self._dets is None:
-            detectors = tod.detectors
+            detectors = tod.local_dets
         else:
-            detectors = [det for det in tod.detectors
+            detectors = [det for det in tod.local_dets
                          if det in self._dets]
 
         detstring = self._dets2detstring(detectors)

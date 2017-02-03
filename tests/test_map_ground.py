@@ -231,14 +231,6 @@ class MapGroundTest(MPITestCase):
         nsig = OpSimNoise()
         nsig.exec(self.data)
 
-        # DEBUG begin
-        noise_tod = self.data.obs[0]['tod'].cache.reference('noise_bore')
-        #noise_tod[:] = np.random.randn(noise_tod.size)*100
-        #noise_tod[:] = 1
-        noise_tod_rms = np.std(noise_tod)
-        print('noise_tod_rms = ', noise_tod_rms)
-        # DEBUG end
-
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
         pointing.exec(self.data)

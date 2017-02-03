@@ -589,7 +589,7 @@ class TODGround(TOD):
                  throw=10, scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None,
                  el_min=0, sun_angle_min=90, allow_sun_up=True,
-                 sizes=None):
+                 sizes=None, timedist=True):
 
         if ephem is None:
             raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
@@ -697,7 +697,7 @@ class TODGround(TOD):
 
         # call base class constructor to distribute data
         super().__init__(
-            mpicomm=mpicomm, timedist=True, detectors=self._detlist,
+            mpicomm=mpicomm, timedist=timedist, detectors=self._detlist,
             detindx=detindx, samples=samples, sizes=sizes)
 
         self._boresight = self.translate_pointing()
@@ -819,10 +819,12 @@ class TODGround(TOD):
         ra_orients = []
         dec_orients = []
 
+        times = self.to_MJD(self.read_times())
+
         for i in range(n):
             el_orient, az_orient = el_orients[i], az_orients[i]
 
-            t = self.to_MJD(self._firsttime + i / self._rate)
+            t = times[i]
 
             self._observer.date = t
             sun.compute(self._observer)
@@ -894,9 +896,7 @@ class TODGround(TOD):
     def _get_times(self, start, n):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
-        stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False,
-                             dtype=np.float64)
+        stamps = start_time + np.arange(n) / self._rate
         return stamps
 
     def _put_times(self, start, stamps):

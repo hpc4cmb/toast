@@ -250,6 +250,7 @@ def distribute_samples(mpicomm, timedist, detectors, samples, sizes=None):
         dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]
         dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
         dist_samples = [ (0, samples) for x in range(mpicomm.size) ]
+        dist_sizes = [ (0, 1) for x in range(mpicomm.size) ]
 
     return (dist_dets, dist_samples, dist_sizes)
 
