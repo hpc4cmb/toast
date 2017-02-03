@@ -602,10 +602,9 @@ class TODGround(TOD):
 
         self._detlist = sorted(list(self._fp.keys()))
 
-        # call base class constructor to distribute data
-        super().__init__(
-            mpicomm=mpicomm, timedist=True, detectors=self._detlist,
-            detindx=detindx, samples=samples, sizes=sizes)
+        if sizes is not None:
+            raise RuntimeError('TODGround will synthesize the sizes to match '
+                               'the subscans.')
 
         if CES_start is None:
             CES_start = firsttime
@@ -693,8 +692,15 @@ class TODGround(TOD):
                                   self._patch_center.az, self._patch_center.alt))
 
         # Set the boresight pointing based on the given scan parameters
-        self._boresight = None
-        self.simulate_scan()
+
+        sizes = self.simulate_scan(samples)
+
+        # call base class constructor to distribute data
+        super().__init__(
+            mpicomm=mpicomm, timedist=True, detectors=self._detlist,
+            detindx=detindx, samples=samples, sizes=sizes)
+
+        self._boresight = self.translate_pointing()
 
     def to_JD(self, t):
         # Convert TOAST UTC time stamp to Julian date
@@ -713,15 +719,15 @@ class TODGround(TOD):
 
         return t*x + y
 
-    def simulate_scan(self):
+    def simulate_scan(self, samples):
         # simulate the scanning with turnarounds. Regardless of firsttime,
         # we must simulate from the beginning of the CES.
         # Generate matching common flags.
         # Sets self._boresight.
 
-        el = self._patch_el
-        az = np.zeros(self._nsamp)
-        flags = np.zeros(self._nsamp, dtype=np.uint8)
+        self._el = self._patch_el
+        self._az = np.zeros(samples)
+        self._commonflags = np.zeros(samples, dtype=np.uint8)
         # Scan starts from the left edge of the patch at the fixed scan rate
         lim_left = self._patch_az - self._throw / 2
         lim_right = self._patch_az + self._throw / 2
@@ -731,94 +737,128 @@ class TODGround(TOD):
         scan_accel = self._scan_accel / self._rate # per sample, not per second
         tol = self._rate / 10
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
+        starts = [0] # Subscan start indices
         while True:
             # Left to right, fixed rate
             while az_last < lim_right:
-                if i >= 0: flags[i] |= self.LEFTRIGHT_SCAN
+                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_SCAN
                 i += 1
-                if i == self._nsamp: break
+                if i == samples: break
                 az_last += dazdt
-                if i >= 0: az[i] = az_last
-            if i == self._nsamp: break
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
             # Left to right, turnaround
             while dazdt > -scanrate:
-                if i >= 0: flags[i] |= self.LEFTRIGHT_TURNAROUND
+                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_TURNAROUND
                 i += 1
-                if i == self._nsamp: break
+                if i == samples: break
                 dazdt -= scan_accel
+                if dazdt < 0 and -dazdt / scan_accel <= 1 and i > 0:
+                    # New susscan begins
+                    starts.append(i)
                 if dazdt < -scanrate:
                     dazdt = -scanrate
                 az_last += dazdt
-                if i >= 0: az[i] = az_last
-            if i == self._nsamp: break
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
             # Right to left, fixed rate
             while az_last > lim_left:
-                if i >= 0: flags[i] |= self.RIGHTLEFT_SCAN
+                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_SCAN
                 i += 1
-                if i == self._nsamp: break
+                if i == samples: break
                 az_last += dazdt
-                if i >= 0: az[i] = az_last
-            if i == self._nsamp: break
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
             # Right to left, turnaround
             while dazdt < scanrate:
-                if i >= 0: flags[i] |= self.RIGHTLEFT_TURNAROUND
+                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_TURNAROUND
                 i += 1
-                if i == self._nsamp: break
+                if i == samples: break
                 dazdt += scan_accel
+                if dazdt > 0 and dazdt / scan_accel <= 1 and i > 0:
+                    # New subscan begins
+                    starts.append(i)
                 if dazdt > scanrate:
                     dazdt = scanrate
                 az_last += dazdt
-                if i >= 0: az[i] = az_last
-            if i == self._nsamp: break
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
+
+        starts.append(samples)
+        sizes = np.diff(starts)
+        if np.sum(sizes) != samples:
+            raise RuntimeError('Subscans do not match samples')
+
+        return sizes
+
+    def translate_pointing(self):
 
         # Translate the azimuth and elevation into bore sight quaternions
         # in the desired frame. Use two (az, el) pairs to measure the
         # position angle
 
-        dir = ZAXIS
         orient = XAXIS
-        boresight = []
         sun = ephem.Sun()
 
-        elquat = qa.rotation(ZAXIS, el)
-        for i in range(self._nsamp):
-            azquat = qa.rotation(ZAXIS, az[i])
-            azelquat = qa.mult(azquat, elquat)
+        offset, n = self.local_samples
+        ind = slice(offset, offset+n)
+        self._az = self.cache.put('az', self._az[ind])
+        self._commonflags = self.cache.put('commonflags', self._commonflags[ind])
 
-            azel_dir = qa.rotate(azelquat, dir)
-            azel_orient = qa.rotate(azelquat, orient)
+        elquat = qa.rotation(ZAXIS, self._el)
+        azelquats = qa.rotation(ZAXIS, self._az)
+        azelquats = qa.mult(azelquats, elquat)
+        azel_orients = qa.rotate(azelquats, orient)
+        del azelquats
 
-            el_dir, az_dir = hp.vec2ang(azel_dir)
-            el_orient, az_orient = hp.vec2ang(azel_orient)
+        el_orients, az_orients = hp.vec2ang(azel_orients)
+        del azel_orients
+
+        ra_dirs = []
+        dec_dirs = []
+        ra_orients = []
+        dec_orients = []
+
+        for i in range(n):
+            el_orient, az_orient = el_orients[i], az_orients[i]
 
             t = self.to_MJD(self._firsttime + i / self._rate)
 
             self._observer.date = t
             sun.compute(self._observer)
             if sun.alt > 0:
-                flags[i] |= self.SUN_UP
+                self._commonflags[i] |= self.SUN_UP
 
             self._patch_center.compute(self._observer)
-            angle = ephem.separation(sun, self._patch_center) / degree
-            if angle < self._sun_angle_min:
-                flags[i] |= self.SUN_CLOSE
 
-            ra_dir, dec_dir = self._observer.radec_of(az[i], el)
+            angle = ephem.separation(sun, self._patch_center) / degree
+
+            if angle < self._sun_angle_min:
+                self._commonflags[i] |= self.SUN_CLOSE
+
+            ra_dir, dec_dir = self._observer.radec_of(self._az[i], self._el)
             ra_orient, dec_orient = self._observer.radec_of(az_orient, el_orient)
 
-            radec_dir = hp.ang2vec(np.pi/2 - dec_dir, ra_dir)
-            radec_orient = hp.ang2vec(np.pi/2 - dec_orient, ra_orient)
-            x = radec_orient[0]*radec_dir[1] - radec_orient[1]*radec_dir[0]
-            y = radec_orient[2]*(radec_dir[0]**2 + radec_dir[1]**2) \
-                - radec_orient[0]*radec_dir[2]*radec_dir[0] \
-                - radec_orient[1]*radec_dir[2]*radec_dir[1]
-            pa = np.arctan2(x, y)
-            quat = self.radec2quat(ra_dir, dec_dir, pa)
-            boresight.append(quat)
+            ra_dirs.append(ra_dir)
+            dec_dirs.append(dec_dir)
+            ra_orients.append(ra_orient)
+            dec_orients.append(dec_orient)
 
-        self._commonflags = self.cache.put('commonflags', flags)
+        ra_dirs = np.array(ra_dirs)
+        dec_dirs = np.array(dec_dirs)
+        ra_orients = np.array(ra_orients)
+        dec_orients = np.array(dec_orients)
 
-        self._boresight = np.vstack(boresight)
+        radec_dirs = hp.ang2vec(np.pi/2 - dec_dirs, ra_dirs).T
+        radec_orients = hp.ang2vec(np.pi/2 - dec_orients, ra_orients).T
+
+        x = radec_orients[0]*radec_dirs[1] - radec_orients[1]*radec_dirs[0]
+        y = radec_orients[2]*(radec_dirs[0]**2 + radec_dirs[1]**2) \
+            - radec_orients[0]*radec_dirs[2]*radec_dirs[0] \
+            - radec_orients[1]*radec_dirs[2]*radec_dirs[1]
+        pas = np.arctan2(x, y)
+
+        return self.radec2quat(ra_dirs, dec_dirs, pas)
 
     def radec2quat(self, ra, dec, pa):
 

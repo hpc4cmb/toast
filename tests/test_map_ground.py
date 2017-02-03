@@ -58,9 +58,9 @@ class MapGroundTest(MPITestCase):
         nside = 1024
         self.sim_nside = nside
         #self.totsamp = 400000
-        self.totsamp = 10000
+        self.totsamp = 100000
         self.map_nside = nside
-        self.rate = 4.0
+        self.rate = 40.0
         self.site_lon = '-67:47:10'
         self.site_lat = '-22:57:30'
         self.site_alt = 5200.
@@ -68,9 +68,9 @@ class MapGroundTest(MPITestCase):
         self.patch_lat = -60 * degree # '-70.0'
         self.patch_coord = 'C'
         self.throw = 4.
-        self.scanrate = 0.05
-        self.scan_accel = 0.0001
-        self.CES_start = -1000.
+        self.scanrate = 1.0
+        self.scan_accel = 0.1
+        self.CES_start = None
 
         self.NET = 7.0
 
@@ -93,18 +93,6 @@ class MapGroundTest(MPITestCase):
         # madam only supports a single observation
         nobs = 1
 
-        # in order to make sure that the noise realization is reproducible
-        # all all concurrencies, we set the chunksize to something independent
-        # of the number of ranks.
-
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
         nflagged = 0
 
         for i in range(nobs):
@@ -126,7 +114,8 @@ class MapGroundTest(MPITestCase):
                 scanrate=self.scanrate,
                 scan_accel=self.scan_accel,
                 CES_start=self.CES_start,
-                sizes=chunks)
+                sizes=None)
+                #sizes=chunks)
 
             self.common_flag_mask = tod.TURNAROUND
 
@@ -235,7 +224,6 @@ class MapGroundTest(MPITestCase):
         else:
             print("libmadam not available, skipping tests")
 
-
     def test_noise(self):
         start = MPI.Wtime()
 
@@ -246,6 +234,7 @@ class MapGroundTest(MPITestCase):
         # DEBUG begin
         noise_tod = self.data.obs[0]['tod'].cache.reference('noise_bore')
         #noise_tod[:] = np.random.randn(noise_tod.size)*100
+        #noise_tod[:] = 1
         noise_tod_rms = np.std(noise_tod)
         print('noise_tod_rms = ', noise_tod_rms)
         # DEBUG end
