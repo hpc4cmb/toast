@@ -16,8 +16,14 @@ import numpy as np
 import scipy.fftpack as sft
 import scipy.interpolate as si
 import scipy.sparse as sp
+from scipy.constants import degree
 
 import healpy as hp
+
+try:
+    import ephem
+except:
+    ephem = None
 
 from . import qarray as qa
 
@@ -26,6 +32,9 @@ from .tod import TOD
 from .noise import Noise
 
 from ..operator import Operator
+
+
+XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
@@ -525,3 +534,415 @@ class TODSatellite(TOD):
         return
 
 
+class TODGround(TOD):
+    """
+    Provide a simple generator of ground-based detector pointing.
+
+    Detector focalplane offsets are specified as a dictionary of
+    4-element ndarrays.  The boresight pointing is a generic
+    2-angle model.
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
+            data is distributed.
+        detectors (dictionary): each key is the detector name, and each
+            value is a quaternion tuple.
+        detindx (dict): the detector indices for use in simulations.
+            Default is
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        samples (int): maximum allowed samples.
+        firsttime (float): starting time of data.
+        rate (float): sample rate in Hz.
+        site_lon (float/str): Observing site Earth longitude in radians or a pyEphem string.
+        site_lat (float/str): Observing site Earth latitude in radians or a pyEphem string.
+        site_alt (float/str): Observing site Earth altitude in meters.
+        patch_lon (float/str): Sky patch longitude in in radians or a pyEphem string.
+        patch_lat (float/str): Sky patch latitude in in radians or a pyEphem string.
+        patch_coord (str): Sky coordinate system ('C', 'E' or 'G')
+        throw (float): Sky patch width in azimuth (degrees)
+        scanrate (float): Sky scanning rate in degrees / second.
+        scan_accel (float): Sky scanning rate acceleration in
+            degrees / second^2 for the turnarounds.
+        CES_start (float): Start time of the constant elevation scan
+        CES_stop (float): Stop time of the constant elevation scan
+        el_min (float): Minimum elevation for the patch to be observable
+            [degrees].
+        sun_angle_min (float): Minimum angular distance for the patch and
+            the Sun [degrees].
+        allow_sun_up (bool):  Permit scans while the Sun is above horizon.
+        sizes (list): specify the indivisible chunks in which to split
+            the samples.
+    """
+
+    TURNAROUND = 1
+    LEFTRIGHT_SCAN = 2
+    RIGHTLEFT_SCAN = 4
+    LEFTRIGHT_TURNAROUND = LEFTRIGHT_SCAN + TURNAROUND
+    RIGHTLEFT_TURNAROUND = RIGHTLEFT_SCAN + TURNAROUND
+    SUN_UP = 8
+    SUN_CLOSE = 16
+
+    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None,
+                 samples=0, firsttime=0.0, rate=100.0,
+                 site_lon=0, site_lat=0, site_alt=0,
+                 patch_lon=0, patch_lat=0, patch_coord='C',
+                 throw=10, scanrate=1, scan_accel=0.1,
+                 CES_start=None, CES_stop=None,
+                 el_min=0, sun_angle_min=90, allow_sun_up=True,
+                 sizes=None, timedist=True):
+
+        if ephem is None:
+            raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
+                               'without pyephem.')
+
+        if detectors is None:
+            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
+        else:
+            self._fp = detectors
+
+        self._detlist = sorted(list(self._fp.keys()))
+
+        if sizes is not None:
+            raise RuntimeError('TODGround will synthesize the sizes to match '
+                               'the subscans.')
+
+        if CES_start is None:
+            CES_start = firsttime
+        elif firsttime < CES_start:
+            raise RuntimeError('TODGround: firsttime < CES_start: {} < {}'
+                               ''.format(firsttime, CES_start))
+        lasttime = firsttime + samples / rate
+        if CES_stop is None:
+            CES_stop = lasttime
+        elif lasttime > CES_stop:
+            raise RuntimeError('TODGround: lasttime > CES_stop: {} > {}'
+                               ''.format(lasttime, CES_stop))
+
+        self._firsttime = firsttime
+        self._rate = rate
+        self._site_lon = site_lon
+        self._site_lat = site_lat
+        self._site_alt = site_alt
+        self._patch_lon = patch_lon
+        self._patch_lat = patch_lat
+        self._patch_coord = patch_coord
+        if self._patch_coord == 'C':
+            center = ephem.Equatorial(
+                self._patch_lon, self._patch_lat, epoch='2000')
+        elif self._patch_coord == 'E':
+            center = ephem.Ecliptic(
+                self._patch_lon, self._patch_lat, epoch='2000')
+        elif self._patch_coord == 'G':
+            center = ephem.Galactic(
+                self._patch_lon, self._patch_lat, epoch='2000')
+        else:
+            raise RuntimeError('TODGround: unrecognized coordinate system: '
+                               '{} not in [C,E,G]'.format(self._patch_coord))
+        center = ephem.Equatorial(center)
+        self._patch_center = ephem.FixedBody()
+        self._patch_center._ra = center.ra
+        self._patch_center._dec = center.dec
+
+        self._throw = throw * degree
+        self._scanrate = scanrate * degree
+        self._scan_accel = scan_accel * degree
+        self._CES_start = CES_start
+        self._CES_stop = CES_stop
+        self._el_min = el_min
+        self._sun_angle_min = sun_angle_min
+        self._allow_sun_up = allow_sun_up
+
+        self._observer = ephem.Observer()
+        self._observer.lon = self._site_lon
+        self._observer.lat = self._site_lat
+        self._observer.elevation = self._site_alt # In meters
+        self._observer.epoch = '2000'
+        self._observer.temp = 0 # in Celcius
+        self._observer.compute_pressure()
+
+        # Is the patch above the horizon?
+        mean_time = (self._CES_start + self._CES_stop) / 2
+        mean_time = self.to_MJD(mean_time)
+        self._observer.date = mean_time
+        self._patch_center.compute(self._observer)
+        self._patch_az = self._patch_center.az
+        self._patch_el = self._patch_center.alt
+        if self._patch_el < self._el_min * degree:
+            raise RuntimeError('TODGround: sky patch is below {} degrees '
+                               'at {:.2f} degrees midway through the scan.'
+                               ''.format(self._el_min, self._patch_el/degree))
+
+        # Is the Sun above the horizon?
+        sun = ephem.Sun()
+        sun.compute(self._observer)
+        if sun.alt > 0:
+            if not self._allow_sun_up:
+                raise RuntimeError(
+                    'Sun is above the horizon at {} degrees midway '
+                    'through the scan.'.format(sun.alt/degree))
+            else:
+                # Is the Sun too close to the patch?
+                angle = ephem.separation(sun, self._patch_center) / degree
+                if angle < self._sun_angle_min:
+                    raise RuntimeError(
+                        'TODGround: sky patch is closer than {} degrees to the '
+                        'Sun at {:.2f} degrees midway through the scan:\n'
+                        'Sun:   {} {}\n Patch: {} {}\n'
+                        ''.format(self._sun_angle_min, angle, sun.az, sun.alt,
+                                  self._patch_center.az, self._patch_center.alt))
+
+        # Set the boresight pointing based on the given scan parameters
+
+        sizes = self.simulate_scan(samples)
+
+        # call base class constructor to distribute data
+        super().__init__(
+            mpicomm=mpicomm, timedist=timedist, detectors=self._detlist,
+            detindx=detindx, samples=samples, sizes=sizes)
+
+        self._boresight = self.translate_pointing()
+
+    def to_JD(self, t):
+        # Convert TOAST UTC time stamp to Julian date
+
+        x = 1./86400.
+        y = 36204.0 + 2400000.5
+
+        return t*x + y
+
+    def to_MJD(self, t):
+        # Convert TOAST UTC time stamp to modified Julian date used
+        # by pyEphem.
+
+        x = 1./86400.
+        y = 36204.0 + 2400000.5 - 2415020.0
+
+        return t*x + y
+
+    def simulate_scan(self, samples):
+        # simulate the scanning with turnarounds. Regardless of firsttime,
+        # we must simulate from the beginning of the CES.
+        # Generate matching common flags.
+        # Sets self._boresight.
+
+        self._el = self._patch_el
+        self._az = np.zeros(samples)
+        self._commonflags = np.zeros(samples, dtype=np.uint8)
+        # Scan starts from the left edge of the patch at the fixed scan rate
+        lim_left = self._patch_az - self._throw / 2
+        lim_right = self._patch_az + self._throw / 2
+        az_last = lim_left
+        scanrate = self._scanrate / self._rate # per sample, not per second
+        dazdt = scanrate
+        scan_accel = self._scan_accel / self._rate # per sample, not per second
+        tol = self._rate / 10
+        i = int((self._CES_start - self._firsttime - tol) * self._rate)
+        starts = [0] # Subscan start indices
+        while True:
+            # Left to right, fixed rate
+            while az_last < lim_right:
+                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_SCAN
+                i += 1
+                if i == samples: break
+                az_last += dazdt
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
+            # Left to right, turnaround
+            while dazdt > -scanrate:
+                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_TURNAROUND
+                i += 1
+                if i == samples: break
+                dazdt -= scan_accel
+                if dazdt < 0 and -dazdt / scan_accel <= 1 and i > 0:
+                    # New susscan begins
+                    starts.append(i)
+                if dazdt < -scanrate:
+                    dazdt = -scanrate
+                az_last += dazdt
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
+            # Right to left, fixed rate
+            while az_last > lim_left:
+                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_SCAN
+                i += 1
+                if i == samples: break
+                az_last += dazdt
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
+            # Right to left, turnaround
+            while dazdt < scanrate:
+                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_TURNAROUND
+                i += 1
+                if i == samples: break
+                dazdt += scan_accel
+                if dazdt > 0 and dazdt / scan_accel <= 1 and i > 0:
+                    # New subscan begins
+                    starts.append(i)
+                if dazdt > scanrate:
+                    dazdt = scanrate
+                az_last += dazdt
+                if i >= 0: self._az[i] = az_last
+            if i == samples: break
+
+        starts.append(samples)
+        sizes = np.diff(starts)
+        if np.sum(sizes) != samples:
+            raise RuntimeError('Subscans do not match samples')
+
+        return sizes
+
+    def translate_pointing(self):
+
+        # Translate the azimuth and elevation into bore sight quaternions
+        # in the desired frame. Use two (az, el) pairs to measure the
+        # position angle
+
+        orient = XAXIS
+        sun = ephem.Sun()
+
+        offset, n = self.local_samples
+        ind = slice(offset, offset+n)
+        self._az = self.cache.put('az', self._az[ind])
+        self._commonflags = self.cache.put('commonflags', self._commonflags[ind])
+
+        elquat = qa.rotation(ZAXIS, self._el)
+        azelquats = qa.rotation(ZAXIS, self._az)
+        azelquats = qa.mult(azelquats, elquat)
+        azel_orients = qa.rotate(azelquats, orient)
+        del azelquats
+
+        el_orients, az_orients = hp.vec2ang(azel_orients)
+        del azel_orients
+
+        ra_dirs = []
+        dec_dirs = []
+        ra_orients = []
+        dec_orients = []
+
+        times = self.to_MJD(self.read_times())
+
+        for i in range(n):
+            el_orient, az_orient = el_orients[i], az_orients[i]
+
+            t = times[i]
+
+            self._observer.date = t
+            sun.compute(self._observer)
+            if sun.alt > 0:
+                self._commonflags[i] |= self.SUN_UP
+
+            self._patch_center.compute(self._observer)
+
+            angle = ephem.separation(sun, self._patch_center) / degree
+
+            if angle < self._sun_angle_min:
+                self._commonflags[i] |= self.SUN_CLOSE
+
+            ra_dir, dec_dir = self._observer.radec_of(self._az[i], self._el)
+            ra_orient, dec_orient = self._observer.radec_of(az_orient, el_orient)
+
+            ra_dirs.append(ra_dir)
+            dec_dirs.append(dec_dir)
+            ra_orients.append(ra_orient)
+            dec_orients.append(dec_orient)
+
+        ra_dirs = np.array(ra_dirs)
+        dec_dirs = np.array(dec_dirs)
+        ra_orients = np.array(ra_orients)
+        dec_orients = np.array(dec_orients)
+
+        radec_dirs = hp.ang2vec(np.pi/2 - dec_dirs, ra_dirs).T
+        radec_orients = hp.ang2vec(np.pi/2 - dec_orients, ra_orients).T
+
+        x = radec_orients[0]*radec_dirs[1] - radec_orients[1]*radec_dirs[0]
+        y = radec_orients[2]*(radec_dirs[0]**2 + radec_dirs[1]**2) \
+            - radec_orients[0]*radec_dirs[2]*radec_dirs[0] \
+            - radec_orients[1]*radec_dirs[2]*radec_dirs[1]
+        pas = np.arctan2(x, y)
+
+        return self.radec2quat(ra_dirs, dec_dirs, pas)
+
+    def radec2quat(self, ra, dec, pa):
+
+        qR = qa.rotation(ZAXIS, ra+np.pi/2)
+        qD = qa.rotation(XAXIS, np.pi/2-dec)
+        qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
+        q = qa.mult(qR, qa.mult(qD, qP))
+
+        return q
+
+    def _get(self, detector, start, n):
+        # This class just returns data streams of zeros
+        return np.zeros(n, dtype=np.float64)
+
+    def _put(self, detector, start, data, flags):
+        raise RuntimeError('cannot write data to simulated data streams')
+        return
+
+    def _get_flags(self, detector, start, n):
+        return (np.zeros(n, dtype=np.uint8), self._commonflags[start:start+n])
+
+    def _put_det_flags(self, detector, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
+        return
+
+    def _get_common_flags(self, start, n):
+        return self._commonflags[start:start+n]
+
+    def _put_common_flags(self, start, flags):
+        raise RuntimeError('cannot write flags to simulated data streams')
+        return
+
+    def _get_times(self, start, n):
+        start_abs = self.local_samples[0] + start
+        start_time = self._firsttime + float(start_abs) / self._rate
+        stamps = start_time + np.arange(n) / self._rate
+        return stamps
+
+    def _put_times(self, start, stamps):
+        raise RuntimeError('cannot write timestamps to simulated data streams')
+        return
+
+    def _get_pntg(self, detector, start, n):
+        if self._boresight is None:
+            raise RuntimeError('you must set the precession axis before reading'
+                               ' detector pointing')
+        detquat = self._fp[detector]
+        data = qa.mult(self._boresight, detquat)
+        return data
+
+    def _put_pntg(self, detector, start, data):
+        raise RuntimeError('cannot write data to simulated pointing')
+        return
+
+    def _get_position(self, start, n):
+        # For this simple class, assume that the Earth is located
+        # along the X axis at time == 0.0s.  We also just use the
+        # mean values for distance and angular speed.  Classes for
+        # real experiments should obviously use ephemeris data.
+        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad
+        x = self._AU * np.cos(ang)
+        y = self._AU * np.sin(ang)
+        z = np.zeros_like(x)
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
+
+    def _put_position(self, start, pos):
+        raise RuntimeError('cannot write data to simulated position')
+        return
+
+    def _get_velocity(self, start, n):
+        # For this simple class, assume that the Earth is located
+        # along the X axis at time == 0.0s.  We also just use the
+        # mean values for distance and angular speed.  Classes for
+        # real experiments should obviously use ephemeris data.
+        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
+        x = self._earthspeed * np.cos(ang)
+        y = self._earthspeed * np.sin(ang)
+        z = np.zeros_like(x)
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
+
+    def _put_velocity(self, start, vel):
+        raise RuntimeError('cannot write data to simulated velocity')
+        return

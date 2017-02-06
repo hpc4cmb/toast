@@ -151,7 +151,7 @@ class OpSimGradient(Operator):
         nest (bool): whether to use NESTED ordering.
     """
 
-    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False):
+    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False, flag_mask=255, common_flag_mask=255):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -159,6 +159,8 @@ class OpSimGradient(Operator):
         self._min = min
         self._max = max
         self._nest = nest
+        self._flag_mask = flag_mask
+        self._common_flag_mask = common_flag_mask
 
     def exec(self, data):
         """
@@ -189,8 +191,8 @@ class OpSimGradient(Operator):
                                               n=tod.local_samples[1]))
                 flags, common = tod.read_flags(detector=det, local_start=0,
                                                n=tod.local_samples[1])
-                totflags = np.copy(flags)
-                totflags |= common
+                totflags = flags & self._flag_mask
+                totflags |= (common & self._common_flag_mask)
 
                 pdata[totflags != 0,:] = nullquat
 
@@ -210,6 +212,7 @@ class OpSimGradient(Operator):
                                      (tod.local_samples[1],))
                 ref = tod.cache.reference(cachename)
                 ref[:] += z
+                print('Grad timestream:', ref, np.sum(ref!=0),' non-zeros', flush=True) # DEBUG
 
         return
 
