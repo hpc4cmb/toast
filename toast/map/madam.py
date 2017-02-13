@@ -565,15 +565,18 @@ class OpMadam(Operator):
 
         if not self._purge_pixels:
             # restore the pixels from the Madam buffers
-            offset = 0
+            global_offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     pixels = -np.ones(nlocal, dtype=pixels_dtype)
+                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart
-                        pixels[istart:istop] = madam_pixels[offset:offset+nn]
+                        dslice = slice(d*nsamp + offset,
+                                       d*nsamp + offset + nn)
+                        pixels[istart:istop] = madam_pixels[dslice]
                         offset += nn
                     npix = 12*nside**2
                     good = np.logical_and(pixels >= 0, pixels < npix)
@@ -582,38 +585,45 @@ class OpMadam(Operator):
                     pixels[np.logical_not(good)] = -1
                     cachename = "{}_{}".format(self._pixels, det)
                     tod.cache.put(cachename, pixels, replace=True)
+                global_offset = offset
             del madam_pixels
 
         if not self._purge_weights and nnz == nnz_full:
             # restore the weights from the Madam buffers
-            offset = 0
+            global_offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
-                    weights = np.zeros(nlocal*nnz, dtype=weight_dtype)
+                    weights = np.zeros([nlocal,nnz], dtype=weight_dtype)
+                    offset = global_offset
                     for istart, istop in period_ranges:
-                        nn = (istop - istart) * nnz
-                        weights[istart*nnz:istop*nnz] \
-                            = madam_pixweights[offset:offset+nn]
+                        nn = istop - istart
+                        dwslice = slice((d*nsamp+offset) * nnz,
+                                        (d*nsamp+offset+nn) * nnz)
+                        weights[istart:istop] \
+                            = madam_pixweights[dwslice].reshape([-1, nnz])
                         offset += nn
                     cachename = "{}_{}".format(self._weights, det)
-                    tod.cache.put(cachename, weights.reshape([-1, nnz]),
-                                  replace=True)
+                    tod.cache.put(cachename, weights, replace=True)
+                global_offset = offset
             del madam_pixweights
 
         if self._name_out is not None:
-            offset = 0
+            global_offset = 0
             for obs, period_ranges in zip(data.obs, obs_period_ranges):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
                 for d, det in enumerate(detectors):
                     signal = np.ones(nlocal) * np.nan
+                    offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart
-                        signal[istart:istop] = madam_signal[offset:offset+nn]
+                        dslice = slice(d*nsamp + offset,
+                                       d*nsamp + offset + nn)
+                        signal[istart:istop] = madam_signal[dslice]
                         offset += nn
                     cachename = "{}_{}".format(self._name_out, det)
                     tod.cache.put(cachename, signal, replace=True)
-
+                global_offset = offset
         return
