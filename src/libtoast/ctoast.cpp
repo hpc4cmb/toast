@@ -11,6 +11,18 @@ a BSD-style license that can be found in the LICENSE file.
 // Math sub-library
 //--------------------------------------
 
+// aligned memory
+
+void * ctoast_mem_aligned_alloc ( size_t size ) {
+    void * data = toast::mem::aligned_alloc ( size, toast::mem::SIMD_ALIGN );
+    return data;
+}
+
+void ctoast_mem_aligned_free ( void * data ) {
+    toast::mem::aligned_free ( data );
+    return;
+}
+
 // special functions
 
 void ctoast_sf_sin ( int n, double * ang, double * sinout ) {

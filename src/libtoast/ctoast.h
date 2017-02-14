@@ -22,6 +22,11 @@ extern "C" {
 // Math sub-library
 //--------------------------------------
 
+// aligned memory
+
+void * ctoast_mem_aligned_alloc ( size_t size );
+void ctoast_mem_aligned_free ( void * data );
+
 // special functions
 
 void ctoast_sf_sin ( int n, double * ang, double * sinout );

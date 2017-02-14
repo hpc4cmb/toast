@@ -1,4 +1,4 @@
-SUBDIRS =
+SUBDIRS = tod fod map test
 
 # Initialize compile and linking flags
 
@@ -6,33 +6,49 @@ AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
 -I$(top_srcdir)/src/libtoast/math \
 -I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map
+-I$(top_srcdir)/src/libtoast/map \
+$(PYTHON_CPPFLAGS)
 
 AM_CFLAGS =
 AM_CXXFLAGS =
 
-AM_LDFLAGS =
+AM_LDFLAGS = $(PYTHON_LDFLAGS)
 
-AM_LIBS = 
+AM_LIBS = $(PYTHON_LIBS)
 
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
 
 
-pkgtoastdir = $(pyexecdir)/toast
+toastdir = $(pythondir)/toast
 
-pkgtoast_PYTHON = \
+toast_PYTHON = \
 __init__.py \
+_version.py \
 ctoast.py
 
+toast_LTLIBRARIES = cbuffer.la
+cbuffer_la_SOURCES = cbuffer.c
+nodist_EXTRA_cbuffer_la_SOURCES = fake.cpp
+cbuffer_la_LDFLAGS = -no-undefined -avoid-version -module -shared -export-dynamic
+cbuffer_la_LIBADD = $(top_builddir)/src/libtoast/libtoast.la $(AM_LIBS)
+
+
+
 ctoast.py : ctoast.py.in
-	@./gen_python.sh \
+	@./gen_python.sh $< $@ \
+	"$(VERSION)" \
+	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
+
+_version.py : _version.py.in
+	@./gen_python.sh $< $@ \
+	"$(VERSION)" \
 	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
 
 
-EXTRA_DIST = gen_python.sh ctoast.py.in
+EXTRA_DIST = gen_python.sh ctoast.py.in _version.py.in
 
-CLEANFILES = ctoast.py
+CLEANFILES = ctoast.py _version.py
 
 clean-local :
 	@rm -f *.pyc
