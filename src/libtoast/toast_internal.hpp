@@ -10,6 +10,8 @@ a BSD-style license that can be found in the LICENSE file.
 #include <config.h>
 #include <toast.hpp>
 
+#include <toast_test.hpp>
+
 
 namespace toast {
 
