@@ -11,19 +11,22 @@ else:
 import numpy as np
 from ._psd_tools import autosums
 
-def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=None):
+
+def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
+                comm=None, minimum_fraction=0.2):
     """
     Compute the sample autocovariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
     are distributed across the communicator as tuples of
-    (start_time, stop_time, bin_frequency, bin_value)
+    (start_time, stop_time, bin_frequency, bin_value, frac)
 
     Args:
         times (float):  Signal time stamps.
         signal (float):  Regularly sampled signal vector.
         flags (float):  Signal quality flags.
         lagmax (int):  Largest sample separation to evaluate.
-        stationary_period (float):  Length of a stationary interval in units of the times vector. 
+        stationary_period (float):  Length of a stationary interval in
+            units of the times vector.
         fsample (float):  The sampling frequency in Hz
     """
 
@@ -35,17 +38,20 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
         rank = comm.rank
         ntask = comm.size
 
-    time_start = comm.bcast( times[0], root=0 )
-    time_stop = comm.bcast( times[-1], root=ntask-1 )
+    time_start = comm.bcast(times[0], root=0)
+    time_stop = comm.bcast(times[-1], root=ntask-1)
 
     nreal = np.int(np.ceil((time_stop - time_start) / stationary_period))
 
-    # Communicate lagmax samples from the beginning of the array backwards in the MPI communicator
+    # Communicate lagmax samples from the beginning of the array
+    # backwards in the MPI communicator
 
     nsamp = signal.size
 
     if lagmax > nsamp:
-        raise RuntimeError('autocov_psd: Communicating TOD beyond nearest neighbors is not implemented. Reduce lagmax or the size of the MPI communicator.')
+        raise RuntimeError('autocov_psd: Communicating TOD beyond nearest '
+                           'neighbors is not implemented. Reduce lagmax or '
+                           'the size of the MPI communicator.')
 
     if rank != ntask - 1:
         nextend = lagmax
@@ -74,7 +80,18 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
             extended_flags[-lagmax:] = comm.recv(source=rank+1, tag=1)
             extended_times[-lagmax:] = comm.recv(source=rank+1, tag=2)
 
-    realization = ((extended_times - time_start) / stationary_period).astype(np.int64)
+    realization = ((extended_times - time_start)
+                   / stationary_period).astype(np.int64)
+
+    # Realization length in samples
+
+    realization_length = int(stationary_period * fsample)
+
+    # Require some minimum number of valid samples in a realization
+
+    if minimum_fraction is None:
+        minimum_fraction = 0.
+    minimum_fraction = max(minimum_fraction, lagmax / realization_length)
 
     # Set flagged elements to zero
 
@@ -91,15 +108,15 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
         sig = extended_signal[realflg].copy()
         flg = extended_flags[realflg]
 
-        sig -= np.mean( sig )
-
         good = flg == 0
-        ngood = np.sum( good )
+        ngood = np.sum(good)
 
         if ngood == 0:
             continue
 
-        autocov, autocov_hits = autosums( sig, good, lagmax )
+        sig[good] -= np.mean(sig[good])
+
+        autocov, autocov_hits = autosums(sig, good, lagmax)
 
         autocovs[ireal] = (autocov_hits, autocov)
 
@@ -132,8 +149,14 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
     my_psds = []
 
     for ireal in my_autocovs.keys():
-        
+
         autocov_hits, autocov = my_autocovs[ireal]
+
+        if minimum_fraction is not None:
+            nhit = np.sum(autocov_hits)
+            frac = nhit / realization_length
+            if frac < minimum_fraction:
+                continue
 
         good = autocov_hits != 0
         autocov[good] /= autocov_hits[good]
@@ -148,17 +171,17 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
         # Fourier transform for the PSD
 
-        autocov = np.hstack( [autocov, autocov[:0:-1]] )
+        autocov = np.hstack([autocov, autocov[:0:-1]])
 
-        psd = np.abs(np.fft.rfft( autocov ))
-        psdfreq = np.fft.rfftfreq( len(autocov), d=1/fsample )
-        
+        psd = np.abs(np.fft.rfft(autocov))
+        psdfreq = np.fft.rfftfreq(len(autocov), d=1/fsample)
+
         # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
 
         tstart = time_start + ireal*stationary_period
         tstop = min(tstart + stationary_period, time_stop)
 
-        my_psds.append( (tstart, tstop, psdfreq, psd) )
+        my_psds.append((tstart, tstop, psdfreq, psd, frac))
 
     return my_psds

@@ -213,7 +213,7 @@ class PSDTest(MPITestCase):
             noisetod2 = noisetod.copy()
             for i in range(1,noisetod.size):
                 noisetod[i] = .999*( noisetod[i-1] + noisetod2[i] - noisetod2[i-1] )
-            
+
             autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), self.lagmax, self.stationary_period, fsamp, comm=self.comm)
             #autocovs = autocov_psd(np.arange(ntod)/fsamp, noisetod, np.zeros(ntod,dtype=np.bool), 10, self.stationary_period, fsamp, comm=self.comm)
 
@@ -234,7 +234,7 @@ class PSDTest(MPITestCase):
                 fig = plt.figure(figsize=(12,8), dpi=72)
                 ax = fig.add_subplot(1, 1, 1, aspect='auto')
                 for i in range(len(autocovs)):
-                    t0, t1, freq, psd = autocovs[i]
+                    t0, t1, freq, psd, frac = autocovs[i]
                     bfreq, hits = log_bin( freq, nbin=nbin )
                     bpsd, hits = log_bin( psd, nbin=nbin )
                     ax.loglog( freq, psd, '.', color='magenta', label='autocov PSD' )
