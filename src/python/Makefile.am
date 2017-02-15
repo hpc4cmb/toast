@@ -1,4 +1,12 @@
-SUBDIRS = tod fod map test
+SUBDIRS = 
+
+#if HAVE_AM_MPI
+#else
+#  SUBDIRS += mpi4py
+#endif
+
+SUBDIRS += tod fod map test
+
 
 # Initialize compile and linking flags
 
@@ -34,7 +42,6 @@ cbuffer_la_LDFLAGS = -no-undefined -avoid-version -module -shared -export-dynami
 cbuffer_la_LIBADD = $(top_builddir)/src/libtoast/libtoast.la $(AM_LIBS)
 
 
-
 ctoast.py : ctoast.py.in
 	@./gen_python.sh $< $@ \
 	"$(VERSION)" \
@@ -45,11 +52,16 @@ _version.py : _version.py.in
 	"$(VERSION)" \
 	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
 
+mpi.py : mpi.py.in
+	@./gen_python.sh $< $@ \
+	"$(VERSION)" \
+	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
+
 
 EXTRA_DIST = gen_python.sh ctoast.py.in _version.py.in
 
 CLEANFILES = ctoast.py _version.py
 
 clean-local :
-	@rm -f *.pyc
+	@rm -f *.pyc *.pyo
 

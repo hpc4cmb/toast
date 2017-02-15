@@ -406,8 +406,12 @@ int MPI_Finalize(void) {
     return MPI_SUCCESS;
 }
 
+int MPI_Initialized(int *flag) {
+    (*flag) = 1;
+    return MPI_SUCCESS;
+}
+
 /*
-int MPI_Initialized(int *flag);
 
 int MPI_Abort(MPI_Comm comm, int errorcode);
 
@@ -596,8 +600,14 @@ int MPI_Grequest_start(MPI_Grequest_query_function *query_fn, MPI_Grequest_free_
                        MPI_Grequest_cancel_function *cancel_fn, void *extra_state,
                        MPI_Request *request);
 
-int MPI_Init_thread(int *argc, char ***argv, int required, int *provided);
+*/
 
+int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
+    (*provided) = required;
+    return MPI_SUCCESS;
+}
+
+/*
 int MPI_Is_thread_main(int *flag);
 
 int MPI_Query_thread(int *provided);
