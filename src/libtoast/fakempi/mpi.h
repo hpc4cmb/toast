@@ -61,6 +61,13 @@ typedef int MPI_Datatype;
 #define MPI_LB             ((MPI_Datatype)0x4c000010)
 #define MPI_UB             ((MPI_Datatype)0x4c000011)
 
+#define MPI_FLOAT_INT         ((MPI_Datatype)0x8c000000)
+#define MPI_DOUBLE_INT        ((MPI_Datatype)0x8c000001)
+#define MPI_LONG_INT          ((MPI_Datatype)0x8c000002)
+#define MPI_SHORT_INT         ((MPI_Datatype)0x8c000003)
+#define MPI_2INT              ((MPI_Datatype)0x8c000816)
+#define MPI_LONG_DOUBLE_INT   ((MPI_Datatype)0x8c000004)
+
 /* C99 fixed-width datatypes */
 
 #define MPI_INT8_T            ((MPI_Datatype)0x4c000137)
@@ -71,6 +78,18 @@ typedef int MPI_Datatype;
 #define MPI_UINT16_T          ((MPI_Datatype)0x4c00023c)
 #define MPI_UINT32_T          ((MPI_Datatype)0x4c00043d)
 #define MPI_UINT64_T          ((MPI_Datatype)0x4c00083e)
+
+/* other C99 types */
+#define MPI_C_BOOL                 ((MPI_Datatype)0x4c00013f)
+#define MPI_C_FLOAT_COMPLEX        ((MPI_Datatype)0x4c000840)
+#define MPI_C_COMPLEX              MPI_C_FLOAT_COMPLEX
+#define MPI_C_DOUBLE_COMPLEX       ((MPI_Datatype)0x4c001041)
+#define MPI_C_LONG_DOUBLE_COMPLEX  ((MPI_Datatype)0x4c002042)
+
+/* address/offset types */
+#define MPI_AINT          ((MPI_Datatype)0x4c000843)
+#define MPI_OFFSET        ((MPI_Datatype)0x4c000844)
+#define MPI_COUNT         ((MPI_Datatype)0x4c000845)
 
 /* typeclasses */
 
@@ -93,6 +112,13 @@ typedef int MPI_Group;
 
 typedef int MPI_Win;
 #define MPI_WIN_NULL ((MPI_Win)0x20000000)
+
+/* File and IO */
+
+typedef int MPI_File;
+#define MPI_FILE_NULL ((MPI_File)0)
+
+typedef int64_t MPI_Offset;
 
 /* Collective operations */
 typedef int MPI_Op;
@@ -160,6 +186,15 @@ typedef enum MPIR_Win_model {
     MPI_WIN_UNIFIED    = 2
 } MPIR_Win_model_t;
 
+/* Upper bound on the overhead in bsend for each message buffer */
+#define MPI_BSEND_OVERHEAD 96
+
+/* Topology types */
+typedef enum MPIR_Topo_type { MPI_GRAPH=1, MPI_CART=2, MPI_DIST_GRAPH=3 } MPIR_Topo_type;
+
+#define MPI_BOTTOM      (void *)0
+extern int * const MPI_UNWEIGHTED;
+extern int * const MPI_WEIGHTS_EMPTY;
 
 #define MPI_PROC_NULL   (-1)
 #define MPI_ANY_SOURCE 	(-2)
@@ -228,6 +263,29 @@ typedef int (MPI_Delete_function) ( MPI_Comm, int, void *, void * );
 
 #define MPI_VERSION    3
 #define MPI_SUBVERSION 1
+
+/* for the datatype decoders */
+enum MPIR_Combiner_enum {
+    MPI_COMBINER_NAMED            = 1,
+    MPI_COMBINER_DUP              = 2,
+    MPI_COMBINER_CONTIGUOUS       = 3, 
+    MPI_COMBINER_VECTOR           = 4,
+    MPI_COMBINER_HVECTOR_INTEGER  = 5,
+    MPI_COMBINER_HVECTOR          = 6,
+    MPI_COMBINER_INDEXED          = 7,
+    MPI_COMBINER_HINDEXED_INTEGER = 8, 
+    MPI_COMBINER_HINDEXED         = 9, 
+    MPI_COMBINER_INDEXED_BLOCK    = 10, 
+    MPI_COMBINER_STRUCT_INTEGER   = 11,
+    MPI_COMBINER_STRUCT           = 12,
+    MPI_COMBINER_SUBARRAY         = 13,
+    MPI_COMBINER_DARRAY           = 14,
+    MPI_COMBINER_F90_REAL         = 15,
+    MPI_COMBINER_F90_COMPLEX      = 16,
+    MPI_COMBINER_F90_INTEGER      = 17,
+    MPI_COMBINER_RESIZED          = 18,
+    MPI_COMBINER_HINDEXED_BLOCK   = 19
+};
 
 /* for info */
 typedef int MPI_Info;

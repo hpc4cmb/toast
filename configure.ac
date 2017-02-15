@@ -41,8 +41,14 @@ dnl | Check for MPI
 dnl +------------------------------------------------
 toast_mpi=yes
 AC_ARG_ENABLE([mpi], [AC_HELP_STRING([--disable-mpi], [Disable all checks for MPI])], [toast_mpi=$enable_mpi], [toast_mpi=yes])
-AX_PROG_CC_MPI([test "$toast_mpi" = yes], [toast_mpi=yes], [toast_mpi=no])
-AX_PROG_CXX_MPI([test "$toast_mpi" = yes], [toast_mpi=yes], [toast_mpi=no])
+AX_PROG_CC_MPI([test "$toast_mpi" = yes], [toast_mpi=yes], [
+  toast_mpi=no
+  AC_MSG_ERROR([An MPI C compiler is currently required to build TOAST.])
+])
+AX_PROG_CXX_MPI([test "$toast_mpi" = yes], [toast_mpi=yes], [
+  toast_mpi=no
+  AC_MSG_ERROR([An MPI C++ compiler is currently required to build TOAST.])
+])
 AM_CONDITIONAL([HAVE_AM_MPI], [test $toast_mpi = yes])
 
 dnl +-------------------------
