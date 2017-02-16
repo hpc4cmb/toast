@@ -8,6 +8,20 @@ a BSD-style license that can be found in the LICENSE file.
 
 
 //--------------------------------------
+// Global library initialize / finalize
+//--------------------------------------
+
+void ctoast_init ( int argc, char *argv[] ) {
+    toast::init ( argc, argv );
+    return;
+}
+
+void ctoast_finalize ( ) {
+    toast::finalize ( );
+    return;
+}
+
+//--------------------------------------
 // Math sub-library
 //--------------------------------------
 

@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
+import sys
 import ctypes as ct
 
 from ctypes.util import find_library
@@ -23,6 +24,31 @@ libc = ct.CDLL(libc_path, mode=ct.RTLD_GLOBAL)
 libc.free.restype = None
 libc.free.argtypes = [ ct.c_void_p ]
 
+#--------------------------------------
+# Library initialize / finalize
+#--------------------------------------
+
+p_c_char = ct.POINTER(ct.c_char)
+pp_c_char = ct.POINTER(p_c_char)
+
+lib.ctoast_init.restype = None
+lib.ctoast_init.argtypes = [ ct.c_int, pp_c_char ]
+
+def cinit ():
+    argc = len(sys.argv)
+    argv = (p_c_char * (argc + 1))()
+    for i, arg in enumerate(sys.argv):
+        enc_arg = arg.encode('utf-8')
+        argv[i] = ct.create_string_buffer(enc_arg)
+    lib.ctoast_init(argc, argv)
+    return
+
+lib.ctoast_finalize.restype = None
+lib.ctoast_finalize.argtypes = []
+
+def cfinalize ():
+    lib.ctoast_finalize()
+    return
 
 #--------------------------------------
 # Math sub-library
@@ -344,8 +370,14 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
 # //--------------------------------------
 
 lib.ctoast_test_runner.restype = ct.c_int
-lib.ctoast_test_runner.argtypes = [ ct.c_int, ct.POINTER(ct.c_char_p) ]
+lib.ctoast_test_runner.argtypes = [ ct.c_int, pp_c_char ]
 
-def test_runner(argc, argv):
-    return lib.ctoast_test_runner(argc, argv)
+def ctest_runner ():
+    argc = len(sys.argv)
+    argv = (p_c_char * (argc + 1))()
+    for i, arg in enumerate(sys.argv):
+        enc_arg = arg.encode('utf-8')
+        argv[i] = ct.create_string_buffer(enc_arg)
+    ret = lib.ctoast_test_runner(argc, argv)
+    return ret
 

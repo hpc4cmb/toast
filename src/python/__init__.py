@@ -11,4 +11,5 @@ designed to allow the processing of data from telescopes that acquire
 data as timestreams (rather than images).
 """
 
+from .tests import test
 

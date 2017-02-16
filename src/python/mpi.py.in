@@ -2,6 +2,12 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
+from .ctoast import cinit
+
+# Ensure that the compiled-library MPI initialization is
+# called BEFORE importing mpi4py.
+cinit()
+
 MPI = None
 
 if @HAVE_MPI@:

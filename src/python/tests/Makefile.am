@@ -20,10 +20,12 @@ AM_LIBS = $(PYTHON_LIBS)
 include $(top_srcdir)/src/build_options.am
 
 
-toasttestdir = $(pythondir)/toast/test
+toasttestsdir = $(pythondir)/toast/tests
 
-toasttest_PYTHON = \
-__init__.py
+toasttests_PYTHON = \
+__init__.py \
+runner.py \
+ctoast.py
 
 
 clean-local :

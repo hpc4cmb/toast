@@ -6,6 +6,9 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <toast_internal.hpp>
 
+#include <unistd.h>
+#include <climits>
+
 
 // Initialize MPI in a consistent way
 
@@ -35,5 +38,22 @@ void toast::init ( int argc, char *argv[] ) {
     return;
 }
 
+
+void toast::finalize ( ) {
+    int ret;
+
+    #ifdef HAVE_ELEMENTAL
+
+    // If we are using Elemental, let it finalize MPI
+    El::Finalize ( );
+    
+    #else
+    
+    ret = MPI_Finalize ( );
+    
+    #endif
+
+    return;
+}
 
 

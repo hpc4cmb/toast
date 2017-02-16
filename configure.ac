@@ -192,7 +192,7 @@ AC_CONFIG_FILES([src/python/Makefile])
 AC_CONFIG_FILES([src/python/tod/Makefile])
 AC_CONFIG_FILES([src/python/fod/Makefile])
 AC_CONFIG_FILES([src/python/map/Makefile])
-AC_CONFIG_FILES([src/python/test/Makefile])
+AC_CONFIG_FILES([src/python/tests/Makefile])
 
 dnl +------------------------------------------------
 dnl | Generate Makefiles
