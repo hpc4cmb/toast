@@ -17,6 +17,12 @@ a BSD-style license that can be found in the LICENSE file.
 extern "C" {
 #endif
 
+//--------------------------------------
+// Global library initialize / finalize
+//--------------------------------------
+
+void ctoast_init ( int argc, char *argv[] );
+void ctoast_finalize ( );
 
 //--------------------------------------
 // Math sub-library

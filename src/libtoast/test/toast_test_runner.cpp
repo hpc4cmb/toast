@@ -10,10 +10,15 @@ a BSD-style license that can be found in the LICENSE file.
 
 int toast::test::runner ( int argc, char *argv[] ) {
 
-    toast::init ( argc, argv );
-
     ::testing::InitGoogleTest ( &argc, argv );
 
-    return RUN_ALL_TESTS();
+    toast::init ( argc, argv );
+
+    // FIXME:  rank 0 of MPI_COMM_WORLD should create the test
+    // output directory here if it does not exist.
+
+    int result = RUN_ALL_TESTS();
+
+    return result;
 }
 

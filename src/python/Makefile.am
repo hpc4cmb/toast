@@ -5,8 +5,12 @@ SUBDIRS =
 #  SUBDIRS += mpi4py
 #endif
 
-SUBDIRS += tod fod map test
+SUBDIRS += tod fod map tests
 
+HAVE_MPI4PY = 
+if HAVE_AM_MPI
+  HAVE_MPI4PY += 1
+endif
 
 # Initialize compile and linking flags
 
@@ -33,7 +37,9 @@ toastdir = $(pythondir)/toast
 toast_PYTHON = \
 __init__.py \
 _version.py \
-ctoast.py
+ctoast.py \
+mpi.py \
+fakempi.py
 
 toast_LTLIBRARIES = cbuffer.la
 cbuffer_la_SOURCES = cbuffer.c
@@ -45,22 +51,25 @@ cbuffer_la_LIBADD = $(top_builddir)/src/libtoast/libtoast.la $(AM_LIBS)
 ctoast.py : ctoast.py.in
 	@./gen_python.sh $< $@ \
 	"$(VERSION)" \
-	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
+	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)" \
+	"$(HAVE_MPI4PY)"
 
 _version.py : _version.py.in
 	@./gen_python.sh $< $@ \
 	"$(VERSION)" \
-	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
+	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)" \
+	"$(HAVE_MPI4PY)"
 
 mpi.py : mpi.py.in
 	@./gen_python.sh $< $@ \
 	"$(VERSION)" \
-	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)"
+	"$(DESTDIR)$(libdir)/libtoast.$(TOAST_SHARED_EXT)" \
+	"$(HAVE_MPI4PY)"
 
 
-EXTRA_DIST = gen_python.sh ctoast.py.in _version.py.in
+EXTRA_DIST = gen_python.sh ctoast.py.in _version.py.in mpi.py.in
 
-CLEANFILES = ctoast.py _version.py
+CLEANFILES = ctoast.py _version.py mpi.py
 
 clean-local :
 	@rm -f *.pyc *.pyo

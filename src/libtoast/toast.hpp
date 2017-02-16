@@ -14,6 +14,8 @@ namespace toast {
 
     void init ( int argc, char * argv[] );
 
+    void finalize ( );
+
 }
 
 #include <toast/math.hpp>
