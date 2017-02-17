@@ -8,6 +8,9 @@ a BSD-style license that can be found in the LICENSE file.
 #include <Python.h>
 #include <ctoast.h>
 
+#include <stdio.h>
+#include <string.h>
+
 
 /* datatypes */
 
@@ -48,12 +51,12 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
 
     /* unpack the size and data type from the keywords */
 
-    static char *kwlist[] = {"size", "type"};
+    static char *kwlist[] = {"size", "type", NULL};
 
     size_t typelen;
     char const * typestr;
 
-    if ( ! PyArg_ParseTupleAndKeywords(args, kwds, "ks", kwlist, &(self->size), typestr) ) {
+    if ( ! PyArg_ParseTupleAndKeywords(args, kwds, "ks", kwlist, &(self->size), &typestr) ) {
         return -1;
     }
 
@@ -66,11 +69,13 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
         return -1;
     } else {
         typelen = strlen ( typestr );
+        int found = 0;
 
         if ( typelen == strlen("float64") ) {
             if ( strncmp ( typestr, "float64", typelen ) == 0 ) {
                 self->itype = item_type_float64;
                 self->itemsize = sizeof(double);
+                found = 1;
             }
         }
         
@@ -78,6 +83,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "float32", typelen ) == 0 ) {
                 self->itype = item_type_float32;
                 self->itemsize = sizeof(float);
+                found = 1;
             }
         }
         
@@ -85,6 +91,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "int64", typelen ) == 0 ) {
                 self->itype = item_type_int64;
                 self->itemsize = sizeof(int64_t);
+                found = 1;
             }
         }
         
@@ -92,6 +99,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "uint64", typelen ) == 0 ) {
                 self->itype = item_type_uint64;
                 self->itemsize = sizeof(uint64_t);
+                found = 1;
             }
         }
 
@@ -99,6 +107,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "int32", typelen ) == 0 ) {
                 self->itype = item_type_int32;
                 self->itemsize = sizeof(int32_t);
+                found = 1;
             }
         }
         
@@ -106,6 +115,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "uint32", typelen ) == 0 ) {
                 self->itype = item_type_uint32;
                 self->itemsize = sizeof(uint32_t);
+                found = 1;
             }
         }
 
@@ -113,6 +123,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "int16", typelen ) == 0 ) {
                 self->itype = item_type_int16;
                 self->itemsize = sizeof(int16_t);
+                found = 1;
             }
         }
         
@@ -120,6 +131,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "uint16", typelen ) == 0 ) {
                 self->itype = item_type_uint16;
                 self->itemsize = sizeof(uint16_t);
+                found = 1;
             }
         }
 
@@ -127,6 +139,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "int8", typelen ) == 0 ) {
                 self->itype = item_type_int8;
                 self->itemsize = sizeof(int8_t);
+                found = 1;
             }
         }
         
@@ -134,6 +147,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "uint8", typelen ) == 0 ) {
                 self->itype = item_type_uint8;
                 self->itemsize = sizeof(uint8_t);
+                found = 1;
             }
         }
 
@@ -141,14 +155,21 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
             if ( strncmp ( typestr, "string", typelen ) == 0 ) {
                 self->itype = item_type_string;
                 self->itemsize = sizeof(char);
+                found = 1;
             }
         }
 
-        PyErr_SetString(PyExc_ValueError, "Invalid data type");
-        return -1;
+        if ( ! found ) {
+            char msg[512];
+            int pos = snprintf(msg, 512, "Invalid data type \"%s\"", typestr);
+            PyErr_SetString(PyExc_ValueError, msg);
+            return -1;
+        }
     }
 
     self->data = ctoast_mem_aligned_alloc ( self->size * self->itemsize );
+
+    void * ptr = memset(self->data, 0, self->size * self->itemsize);
 
     return 0;
 }
@@ -157,6 +178,7 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
 /* this function is called when the object is deallocated */
 
 static void ToastBuffer_dealloc ( ToastBuffer * self ) {
+    /*printf("Dealloc ToastBuffer of type %d and size %lu\n", self->itype, self->size);*/
     if ( self->data != NULL ) {
         ctoast_mem_aligned_free ( self->data );
     }
@@ -166,12 +188,85 @@ static void ToastBuffer_dealloc ( ToastBuffer * self ) {
 
 /* This function returns the string representation of our object */
 
-static PyObject * ToastBuffer_str ( ToastBuffer * self ) {
-    char const * s = "test";
+char * ToastBuffer_stringify ( void * data, ToastItemType type, size_t len, size_t nmax ) {
+    char * output = (char*) malloc(nmax * 20);
+    int pos = sprintf(&output[0], "[");
 
+    switch ( type ) {
+        case item_type_float64 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %0.15e", ((double*)data)[k] );
+            }
+            break;
+        case item_type_float32 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %0.6e", ((float*)data)[k] );
+            }
+            break;
+        case item_type_int64 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %lld", ((long long int *)data)[k] );
+            }
+            break;
+        case item_type_uint64 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %llu", ((long long unsigned int *)data)[k] );
+            }
+            break;
+        case item_type_int32 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %d", ((int32_t*)data)[k] );
+            }
+            break;
+        case item_type_uint32 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %u", ((uint32_t*)data)[k] );
+            }
+            break;
+        case item_type_int16 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %hd", ((int16_t*)data)[k] );
+            }
+            break;
+        case item_type_uint16 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %hu", ((uint16_t*)data)[k] );
+            }
+            break;
+        case item_type_int8 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %hhd", ((int8_t*)data)[k] );
+            }
+            break;
+        case item_type_uint8 :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %hhu", ((uint8_t*)data)[k] );
+            }
+            break;
+        case item_type_string :
+            for ( size_t k = 0; (k < len) && (k < nmax); ++k ) {
+                pos += sprintf( &output[pos], " %s", ((char**)data)[k] );
+            }
+            break;
+        default :
+            pos += sprintf( &output[pos], " ERROR: Unknown type" );
+            break;
+    }
+
+    if ( len > nmax ) {
+        pos += sprintf ( &output[pos], "..." );
+    }
+    sprintf ( &output[pos], " ]" );
+    return output;
+}
+
+
+static PyObject * ToastBuffer_str ( ToastBuffer * self ) {
+    char * s = ToastBuffer_stringify(self->data, self->itype, self->size, 10);
 
     PyObject* ret = PyUnicode_FromString(s);
-    //free(s);
+    
+    free(s);
     return ret;
 }
 

@@ -7,7 +7,7 @@ import sys
 from ..ctoast import ctest_runner
 
 
-def test_ctoast(testdir):
+def test_ctoast():
     ret = ctest_runner()
     return
 

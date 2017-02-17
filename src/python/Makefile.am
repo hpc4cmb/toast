@@ -39,7 +39,8 @@ __init__.py \
 _version.py \
 ctoast.py \
 mpi.py \
-fakempi.py
+fakempi.py \
+cache.py
 
 toast_LTLIBRARIES = cbuffer.la
 cbuffer_la_SOURCES = cbuffer.c

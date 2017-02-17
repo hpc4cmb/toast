@@ -25,7 +25,10 @@ toasttestsdir = $(pythondir)/toast/tests
 toasttests_PYTHON = \
 __init__.py \
 runner.py \
-ctoast.py
+ctoast.py \
+cbuffer.py \
+mpi.py \
+cache.py
 
 
 clean-local :
