@@ -6,6 +6,7 @@ import re
 import sys
 import numpy as np
 
+import warnings
 #import gc
 
 from .cbuffer import ToastBuffer
@@ -90,7 +91,7 @@ class Cache(object):
                 # print("__del__ referrers for {} are ".format(k), gc.get_referrers(v))
                 # print("__del__ refcount for {} is ".format(k), sys.getrefcount(v) )
                 if sys.getrefcount(v) > 2:
-                    sys.stderr.write("Cache object {} has external references and cannot be freed.".format(k))
+                    warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
         self._refs.clear()
 
 
@@ -112,7 +113,7 @@ class Cache(object):
                     # print("clear referrers for {} are ".format(k), gc.get_referrers(v))
                     # print("clear refcount for {} is ".format(k), sys.getrefcount(v) )
                     if sys.getrefcount(v) > 2:
-                        sys.stderr.write("Cache object {} has external references and cannot be freed.".format(k))
+                        warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
             self._refs.clear()            
         else:
             pat = re.compile(pattern)
@@ -232,7 +233,7 @@ class Cache(object):
             # print("destroy referrers for {} are ".format(name), gc.get_referrers(self._refs[name]))
             # print("destroy refcount for {} is ".format(name), sys.getrefcount(self._refs[name]) )
             if sys.getrefcount(self._refs[name]) > 2:
-                sys.stderr.write("Cache object {} has external references and cannot be freed.".format(name))
+                warnings.warn("Cache object {} has external references and will not be freed.".format(name), RuntimeWarning)
         del self._refs[name]
         return
 

@@ -28,7 +28,9 @@ runner.py \
 ctoast.py \
 cbuffer.py \
 mpi.py \
-cache.py
+cache.py \
+dist.py \
+rng.py
 
 
 clean-local :

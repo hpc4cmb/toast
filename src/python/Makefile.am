@@ -40,11 +40,18 @@ _version.py \
 ctoast.py \
 mpi.py \
 fakempi.py \
-cache.py
+cache.py \
+dist.py \
+rng.py \
+op.py
+
 
 toast_LTLIBRARIES = cbuffer.la
 cbuffer_la_SOURCES = cbuffer.c
+
+# make sure that the C++ compiler is used for linking
 nodist_EXTRA_cbuffer_la_SOURCES = fake.cpp
+
 cbuffer_la_LDFLAGS = -no-undefined -avoid-version -module -shared -export-dynamic
 cbuffer_la_LIBADD = $(top_builddir)/src/libtoast/libtoast.la $(AM_LIBS)
 

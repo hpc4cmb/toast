@@ -15,6 +15,8 @@ from .ctoast import test_ctoast
 
 from . import cbuffer as testcbuffer
 from . import cache as testcache
+from . import rng as testrng
+from . import dist as testdist
 
 
 def test():
@@ -42,6 +44,8 @@ def test():
 
     suite.addTest( loader.loadTestsFromModule(testcbuffer) )
     suite.addTest( loader.loadTestsFromModule(testcache) )
+    suite.addTest( loader.loadTestsFromModule(testrng) )
+    suite.addTest( loader.loadTestsFromModule(testdist) )
 
     mpirunner.run(suite)
 
