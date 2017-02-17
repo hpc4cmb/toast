@@ -132,7 +132,7 @@ dnl +------------------------------------------------
 ax_have_fftw=no
 if test "$ax_have_mkl" = "no"; then
   AC_LANG_PUSH([C])
-  ACX_FFTW([ax_have_fftw=yes;AC_DEFINE(HAVE_FFTW,1,[Define we have FFTW])], AC_MSG_ERROR([Could not find an FFT library!]))
+  ACX_FFTW([ax_have_fftw=yes;AC_DEFINE(HAVE_FFTW,1,[Define we have FFTW])], AC_MSG_ERROR([Could not find an FFT library (MKL or FFTW)!]))
   AC_LANG_POP([C])
 fi
 AM_CONDITIONAL([HAVE_AM_FFTW], [test $ax_have_fftw = yes])

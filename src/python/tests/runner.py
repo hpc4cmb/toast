@@ -5,13 +5,16 @@
 from ..mpi import MPI
 
 import os
-import shutil
-import tempfile
+import unittest
 
 from .._version import __version__
 
+from .mpi import MPITestRunner
+
 from .ctoast import test_ctoast
 
+from . import cbuffer as testcbuffer
+from . import cache as testcache
 
 
 def test():
@@ -31,8 +34,16 @@ def test():
     # MPI_COMM_WORLD.
     test_ctoast()
 
-    # Run tests on the ToastBuffer CPython class.
+    # Run python tests.
 
+    loader = unittest.TestLoader()
+    mpirunner = MPITestRunner(verbosity=2)
+    suite = unittest.TestSuite()
+
+    suite.addTest( loader.loadTestsFromModule(testcbuffer) )
+    suite.addTest( loader.loadTestsFromModule(testcache) )
+
+    mpirunner.run(suite)
 
 
     return

@@ -83,23 +83,23 @@ TEST_F( sfTest, trig ) {
     double comp2[size];
 
     sf::sin ( size, angin, comp1 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( sinout[i], comp1[i] );
     }
 
     sf::cos ( size, angin, comp2 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( cosout[i], comp2[i] );
     }
 
     sf::sincos ( size, angin, comp1, comp2 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( sinout[i], comp1[i] );
         EXPECT_DOUBLE_EQ( cosout[i], comp2[i] );
     }
 
     sf::atan2 ( size, yin, xin, comp1 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( atanout[i], comp1[i] );
     }
 }
@@ -110,23 +110,23 @@ TEST_F( sfTest, fasttrig ) {
     double comp2[size];
 
     sf::fast_sin ( size, angin, comp1 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( sinout[i], comp1[i] );
     }
 
     sf::fast_cos ( size, angin, comp2 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( cosout[i], comp2[i] );
     }
 
     sf::fast_sincos ( size, angin, comp1, comp2 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( sinout[i], comp1[i] );
         EXPECT_FLOAT_EQ( cosout[i], comp2[i] );
     }
 
     sf::fast_atan2 ( size, yin, xin, comp1 );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( atanout[i], comp1[i] );
     }
 }
@@ -136,22 +136,22 @@ TEST_F( sfTest, sqrtlog ) {
     double comp[size];
 
     sf::sqrt ( size, sqin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( sqout[i], comp[i] );
     }
 
     sf::rsqrt ( size, rsqin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( rsqout[i], comp[i] );
     }
 
     sf::exp ( size, expin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( expout[i], comp[i] );
     }
 
     sf::log ( size, login, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_DOUBLE_EQ( logout[i], comp[i] );
     }
 }
@@ -161,22 +161,22 @@ TEST_F( sfTest, fast_sqrtlog ) {
     double comp[size];
 
     sf::fast_sqrt ( size, sqin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( sqout[i], comp[i] );
     }
 
     sf::fast_rsqrt ( size, rsqin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( rsqout[i], comp[i] );
     }
 
     sf::fast_exp ( size, expin, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( expout[i], comp[i] );
     }
 
     sf::fast_log ( size, login, comp );
-    for ( int i; i < size; ++i ) {
+    for ( int i = 0; i < size; ++i ) {
         EXPECT_FLOAT_EQ( logout[i], comp[i] );
     }
 }
