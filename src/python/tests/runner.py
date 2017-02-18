@@ -17,6 +17,7 @@ from . import cbuffer as testcbuffer
 from . import cache as testcache
 from . import rng as testrng
 from . import dist as testdist
+from . import qarray as testqarray
 
 
 def test():
@@ -46,6 +47,8 @@ def test():
     suite.addTest( loader.loadTestsFromModule(testcache) )
     suite.addTest( loader.loadTestsFromModule(testrng) )
     suite.addTest( loader.loadTestsFromModule(testdist) )
+    suite.addTest( loader.loadTestsFromModule(testqarray) )
+
 
     mpirunner.run(suite)
 
