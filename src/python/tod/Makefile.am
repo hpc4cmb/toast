@@ -23,7 +23,8 @@ include $(top_srcdir)/src/build_options.am
 toasttoddir = $(pythondir)/toast/tod
 
 toasttod_PYTHON = \
-__init__.py
+__init__.py \
+qarray.py
 
 
 clean-local :

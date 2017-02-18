@@ -30,7 +30,8 @@ cbuffer.py \
 mpi.py \
 cache.py \
 dist.py \
-rng.py
+rng.py \
+qarray.py
 
 
 clean-local :
