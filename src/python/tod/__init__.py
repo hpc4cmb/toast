@@ -3,15 +3,13 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-# import functions in our public API
+# import functions into our public API
 
-from . import qarray as qarray
+from .tod import TOD
 
-# from .tod import TOD
+from .interval import Interval
 
-# from .interval import Interval
-
-# from .pointing import OpPointingHpix
+from .pointing import OpPointingHpix
 
 # from .sim_tod import (satellite_scanning, TODHpixSpiral,
 #     TODSatellite, slew_precession_axis)
@@ -23,11 +21,11 @@ from . import qarray as qarray
 # from .sim_detdata import (OpSimNoise, OpSimGradient,
 #     OpSimScan, OpSimDipole)
 
-# from .noise import Noise
+from .noise import Noise
 
-# from .pointing_math import quat2angle, aberrate
+from .pointing_math import quat2angle, aberrate
 
-# from .tod_math import calibrate, dipole, sim_noise_timestream
+from .tod_math import calibrate, dipole, sim_noise_timestream
 
 # from .conviqt import OpSimConviqt
 

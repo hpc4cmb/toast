@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from .. import ctoast as ctoast
+from . import ctoast as ctoast
 
 
 def arraylist_dot(a, b):

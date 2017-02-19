@@ -20,42 +20,42 @@ a BSD-style license that can be found in the LICENSE file.
 
 // These call MKL VM functions with "High Accuracy" mode.
 
-void toast::sf::sin ( int n, double * ang, double * sinout ) {
+void toast::sf::sin ( int n, double const * ang, double * sinout ) {
     vmdSin ( n, ang, sinout, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::cos ( int n, double * ang, double * cosout ) {
+void toast::sf::cos ( int n, double const * ang, double * cosout ) {
     vmdCos ( n, ang, cosout, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void toast::sf::sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     vmdSinCos ( n, ang, sinout, cosout, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::atan2 ( int n, double * y, double * x, double * ang ) {
+void toast::sf::atan2 ( int n, double const * y, double const * x, double * ang ) {
     vmdAtan2 ( n, y, x, ang, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::sqrt ( int n, double * in, double * out ) {
+void toast::sf::sqrt ( int n, double const * in, double * out ) {
     vmdSqrt ( n, in, out, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::rsqrt ( int n, double * in, double * out ) {
+void toast::sf::rsqrt ( int n, double const * in, double * out ) {
     vmdInvSqrt ( n, in, out, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::exp ( int n, double * in, double * out ) {
+void toast::sf::exp ( int n, double const * in, double * out ) {
     vmdExp ( n, in, out, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::log ( int n, double * in, double * out ) {
+void toast::sf::log ( int n, double const * in, double * out ) {
     vmdLn ( n, in, out, VML_HA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
@@ -63,42 +63,42 @@ void toast::sf::log ( int n, double * in, double * out ) {
 
 // These call MKL VM functions with "Low Accuracy" mode.
 
-void toast::sf::fast_sin ( int n, double * ang, double * sinout ) {
+void toast::sf::fast_sin ( int n, double const * ang, double * sinout ) {
     vmdSin ( n, ang, sinout, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_cos ( int n, double * ang, double * cosout ) {
+void toast::sf::fast_cos ( int n, double const * ang, double * cosout ) {
     vmdCos ( n, ang, cosout, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void toast::sf::fast_sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     vmdSinCos ( n, ang, sinout, cosout, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_atan2 ( int n, double * y, double * x, double * ang ) {
+void toast::sf::fast_atan2 ( int n, double const * y, double const * x, double * ang ) {
     vmdAtan2 ( n, y, x, ang, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_sqrt ( int n, double * in, double * out ) {
+void toast::sf::fast_sqrt ( int n, double const * in, double * out ) {
     vmdSqrt ( n, in, out, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_rsqrt ( int n, double * in, double * out ) {
+void toast::sf::fast_rsqrt ( int n, double const * in, double * out ) {
     vmdInvSqrt ( n, in, out, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_exp ( int n, double * in, double * out ) {
+void toast::sf::fast_exp ( int n, double const * in, double * out ) {
     vmdExp ( n, in, out, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
 
-void toast::sf::fast_log ( int n, double * in, double * out ) {
+void toast::sf::fast_log ( int n, double const * in, double * out ) {
     vmdLn ( n, in, out, VML_LA | VML_FTZDAZ_OFF | VML_ERRMODE_DEFAULT );
     return;
 }
@@ -108,7 +108,7 @@ void toast::sf::fast_log ( int n, double * in, double * out ) {
 // These are simply threaded for-loops that call the standard
 // math library functions.
 
-void toast::sf::sin ( int n, double * ang, double * sinout ) {
+void toast::sf::sin ( int n, double const * ang, double * sinout ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, ang, sinout) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -117,7 +117,7 @@ void toast::sf::sin ( int n, double * ang, double * sinout ) {
     return;
 }
 
-void toast::sf::cos ( int n, double * ang, double * cosout ) {
+void toast::sf::cos ( int n, double const * ang, double * cosout ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, ang, cosout) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -126,7 +126,7 @@ void toast::sf::cos ( int n, double * ang, double * cosout ) {
     return;
 }
 
-void toast::sf::sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void toast::sf::sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, ang, sinout, cosout) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -136,7 +136,7 @@ void toast::sf::sincos ( int n, double * ang, double * sinout, double * cosout )
     return;
 }
 
-void toast::sf::atan2 ( int n, double * y, double * x, double * ang ) {
+void toast::sf::atan2 ( int n, double const * y, double const * x, double * ang ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, x, y, ang) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -145,7 +145,7 @@ void toast::sf::atan2 ( int n, double * y, double * x, double * ang ) {
     return;
 }
 
-void toast::sf::sqrt ( int n, double * in, double * out ) {
+void toast::sf::sqrt ( int n, double const * in, double * out ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, in, out) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -154,7 +154,7 @@ void toast::sf::sqrt ( int n, double * in, double * out ) {
     return;
 }
 
-void toast::sf::rsqrt ( int n, double * in, double * out ) {
+void toast::sf::rsqrt ( int n, double const * in, double * out ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, in, out) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -163,7 +163,7 @@ void toast::sf::rsqrt ( int n, double * in, double * out ) {
     return;
 }
 
-void toast::sf::exp ( int n, double * in, double * out ) {
+void toast::sf::exp ( int n, double const * in, double * out ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, in, out) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -172,7 +172,7 @@ void toast::sf::exp ( int n, double * in, double * out ) {
     return;
 }
 
-void toast::sf::log ( int n, double * in, double * out ) {
+void toast::sf::log ( int n, double const * in, double * out ) {
     int i;
     #pragma omp parallel for default(none) private(i) shared(n, in, out) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -184,7 +184,7 @@ void toast::sf::log ( int n, double * in, double * out ) {
 
 // These use polynomial approximations for some functions.
 
-void toast::sf::fast_sin ( int n, double * ang, double * sinout ) {
+void toast::sf::fast_sin ( int n, double const * ang, double * sinout ) {
     double const SC1 = 0.99999999999999806767;
     double const SC2 = -0.4999999999998996568;
     double const SC3 = 0.04166666666581174292;
@@ -236,7 +236,7 @@ void toast::sf::fast_sin ( int n, double * ang, double * sinout ) {
     return;
 }
 
-void toast::sf::fast_cos ( int n, double * ang, double * cosout ) {
+void toast::sf::fast_cos ( int n, double const * ang, double * cosout ) {
     double const SC1 = 0.99999999999999806767;
     double const SC2 = -0.4999999999998996568;
     double const SC3 = 0.04166666666581174292;
@@ -287,7 +287,7 @@ void toast::sf::fast_cos ( int n, double * ang, double * cosout ) {
     return;
 }
 
-void toast::sf::fast_sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void toast::sf::fast_sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     double const SC1 = 0.99999999999999806767;
     double const SC2 = -0.4999999999998996568;
     double const SC3 = 0.04166666666581174292;
@@ -350,7 +350,7 @@ void toast::sf::fast_sincos ( int n, double * ang, double * sinout, double * cos
     return;
 }
 
-void toast::sf::fast_atan2 ( int n, double * y, double * x, double * ang ) {
+void toast::sf::fast_atan2 ( int n, double const * y, double const * x, double * ang ) {
     double const ATCHEB1 = 48.70107004404898384;
     double const ATCHEB2 = 49.5326263772254345;
     double const ATCHEB3 = 9.40604244231624;
@@ -418,22 +418,22 @@ void toast::sf::fast_atan2 ( int n, double * y, double * x, double * ang ) {
     return;
 }
 
-void toast::sf::fast_sqrt ( int n, double * in, double * out ) {
+void toast::sf::fast_sqrt ( int n, double const * in, double * out ) {
     toast::sf::sqrt ( n, in, out );
     return;
 }
 
-void toast::sf::fast_rsqrt ( int n, double * in, double * out ) {
+void toast::sf::fast_rsqrt ( int n, double const * in, double * out ) {
     toast::sf::rsqrt ( n, in, out );
     return;
 }
 
-void toast::sf::fast_exp ( int n, double * in, double * out ) {
+void toast::sf::fast_exp ( int n, double const * in, double * out ) {
     toast::sf::exp ( n, in, out );
     return;
 }
 
-void toast::sf::fast_log ( int n, double * in, double * out ) {
+void toast::sf::fast_log ( int n, double const * in, double * out ) {
     toast::sf::log ( n, in, out );
     return;
 }

@@ -39,82 +39,82 @@ void ctoast_mem_aligned_free ( void * data ) {
 
 // special functions
 
-void ctoast_sf_sin ( int n, double * ang, double * sinout ) {
+void ctoast_sf_sin ( int n, double const * ang, double * sinout ) {
     toast::sf::sin ( n, ang, sinout );
     return;
 }
 
-void ctoast_sf_cos ( int n, double * ang, double * cosout ) {
+void ctoast_sf_cos ( int n, double const * ang, double * cosout ) {
     toast::sf::cos ( n, ang, cosout );
     return;
 }
 
-void ctoast_sf_sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void ctoast_sf_sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     toast::sf::sincos ( n, ang, sinout, cosout );
     return;
 }
 
-void ctoast_sf_atan2 ( int n, double * y, double * x, double * ang ) {
+void ctoast_sf_atan2 ( int n, double const * y, double const * x, double * ang ) {
     toast::sf::atan2 ( n, y, x, ang );
     return;
 }
 
-void ctoast_sf_sqrt ( int n, double * in, double * out ) {
+void ctoast_sf_sqrt ( int n, double const * in, double * out ) {
     toast::sf::sqrt ( n, in, out );
     return;
 }
 
-void ctoast_sf_rsqrt ( int n, double * in, double * out ) {
+void ctoast_sf_rsqrt ( int n, double const * in, double * out ) {
     toast::sf::rsqrt ( n, in, out );
     return;
 }
 
-void ctoast_sf_exp ( int n, double * in, double * out ) {
+void ctoast_sf_exp ( int n, double const * in, double * out ) {
     toast::sf::exp ( n, in, out );
     return;
 }
 
-void ctoast_sf_log ( int n, double * in, double * out ) {
+void ctoast_sf_log ( int n, double const * in, double * out ) {
     toast::sf::log ( n, in, out );
     return;
 }
 
-void ctoast_sf_fast_sin ( int n, double * ang, double * sinout ) {
+void ctoast_sf_fast_sin ( int n, double const * ang, double * sinout ) {
     toast::sf::fast_sin ( n, ang, sinout );
     return;
 }
 
-void ctoast_sf_fast_cos ( int n, double * ang, double * cosout ) {
+void ctoast_sf_fast_cos ( int n, double const * ang, double * cosout ) {
     toast::sf::fast_cos ( n, ang, cosout );
     return;
 }
 
-void ctoast_sf_fast_sincos ( int n, double * ang, double * sinout, double * cosout ) {
+void ctoast_sf_fast_sincos ( int n, double const * ang, double * sinout, double * cosout ) {
     toast::sf::fast_sincos ( n, ang, sinout, cosout );
     return;
 }
 
-void ctoast_sf_fast_atan2 ( int n, double * y, double * x, double * ang ) {
+void ctoast_sf_fast_atan2 ( int n, double const * y, double const * x, double * ang ) {
     toast::sf::fast_atan2 ( n, y, x, ang );
     return;
 }
 
-void ctoast_sf_fast_sqrt ( int n, double * in, double * out ) {
+void ctoast_sf_fast_sqrt ( int n, double const * in, double * out ) {
     toast::sf::fast_sqrt ( n, in, out );
     return;
 }
 
-void ctoast_sf_fast_rsqrt ( int n, double * in, double * out ) {
+void ctoast_sf_fast_rsqrt ( int n, double const * in, double * out ) {
     toast::sf::fast_rsqrt ( n, in, out );
     return;
 }
 
-void ctoast_sf_fast_exp ( int n, double * in, double * out ) {
+void ctoast_sf_fast_exp ( int n, double const * in, double * out ) {
     toast::sf::fast_exp ( n, in, out );
     return;
 }
 
-void ctoast_sf_fast_log ( int n, double * in, double * out ) {
+void ctoast_sf_fast_log ( int n, double const * in, double * out ) {
     toast::sf::fast_log ( n, in, out );
     return;
 }
@@ -381,85 +381,85 @@ void ctoast_healpix_pixels_reset ( ctoast_healpix_pixels * hpix, int64_t nside )
     return;
 }
 
-void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, double * phi, int * region, double * z, double * rtz ) {
+void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->vec2zphi ( n, vec, phi, region, z, rtz );
     return;
 }
 
-void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, int * region, double * z, double * rtz ) {
+void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, int * region, double * z, double * rtz ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->theta2z ( n, theta, region, z, rtz );
     return;
 }
 
-void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix ) {
+void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->zphi2nest ( n, phi, region, z, rtz, pix );
     return;
 }
 
-void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix ) {
+void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->zphi2ring ( n, phi, region, z, rtz, pix );
     return;
 }
 
-void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix ) {
+void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, double const * phi, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->ang2nest ( n, theta, phi, pix );
     return;
 }
 
-void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix ) {
+void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, double const * phi, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->ang2ring ( n, theta, phi, pix );
     return;
 }
 
-void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix ) {
+void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->vec2nest ( n, vec, pix );
     return;
 }
 
-void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix ) {
+void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, int64_t * pix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->vec2ring ( n, vec, pix );
     return;
 }
 
-void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * ringpix, int64_t * nestpix ) {
+void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t const * ringpix, int64_t * nestpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->ring2nest ( n, ringpix, nestpix );
     return;
 }
 
-void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * nestpix, int64_t * ringpix ) {
+void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t const * nestpix, int64_t * ringpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->nest2ring ( n, nestpix, ringpix );
     return;
 }
 
-void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix ) {
+void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->degrade_ring ( factor, n, inpix, outpix );
     return;
 }
 
-void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix ) {
+void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->degrade_nest ( factor, n, inpix, outpix );
     return;
 }
 
-void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix ) {
+void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->upgrade_ring ( factor, n, inpix, outpix );
     return;
 }
 
-void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix ) {
+void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
     hp->upgrade_nest ( factor, n, inpix, outpix );
     return;
