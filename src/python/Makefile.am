@@ -43,7 +43,9 @@ fakempi.py \
 cache.py \
 dist.py \
 rng.py \
-op.py
+qarray.py \
+op.py \
+healpix.py
 
 
 toast_LTLIBRARIES = cbuffer.la

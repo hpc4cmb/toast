@@ -24,7 +24,12 @@ toasttoddir = $(pythondir)/toast/tod
 
 toasttod_PYTHON = \
 __init__.py \
-qarray.py
+tod.py \
+tod_math.py \
+pointing_math.py \
+pointing.py \
+noise.py \
+interval.py
 
 
 clean-local :

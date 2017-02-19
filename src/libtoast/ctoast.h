@@ -35,23 +35,23 @@ void ctoast_mem_aligned_free ( void * data );
 
 // special functions
 
-void ctoast_sf_sin ( int n, double * ang, double * sinout );
-void ctoast_sf_cos ( int n, double * ang, double * cosout );
-void ctoast_sf_sincos ( int n, double * ang, double * sinout, double * cosout );
-void ctoast_sf_atan2 ( int n, double * y, double * x, double * ang );
-void ctoast_sf_sqrt ( int n, double * in, double * out );
-void ctoast_sf_rsqrt ( int n, double * in, double * out );
-void ctoast_sf_exp ( int n, double * in, double * out );
-void ctoast_sf_log ( int n, double * in, double * out );
+void ctoast_sf_sin ( int n, double const * ang, double * sinout );
+void ctoast_sf_cos ( int n, double const * ang, double * cosout );
+void ctoast_sf_sincos ( int n, double const * ang, double * sinout, double * cosout );
+void ctoast_sf_atan2 ( int n, double const * y, double const * x, double * ang );
+void ctoast_sf_sqrt ( int n, double const * in, double * out );
+void ctoast_sf_rsqrt ( int n, double const * in, double * out );
+void ctoast_sf_exp ( int n, double const * in, double * out );
+void ctoast_sf_log ( int n, double const * in, double * out );
 
-void ctoast_sf_fast_sin ( int n, double * ang, double * sinout );
-void ctoast_sf_fast_cos ( int n, double * ang, double * cosout );
-void ctoast_sf_fast_sincos ( int n, double * ang, double * sinout, double * cosout );
-void ctoast_sf_fast_atan2 ( int n, double * y, double * x, double * ang );
-void ctoast_sf_fast_sqrt ( int n, double * in, double * out );
-void ctoast_sf_fast_rsqrt ( int n, double * in, double * out );
-void ctoast_sf_fast_exp ( int n, double * in, double * out );
-void ctoast_sf_fast_log ( int n, double * in, double * out );
+void ctoast_sf_fast_sin ( int n, double const * ang, double * sinout );
+void ctoast_sf_fast_cos ( int n, double const * ang, double * cosout );
+void ctoast_sf_fast_sincos ( int n, double const * ang, double * sinout, double * cosout );
+void ctoast_sf_fast_atan2 ( int n, double const * y, double const * x, double * ang );
+void ctoast_sf_fast_sqrt ( int n, double const * in, double * out );
+void ctoast_sf_fast_rsqrt ( int n, double const * in, double * out );
+void ctoast_sf_fast_exp ( int n, double const * in, double * out );
+void ctoast_sf_fast_log ( int n, double const * in, double * out );
 
 // RNG
 
@@ -144,33 +144,33 @@ void ctoast_healpix_pixels_free ( ctoast_healpix_pixels * hpix );
 
 void ctoast_healpix_pixels_reset ( ctoast_healpix_pixels * hpix, int64_t nside );
 
-void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, double * phi, int * region, double * z, double * rtz );
+void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz );
 
-void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, int * region, double * z, double * rtz );
+void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, int * region, double * z, double * rtz );
 
-void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
 
-void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
 
-void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, double const * phi, int64_t * pix );
 
-void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * theta, double const * phi, int64_t * pix );
 
-void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, int64_t * pix );
 
-void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double const * vec, int64_t * pix );
 
-void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * ringpix, int64_t * nestpix );
+void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t const * ringpix, int64_t * nestpix );
 
-void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * nestpix, int64_t * ringpix );
+void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t const * nestpix, int64_t * ringpix );
 
-void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
 
 //--------------------------------------

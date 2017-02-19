@@ -20,33 +20,33 @@ namespace toast { namespace healpix {
 
             void reset ( int64_t nside );
 
-            void vec2zphi ( int64_t n, double * vec, double * phi, int * region, double * z, double * rtz );
+            void vec2zphi ( int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz );
 
-            void theta2z ( int64_t n, double * theta, int * region, double * z, double * rtz );
+            void theta2z ( int64_t n, double const * theta, int * region, double * z, double * rtz );
 
-            void zphi2nest ( int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+            void zphi2nest ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
 
-            void zphi2ring ( int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+            void zphi2ring ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
 
-            void ang2nest ( int64_t n, double * theta, double * phi, int64_t * pix );
+            void ang2nest ( int64_t n, double const * theta, double const * phi, int64_t * pix );
 
-            void ang2ring ( int64_t n, double * theta, double * phi, int64_t * pix );
+            void ang2ring ( int64_t n, double const * theta, double const * phi, int64_t * pix );
 
-            void vec2nest ( int64_t n, double * vec, int64_t * pix );
+            void vec2nest ( int64_t n, double const * vec, int64_t * pix );
 
-            void vec2ring ( int64_t n, double * vec, int64_t * pix );
+            void vec2ring ( int64_t n, double const * vec, int64_t * pix );
 
-            void ring2nest ( int64_t n, int64_t * ringpix, int64_t * nestpix );
+            void ring2nest ( int64_t n, int64_t const * ringpix, int64_t * nestpix );
 
-            void nest2ring ( int64_t n, int64_t * nestpix, int64_t * ringpix );
+            void nest2ring ( int64_t n, int64_t const * nestpix, int64_t * ringpix );
 
-            void degrade_ring ( int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+            void degrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-            void degrade_nest ( int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+            void degrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-            void upgrade_ring ( int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+            void upgrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
-            void upgrade_nest ( int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+            void upgrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
         private :
 

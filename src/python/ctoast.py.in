@@ -206,7 +206,6 @@ def sf_fast_log(input):
     lib.ctoast_sf_fast_log(n, input, out)
     return out
 
-
 # RNG
 
 lib.ctoast_rng_dist_uint64.restype = None
@@ -240,7 +239,6 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
     lib.ctoast_rng_dist_normal(n, key1, key2, counter1, counter2, ret)
     return ret
-
 
 # Quaternion array
 
@@ -411,8 +409,7 @@ def qarray_from_vectors(vec1, vec2):
     lib.ctoast_qarray_from_vectors(vec1, vec2, q)
     return q
 
-
-# # FFT
+# FFT
 
 # typedef enum {
 #     PLAN_FAST = 0,
@@ -449,61 +446,177 @@ def qarray_from_vectors(vec1, vec2):
 
 # ctoast_fft_r1d * ctoast_fft_r1d_plan_store_backward ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
 
-# // Healpix
+# Healpix
 
-# struct ctoast_healpix_pixels_;
-# typedef struct ctoast_healpix_pixels_ ctoast_healpix_pixels;
+class cHealpix(ct.Structure):
+    pass
 
-# ctoast_healpix_pixels * ctoast_healpix_pixels_alloc ( int64_t nside );
-# void ctoast_healpix_pixels_free ( ctoast_healpix_pixels * hpix );
+lib.ctoast_healpix_pixels_alloc.restype = ct.POINTER(cHealpix)
+lib.ctoast_healpix_pixels_alloc.argtypes = [ ct.c_longlong ]
 
-# void ctoast_healpix_pixels_reset ( ctoast_healpix_pixels * hpix, int64_t nside );
+def healpix_pixels_alloc(nside):
+    return lib.ctoast_healpix_pixels_alloc(nside)
 
-# void ctoast_healpix_pixels_vec2zphi ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, double * phi, int * region, double * z, double * rtz );
+lib.ctoast_healpix_pixels_free.restype = None
+lib.ctoast_healpix_pixels_free.argtypes = [ ct.POINTER(cHealpix) ]
 
-# void ctoast_healpix_pixels_theta2z ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, int * region, double * z, double * rtz );
+def healpix_pixels_free(hpix):
+    lib.ctoast_healpix_pixels_free(hpix)
+    return
 
-# void ctoast_healpix_pixels_zphi2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+lib.ctoast_healpix_pixels_reset.restype = None
+lib.ctoast_healpix_pixels_reset.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong ]
 
-# void ctoast_healpix_pixels_zphi2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * phi, int * region, double * z, double * rtz, int64_t * pix );
+def healpix_pixels_reset(hpix, nside):
+    lib.ctoast_healpix_pixels_reset(hpix, nside)
+    return
 
-# void ctoast_healpix_pixels_ang2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+lib.ctoast_healpix_pixels_vec2zphi.restype = None
+lib.ctoast_healpix_pixels_vec2zphi.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
 
-# void ctoast_healpix_pixels_ang2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * theta, double * phi, int64_t * pix );
+def healpix_pixels_vec2zphi(hpix, n, vec, phi, region, z, rtz):
+    lib.ctoast_healpix_pixels_vec2zphi(hpix, n, vec, phi, region, z, rtz)
+    return
 
-# void ctoast_healpix_pixels_vec2nest ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+lib.ctoast_healpix_pixels_theta2z.restype = None
+lib.ctoast_healpix_pixels_theta2z.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
 
-# void ctoast_healpix_pixels_vec2ring ( ctoast_healpix_pixels * hpix, int64_t n, double * vec, int64_t * pix );
+def healpix_pixels_theta2z(hpix, n, theta, region, z, rtz):
+    lib.ctoast_healpix_pixels_theta2z(hpix, n, theta, region, z, rtz)
+    return
 
-# void ctoast_healpix_pixels_ring2nest ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * ringpix, int64_t * nestpix );
+lib.ctoast_healpix_pixels_zphi2nest.restype = None
+lib.ctoast_healpix_pixels_zphi2nest.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
 
-# void ctoast_healpix_pixels_nest2ring ( ctoast_healpix_pixels * hpix, int64_t n, int64_t * nestpix, int64_t * ringpix );
+def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix):
+    lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
+    return
 
-# void ctoast_healpix_pixels_degrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+lib.ctoast_healpix_pixels_zphi2ring.restype = None
+lib.ctoast_healpix_pixels_zphi2ring.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
 
-# void ctoast_healpix_pixels_degrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz, pix):
+    lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
+    return
 
-# void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+lib.ctoast_healpix_pixels_ang2nest.restype = None
+lib.ctoast_healpix_pixels_ang2nest.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
 
-# void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t * inpix, int64_t * outpix );
+def healpix_pixels_ang2nest(hpix, n, theta, phi, pix):
+    lib.ctoast_healpix_pixels_ang2nest(hpix, n, theta, phi, pix)
+    return
+
+lib.ctoast_healpix_pixels_ang2ring.restype = None
+lib.ctoast_healpix_pixels_ang2ring.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_ang2ring(hpix, n, theta, phi, pix):
+    lib.ctoast_healpix_pixels_ang2ring(hpix, n, theta, phi, pix)
+    return
+
+lib.ctoast_healpix_pixels_vec2nest.restype = None
+lib.ctoast_healpix_pixels_vec2nest.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_vec2nest(hpix, n, vec, pix):
+    lib.ctoast_healpix_pixels_vec2nest(hpix, n, vec, pix)
+    return
+
+lib.ctoast_healpix_pixels_vec2ring.restype = None
+lib.ctoast_healpix_pixels_vec2ring.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_vec2ring(hpix, n, vec, pix):
+    lib.ctoast_healpix_pixels_vec2ring(hpix, n, vec, pix)
+    return
+
+lib.ctoast_healpix_pixels_ring2nest.restype = None
+lib.ctoast_healpix_pixels_ring2nest.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_ring2nest(hpix, n, ringpix, nestpix):
+    lib.ctoast_healpix_pixels_ring2nest(hpix, n, ringpix, nestpix)
+    return
+
+lib.ctoast_healpix_pixels_nest2ring.restype = None
+lib.ctoast_healpix_pixels_nest2ring.argtypes = [ ct.POINTER(cHealpix), 
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_nest2ring(hpix, n, nestpix, ringpix):
+    lib.ctoast_healpix_pixels_nest2ring(hpix, n, nestpix, ringpix)
+    return
+
+lib.ctoast_healpix_pixels_degrade_ring.restype = None
+lib.ctoast_healpix_pixels_degrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_degrade_ring(hpix, factor, n, inpix, outpix):
+    lib.ctoast_healpix_pixels_degrade_ring(hpix, factor, n, inpix, outpix)
+    return
+
+lib.ctoast_healpix_pixels_degrade_nest.restype = None
+lib.ctoast_healpix_pixels_degrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_degrade_nest(hpix, factor, n, inpix, outpix):
+    lib.ctoast_healpix_pixels_degrade_nest(hpix, factor, n, inpix, outpix)
+    return
+
+lib.ctoast_healpix_pixels_upgrade_ring.restype = None
+lib.ctoast_healpix_pixels_upgrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_pixels_upgrade_ring(hpix, factor, n, inpix, outpix):
+    lib.ctoast_healpix_pixels_upgrade_ring(hpix, factor, n, inpix, outpix)
+    return
 
 
-# //--------------------------------------
-# // TOD sub-library
-# //--------------------------------------
+lib.ctoast_healpix_pixels_upgrade_nest.restype = None
+lib.ctoast_healpix_pixels_upgrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
+    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
 
+def healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix):
+    lib.ctoast_healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix)
+    return
 
-
-# //--------------------------------------
-# // Map functions
-# //--------------------------------------
-
-
-
-
-# //--------------------------------------
-# // Run C++ test suite
-# //--------------------------------------
+#--------------------------------------
+#  Run C++ test suite
+#--------------------------------------
 
 lib.ctoast_test_runner.restype = ct.c_int
 lib.ctoast_test_runner.argtypes = [ ct.c_int, pp_c_char ]
