@@ -5,6 +5,7 @@ SUBDIRS =
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast/math \
+-I$(top_srcdir)/src/libtoast/atm \
 -I$(top_srcdir)/src/libtoast/tod
 
 AM_CFLAGS =

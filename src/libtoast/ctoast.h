@@ -180,10 +180,22 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 
 
 //--------------------------------------
+// Atmosphere sub-library
+//--------------------------------------
+
+
+
+//--------------------------------------
 // TOD sub-library
 //--------------------------------------
 
 
+
+//--------------------------------------
+// FOD sub-library
+//--------------------------------------
+
+void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits );
 
 //--------------------------------------
 // Map functions

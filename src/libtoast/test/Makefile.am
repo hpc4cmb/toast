@@ -6,6 +6,10 @@ SUBDIRS = gtest
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
 -I$(top_srcdir)/src/libtoast/math \
+-I$(top_srcdir)/src/libtoast/atm \
+-I$(top_srcdir)/src/libtoast/tod \
+-I$(top_srcdir)/src/libtoast/fod \
+-I$(top_srcdir)/src/libtoast/map \
 -I$(top_srcdir)/src/libtoast/test/gtest \
 -I$(top_srcdir)/src/libtoast/test
 
