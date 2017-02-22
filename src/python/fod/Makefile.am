@@ -4,9 +4,6 @@ SUBDIRS =
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
--I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map \
 $(PYTHON_CPPFLAGS)
 
 AM_CFLAGS =
@@ -23,7 +20,8 @@ include $(top_srcdir)/src/build_options.am
 toastfoddir = $(pythondir)/toast/fod
 
 toastfod_PYTHON = \
-__init__.py
+__init__.py \
+psd_math.py
 
 
 clean-local :

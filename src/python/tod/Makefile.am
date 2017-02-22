@@ -4,9 +4,6 @@ SUBDIRS =
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
--I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map \
 $(PYTHON_CPPFLAGS)
 
 AM_CFLAGS =
@@ -35,7 +32,12 @@ sim_noise.py \
 sim_tod.py \
 sim_detdata.py
 
+if HAVE_AM_MPI
+  toasttod_PYTHON += conviqt.py
+endif
 
+
+EXTRA_DIST = conviqt_example.txt
 
 clean-local :
 	@rm -f *.pyc

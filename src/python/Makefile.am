@@ -16,9 +16,6 @@ endif
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
--I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map \
 $(PYTHON_CPPFLAGS)
 
 AM_CFLAGS =
