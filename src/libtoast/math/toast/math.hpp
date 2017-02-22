@@ -109,6 +109,7 @@ namespace toast {
 #include <toast/memory.hpp>
 #include <toast/sf.hpp>
 #include <toast/rng.hpp>
+#include <toast/lapack.hpp>
 #include <toast/qarray.hpp>
 #include <toast/fft.hpp>
 #include <toast/healpix.hpp>
