@@ -646,6 +646,40 @@ def healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix):
     return
 
 #--------------------------------------
+#  ATM sublibrary
+#--------------------------------------
+
+
+#--------------------------------------
+#  TOD sublibrary
+#--------------------------------------
+
+
+
+
+#--------------------------------------
+#  FOD sublibrary
+#--------------------------------------
+
+lib.ctoast_fod_autosums.restype = None
+lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS"),
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def fod_autosums(x, good, lagmax, sums, hits):
+    n = len(x)
+    lib.ctoast_fod_autosums(n, x, good, lagmax, sums, hits)
+    return
+
+
+#--------------------------------------
+#  MAP sublibrary
+#--------------------------------------
+
+
+#--------------------------------------
 #  Run C++ test suite
 #--------------------------------------
 

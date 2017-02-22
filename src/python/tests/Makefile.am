@@ -4,9 +4,6 @@ SUBDIRS =
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
--I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/libtoast/tod \
--I$(top_srcdir)/src/libtoast/map \
 $(PYTHON_CPPFLAGS)
 
 AM_CFLAGS =
@@ -31,7 +28,9 @@ mpi.py \
 cache.py \
 dist.py \
 rng.py \
-qarray.py
+qarray.py \
+intervals.py \
+ops_madam.py
 
 
 clean-local :
