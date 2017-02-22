@@ -17,6 +17,95 @@ const int64_t toast::healpix::pixels::jr_[] = { 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,
 const int64_t toast::healpix::pixels::jp_[] = { 1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7 };
 
 
+void toast::healpix::ang2vec ( int64_t n, double const * theta, double const * phi, double * vec ) {
+
+    if ( n > std::numeric_limits<int>::max() ) {
+        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+    }
+
+    int64_t i;
+    int64_t offset;
+    double sintheta;
+
+    #pragma omp parallel for default(none) private(i, offset, sintheta) shared(n, theta, phi, vec) schedule(static)
+    for ( i = 0; i < n; ++i ) {
+        offset = 3 * i;
+        sintheta = ::sin(theta[i]);
+        vec [ offset ] = sintheta * ::cos(phi[i]);
+        vec [ offset + 1 ] = sintheta * ::sin(phi[i]);
+        vec [ offset + 2 ] = ::cos(theta[i]);
+    }
+
+    return;
+}
+
+
+void toast::healpix::vec2ang ( int64_t n, double const * vec, double * theta, double * phi ) {
+
+    if ( n > std::numeric_limits<int>::max() ) {
+        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+    }
+
+    int64_t i;
+    int64_t offset;
+    double norm;
+    double phitemp;
+
+    #pragma omp parallel for default(none) private(i, offset, norm, phitemp) shared(n, theta, phi, vec) schedule(static)
+    for ( i = 0; i < n; ++i ) {
+        offset = 3 * i;
+        norm = 1.0 / ::sqrt ( vec[offset] * vec[offset] 
+            + vec[offset + 1] * vec[offset + 1] 
+            + vec[offset + 2] * vec[offset + 2] );
+        theta[i] = ::acos ( vec[offset + 2] * norm );
+        phitemp = ::atan2 ( vec[offset + 1], vec[offset] );
+        phi[i] = ( phitemp < 0 ) ? phitemp + toast::TWOPI : phitemp;
+    }
+
+    return;
+}
+
+
+void toast::healpix::vecs2angpa ( int64_t n, double const * vec, double * theta, double * phi, double * pa ) {
+
+    if ( n > std::numeric_limits<int>::max() ) {
+        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+    }
+
+    int64_t i;
+    int64_t offset;
+    double dx, dy, dz, ox, oy, oz;
+    double xysq, xy, xpa, ypa;
+    double phitemp;
+
+    #pragma omp parallel for default(none) private(i, offset, dx, dy, dz, ox, oy, oz, xysq, xy, xpa, ypa, phitemp) shared(n, theta, phi, pa, vec) schedule(static)
+    for ( i = 0; i < n; ++i ) {
+        offset = 6 * i;
+        dx = vec[offset];
+        dy = vec[offset + 1];
+        dz = vec[offset + 2];
+        ox = vec[offset + 3];
+        oy = vec[offset + 4];
+        oz = vec[offset + 5];
+
+        xysq = dx * dx + dy * dy;
+
+        ypa = ox * dy - oy * dx;
+        xpa = - (ox * dz * dx) - (oy * dz * dy) + ( oz * xysq );
+
+        xy = ::sqrt ( xysq );
+
+        theta[i] = ::atan2 ( xy, dz );
+        phitemp = ::atan2 ( dy, dx );
+        pa[i] = ::atan2 ( ypa, xpa );
+
+        phi[i] = ( phitemp < 0 ) ? phitemp + toast::TWOPI : phitemp;
+    }
+
+    return;
+}
+
+
 void toast::healpix::pixels::init ( ) {
     nside_ = 0;
     ncap_ = 0;

@@ -366,6 +366,21 @@ ctoast_fft_r1d * ctoast_fft_r1d_plan_store_backward ( ctoast_fft_r1d_plan_store 
 
 // Healpix
 
+void ctoast_healpix_ang2vec ( int64_t n, double const * theta, double const * phi, double * vec ) {
+    toast::healpix::ang2vec ( n, theta, phi, vec );
+    return;
+}
+
+void ctoast_healpix_vec2ang ( int64_t n, double const * vec, double * theta, double * phi ) {
+    toast::healpix::vec2ang ( n, vec, theta, phi );
+    return;
+}
+
+void ctoast_healpix_vecs2angpa ( int64_t n, double const * vec, double * theta, double * phi, double * pa ) {
+    toast::healpix::vecs2angpa ( n, vec, theta, phi, pa );
+    return;
+}
+
 ctoast_healpix_pixels * ctoast_healpix_pixels_alloc ( int64_t nside ) {
     return reinterpret_cast < ctoast_healpix_pixels * > ( new toast::healpix::pixels ( nside ) );
 }

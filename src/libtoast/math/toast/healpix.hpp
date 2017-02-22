@@ -10,6 +10,13 @@ a BSD-style license that can be found in the LICENSE file.
 
 namespace toast { namespace healpix {
 
+    void ang2vec ( int64_t n, double const * theta, double const * phi, double * vec );
+
+    void vec2ang ( int64_t n, double const * vec, double * theta, double * phi );
+
+    void vecs2angpa ( int64_t n, double const * vec, double * theta, double * phi, double * pa );
+
+
     class pixels {
 
         public :

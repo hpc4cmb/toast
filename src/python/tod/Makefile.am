@@ -29,7 +29,12 @@ tod_math.py \
 pointing_math.py \
 pointing.py \
 noise.py \
-interval.py
+interval.py \
+sim_interval.py \
+sim_noise.py \
+sim_tod.py \
+sim_detdata.py
+
 
 
 clean-local :

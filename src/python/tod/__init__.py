@@ -11,15 +11,15 @@ from .interval import Interval
 
 from .pointing import OpPointingHpix
 
-# from .sim_tod import (satellite_scanning, TODHpixSpiral,
-#     TODSatellite, slew_precession_axis)
+from .sim_tod import (satellite_scanning, TODHpixSpiral,
+    TODSatellite, slew_precession_axis)
 
-# from .sim_noise import AnalyticNoise
+from .sim_noise import AnalyticNoise
 
-# from .sim_interval import regular_intervals
+from .sim_interval import regular_intervals
 
-# from .sim_detdata import (OpSimNoise, OpSimGradient,
-#     OpSimScan, OpSimDipole)
+from .sim_detdata import (OpSimNoise, OpSimGradient,
+    OpSimScan, OpSimDipole)
 
 from .noise import Noise
 
