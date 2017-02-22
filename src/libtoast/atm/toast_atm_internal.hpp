@@ -10,6 +10,9 @@ a BSD-style license that can be found in the LICENSE file.
 #include <config.h>
 #include <toast/atm.hpp>
 
+#ifdef HAVE_ELEMENTAL
+#include <El.hpp>
+#endif
 
 namespace toast {
 

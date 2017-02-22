@@ -177,6 +177,16 @@ AC_LANG_POP([C])
 AM_CONDITIONAL([HAVE_AM_PYTHON], [test $toast_python = yes])
 
 dnl +------------------------------------------------
+dnl | Check for Elemental
+dnl +------------------------------------------------
+toast_elemental=yes
+AC_ARG_ENABLE([elemental], [AC_HELP_STRING([--disable-elemental], [Disable all checks for Elemental])], [toast_elemental=$enable_elemental], [toast_elemental=yes])
+if test x"$toast_elemental" != xno; then
+  ACX_ELEMENTAL([toast_elemental=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define we have Elemental])], [toast_elemental=no;AC_MSG_WARN([Could not find Elemental library, some TOAST features will not be built.])])
+fi
+AM_CONDITIONAL([HAVE_AM_ELEMENTAL], [test $toast_elemental = yes])
+
+dnl +------------------------------------------------
 dnl | Set outputs
 dnl +------------------------------------------------
 AC_CONFIG_FILES([Makefile])
@@ -264,4 +274,12 @@ if test $toast_python = yes; then
 else
   AC_MSG_NOTICE([  Python                    : Disabled])
 fi
+
+if test $toast_elemental = yes; then
+  AC_MSG_NOTICE([  Elemental compile         : $ELEMENTAL_CPPFLAGS])
+  AC_MSG_NOTICE([  Elemental link            : $ELEMENTAL])
+else
+  AC_MSG_NOTICE([  Elemental                 : Disabled])
+fi
+
 AC_MSG_NOTICE([                                           ])

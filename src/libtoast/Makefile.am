@@ -7,7 +7,11 @@ else
 endif
 
 SUBDIRS += math
-SUBDIRS += atm
+
+if HAVE_AM_ELEMENTAL
+  SUBDIRS += atm
+endif
+
 SUBDIRS += tod
 SUBDIRS += fod
 SUBDIRS += map
@@ -53,9 +57,13 @@ libtoast_la_LIBADD = \
 $(top_builddir)/src/libtoast/test/libtoast_test.la \
 $(top_builddir)/src/libtoast/map/libtoast_map.la \
 $(top_builddir)/src/libtoast/fod/libtoast_fod.la \
-$(top_builddir)/src/libtoast/tod/libtoast_tod.la \
-$(top_builddir)/src/libtoast/atm/libtoast_atm.la \
-$(top_builddir)/src/libtoast/math/libtoast_math.la
+$(top_builddir)/src/libtoast/tod/libtoast_tod.la
+
+if HAVE_AM_ELEMENTAL
+  libtoast_la_LIBADD += $(top_builddir)/src/libtoast/atm/libtoast_atm.la
+endif
+
+libtoast_la_LIBADD += $(top_builddir)/src/libtoast/math/libtoast_math.la
 
 if HAVE_AM_MPI
 else

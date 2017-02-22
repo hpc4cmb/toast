@@ -9,6 +9,10 @@ a BSD-style license that can be found in the LICENSE file.
 #include <unistd.h>
 #include <climits>
 
+#ifdef HAVE_ELEMENTAL
+#include <El.hpp>
+#endif
+
 
 // Initialize MPI in a consistent way
 

@@ -5,14 +5,14 @@ SUBDIRS =
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast/math \
--I$(top_srcdir)/src/libtoast/atm
+-I$(top_srcdir)/src/libtoast/atm 
 
 AM_CFLAGS =
 AM_CXXFLAGS =
 
 AM_LDFLAGS =
 
-AM_LIBS = 
+AM_LIBS =
 
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
