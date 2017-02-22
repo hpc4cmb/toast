@@ -75,7 +75,7 @@ AC_ARG_WITH(elemental, [AC_HELP_STRING([--with-elemental=<PATH>], [use the Eleme
 if test x"$with_elemental" != x; then
    if test x"$with_elemental" != xno; then
       ELEMENTAL_CPPFLAGS="-I$with_elemental/include"
-      ELEMENTAL="-L$with_elemental/lib $acx_elemental_default"
+      ELEMENTAL="-L$with_elemental/lib64 -L$with_elemental/lib $acx_elemental_default"
    else
       acx_elemental_ok=disable
    fi
