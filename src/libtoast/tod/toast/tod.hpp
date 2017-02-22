@@ -7,7 +7,8 @@ a BSD-style license that can be found in the LICENSE file.
 #ifndef TOAST_TOD_HPP
 #define TOAST_TOD_HPP
 
-
+#include <toast/math.hpp>
+#include <toast/atm.hpp>
 
 
 namespace toast {
