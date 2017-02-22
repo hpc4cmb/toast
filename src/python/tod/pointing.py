@@ -3,8 +3,6 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-import unittest
-
 import numpy as np
 
 from .. import healpix as hp
@@ -219,13 +217,12 @@ class OpPointingHpix(Operator):
 
                 dir = qa.rotate(pdata, np.tile(zaxis, nsamp).reshape(-1,3))
 
+                #pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
                 pixels = None
                 if self._nest:
-                    pixels = self.hpix()
+                    pixels = self.hpix.vec2nest(dir)
                 else:
-                    pixels = self.hpix()
-
-                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
+                    pixels = self.hpix.vec2ring(dir)
 
                 if self._apply_flags:
                     pixels[common != 0] = -1

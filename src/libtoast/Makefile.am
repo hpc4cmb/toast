@@ -7,7 +7,9 @@ else
 endif
 
 SUBDIRS += math
+SUBDIRS += atm
 SUBDIRS += tod
+SUBDIRS += fod
 SUBDIRS += map
 SUBDIRS += test
 
@@ -17,7 +19,9 @@ SUBDIRS += test
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
 -I$(top_srcdir)/src/libtoast/math \
+-I$(top_srcdir)/src/libtoast/atm \
 -I$(top_srcdir)/src/libtoast/tod \
+-I$(top_srcdir)/src/libtoast/fod \
 -I$(top_srcdir)/src/libtoast/map \
 -I$(top_srcdir)/src/libtoast/test \
 -I$(top_srcdir)/src/libtoast/test/gtest
@@ -48,7 +52,9 @@ libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@
 libtoast_la_LIBADD = \
 $(top_builddir)/src/libtoast/test/libtoast_test.la \
 $(top_builddir)/src/libtoast/map/libtoast_map.la \
+$(top_builddir)/src/libtoast/fod/libtoast_fod.la \
 $(top_builddir)/src/libtoast/tod/libtoast_tod.la \
+$(top_builddir)/src/libtoast/atm/libtoast_atm.la \
 $(top_builddir)/src/libtoast/math/libtoast_math.la
 
 if HAVE_AM_MPI

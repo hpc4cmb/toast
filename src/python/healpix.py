@@ -8,6 +8,49 @@ import numpy as np
 from . import ctoast as ctoast
 
 
+def ang2vec(theta, phi):
+    n = len(theta)
+    if len(phi) != n:
+        raise RuntimeError("theta / phi vectors must have the same length")
+    vec = np.zeros(3*n, dtype=np.float64)
+    ctoast.healpix_ang2vec(n, theta.flatten().astype(np.float64, copy=False), phi.flatten().astype(np.float64, copy=False), vec)
+    if n == 1:
+        return vec
+    else:
+        return vec.reshape((-1,3))
+
+
+def vec2ang(vec):
+    n = None
+    if vec.ndim == 1:
+        n = 1
+    else:
+        n = vec.shape[0]
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
+    ctoast.healpix_vec2ang(n, vec.flatten().astype(np.float64, copy=False), theta, phi)
+    if n == 1:
+        return (theta[0], phi[0])
+    else:
+        return (theta, phi)
+
+
+def vecs2angpa(vec):
+    n = None
+    if vec.ndim == 1:
+        n = 1
+    else:
+        n = vec.shape[0]
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
+    pa = np.zeros(n, dtype=np.float64)
+    ctoast.healpix_vecs2angpa(n, vec.flatten().astype(np.float64, copy=False), theta, phi, pa)
+    if n == 1:
+        return (theta[0], phi[0], pa[0])
+    else:
+        return (theta, phi, pa)
+
+
 class Pixels(object):
     """
     Class for HEALPix pixel operations at a fixed NSIDE.

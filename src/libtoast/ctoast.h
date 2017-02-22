@@ -136,6 +136,12 @@ ctoast_fft_r1d * ctoast_fft_r1d_plan_store_backward ( ctoast_fft_r1d_plan_store 
 
 // Healpix
 
+void ctoast_healpix_ang2vec ( int64_t n, double const * theta, double const * phi, double * vec );
+
+void ctoast_healpix_vec2ang ( int64_t n, double const * vec, double * theta, double * phi );
+
+void ctoast_healpix_vecs2angpa ( int64_t n, double const * vec, double * theta, double * phi, double * pa );
+
 struct ctoast_healpix_pixels_;
 typedef struct ctoast_healpix_pixels_ ctoast_healpix_pixels;
 

@@ -448,6 +448,37 @@ def qarray_from_vectors(vec1, vec2):
 
 # Healpix
 
+lib.ctoast_healpix_ang2vec.restype = None
+lib.ctoast_healpix_ang2vec.argtypes = [ ct.c_longlong,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_ang2vec(n, theta, phi, vec):
+    lib.ctoast_healpix_ang2vec(n, theta, phi, vec)
+    return
+
+lib.ctoast_healpix_vec2ang.restype = None
+lib.ctoast_healpix_vec2ang.argtypes = [ ct.c_longlong,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_vec2ang(n, vec, theta, phi):
+    lib.ctoast_healpix_vec2ang(n, vec, theta, phi)
+    return
+
+lib.ctoast_healpix_vecs2angpa.restype = None
+lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong,
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def healpix_vecs2angpa(n, vec, theta, phi, pa):
+    lib.ctoast_healpix_vecs2angpa(n, vec, theta, phi, pa)
+    return
+
 class cHealpix(ct.Structure):
     pass
 
