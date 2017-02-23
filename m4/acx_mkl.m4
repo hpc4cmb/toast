@@ -109,6 +109,19 @@ else
    if test $acx_mkl_ok = no; then
       MKL_CPPFLAGS=""
       MKL=""
+   else
+      # Check fortran name mangling
+      fortran_underscore=no
+      AC_TRY_LINK_FUNC(dgemm_, [fortran_underscore=yes], [])
+      AC_MSG_RESULT($fortran_underscore)
+
+      AH_TEMPLATE([F77_FUNC], 
+         [Define to a macro mangling the given Fortan function name])
+      if test x$fortran_underscore = xyes; then
+         AC_DEFINE([F77_FUNC(name)], [name ## _])
+      else
+         AC_DEFINE([F77_FUNC(name)], [name])
+      fi
    fi
 
    # Restore environment

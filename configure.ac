@@ -241,8 +241,8 @@ fi
 AC_MSG_NOTICE([  C math library            : $MATH])
 
 if test $ax_have_mkl = yes; then
-  AC_MSG_NOTICE([  MKL compile              : $MKL_CPPFLAGS])
-  AC_MSG_NOTICE([  MKL link                 : $MKL])
+  AC_MSG_NOTICE([  MKL compile               : $MKL_CPPFLAGS])
+  AC_MSG_NOTICE([  MKL link                  : $MKL])
 else
 
   if test $ax_have_fftw = no; then

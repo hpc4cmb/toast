@@ -12,7 +12,7 @@ a BSD-style license that can be found in the LICENSE file.
 extern "C" void dgemm ( char * TRANSA, char * TRANSB, int * M, int * N, int * K, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC );
 
 void toast::lapack::gemm ( char * TRANSA, char * TRANSB, int * M, int * N, int * K, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC ) {
-  ::dgemm ( TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC );
+  dgemm ( TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC );
   return;
 }
 
@@ -22,7 +22,7 @@ void toast::lapack::gemm ( char * TRANSA, char * TRANSB, int * M, int * N, int *
 extern "C" void dgemv ( char * TRANS, int * M, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY );
 
 void toast::lapack::gemv ( char * TRANS, int * M, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY ) {
-  ::dgemv ( TRANS, M, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY );
+  dgemv ( TRANS, M, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY );
   return;
 }
 
@@ -32,7 +32,7 @@ void toast::lapack::gemv ( char * TRANS, int * M, int * N, double * ALPHA, doubl
 extern "C" void dsyev ( char * JOBZ, char * UPLO, int * N, double * A, int * LDA, double * W, double * WORK, int * LWORK, int * INFO );
 
 void toast::lapack::syev ( char * JOBZ, char * UPLO, int * N, double * A, int * LDA, double * W, double * WORK, int * LWORK, int * INFO ) {
-  ::dsyev ( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO );
+  dsyev ( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO );
   return;
 }
 
@@ -42,7 +42,7 @@ void toast::lapack::syev ( char * JOBZ, char * UPLO, int * N, double * A, int * 
 extern "C" void dsymv ( char * UPLO, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY );
 
 void toast::lapack::symv ( char * UPLO, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY ) {
-  ::dsymv ( UPLO, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY );
+  dsymv ( UPLO, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY );
   return;
 }
 
@@ -52,7 +52,7 @@ void toast::lapack::symv ( char * UPLO, int * N, double * ALPHA, double * A, int
 extern "C" void dpotrf ( char * UPLO, int * N, double * A, int * LDA, int * INFO );
 
 void toast::lapack::potrf ( char * UPLO, int * N, double * A, int * LDA, int * INFO ) {
-  ::dpotrf ( UPLO, N, A, LDA, INFO );
+  dpotrf ( UPLO, N, A, LDA, INFO );
   return;
 }
 
@@ -62,7 +62,7 @@ void toast::lapack::potrf ( char * UPLO, int * N, double * A, int * LDA, int * I
 extern "C" void dpocon ( char * UPLO, int * N, double * A, int * LDA, double * ANORM, double * RCOND, double * WORK, int * IWORK, int * INFO );
 
 void toast::lapack::pocon ( char * UPLO, int * N, double * A, int * LDA, double * ANORM, double * RCOND, double * WORK, int * IWORK, int * INFO ) {
-  ::dpocon ( UPLO, N, A, LDA, ANORM, RCOND, WORK, IWORK, INFO );
+  dpocon ( UPLO, N, A, LDA, ANORM, RCOND, WORK, IWORK, INFO );
   return;
 }
 
@@ -72,7 +72,7 @@ void toast::lapack::pocon ( char * UPLO, int * N, double * A, int * LDA, double 
 extern "C" void dpotri ( char * UPLOW, int * N, double * A, int * LDA, int * INFO );
 
 void toast::lapack::potri ( char * UPLO, int * N, double * A, int * LDA, int * INFO ) {
-  ::dpotri ( UPLO, N, A, LDA, INFO );
+  dpotri ( UPLO, N, A, LDA, INFO );
   return;
 }
 
