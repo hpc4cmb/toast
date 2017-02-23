@@ -17,6 +17,5 @@ export MPICC=cc
 export MPICXX=CC
 export CXXFLAGS="-O3"
 
-./configure "${OPTS}" \
---with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
-
+./configure ${OPTS} \
+	    --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
