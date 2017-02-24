@@ -4,6 +4,10 @@
 # wrappers from macports.  You may also have installed Elemental
 # separately as there is no macports package yet.
 #
+# Note that on OSX, Elemental uses relative paths to its dependencies.
+# You can only run the toast_test executable after make_install:
+# "make check" will fail.
+#
 # You can supply extra arguments to the configure script from the
 # command line:
 #
@@ -12,7 +16,6 @@
 #
 
 OPTS="$@"
-echo "${OPTS}"
 
 export PYTHON=python3
 export CC=mpicc
