@@ -93,7 +93,8 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
         sig -= np.mean( sig )
 
-        good = flg == 0
+        good = np.zeros(len(flg), dtype=np.int8)
+        good[flg == 0] = 1
         ngood = np.sum( good )
 
         if ngood == 0:

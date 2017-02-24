@@ -6,408 +6,495 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <toast_map_internal.hpp>
 
+#include <cstring>
 
-// void toast::map::accumulate_diagonal ( int64_t nsamp
-//         np.ndarray[f64_t, ndim=3] zmap, 
-//         int do_zmap, 
-//         np.ndarray[i64_t, ndim=3] hits, 
-//         int do_hits, 
-//         np.ndarray[f64_t, ndim=3] invnpp, 
-//         int do_invnpp,
-//         np.ndarray[f64_t, ndim=1] signal,
-//         np.ndarray[i64_t, ndim=1] submap_indx, 
-//         np.ndarray[i64_t, ndim=1] pix_indx, 
-//         np.ndarray[f64_t, ndim=2] weights, 
-//         f64_t scale
-//     ):
-//     '''
-//     For a vector of pointing weights, build and accumulate the diagonal
-//     inverse noise covariance, the hit map, and the noise weighted map.
-//     '''
-//     cdef i64_t nsamp = weights.shape[0]
-//     cdef i64_t nnz = weights.shape[1]
-//     cdef i64_t nblock = int(nnz * (nnz+1) / 2)
-//     cdef i64_t i
-//     cdef i64_t elem
-//     cdef i64_t alt
-//     cdef i64_t off
-//     cdef f64_t zsig = 0
+#ifdef _OPENMP
+#  include <omp.h>
+#endif
 
-//     if submap_indx.shape[0] != nsamp:
-//         raise RuntimeError("submap index list does not have same length as weights")
-//     if pix_indx.shape[0] != nsamp:
-//         raise RuntimeError("pixel index list does not have same length as weights")
 
-//     if (do_zmap != 0) and (zmap.shape[2] != nnz):
-//         raise RuntimeError("noise weighted map does not have same NNZ as weights")
+void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double * zdata, int64_t * hits, double * invnpp, int64_t nsamp, double const * signal,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, double scale ) {
 
-//     if (do_hits != 0) and (hits.shape[2] != 1):
-//         raise RuntimeError("hit map does not have NNZ of one")
+    bool do_z = ( zdata != NULL );
+    bool do_hits = ( hits != NULL );
+    bool do_invn = ( invnpp != NULL );
 
-//     if (do_invnpp != 0) and (invnpp.shape[2] != nblock):
-//         raise RuntimeError("inverse covariance does not have correct shape for NNZ from weights")
+    // This duplicates code in order to keep conditionals out of the loop.
 
-//     # Here we repeat code slightly, so that we can do a single loop over
-//     # samples.
+    int64_t i, j, k;
+    int64_t px;
+    int64_t off;
+    double zsig;
 
-//     if (do_zmap != 0) and (do_hits != 0) and (do_invnpp != 0):
+    if ( do_z && do_hits && do_invn ) {
 
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 hits[submap_indx[i], pix_indx[i]] += 1
-//                 zsig = scale * signal[i]
-//                 off = 0
-//                 for elem in range(nnz):
-//                     zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
-//                     for alt in range(elem, nnz):
-//                         invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
-//                         off += 1
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                hits[px] += 1;
+                zsig = scale * signal[i];
+                off = 0;
+                for ( j = 0; j < nnz; ++j ) {
+                    zdata[px + j] += zsig * weights[i * nnz + j];
+                    for ( k = j; k < nnz; ++k ) {
+                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                        off += 1;
+                    }
+                }
+            }
+        }
 
-//     elif (do_zmap != 0) and (do_hits != 0):
+    } else if ( do_z && do_hits ) {
 
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 hits[submap_indx[i], pix_indx[i]] += 1
-//                 zsig = scale * signal[i]
-//                 for elem in range(nnz):
-//                     zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                hits[px] += 1;
+                zsig = scale * signal[i];
+                for ( j = 0; j < nnz; ++j ) {
+                    zdata[px + j] += zsig * weights[i * nnz + j];
+                }
+            }
+        }
 
-//     elif (do_hits != 0) and (do_invnpp != 0):
+    } else if ( do_hits && do_invn ) {
 
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 hits[submap_indx[i], pix_indx[i]] += 1
-//                 off = 0
-//                 for elem in range(nnz):
-//                     for alt in range(elem, nnz):
-//                         invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
-//                         off += 1
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                hits[px] += 1;
+                off = 0;
+                for ( j = 0; j < nnz; ++j ) {
+                    for ( k = j; k < nnz; ++k ) {
+                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                        off += 1;
+                    }
+                }
+            }
+        }
+
+    } else if ( do_z && do_invn ) {
+
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                zsig = scale * signal[i];
+                off = 0;
+                for ( j = 0; j < nnz; ++j ) {
+                    zdata[px + j] += zsig * weights[i * nnz + j];
+                    for ( k = j; k < nnz; ++k ) {
+                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                        off += 1;
+                    }
+                }
+            }
+        }
+
+    } else if ( do_z ) {
+
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                zsig = scale * signal[i];
+                for ( j = 0; j < nnz; ++j ) {
+                    zdata[px + j] += zsig * weights[i * nnz + j];
+                }
+            }
+        }
+
+    } else if ( do_hits ) {
+
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                hits[px] += 1;
+            }
+        }
+
+    } else if ( do_invn ) {
+
+        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                off = 0;
+                for ( j = 0; j < nnz; ++j ) {
+                    for ( k = j; k < nnz; ++k ) {
+                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                        off += 1;
+                    }
+                }
+            }
+        }
+
+    }
+
+    return;
+}
+
+
+void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double * data, double * cond, double threshold, int32_t do_invert, int32_t do_rcond ) {
+
+    if ( ( ! do_invert ) && ( ! do_rcond ) ) {
+        return;
+    }
+
+    int64_t i, j, k;
+    int64_t px;
+
+    if ( nnz == 1 ) {
+        // shortcut for NNZ == 1
+        
+        if ( ! do_invert ) {
+
+            for ( i = 0; i < nsub; ++i ) {
+                for ( j = 0; j < subsize; ++j ) {
+                    px = (i * subsize * nnz) + (j * nnz);
+                    cond[px] = 1.0;
+                }
+            }
+
+        } else if ( ! do_rcond ) {
+
+            for ( i = 0; i < nsub; ++i ) {
+                for ( j = 0; j < subsize; ++j ) {
+                    px = (i * subsize * nnz) + (j * nnz);
+                    if ( data[px] != 0 ) {
+                        data[px] = 1.0 / data[px];
+                    }
+                }
+            }
+
+        } else {
+
+            for ( i = 0; i < nsub; ++i ) {
+                for ( j = 0; j < subsize; ++j ) {
+                    px = (i * subsize * nnz) + (j * nnz);
+                    cond[px] = 1.0;
+                    if ( data[px] != 0 ) {
+                        data[px] = 1.0 / data[px];
+                    }
+                }
+            }
+
+        }
+
+    } else {
     
-//     elif (do_zmap != 0) and (do_invnpp != 0):
-
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 zsig = scale * signal[i]
-//                 off = 0
-//                 for elem in range(nnz):
-//                     zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
-//                     for alt in range(elem, nnz):
-//                         invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
-//                         off += 1
+        // We assume a large value here, since the work space needed
+        // will still be small.
+        int NB = 256;
     
-//     elif (do_zmap != 0):
-
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 zsig = scale * signal[i]
-//                 for elem in range(nnz):
-//                     zmap[submap_indx[i], pix_indx[i], elem] += zsig * weights[i,elem]
-
-//     elif (do_hits != 0):
-
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 hits[submap_indx[i], pix_indx[i]] += 1
-
-//     elif (do_invnpp != 0):
-
-//         for i in range(nsamp):
-//             if (submap_indx[i] >= 0) and (pix_indx[i] >= 0):
-//                 off = 0
-//                 for elem in range(nnz):
-//                     for alt in range(elem, nnz):
-//                         invnpp[submap_indx[i], pix_indx[i], off] += scale * weights[i,elem] * weights[i,alt]
-//                         off += 1
-//     return
-
-
-// def _eigendecompose_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] cond, f64_t threshold, i32_t do_invert, i32_t do_rcond):
-//     cdef i64_t nsubmap = data.shape[0]
-//     cdef i64_t npix = data.shape[1]
-//     cdef i64_t nblock = data.shape[2]
-//     cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
-//     cdef i64_t i
-//     cdef i64_t j
-//     cdef i64_t k
-//     cdef i64_t m
-//     cdef i64_t off
-
-//     if do_rcond != 0:
-//         if cond.shape[2] != 1:
-//             raise RuntimeError("condition number map should have one non-zero per pixel")
-//         if cond.shape[1] != npix:
-//             raise RuntimeError("condition number map should have the same number of pixels as covariance")
-//         if cond.shape[0] != nsubmap:
-//             raise RuntimeError("condition number map should have the same number of submaps as covariance")
-
-//     if (do_invert == 0) and (do_rcond == 0):
-//         # nothing to do!
-//         return
-
-//     cdef double * fdata = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * ftemp = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * finv = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * evals = <double*>malloc(nnz*sizeof(double))
+        int lwork = NB * 2 + (int)nnz;
+        int fnnz = (int)nnz;
+        
+        double fzero = 0.0;
+        double fone = 1.0;
     
-//     # we assume a large value here, since the work space needed
-//     # will still be small.
-//     cdef int NB = 256
+        char jobz_vec = 'V';
+        char jobz_val = 'N';
+        char uplo = 'L';
+        char transN = 'N';
+        char transT = 'T';
+
+        // Even if the actual BLAS/LAPACK library is threaded, these are very
+        // small matrices.  So instead we divide up the map data across threads
+        // and each thread does some large number of small eigenvalue problems.
+
+        #pragma omp parallel default(shared) private(i, j, k, px)
+        {
+            // thread-private variables
+
+            int64_t m;
+            int64_t off;
+
+            double emin;
+            double emax;
+            double rcond;
+        
+            int info;
+
+            double * fdata = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            
+            double * ftemp = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            
+            double * finv = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            
+            double * evals = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            
+            double * work = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                lwork * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+            // Here we "unroll" the loop over submaps and pixels within each submap.
+            // This allows us to distribute the total pixels across all threads.
+
+            #pragma omp for schedule(static)
+            for ( i = 0; i < (nsub * subsize); ++i ) {
+                
+                px = i * nnz;
+                    
+                // copy to fortran buffer
+                off = 0;
+                ::memset ( fdata, 0, nnz*nnz*sizeof(double) );
+                for ( k = 0; k < nnz; ++k ) {
+                    for ( m = k; m < nnz; ++m ) {
+                        fdata[k*nnz + m] = data[px + off];
+                        off += 1;
+                    }
+                }
+
+                // eigendecompose
+                if ( ! do_invert ) {
+                    toast::lapack::syev(&jobz_val, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info);
+                } else {
+                    toast::lapack::syev(&jobz_vec, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info);
+                }
+
+                rcond = 0.0;
+
+                if ( info == 0 ) {
+                    
+                    // it worked, compute condition number
+                    emin = 1.0e100;
+                    emax = 0.0;
+                    for ( k = 0; k < nnz; ++k ) {
+                        if ( evals[k] < emin ) {
+                            emin = evals[k];
+                        }
+                        if ( evals[k] > emax ) {
+                            emax = evals[k];
+                        }
+                    }
+                    if ( emax > 0.0 ) {
+                        rcond = emin / emax;
+                    }
+
+                    // compare to threshold
+                    if ( rcond >= threshold ) {
+                        if ( do_invert ) {
+                            for ( k = 0; k < nnz; ++k ) {
+                                evals[k] = 1.0 / evals[k];
+                                for ( m = 0; m < nnz; ++m ) {
+                                    ftemp[k*nnz + m] = evals[k] * fdata[k*nnz + m];
+                                }
+                            }
+                            toast::lapack::gemm(&transN, &transT, &fnnz, &fnnz, &fnnz, 
+                                &fone, ftemp, &fnnz, fdata, &fnnz, &fzero, finv, &fnnz);
+                                
+                            off = 0;
+                            for ( k = 0; k < nnz; ++k ) {
+                                for ( m = k; m < nnz; ++m ) {
+                                    data[px + off] = finv[k*nnz + m];
+                                    off += 1;
+                                }
+                            }
+                        }
+                    } else {
+                        // reject this pixel
+                        rcond = 0.0;
+                        info = 1;
+                    }
+
+                }
+                
+                if ( do_invert ) {
+                    if ( info != 0 ) {
+                        off = 0;
+                        for ( k = 0; k < nnz; ++k ) {
+                            for ( m = k; m < nnz; ++m ) {
+                                data[px + off] = 0.0;
+                                off += 1;
+                            }
+                        }
+                    }
+                }
+
+                if ( do_rcond ) {
+                    cond[px] = rcond;
+                }
+
+            }
+
+            toast::mem::aligned_free ( fdata );
+            toast::mem::aligned_free ( ftemp );
+            toast::mem::aligned_free ( finv );
+            toast::mem::aligned_free ( evals );
+            toast::mem::aligned_free ( work );
+
+        }
+
+    }
+
+    return;
+}
+
+
+void toast::cov::multiply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double * data1, double const * data2 ) {
+
+    int64_t i, j, k;
+    int64_t px;
+
+    if ( nnz == 1 ) {
+        // shortcut for NNZ == 1
+
+        for ( i = 0; i < nsub; ++i ) {
+            for ( j = 0; j < subsize; ++j ) {
+                px = (i * subsize * nnz) + (j * nnz);
+                data1[px] *= data2[px];
+            }
+        }
+
+    } else {
+
+        int fnnz = (int)nnz;
+        
+        double fzero = 0.0;
+        double fone = 1.0;
     
-//     cdef int lwork = NB * 2 + nnz
-//     cdef double * work = <double*>malloc(lwork*sizeof(double))
-//     cdef int fnnz = nnz
+        char uplo = 'L';
+        char side = 'L';
 
-//     cdef double emin
-//     cdef double emax
-//     cdef double rcond
-    
-//     cdef int info
-//     cdef double fzero = 0.0
-//     cdef double fone = 1.0
-    
-//     cdef char jobz_vec = 'V'
-//     cdef char jobz_val = 'N'
-//     cdef char uplo = 'L'
-//     cdef char transN = 'N'
-//     cdef char transT = 'T'
+        // Even if the actual BLAS/LAPACK library is threaded, these are very
+        // small matrices.  So instead we divide up the map data across threads
+        // and each thread does some large number of small eigenvalue problems.
 
-//     if nnz == 1:
-//         # shortcut
-//         if do_invert == 0:
-//             cond[:,:,:] = data[:,:,:]
-//         else:
-//             if do_rcond == 0:
-//                 for i in range(nsubmap):
-//                     for j in range(npix):
-//                         if data[i,j,0] != 0:
-//                             data[i,j,0] = 1.0 / data[i,j,0]
-//             else: 
-//                 for i in range(nsubmap):
-//                     for j in range(npix):
-//                         cond[i,j,0] = data[i,j,0]
-//                         if data[i,j,0] != 0:
-//                             data[i,j,0] = 1.0 / data[i,j,0]
-//     else:
-//         for i in range(nsubmap):
-//             for j in range(npix):
-//                 # copy to fortran compatible buffer
-//                 off = 0
-//                 memset(fdata, 0, nnz*nnz*sizeof(f64_t))
-//                 for k in range(nnz):
-//                     for m in range(k, nnz):
-//                         fdata[k*nnz+m] = data[i,j,off]
-//                         off += 1
+        #pragma omp parallel default(shared) private(i, j, k, px)
+        {
+            // thread-private variables
 
-//                 # eigendecompose
-//                 if do_invert == 0:
-//                     cython_lapack.dsyev(&jobz_val, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
-//                 else:
-//                     cython_lapack.dsyev(&jobz_vec, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
+            int64_t m;
+            int64_t off;
 
-//                 rcond = 0.0
+            double * fdata1 = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-//                 if info == 0:
-//                     # it worked, compute condition number
-//                     emin = 1.0e100
-//                     emax = 0.0
-//                     for k in range(nnz):
-//                         if evals[k] < emin:
-//                             emin = evals[k]
-//                         if evals[k] > emax:
-//                             emax = evals[k]
-//                     if emax > 0.0:
-//                         rcond = emin / emax
+            double * fdata2 = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-//                     # compare to threshold
-//                     if rcond >= threshold:
-//                         if do_invert != 0:
-//                             for k in range(nnz):
-//                                 evals[k] = 1.0 / evals[k]
-//                                 for m in range(nnz):
-//                                     ftemp[k*nnz+m] = evals[k] * fdata[k*nnz+m]
-//                             cython_blas.dgemm(&transN, &transT, &fnnz, &fnnz, &fnnz, &fone, ftemp, &fnnz, fdata, &fnnz, &fzero, finv, &fnnz)
+            double * fdata3 = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-//                             off = 0
-//                             for k in range(nnz):
-//                                 for m in range(k, nnz):
-//                                     data[i,j,off] = finv[k*nnz+m]
-//                                     off += 1
-//                     else:
-//                         # reject this pixel
-//                         rcond = 0.0
-//                         info = 1
+            // Here we "unroll" the loop over submaps and pixels within each submap.
+            // This allows us to distribute the total pixels across all threads.
 
-//                 if do_invert != 0:
-//                     if info != 0:
-//                         data[i,j,:] = 0.0
-//                 if do_rcond != 0:
-//                     cond[i,j,0] = rcond
+            #pragma omp for schedule(static)
+            for ( i = 0; i < (nsub * subsize); ++i ) {
+                
+                px = i * nnz;
+                    
+                // copy to fortran buffer
 
-//     free(fdata)
-//     free(ftemp)
-//     free(finv)
-//     free(evals)
-//     free(work)
-//     return
+                ::memset ( fdata1, 0, nnz*nnz*sizeof(double) );
+                ::memset ( fdata2, 0, nnz*nnz*sizeof(double) );
+                ::memset ( fdata3, 0, nnz*nnz*sizeof(double) );
+                
+                off = 0;
+                for ( k = 0; k < nnz; ++k ) {
+                    for ( m = k; m < nnz; ++m ) {
+                        fdata1[k*nnz + m] = data1[px + off];
+                        fdata2[k*nnz + m] = data2[px + off];
+                        if ( k != m ) {
+                            // Second argument to dsymm must be full
+                            fdata2[m*nnz + k] = data2[px + off];
+                        }
+                        off += 1;
+                    }
+                }
+
+                toast::lapack::symm(&side, &uplo, &fnnz, &fnnz, &fone, fdata1, &fnnz, fdata2, &fnnz, &fzero, fdata3, &fnnz);
+
+                off = 0;
+                for ( k = 0; k < nnz; ++k ) {
+                    for ( m = k; m < nnz; ++m ) {
+                        data1[px + off] = fdata3[k*nnz + m];
+                        off += 1;
+                    }
+                }
+
+            }
+
+            toast::mem::aligned_free ( fdata1 );
+            toast::mem::aligned_free ( fdata2 );
+            toast::mem::aligned_free ( fdata3 );
+
+        }
+
+    }
+
+    return;
+}
 
 
-// def _multiply_covariance(np.ndarray[f64_t, ndim=3] data1, np.ndarray[f64_t, ndim=3] data2):
-//     cdef i64_t nsubmap = data1.shape[0]
-//     cdef i64_t npix = data1.shape[1]
-//     cdef i64_t nblock = data1.shape[2]
-//     cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
-//     cdef i64_t i
-//     cdef i64_t j
-//     cdef i64_t k
-//     cdef i64_t m
-//     cdef i64_t off
+void toast::cov::apply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double const * mat, double * vec ) {
 
-//     cdef double * fdata1 = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * fdata2 = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * fdata3 = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef int fnnz = nnz
-//     cdef double fone = 1
-//     cdef double fzero = 0
-//     cdef char side = 'L'
-//     cdef char uplo = 'L'
+    int64_t i, j, k;
+    int64_t px;
 
-//     if nnz == 1:
-//         # shortcut
-//         for i in range(nsubmap):
-//             for j in range(npix):
-//                 data1[i,j,0] *= data2[i,j,0]
-//     else:
-//         for i in range(nsubmap):
-//             for j in range(npix):
-//                 # copy to fortran compatible buffer
-//                 memset(fdata1, 0, nnz*nnz*sizeof(f64_t))
-//                 memset(fdata2, 0, nnz*nnz*sizeof(f64_t))
-//                 memset(fdata3, 0, nnz*nnz*sizeof(f64_t))
-//                 off = 0
-//                 for k in range(nnz):
-//                     for m in range(k, nnz):
-//                         fdata1[k*nnz+m] = data1[i,j,off]
-//                         fdata2[k*nnz+m] = data2[i,j,off]
-//                         if k != m:
-//                             # Second argument to dsymm must be full
-//                             fdata2[m*nnz+k] = data2[i,j,off]
-//                         off += 1
-                        
-//                 cython_blas.dsymm(&side, &uplo, &fnnz, &fnnz, &fone, fdata1, &fnnz, fdata2, &fnnz, &fzero, fdata3, &fnnz)
+    if ( nnz == 1 ) {
+        // shortcut for NNZ == 1
 
-//                 off = 0
-//                 for k in range(nnz):
-//                     for m in range(k, nnz):
-//                         data1[i,j,off] = fdata3[k*nnz+m]
-//                         off += 1
-//     free(fdata1)
-//     free(fdata2)
-//     free(fdata3)
-//     return
+        for ( i = 0; i < nsub; ++i ) {
+            for ( j = 0; j < subsize; ++j ) {
+                px = (i * subsize * nnz) + (j * nnz);
+                vec[px] *= mat[px];
+            }
+        }
 
+    } else {
 
-// def _apply_covariance(np.ndarray[f64_t, ndim=3] cov, np.ndarray[f64_t, ndim=3] mdata):
-//     cdef i64_t nsubmap = cov.shape[0]
-//     cdef i64_t npix = cov.shape[1]
-//     cdef i64_t nblock = cov.shape[2]
-//     cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
-//     cdef i64_t i
-//     cdef i64_t j
-//     cdef i64_t k
-//     cdef i64_t m
-//     cdef i64_t x
-//     cdef np.ndarray[f64_t, ndim=1] tempval = np.zeros(nnz, dtype=f64)
+        // We do this manually now, but could use dsymv if needed...
+        // Since this is just multiply / add operations, the overhead of threading
+        // is likely more than the savings.
 
-//     # we do this manually now, but could use dsymv if needed...
-//     for i in range(nsubmap):
-//         for j in range(npix):
-//             x = 0
-//             tempval.fill(0.0)
-//             for k in range(nnz):
-//                 for m in range(k, nnz):
-//                     tempval[k] += cov[i,j,x] * mdata[i,j,m]
-//                     if m != k:
-//                         tempval[m] += cov[i,j,x] * mdata[i,j,k]
-//                     x += 1
-//             for k in range(nnz):
-//                 mdata[i,j,k] = tempval[k]
-//     return
+        int64_t m;
+        int64_t off;
 
+        double * temp = static_cast < double * > ( toast::mem::aligned_alloc ( 
+                nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-// def _cond_covariance(np.ndarray[f64_t, ndim=3] data, np.ndarray[f64_t, ndim=3] cond):
-//     cdef i64_t nsubmap = data.shape[0]
-//     cdef i64_t npix = data.shape[1]
-//     cdef i64_t nblock = data.shape[2]
-//     cdef i64_t nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
-//     cdef i64_t i
-//     cdef i64_t j
-//     cdef i64_t k
-//     cdef i64_t m
-//     cdef i64_t off
+        for ( i = 0; i < nsub; ++i ) {
+            for ( j = 0; j < subsize; ++j ) {
+                px = (i * subsize * nnz) + (j * nnz);
 
-//     if cond.shape[2] != 1:
-//         raise RuntimeError("condition number map should have one non-zero per pixel")
-//     if cond.shape[1] != npix:
-//         raise RuntimeError("condition number map should have the same number of pixels as covariance")
-//     if cond.shape[0] != nsubmap:
-//         raise RuntimeError("condition number map should have the same number of submaps as covariance")
+                ::memset(temp, 0, nnz * sizeof(double));
 
-//     cdef int lwork = (nnz + 2) * nnz
-//     cdef double * fdata = <double*>malloc(nnz*nnz*sizeof(double))
-//     cdef double * evals = <double*>malloc(nnz*sizeof(double))
-//     cdef double * work = <double*>malloc(lwork*sizeof(double))
-//     cdef int fnnz = nnz
-//     cdef double norm
-//     cdef double rcond
-//     cdef int info
-//     cdef double inverse
-//     cdef char uplo = 'L'
-//     cdef char jobz = 'N'
-//     cdef double emin
-//     cdef double emax
+                off = 0;
+                for ( k = 0; k < nnz; ++k ) {
+                    for ( m = k; m < nnz; ++m ) {
+                        temp[k] += mat[px + off] * vec[px + m];
+                        if ( m != k ) {
+                            temp[m] += mat[px + off] * vec[px + k];
+                        }
+                        off++;
+                    }
+                }
 
-//     if nnz == 1:
-//         # shortcut
-//         for i in range(nsubmap):
-//             for j in range(npix):
-//                 cond[i,j,0] = 1.0
-//     else:
-//         for i in range(nsubmap):
-//             for j in range(npix):
-//                 # copy to fortran compatible buffer
-//                 off = 0
-//                 memset(fdata, 0, nnz*nnz*sizeof(f64_t))
-//                 memset(evals, 0, nnz*sizeof(f64_t))
-//                 for k in range(nnz):
-//                     for m in range(k, nnz):
-//                         fdata[k*nnz+m] = data[i,j,off]
-//                         if k != m:
-//                             fdata[m*nnz+k] = data[i,j,off]
-//                         off += 1
+                for ( k = 0; k < nnz; ++k ) {
+                    vec[px + k] = temp[k];
+                }
+            }
+        }
 
-//                 # eigendecomposition
+        toast::mem::aligned_free ( temp );
 
-//                 cython_lapack.dsyev(&jobz, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info)
+    }
 
-//                 if info == 0:
-//                     emin = 1.0e100
-//                     emax = 0
-//                     for t in range(nnz):
-//                         if evals[t] > emax:
-//                             emax = evals[t]
-//                         if evals[t] < emin:
-//                             emin = evals[t]
-//                     if emax > 0:
-//                         cond[i,j,0] = emin / emax
-//                     else:
-//                         cond[i,j,0] = 0.0
-//                 else:
-//                     cond[i,j,0] = 0.0
-
-//     free(fdata)
-//     free(work)
-//     free(evals)
-//     return
-
+    return;
+}
 
 

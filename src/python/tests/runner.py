@@ -18,6 +18,17 @@ from . import cache as testcache
 from . import rng as testrng
 from . import dist as testdist
 from . import qarray as testqarray
+from . import tod as testtod
+from . import psd_math as testpsdmath
+from . import intervals as testintervals
+from . import cov as testcov
+from . import ops_pmat as testopspmat
+from . import ops_dipole as testopsdipole
+from . import ops_simnoise as testopssimnoise
+from . import ops_madam as testopsmadam
+from . import map_satellite as testmapsatellite
+from . import map_ground as testmapground
+from . import binned as testbinned
 
 
 def test():
@@ -48,7 +59,17 @@ def test():
     suite.addTest( loader.loadTestsFromModule(testrng) )
     suite.addTest( loader.loadTestsFromModule(testdist) )
     suite.addTest( loader.loadTestsFromModule(testqarray) )
-
+    suite.addTest( loader.loadTestsFromModule(testtod) )
+    #suite.addTest( loader.loadTestsFromModule(testpsdmath) )
+    suite.addTest( loader.loadTestsFromModule(testintervals) )
+    #suite.addTest( loader.loadTestsFromModule(testcov) )
+    suite.addTest( loader.loadTestsFromModule(testopspmat) )
+    suite.addTest( loader.loadTestsFromModule(testopsdipole) )
+    #suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
+    #suite.addTest( loader.loadTestsFromModule(testopsmadam) )
+    #suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
+    #suite.addTest( loader.loadTestsFromModule(testmapground) )
+    #suite.addTest( loader.loadTestsFromModule(testbinned) )
 
     mpirunner.run(suite)
 

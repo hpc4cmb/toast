@@ -11,7 +11,7 @@ import numpy as np
 import healpy as hp
 
 from ..dist import Comm, Data
-from ..operator import Operator
+from ..op import Operator
 from ..tod import TOD
 
 from ..cache import Cache

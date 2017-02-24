@@ -4,8 +4,9 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
-
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
 #include <ctoast.h>
 
 #include <stdio.h>
@@ -34,7 +35,7 @@ typedef enum {
 typedef struct {
     PyObject_HEAD
     /* Type-specific fields go below. */
-    size_t size;
+    long size;
     size_t itemsize;
     ToastItemType itype;
     void * data;
@@ -51,12 +52,12 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
 
     /* unpack the size and data type from the keywords */
 
-    static char *kwlist[] = {"size", "type", NULL};
+    /* static char *kwlist[] = {"size", "type", NULL}; */
 
-    size_t typelen;
+    Py_ssize_t ptypelen;
     char const * typestr;
 
-    if ( ! PyArg_ParseTupleAndKeywords(args, kwds, "ks", kwlist, &(self->size), &typestr) ) {
+    if ( ! PyArg_ParseTuple(args, "ls#", &(self->size), &typestr, &ptypelen) ) {
         return -1;
     }
 
@@ -68,8 +69,8 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
         PyErr_SetString(PyExc_ValueError, "Data type string is NULL");
         return -1;
     } else {
-        typelen = strlen ( typestr );
         int found = 0;
+        size_t typelen = (size_t)ptypelen;
 
         if ( typelen == strlen("float64") ) {
             if ( strncmp ( typestr, "float64", typelen ) == 0 ) {
@@ -167,9 +168,9 @@ static int ToastBuffer_init ( ToastBuffer * self, PyObject * args, PyObject * kw
         }
     }
 
-    self->data = ctoast_mem_aligned_alloc ( self->size * self->itemsize );
+    self->data = ctoast_mem_aligned_alloc ( (size_t)self->size * self->itemsize );
 
-    void * ptr = memset(self->data, 0, self->size * self->itemsize);
+    void * ptr = memset(self->data, 0, (size_t)self->size * self->itemsize);
 
     return 0;
 }

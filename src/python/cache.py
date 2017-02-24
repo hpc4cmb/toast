@@ -146,7 +146,7 @@ class Cache(object):
             flatsize = 1
             for s in shape:
                 flatsize *= s
-            self._refs[name] = np.asarray( ToastBuffer(size=flatsize, type=numpy2toast(type)) ).reshape(shape)
+            self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
             
         return self._refs[name]
 

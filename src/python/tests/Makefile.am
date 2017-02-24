@@ -21,16 +21,25 @@ toasttestsdir = $(pythondir)/toast/tests
 
 toasttests_PYTHON = \
 __init__.py \
-runner.py \
-ctoast.py \
-cbuffer.py \
-mpi.py \
+binned.py \
 cache.py \
+cbuffer.py \
+cov.py \
+ctoast.py \
 dist.py \
-rng.py \
-qarray.py \
 intervals.py \
-ops_madam.py
+map_ground.py \
+map_satellite.py \
+mpi.py \
+ops_dipole.py \
+ops_madam.py \
+ops_pmat.py \
+ops_simnoise.py \
+psd_math.py \
+qarray.py \
+rng.py \
+runner.py \
+tod.py
 
 
 clean-local :

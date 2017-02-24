@@ -71,7 +71,6 @@ class TOD(object):
         The timestream data cache.
         """
 
-
     @property
     def detectors(self):
         """

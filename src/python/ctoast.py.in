@@ -678,6 +678,52 @@ def fod_autosums(x, good, lagmax, sums, hits):
 #  MAP sublibrary
 #--------------------------------------
 
+lib.ctoast_cov_accumulate_diagonal.restype = None
+lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), ct.c_double ]
+
+def cov_accumulate_diagonal(nsub, subsize, nnz, zdata, hits, invnpp, nsamp, 
+    signal, indx_submap, indx_pix, weights, scale):
+    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, zdata, hits, invnpp, nsamp, 
+    signal, indx_submap, indx_pix, weights, scale)
+    return
+
+lib.ctoast_cov_eigendecompose_covariance.restype = None
+lib.ctoast_cov_eigendecompose_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    ct.c_double, ct.c_int, ct.c_int ]
+
+def cov_eigendecompose_covariance(nsub, subsize, nnz, data, cond, threshold, 
+    do_invert, do_rcond):
+    lib.ctoast_cov_eigendecompose_covariance(nsub, subsize, nnz, data, cond, threshold, 
+    do_invert, do_rcond)
+    return
+
+lib.ctoast_cov_multiply_covariance.restype = None
+lib.ctoast_cov_multiply_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def cov_multiply_covariance(nsub, subsize, nnz, data1, data2):
+    lib.ctoast_cov_multiply_covariance(nsub, subsize, nnz, data1, data2)
+    return
+
+lib.ctoast_cov_apply_covariance.restype = None
+lib.ctoast_cov_apply_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
+    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+
+def cov_apply_covariance(nsub, subsize, nnz, mat, vec):
+    lib.ctoast_cov_apply_covariance(nsub, subsize, nnz, mat, vec)
+    return
+
 
 #--------------------------------------
 #  Run C++ test suite

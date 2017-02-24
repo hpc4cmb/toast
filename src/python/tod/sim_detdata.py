@@ -128,6 +128,7 @@ class OpSimNoise(Operator):
                     ref = tod.cache.reference(cachename)[
                         local_offset:local_offset+chunk_samp]
                     ref[:] += nsedata
+                    del ref
 
                     idet += 1
 
@@ -196,6 +197,9 @@ class OpSimGradient(Operator):
                 totflags = flags & self._flag_mask
                 totflags |= (common & self._common_flag_mask)
 
+                del flags
+                del common
+
                 pdata[totflags != 0,:] = nullquat
 
                 dir = qa.rotate(pdata, zaxis)
@@ -214,7 +218,8 @@ class OpSimGradient(Operator):
                                      (tod.local_samples[1],))
                 ref = tod.cache.reference(cachename)
                 ref[:] += z
-                print('Grad timestream:', ref, np.sum(ref!=0),' non-zeros', flush=True) # DEBUG
+                del ref
+                #print('Grad timestream:', ref, np.sum(ref!=0),' non-zeros', flush=True) # DEBUG
 
         return
 
@@ -303,6 +308,10 @@ class OpSimScan(Operator):
                                      (tod.local_samples[1],))
                 ref = tod.cache.reference(cachename)
                 ref[:] += maptod
+                
+                del ref
+                del pixels
+                del weights
 
         return
 
@@ -417,6 +426,9 @@ class OpSimDipole(Operator):
                 totflags = np.copy(flags)
                 totflags |= common
 
+                del flags
+                del common
+
                 pdata[(totflags != 0),:] = nullquat
 
                 dipoletod = dipole(pdata, vel=vel, solar=sol, cmb=self._cmb, freq=self._freq)
@@ -424,12 +436,13 @@ class OpSimDipole(Operator):
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
                     tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                
                 ref = tod.cache.reference(cachename)
-
                 if self._subtract:
                     ref[:] -= dipoletod
                 else:
                     ref[:] += dipoletod
+                del ref
 
         return
 
