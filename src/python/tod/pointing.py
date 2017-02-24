@@ -193,10 +193,10 @@ class OpPointingHpix(Operator):
             common = None
             if self._apply_flags:
                 if self._common_flag_name is not None:
-                    common = tod.cache.reference(self._common_flag_name)
+                    common = np.copy(tod.cache.reference(self._common_flag_name))
                 else:
                     common = tod.read_common_flags()
-                common = (common & self._common_flag_mask)
+                common &= self._common_flag_mask
 
             for det in tod.local_dets:
 
@@ -262,14 +262,20 @@ class OpPointingHpix(Operator):
 
                 pixelsname = "{}_{}".format(self._pixels, det)
                 weightsname = "{}_{}".format(self._weights, det)
+                
                 if not tod.cache.exists(pixelsname):
                     tod.cache.create(pixelsname, np.int64, (tod.local_samples[1],))
                 if not tod.cache.exists(weightsname):
                     tod.cache.create(weightsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+
                 pixelsref = tod.cache.reference(pixelsname)
                 weightsref = tod.cache.reference(weightsname)
                 pixelsref[:] = pixels
                 weightsref[:,:] = weights
+                del pixelsref
+                del weightsref
+
+            del common
 
         return
 

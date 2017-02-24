@@ -7,12 +7,10 @@ from ..mpi import MPI
 import numpy as np
 
 from ..dist import Comm, Data
-from ..operator import Operator
+from ..op import Operator
 from .pixels import DistPixels
 
-# from ._noise import (_accumulate_diagonal, _eigendecompose_covariance, 
-#    _multiply_covariance, _apply_covariance)
-
+from .. import ctoast as ctoast
 
 
 class OpAccumDiag(Operator):
@@ -73,6 +71,51 @@ class OpAccumDiag(Operator):
         self._zmap = zmap
         self._hits = hits
         self._invnpp = invnpp
+
+        # Ensure that the 3 different DistPixel objects have the same number
+        # of pixels.
+
+        self._nsub = None
+        self._subsize = None
+        self._nnz = None
+
+        if self._zmap is not None:
+            self._nsub = self._zmap.nsubmap
+            self._subsize = self._zmap.submap
+            self._nnz = self._zmap.nnz
+
+        if self._hits is not None:
+            if self._hits.nnz != 1:
+                raise RuntimeError("Hit map should always have NNZ == 1")
+            if self._nsub is None:
+                self._nsub = self._hits.nsubmap
+                self._subsize = self._hits.submap
+            else:
+                if self._nsub != self._hits.nsubmap:
+                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                if self._subsize != self._hits.submap:
+                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+
+        if self._invnpp is not None:
+            block = self._invnpp.nnz
+            blocknnz = int( ( (np.sqrt(8 * block) - 1) / 2 ) + 0.5 )
+            if self._nsub is None:
+                self._nsub = self._invnpp.nsubmap
+                self._subsize = self._invnpp.submap
+                self._nnz = blocknnz
+            else:
+                if self._nsub != self._invnpp.nsubmap:
+                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                if self._subsize != self._invnpp.submap:
+                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                if self._nnz is None:
+                    self._nnz = blocknnz
+                elif self._nnz != blocknnz:
+                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+
+        if self._nnz is None:
+            # this means we only have a hit map
+            self._nnz = 1
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -189,7 +232,14 @@ class OpAccumDiag(Operator):
                     if detweight == 0:
                         continue
 
-                #_accumulate_diagonal(czmap, do_zmap, chits, do_hits, cinvnpp, do_invnpp, signal, sm, lpix, weights, detweight)
+                ctoast.cov_accumulate_diagonal(self._nsub, self._subsize, self._nnz, 
+                    czmap.flatten().astype(np.float64, copy=False), 
+                    chits.flatten().astype(np.int64, copy=False), 
+                    cinvnpp.flatten().astype(np.float64, copy=False), len(signal), 
+                    signal.flatten().astype(np.float64, copy=False), 
+                    sm.flatten().astype(np.int64, copy=False), 
+                    lpix.flatten().astype(np.int64, copy=False), 
+                    weights.flatten().astype(np.float64, copy=False), detweight)
 
         return
 
@@ -209,16 +259,22 @@ def covariance_invert(npp, threshold, rcond=None):
     """
     if len(npp.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    blocknnz = int( ( (np.sqrt(8 * npp.shape[2]) - 1) / 2 ) + 0.5 )
+
     if rcond is None:
-        #_eigendecompose_covariance(npp, np.zeros((1,1,1), dtype=np.float64), threshold, 1, 0)
+        ctoast.cov_eigendecompose_covariance(npp.shape[0], npp.shape[1], blocknnz, 
+            npp.flatten().astype(np.float64, copy=False),
+            np.zeros(1, dtype=np.float64), threshold, 1, 0)
     else:
-        #_eigendecompose_covariance(npp, rcond, threshold, 1, 1)
+        ctoast.cov_eigendecompose_covariance(npp.shape[0], npp.shape[1], blocknnz, 
+            npp.flatten().astype(np.float64, copy=False), 
+            rcond.flatten().astype(np.float64, copy=False), threshold, 1, 1)
     return
 
 
 def covariance_multiply(npp1, npp2):
     """
-    Multiply two local piece of diagonal noise covariance.
+    Multiply two local pieces of diagonal noise covariance.
 
     This does an in-place multiplication of the covariance.
     The results are returned in place of the first argument, npp1.
@@ -231,16 +287,19 @@ def covariance_multiply(npp1, npp2):
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
     if np.any( npp1.shape != npp2.shape ):
         raise RuntimeError("Dimensions of the distributed matrices must agree but {} != {}".format(npp1.shape, npp2.shape))
-    #_multiply_covariance(npp1, npp2)
+    blocknnz = int( ( (np.sqrt(8 * npp1.shape[2]) - 1) / 2 ) + 0.5 )
+    ctoast.cov_multiply_covariance(npp1.shape[0], npp1.shape[1], blocknnz, 
+        npp1.flatten().astype(np.float64, copy=False),
+        npp2.flatten().astype(np.float64, copy=False))
     return
 
 
 def covariance_apply(npp, m):
     """
-    Multiply two local piece of diagonal noise covariance.
+    Multiply the local piece of a diagonal noise covariance with a map.
 
-    This does an in-place multiplication of the covariance.
-    The results are returned in place of the first argument, npp1.
+    This does an in-place multiplication of the covariance and a
+    map.  The results are returned in place of the input map.
 
     Args:
         npp (3D array): The data member of a distributed covariance.
@@ -248,7 +307,10 @@ def covariance_apply(npp, m):
     """
     if len(npp.shape) != 3 or len(m.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
-    #_apply_covariance(npp, m)
+    blocknnz = int( ( (np.sqrt(8 * npp.shape[2]) - 1) / 2 ) + 0.5 )
+    ctoast.cov_apply_covariance(npp.shape[0], npp.shape[1], blocknnz, 
+        npp.flatten().astype(np.float64, copy=False), 
+        m.flatten().astype(np.float64, copy=False))
     return
 
 
@@ -268,7 +330,11 @@ def covariance_rcond(npp):
     """
     if len(npp.shape) != 3:
         raise RuntimeError("distributed covariance matrix must have dimensions (number of submaps, pixels per submap, nnz*(nnz+1)/2)")
+    blocknnz = int( ( (np.sqrt(8 * npp.shape[2]) - 1) / 2 ) + 0.5 )
     rcond = np.zeros((npp.shape[0], npp.shape[1], 1), dtype=np.float64)
     threshold = np.finfo(np.float64).eps
-    #_eigendecompose_covariance(npp, rcond, threshold, 0, 1)
+    ctoast.cov_eigendecompose_covariance(npp.shape[0], npp.shape[1], blocknnz, 
+        npp.flatten().astype(np.float64, copy=False), 
+        rcond.flatten().astype(np.float64, copy=False), threshold, 0, 1)
     return rcond
+

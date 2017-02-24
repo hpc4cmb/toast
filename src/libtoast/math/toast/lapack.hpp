@@ -18,6 +18,8 @@ namespace toast { namespace lapack {
 
     void symv ( char * UPLO, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY );
 
+    void symm ( char * SIDE, char * UPLO, int * M, int * N, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC );
+
     void potrf ( char * UPLO, int * N, double * A, int * LDA, int * INFO );
 
     void pocon ( char * UPLO, int * N, double * A, int * LDA, double * ANORM, double * RCOND, double * WORK, int * IWORK, int * INFO );

@@ -503,9 +503,37 @@ void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, in
 
 
 //--------------------------------------
-// Map functions
+// Map sub-library
 //--------------------------------------
 
+void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * zdata, int64_t * hits, double * invnpp, int64_t nsamp, 
+    double const * signal, int64_t const * indx_submap, int64_t const * indx_pix, 
+    double const * weights, double scale ) {
+    toast::cov::accumulate_diagonal ( nsub, subsize, nnz, zdata, hits, invnpp, 
+        nsamp, signal, indx_submap, indx_pix, weights, scale );
+    return;
+}
+
+void ctoast_cov_eigendecompose_covariance ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * data, double * cond, double threshold, 
+    int32_t do_invert, int32_t do_rcond ) {
+    toast::cov::eigendecompose_covariance ( nsub, subsize, nnz, data, cond, 
+        threshold, do_invert, do_rcond );
+    return;
+}
+
+void ctoast_cov_multiply_covariance ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * data1, double const * data2 ) {
+    toast::cov::multiply_covariance ( nsub, subsize, nnz, data1, data2 );
+    return;
+}
+
+void ctoast_cov_apply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double const * mat, double * vec ) {
+    toast::cov::apply_covariance ( nsub, subsize, nnz, mat, vec );
+    return;
+}
 
 
 //--------------------------------------

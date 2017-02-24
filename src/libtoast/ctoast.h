@@ -198,10 +198,23 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits );
 
 //--------------------------------------
-// Map functions
+// Map sub-library
 //--------------------------------------
 
+void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * zdata, int64_t * hits, double * invnpp, int64_t nsamp, 
+    double const * signal, int64_t const * indx_submap, int64_t const * indx_pix, 
+    double const * weights, double scale );
 
+void ctoast_cov_eigendecompose_covariance ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * data, double * cond, double threshold, 
+    int32_t do_invert, int32_t do_rcond );
+
+void ctoast_cov_multiply_covariance ( int64_t nsub, int64_t subsize, 
+    int64_t nnz, double * data1, double const * data2 );
+
+void ctoast_cov_apply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+    double const * mat, double * vec );
 
 
 //--------------------------------------

@@ -42,7 +42,7 @@ class CbufferTest(MPITestCase):
         data = {}
 
         for k, v in self.types.items():
-            data[k] = ToastBuffer(size=self.nsamp, type=k)
+            data[k] = ToastBuffer(self.nsamp, k)
 
         stop = MPI.Wtime()
         elapsed = stop - start
@@ -55,7 +55,7 @@ class CbufferTest(MPITestCase):
         data = {}
 
         for k, v in self.types.items():
-            raw = ToastBuffer(size=self.nsamp, type=k)
+            raw = ToastBuffer(self.nsamp, k)
             data[k] = np.asarray(raw)
             for i in range(self.nsamp):
                 data[k][i] = i
@@ -72,7 +72,7 @@ class CbufferTest(MPITestCase):
         data = {}
 
         for k, v in self.types.items():
-            raw = ToastBuffer(size=self.nsamp, type=k)
+            raw = ToastBuffer(self.nsamp, k)
             data[k] = np.asarray(raw)
             print("buffer {} has numpy type {}".format(k, data[k].dtype))
             for i in range(self.nsamp):
