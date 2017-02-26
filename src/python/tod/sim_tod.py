@@ -691,7 +691,7 @@ class TODGround(TOD):
             mpicomm=mpicomm, timedist=timedist, detectors=self._detlist,
             detindx=detindx, samples=samples, sizes=sizes)
 
-        self._boresight = self.translate_pointing()
+        self._boresize_azel, self._boresight = self.translate_pointing()
 
     def to_JD(self, t):
         # Convert TOAST UTC time stamp to Julian date
@@ -800,8 +800,6 @@ class TODGround(TOD):
         azelquats = qa.rotation(ZAXIS, self._az)
         azelquats = qa.mult(azelquats, elquat)
         azel_orients = qa.rotate(azelquats, orient)
-        del azelquats
-
         el_orients, az_orients = hp.vec2ang(azel_orients)
         del azel_orients
 
@@ -851,7 +849,7 @@ class TODGround(TOD):
             - radec_orients[1]*radec_dirs[2]*radec_dirs[1]
         pas = np.arctan2(x, y)
 
-        return self.radec2quat(ra_dirs, dec_dirs, pas)
+        return azelquats, self.radec2quat(ra_dirs, dec_dirs, pas)
 
     def radec2quat(self, ra, dec, pa):
 
@@ -894,12 +892,15 @@ class TODGround(TOD):
         raise RuntimeError('cannot write timestamps to simulated data streams')
         return
 
-    def _get_pntg(self, detector, start, n):
+    def _get_pntg(self, detector, start, n, azel=False):
         if self._boresight is None:
             raise RuntimeError('you must set the precession axis before reading'
                                ' detector pointing')
         detquat = self._fp[detector]
-        data = qa.mult(self._boresight, detquat)
+        if azel:
+            data = qa.mult(self._boresight_azel, detquat)
+        else:
+            data = qa.mult(self._boresight, detquat)
         return data
 
     def _put_pntg(self, detector, start, data):
