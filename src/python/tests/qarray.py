@@ -9,7 +9,7 @@ from ..rng import random
 
 import numpy as np
 
-from ..tod import qarray as qarray
+from .. import qarray as qarray
 
 
 class QarrayTest(MPITestCase):
