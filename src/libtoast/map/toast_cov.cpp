@@ -25,7 +25,6 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
     int64_t off;
     double zsig;
 
-    #pragma omp parallel for default(shared) private(i, j, k, zpx, hpx, ipx, off, zsig) schedule(static)
     for ( i = 0; i < nsamp; ++i ) {
         if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
             zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
@@ -54,7 +53,6 @@ void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64
     int64_t i, j, k;
     int64_t hpx;
 
-    #pragma omp parallel for default(shared) private(i, j, k, hpx) schedule(static)
     for ( i = 0; i < nsamp; ++i ) {
         if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
             hpx = (indx_submap[i] * subsize) + indx_pix[i];
@@ -76,7 +74,6 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
     int64_t ipx;
     int64_t off;
 
-    #pragma omp parallel for default(shared) private(i, j, k, hpx, ipx, off) schedule(static)
     for ( i = 0; i < nsamp; ++i ) {
         if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
             hpx = (indx_submap[i] * subsize) + indx_pix[i];
@@ -94,7 +91,6 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
         }
     }
 
-
     return;
 }
 
@@ -107,7 +103,6 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
     int64_t zpx;
     double zsig;
 
-    #pragma omp parallel for default(shared) private(i, j, k, zpx, zsig) schedule(static)
     for ( i = 0; i < nsamp; ++i ) {
         if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
             zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
