@@ -13,163 +13,144 @@ a BSD-style license that can be found in the LICENSE file.
 #endif
 
 
-void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
-    double * zdata, int64_t * hits, double * invnpp, int64_t nsamp, double const * signal,
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, double scale ) {
-
-    bool do_z = ( zdata != NULL );
-    bool do_hits = ( hits != NULL );
-    bool do_invn = ( invnpp != NULL );
-
-    // This duplicates code in order to keep conditionals out of the loop.
+void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+    double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
 
     int64_t i, j, k;
-    int64_t px;
+    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+    int64_t zpx;
+    int64_t hpx;
+    int64_t ipx;
     int64_t off;
     double zsig;
 
-    if ( do_z && do_hits && do_invn ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                hits[px] += 1;
-                zsig = scale * signal[i];
-                off = 0;
-                for ( j = 0; j < nnz; ++j ) {
-                    zdata[px + j] += zsig * weights[i * nnz + j];
-                    for ( k = j; k < nnz; ++k ) {
-                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                        off += 1;
-                    }
+    #pragma omp parallel for default(shared) private(i, j, k, zpx, hpx, ipx, off, zsig) schedule(static)
+    for ( i = 0; i < nsamp; ++i ) {
+        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+            hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+            hits[hpx] += 1;
+            zsig = scale * signal[i];
+            off = 0;
+            for ( j = 0; j < nnz; ++j ) {
+                zdata[zpx + j] += zsig * weights[i * nnz + j];
+                for ( k = j; k < nnz; ++k ) {
+                    invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                    off += 1;
                 }
             }
         }
-
-    } else if ( do_z && do_hits ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                hits[px] += 1;
-                zsig = scale * signal[i];
-                for ( j = 0; j < nnz; ++j ) {
-                    zdata[px + j] += zsig * weights[i * nnz + j];
-                }
-            }
-        }
-
-    } else if ( do_hits && do_invn ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                hits[px] += 1;
-                off = 0;
-                for ( j = 0; j < nnz; ++j ) {
-                    for ( k = j; k < nnz; ++k ) {
-                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                        off += 1;
-                    }
-                }
-            }
-        }
-
-    } else if ( do_z && do_invn ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                zsig = scale * signal[i];
-                off = 0;
-                for ( j = 0; j < nnz; ++j ) {
-                    zdata[px + j] += zsig * weights[i * nnz + j];
-                    for ( k = j; k < nnz; ++k ) {
-                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                        off += 1;
-                    }
-                }
-            }
-        }
-
-    } else if ( do_z ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                zsig = scale * signal[i];
-                for ( j = 0; j < nnz; ++j ) {
-                    zdata[px + j] += zsig * weights[i * nnz + j];
-                }
-            }
-        }
-
-    } else if ( do_hits ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                hits[px] += 1;
-            }
-        }
-
-    } else if ( do_invn ) {
-
-        #pragma omp parallel for default(shared) private(i, j, k, px, off, zsig) schedule(static)
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                px = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                off = 0;
-                for ( j = 0; j < nnz; ++j ) {
-                    for ( k = j; k < nnz; ++k ) {
-                        invnpp[px + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                        off += 1;
-                    }
-                }
-            }
-        }
-
     }
 
     return;
 }
 
 
-void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+    int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
+
+    int64_t i, j, k;
+    int64_t hpx;
+
+    #pragma omp parallel for default(shared) private(i, j, k, hpx) schedule(static)
+    for ( i = 0; i < nsamp; ++i ) {
+        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            hits[hpx] += 1;
+        }
+    }
+
+    return;
+}
+
+
+void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+    double scale, int64_t * hits, double * invnpp ) {
+
+    int64_t i, j, k;
+    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+    int64_t hpx;
+    int64_t ipx;
+    int64_t off;
+
+    #pragma omp parallel for default(shared) private(i, j, k, hpx, ipx, off) schedule(static)
+    for ( i = 0; i < nsamp; ++i ) {
+        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+            //printf("cpp %ld : hpx=%ld, ipx=%ld, hits[hpx]=%e, invnpp =", i, hpx, ipx, hits[hpx]);
+            hits[hpx] += 1;
+            off = 0;
+            for ( j = 0; j < nnz; ++j ) {
+                for ( k = j; k < nnz; ++k ) {
+                    //printf("cpp     %ld = %e\n", off, invnpp[ipx + off]);
+                    invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                    off += 1;
+                }
+            }
+        }
+    }
+
+
+    return;
+}
+
+
+void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+    double scale, double const * signal, double * zdata ) {
+
+    int64_t i, j, k;
+    int64_t zpx;
+    double zsig;
+
+    #pragma omp parallel for default(shared) private(i, j, k, zpx, zsig) schedule(static)
+    for ( i = 0; i < nsamp; ++i ) {
+        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+            zsig = scale * signal[i];
+            for ( j = 0; j < nnz; ++j ) {
+                zdata[zpx + j] += zsig * weights[i * nnz + j];
+            }
+        }
+    }
+
+    return;
+}
+
+
+void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double * data, double * cond, double threshold, int32_t do_invert, int32_t do_rcond ) {
 
-    if ( ( ! do_invert ) && ( ! do_rcond ) ) {
+    if ( ( do_invert == 0 ) && ( do_rcond == 0 ) ) {
         return;
     }
 
     int64_t i, j, k;
-    int64_t px;
+    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+    int64_t dpx;
 
     if ( nnz == 1 ) {
         // shortcut for NNZ == 1
         
-        if ( ! do_invert ) {
+        if ( do_invert == 0 ) {
 
             for ( i = 0; i < nsub; ++i ) {
                 for ( j = 0; j < subsize; ++j ) {
-                    px = (i * subsize * nnz) + (j * nnz);
-                    cond[px] = 1.0;
+                    cond[i * subsize + j] = 1.0;
                 }
             }
 
-        } else if ( ! do_rcond ) {
+        } else if ( do_rcond == 0 ) {
 
             for ( i = 0; i < nsub; ++i ) {
                 for ( j = 0; j < subsize; ++j ) {
-                    px = (i * subsize * nnz) + (j * nnz);
-                    if ( data[px] != 0 ) {
-                        data[px] = 1.0 / data[px];
+                    dpx = (i * subsize) + j;
+                    if ( data[dpx] != 0 ) {
+                        data[dpx] = 1.0 / data[dpx];
                     }
                 }
             }
@@ -178,10 +159,10 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
 
             for ( i = 0; i < nsub; ++i ) {
                 for ( j = 0; j < subsize; ++j ) {
-                    px = (i * subsize * nnz) + (j * nnz);
-                    cond[px] = 1.0;
-                    if ( data[px] != 0 ) {
-                        data[px] = 1.0 / data[px];
+                    dpx = (i * subsize) + j;
+                    cond[dpx] = 1.0;
+                    if ( data[dpx] != 0 ) {
+                        data[dpx] = 1.0 / data[dpx];
                     }
                 }
             }
@@ -210,7 +191,7 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
         // small matrices.  So instead we divide up the map data across threads
         // and each thread does some large number of small eigenvalue problems.
 
-        #pragma omp parallel default(shared) private(i, j, k, px)
+        #pragma omp parallel default(shared) private(i, j, k, dpx)
         {
             // thread-private variables
 
@@ -243,21 +224,21 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
 
             #pragma omp for schedule(static)
             for ( i = 0; i < (nsub * subsize); ++i ) {
-                
-                px = i * nnz;
+
+                dpx = i * block;
                     
                 // copy to fortran buffer
                 off = 0;
                 ::memset ( fdata, 0, nnz*nnz*sizeof(double) );
                 for ( k = 0; k < nnz; ++k ) {
                     for ( m = k; m < nnz; ++m ) {
-                        fdata[k*nnz + m] = data[px + off];
+                        fdata[k*nnz + m] = data[dpx + off];
                         off += 1;
                     }
                 }
 
                 // eigendecompose
-                if ( ! do_invert ) {
+                if ( do_invert == 0 ) {
                     toast::lapack::syev(&jobz_val, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info);
                 } else {
                     toast::lapack::syev(&jobz_vec, &uplo, &fnnz, fdata, &fnnz, evals, work, &lwork, &info);
@@ -284,7 +265,7 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
 
                     // compare to threshold
                     if ( rcond >= threshold ) {
-                        if ( do_invert ) {
+                        if ( do_invert != 0 ) {
                             for ( k = 0; k < nnz; ++k ) {
                                 evals[k] = 1.0 / evals[k];
                                 for ( m = 0; m < nnz; ++m ) {
@@ -297,7 +278,7 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
                             off = 0;
                             for ( k = 0; k < nnz; ++k ) {
                                 for ( m = k; m < nnz; ++m ) {
-                                    data[px + off] = finv[k*nnz + m];
+                                    data[dpx + off] = finv[k*nnz + m];
                                     off += 1;
                                 }
                             }
@@ -310,20 +291,20 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
 
                 }
                 
-                if ( do_invert ) {
+                if ( do_invert != 0 ) {
                     if ( info != 0 ) {
                         off = 0;
                         for ( k = 0; k < nnz; ++k ) {
                             for ( m = k; m < nnz; ++m ) {
-                                data[px + off] = 0.0;
+                                data[dpx + off] = 0.0;
                                 off += 1;
                             }
                         }
                     }
                 }
 
-                if ( do_rcond ) {
-                    cond[px] = rcond;
+                if ( do_rcond != 0 ) {
+                    cond[i] = rcond;
                 }
 
             }
@@ -342,10 +323,11 @@ void toast::cov::eigendecompose_covariance ( int64_t nsub, int64_t subsize, int6
 }
 
 
-void toast::cov::multiply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double * data1, double const * data2 ) {
 
     int64_t i, j, k;
+    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
     int64_t px;
 
     if ( nnz == 1 ) {
@@ -353,7 +335,7 @@ void toast::cov::multiply_covariance ( int64_t nsub, int64_t subsize, int64_t nn
 
         for ( i = 0; i < nsub; ++i ) {
             for ( j = 0; j < subsize; ++j ) {
-                px = (i * subsize * nnz) + (j * nnz);
+                px = (i * subsize * block) + (j * block);
                 data1[px] *= data2[px];
             }
         }
@@ -394,7 +376,7 @@ void toast::cov::multiply_covariance ( int64_t nsub, int64_t subsize, int64_t nn
             #pragma omp for schedule(static)
             for ( i = 0; i < (nsub * subsize); ++i ) {
                 
-                px = i * nnz;
+                px = i * block;
                     
                 // copy to fortran buffer
 
@@ -439,19 +421,22 @@ void toast::cov::multiply_covariance ( int64_t nsub, int64_t subsize, int64_t nn
 }
 
 
-void toast::cov::apply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
+void toast::cov::apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double const * mat, double * vec ) {
 
     int64_t i, j, k;
-    int64_t px;
+    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+    int64_t mpx;
+    int64_t vpx;
 
     if ( nnz == 1 ) {
         // shortcut for NNZ == 1
 
         for ( i = 0; i < nsub; ++i ) {
             for ( j = 0; j < subsize; ++j ) {
-                px = (i * subsize * nnz) + (j * nnz);
-                vec[px] *= mat[px];
+                mpx = (i * subsize * block) + (j * block);
+                vpx = (i * subsize * nnz) + (j * nnz);
+                vec[vpx] *= mat[mpx];
             }
         }
 
@@ -469,23 +454,24 @@ void toast::cov::apply_covariance ( int64_t nsub, int64_t subsize, int64_t nnz,
 
         for ( i = 0; i < nsub; ++i ) {
             for ( j = 0; j < subsize; ++j ) {
-                px = (i * subsize * nnz) + (j * nnz);
+                mpx = (i * subsize * block) + (j * block);
+                vpx = (i * subsize * nnz) + (j * nnz);
 
                 ::memset(temp, 0, nnz * sizeof(double));
 
                 off = 0;
                 for ( k = 0; k < nnz; ++k ) {
                     for ( m = k; m < nnz; ++m ) {
-                        temp[k] += mat[px + off] * vec[px + m];
+                        temp[k] += mat[mpx + off] * vec[vpx + m];
                         if ( m != k ) {
-                            temp[m] += mat[px + off] * vec[px + k];
+                            temp[m] += mat[mpx + off] * vec[vpx + k];
                         }
                         off++;
                     }
                 }
 
                 for ( k = 0; k < nnz; ++k ) {
-                    vec[px + k] = temp[k];
+                    vec[vpx + k] = temp[k];
                 }
             }
         }

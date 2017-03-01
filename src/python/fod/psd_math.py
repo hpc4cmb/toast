@@ -100,10 +100,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
         if ngood == 0:
             continue
 
-        autocov = np.zeros(lagmax, dtype=np.float64)
-        autocov_hits = np.zeros(lagmax, dtype=np.int64)
-
-        fod_autosums(sig, good, lagmax, autocov, autocov_hits)
+        (autocov, autocov_hits) = fod_autosums(sig, good, lagmax)
 
         autocovs[ireal] = (autocov_hits, autocov)
 

@@ -89,7 +89,7 @@ class QarrayTest(MPITestCase):
         time = np.array([0., 9]) 
         targettime = np.array([0, 3, 4.5, 9])
         q_interp = qarray.slerp(targettime, time, q)
-        self.assertEquals(len(q_interp), 4)
+        self.assertEqual(len(q_interp), 4)
         np.testing.assert_array_almost_equal(q_interp[0], q[0])
         np.testing.assert_array_almost_equal(q_interp[-1], q[-1])
         np.testing.assert_array_almost_equal(q_interp[1], qarray.norm(q[0] * 2/3 + q[1]/3), decimal=4)

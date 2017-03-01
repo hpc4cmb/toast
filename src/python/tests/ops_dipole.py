@@ -26,7 +26,7 @@ from ..map import *
 class OpSimDipoleTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -162,13 +162,13 @@ class OpSimDipoleTest(MPITestCase):
         zmap.write_healpix_fits(os.path.join(self.mapdir, "zmap.fits"))
 
         # invert it
-        covariance_invert(invnpp.data, 1.0e-3)
+        covariance_invert(invnpp, 1.0e-3)
 
         invnpp.write_healpix_fits(os.path.join(self.mapdir, "npp.fits"))
 
         # compute the binned map, N_pp x Z
 
-        covariance_apply(invnpp.data, zmap.data)
+        covariance_apply(invnpp, zmap)
         zmap.write_healpix_fits(os.path.join(self.mapdir, "binned.fits"))
 
         if self.comm.rank == 0:

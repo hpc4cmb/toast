@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
+from toast.mpi import MPI
+
 import os
-if 'TOAST_NO_MPI' in os.environ.keys():
-    from toast import fakempi as MPI
-else:
-    from mpi4py import MPI
 
 import sys
 import re
@@ -30,7 +28,6 @@ def main():
     parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
-    parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
     
     args = parser.parse_args()
 
@@ -85,14 +82,7 @@ def main():
 
     # create the covariance and inverse condition number map
 
-    cov = None
-    rcond = None
-    if args.single:
-        cov = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=nnz, submap=subnpix, local=local)
-        rcond = tm.DistPixels(comm=comm, dtype=np.float32, size=npix, nnz=1, submap=subnpix, local=local)
-    else:
-        cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
-        rcond = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=1, submap=subnpix, local=local)
+    cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
 
     # read the covariance
 
@@ -100,7 +90,7 @@ def main():
 
     # every process computes its local piece
 
-    rcond.data[:] = tm.covariance_rcond(cov.data.astype(np.float64))
+    rcond = tm.covariance_rcond(cov)
 
     # write the map
 

@@ -263,15 +263,22 @@ class OpPointingHpix(Operator):
                 pixelsname = "{}_{}".format(self._pixels, det)
                 weightsname = "{}_{}".format(self._weights, det)
                 
-                if not tod.cache.exists(pixelsname):
-                    tod.cache.create(pixelsname, np.int64, (tod.local_samples[1],))
-                if not tod.cache.exists(weightsname):
-                    tod.cache.create(weightsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+                pixelsref = None
+                weightsref = None
 
-                pixelsref = tod.cache.reference(pixelsname)
-                weightsref = tod.cache.reference(weightsname)
+                if tod.cache.exists(pixelsname):
+                    pixelsref = tod.cache.reference(pixelsname)
+                else:
+                    pixelsref = tod.cache.create(pixelsname, np.int64, (tod.local_samples[1],))
+
+                if tod.cache.exists(weightsname):
+                    weightsref = tod.cache.reference(weightsname)
+                else:
+                    weightsref = tod.cache.create(weightsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+
                 pixelsref[:] = pixels
                 weightsref[:,:] = weights
+
                 del pixelsref
                 del weightsref
 

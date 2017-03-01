@@ -71,6 +71,9 @@ class TOD(object):
         The timestream data cache.
         """
 
+    def __del__(self):
+        self.cache.clear()
+
     @property
     def detectors(self):
         """
@@ -639,6 +642,9 @@ class TODCache(TOD):
         self._stamps = 'toast_tod_stamps'
         self._pos = 'toast_tod_pos'
         self._vel = 'toast_tod_vel'
+
+    def __del__(self):
+        self.cache.clear()
 
 
     # This class just use a Cache object to store things.

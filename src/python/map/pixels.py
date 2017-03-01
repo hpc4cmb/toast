@@ -72,6 +72,7 @@ class OpLocalPixels(Operator):
                 pixelsname = "{}_{}".format(self._pixels, det)
                 pixels = tod.cache.reference(pixelsname)
                 local.update(set(pixels))
+                del pixels
 
         ret = np.zeros(len(local), dtype=np.int64)
         ret[:] = sorted(local)
@@ -126,6 +127,7 @@ class DistPixels(object):
 
         # our data is a 3D array of submap, pixel, values
         # we allocate this as a contiguous block
+
         if self._local is None:
             self.data = None
             self._nsub = 0
@@ -136,6 +138,11 @@ class DistPixels(object):
             if (self._submap * self._local.max()) > self._size:
                  raise RuntimeError("local submap indices out of range")
             self.data = self._cache.create("data", dtype, (self._nsub, self._submap, self._nnz))
+
+    def __del__(self):
+        if self.data is not None:
+            del self.data
+        self._cache.clear()
 
 
     @property
@@ -187,6 +194,13 @@ class DistPixels(object):
         """
         return self._nsub
 
+    @property
+    def nested(self):
+        """
+        (bool): If True, data is HEALPix NESTED ordering.
+        """
+        return self._nest
+
 
     def global_to_local(self, gl):
         """
@@ -220,7 +234,7 @@ class DistPixels(object):
         """
         ret = DistPixels(comm=self._comm, size=self._size, nnz=self._nnz, dtype=self._dtype, submap=self._submap, local=self._local)
         if self.data is not None:
-            ret.data = np.copy(self.data)
+            ret.data[:,:,:] = self.data
         return ret
 
 

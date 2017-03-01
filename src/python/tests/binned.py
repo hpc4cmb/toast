@@ -27,7 +27,7 @@ from ..map import *
 class BinnedTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -218,13 +218,13 @@ class BinnedTest(MPITestCase):
         zmap.write_healpix_fits(os.path.join(self.mapdir, "zmap.fits"))
 
         # invert it
-        covariance_invert(invnpp.data, 1.0e-3)
+        covariance_invert(invnpp, 1.0e-3)
 
         invnpp.write_healpix_fits(os.path.join(self.mapdir, "npp.fits"))
 
         # compute the binned map, N_pp x Z
 
-        covariance_apply(invnpp.data, zmap.data)
+        covariance_apply(invnpp, zmap)
         zmap.write_healpix_fits(os.path.join(self.mapdir, "binned.fits"))
 
         # compare with MADAM
@@ -419,7 +419,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[0][mask], binserial[0][mask], decimal=4)
+                nt.assert_almost_equal(bins[0][mask], binserial[0][mask], decimal=3)
 
                 diffmap = binserial[1] - bins[1]
                 mask = (bins[1] != 0)
@@ -429,7 +429,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[1][mask], binserial[1][mask], decimal=4)
+                nt.assert_almost_equal(bins[1][mask], binserial[1][mask], decimal=3)
 
                 diffmap = binserial[2] - bins[2]
                 mask = (bins[2] != 0)
@@ -439,7 +439,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=4)
+                nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=3)
 
 
             stop = MPI.Wtime()

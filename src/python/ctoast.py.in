@@ -24,6 +24,15 @@ libc = ct.CDLL(libc_path, mode=ct.RTLD_GLOBAL)
 libc.free.restype = None
 libc.free.argtypes = [ ct.c_void_p ]
 
+# numpy pointer types that we use frequently
+
+npi8 = npc.ndpointer(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS")
+npi32 = npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS")
+npi64 = npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS")
+npu64 = npc.ndpointer(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS")
+npf64 = npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
+
+
 #--------------------------------------
 # Library initialize / finalize
 #--------------------------------------
@@ -57,7 +66,7 @@ def cfinalize ():
 # special functions
 
 lib.ctoast_sf_sin.restype = None
-lib.ctoast_sf_sin.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_sin.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_sin(ang):
     n = len(ang)
@@ -66,7 +75,7 @@ def sf_sin(ang):
     return sinout
 
 lib.ctoast_sf_cos.restype = None
-lib.ctoast_sf_cos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_cos.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_cos(ang):
     n = len(ang)
@@ -75,7 +84,7 @@ def sf_cos(ang):
     return cosout
 
 lib.ctoast_sf_sincos.restype = None
-lib.ctoast_sf_sincos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_sincos.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
 
 def sf_sincos(ang):
     n = len(ang)
@@ -85,7 +94,7 @@ def sf_sincos(ang):
     return (sinout, cosout)
 
 lib.ctoast_sf_atan2.restype = None
-lib.ctoast_sf_atan2.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_atan2.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
 
 def sf_atan2(y, x):
     n = len(y)
@@ -96,7 +105,7 @@ def sf_atan2(y, x):
     return ang
 
 lib.ctoast_sf_sqrt.restype = None
-lib.ctoast_sf_sqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_sqrt.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_sqrt(input):
     n = len(input)
@@ -105,7 +114,7 @@ def sf_sqrt(input):
     return out
 
 lib.ctoast_sf_rsqrt.restype = None
-lib.ctoast_sf_rsqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_rsqrt.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_rsqrt(input):
     n = len(input)
@@ -114,7 +123,7 @@ def sf_rsqrt(input):
     return out
 
 lib.ctoast_sf_exp.restype = None
-lib.ctoast_sf_exp.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_exp.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_exp(input):
     n = len(input)
@@ -123,7 +132,7 @@ def sf_exp(input):
     return out
 
 lib.ctoast_sf_log.restype = None
-lib.ctoast_sf_log.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_log.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_log(input):
     n = len(input)
@@ -132,7 +141,7 @@ def sf_log(input):
     return out
 
 lib.ctoast_sf_fast_sin.restype = None
-lib.ctoast_sf_fast_sin.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_sin.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_sin(ang):
     n = len(ang)
@@ -141,7 +150,7 @@ def sf_fast_sin(ang):
     return sinout
 
 lib.ctoast_sf_fast_cos.restype = None
-lib.ctoast_sf_fast_cos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_cos.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_cos(ang):
     n = len(ang)
@@ -150,7 +159,7 @@ def sf_fast_cos(ang):
     return cosout
 
 lib.ctoast_sf_fast_sincos.restype = None
-lib.ctoast_sf_fast_sincos.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_sincos.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
 
 def sf_fast_sincos(ang):
     n = len(ang)
@@ -160,7 +169,7 @@ def sf_fast_sincos(ang):
     return (sinout, cosout)
 
 lib.ctoast_sf_fast_atan2.restype = None
-lib.ctoast_sf_fast_atan2.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_atan2.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
 
 def sf_fast_atan2(y, x):
     n = len(y)
@@ -171,7 +180,7 @@ def sf_fast_atan2(y, x):
     return ang
 
 lib.ctoast_sf_fast_sqrt.restype = None
-lib.ctoast_sf_fast_sqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_sqrt.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_sqrt(input):
     n = len(input)
@@ -180,7 +189,7 @@ def sf_fast_sqrt(input):
     return out
 
 lib.ctoast_sf_fast_rsqrt.restype = None
-lib.ctoast_sf_fast_rsqrt.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_rsqrt.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_rsqrt(input):
     n = len(input)
@@ -189,7 +198,7 @@ def sf_fast_rsqrt(input):
     return out
 
 lib.ctoast_sf_fast_exp.restype = None
-lib.ctoast_sf_fast_exp.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_exp.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_exp(input):
     n = len(input)
@@ -198,7 +207,7 @@ def sf_fast_exp(input):
     return out
 
 lib.ctoast_sf_fast_log.restype = None
-lib.ctoast_sf_fast_log.argtypes = [ ct.c_int, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_sf_fast_log.argtypes = [ ct.c_int, npf64, npf64 ]
 
 def sf_fast_log(input):
     n = len(input)
@@ -209,7 +218,8 @@ def sf_fast_log(input):
 # RNG
 
 lib.ctoast_rng_dist_uint64.restype = None
-lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npu64 ]
 
 def rng_dist_uint64(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.uint64)
@@ -217,7 +227,8 @@ def rng_dist_uint64(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_uniform_01.restype = None
-lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
@@ -225,7 +236,8 @@ def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_uniform_11.restype = None
-lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
@@ -233,7 +245,8 @@ def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_normal.restype = None
-lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_normal(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
@@ -244,9 +257,7 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
 
 lib.ctoast_qarray_list_dot.restype = None
 lib.ctoast_qarray_list_dot.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+    npf64, npf64, npf64 ]
 
 def qarray_list_dot(n, m, d, a, b):
     dotprod = np.zeros(n, dtype=np.float64)
@@ -254,8 +265,7 @@ def qarray_list_dot(n, m, d, a, b):
     return dotprod
 
 lib.ctoast_qarray_inv.restype = None
-lib.ctoast_qarray_inv.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_inv.argtypes = [ ct.c_ulong, npf64 ]
 
 def qarray_inv(n, q):
     qcopy = np.copy(q)
@@ -264,8 +274,7 @@ def qarray_inv(n, q):
 
 lib.ctoast_qarray_amplitude.restype = None
 lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+    npf64, npf64 ]
 
 def qarray_amplitude(n, m, d, v):
     amp = np.zeros(n, dtype=np.float64)
@@ -274,27 +283,15 @@ def qarray_amplitude(n, m, d, v):
 
 lib.ctoast_qarray_normalize.restype = None
 lib.ctoast_qarray_normalize.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+    npf64, npf64 ]
 
 def qarray_normalize(n, m, d, q_in):
     q_out = np.zeros_like(q_in)
     lib.ctoast_qarray_normalize(n, m, d, q_in, q_out)
     return q_out
 
-lib.ctoast_qarray_normalize_inplace.restype = None
-lib.ctoast_qarray_normalize_inplace.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
-
-def qarray_normalize_inplace(n, m, d, q):
-    lib.ctoast_qarray_normalize_inplace(n, m, d, q)
-    return
-
 lib.ctoast_qarray_rotate.restype = None
-lib.ctoast_qarray_rotate.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_rotate.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
 
 def qarray_rotate(n, q, v_in):
     v_out = np.zeros_like(v_in)
@@ -302,10 +299,7 @@ def qarray_rotate(n, q, v_in):
     return v_out
 
 lib.ctoast_qarray_mult.restype = None
-lib.ctoast_qarray_mult.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_mult.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
 
 def qarray_mult(n, p, q):
     r = np.zeros_like(p)
@@ -313,11 +307,8 @@ def qarray_mult(n, p, q):
     return r
 
 lib.ctoast_qarray_slerp.restype = None
-lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, npf64, 
+    npf64, npf64, npf64 ]
 
 def qarray_slerp(n_time, n_targettime, time, targettime, q_in):
     q_interp = np.zeros(n_targettime*4, dtype=np.float64)
@@ -325,9 +316,7 @@ def qarray_slerp(n_time, n_targettime, time, targettime, q_in):
     return q_interp
 
 lib.ctoast_qarray_exp.restype = None
-lib.ctoast_qarray_exp.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_exp.argtypes = [ ct.c_ulong, npf64, npf64 ]
 
 def qarray_exp(n, q_in):
     q_out = np.zeros_like(q_in)
@@ -335,9 +324,7 @@ def qarray_exp(n, q_in):
     return q_out
 
 lib.ctoast_qarray_ln.restype = None
-lib.ctoast_qarray_ln.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_ln.argtypes = [ ct.c_ulong, npf64, npf64 ]
 
 def qarray_ln(n, q_in):
     q_out = np.zeros_like(q_in)
@@ -345,10 +332,7 @@ def qarray_ln(n, q_in):
     return q_out
 
 lib.ctoast_qarray_pow.restype = None
-lib.ctoast_qarray_pow.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_pow.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
 
 def qarray_pow(n, p, q_in):
     q_out = np.zeros_like(q_in)
@@ -356,10 +340,8 @@ def qarray_pow(n, p, q_in):
     return q_out
 
 lib.ctoast_qarray_from_axisangle.restype = None
-lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, npf64, 
+    npf64, npf64 ]
 
 def qarray_from_axisangle(n, axis, angle):
     q_out = np.zeros(n*4, dtype=np.float64)
@@ -367,10 +349,8 @@ def qarray_from_axisangle(n, axis, angle):
     return q_out
 
 lib.ctoast_qarray_to_axisangle.restype = None
-lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, npf64, npf64, 
+    npf64 ]
 
 def qarray_to_axisangle(n, q):
     axis = np.zeros(n*3, dtype=np.float64)
@@ -379,9 +359,7 @@ def qarray_to_axisangle(n, q):
     return (axis, angle)
 
 lib.ctoast_qarray_to_rotmat.restype = None
-lib.ctoast_qarray_to_rotmat.argtypes = [ 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_to_rotmat.argtypes = [ npf64, npf64 ]
 
 def qarray_to_rotmat(q):
     rotmat = np.zeros(9, dtype=np.float64)
@@ -389,9 +367,7 @@ def qarray_to_rotmat(q):
     return rotmat
 
 lib.ctoast_qarray_from_rotmat.restype = None
-lib.ctoast_qarray_from_rotmat.argtypes = [ 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_from_rotmat.argtypes = [ npf64, npf64 ]
 
 def qarray_from_rotmat(rotmat):
     q = np.zeros(4, dtype=np.float64)
@@ -399,10 +375,7 @@ def qarray_from_rotmat(rotmat):
     return q
 
 lib.ctoast_qarray_from_vectors.restype = None
-lib.ctoast_qarray_from_vectors.argtypes = [ 
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_qarray_from_vectors.argtypes = [ npf64, npf64, npf64 ]
 
 def qarray_from_vectors(vec1, vec2):
     q = np.zeros(4, dtype=np.float64)
@@ -449,35 +422,32 @@ def qarray_from_vectors(vec1, vec2):
 # Healpix
 
 lib.ctoast_healpix_ang2vec.restype = None
-lib.ctoast_healpix_ang2vec.argtypes = [ ct.c_longlong,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_healpix_ang2vec.argtypes = [ ct.c_longlong, npf64, npf64, npf64 ]
 
-def healpix_ang2vec(n, theta, phi, vec):
+def healpix_ang2vec(n, theta, phi):
+    vec = np.zeros(3*n, dtype=np.float64)
     lib.ctoast_healpix_ang2vec(n, theta, phi, vec)
-    return
+    return vec
 
 lib.ctoast_healpix_vec2ang.restype = None
-lib.ctoast_healpix_vec2ang.argtypes = [ ct.c_longlong,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_healpix_vec2ang.argtypes = [ ct.c_longlong, npf64, npf64, npf64 ]
 
-def healpix_vec2ang(n, vec, theta, phi):
+def healpix_vec2ang(n, vec):
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
     lib.ctoast_healpix_vec2ang(n, vec, theta, phi)
-    return
+    return (theta, phi)
 
 lib.ctoast_healpix_vecs2angpa.restype = None
-lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong, npf64, npf64, 
+    npf64, npf64 ]
 
-def healpix_vecs2angpa(n, vec, theta, phi, pa):
+def healpix_vecs2angpa(n, vec):
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
+    pa = np.zeros(n, dtype=np.float64)
     lib.ctoast_healpix_vecs2angpa(n, vec, theta, phi, pa)
-    return
+    return (theta, phi, pa)
 
 class cHealpix(ct.Structure):
     pass
@@ -505,145 +475,134 @@ def healpix_pixels_reset(hpix, nside):
 
 lib.ctoast_healpix_pixels_vec2zphi.restype = None
 lib.ctoast_healpix_pixels_vec2zphi.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npf64, npi32, npf64, npf64 ]
 
-def healpix_pixels_vec2zphi(hpix, n, vec, phi, region, z, rtz):
+def healpix_pixels_vec2zphi(hpix, n, vec):
+    phi = np.zeros(n, dtype=np.float64)
+    region = np.zeros(n, dtype=np.int32)
+    z = np.zeros(n, dtype=np.float64)
+    rtz = np.zeros(n, dtype=np.float64)
     lib.ctoast_healpix_pixels_vec2zphi(hpix, n, vec, phi, region, z, rtz)
-    return
+    return (phi, region, z, rtz)
 
 lib.ctoast_healpix_pixels_theta2z.restype = None
 lib.ctoast_healpix_pixels_theta2z.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npi32, npf64, npf64 ]
 
-def healpix_pixels_theta2z(hpix, n, theta, region, z, rtz):
+def healpix_pixels_theta2z(hpix, n, theta):
+    region = np.zeros(n, dtype=np.int32)
+    z = np.zeros(n, dtype=np.float64)
+    rtz = np.zeros(n, dtype=np.float64)
     lib.ctoast_healpix_pixels_theta2z(hpix, n, theta, region, z, rtz)
-    return
+    return (region, z, rtz)
 
 lib.ctoast_healpix_pixels_zphi2nest.restype = None
 lib.ctoast_healpix_pixels_zphi2nest.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
 
-def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix):
+def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_zphi2ring.restype = None
 lib.ctoast_healpix_pixels_zphi2ring.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
 
-def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz, pix):
+def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_ang2nest.restype = None
 lib.ctoast_healpix_pixels_ang2nest.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npf64, npf64, npi64 ]
 
-def healpix_pixels_ang2nest(hpix, n, theta, phi, pix):
+def healpix_pixels_ang2nest(hpix, n, theta, phi):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ang2nest(hpix, n, theta, phi, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_ang2ring.restype = None
 lib.ctoast_healpix_pixels_ang2ring.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npf64, npf64, npi64 ]
 
-def healpix_pixels_ang2ring(hpix, n, theta, phi, pix):
+def healpix_pixels_ang2ring(hpix, n, theta, phi):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ang2ring(hpix, n, theta, phi, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_vec2nest.restype = None
 lib.ctoast_healpix_pixels_vec2nest.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npi64 ]
 
-def healpix_pixels_vec2nest(hpix, n, vec, pix):
+def healpix_pixels_vec2nest(hpix, n, vec):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_vec2nest(hpix, n, vec, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_vec2ring.restype = None
 lib.ctoast_healpix_pixels_vec2ring.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npf64, npi64 ]
 
-def healpix_pixels_vec2ring(hpix, n, vec, pix):
+def healpix_pixels_vec2ring(hpix, n, vec):
+    pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_vec2ring(hpix, n, vec, pix)
-    return
+    return pix
 
 lib.ctoast_healpix_pixels_ring2nest.restype = None
 lib.ctoast_healpix_pixels_ring2nest.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_ring2nest(hpix, n, ringpix, nestpix):
+def healpix_pixels_ring2nest(hpix, n, ringpix):
+    nestpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ring2nest(hpix, n, ringpix, nestpix)
-    return
+    return nestpix
 
 lib.ctoast_healpix_pixels_nest2ring.restype = None
 lib.ctoast_healpix_pixels_nest2ring.argtypes = [ ct.POINTER(cHealpix), 
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_nest2ring(hpix, n, nestpix, ringpix):
+def healpix_pixels_nest2ring(hpix, n, nestpix):
+    ringpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_nest2ring(hpix, n, nestpix, ringpix)
-    return
+    return ringpix
 
 lib.ctoast_healpix_pixels_degrade_ring.restype = None
 lib.ctoast_healpix_pixels_degrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_degrade_ring(hpix, factor, n, inpix, outpix):
+def healpix_pixels_degrade_ring(hpix, factor, n, inpix):
+    outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_degrade_ring(hpix, factor, n, inpix, outpix)
-    return
+    return outpix
 
 lib.ctoast_healpix_pixels_degrade_nest.restype = None
 lib.ctoast_healpix_pixels_degrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_degrade_nest(hpix, factor, n, inpix, outpix):
+def healpix_pixels_degrade_nest(hpix, factor, n, inpix):
+    outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_degrade_nest(hpix, factor, n, inpix, outpix)
-    return
+    return outpix
 
 lib.ctoast_healpix_pixels_upgrade_ring.restype = None
 lib.ctoast_healpix_pixels_upgrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_upgrade_ring(hpix, factor, n, inpix, outpix):
+def healpix_pixels_upgrade_ring(hpix, factor, n, inpix):
+    outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_upgrade_ring(hpix, factor, n, inpix, outpix)
-    return
-
+    return outpix
 
 lib.ctoast_healpix_pixels_upgrade_nest.restype = None
 lib.ctoast_healpix_pixels_upgrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+    ct.c_longlong, npi64, npi64 ]
 
-def healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix):
+def healpix_pixels_upgrade_nest(hpix, factor, n, inpix):
+    outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix)
-    return
+    return outpix
 
 #--------------------------------------
 #  ATM sublibrary
@@ -662,16 +621,15 @@ def healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix):
 #--------------------------------------
 
 lib.ctoast_fod_autosums.restype = None
-lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong,
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS"),
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong, npf64, npi8, 
+    ct.c_longlong, npf64, npi64 ]
 
-def fod_autosums(x, good, lagmax, sums, hits):
+def fod_autosums(x, good, lagmax):
     n = len(x)
+    sums = np.zeros(lagmax, dtype=np.float64)
+    hits = np.zeros(lagmax, dtype=np.int64)
     lib.ctoast_fod_autosums(n, x, good, lagmax, sums, hits)
-    return
+    return (sums, hits)
 
 
 #--------------------------------------
@@ -679,49 +637,77 @@ def fod_autosums(x, good, lagmax, sums, hits):
 #--------------------------------------
 
 lib.ctoast_cov_accumulate_diagonal.restype = None
-lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"), ct.c_double ]
+lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong, 
+    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, npf64, 
+    npf64, npi64, npf64 ]
 
-def cov_accumulate_diagonal(nsub, subsize, nnz, zdata, hits, invnpp, nsamp, 
-    signal, indx_submap, indx_pix, weights, scale):
-    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, zdata, hits, invnpp, nsamp, 
-    signal, indx_submap, indx_pix, weights, scale)
+def cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+    weights, scale, signal, zdata, hits, invnpp):
+    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, 
+        indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1), 
+        hits.reshape(-1), invnpp.reshape(-1))
     return
 
-lib.ctoast_cov_eigendecompose_covariance.restype = None
-lib.ctoast_cov_eigendecompose_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    ct.c_double, ct.c_int, ct.c_int ]
+lib.ctoast_cov_accumulate_diagonal_hits.restype = None
+lib.ctoast_cov_accumulate_diagonal_hits.argtypes = [ ct.c_longlong, 
+    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npi64 ]
 
-def cov_eigendecompose_covariance(nsub, subsize, nnz, data, cond, threshold, 
+def cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp, indx_submap, 
+    indx_pix, hits):
+    lib.ctoast_cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp,
+        indx_submap, indx_pix, hits.reshape(-1))
+    return
+
+lib.ctoast_cov_accumulate_diagonal_invnpp.restype = None
+lib.ctoast_cov_accumulate_diagonal_invnpp.argtypes = [ ct.c_longlong, 
+    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, 
+    ct.c_double, npi64, npf64 ]
+
+def cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp, indx_submap, 
+    indx_pix, weights, scale, hits, invnpp):
+    lib.ctoast_cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp,
+        indx_submap, indx_pix, weights.reshape(-1), scale, hits.reshape(-1), 
+        invnpp.reshape(-1))
+    return
+
+lib.ctoast_cov_accumulate_zmap.restype = None
+lib.ctoast_cov_accumulate_zmap.argtypes = [ ct.c_longlong, ct.c_longlong, 
+    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, 
+    npf64, npf64 ]
+
+def cov_accumulate_zmap(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+    weights, scale, signal, zdata):
+    lib.ctoast_cov_accumulate_zmap(nsub, subsize, nnz, nsamp,
+        indx_submap, indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1))
+    return
+
+lib.ctoast_cov_eigendecompose_diagonal.restype = None
+lib.ctoast_cov_eigendecompose_diagonal.argtypes = [ ct.c_longlong, 
+    ct.c_longlong, ct.c_longlong, npf64, npf64, ct.c_double, ct.c_int, 
+    ct.c_int ]
+
+def cov_eigendecompose_diagonal(nsub, subsize, nnz, data, cond, threshold, 
     do_invert, do_rcond):
-    lib.ctoast_cov_eigendecompose_covariance(nsub, subsize, nnz, data, cond, threshold, 
-    do_invert, do_rcond)
+    lib.ctoast_cov_eigendecompose_diagonal(nsub, subsize, nnz, 
+        data.reshape(-1), cond.reshape(-1), threshold, do_invert, do_rcond)
     return
 
-lib.ctoast_cov_multiply_covariance.restype = None
-lib.ctoast_cov_multiply_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_cov_multiply_diagonal.restype = None
+lib.ctoast_cov_multiply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npf64, npf64 ]
 
-def cov_multiply_covariance(nsub, subsize, nnz, data1, data2):
-    lib.ctoast_cov_multiply_covariance(nsub, subsize, nnz, data1, data2)
+def cov_multiply_diagonal(nsub, subsize, nnz, data1, data2):
+    lib.ctoast_cov_multiply_diagonal(nsub, subsize, nnz, 
+        data1.reshape(-1), data2.reshape(-1))
     return
 
-lib.ctoast_cov_apply_covariance.restype = None
-lib.ctoast_cov_apply_covariance.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS") ]
+lib.ctoast_cov_apply_diagonal.restype = None
+lib.ctoast_cov_apply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, npf64, npf64 ]
 
-def cov_apply_covariance(nsub, subsize, nnz, mat, vec):
-    lib.ctoast_cov_apply_covariance(nsub, subsize, nnz, mat, vec)
+def cov_apply_diagonal(nsub, subsize, nnz, mat, vec):
+    lib.ctoast_cov_apply_diagonal(nsub, subsize, nnz, mat.reshape(-1), 
+        vec.reshape(-1))
     return
 
 

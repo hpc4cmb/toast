@@ -121,13 +121,15 @@ class OpSimNoise(Operator):
                     # write to cache
 
                     cachename = "{}_{}".format(self._out, det)
-                    if not tod.cache.exists(cachename):
-                        tod.cache.create(cachename, np.float64,
-                                         (tod.local_samples[1],))
-                    
-                    ref = tod.cache.reference(cachename)[
-                        local_offset:local_offset+chunk_samp]
-                    ref[:] += nsedata
+
+                    ref = None
+                    if tod.cache.exists(cachename):
+                        ref = tod.cache.reference(cachename)
+                    else:
+                        ref = tod.cache.create(cachename, np.float64,
+                                    (tod.local_samples[1],))
+
+                    ref[local_offset:local_offset+chunk_samp] += nsedata
                     del ref
 
                     idet += 1

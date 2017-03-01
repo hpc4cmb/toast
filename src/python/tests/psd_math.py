@@ -24,7 +24,7 @@ class PSDTest(MPITestCase):
 
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -146,7 +146,7 @@ class PSDTest(MPITestCase):
         #self.flags[int(self.nsamp/4):int(self.nsamp/2)] = True
 
     def tearDown(self):
-        del self.data
+        pass
 
 
     def test_autocov_psd(self):
@@ -250,6 +250,8 @@ class PSDTest(MPITestCase):
                 savefile = os.path.join(self.outdir, "out_test_psd_math_rawpsd_{}.png".format(det))
                 plt.savefig(savefile)
                 plt.close()
+
+            del noisetod
 
         """
         autocovs = autocov_psd(self.times, self.signal, self.flags, self.lagmax, self.stationary_period, self.fsample, comm=self.comm)

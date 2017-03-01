@@ -17,7 +17,7 @@ from ..map.pixels import *
 class OpPointingHpixTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -44,7 +44,7 @@ class OpPointingHpixTest(MPITestCase):
             '2b' : np.array([0.0, -axiscoef, 0.0, angterm])
             }
 
-        self.totsamp = 100
+        self.totsamp = 10
         self.rms = 10.0
 
         # every process group creates some number of observations
@@ -70,7 +70,7 @@ class OpPointingHpixTest(MPITestCase):
             self.data.obs.append(ob)
 
     def tearDown(self):
-        del self.data
+        pass
 
 
     def test_hpix_simple(self):
@@ -88,6 +88,8 @@ class OpPointingHpixTest(MPITestCase):
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
+
+        #self.assertTrue(False)
         
         stop = MPI.Wtime()
         elapsed = stop - start
@@ -106,6 +108,8 @@ class OpPointingHpixTest(MPITestCase):
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
+
+        #self.assertTrue(False)
         
         stop = MPI.Wtime()
         elapsed = stop - start
