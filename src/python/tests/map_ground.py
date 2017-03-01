@@ -139,6 +139,26 @@ class MapGroundTest(MPITestCase):
 
         self.nflagged = nflagged
 
+    def test_azel(self):
+        start = MPI.Wtime()
+
+        quats1 = []
+        quats2 = []
+
+        for ob in self.data.obs:
+            tod = ob['tod']
+            for d in tod.local_dets:
+                quats1.append(tod.read_pntg(detector=d))
+                quats2.append(tod.read_pntg(detector=d, azel=True))
+
+        for i in range(10):
+            if np.all(quats1[0][i] == quats2[0][i]):
+                raise Exception('Horizontal and celestial pointing must be different')
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("Az/El test took {:.3f} s".format(elapsed))
+
     def test_grad(self):
         start = MPI.Wtime()
 

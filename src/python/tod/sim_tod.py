@@ -691,7 +691,7 @@ class TODGround(TOD):
             mpicomm=mpicomm, timedist=timedist, detectors=self._detlist,
             detindx=detindx, samples=samples, sizes=sizes)
 
-        self._boresize_azel, self._boresight = self.translate_pointing()
+        self._boresight_azel, self._boresight = self.translate_pointing()
 
     def to_JD(self, t):
         # Convert TOAST UTC time stamp to Julian date
@@ -893,9 +893,6 @@ class TODGround(TOD):
         return
 
     def _get_pntg(self, detector, start, n, azel=False):
-        if self._boresight is None:
-            raise RuntimeError('you must set the precession axis before reading'
-                               ' detector pointing')
         detquat = self._fp[detector]
         if azel:
             data = qa.mult(self._boresight_azel, detquat)
