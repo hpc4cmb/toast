@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
+from toast.mpi import MPI
+
 import os
-if 'TOAST_NO_MPI' in os.environ.keys():
-    from toast import fakempi as MPI
-else:
-    from mpi4py import MPI
 
 import sys
 import re
@@ -107,7 +105,7 @@ def main():
 
     # every process computes its local piece
 
-    tm.covariance_invert(cov.data, args.threshold, rcond=rcond)
+    tm.covariance_invert(cov, args.threshold, rcond=rcond)
 
     if args.single:
         invcov.data[:] = cov.data.astype(np.float32)

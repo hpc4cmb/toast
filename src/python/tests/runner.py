@@ -6,6 +6,7 @@ from ..mpi import MPI
 
 import os
 import unittest
+import warnings
 
 from .._version import __version__
 
@@ -60,19 +61,21 @@ def test():
     suite.addTest( loader.loadTestsFromModule(testdist) )
     suite.addTest( loader.loadTestsFromModule(testqarray) )
     suite.addTest( loader.loadTestsFromModule(testtod) )
-    #suite.addTest( loader.loadTestsFromModule(testpsdmath) )
+    suite.addTest( loader.loadTestsFromModule(testpsdmath) )
     suite.addTest( loader.loadTestsFromModule(testintervals) )
-    #suite.addTest( loader.loadTestsFromModule(testcov) )
     suite.addTest( loader.loadTestsFromModule(testopspmat) )
+    suite.addTest( loader.loadTestsFromModule(testcov) )
     suite.addTest( loader.loadTestsFromModule(testopsdipole) )
-    #suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
-    #suite.addTest( loader.loadTestsFromModule(testopsmadam) )
-    #suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
-    #suite.addTest( loader.loadTestsFromModule(testmapground) )
-    #suite.addTest( loader.loadTestsFromModule(testbinned) )
+    suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
+    suite.addTest( loader.loadTestsFromModule(testopsmadam) )
+    suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
+    suite.addTest( loader.loadTestsFromModule(testmapground) )
+    suite.addTest( loader.loadTestsFromModule(testbinned) )
 
-    mpirunner.run(suite)
-
+    with warnings.catch_warnings(record=True) as w:
+        # Cause all toast warnings to be shown.
+        warnings.simplefilter("always", UserWarning)
+        mpirunner.run(suite)
 
     return
 

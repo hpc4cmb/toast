@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 import warnings
-#import gc
+import gc
 
 from .cbuffer import ToastBuffer
 
@@ -86,12 +86,15 @@ class Cache(object):
         # free all buffers at destruction time
         self._aliases.clear()
         if not self._pymem:
-            for k, v in self._refs.items():
-                # print("__del__ referents for {} are ".format(k), gc.get_referents(v))
-                # print("__del__ referrers for {} are ".format(k), gc.get_referrers(v))
-                # print("__del__ refcount for {} is ".format(k), sys.getrefcount(v) )
-                if sys.getrefcount(v) > 2:
+            keylist = list(self._refs.keys())
+            for k in keylist:
+                gc.collect()
+                referrers = gc.get_referrers(self._refs[k])
+                #print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
+                #print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+                if sys.getrefcount(self._refs[k]) > 2:
                     warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
+                del self._refs[k]
         self._refs.clear()
 
 
@@ -108,12 +111,15 @@ class Cache(object):
             # free all buffers
             self._aliases.clear()
             if not self._pymem:
-                for k, v in self._refs.items():
-                    # print("clear referents for {} are ".format(k), gc.get_referents(v))
-                    # print("clear referrers for {} are ".format(k), gc.get_referrers(v))
-                    # print("clear refcount for {} is ".format(k), sys.getrefcount(v) )
-                    if sys.getrefcount(v) > 2:
+                keylist = list(self._refs.keys())
+                for k in keylist:
+                    gc.collect()
+                    referrers = gc.get_referrers(self._refs[k])
+                    #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
+                    #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+                    if sys.getrefcount(self._refs[k]) > 2:
                         warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
+                    del self._refs[k]
             self._refs.clear()            
         else:
             pat = re.compile(pattern)
@@ -139,13 +145,15 @@ class Cache(object):
 
         if self.exists(name):
             raise RuntimeError("Data buffer or alias {} already exists".format(name))
-        
+
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
         else:
             flatsize = 1
-            for s in shape:
-                flatsize *= s
+            for s in range(len(shape)):
+                if shape[s] <= 0:
+                    raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
+                flatsize *= shape[s]
             self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
             
         return self._refs[name]
@@ -248,16 +256,26 @@ class Cache(object):
         Returns:
             (array): a numpy array wrapping the raw data buffer or None if it does not exist.
         """
-        ref = None
+        # Do the existence check first, to avoid creating extra
+        # references if we are not returning a reference.
+        check = False
         if name in self._refs.keys():
-            ref = self._refs[name]
+            check = True
         elif name in self._aliases.keys():
-            ref = self._refs[self._aliases[name]]
+            check = True
 
-        if return_ref:
-            return ref
+        if not return_ref:
+            return check
         else:
-            return ref is not None
+            if not check:
+                return None
+            else:
+                ref = None
+                if name in self._refs.keys():
+                    ref = self._refs[name]
+                elif name in self._aliases.keys():
+                    ref = self._refs[self._aliases[name]]
+                return ref
 
 
     def reference(self, name):
@@ -291,7 +309,7 @@ class Cache(object):
             (list): List of key strings.
         """
 
-        return self._refs.keys()
+        return list(self._refs.keys())
 
 
     def aliases(self):
@@ -318,6 +336,7 @@ class Cache(object):
         for key in self.keys():
             ref = self.reference(key)
             sz = ref.nbytes
+            del ref
             tot += sz
             print(' - {:25} {:5.2f} MB'.format(key,sz/2**20))
                   

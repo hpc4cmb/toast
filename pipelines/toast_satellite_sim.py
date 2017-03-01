@@ -1,18 +1,13 @@
 #!/usr/bin/env python
 
+from toast.mpi import MPI
+
 import os
-if 'TOAST_NO_MPI' in os.environ.keys():
-    from toast import fakempi as MPI
-else:
-    from mpi4py import MPI
 
 import re
 import argparse
 
-try:
-   import cPickle as pickle
-except:
-   import pickle
+import pickle
 
 import numpy as np
 
@@ -349,7 +344,7 @@ def main():
         start = stop
 
         # invert it
-        tm.covariance_invert(invnpp.data, 1.0e-3)
+        tm.covariance_invert(invnpp, 1.0e-3)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -432,7 +427,7 @@ def main():
                 print("  Building noise weighted map {:04d} took {:.3f} s".format(mc, elapsed))
             start = stop
 
-            tm.covariance_apply(invnpp.data, zmap.data)
+            tm.covariance_apply(invnpp, zmap)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

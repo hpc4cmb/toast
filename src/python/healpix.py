@@ -12,8 +12,7 @@ def ang2vec(theta, phi):
     n = len(theta)
     if len(phi) != n:
         raise RuntimeError("theta / phi vectors must have the same length")
-    vec = np.zeros(3*n, dtype=np.float64)
-    ctoast.healpix_ang2vec(n, theta.flatten().astype(np.float64, copy=False), phi.flatten().astype(np.float64, copy=False), vec)
+    vec = ctoast.healpix_ang2vec(n, theta.flatten().astype(np.float64, copy=False), phi.flatten().astype(np.float64, copy=False))
     if n == 1:
         return vec
     else:
@@ -26,9 +25,7 @@ def vec2ang(vec):
         n = 1
     else:
         n = vec.shape[0]
-    theta = np.zeros(n, dtype=np.float64)
-    phi = np.zeros(n, dtype=np.float64)
-    ctoast.healpix_vec2ang(n, vec.flatten().astype(np.float64, copy=False), theta, phi)
+    (theta, phi) = ctoast.healpix_vec2ang(n, vec.flatten().astype(np.float64, copy=False))
     if n == 1:
         return (theta[0], phi[0])
     else:
@@ -41,10 +38,7 @@ def vecs2angpa(vec):
         n = 1
     else:
         n = vec.shape[0]
-    theta = np.zeros(n, dtype=np.float64)
-    phi = np.zeros(n, dtype=np.float64)
-    pa = np.zeros(n, dtype=np.float64)
-    ctoast.healpix_vecs2angpa(n, vec.flatten().astype(np.float64, copy=False), theta, phi, pa)
+    (theta, phi, pa) = ctoast.healpix_vecs2angpa(n, vec.flatten().astype(np.float64, copy=False))
     if n == 1:
         return (theta[0], phi[0], pa[0])
     else:
@@ -99,25 +93,16 @@ class Pixels(object):
             n = 1
         else:
             n = vec.shape[0]
-        phi = np.zeros(n, dtype=np.float64)
-        region = np.zeros(n, dtype=np.int32)
-        z = np.zeros(n, dtype=np.float64)
-        rtz = np.zeros(n, dtype=np.float64)
         ctoast.healpix_pixels_vec2zphi(self.hpix, n, 
-            vec.flatten().astype(np.float64, copy=False), 
-            phi, region, z, rtz)
+            vec.flatten().astype(np.float64, copy=False))
         return (phi, region, z, rtz)
 
     def theta2z(self, theta):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(theta)
-        region = np.zeros(n, dtype=np.int32)
-        z = np.zeros(n, dtype=np.float64)
-        rtz = np.zeros(n, dtype=np.float64)
-        ctoast.healpix_pixels_theta2z(self.hpix, n, 
-            theta.flatten().astype(np.float64, copy=False), 
-            region, z, rtz)
+        (region, z, rtz) = ctoast.healpix_pixels_theta2z(self.hpix, n, 
+                            theta.flatten().astype(np.float64, copy=False))
         return (region, z, rtz)
 
     def zphi2nest(self, phi, region, z, rtz):
@@ -130,12 +115,11 @@ class Pixels(object):
             raise RuntimeError("All inputs must be the same length")
         if len(rtz) != n:
             raise RuntimeError("All inputs must be the same length")
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_zphi2nest(self.hpix, n, 
-            phi.flatten().astype(np.float64, copy=False), 
-            region.flatten().astype(np.int32, copy=False), 
-            z.flatten().astype(np.float64, copy=False), 
-            rtz.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_zphi2nest(self.hpix, n, 
+                    phi.flatten().astype(np.float64, copy=False), 
+                    region.flatten().astype(np.int32, copy=False), 
+                    z.flatten().astype(np.float64, copy=False), 
+                    rtz.flatten().astype(np.float64, copy=False))
         return pix
 
     def zphi2ring(self, phi, region, z, rtz):
@@ -148,12 +132,11 @@ class Pixels(object):
             raise RuntimeError("All inputs must be the same length")
         if len(rtz) != n:
             raise RuntimeError("All inputs must be the same length")
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_zphi2nest(self.hpix, n, 
-            phi.flatten().astype(np.float64, copy=False), 
-            region.flatten().astype(np.int32, copy=False), 
-            z.flatten().astype(np.float64, copy=False), 
-            rtz.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_zphi2nest(self.hpix, n, 
+                    phi.flatten().astype(np.float64, copy=False), 
+                    region.flatten().astype(np.int32, copy=False), 
+                    z.flatten().astype(np.float64, copy=False), 
+                    rtz.flatten().astype(np.float64, copy=False))
         return pix
 
     def ang2nest(self, theta, phi):
@@ -162,10 +145,9 @@ class Pixels(object):
         n = len(theta)
         if len(phi) != n:
             raise RuntimeError("All inputs must be the same length")
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_ang2nest(self.hpix, n, 
-            theta.flatten().astype(np.float64, copy=False), 
-            phi.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_ang2nest(self.hpix, n, 
+                    theta.flatten().astype(np.float64, copy=False), 
+                    phi.flatten().astype(np.float64, copy=False))
         return pix
 
     def ang2ring(self, theta, phi):
@@ -174,10 +156,9 @@ class Pixels(object):
         n = len(theta)
         if len(phi) != n:
             raise RuntimeError("All inputs must be the same length")
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_ang2ring(self.hpix, n, 
-            theta.flatten().astype(np.float64, copy=False), 
-            phi.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_ang2ring(self.hpix, n, 
+                    theta.flatten().astype(np.float64, copy=False), 
+                    phi.flatten().astype(np.float64, copy=False))
         return pix
 
     def vec2nest(self, vec):
@@ -188,9 +169,8 @@ class Pixels(object):
             n = 1
         else:
             n = vec.shape[0]
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_vec2nest(self.hpix, n, 
-            vec.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_vec2nest(self.hpix, n, 
+                    vec.flatten().astype(np.float64, copy=False))
         return pix
 
     def vec2ring(self, vec):
@@ -201,62 +181,55 @@ class Pixels(object):
             n = 1
         else:
             n = vec.shape[0]
-        pix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_vec2ring(self.hpix, n, 
-            vec.flatten().astype(np.float64, copy=False), pix)
+        pix = ctoast.healpix_pixels_vec2ring(self.hpix, n, 
+                    vec.flatten().astype(np.float64, copy=False))
         return pix
 
     def ring2nest(self, ringpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(ringpix)
-        nestpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_ring2nest(self.hpix, n, 
-            ringpix.flatten().astype(np.int64, copy=False), nestpix)
+        nestpix = ctoast.healpix_pixels_ring2nest(self.hpix, n, 
+                        ringpix.flatten().astype(np.int64, copy=False))
         return nestpix
 
     def nest2ring(self, nestpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(nestpix)
-        ringpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_nest2ring(self.hpix, n, 
-            nestpix.flatten().astype(np.int64, copy=False), ringpix)
+        ringpix = ctoast.healpix_pixels_nest2ring(self.hpix, n, 
+                        nestpix.flatten().astype(np.int64, copy=False))
         return ringpix
 
     def degrade_ring(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(inpix)
-        outpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_degrade_ring(self.hpix, factor, n, 
-            inpix.flatten().astype(np.int64, copy=False), outpix)
+        outpix = ctoast.healpix_pixels_degrade_ring(self.hpix, factor, n, 
+                        inpix.flatten().astype(np.int64, copy=False))
         return outpix
 
     def degrade_nest(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(inpix)
-        outpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_degrade_nest(self.hpix, factor, n, 
-            inpix.flatten().astype(np.int64, copy=False), outpix)
+        outpix = ctoast.healpix_pixels_degrade_nest(self.hpix, factor, n, 
+                        inpix.flatten().astype(np.int64, copy=False))
         return outpix
 
     def upgrade_ring(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(inpix)
-        outpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_upgrade_ring(self.hpix, factor, n, 
-            inpix.flatten().astype(np.int64, copy=False), outpix)
+        outpix = ctoast.healpix_pixels_upgrade_ring(self.hpix, factor, n, 
+                        inpix.flatten().astype(np.int64, copy=False))
         return outpix
 
     def upgrade_nest(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
         n = len(inpix)
-        outpix = np.zeros(n, dtype=np.int64)
-        ctoast.healpix_pixels_upgrade_nest(self.hpix, factor, n, 
-            inpix.flatten().astype(np.int64, copy=False), outpix)
+        outpix = ctoast.healpix_pixels_upgrade_nest(self.hpix, factor, n, 
+                        inpix.flatten().astype(np.int64, copy=False))
         return outpix
 

@@ -127,4 +127,23 @@ class fftTest : public ::testing::Test {
 };
 
 
+class covTest : public ::testing::Test {
+
+    public :
+
+        covTest () { }
+        ~covTest () { }
+        virtual void SetUp() { }
+        virtual void TearDown() { }
+
+        static const int64_t nsm;
+        static const int64_t npix;
+        static const int64_t nnz;
+        static const int64_t nsamp;
+        static const int64_t scale;
+
+};
+
+
+
 #endif

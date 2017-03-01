@@ -15,7 +15,7 @@ class CacheTest(MPITestCase):
 
     def setUp(self):
         self.nsamp = 1000
-        self.cache = Cache()
+        self.cache = Cache(pymem=False)
         self.pycache = Cache(pymem=True)
         self.types = {
             'f64': np.float64,
@@ -39,34 +39,40 @@ class CacheTest(MPITestCase):
         start = MPI.Wtime()
 
         for k, v in self.types.items():
-            self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
+            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
+            del ref
 
         for k, v in self.types.items():
             data = self.cache.reference('test-{}'.format(k))
             data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
+            del data
 
         for k, v in self.types.items():
-            data = self.cache.reference('test-{}'.format(k))
-
-        del data
+            ex = self.cache.exists('test-{}'.format(k))
+            self.assertTrue(ex)
 
         for k, v in self.types.items():
             self.cache.destroy('test-{}'.format(k))
 
+        self.cache.clear()
+
         for k, v in self.types.items():
-            self.pycache.create('test-{}'.format(k), v, (self.nsamp,4))
+            ref = self.pycache.create('test-{}'.format(k), v, (self.nsamp,4))
+            del ref
 
         for k, v in self.types.items():
             data = self.pycache.reference('test-{}'.format(k))
             data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
+            del data
 
         for k, v in self.types.items():
-            data = self.pycache.reference('test-{}'.format(k))
+            ex = self.pycache.exists('test-{}'.format(k))
+            self.assertTrue(ex)
 
         for k, v in self.types.items():
             self.pycache.destroy('test-{}'.format(k))
 
-        #self.assertTrue(False)
+        self.cache.clear()
 
         stop = MPI.Wtime()
         elapsed = stop - start
@@ -76,26 +82,24 @@ class CacheTest(MPITestCase):
     def test_alias(self):
         start = MPI.Wtime()
 
-        self.cache.put('test', np.arange(10))
+        ref = self.cache.put('test', np.arange(10))
+        del ref
 
         self.cache.add_alias('test-alias', 'test')
-
         self.cache.add_alias('test-alias-2', 'test')
 
         data = self.cache.reference('test-alias')
+        del data
 
         self.cache.destroy('test-alias')
 
         data = self.cache.reference('test-alias-2')
-
         del data
 
         self.cache.destroy('test')
 
-        if self.cache.exists('test-alias-2'):
-            raise Exception('Alias exists after destroying target.')
-
-        #self.assertTrue(False)
+        ex = self.cache.exists('test-alias-2')
+        self.assertFalse(ex)
 
         stop = MPI.Wtime()
         elapsed = stop - start

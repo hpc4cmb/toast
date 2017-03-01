@@ -25,7 +25,7 @@ from .. import ctoast as ctoast
 class CovarianceTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -130,41 +130,67 @@ class CovarianceTest(MPITestCase):
 
             self.data.obs.append(ob)
 
+
+    def tearDown(self):
+        pass
+
+
     def test_accum(self):
         nsm = 2
         npix = 3
         nnz = 4
+        block = int(nnz * (nnz+1) / 2)
         scale = 2.0
         nsamp = nsm * npix
 
-        fakedata = np.zeros((nsm, npix, nnz), dtype=np.float64)
-        fakehits = np.zeros((nsm, npix, 1), dtype=np.int64)
-        checkdata = np.zeros((nsm, npix, nnz), dtype=np.float64)
-        checkhits = np.zeros((nsm, npix, 1), dtype=np.int64)
-        sm = np.repeat(np.arange(nsm, dtype=np.int64), npix)
-        pix = np.tile(np.arange(npix, dtype=np.int64), nsm)
-        wt = np.tile(np.arange(nnz, dtype=np.float64), nsamp).reshape(-1, nnz)
+        fake = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=nnz, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        check = fake.duplicate()
+
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=1, dtype=np.int64, submap=npix, local=np.arange(nsm))
+        checkhits = hits.duplicate()
+
+        invn = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=block, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        checkinvn = invn.duplicate()
+
+        sm = np.zeros(nsamp, dtype=np.int64)
+        pix = np.zeros(nsamp, dtype=np.int64)
+        wt = np.zeros(nsamp*nnz, dtype=np.float64)
+
+        for i in range(nsamp):
+            sm[i] = i % nsm
+            pix[i] = i % npix
+            for k in range(nnz):
+                wt[i*nnz + k] = float(k+1)
 
         signal = np.random.normal(size=nsamp)
 
-        nh._accumulate_diagonal(fakedata, 1, fakehits, 1, np.zeros((1,1,1), dtype=np.float64), 0, signal, sm, pix, wt, scale)
-
-        ctoast.cov_accumulate_diagonal(nsm, npix, nnz, 
-            fakedata.flatten().astype(np.float64, copy=False), 
-            fakehits.flatten().astype(np.int64, copy=False), 
-            np.zeros(1, dtype=np.float64), nsamp, 
-            signal.flatten().astype(np.float64, copy=False), 
-            sm.flatten().astype(np.int64, copy=False), 
-            pix.flatten().astype(np.int64, copy=False), 
-            weights.flatten().astype(np.float64, copy=False), scale)
+        ctoast.cov_accumulate_diagonal(nsm, npix, nnz, nsamp, sm, pix, wt, scale, 
+            signal, fake.data, hits.data, invn.data)
 
         for i in range(nsamp):
-            checkhits[sm[i], pix[i], 0] += 1
+            checkhits.data[sm[i], pix[i], 0] += 1
+            off = 0
             for j in range(nnz):
-                checkdata[sm[i], pix[i], j] += scale * signal[i] * wt[i,j]
+                check.data[sm[i], pix[i], j] += scale * signal[i] * wt[i*nnz+j]
+                for k in range(j, nnz):
+                    checkinvn.data[sm[i], pix[i], off] += scale * wt[i*nnz+j] * wt[i*nnz+k]
+                    off += 1
 
-        nt.assert_equal(fakehits, checkhits)
-        nt.assert_almost_equal(fakedata, checkdata)
+        # for i in range(nsamp):
+        #     print("{}: {} {}".format(i, checkhits.data[sm[i], pix[i], 0], hits.data[sm[i], pix[i], 0]))
+        #     off = 0
+        #     for j in range(nnz):
+        #         print("  {}:  {}  {}".format(j, check.data[sm[i], pix[i], j], fake.data[sm[i], pix[i], j]))
+        #         for k in range(j, nnz):
+        #             print("    {}:  {}  {}".format(off, checkinvn.data[sm[i], pix[i], off], invn.data[sm[i], pix[i], off]))
+        #             off += 1
+
+        nt.assert_equal(hits.data, checkhits.data)
+        nt.assert_almost_equal(fake.data, check.data)
+        nt.assert_almost_equal(invn.data, checkinvn.data)
+
+        #self.assertTrue(False)
+
         return
 
 
@@ -176,8 +202,10 @@ class CovarianceTest(MPITestCase):
         nsamp = nsm * npix
         nelem = int(nnz * (nnz+1) / 2)
         threshold = 1.0e-6
-        fakedata = np.zeros((nsm, npix, nelem), dtype=np.float64)
-        checkdata = np.zeros((nsm, npix, nelem), dtype=np.float64)
+
+        invn = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=nelem, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        check = invn.duplicate()
+
         rowdata = 10.0 * np.arange(nnz, 0, -1)
 
         for i in range(nsm):
@@ -185,20 +213,32 @@ class CovarianceTest(MPITestCase):
                 off = 0
                 for k in range(nnz):
                     for m in range(k, nnz):
-                        fakedata[i,j,off] = rowdata[m-k]
-                        checkdata[i,j,off] = fakedata[i,j,off]
+                        invn.data[i,j,off] = rowdata[m-k]
+                        check.data[i,j,off] = invn.data[i,j,off]
                         off += 1
 
         # invert twice
-        covariance_invert(fakedata, threshold)
-        covariance_invert(fakedata, threshold)
+        covariance_invert(invn, threshold)
+        covariance_invert(invn, threshold)
 
-        nt.assert_almost_equal(fakedata, checkdata)
+        # for i in range(nsm):
+        #     for j in range(npix):
+        #         off = 0
+        #         print("sm {}, pix {}:".format(i, j))
+        #         for k in range(nnz):
+        #             for m in range(k, nnz):
+        #                 print("  {} {}".format(fakedata[i,j,off], checkdata[i,j,off]))
+        #                 off += 1
+
+        nt.assert_almost_equal(invn.data, check.data)
         return
 
 
     def test_invnpp(self):
         start = MPI.Wtime()
+
+        op = OpSimNoise(realization=0)
+        op.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
@@ -212,12 +252,15 @@ class CovarianceTest(MPITestCase):
         allsm = np.floor_divide(localpix, self.subnpix)
         sm = set(allsm)
         localsm = np.array(sorted(sm), dtype=np.int64)
+        #print(localsm)
 
         # construct a distributed map to store the covariance and hits
 
         invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp.data.fill(0.0)
 
         hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+        hits.data.fill(0)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
@@ -228,22 +271,29 @@ class CovarianceTest(MPITestCase):
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits, name="noise")
         build_invnpp.exec(self.data)
+
+        # for i in range(invnpp.data.shape[0]):
+        #     for j in range(invnpp.data.shape[1]):
+        #         print("sm {}, pix {}:  hits = {}".format(i, j, hits.data[i,j,0]))
+        #         for k in range(invnpp.data.shape[2]):
+        #             print("  {}".format(invnpp.data[i,j,k]))
 
         invnpp.allreduce()
         hits.allreduce()
 
         # invert it
-        checkdata = np.copy(invnpp.data)
-        covariance_invert(invnpp.data, 1.0e-3)
-        covariance_invert(invnpp.data, 1.0e-3)
+        check = invnpp.duplicate()
+        covariance_invert(invnpp, 1.0e-14)
+        covariance_invert(invnpp, 1.0e-14)
 
         # Matrices that failed the rcond test are set to zero
-        nonzero = invnpp.data != 0
-        if np.sum(nonzero) == 0: raise Exception('All matrices failed the rcond test.')
+        nonzero = (np.absolute(invnpp.data) > 1.0e-12)
+        if np.sum(nonzero) == 0:
+            raise Exception('All matrices failed the rcond test.')
 
-        nt.assert_almost_equal(invnpp.data[nonzero], checkdata[nonzero])
+        nt.assert_almost_equal(invnpp.data[nonzero], check.data[nonzero])
 
         return
 
@@ -267,9 +317,12 @@ class CovarianceTest(MPITestCase):
         # construct a distributed map to store the covariance and hits
 
         invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+
         invnpp2 = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, localpix=localpix)
 
         nt.assert_equal( invnpp.local, invnpp2.local )
+
+        #self.assertTrue(False)
 
         return
 
@@ -312,14 +365,14 @@ class CovarianceTest(MPITestCase):
         hits.allreduce()
 
         # invert it
-        checkdata = np.copy(invnpp.data)
-        covariance_invert(invnpp.data, 1.0e-3)
+        check = invnpp.duplicate()
+        covariance_invert(invnpp, 1.0e-3)
 
         # multiply the two
-        covariance_multiply(checkdata, invnpp.data)
+        covariance_multiply(check, invnpp)
 
         # check that the multiplied matrices are unit matrices
-        nsubmap, npix, nblock = checkdata.shape
+        nsubmap, npix, nblock = check.data.shape
         nnz = int( ( (np.sqrt(8*nblock) - 1) / 2 ) + 0.5 )
         for i in range(nsubmap):
             for j in range(npix):
@@ -330,9 +383,9 @@ class CovarianceTest(MPITestCase):
                 for k in range(nnz):
                     for m in range(k, nnz):
                         if k == m:
-                            nt.assert_almost_equal( checkdata[i,j,off], 1. )
+                            nt.assert_almost_equal( check.data[i,j,off], 1. )
                         else:
-                            nt.assert_almost_equal( checkdata[i,j,off], 0. )
+                            nt.assert_almost_equal( check.data[i,j,off], 0. )
                         off += 1
 
         return
@@ -380,13 +433,13 @@ class CovarianceTest(MPITestCase):
         hits.allreduce()
 
         # invert it
-        covariance_invert(invnpp.data, 1.0e-3)
 
-        checkdata = np.copy(invnpp.data)
+        covariance_invert(invnpp, 1.0e-3)
+        rcond = covariance_rcond(invnpp)
 
-        checkhits = np.copy(hits.data)
-
-        rcond.data = covariance_rcond(invnpp.data)
+        check = invnpp.duplicate()
+        checkhits = hits.duplicate()
+        checkrcond = rcond.duplicate()
 
         # write this out...
 
@@ -411,8 +464,7 @@ class CovarianceTest(MPITestCase):
 
         invnpp.write_healpix_fits(outfile)
         rcond.write_healpix_fits(rcondfile)
-
-        checkrcond = np.copy(rcond.data)
+        hits.write_healpix_fits(hitfile)
 
         print("proc {} invnpp.data on write sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
 
@@ -422,50 +474,48 @@ class CovarianceTest(MPITestCase):
         print("proc {} invnpp.data on read sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
 
         diffdata = invnpp.duplicate()
-        diffdata.data -= checkdata
+        diffdata.data -= check.data
 
         difffile = os.path.join(self.mapdir, 'readwrite_diff.fits')
         diffdata.write_healpix_fits(difffile)
-
-        hits.write_healpix_fits(hitfile)
 
         if self.comm.rank == 0:
             import matplotlib.pyplot as plt
 
             dat = hp.read_map(outfile)
             outfile = "{}.png".format(outfile)
-            hp.mollview(dat, xsize=1600)
+            hp.mollview(dat, xsize=int(1600))
             plt.savefig(outfile)
             plt.close()
 
             dat = hp.read_map(difffile)
             outfile = "{}.png".format(difffile)
-            hp.mollview(dat, xsize=1600)
+            hp.mollview(dat, xsize=int(1600))
             plt.savefig(outfile)
             plt.close()
 
             dat = hp.read_map(hitfile)
             outfile = "{}.png".format(hitfile)
-            hp.mollview(dat, xsize=1600)
+            hp.mollview(dat, xsize=int(1600))
             plt.savefig(outfile)
             plt.close()
 
             dat = hp.read_map(rcondfile)
             outfile = "{}.png".format(rcondfile)
-            hp.mollview(dat, xsize=1600)
+            hp.mollview(dat, xsize=int(1600))
             plt.savefig(outfile)
             plt.close()
 
         rcond.data.fill(0.0)
         rcond.read_healpix_fits(rcondfile)
 
-        nt.assert_almost_equal(rcond.data, checkrcond, decimal=6)
+        nt.assert_almost_equal(rcond.data, checkrcond.data, decimal=6)
         #nt.assert_almost_equal(invnpp.data, checkdata, decimal=6)
 
         hits.data.fill(0)
         hits.read_healpix_fits(hitfile)
 
-        nt.assert_equal(hits.data, checkhits)
+        nt.assert_equal(hits.data, checkhits.data)
 
         return
 

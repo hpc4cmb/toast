@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
+from toast.mpi import MPI
+
 import os
 import re
 import argparse
 import pickle
 
-if 'TOAST_NO_MPI' in os.environ.keys():
-    from toast import fakempi as MPI
-else:
-    from mpi4py import MPI
 import numpy as np
 from scipy.constants import degree
 
@@ -420,7 +418,7 @@ def main():
         start = stop
 
         # invert it
-        tm.covariance_invert(invnpp.data, 1.0e-3)
+        tm.covariance_invert(invnpp, 1.0e-3)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -507,7 +505,7 @@ def main():
                       ''.format(mc, elapsed))
             start = stop
 
-            tm.covariance_apply(invnpp.data, zmap.data)
+            tm.covariance_apply(invnpp, zmap)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

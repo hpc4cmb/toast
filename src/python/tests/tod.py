@@ -16,7 +16,7 @@ class TODTest(MPITestCase):
 
 
     def setUp(self):
-        self.outdir = "tests_output"
+        self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
@@ -40,7 +40,7 @@ class TODTest(MPITestCase):
             self.tod.write_pntg(detector=d, local_start=0, data=self.pntgvec)
 
     def tearDown(self):
-        self.tod.cache.clear()
+        pass
 
 
     def test_props(self):
