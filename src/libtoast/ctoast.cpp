@@ -6,6 +6,9 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <ctoast.hpp>
 
+#include <sstream>
+#include <cstring>
+
 
 //--------------------------------------
 // Global library initialize / finalize
@@ -481,6 +484,43 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 }
 
 //--------------------------------------
+// Operator helpers
+//--------------------------------------
+
+char ** ctoast_string_alloc ( size_t nstring, size_t length ) {
+    char ** ret = (char**) malloc( nstring * sizeof(char*) );
+    
+    if ( ! ret ) {
+        std::ostringstream o;
+        o << "failed to allocate array of " << nstring << " C strings";
+        TOAST_THROW( o.str().c_str() );
+    }
+
+    for ( size_t i = 0; i < nstring; ++i ) {
+        ret[i] = (char*) malloc ( (length + 1) * sizeof(char) );
+        if ( ! ret[i] ) {
+            std::ostringstream o;
+            o << "failed to allocate C string of " << (length+1) << " characters";
+            TOAST_THROW( o.str().c_str() );
+        }
+    }
+
+    return ret;
+}
+
+void ctoast_string_free ( size_t nstring, char ** str ) {
+    if ( str != NULL ) {
+        for ( size_t i = 0; i < nstring; ++i ) {
+            if ( str[i] != NULL ) {
+                free( str[i] );
+            }
+        }
+        free(str);
+    }
+    return;
+}
+
+//--------------------------------------
 // Atmosphere sub-library
 //--------------------------------------
 
@@ -490,6 +530,8 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 //--------------------------------------
 // TOD sub-library
 //--------------------------------------
+
+
 
 
 //--------------------------------------
