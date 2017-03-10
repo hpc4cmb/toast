@@ -184,10 +184,10 @@ TEST_F( qarrayTest, slerp ) {
     size_t n = 2;
     size_t ninterp = 4;
 
-    double q[4*n] = { 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 };
-    double qinterp[4*ninterp];
-    double time[n] = { 0.0, 9.0 };
-    double targettime[ninterp] = { 0.0, 3.0, 4.5, 9.0 };
+    double q[8] = { 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 };
+    double qinterp[16];
+    double time[2] = { 0.0, 9.0 };
+    double targettime[4] = { 0.0, 3.0, 4.5, 9.0 };
     double qcheck1[4];
     double qcheck2[4];
 

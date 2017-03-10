@@ -30,11 +30,11 @@
 #
 # LAST MODIFICATION
 #
-#   2016-11-22
+#   2017-03-10
 #
 # COPYING
 #
-#   Copyright (c) 2016 Theodore Kisner <tskisner@lbl.gov>
+#   Copyright (c) 2016-2017 Theodore Kisner <tskisner@lbl.gov>
 #
 #   All rights reserved.
 #
@@ -91,20 +91,34 @@ else
    acx_mkl_save_CPPFLAGS="$CPPFLAGS"
    acx_mkl_save_LIBS="$LIBS"
 
-   # Test serial compile and linking
+   # Test compile and linking.  See if we need to link to libmemkind.
 
    # First, try user-specified location or linked-by-default (for example using
    # a compiler wrapper script)
 
-   MKL="$acx_mkl_ldflags -lmkl_rt -ldl"
-   CPPFLAGS="$CPPFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
+   MKL="$acx_mkl_ldflags -lmkl_rt -lmemkind -ldl"
+   CPPFLAGS="$acx_mkl_save_CPPFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
    LIBS="$acx_mkl_save_LIBS $MKL $PTHREAD_LIBS $MATH"
 
    AC_CHECK_HEADERS([mkl_dfti.h])
 
-   AC_MSG_CHECKING([for DftiCreateDescriptor in user specified location])
+   AC_MSG_CHECKING([for DftiCreateDescriptor in user specified location with libmemkind])
    AC_TRY_LINK_FUNC(DftiCreateDescriptor, [acx_mkl_ok=yes;AC_DEFINE(HAVE_MKL,1,[Define if you have the Intel MKL library.])], [])
    AC_MSG_RESULT($acx_mkl_ok)
+
+   if test $acx_mkl_ok = no; then
+
+      MKL="$acx_mkl_ldflags -lmkl_rt -ldl"
+      CPPFLAGS="$acx_mkl_save_CPPFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
+      LIBS="$acx_mkl_save_LIBS $MKL $PTHREAD_LIBS $MATH"
+
+      AC_CHECK_HEADERS([mkl_dfti.h])
+
+      AC_MSG_CHECKING([for DftiCreateDescriptor in user specified location])
+      AC_TRY_LINK_FUNC(DftiCreateDescriptor, [acx_mkl_ok=yes;AC_DEFINE(HAVE_MKL,1,[Define if you have the Intel MKL library.])], [])
+      AC_MSG_RESULT($acx_mkl_ok)
+
+   fi
 
    if test $acx_mkl_ok = no; then
       MKL_CPPFLAGS=""

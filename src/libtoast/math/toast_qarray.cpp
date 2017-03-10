@@ -255,7 +255,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
     
-    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( 4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::ln ( n, q_in, q_tmp );
     for ( size_t i = 0; i < n; ++i ) {
