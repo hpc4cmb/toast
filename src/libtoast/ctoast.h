@@ -178,6 +178,13 @@ void ctoast_healpix_pixels_upgrade_ring ( ctoast_healpix_pixels * hpix, int fact
 
 void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
 
+//--------------------------------------
+// Operator helpers
+//--------------------------------------
+
+char ** ctoast_string_alloc ( size_t nstring, size_t length );
+
+void ctoast_string_free ( size_t nstring, char ** str );
 
 //--------------------------------------
 // Atmosphere sub-library

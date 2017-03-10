@@ -605,6 +605,19 @@ def healpix_pixels_upgrade_nest(hpix, factor, n, inpix):
     return outpix
 
 #--------------------------------------
+#  Operator Helpers
+#--------------------------------------
+
+lib.ctoast_string_alloc.restype = ct.POINTER(ct.c_char_p)
+lib.ctoast_string_alloc.argtypes = [ ct.c_ulong, ct.c_ulong ]
+
+lib.ctoast_string_free.restype = None
+lib.ctoast_string_free.argtypes = [ ct.c_ulong, ct.POINTER(ct.c_char_p) ]
+
+
+
+
+#--------------------------------------
 #  ATM sublibrary
 #--------------------------------------
 
