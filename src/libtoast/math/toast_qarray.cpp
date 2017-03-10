@@ -51,12 +51,8 @@ void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, 
 // Normalize quaternion array.
 
 void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_in, double * q_out ) {
-    double * norm = (double*) malloc ( n * sizeof(double) );
-    if ( norm == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << n << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+
+    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, m, d, q_in, norm );
 
@@ -66,7 +62,7 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
         }
     }
 
-    free ( norm );
+    toast::mem::aligned_free ( norm );
     return;
 }
 
@@ -74,12 +70,8 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
 // Normalize quaternion array in place.
 
 void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q ) {
-    double * norm = (double*) malloc ( n * sizeof(double) );
-    if ( norm == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << n << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+
+    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, m, d, q, norm );
 
@@ -89,7 +81,7 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
         }
     }
 
-    free ( norm );
+    toast::mem::aligned_free ( norm );
     return;
 }
 
@@ -98,12 +90,7 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
 
 void toast::qarray::rotate ( size_t n, double const * q, double const * v_in, double * v_out ) {
 
-    double * q_unit = (double*) malloc ( 4 * n * sizeof(double) );
-    if ( q_unit == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << (4*n) << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+    double * q_unit = static_cast < double * > ( toast::mem::aligned_alloc ( 4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::normalize ( n, 4, 4, q, q_unit );
 
@@ -129,7 +116,7 @@ void toast::qarray::rotate ( size_t n, double const * q, double const * v_in, do
         v_out[vf + 2] = 2*( (xz - yw) * v_in[vf + 0] + (xw + yz) * v_in[vf + 1] + (x2 + y2) * v_in[vf + 2] ) + v_in[vf + 2];
     }
 
-    free ( q_unit );
+    toast::mem::aligned_free ( q_unit );
     return;
 }
 
@@ -216,12 +203,7 @@ void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * t
 
 void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normv = (double*) malloc ( n * sizeof(double) );
-    if ( normv == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << n << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+    double * normv = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, 4, 3, q_in, normv );
     
@@ -237,7 +219,7 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
         }
     }
 
-    free ( normv );
+    toast::mem::aligned_free ( normv );
     return;
 }
 
@@ -246,12 +228,7 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normq = (double*) malloc ( n * sizeof(double) );
-    if ( normq == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << n << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+    double * normq = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, 4, 4, q_in, normq );
 
@@ -269,7 +246,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
         }
     }
 
-    free ( normq );
+    toast::mem::aligned_free ( normq );
     return;
 }
 
@@ -278,12 +255,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
     
-    double * q_tmp = (double*) malloc ( 4 * n * sizeof(double) );
-    if ( q_tmp == NULL ) {
-        std::ostringstream o;
-        o << "cannot allocate " << (4*n) << " doubles";
-        TOAST_THROW( o.str().c_str() );
-    }
+    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::ln ( n, q_in, q_tmp );
     for ( size_t i = 0; i < n; ++i ) {
@@ -294,7 +266,7 @@ void toast::qarray::pow ( size_t n, double const * p, double const * q_in, doubl
 
     toast::qarray::exp ( n, q_tmp, q_out );
 
-    free ( q_tmp );
+    toast::mem::aligned_free ( q_tmp );
     return;
 }
 
