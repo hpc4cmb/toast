@@ -10,13 +10,17 @@ a BSD-style license that can be found in the LICENSE file.
 #include <config.h>
 #include <toast.hpp>
 
-#include <toast_test.hpp>
-
-
 namespace toast {
 
 
 }
 
+#include <toast_math_internal.hpp>
+#include <toast_atm_internal.hpp>
+#include <toast_tod_internal.hpp>
+#include <toast_fod_internal.hpp>
+#include <toast_map_internal.hpp>
+
+#include <toast_test.hpp>
 
 #endif
