@@ -115,9 +115,16 @@ typedef struct ctoast_fft_r1d_ ctoast_fft_r1d;
 ctoast_fft_r1d * ctoast_fft_r1d_alloc ( int64_t length, int64_t n, ctoast_fft_plan_type type, ctoast_fft_direction dir, double scale );
 void ctoast_fft_r1d_free ( ctoast_fft_r1d * frd );
 
+int64_t ctoast_fft_r1d_length ( ctoast_fft_r1d * frd );
+int64_t ctoast_fft_r1d_count ( ctoast_fft_r1d * frd );
+
 double ** ctoast_fft_r1d_tdata ( ctoast_fft_r1d * frd );
+void ctoast_fft_r1d_tdata_set ( ctoast_fft_r1d * frd, double ** data );
+void ctoast_fft_r1d_tdata_get ( ctoast_fft_r1d * frd, double ** data );
 
 double ** ctoast_fft_r1d_fdata ( ctoast_fft_r1d * frd );
+void ctoast_fft_r1d_fdata_set ( ctoast_fft_r1d * frd, double ** data );
+void ctoast_fft_r1d_fdata_get ( ctoast_fft_r1d * frd, double ** data );
 
 void ctoast_fft_r1d_exec ( ctoast_fft_r1d * frd );
 

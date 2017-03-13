@@ -304,6 +304,16 @@ void ctoast_fft_r1d_free ( ctoast_fft_r1d * frd ) {
     return;
 }
 
+int64_t ctoast_fft_r1d_length ( ctoast_fft_r1d * frd ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    return rd->length();
+}
+
+int64_t ctoast_fft_r1d_count ( ctoast_fft_r1d * frd ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    return rd->count();
+}
+
 double ** ctoast_fft_r1d_tdata ( ctoast_fft_r1d * frd ) {
     toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
     std::vector < double * > tdata = rd->tdata();
@@ -317,6 +327,26 @@ double ** ctoast_fft_r1d_tdata ( ctoast_fft_r1d * frd ) {
     return ret;
 }
 
+void ctoast_fft_r1d_tdata_set ( ctoast_fft_r1d * frd, double ** data ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    int64_t len = rd->length();
+    std::vector < double * > tdata = rd->tdata();
+    for ( size_t i = 0; i < tdata.size(); ++i ) {
+        std::copy ( data[i], data[i] + len, tdata[i] );
+    }
+    return;
+}
+
+void ctoast_fft_r1d_tdata_get ( ctoast_fft_r1d * frd, double ** data ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    std::vector < double * > tdata = rd->tdata();
+    int64_t len = rd->length();
+    for ( size_t i = 0; i < tdata.size(); ++i ) {
+        std::copy ( tdata[i], tdata[i] + len, data[i] );
+    }
+    return;
+}
+
 double ** ctoast_fft_r1d_fdata ( ctoast_fft_r1d * frd ) {
     toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
     std::vector < double * > fdata = rd->fdata();
@@ -328,6 +358,26 @@ double ** ctoast_fft_r1d_fdata ( ctoast_fft_r1d * frd ) {
         ret[i] = fdata[i];
     }
     return ret;
+}
+
+void ctoast_fft_r1d_fdata_set ( ctoast_fft_r1d * frd, double ** data ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    int64_t len = rd->length();
+    std::vector < double * > fdata = rd->fdata();
+    for ( size_t i = 0; i < fdata.size(); ++i ) {
+        std::copy ( data[i], data[i] + len, fdata[i] );
+    }
+    return;
+}
+
+void ctoast_fft_r1d_fdata_get ( ctoast_fft_r1d * frd, double ** data ) {
+    toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
+    std::vector < double * > fdata = rd->fdata();
+    int64_t len = rd->length();
+    for ( size_t i = 0; i < fdata.size(); ++i ) {
+        std::copy ( fdata[i], fdata[i] + len, data[i] );
+    }
+    return;
 }
 
 void ctoast_fft_r1d_exec ( ctoast_fft_r1d * frd ) {

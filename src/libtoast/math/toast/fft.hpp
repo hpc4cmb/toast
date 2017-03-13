@@ -38,6 +38,10 @@ namespace toast { namespace fft {
             virtual std::vector < double * > tdata ( ) { return std::vector < double * > (); }
             virtual std::vector < double * > fdata ( ) { return std::vector < double * > (); }
 
+            int64_t length ( );
+
+            int64_t count ( );
+
         protected :
             
             r1d ( int64_t length, int64_t n, plan_type type, direction dir, double scale );
