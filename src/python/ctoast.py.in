@@ -384,40 +384,128 @@ def qarray_from_vectors(vec1, vec2):
 
 # FFT
 
-# typedef enum {
-#     PLAN_FAST = 0,
-#     PLAN_BEST = 1
-# } ctoast_fft_plan_type;
-  
-# typedef enum {
-#     FORWARD = 0,
-#     BACKWARD = 1
-# } ctoast_fft_direction;
+class cFFTR1D(ct.Structure):
+    pass
 
-# struct ctoast_fft_r1d_;
-# typedef struct ctoast_fft_r1d_ ctoast_fft_r1d;
+fft_plan_type = {
+    'fast' : ct.c_uint(0),
+    'best' : ct.c_uint(1)
+}
 
-# ctoast_fft_r1d * ctoast_fft_r1d_alloc ( int64_t length, int64_t n, ctoast_fft_plan_type type, ctoast_fft_direction dir, double scale );
-# void ctoast_fft_r1d_free ( ctoast_fft_r1d * frd );
+fft_direction = {
+    'forward' : ct.c_uint(0),
+    'backward' : ct.c_uint(1)
+}
 
-# double ** ctoast_fft_r1d_tdata ( ctoast_fft_r1d * frd );
+lib.ctoast_fft_r1d_alloc.restype = ct.POINTER(cFFTR1D)
+lib.ctoast_fft_r1d_alloc.argtypes = [ ct.c_longlong, ct.c_longlong, ct.c_uint, 
+    ct.c_uint, ct.c_double ]
 
-# double ** ctoast_fft_r1d_fdata ( ctoast_fft_r1d * frd );
+def fft_r1d_alloc(length, n, type, dir, scale):
+    return lib.ctoast_fft_r1d_alloc(length, n, fft_plan_type[type], 
+        fft_direction[dir], scale)
 
-# void ctoast_fft_r1d_exec ( ctoast_fft_r1d * frd );
+lib.ctoast_fft_r1d_free.restype = None
+lib.ctoast_fft_r1d_free.argtypes = [ ct.POINTER(cFFTR1D) ]
 
-# struct ctoast_fft_r1d_plan_store_;
-# typedef struct ctoast_fft_r1d_plan_store_ ctoast_fft_r1d_plan_store;
+def fft_r1d_free(plan):
+    lib.ctoast_fft_r1d_free(plan)
+    return
 
-# ctoast_fft_r1d_plan_store * ctoast_fft_r1d_plan_store_get ( );
+lib.ctoast_fft_r1d_length.restype = ct.c_longlong
+lib.ctoast_fft_r1d_length.argtypes = [ ct.POINTER(cFFTR1D) ]
 
-# void ctoast_fft_r1d_plan_store_clear ( ctoast_fft_r1d_plan_store * pstore );
+def fft_r1d_length(plan):
+    return lib.ctoast_fft_r1d_length(plan)
 
-# void ctoast_fft_r1d_plan_store_cache ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+lib.ctoast_fft_r1d_count.restype = ct.c_longlong
+lib.ctoast_fft_r1d_count.argtypes = [ ct.POINTER(cFFTR1D) ]
 
-# ctoast_fft_r1d * ctoast_fft_r1d_plan_store_forward ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+def fft_r1d_count(plan):
+    return lib.ctoast_fft_r1d_count(plan)
 
-# ctoast_fft_r1d * ctoast_fft_r1d_plan_store_backward ( ctoast_fft_r1d_plan_store * pstore, int64_t len, int64_t n );
+lib.ctoast_fft_r1d_tdata_set.restype = None
+lib.ctoast_fft_r1d_tdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+
+def fft_r1d_tdata_set(plan, data):
+    cdata = (ct.POINTER(ct.c_double) * len(data))(*data)
+    lib.ctoast_fft_r1d_tdata_set(plan, cdata)
+    return
+
+lib.ctoast_fft_r1d_tdata_get.restype = None
+lib.ctoast_fft_r1d_tdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+
+def fft_r1d_tdata_get(plan):
+    cnt = lib.ctoast_fft_r1d_count(plan)
+    len = lib.ctoast_fft_r1d_length(plan)
+    data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
+    cdata = (ct.POINTER(ct.c_double) * len)(*data)
+    lib.ctoast_fft_r1d_tdata_get(plan, cdata)
+    return data
+
+lib.ctoast_fft_r1d_fdata_set.restype = None
+lib.ctoast_fft_r1d_fdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+
+def fft_r1d_fdata_set(plan, data):
+    cdata = (ct.POINTER(ct.c_double) * len(data))(*data)
+    lib.ctoast_fft_r1d_fdata_set(plan, cdata)
+    return
+
+lib.ctoast_fft_r1d_fdata_get.restype = None
+lib.ctoast_fft_r1d_fdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+
+def fft_r1d_fdata_get(plan):
+    cnt = lib.ctoast_fft_r1d_count(plan)
+    len = lib.ctoast_fft_r1d_length(plan)
+    data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
+    cdata = (ct.POINTER(ct.c_double) * len)(*data)
+    lib.ctoast_fft_r1d_fdata_get(plan, cdata)
+    return data
+
+lib.ctoast_fft_r1d_exec.restype = None
+lib.ctoast_fft_r1d_exec.argtypes = [ ct.POINTER(cFFTR1D) ]
+
+def fft_r1d_exec(plan):
+    lib.ctoast_fft_r1d_exec(plan)
+    return
+
+class cFFTR1D_Store(ct.Structure):
+    pass
+
+lib.ctoast_fft_r1d_plan_store_get.restype = ct.POINTER(cFFTR1D_Store)
+lib.ctoast_fft_r1d_plan_store_get.argtypes = [ ]
+
+def fft_r1d_store_get():
+    return lib.ctoast_fft_r1d_plan_store_get()
+
+lib.ctoast_fft_r1d_plan_store_clear.restype = None
+lib.ctoast_fft_r1d_plan_store_clear.argtypes = [ ct.POINTER(cFFTR1D_Store) ]
+
+def fft_r1d_store_clear(store):
+    lib.ctoast_fft_r1d_plan_store_clear(store)
+    return
+
+lib.ctoast_fft_r1d_plan_store_cache.restype = None
+lib.ctoast_fft_r1d_plan_store_cache.argtypes = [ ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong, ct.c_longlong ]
+
+def fft_r1d_store_cache(store, len, count):
+    lib.ctoast_fft_r1d_plan_store_cache(store, len, count)
+    return
+
+lib.ctoast_fft_r1d_plan_store_forward.restype = ct.POINTER(cFFTR1D)
+lib.ctoast_fft_r1d_plan_store_forward.argtypes = [ ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong, ct.c_longlong ]
+
+def fft_r1d_store_forward(store, length, n):
+    return lib.ctoast_fft_plan_store_forward(store, length, n)
+
+lib.ctoast_fft_r1d_plan_store_backward.restype = ct.POINTER(cFFTR1D)
+lib.ctoast_fft_r1d_plan_store_backward.argtypes = [ ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong, ct.c_longlong ]
+
+def fft_r1d_store_backward(store, length, n):
+    return lib.ctoast_fft_plan_store_backward(store, length, n)
 
 # Healpix
 

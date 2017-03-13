@@ -331,6 +331,13 @@ toast::fft::r1d::r1d ( int64_t length, int64_t n, plan_type type, direction dir,
     scale_ = scale;
 }
 
+int64_t toast::fft::r1d::length ( ) {
+    return length_;
+}
+
+int64_t toast::fft::r1d::count ( ) {
+    return mult_;
+}
 
 toast::fft::r1d * toast::fft::r1d::create ( int64_t length, int64_t n, plan_type type, direction dir, double scale ) {
 
