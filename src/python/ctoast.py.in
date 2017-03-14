@@ -425,41 +425,47 @@ def fft_r1d_count(plan):
     return lib.ctoast_fft_r1d_count(plan)
 
 lib.ctoast_fft_r1d_tdata_set.restype = None
-lib.ctoast_fft_r1d_tdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+lib.ctoast_fft_r1d_tdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
 
 def fft_r1d_tdata_set(plan, data):
-    cdata = (ct.POINTER(ct.c_double) * len(data))(*data)
-    lib.ctoast_fft_r1d_tdata_set(plan, cdata)
+    cnt = len(data)
+    cdata = [ npc.as_ctypes(x) for x in data ]
+    pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
+    lib.ctoast_fft_r1d_tdata_set(plan, pdata)
     return
 
 lib.ctoast_fft_r1d_tdata_get.restype = None
-lib.ctoast_fft_r1d_tdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+lib.ctoast_fft_r1d_tdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
 
 def fft_r1d_tdata_get(plan):
     cnt = lib.ctoast_fft_r1d_count(plan)
     len = lib.ctoast_fft_r1d_length(plan)
     data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
-    cdata = (ct.POINTER(ct.c_double) * len)(*data)
-    lib.ctoast_fft_r1d_tdata_get(plan, cdata)
+    cdata = [ npc.as_ctypes(x) for x in data ]
+    pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
+    lib.ctoast_fft_r1d_tdata_get(plan, pdata)
     return data
 
 lib.ctoast_fft_r1d_fdata_set.restype = None
-lib.ctoast_fft_r1d_fdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+lib.ctoast_fft_r1d_fdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
 
 def fft_r1d_fdata_set(plan, data):
-    cdata = (ct.POINTER(ct.c_double) * len(data))(*data)
-    lib.ctoast_fft_r1d_fdata_set(plan, cdata)
+    cnt = len(data)
+    cdata = [ npc.as_ctypes(x) for x in data ]
+    pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
+    lib.ctoast_fft_r1d_fdata_set(plan, pdata)
     return
 
 lib.ctoast_fft_r1d_fdata_get.restype = None
-lib.ctoast_fft_r1d_fdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(npf64) ]
+lib.ctoast_fft_r1d_fdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
 
 def fft_r1d_fdata_get(plan):
     cnt = lib.ctoast_fft_r1d_count(plan)
     len = lib.ctoast_fft_r1d_length(plan)
     data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
-    cdata = (ct.POINTER(ct.c_double) * len)(*data)
-    lib.ctoast_fft_r1d_fdata_get(plan, cdata)
+    cdata = [ npc.as_ctypes(x) for x in data ]
+    pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
+    lib.ctoast_fft_r1d_fdata_get(plan, pdata)
     return data
 
 lib.ctoast_fft_r1d_exec.restype = None
@@ -498,14 +504,14 @@ lib.ctoast_fft_r1d_plan_store_forward.argtypes = [ ct.POINTER(cFFTR1D_Store),
     ct.c_longlong, ct.c_longlong ]
 
 def fft_r1d_store_forward(store, length, n):
-    return lib.ctoast_fft_plan_store_forward(store, length, n)
+    return lib.ctoast_fft_r1d_plan_store_forward(store, length, n)
 
 lib.ctoast_fft_r1d_plan_store_backward.restype = ct.POINTER(cFFTR1D)
 lib.ctoast_fft_r1d_plan_store_backward.argtypes = [ ct.POINTER(cFFTR1D_Store),
     ct.c_longlong, ct.c_longlong ]
 
 def fft_r1d_store_backward(store, length, n):
-    return lib.ctoast_fft_plan_store_backward(store, length, n)
+    return lib.ctoast_fft_r1d_plan_store_backward(store, length, n)
 
 # Healpix
 

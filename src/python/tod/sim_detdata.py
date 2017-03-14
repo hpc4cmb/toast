@@ -35,7 +35,7 @@ class OpSimNoise(Operator):
     """
 
     def __init__(self, out='noise', realization=0, component=0, noise='noise',
-                 rate=None):
+                 rate=None, altFFT=False):
         
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -46,6 +46,7 @@ class OpSimNoise(Operator):
         self._component = component
         self._noisekey = noise
         self._rate = rate
+        self._altfft = altFFT
 
     @property
     def timedist(self):
@@ -116,7 +117,8 @@ class OpSimNoise(Operator):
                     (nsedata, freq, psd) = sim_noise_timestream(
                         self._realization, telescope, self._component, obsindx,
                         detindx, rate, chunk_first, chunk_samp,
-                        self._oversample, nse.freq(det), nse.psd(det))
+                        self._oversample, nse.freq(det), nse.psd(det), 
+                        self._altfft)
 
                     # write to cache
 

@@ -40,6 +40,7 @@ fakempi.py \
 cache.py \
 dist.py \
 rng.py \
+fft.py \
 qarray.py \
 op.py \
 healpix.py

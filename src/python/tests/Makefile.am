@@ -38,6 +38,7 @@ ops_simnoise.py \
 psd_math.py \
 qarray.py \
 rng.py \
+fft.py \
 runner.py \
 tod.py
 
