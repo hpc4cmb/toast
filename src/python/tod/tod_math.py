@@ -12,6 +12,7 @@ import scipy.sparse as sp
 
 from .. import rng as rng
 from .. import qarray as qa
+from .. import fft as fft
 
 
 def calibrate( toitimes, toi, gaintimes, gains, order=0, inplace=False ):
@@ -56,7 +57,8 @@ def calibrate( toitimes, toi, gaintimes, gains, order=0, inplace=False ):
 
 
 def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
-                         rate, firstsamp, samples, oversample, freq, psd):
+                         rate, firstsamp, samples, oversample, freq, psd, 
+                         altfft=False):
     """
     Generate a noise timestream, given a starting RNG state.
 
@@ -147,6 +149,8 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     loginterp_psd = interp(loginterp_freq)
     interp_psd = np.power(10.0, loginterp_psd) - psdshift
 
+    scale = np.sqrt(interp_psd * norm)
+
     # Zero out DC value
 
     interp_psd[0] = 0.0
@@ -160,20 +164,35 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
 
     rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2), 
         counter=(counter1, counter2))
-    fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
 
-    # set the Nyquist frequency imaginary part to zero
+    # pack data differently depending on the FFT implementation
 
-    fdata[-1] = fdata[-1].real + 0.0j
+    fdata = None
+    if altfft:
+        fdata = np.zeros(fftlen, dtype=np.float64)
+        fdata[:npsd] = rngdata[:npsd]
+        fdata[-1:npsd-1:-1] = rngdata[npsd+1:2*npsd-1]
+        # Nyquist frequency imaginary part is already excluded
+        # from the data vector in this packing scheme...
 
-    # scale by PSD
+        # scale by PSD
+        fdata[0:npsd] *= scale
+        fdata[-1:npsd-1:-1] *= scale[1:npsd-1]
 
-    scale = np.sqrt(interp_psd * norm)
-    fdata *= scale
+        # inverse FFT
+        tdata = fft.r1d_backward(fdata)
 
-    # inverse FFT
+    else:
+        fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
 
-    tdata = np.fft.irfft(fdata)
+        # set the Nyquist frequency imaginary part to zero
+        fdata[-1] = fdata[-1].real + 0.0j
+
+        # scale by PSD
+        fdata *= scale
+
+        # inverse FFT
+        tdata = np.fft.irfft(fdata)
 
     # subtract the DC level- for just the samples that we are returning
 

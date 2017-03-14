@@ -17,6 +17,7 @@ from .ctoast import test_ctoast
 from . import cbuffer as testcbuffer
 from . import cache as testcache
 from . import rng as testrng
+from . import fft as testfft
 from . import dist as testdist
 from . import qarray as testqarray
 from . import tod as testtod
@@ -58,6 +59,7 @@ def test():
     suite.addTest( loader.loadTestsFromModule(testcbuffer) )
     suite.addTest( loader.loadTestsFromModule(testcache) )
     suite.addTest( loader.loadTestsFromModule(testrng) )
+    suite.addTest( loader.loadTestsFromModule(testfft) )
     suite.addTest( loader.loadTestsFromModule(testdist) )
     suite.addTest( loader.loadTestsFromModule(testqarray) )
     suite.addTest( loader.loadTestsFromModule(testtod) )
