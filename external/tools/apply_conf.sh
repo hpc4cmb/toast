@@ -8,9 +8,9 @@ version=$5
 moddir=$6
 docker=$7
 
-compiled_prefix="${prefix}/desiconda/${version}_aux"
-conda_prefix="${prefix}/desiconda/${version}_conda"
-module_dir="${moddir}/desiconda"
+compiled_prefix="${prefix}/toastdeps/${version}_aux"
+conda_prefix="${prefix}/toastdeps/${version}_conda"
+module_dir="${moddir}/toastdeps"
 
 if [ "x${docker}" = "xyes" ]; then
     compiled_prefix="/usr"
