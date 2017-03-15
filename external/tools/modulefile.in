@@ -1,0 +1,56 @@
+#%Module###<-magic cookie ####################################################
+##
+##   Software dependencies for TOAST.
+##
+##
+# variables for Tcl script use only
+set     version  @VERSION@
+
+module-whatis "Loads software dependencies for TOAST."
+
+proc ModulesHelp { } {
+  global version
+  puts stderr "\t\t TOAST software dependencies - Version $version\n"
+  puts stderr "\t This loads a conda environment and other compiled"
+  puts stderr "\t software needed by TOAST."
+  puts stderr ""
+}
+
+conflict toastdeps
+
+@modload@
+
+# This is set by OS python and gives us problems.
+unsetenv PYTHONSTARTUP
+
+# This is the conda environment location
+prepend-path PATH "@CONDA_PREFIX@/bin"
+setenv PYTHONPATH "@CONDA_PREFIX@/lib/python3.5/site-packages"
+
+# This is the location of the extra compiled software
+prepend-path PATH "@AUX_PREFIX@/bin"
+prepend-path CPATH "@AUX_PREFIX@/include"
+prepend-path LD_LIBRARY_PATH "@AUX_PREFIX@/lib"
+prepend-path LIBRARY_PATH "@AUX_PREFIX@/lib"
+prepend-path PYTHONPATH "@AUX_PREFIX@/lib/python3.5/site-packages"
+
+# FIXME: Disabling these for now, since they override
+# the compiler choices used by distutils, resulting
+# in the intel compiler being using for extensions
+# but with incompatible gcc compile flags.
+
+#setenv CC "@CC@"
+#setenv CXX "@CXX@"
+#setenv FC "@FC@"
+
+#setenv MPICC "@MPICC@"
+#setenv MPICXX "@MPICXX@"
+#setenv MPIFC "@MPIFC@"
+
+#setenv CFLAGS "@CFLAGS@"
+#setenv CXXFLAGS "@CXXFLAGS@"
+#setenv FCFLAGS "@FCFLAGS@"
+
+#setenv OPENMP_CFLAGS "@OPENMP_CFLAGS@"
+#setenv OPENMP_CXXFLAGS "@OPENMP_CXXFLAGS@"
+

@@ -1,0 +1,115 @@
+#!/bin/bash
+
+# Script directory
+
+pushd $(dirname $0) > /dev/null
+topdir=$(pwd)
+popd > /dev/null
+
+# Initialize environment
+
+if [ -e "${topdir}/@CONFFILE@.sh" ]; then
+    source "${topdir}/@CONFFILE@.sh"
+fi
+
+# Install DESI dependencies from source.
+
+mkdir -p @CONDA_PREFIX@/bin
+mkdir -p @CONDA_PREFIX@/lib
+mkdir -p @AUX_PREFIX@/lib/python3.6/site-packages
+
+export PATH=@AUX_PREFIX@/bin:@CONDA_PREFIX@/bin:${PATH}
+export CPATH=@AUX_PREFIX@/include:${CPATH}
+export LIBRARY_PATH=@AUX_PREFIX@/lib:${LIBRARY_PATH}
+export LD_LIBRARY_PATH=@AUX_PREFIX@/lib:${LD_LIBRARY_PATH}
+export PYTHONPATH=@AUX_PREFIX@/lib/python3.6/site-packages:${PYTHONPATH}
+
+export ACCEPT_INTEL_PYTHON_EULA=yes
+
+# Install conda root environment
+
+@conda_root@
+
+if [ "x@INTEL_CONDA@" = "xyes" ]; then
+@conda_intel@
+fi
+
+# Install conda packages.
+
+@conda_pkgs@
+
+conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
+
+# Install pip packages.
+
+@pip_pkgs@
+
+# Autotools
+
+@m4@
+
+@libtool@
+
+@autoconf@
+
+@automake@
+
+# Install mpi4py.
+
+@mpi4py@
+
+# Install CFITSIO.
+
+@cfitsio@
+
+# Install FFTW.
+
+@fftw@
+
+# Install Healpix
+
+@healpix@
+
+# Install libmadam
+
+@madam@
+
+# Install conviqt
+
+@conviqt@
+
+# Install PyMPIT for environment testing
+
+@pympit@
+
+# Compile python modules
+
+python3 -m compileall -f "@CONDA_PREFIX@/lib/python3.6/site-packages"
+python3 -m compileall -f "@AUX_PREFIX@"
+
+# Set permissions
+
+if [ "x@CHGRP@" != "x" ]; then
+    chgrp -R @CHGRP@ "@AUX_PREFIX@"
+    chgrp -R @CHGRP@ "@CONDA_PREFIX@"
+fi
+
+if [ "x@CHMOD@" != "x" ]; then
+    chmod -R @CHMOD@ "@AUX_PREFIX@"
+    chmod -R @CHMOD@ "@CONDA_PREFIX@"
+fi
+
+# Install modulefile
+
+if [ "x@MODULE_DIR@" != "x" ]; then
+    mkdir -p "@MODULE_DIR@"
+    cp "$0.module" "@MODULE_DIR@/@VERSION@"
+    cp "$0.modversion" "@MODULE_DIR@/.version_@VERSION@"
+
+    if [ "x@CHGRP@" != "x" ]; then
+        chgrp -R @CHGRP@ "@MODULE_DIR@"
+    fi
+    if [ "x@CHMOD@" != "x" ]; then
+        chmod -R @CHMOD@ "@MODULE_DIR@"
+    fi
+fi
