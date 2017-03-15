@@ -1,4 +1,5 @@
 conda install --copy --yes \
+    nose \
     cython \
     numpy \
     scipy \
@@ -9,4 +10,5 @@ conda install --copy --yes \
     jupyter \
     psutil \
     ephem \
+    && python -c "import matplotlib.font_manager" \
     && rm -rf @CONDA_PREFIX@/pkgs/*

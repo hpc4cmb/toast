@@ -25,9 +25,8 @@ ENV LC_ALL en_US.UTF-8
 # search paths.  Shifter will manipulate LD_LIBRARY_PATH,
 # so it is important not to use that variable.
 
-# Create working directory for builds
+# Working directory for builds
 
-RUN mkdir /usr/src
 WORKDIR /usr/src
 
 # Install conda root environment
@@ -53,7 +52,10 @@ ENV ACCEPT_INTEL_PYTHON_EULA yes
 
 # Copy MKL headers into conda root
 
-ADD dockerdata/mkl_11.3.3_include.tar.gz /usr/include/
+RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz?dl=1 \
+    -o mkl_11.3.3_include.tar.gz \
+    && tar xzf mkl_11.3.3_include.tar.gz -C /usr/include --strip=1 \
+    && rm mkl_11.3.3_include.tar.gz
 
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
@@ -89,15 +91,20 @@ ADD dockerdata/mkl_11.3.3_include.tar.gz /usr/include/
 
 @pympit@
 
-# Create a fake home directory so that stupid programs don't touch
-# the real home partition.  In particular, astropy is horrible with this.
+# Precompile all python modules
+
+RUN python -m compileall -f "/usr/lib/python@PYVERSION@/site-packages"
+
+# Create a fake home directory so that packages can create
+# config files if needed
 
 RUN mkdir /home/toast
 RUN mkdir /home/toast/.astropy
 
 WORKDIR /home/toast
 ENV HOME /home/toast
-COPY dockerdata/astropy_config /home/toast/.astropy/config
+
+RUN python -c "import astropy"
 
 # Set the entrypoint and default command
 

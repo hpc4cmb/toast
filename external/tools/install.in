@@ -16,13 +16,13 @@ fi
 
 mkdir -p @CONDA_PREFIX@/bin
 mkdir -p @CONDA_PREFIX@/lib
-mkdir -p @AUX_PREFIX@/lib/python3.6/site-packages
+mkdir -p @AUX_PREFIX@/lib/python@PYVERSION@/site-packages
 
 export PATH=@AUX_PREFIX@/bin:@CONDA_PREFIX@/bin:${PATH}
 export CPATH=@AUX_PREFIX@/include:${CPATH}
 export LIBRARY_PATH=@AUX_PREFIX@/lib:${LIBRARY_PATH}
 export LD_LIBRARY_PATH=@AUX_PREFIX@/lib:${LD_LIBRARY_PATH}
-export PYTHONPATH=@AUX_PREFIX@/lib/python3.6/site-packages:${PYTHONPATH}
+export PYTHONPATH=@AUX_PREFIX@/lib/python@PYVERSION@/site-packages:${PYTHONPATH}
 
 export ACCEPT_INTEL_PYTHON_EULA=yes
 
@@ -84,7 +84,7 @@ conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
 
 # Compile python modules
 
-python3 -m compileall -f "@CONDA_PREFIX@/lib/python3.6/site-packages"
+python3 -m compileall -f "@CONDA_PREFIX@/lib/python@PYVERSION@/site-packages"
 python3 -m compileall -f "@AUX_PREFIX@"
 
 # Set permissions
