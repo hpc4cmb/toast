@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update \
     && apt-get install -y curl procps build-essential gfortran git subversion \
-    autoconf automake libtool m4 \
+    autoconf automake libtool m4 cmake \
     && rm -fr /var/lib/apt/lists/*
 
 # Set up locales, to workaround a pip bug
@@ -86,6 +86,10 @@ RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz
 # Install conviqt
 
 @conviqt@
+
+# Install elemental
+
+@elemental@
 
 # Install PyMPIT for environment testing
 

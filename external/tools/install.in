@@ -78,6 +78,10 @@ conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
 
 @conviqt@
 
+# Install elemental
+
+@elemental@
+
 # Install PyMPIT for environment testing
 
 @pympit@
