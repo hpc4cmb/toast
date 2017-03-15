@@ -4,6 +4,7 @@ curl -SL https://github.com/hpc4cmb/libmadam/releases/download/0.2.0/libmadam-0.
     && cd libmadam-0.2.0 \
     && FC="@MPIFC@" MPIFC="@MPIFC@" FCFLAGS="@FCFLAGS@" \
     ./configure @CROSS@ --with-cfitsio="@AUX_PREFIX@" \
+    --with-blas="@BLAS@" --with-lapack="@LAPACK@" \
     --with-fftw="@AUX_PREFIX@" --prefix="@AUX_PREFIX@" \
     && make -j 4 && make install \
     && cd .. \

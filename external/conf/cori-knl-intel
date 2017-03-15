@@ -29,6 +29,7 @@ CROSS = --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu
 
 INTEL_CONDA = yes
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+PYVERSION = 3.5
 
 # Use Cray MPICH
 
