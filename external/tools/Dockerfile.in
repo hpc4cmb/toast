@@ -1,0 +1,106 @@
+FROM ubuntu:16.04
+
+MAINTAINER Theodore Kisner <tskisner@lbl.gov>
+
+# Use bash
+
+SHELL ["/bin/bash", "-c"]
+
+# Install system dependencies.
+
+RUN apt-get update \
+    && apt-get install -y curl procps build-essential gfortran git subversion \
+    autoconf automake libtool m4 \
+    && rm -fr /var/lib/apt/lists/*
+
+# Set up locales, to workaround a pip bug
+
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8 
+ENV LANGUAGE en_US:en 
+ENV LC_ALL en_US.UTF-8
+
+# We install everything directly into /usr so that we do
+# not need to modify the default library and executable
+# search paths.  Shifter will manipulate LD_LIBRARY_PATH,
+# so it is important not to use that variable.
+
+# Create working directory for builds
+
+RUN mkdir /usr/src
+WORKDIR /usr/src
+
+# Install conda root environment
+
+ENV PYTHONPATH ""
+ENV PYTHONSTARTUP ""
+ENV PYTHONNOUSERSITE "1"
+ENV PYTHONUSERBASE "/tmp"
+
+@conda_root@
+
+ENV ACCEPT_INTEL_PYTHON_EULA yes
+
+@conda_intel@
+
+# Install conda packages.
+
+@conda_pkgs@
+
+# Install pip packages.
+
+@pip_pkgs@
+
+# Copy MKL headers into conda root
+
+ADD dockerdata/mkl_11.3.3_include.tar.gz /usr/include/
+
+# Install MPICH 3.2 which is compatible with the external
+# Cray MPICH which is prepended to LD_LIBRARY_PATH as part
+# of shifter.
+
+@mpich@
+
+# Install mpi4py.
+
+@mpi4py@
+
+# Install CFITSIO.
+
+@cfitsio@
+
+# Install FFTW.
+
+@fftw@
+
+# Install Healpix
+
+@healpix@
+
+# Install libmadam
+
+@madam@
+
+# Install conviqt
+
+@conviqt@
+
+# Install PyMPIT for environment testing
+
+@pympit@
+
+# Create a fake home directory so that stupid programs don't touch
+# the real home partition.  In particular, astropy is horrible with this.
+
+RUN mkdir /home/toast
+RUN mkdir /home/toast/.astropy
+
+WORKDIR /home/toast
+ENV HOME /home/toast
+COPY dockerdata/astropy_config /home/toast/.astropy/config
+
+# Set the entrypoint and default command
+
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["/bin/bash"]
+

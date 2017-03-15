@@ -1,0 +1,53 @@
+
+# Serial compilers
+
+CC = gcc
+CXX = g++
+FC = gfortran
+
+# MPI compilers
+
+MPICC = cc
+MPICXX = CC
+MPIFC = ftn
+
+# Compile flags
+
+CFLAGS = -O3 -fPIC -std=gnu99 -pthread
+CXXFLAGS = -O3 -fPIC -std=c++11 -pthread
+FCFLAGS = -O3 -fPIC -fexceptions -pthread
+
+OPENMP_CFLAGS = -fopenmp
+OPENMP_CXXFLAGS = -fopenmp
+LDFLAGS = -lpthread -fopenmp
+
+# Are we doing a cross-compile?
+
+CROSS =
+
+# Miniconda install
+
+INTEL_CONDA = no
+MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# Use Cray MPICH
+
+MPI_CPPFLAGS = /opt/cray/mpt/default/gni/mpich-gnu/5.1/include
+MPI_LDFLAGS = /opt/cray/mpt/default/gni/mpich-gnu/5.1/lib
+MPI_CXXLIB = mpichcxx
+MPI_LIB = mpich
+
+# For BLAS/LAPACK, we use MKL
+
+BLAS = -L/opt/intel/compilers_and_libraries_2017.1.132/linux/mkl/lib/intel64 -lmkl_rt -fopenmp -lpthread -lm -ldl
+LAPACK = 
+
+# Boost toolchain name
+
+BOOSTCHAIN = gcc
+
+# Group and permissions to set
+
+CHGRP = desi
+CHMOD = a+rX,g-w,o-w
+

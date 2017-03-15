@@ -1,0 +1,32 @@
+
+CC = gcc
+CXX = g++
+FC = gfortran
+
+MPICC = mpicc
+MPICXX = mpicxx
+MPIFC = mpifc
+
+CFLAGS = -O3 -fPIC -std=gnu99 -pthread
+CXXFLAGS = -O3 -fPIC -std=c++11 -pthread
+FCFLAGS = -O3 -fPIC -fexceptions -pthread
+
+OPENMP_CFLAGS = -fopenmp
+OPENMP_CXXFLAGS = -fopenmp
+LDFLAGS = -lpthread -fopenmp
+
+INTEL_CONDA = yes
+MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+CROSS =
+
+MPI_CPPFLAGS = /usr/include
+MPI_LDFLAGS = /usr/lib
+MPI_CXXLIB = mpichcxx
+MPI_LIB = mpich
+
+BLAS = -L/usr/lib -lmkl_rt -fopenmp -lpthread -lm -ldl
+LAPACK = 
+
+BOOSTCHAIN = gcc
+
