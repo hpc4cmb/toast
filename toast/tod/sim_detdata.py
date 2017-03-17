@@ -21,7 +21,12 @@ class OpSimNoise(Operator):
     Operator which generates noise timestreams.
 
     This passes through each observation and every process generates data
-    for its assigned samples.
+    for its assigned samples.  The dictionary for each observation should
+    include a unique 'ID' used in the random number generation.  The
+    observation dictionary can optionally include a 'global_offset' member
+    that might be useful if you are splitting observations and want to
+    enforce reproducibility of a given sample, even when using 
+    different-sized observations.
 
     Args:
         out (str): accumulate data to the cache with name <out>_<detector>.
@@ -73,6 +78,10 @@ class OpSimNoise(Operator):
             if 'telescope' in obs:
                 telescope = obs['telescope']
 
+            global_offset = 0
+            if 'global_offset' in obs:
+                global_offset = obs['global_offset']
+
             tod = obs['tod']
             if self._noisekey in obs:
                 nse = obs[self._noisekey]
@@ -113,7 +122,7 @@ class OpSimNoise(Operator):
 
                     (nsedata, freq, psd) = sim_noise_timestream(
                         self._realization, telescope, self._component, obsindx,
-                        detindx, rate, chunk_first, chunk_samp,
+                        detindx, rate, chunk_first + global_offset, chunk_samp,
                         self._oversample, nse.freq(det), nse.psd(det))
 
                     # write to cache
