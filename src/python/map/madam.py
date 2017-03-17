@@ -61,6 +61,7 @@ if libmadam is not None:
         npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_char_p,
     ]
     libmadam.clear_caches.restype = None
     libmadam.clear_caches.argtypes = []
@@ -499,9 +500,13 @@ class OpMadam(Operator):
 
         if self._cached:
             # destripe
+            outpath = ''
+            if 'path_output' in self._params:
+                outpath = self._params['path_output']
+            outpath = outpath.encode('ascii')
             libmadam.destripe_with_cache(
                 fcomm, ndet, nsamp, nnz, madam_timestamps, madam_pixels,
-                madam_pixweights, madam_signal)
+                madam_pixweights, madam_signal, outpath)
         else:
             # detweights is either a dictionary of weights specified at
             # construction time, or else we use uniform weighting.
