@@ -109,6 +109,7 @@ WORKDIR /home/toast
 ENV HOME /home/toast
 
 RUN python -c "import astropy"
+RUN python -c "import matplotlib.font_manager as fm; f = fm.FontManager"
 
 # Set the entrypoint and default command
 
