@@ -33,7 +33,8 @@ sim_tod.py \
 sim_det_noise.py \
 sim_det_map.py \
 sim_det_dipole.py \
-sim_det_atm.py
+sim_det_atm.py \
+sim_focalplane.py
 
 
 if HAVE_AM_MPI
