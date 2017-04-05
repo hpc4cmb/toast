@@ -1,4 +1,4 @@
-# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -13,25 +13,15 @@ import healpy as hp
 import numpy as np
 import numpy.ctypeslib as npc
 
+from ..ctoast import MPI_Comm
+
 from .. import qarray as qa
 from ..dist import Comm, Data
-from ..operator import Operator
+from ..op import Operator
 from ..tod import TOD
 from ..tod import Interval
 from ..tod import quat2angle
 
-# Define portably the MPI communicator datatype
-
-try:
-    if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
-        MPI_Comm = ct.c_int
-    else:
-        MPI_Comm = ct.c_void_p
-except Exception as e:
-    raise Exception(
-        'Failed to set the portable MPI communicator datatype. MPI4py is '
-        'probably too old. You need to have at least version 2.0. ({})'
-        ''.format(e))
 
 libconviqt = None
 

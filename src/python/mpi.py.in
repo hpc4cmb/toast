@@ -2,10 +2,43 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-from .ctoast import cinit
+import sys
+import ctypes as ct
+
+# open ctoast library
+
+library_path = "@LIBTOAST_PATH@"
+lib = ct.CDLL(library_path, mode=ct.RTLD_GLOBAL)
+
+#--------------------------------------
+# Library initialize / finalize
+#--------------------------------------
+
+p_c_char = ct.POINTER(ct.c_char)
+pp_c_char = ct.POINTER(p_c_char)
+
+lib.ctoast_init.restype = None
+lib.ctoast_init.argtypes = [ ct.c_int, pp_c_char ]
+
+def cinit ():
+    argc = len(sys.argv)
+    argv = (p_c_char * (argc + 1))()
+    for i, arg in enumerate(sys.argv):
+        enc_arg = arg.encode('utf-8')
+        argv[i] = ct.create_string_buffer(enc_arg)
+    lib.ctoast_init(argc, argv)
+    return
+
+lib.ctoast_finalize.restype = None
+lib.ctoast_finalize.argtypes = []
+
+def cfinalize ():
+    lib.ctoast_finalize()
+    return
 
 # Ensure that the compiled-library MPI initialization is
 # called BEFORE importing mpi4py.
+
 cinit()
 
 MPI = None
@@ -17,4 +50,19 @@ if @HAVE_MPI@:
         raise ImportError("External mpi4py installation not found")
 else:
     from . import fakempi as MPI
+
+# Define portably the MPI communicator datatype
+
+MPI_Comm = None
+try:
+    if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
+        MPI_Comm = ct.c_int
+    else:
+        MPI_Comm = ct.c_void_p
+except Exception as e:
+    raise Exception(
+        'Failed to set the portable MPI communicator datatype. MPI4py is '
+        'probably too old. You need to have at least version 2.0. ({})'
+        ''.format(e))
+
 

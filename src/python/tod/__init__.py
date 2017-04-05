@@ -18,8 +18,13 @@ from .sim_noise import AnalyticNoise
 
 from .sim_interval import regular_intervals
 
-from .sim_detdata import (OpSimNoise, OpSimGradient,
-    OpSimScan, OpSimDipole)
+from .sim_det_noise import OpSimNoise
+
+from .sim_det_map import OpSimGradient, OpSimScan
+
+from .sim_det_dipole import OpSimDipole
+
+from .sim_det_atm import OpSimAtmosphere
 
 from .noise import Noise
 
@@ -27,5 +32,5 @@ from .pointing_math import quat2angle, aberrate
 
 from .tod_math import calibrate, dipole, sim_noise_timestream
 
-# from .conviqt import OpSimConviqt
+from .conviqt import OpSimConviqt
 

@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
+from .mpi import MPI, MPI_Comm
+
 import sys
 import ctypes as ct
 
@@ -9,7 +11,6 @@ from ctypes.util import find_library
 
 import numpy as np
 import numpy.ctypeslib as npc
-
 
 # open library
 
@@ -32,32 +33,8 @@ npi64 = npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS")
 npu64 = npc.ndpointer(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS")
 npf64 = npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
 
-
-#--------------------------------------
-# Library initialize / finalize
-#--------------------------------------
-
 p_c_char = ct.POINTER(ct.c_char)
 pp_c_char = ct.POINTER(p_c_char)
-
-lib.ctoast_init.restype = None
-lib.ctoast_init.argtypes = [ ct.c_int, pp_c_char ]
-
-def cinit ():
-    argc = len(sys.argv)
-    argv = (p_c_char * (argc + 1))()
-    for i, arg in enumerate(sys.argv):
-        enc_arg = arg.encode('utf-8')
-        argv[i] = ct.create_string_buffer(enc_arg)
-    lib.ctoast_init(argc, argv)
-    return
-
-lib.ctoast_finalize.restype = None
-lib.ctoast_finalize.argtypes = []
-
-def cfinalize ():
-    lib.ctoast_finalize()
-    return
 
 #--------------------------------------
 # Math sub-library
@@ -709,11 +686,54 @@ lib.ctoast_string_free.restype = None
 lib.ctoast_string_free.argtypes = [ ct.c_ulong, ct.POINTER(ct.c_char_p) ]
 
 
-
-
 #--------------------------------------
 #  ATM sublibrary
 #--------------------------------------
+
+class cATMSim(ct.Structure):
+    pass
+
+lib.ctoast_atm_sim_alloc.restype = ct.POINTER(cATMSim)
+lib.ctoast_atm_sim_alloc.argtypes = [ ct.c_double, ct.c_double, ct.c_double, 
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double, 
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double, 
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double, 
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double, 
+    ct.c_long, ct.c_int, MPI_Comm, ct.c_int, ct.c_double ]
+
+def atm_sim_alloc(azmin, azmax, elmin, elmax, tmin, tmax, lmin_center=0.01, 
+    lmin_sigma=0.001, lmax_center=10, lmax_sigma=10, w_center=25.0, 
+    w_sigma=10.0, wdir_center=0.0, wdir_sigma=100.0, z0_center=2000.0, 
+    z0_sigma=0.0, T0_center=280.0, T0_sigma=10.0, zatm=40000.0, zmax=2000.0, 
+    xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0, 
+    comm=MPI.COMM_WORLD, gangsize=-1, fnear=0.1):
+    return lib.ctoast_atm_sim_alloc(azmin, azmax, elmin, elmax, tmin, tmax, 
+        lmin_center, lmin_sigma, lmax_center, lmax_sigma, w_center, w_sigma, 
+        wdir_center, wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma, 
+        zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, comm, 
+        gangsize, fnear)
+
+lib.ctoast_atm_sim_free.restype = None
+lib.ctoast_atm_sim_free.argtypes = [ ct.POINTER(cATMSim) ]
+
+def atm_sim_free(sim):
+    lib.ctoast_atm_sim_free(sim)
+    return
+
+lib.ctoast_atm_sim_simulate.restype = None
+lib.ctoast_atm_sim_simulate.argtypes = [ ct.POINTER(cATMSim), ct.c_int ]
+
+def atm_sim_simulate(sim, save_covmat):
+    lib.ctoast_atm_sim_simulate(sim, save_covmat)
+    return
+
+lib.ctoast_atm_sim_observe.restype = None
+lib.ctoast_atm_sim_observe.argtypes = [ ct.POINTER(cATMSim), npf64, npf64,
+    npf64, npf64, ct.c_long, ct.c_double ]
+
+def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
+    lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
+    return
 
 
 #--------------------------------------

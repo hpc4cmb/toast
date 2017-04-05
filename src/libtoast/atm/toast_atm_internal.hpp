@@ -22,13 +22,13 @@ namespace toast { namespace atm {
 
 #ifdef HAVE_ELEMENTAL
 
-    class atmsim {
+    class sim {
 
         public :
 
-            // The atmsim object is constructed for one CES (constant elevation scan)
+            // The sim object is constructed for one CES (constant elevation scan)
 
-            atmsim( double azmin, double azmax, double elmin, double elmax, double tmin, double tmax, // CES parameters
+            sim( double azmin, double azmax, double elmin, double elmax, double tmin, double tmax, // CES parameters
                 double lmin_center=.01, double lmin_sigma=.001, // dissipation scale of the Kolmogorov turbulence
                 double lmax_center=10, double lmax_sigma=10, // injection scale of the Kolmogorov turbulence
                 double w_center=25, double w_sigma=10, // wind speed [m/s]
@@ -43,7 +43,7 @@ namespace toast { namespace atm {
                 int gangsize=-1, // Size of the gangs that create slices
                 double fnear=0.1 ); // Multiplier for the near field simulation
 
-            ~atmsim();
+            ~sim();
 
             // we can simulate a number of realizations for the same CES and distribution of parameters
             void simulate( bool save_covmat );

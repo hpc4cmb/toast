@@ -574,8 +574,38 @@ void ctoast_string_free ( size_t nstring, char ** str ) {
 // Atmosphere sub-library
 //--------------------------------------
 
+ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax, 
+    double elmin, double elmax, double tmin, double tmax, double lmin_center, 
+    double lmin_sigma, double lmax_center, double lmax_sigma, double w_center, 
+    double w_sigma, double wdir_center, double wdir_sigma, double z0_center, 
+    double z0_sigma, double T0_center, double T0_sigma, double zatm, 
+    double zmax, double xstep, double ystep, double zstep, long nelem_sim_max, 
+    int verbosity, MPI_Comm comm, int gangsize, double fnear ) {
 
+    return reinterpret_cast < ctoast_atm_sim * > ( new toast::atm::sim ( azmin, 
+        azmax, elmin, elmax, tmin, tmax, lmin_center, lmin_sigma, lmax_center, 
+        lmax_sigma, w_center, w_sigma, wdir_center, wdir_sigma, z0_center, 
+        z0_sigma, T0_center, T0_sigma, zatm, zmax, xstep, ystep, zstep, 
+        nelem_sim_max, verbosity, comm, gangsize, fnear ) );
+}
 
+void ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
+    delete reinterpret_cast < toast::atm::sim * > ( sim );
+    return;
+}
+
+void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat ) {
+    toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
+    sm->simulate( (save_covmat != 0) );
+    return;
+}
+
+void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double *el, 
+    double *tod, long nsamp, double fixed_r ) {
+    toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
+    sm->observe( t, az, el, tod, nsamp, fixed_r );
+    return;
+}
 
 //--------------------------------------
 // TOD sub-library
