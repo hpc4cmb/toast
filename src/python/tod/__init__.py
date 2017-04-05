@@ -26,6 +26,10 @@ from .sim_det_dipole import OpSimDipole
 
 from .sim_det_atm import OpSimAtmosphere
 
+from .sim_focalplane import (hex_layout, rhombus_layout,
+    hex_pol_angles_qu, hex_pol_angles_radial, rhomb_pol_angles_qu,
+    plot_focalplane)
+
 from .noise import Noise
 
 from .pointing_math import quat2angle, aberrate
