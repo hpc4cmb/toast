@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
+from ..mpi import MPI, MPI_Comm
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from .tod import TOD
 
 from ..op import Operator
 
-from ..ctoast import (MPI_Comm, atm_sim_alloc, atm_sim_free,
+from ..ctoast import (atm_sim_alloc, atm_sim_free,
     atm_sim_simulate, atm_sim_observe)
 
 
