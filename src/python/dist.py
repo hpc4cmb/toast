@@ -141,7 +141,8 @@ def distribute_partition(A, k):
             low = mid + 1
     return low
 
-def distribute_discrete(sizes, groups, pow=1.0):
+
+def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     """
     Distribute indivisible blocks of items between groups.
 
@@ -156,6 +157,7 @@ def distribute_discrete(sizes, groups, pow=1.0):
         sizes (list): The sizes of the indivisible blocks.
         groups (int): The number of groups.
         pow (float): The power to use for weighting
+        breaks (list): List of hard breaks in the data distribution.
 
     Returns:
         A list of tuples.  There is one tuple per group.  
@@ -173,16 +175,32 @@ def distribute_discrete(sizes, groups, pow=1.0):
 
     off = 0
     curweight = 0.0
-    proc = 0
+
+    all_breaks = None
+    if breaks is not None:
+        # Check that the problem makes sense
+        all_breaks = np.unique(breaks)
+        all_breaks = all_breaks[all_breaks > 0]
+        all_breaks = all_breaks[all_breaks < chunks.size]
+        all_breaks = np.sort(all_breaks)
+        if all_breaks.size + 1 > groups:
+            raise RuntimeError(
+                'Cannot divide {} chunks to {} groups with {} breaks.'.format(
+                    chunks.size, groups, all_breaks.size))
+
+    at_break = False
     for cur in range(0, weights.shape[0]):
-        if curweight + weights[cur] > max_per_proc:
+        if curweight + weights[cur] > max_per_proc or at_break:
             dist.append( (off, cur-off) )
             over = curweight - target
             curweight = weights[cur] + over
             off = cur
-            proc += 1
         else:
             curweight += weights[cur]
+        if all_breaks is not None:
+            at_break = False
+            if cur+1 in all_breaks:
+                at_break = True
 
     dist.append( (off, weights.shape[0]-off) )
 
@@ -192,7 +210,7 @@ def distribute_discrete(sizes, groups, pow=1.0):
     return dist
 
 
-def distribute_uniform(totalsize, groups):
+def distribute_uniform(totalsize, groups, breaks=None):
     """
     Uniformly distribute items between groups.
 
@@ -203,6 +221,7 @@ def distribute_uniform(totalsize, groups):
     Args:
         totalsize (int): The total number of items.
         groups (int): The number of groups.
+        breaks (list): List of hard breaks in the data distribution.
 
     Returns:
         list of tuples: there is one tuple per group.  The 
@@ -210,41 +229,118 @@ def distribute_uniform(totalsize, groups):
         assigned to the group, and the second element is 
         the number of items assigned to the group. 
     """
-    ret = []
-    for i in range(groups):
-        myn = totalsize // groups
-        off = 0
-        leftover = totalsize % groups
-        if ( i < leftover ):
-            myn = myn + 1
-            off = i * myn
-        else:
-            off = ((myn + 1) * leftover) + (myn * (i - leftover))
-        ret.append( (off, myn) )
-    return ret
-
-
-def distribute_samples(mpicomm, timedist, detectors, samples, sizes=None):
-    dist_dets = detectors
-    dist_samples = None
-    dist_sizes = None
-
-    if timedist:
-        if sizes is not None:
-            dist_sizes = distribute_discrete(sizes, mpicomm.size)
-            dist_samples = []
-            off = 0
-            for ds in dist_sizes:
-                cursamp = np.sum(sizes[ds[0]:ds[0]+ds[1]])
-                dist_samples.append( (off, cursamp) )
-                off += cursamp
-        else:
-            dist_samples = distribute_uniform(samples, mpicomm.size)
+    if breaks is not None:
+        all_breaks = np.unique(breaks)
+        all_breaks = all_breaks[all_breaks > 0]
+        all_breaks = all_breaks[all_breaks < totalsize]
+        all_breaks = np.sort(all_breaks)
+        groupcounts = []
+        groupsizes = []
+        offset = 0
+        for brk in all_breaks:
+            length = brk - offset
+            groupcounts.append(int(np.round(groups*length/totalsize)))
+            groupsizes.append(length)
+            offset = brk
+        groupcounts.append(groups - np.sum(groupcounts))
+        groupsizes.append(totalsize - offset)
     else:
-        dist_detsindx = distribute_uniform(len(detectors), mpicomm.size)[mpicomm.rank]
-        dist_dets = detectors[dist_detsindx[0]:dist_detsindx[0]+dist_detsindx[1]]
-        dist_samples = [ (0, samples) for x in range(mpicomm.size) ]
-        dist_sizes = [ (0, 1) for x in range(mpicomm.size) ]
+        groupcounts = [groups]
+        groupsizes = [totalsize]
+
+    dist = []
+    offset = 0
+    for groupsize, groupcount in zip(groupsizes, groupcounts):
+        for i in range(groupcount):
+            myn = groupsize // groupcount
+            off = 0
+            leftover = groupsize % groupcount
+            if ( i < leftover ):
+                myn = myn + 1
+                off = i * myn
+            else:
+                off = ((myn + 1) * leftover) + (myn * (i - leftover))
+            dist.append((offset+off, myn))
+        offset += groupsize
+
+    return dist
+
+
+def distribute_samples(mpicomm, detectors, samples, detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
+    """
+    Distribute data by detector and sample.
+
+    Given a list of detectors and some number of samples, distribute
+    the data in a load balanced way.  Optionally account for constraints
+    on this distribution.  The samples may be grouped by indivisible
+    chunks, and there may be force breaks in the distribution in both
+    the detector and chunk directions.
+
+                            samples -->
+                      +--------------+--------------
+                    / | sampsize[0]  | sampsize[1] ... 
+        detrank = 0   +--------------+--------------
+                    \ | sampsize[0]  | sampsize[1] ...
+                      +--------------+--------------
+                    / | sampsize[0]  | sampsize[1] ... 
+        detrank = 1   +--------------+--------------
+                    \ | sampsize[0]  | sampsize[1] ...
+                      +--------------+--------------
+                      | ...
+
+    Args:
+        mpicomm (mpi4py.MPI.Comm):  the MPI communicator over which the 
+            data is distributed.
+        detectors (list):  The list of detector names.
+        samples (int):  The total number of samples.
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
+
+    Returns:
+        tuple of lists: the 3 lists returned contain information about 
+        the detector distribution, the sample distribution, and the chunk 
+        distribution.  The first list has one entry for each detrank and
+        contains the list of detectors for that row of the process grid.
+        The second list contains tuples of (first sample, N samples) for 
+        each column of the process grid.  The third list contains tuples
+        of (first chunk, N chunks) for each column of the process grid.
+
+    """
+    if mpicomm.size % detranks != 0:
+        raise RuntimeError("The number of detranks ({}) does not divide evenly into the communicator size ({})".format(detranks, mpicomm.size))
+
+    # Compute the other dimension of the process grid.
+
+    sampranks = mpicomm.size // detranks
+
+    # Distribute detectors uniformly, but respecting forced breaks in the
+    # grouping specified by the calling code.
+
+    dist_detsindx = distribute_uniform(len(detectors), detranks, breaks=detbreaks)
+    dist_dets = [ detectors[d[0]:d[0]+d[1]] for d in dist_detsindx ]
+
+    # Distribute samples using both the chunking and the forced breaks
+
+    if sampsizes is not None:
+        dist_sizes = distribute_discrete(
+            sampsizes, sampranks, breaks=sampbreaks)
+        dist_samples = []
+        off = 0
+        for ds in dist_sizes:
+            cursamp = np.sum(sampsizes[ds[0]:ds[0]+ds[1]])
+            dist_samples.append( (off, cursamp) )
+            off += cursamp
+    else:
+        dist_samples = distribute_uniform(
+            samples, sampranks, breaks=sampbreaks)
+        dist_sizes = [ (x, 1) for x in range(sampranks) ]
 
     return (dist_dets, dist_samples, dist_sizes)
 

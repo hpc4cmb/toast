@@ -95,16 +95,16 @@ class MapSatelliteTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODSatellite(
-                mpicomm=self.toastcomm.comm_group, 
-                detectors=self.dets, 
-                samples=self.totsamp, 
+                self.toastcomm.comm_group, 
+                self.dets, 
+                self.totsamp, 
                 firsttime=0.0, 
                 rate=self.rate, 
                 spinperiod=self.spinperiod,
                 spinangle=self.spinangle,
                 precperiod=self.precperiod, 
                 precangle=self.precangle, 
-                sizes=chunks)
+                sampsizes=chunks)
 
             precquat = slew_precession_axis(nsim=self.totsamp, firstsamp=0, samplerate=self.rate, degday=1.0)
 

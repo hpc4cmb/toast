@@ -212,23 +212,32 @@ class TODHpixSpiral(TOD):
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
-        detindx (dict): the detector indices for use in simulations.  Default is 
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        samples (int): maximum allowed samples.
+        samples (int):  The total number of samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
-        sizes (list): specify the indivisible chunks in which to split the samples.
+        nside (int): sky NSIDE to use.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
+
     """
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0, nside=512,
+        detindx=None, detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None, samples=0, firsttime=0.0, rate=100.0, nside=512, sizes=None):
-        if detectors is None:
-            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
-        else:
-            self._fp = detectors
-
+        self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
-        
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, detindx=detindx, samples=samples, sizes=sizes)
+
+        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
+            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
+            sampbreaks=sampbreaks)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -317,16 +326,6 @@ class TODHpixSpiral(TOD):
 
         boresight = qa.norm(boresight)
 
-        # boredir = qa.rotate(boresight, zaxis)
-        # boredir = boredir / np.sum(boredir * boredir, axis=1).reshape(-1,1)
-
-        # check = hp.vec2pix(self._nside, boredir[:,0], boredir[:,1], boredir[:,2], nest=False)
-        # if not np.array_equal(pixels, check):
-        #     print(list(enumerate(zip(dir,boredir))))
-        #     print(pixels)
-        #     print(check)
-        #     raise RuntimeError('FAIL on TODFake')
-
         data = qa.mult(boresight, detquat)
 
         return data
@@ -355,7 +354,6 @@ class TODHpixSpiral(TOD):
         return
 
 
-
 class TODSatellite(TOD):
     """
     Provide a simple generator of satellite detector pointing.
@@ -367,9 +365,7 @@ class TODSatellite(TOD):
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
-        detindx (dict): the detector indices for use in simulations.  Default is 
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        samples (int): maximum allowed samples.
+        samples (int):  The total number of samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         spinperiod (float): The period (in minutes) of the
@@ -380,20 +376,31 @@ class TODSatellite(TOD):
             rotation about the precession axis.
         precangle (float): The opening angle (in degrees)
             of the spin axis from the precession axis.
-        sizes (list): specify the indivisible chunks in which to split the samples.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
+    
     """
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0, 
+        spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, 
+        detindx=None, detranks=1, detbreaks=None, sampsizes=None, 
+        sampbreaks=None):
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None, samples=0, firsttime=0.0, rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, sizes=None):
-
-        if detectors is None:
-            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
-        else:
-            self._fp = detectors
-
+        self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
         
         # call base class constructor to distribute data
-        super().__init__(mpicomm=mpicomm, timedist=True, detectors=self._detlist, detindx=detindx, samples=samples, sizes=sizes)
+        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
+            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
+            sampbreaks=sampbreaks)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -534,14 +541,10 @@ class TODGround(TOD):
     2-angle model.
 
     Args:
-        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data is distributed.
-        detectors (dictionary): each key is the detector name, and each
-            value is a quaternion tuple.
-        detindx (dict): the detector indices for use in simulations.
-            Default is
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        samples (int): maximum allowed samples.
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        detectors (dictionary): each key is the detector name, and each value
+            is a quaternion tuple.
+        samples (int):  The total number of samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         site_lon (float/str): Observing site Earth longitude in radians or a pyEphem string.
@@ -561,8 +564,18 @@ class TODGround(TOD):
         sun_angle_min (float): Minimum angular distance for the patch and
             the Sun [degrees].
         allow_sun_up (bool):  Permit scans while the Sun is above horizon.
-        sizes (list): specify the indivisible chunks in which to split
-            the samples.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
+
     """
 
     TURNAROUND = 1
@@ -573,27 +586,18 @@ class TODGround(TOD):
     SUN_UP = 8
     SUN_CLOSE = 16
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, detectors=None, detindx=None,
-                 samples=0, firsttime=0.0, rate=100.0,
-                 site_lon=0, site_lat=0, site_alt=0,
-                 patch_lon=0, patch_lat=0, patch_coord='C',
-                 throw=10, scanrate=1, scan_accel=0.1,
-                 CES_start=None, CES_stop=None,
-                 el_min=0, sun_angle_min=90, allow_sun_up=True,
-                 sizes=None, timedist=True):
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0,
+                 site_lon=0, site_lat=0, site_alt=0, patch_lon=0, patch_lat=0, 
+                 patch_coord='C', throw=10, scanrate=1, scan_accel=0.1,
+                 CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90, 
+                 allow_sun_up=True, detindx=None, detranks=1, detbreaks=None, 
+                 sampsizes=None, sampbreaks=None):
 
         if ephem is None:
             raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
                                'without pyephem.')
 
-        if detectors is None:
-            self._fp = {'boresight' : np.array([0.0, 0.0, 1.0, 0.0])}
-        else:
-            self._fp = detectors
-
-        self._detlist = sorted(list(self._fp.keys()))
-
-        if sizes is not None:
+        if sampsizes is not None:
             raise RuntimeError('TODGround will synthesize the sizes to match '
                                'the subscans.')
 
@@ -686,10 +690,13 @@ class TODGround(TOD):
 
         sizes = self.simulate_scan(samples)
 
+        self._fp = detectors
+        self._detlist = sorted(list(self._fp.keys()))
+
         # call base class constructor to distribute data
-        super().__init__(
-            mpicomm=mpicomm, timedist=timedist, detectors=self._detlist,
-            detindx=detindx, samples=samples, sizes=sizes)
+        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
+            detranks=detranks, detbreaks=detbreaks, sampsizes=sizes, 
+            sampbreaks=sampbreaks)
 
         self._boresight_azel, self._boresight = self.translate_pointing()
 

@@ -53,9 +53,9 @@ class OpMadamTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODHpixSpiral(
-                mpicomm=self.toastcomm.comm_group, 
-                detectors=self.dets,
-                samples=self.totsamp,
+                self.toastcomm.comm_group, 
+                self.dets,
+                self.totsamp,
                 rate=self.rate,
                 nside=self.sim_nside
             )

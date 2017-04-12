@@ -94,10 +94,10 @@ class MapGroundTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODGround(
-                mpicomm=self.toastcomm.comm_group, 
-                detectors=self.dets, 
-                samples=self.totsamp, 
-                firsttime=0.0, 
+                self.toastcomm.comm_group,
+                self.dets, 
+                self.totsamp, 
+                firsttime=0.0,
                 rate=self.rate,
                 site_lon=self.site_lon,
                 site_lat=self.site_lat,
@@ -108,9 +108,7 @@ class MapGroundTest(MPITestCase):
                 throw=self.throw,
                 scanrate=self.scanrate,
                 scan_accel=self.scan_accel,
-                CES_start=self.CES_start,
-                sizes=None)
-                #sizes=chunks)
+                CES_start=self.CES_start)
 
             self.common_flag_mask = tod.TURNAROUND
 

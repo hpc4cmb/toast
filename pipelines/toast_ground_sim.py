@@ -279,9 +279,9 @@ def main():
 
     try:
         tod = tt.TODGround(
-            mpicomm=comm.comm_group, 
-            detectors=detquats,
-            samples=totsamples,
+            comm.comm_group, 
+            detquats,
+            totsamples,
             firsttime=CES_start,
             rate=args.samplerate,
             site_lon=args.site_lon,
@@ -298,7 +298,7 @@ def main():
             el_min=args.el_min,
             sun_angle_min=args.sun_angle_min,
             allow_sun_up=args.allow_sun_up,
-            sizes=None, timedist=False)
+            sampsizes=None)
     except RuntimeError as e:
         print('Failed to create the CES scan: {}'.format(e))
         return

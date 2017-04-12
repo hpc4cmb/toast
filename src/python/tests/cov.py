@@ -97,16 +97,16 @@ class CovarianceTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODSatellite(
-                mpicomm=self.toastcomm.comm_group, 
-                detectors=self.dets, 
-                samples=self.totsamp, 
+                self.toastcomm.comm_group, 
+                self.dets, 
+                self.totsamp, 
                 firsttime=0.0, 
                 rate=self.rate, 
                 spinperiod=self.spinperiod,
                 spinangle=self.spinangle,
                 precperiod=self.precperiod, 
                 precangle=self.precangle, 
-                sizes=chunks)
+                sampsizes=chunks)
 
             tod.set_prec_axis()
 

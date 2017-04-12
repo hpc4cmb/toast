@@ -113,7 +113,14 @@ class OpSimNoiseTest(MPITestCase):
 
         # Construct an empty TOD (no pointing needed)
 
-        self.tod = TODHpixSpiral(mpicomm=self.toastcomm.comm_group, detectors=self.fp, samples=self.totsamp, firsttime=0.0, rate=self.rate, nside=512, sizes=chunks)
+        self.tod = TODHpixSpiral(
+            self.toastcomm.comm_group, 
+            self.fp, 
+            self.totsamp, 
+            firsttime=0.0, 
+            rate=self.rate, 
+            nside=512, 
+            sampsizes=chunks)
 
         # construct an analytic noise model
 

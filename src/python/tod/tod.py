@@ -25,24 +25,41 @@ class TOD(object):
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
-        timedist (bool): if True, the data is distributed by time, otherwise by
-            detector.
-        detectors (list): list of names to use for the detectors.
+        detectors (list):  The list of detector names.
+        samples (int):  The total number of samples.
         detindx (dict): the detector indices for use in simulations.  Default is 
             { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        samples (int): the number of global samples represented by this TOD object.
-        sizes (list): specify the indivisible chunks in which to split the samples.
-    """
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, detindx=None, samples=0, sizes=None):
+    """
+    def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1, 
+        detbreaks=None, sampsizes=None, sampbreaks=None):
 
         self._mpicomm = mpicomm
-        self._timedist = timedist
-        self._dets = []
-        if detectors is not None:
-            self._dets = detectors
+        self._detranks = detranks
+
+        if mpicomm.size % detranks != 0:
+            raise RuntimeError("The number of detranks ({}) does not divide evenly into the communicator size ({})".format(detranks, mpicomm.size))
+        
+        self._sampranks = mpicomm.size // detranks
+
+        self._rank_det = mpicomm.rank // self._sampranks
+        self._rank_samp = mpicomm.rank % self._sampranks
+
+        self._dets = detectors
+
         self._nsamp = samples
-        self._sizes = sizes
+
+        self._sizes = sampsizes
+
         if detindx is not None:
             for d in self._dets:
                 if d not in detindx:
@@ -53,17 +70,22 @@ class TOD(object):
 
         # if sizes is specified, it must be consistent with
         # the total number of samples.
-        if sizes is not None:
-            test = np.sum(sizes)
+        if self._sizes is not None:
+            test = np.sum(self._sizes)
             if samples != test:
-                raise RuntimeError("Sum of sizes ({}) does not equal total samples ({})".format(test, samples))
+                raise RuntimeError("Sum of sampsizes ({}) does not equal total samples ({})".format(test, samples))
 
-        (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_samples(self._mpicomm, self._timedist, self._dets, self._nsamp, sizes=self._sizes)
+        (self._dist_dets, self._dist_samples, self._dist_sizes) = distribute_samples(
+            self._mpicomm, self._dets, self._nsamp, detranks=self._detranks, 
+            detbreaks=detbreaks, sampsizes=sampsizes, sampbreaks=sampbreaks)
+
+        if self._sizes is None:
+            self._sizes = [ self._dist_samples[x][1] for x in range(self._sampranks) ]
 
         if self._mpicomm.rank == 0:
             # check that all processes have some data, otherwise print warning
             for r in range(self._mpicomm.size):
-                if len(self._dist_samples[r]) == 0:
+                if self._dist_samples[r][1] <= 0:
                     print("WARNING: process {} has no data assigned in TOD.  Use fewer processes.".format(r))
 
         self.cache = Cache()
@@ -71,8 +93,6 @@ class TOD(object):
         The timestream data cache.
         """
 
-    def __del__(self):
-        self.cache.clear()
 
     @property
     def detectors(self):
@@ -93,30 +113,22 @@ class TOD(object):
         """
         (list): The detectors assigned to this process.
         """
-        return self._dist_dets
-
-    @property
-    def timedist(self):
-        """
-        (bool): if True, the data is time-distributed.
-        """
-        return self._timedist
+        return self._dist_dets[self._rank_det]
 
     @property
     def total_chunks(self):
         """
-        (list): the full list of sample sizes that were used in computing
-            the data distribution (i.e. what was passed to the constructor
-            as the "sizes" parameter).
+        (list): the full list of sample chunk sizes that were used in the 
+            data distribution.
         """
         return self._sizes
 
     @property
     def dist_chunks(self):
         """
-        (list): this is a list of 2-tuples, one for each process.  Each
-        element of the list is the same as the information returned by
-        the "local_chunks" member for the given process.
+        (list): this is a list of 2-tuples, one for each column of the process
+        grid.  Each element of the list is the same as the information returned 
+        by the "local_chunks" member for a given process column.
         """
         return self._dist_sizes
 
@@ -128,14 +140,7 @@ class TOD(object):
         given by the "total_chunks" member).  The second element of the
         tuple is the number of chunks assigned to this process.
         """
-        if self._dist_sizes is None:
-            return None
-        else:
-            mysizes = self._dist_sizes[self._mpicomm.rank]
-            if len(mysizes) == 0:
-                return [(-1, -1)]
-            else:
-                return mysizes
+        return self._dist_sizes[self._rank_samp]
 
     @property
     def total_samples(self):
@@ -147,9 +152,10 @@ class TOD(object):
     @property
     def dist_samples(self):
         """
-        (list): This is a list of 2-tuples, with one element per process.
-            Each tuple is the same information returned by the "local_samples"
-            member for the corresponding process.
+        (list): This is a list of 2-tuples, with one element per column
+            of the process grid.  Each tuple is the same information 
+            returned by the "local_samples" member for the corresponding 
+            process grid column rank.
         """
         return self._dist_samples
 
@@ -161,11 +167,7 @@ class TOD(object):
             the tuple is the number of samples assigned to this
             process.
         """
-        mysamples = self._dist_samples[self._mpicomm.rank]
-        if len(mysamples) == 0:
-            return [(-1, -1)]
-        else:
-            return mysamples
+        return self._dist_samples[self._rank_samp]
 
     @property
     def mpicomm(self):
@@ -173,6 +175,22 @@ class TOD(object):
         (mpi4py.MPI.Comm): the communicator assigned to this TOD.
         """
         return self._mpicomm
+
+    @property
+    def grid_size(self):
+        """
+        (tuple): the dimensions of the process grid in (detector, sample)
+            directions.
+        """
+        return (self._detranks, self._sampranks)
+    
+    @property
+    def grid_ranks(self):
+        """
+        (tuple): the ranks of this process in the (detector, sample)
+            directions.
+        """
+        return (self._rank_det, self._rank_samp)
 
 
     def _get(self, detector, start, n):
@@ -620,20 +638,29 @@ class TODCache(TOD):
     ordered data.  You must "write" the data before you can "read" it.
 
     Args:
-        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data 
-            is distributed.
-        timedist (bool): if True, the data is distributed by time, otherwise 
-            by detector.
-        detectors (list): list of names to use for the detectors.
-        samples (int): the number of global samples represented by this TOD 
-            object.
-        sizes (list): specify the indivisible chunks in which to split the 
-            samples.
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        detectors (list):  The list of detector names.
+        samples (int):  The total number of samples.
+        detindx (dict): the detector indices for use in simulations.  Default is 
+            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        detranks (int):  The dimension of the process grid in the detector
+            direction.  The MPI communicator size must be evenly divisible
+            by this number.
+        detbreaks (list):  Optional list of hard breaks in the detector
+            distribution.
+        sampsizes (list):  Optional list of sample chunk sizes which 
+            cannot be split.    
+        sampbreaks (list):  Optional list of hard breaks in the sample 
+            distribution.
+
     """
 
-    def __init__(self, mpicomm=MPI.COMM_WORLD, timedist=True, detectors=None, samples=0, sizes=None):
+    def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1, 
+        detbreaks=None, sampsizes=None, sampbreaks=None):
 
-        super().__init__(mpicomm=mpicomm, timedist=timedist, detectors=detectors, samples=samples, sizes=sizes)
+        super().__init__(mpicomm, detectors, samples, detindx=detindx, 
+            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
+            sampbreaks=sampbreaks)
 
         self._pref_detdata = 'toast_tod_detdata_'
         self._pref_detflags = 'toast_tod_detflags_'
