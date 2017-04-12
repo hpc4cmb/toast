@@ -54,9 +54,9 @@ class OpPointingHpixTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODHpixSpiral(
-                mpicomm = self.data.comm.comm_group,  
-                detectors = self.dets,
-                samples = self.totsamp
+                self.data.comm.comm_group,  
+                self.dets,
+                self.totsamp
             )
 
             ob = {}

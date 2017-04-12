@@ -58,9 +58,9 @@ class OpSimDipoleTest(MPITestCase):
         self.rate = 1.0
 
         self.tod = TODHpixSpiral(
-            mpicomm=self.toastcomm.comm_group, 
-            detectors=self.dets, 
-            samples=self.totsamp, 
+            self.toastcomm.comm_group, 
+            self.dets, 
+            self.totsamp, 
             firsttime=0.0, 
             rate=self.rate, 
             nside=self.nside)

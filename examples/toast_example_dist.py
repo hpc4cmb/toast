@@ -20,7 +20,7 @@ obs_samples = 100
 obs_dets = ['detA', 'detB', 'detC']
 
 for i in range(10):
-    tod = tt.TOD(mpicomm=cm.comm_group, detectors=obs_dets, samples=obs_samples)
+    tod = tt.TOD(cm.comm_group, obs_dets, obs_samples)
     indx = cm.group * 10 + i
     ob = {}
     ob['name'] = '{}'.format(indx)

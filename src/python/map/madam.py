@@ -210,7 +210,7 @@ class OpMadam(Operator):
             s += '{};'.format(d)
         return s
 
-    def exec(self, data):
+    def exec(self, data, comm=None):
         """
         Copy data to Madam-compatible buffers and make a map.
 
@@ -220,8 +220,9 @@ class OpMadam(Operator):
         if libmadam is None:
             raise RuntimeError("Cannot find libmadam")
 
-        # the two-level pytoast communicator
-        comm = data.comm
+        if comm is None:
+            # Just use COMM_WORLD
+            comm = data.comm.comm_world
 
         # Madam only works with a data model where there is either
         #   1) one global observation split among the processes,
@@ -277,7 +278,7 @@ class OpMadam(Operator):
             nnz = nnz_full
             nnz_stride = 1
 
-        fcomm = comm.comm_world.py2f()
+        fcomm = comm.py2f()
 
         if 'nside_map' not in self._params:
             raise RuntimeError(

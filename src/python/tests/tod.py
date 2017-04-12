@@ -26,7 +26,7 @@ class TODTest(MPITestCase):
         self.mynsamp = 10
         self.myoff = self.mynsamp * self.comm.rank
         self.totsamp = self.mynsamp * self.comm.size
-        self.tod = TODCache(mpicomm=self.comm, timedist=True, detectors=self.dets, samples=self.totsamp)
+        self.tod = TODCache(self.comm, self.dets, self.totsamp)
         self.rms = 10.0
         self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4))).reshape(-1,4)
         self.pflagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
@@ -51,7 +51,6 @@ class TODTest(MPITestCase):
         self.assertEqual(self.tod.total_samples, self.totsamp)
         self.assertEqual(self.tod.local_samples[0], self.myoff)
         self.assertEqual(self.tod.local_samples[1], self.mynsamp)
-        self.assertTrue(self.tod.timedist)
 
         stop = MPI.Wtime()
         elapsed = stop - start

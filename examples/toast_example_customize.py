@@ -86,16 +86,16 @@ for d in detectors:
     detquats[d] = fp[d]['quat']
 
 tod = tt.TODSatellite(
-    mpicomm=comm.comm_group, 
-    detectors=detquats,
-    samples=totsamples,
+    comm.comm_group, 
+    detquats,
+    totsamples,
     firsttime=0.0,
     rate=samplerate,
     spinperiod=spinperiod,
     spinangle=spinangle,
     precperiod=precperiod,
     precangle=precangle,
-    sizes=distsizes
+    sampsizes=distsizes
 )
 
 # Create the noise model for this observation
