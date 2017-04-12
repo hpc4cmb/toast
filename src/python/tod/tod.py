@@ -93,6 +93,9 @@ class TOD(object):
         The timestream data cache.
         """
 
+    def __del__(self):
+        self.cache.clear()
+
 
     @property
     def detectors(self):
