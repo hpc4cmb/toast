@@ -273,7 +273,7 @@ def distribute_samples(mpicomm, detectors, samples, detranks=1, detbreaks=None, 
     Given a list of detectors and some number of samples, distribute
     the data in a load balanced way.  Optionally account for constraints
     on this distribution.  The samples may be grouped by indivisible
-    chunks, and there may be force breaks in the distribution in both
+    chunks, and there may be forced breaks in the distribution in both
     the detector and chunk directions.
 
                             samples -->
