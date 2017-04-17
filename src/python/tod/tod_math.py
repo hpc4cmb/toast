@@ -14,6 +14,8 @@ from .. import rng as rng
 from .. import qarray as qa
 from .. import fft as fft
 
+from ..op import Operator
+
 
 def calibrate( toitimes, toi, gaintimes, gains, order=0, inplace=False ):
     """
@@ -281,4 +283,70 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
         dipoletod = cmb * (bt + fcor * bt**2)
 
     return dipoletod
+
+
+class OpCacheCopy(Operator):
+    """
+    Operator which copies sets of timestreams between cache locations.
+
+    This simply copies data from one set of per-detector cache objects to
+    another set.  At some point we will likely move away from persistent
+    caching of intermediate timestreams and this operator will become
+    irrelevant.
+
+    Args:
+        in (str): use cache objects with name <in>_<detector>.
+        out (str): copy data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
+    """
+
+    def __init__(self, input, output):
+        
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
+
+        self._in = input
+        self._out = output
+
+    def exec(self, data):
+        """
+        Copy timestreams.
+
+        This iterates over all observations and detectors and copies cache
+        objects whose names match the specified pattern.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
+        comm = data.comm
+
+        for obs in data.obs:
+
+            tod = obs['tod']
+
+            for det in tod.local_dets:
+
+                # if the cache object exists, copy it
+
+                inname = "{}_{}".format(self._in, det)
+                outname = "{}_{}".format(self._out, det)
+
+                inref = None
+                if tod.cache.exists(inname):
+                    inref = tod.cache.reference(inname)
+
+                    outref = None
+                    if tod.cache.exists(outname):
+                        outref = tod.cache.reference(outname)
+                    else:
+                        outref = tod.cache.create(outname, np.float64,
+                                    (tod.local_samples[1],))
+
+                    outref[local_offset:local_offset+chunk_samp] = inref[local_offset:local_offset+chunk_samp]
+
+                    del outref
+                    del inref
+
+        return
+
 

@@ -49,10 +49,6 @@ class OpSimNoise(Operator):
         self._rate = rate
         self._altfft = altFFT
 
-    @property
-    def timedist(self):
-        return self._timedist
-
     def exec(self, data):
         """
         Generate noise timestreams.

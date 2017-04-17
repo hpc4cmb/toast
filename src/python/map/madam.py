@@ -181,13 +181,6 @@ class OpMadam(Operator):
             self._cached = False
 
     @property
-    def timedist(self):
-        """
-        (bool): Whether this operator requires data that time-distributed.
-        """
-        return self._timedist
-
-    @property
     def available(self):
         """
         (bool): True if libmadam is found in the library search path.

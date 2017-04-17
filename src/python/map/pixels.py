@@ -34,15 +34,6 @@ class OpLocalPixels(Operator):
         self._timedist = True
         self._pixels = pixels
 
-
-    @property
-    def timedist(self):
-        """
-        (bool): Whether this operator requires data that time-distributed.
-        """
-        return self._timedist
-
-
     def exec(self, data):
         """
         Iterate over all observations and detectors and compute local pixels.

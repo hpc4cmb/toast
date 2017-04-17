@@ -114,10 +114,30 @@ class OpSimAtmosphere(Operator):
             (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
 
             # Go through all detectors and compute the maximum angular extent
-            # of the focalplane from the boresight.  Add some margin.
+            # of the focalplane from the boresight.  Add a tiny margin, since
+            # the atmosphere simulation already adds some margin.
 
+            # FIXME: the TOD class should really provide a method to return
+            # the detector quaternions relative to the boresight.  For now, we
+            # jump through hoops by getting one sample of the pointing.
 
+            zaxis = np.array([0.0, 0.0, 1.0])
+            detdirs = []
+            for det in tod.local_dets:
+                dquat = tod.read_pntg(detector=det, local_start=0, n=1)
+                detdirs.append(qa.rotate(dquat, zaxis).flatten())
 
+            detangs = []
+            for d in range(1, len(tod.local_dets)):
+                detangs.append(np.dot(detdirs[d], detdirs[0]))
+
+            fp_diameter = np.max(np.arccos(detangs)) * 180.0 / np.pi
+            fp_radius = 0.5 * fp_diameter
+
+            azmin = min_az_bore - 1.01 * fp_radius
+            azmax = max_az_bore + 1.01 * fp_radius
+            elmin = min_el_bore - 1.01 * fp_radius
+            elmax = max_el_bore + 1.01 * fp_radius
 
             # Get the timestamps
 
@@ -144,7 +164,7 @@ class OpSimAtmosphere(Operator):
                 # Convert Az/El quaternion of the detector back into angles for
                 # the simulation.
 
-                
+                az, el, pa = qarray.to_angles(azelquat)
 
                 # Integrate detector signal
 

@@ -34,7 +34,8 @@ from .noise import Noise
 
 from .pointing_math import quat2angle, aberrate
 
-from .tod_math import calibrate, dipole, sim_noise_timestream
+from .tod_math import (calibrate, dipole, sim_noise_timestream,
+    OpCacheCopy)
 
 from .conviqt import OpSimConviqt
 
