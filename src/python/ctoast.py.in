@@ -359,6 +359,30 @@ def qarray_from_vectors(vec1, vec2):
     lib.ctoast_qarray_from_vectors(vec1, vec2, q)
     return q
 
+lib.ctoast_qarray_from_angles.restype = None
+lib.ctoast_qarray_from_angles.argtypes = [ ct.c_ulong, npf64, npf64, npf64, npf64, ct.c_int ]
+
+def qarray_from_angles(n, theta, phi, pa, IAU=False):
+    q = np.zeros(4*n, dtype=np.float64)
+    iau = 0
+    if IAU:
+        iau = 1
+    lib.ctoast_qarray_from_angles(n, theta, phi, pa, q, iau)
+    return q
+
+lib.ctoast_qarray_to_angles.restype = None
+lib.ctoast_qarray_to_angles.argtypes = [ ct.c_ulong, npf64, npf64, npf64, npf64, ct.c_int ]
+
+def qarray_to_angles(n, quat, IAU=False):
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
+    pa = np.zeros(n, dtype=np.float64)
+    iau = 0
+    if IAU:
+        iau = 1
+    lib.ctoast_qarray_to_angles(n, quat, theta, phi, pa, iau)
+    return (theta, phi, pa)
+
 # FFT
 
 class cFFTR1D(ct.Structure):

@@ -9,6 +9,8 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <cmath>
 
+#include <limits>
+
 
 using namespace std;
 using namespace toast;
@@ -327,6 +329,195 @@ TEST_F( qarrayTest, fromvectors ) {
     for ( size_t i = 0; i < 4; ++i ) {
         EXPECT_FLOAT_EQ( check[i], result[i] );
     }
+}
+
+
+TEST_F( qarrayTest, thetaphipa ) {
+    size_t n_theta = 5;
+    size_t n_phi = 5;
+    size_t n = n_theta * n_phi;
+
+    double xaxis[3] = { 1.0, 0.0, 0.0 };
+    double zaxis[3] = { 0.0, 0.0, 1.0 };
+
+    double * theta = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * phi = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * pa = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    double * check_theta = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * check_phi = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * check_pa = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    double * quat = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    // First run tests in Healpix convention...
+
+    for ( size_t i = 0; i < n_theta; ++i ) {
+        for ( size_t j = 0; j < n_phi; ++j ) {
+            theta[i*n_phi + j] = (0.5 + (double)i) * toast::PI / (double)n_theta;
+            phi[i*n_phi + j] = (double)j * toast::TWOPI / (double)n_phi;
+            pa[i*n_phi + j] = (double)j * toast::TWOPI / (double)n_phi - toast::PI;
+        }
+    }
+
+    // convert to quaternions
+
+    qarray::from_angles ( n, theta, phi, pa, quat, false );
+
+    // check that the resulting quaternions rotate the Z and X
+    // axes to the correct place.
+
+    double dir[3];
+    double orient[3];
+    double check;
+
+    for ( size_t i = 0; i < n; ++i ) {
+        qarray::rotate ( 1, &(quat[4*i]), zaxis, dir );
+        qarray::rotate ( 1, &(quat[4*i]), xaxis, orient );
+
+        ASSERT_NEAR( toast::PI_2 - ::asin(dir[2]), theta[i], 1.0e-6 );
+
+        check = ::atan2 ( dir[1], dir[0] );
+
+        if ( check < 0.0 ) {
+            check += toast::TWOPI;
+        }
+        if ( check >= toast::TWOPI ) {
+            check -= toast::TWOPI;
+        }
+        if ( ::fabs( check ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+        if ( ::fabs( check - toast::TWOPI ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+
+        ASSERT_NEAR( check, phi[i], 1.0e-6 );
+
+        check = ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0], 
+                - ( orient[0] * dir[2] * dir[0] ) 
+                - ( orient[1] * dir[2] * dir[1] ) 
+                + ( orient[2] * ( dir[0] * dir[0] + dir[1] * dir[1] ) ) );
+
+        ASSERT_NEAR( check, pa[i], 1.0e-6 );
+    }
+
+    qarray::to_angles ( n, quat, check_theta, check_phi, check_pa, false );
+
+    for ( size_t i = 0; i < n; ++i ) {
+        ASSERT_NEAR( theta[i], check_theta[i], 1.0e-6 );
+
+        check = check_phi[i];
+        if ( check < 0.0 ) {
+            check += toast::TWOPI;
+        }
+        if ( check >= toast::TWOPI ) {
+            check -= toast::TWOPI;
+        }
+        if ( ::fabs( check ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+        if ( ::fabs( check - toast::TWOPI ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+
+        ASSERT_NEAR( phi[i], check, 1.0e-6 );
+
+        ASSERT_NEAR( pa[i], check_pa[i], 1.0e-6 );
+    }
+
+    // Now run tests in IAU convention...
+
+    for ( size_t i = 0; i < n_theta; ++i ) {
+        for ( size_t j = 0; j < n_phi; ++j ) {
+            theta[i*n_phi + j] = (0.5 + (double)i) * toast::PI / (double)n_theta;
+            phi[i*n_phi + j] = (double)j * toast::TWOPI / (double)n_phi;
+            pa[i*n_phi + j] = - (double)j * toast::TWOPI / (double)n_phi + toast::PI;
+        }
+    }
+
+    // convert to quaternions
+
+    qarray::from_angles ( n, theta, phi, pa, quat, true );
+
+    // check that the resulting quaternions rotate the Z and X
+    // axes to the correct place.
+
+    for ( size_t i = 0; i < n; ++i ) {
+        qarray::rotate ( 1, &(quat[4*i]), zaxis, dir );
+        qarray::rotate ( 1, &(quat[4*i]), xaxis, orient );
+
+        ASSERT_NEAR( toast::PI_2 - ::asin (dir[2]), theta[i], 1.0e-6 );
+
+        check = ::atan2 ( dir[1], dir[0] );
+
+        if ( check < 0.0 ) {
+            check += toast::TWOPI;
+        }
+        if ( check >= toast::TWOPI ) {
+            check -= toast::TWOPI;
+        }
+        if ( ::fabs( check ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+        if ( ::fabs( check - toast::TWOPI ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+
+        ASSERT_NEAR( check, phi[i], 1.0e-6 );
+
+        check = - ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0], 
+                - ( orient[0] * dir[2] * dir[0] ) 
+                - ( orient[1] * dir[2] * dir[1] ) 
+                + ( orient[2] * ( dir[0] * dir[0] + dir[1] * dir[1] ) ) );
+
+        if ( ::fabs ( ::fabs ( check - pa[i] ) - toast::TWOPI ) < std::numeric_limits<float>::epsilon() ) {
+            // we are at the same angle, just with 2PI rotation.
+        } else if ( ::fabs ( ::fabs ( pa[i] - check ) - toast::TWOPI ) < std::numeric_limits<float>::epsilon() ) {
+            // we are at the same angle, just with 2PI rotation.
+        } else {
+            ASSERT_NEAR( check, pa[i], 1.0e-6 );
+        }
+    }
+
+    qarray::to_angles ( n, quat, check_theta, check_phi, check_pa, true );
+
+    for ( size_t i = 0; i < n; ++i ) {
+        ASSERT_NEAR( theta[i], check_theta[i], 1.0e-6 );
+
+        check = check_phi[i];
+        if ( check < 0.0 ) {
+            check += toast::TWOPI;
+        }
+        if ( check >= toast::TWOPI ) {
+            check -= toast::TWOPI;
+        }
+        if ( ::fabs( check ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+        if ( ::fabs( check - toast::TWOPI ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+
+        ASSERT_NEAR( phi[i], check, 1.0e-6 );
+
+        ASSERT_NEAR( pa[i], check_pa[i], 1.0e-6 );
+    }
+
+    toast::mem::aligned_free ( theta );
+    toast::mem::aligned_free ( phi );
+    toast::mem::aligned_free ( pa );
+    toast::mem::aligned_free ( quat );
+    toast::mem::aligned_free ( check_theta );
+    toast::mem::aligned_free ( check_phi );
+    toast::mem::aligned_free ( check_pa );
 }
 
 

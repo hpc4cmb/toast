@@ -406,3 +406,137 @@ void toast::qarray::from_vectors ( double const * vec1, double const * vec2, dou
 }
 
 
+// Create quaternions from latitude, longitude, and position angles
+
+void toast::qarray::from_angles ( size_t n, double const * theta, 
+    double const * phi, double * const pa, double * quat, bool IAU ) {
+
+    #pragma omp parallel default(shared)
+    {
+        size_t qf;
+
+        double angR;
+        double angD;
+        double angP;
+        double norm;
+
+        double qR[4];
+        double qD[4];
+        double qP[4];
+        double qtemp[4];
+
+        #pragma omp for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            qf = 4 * i;
+
+            // phi rotation around z-axis
+
+            angR = phi[i] + toast::PI_2;
+
+            qR[0] = 0.0;
+            qR[1] = 0.0;
+            qR[2] = ::sin ( 0.5 * angR );
+            qR[3] = ::cos ( 0.5 * angR );
+
+            // theta rotation around x-axis
+
+            angD = theta[i];
+
+            qD[0] = ::sin ( 0.5 * angD );
+            qD[1] = 0.0;
+            qD[2] = 0.0;
+            qD[3] = ::cos ( 0.5 * angD );
+
+            // position angle rotation about z-axis
+
+            angP = toast::PI_2;
+            if ( IAU ) {
+                angP -= pa[i];
+            } else {
+                angP += pa[i];
+            }
+
+            qP[0] = 0.0;
+            qP[1] = 0.0;
+            qP[2] = ::sin ( 0.5 * angP );
+            qP[3] = ::cos ( 0.5 * angP );
+
+            toast::qarray::mult ( 1, qD, qP, qtemp );
+            toast::qarray::mult ( 1, qR, qtemp, &(quat[qf]) );
+
+            norm = 0.0;
+            norm += quat[qf] * quat[qf];
+            norm += quat[qf+1] * quat[qf+1];
+            norm += quat[qf+2] * quat[qf+2];
+            norm += quat[qf+3] * quat[qf+3];
+            norm = 1.0 / ::sqrt ( norm );
+            quat[qf] *= norm;
+            quat[qf+1] *= norm;
+            quat[qf+2] *= norm;
+            quat[qf+3] *= norm;
+        }
+
+    }
+
+    return;
+}
+
+
+// Convert quaternions to latitude, longitude, and position angle
+
+void toast::qarray::to_angles ( size_t n, double const * quat, double * theta, 
+    double * phi, double * pa, bool IAU ) {
+
+    double const xaxis[3] = { 1.0, 0.0, 0.0 };
+    double const zaxis[3] = { 0.0, 0.0, 1.0 };
+
+    #pragma omp parallel default(shared)
+    {
+        size_t qf;
+
+        double norm;
+
+        double dir[3];
+        double orient[3];
+        double qtemp[4];
+
+        #pragma omp for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            qf = 4 * i;
+
+            norm = 0.0;
+            norm += quat[qf] * quat[qf];
+            norm += quat[qf+1] * quat[qf+1];
+            norm += quat[qf+2] * quat[qf+2];
+            norm += quat[qf+3] * quat[qf+3];
+            norm = 1.0 / ::sqrt ( norm );
+            qtemp[0] = quat[qf] * norm;
+            qtemp[1] = quat[qf+1] * norm;
+            qtemp[2] = quat[qf+2] * norm;
+            qtemp[3] = quat[qf+3] * norm;
+
+            toast::qarray::rotate ( 1, qtemp, zaxis, dir );
+            toast::qarray::rotate ( 1, qtemp, xaxis, orient );
+
+            theta[i] = toast::PI_2 - ::asin ( dir[2] );
+            phi[i] = ::atan2 ( dir[1], dir[0] );
+
+            if ( phi[i] < 0.0 ) {
+                phi[i] += toast::TWOPI;
+            }
+
+            pa[i] = ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0], 
+                - ( orient[0] * dir[2] * dir[0] ) 
+                - ( orient[1] * dir[2] * dir[1] ) 
+                + ( orient[2] * ( dir[0] * dir[0] + dir[1] * dir[1] ) ) );
+
+            if ( IAU ) {
+                pa[i] = -pa[i];
+            }
+        }
+    }
+
+    return;
+}
+
+

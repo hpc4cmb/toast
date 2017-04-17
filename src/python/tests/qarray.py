@@ -185,3 +185,106 @@ class QarrayTest(MPITestCase):
             np.testing.assert_almost_equal(check, np.cos(radius))
 
 
+    def test_angles(self):
+        ntheta = 5
+        nphi = 5
+        n = ntheta * nphi
+        xaxis = np.array([1.0, 0.0, 0.0])
+        zaxis = np.array([0.0, 0.0, 1.0])
+
+        theta = np.zeros(n, dtype=np.float64)
+        phi = np.zeros(n, dtype=np.float64)
+        pa = np.zeros(n, dtype=np.float64)
+
+        # Healpix convention
+
+        for i in range(ntheta):
+            for j in range(nphi):
+                theta[i*nphi + j] = (0.5 + i) * np.pi / float(ntheta)
+                phi[i*nphi + j] = j * 2.0 * np.pi / float(nphi)
+                pa[i*nphi + j] = j * 2.0 * np.pi / float(nphi) - np.pi
+
+        quat = qarray.from_angles(theta, phi, pa, IAU=False)
+
+        dir = qarray.rotate(quat, np.tile(zaxis, n).reshape((n, 3)) )
+        orient = qarray.rotate(quat, np.tile(xaxis, n).reshape((n, 3)) )
+
+        np.testing.assert_array_almost_equal(np.pi/2 - np.arcsin(dir[:,2]), theta, decimal=4)
+
+        check = np.arctan2(dir[:,1], dir[:,0])
+
+        check[check < 0.0] += 2.0*np.pi
+        check[check > 2.0*np.pi] -= 2.0*np.pi
+        check[(np.absolute(check) < 2.0e-16)] = 0.0
+        check[(np.absolute(check - 2.0*np.pi) < 2.0e-16)] = 0.0
+
+        np.testing.assert_array_almost_equal(check, phi, decimal=6)
+
+        check = np.arctan2 ( orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0], 
+                - ( orient[:,0] * dir[:,2] * dir[:,0] ) 
+                - ( orient[:,1] * dir[:,2] * dir[:,1] ) 
+                + ( orient[:,2] * ( dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1] ) ) )
+
+        np.testing.assert_array_almost_equal(check, pa, decimal=6)
+
+        check_theta, check_phi, check_pa = qarray.to_angles(quat, IAU=False)
+
+        np.testing.assert_array_almost_equal(check_theta, theta, decimal=4)
+
+        check_phi[(np.absolute(check_phi) < 2.0e-6)] = 0.0
+        check_phi[(np.absolute(check_phi - 2.0*np.pi) < 2.0e-6)] = 0.0
+
+        np.testing.assert_array_almost_equal(check_phi, phi, decimal=4)
+
+        np.testing.assert_array_almost_equal(check_pa, pa, decimal=4)
+
+        # IAU convention
+
+        for i in range(ntheta):
+            for j in range(nphi):
+                theta[i*nphi + j] = (0.5 + i) * np.pi / float(ntheta)
+                phi[i*nphi + j] = j * 2.0 * np.pi / float(nphi)
+                pa[i*nphi + j] = - j * 2.0 * np.pi / float(nphi) - np.pi
+
+        quat = qarray.from_angles(theta, phi, pa, IAU=True)
+
+        dir = qarray.rotate(quat, np.tile(zaxis, n).reshape((n, 3)) )
+        orient = qarray.rotate(quat, np.tile(xaxis, n).reshape((n, 3)) )
+
+        np.testing.assert_array_almost_equal(np.pi/2 - np.arcsin(dir[:,2]), theta, decimal=4)
+
+        check = np.arctan2(dir[:,1], dir[:,0])
+
+        check[check < 0.0] += 2.0*np.pi
+        check[check > 2.0*np.pi] -= 2.0*np.pi
+        check[(np.absolute(check) < 2.0e-16)] = 0.0
+        check[(np.absolute(check - 2.0*np.pi) < 2.0e-16)] = 0.0
+
+        np.testing.assert_array_almost_equal(check, phi, decimal=6)
+
+        check = - np.arctan2 ( orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0], 
+                - ( orient[:,0] * dir[:,2] * dir[:,0] ) 
+                - ( orient[:,1] * dir[:,2] * dir[:,1] ) 
+                + ( orient[:,2] * ( dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1] ) ) )
+
+        check[check < -np.pi] += 2.0*np.pi
+        check[check > np.pi] -= 2.0*np.pi
+
+        comp_pa = np.copy(pa)
+        comp_pa[comp_pa < -np.pi] += 2.0*np.pi
+        comp_pa[comp_pa > np.pi] -= 2.0*np.pi
+
+        np.testing.assert_array_almost_equal(check, comp_pa, decimal=6)
+
+        check_theta, check_phi, check_pa = qarray.to_angles(quat, IAU=True)
+
+        np.testing.assert_array_almost_equal(check_theta, theta, decimal=4)
+
+        check_phi[(np.absolute(check_phi) < 2.0e-6)] = 0.0
+        check_phi[(np.absolute(check_phi - 2.0*np.pi) < 2.0e-6)] = 0.0
+
+        np.testing.assert_array_almost_equal(check_phi, phi, decimal=4)
+
+        np.testing.assert_array_almost_equal(check_pa, comp_pa, decimal=4)
+
+

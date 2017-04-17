@@ -227,6 +227,18 @@ void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2, doub
     return;
 }
 
+void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi, 
+    double * const pa, double * quat, int IAU ) {
+    toast::qarray::from_angles ( n, theta, phi, pa, quat, (IAU != 0) );
+    return;
+}
+
+void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta, 
+    double * phi, double * pa, int IAU ) {
+    toast::qarray::to_angles ( n, quat, theta, phi, pa, (IAU != 0) );
+    return;
+}
+
 // FFT
 
 toast::fft::plan_type ctoast::convert_from_c ( ctoast_fft_plan_type in ) {

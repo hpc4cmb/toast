@@ -335,3 +335,36 @@ def from_vectors(v1, v2):
         v2 = np.array(v2, dtype=np.float64)
     return ctoast.qarray_from_vectors(v1.flatten().astype(np.float64, copy=False), v2.flatten().astype(np.float64, copy=False))
 
+
+def from_angles(theta, phi, pa, IAU=False):
+    if not isinstance(theta, np.ndarray):
+        theta = np.array(theta, dtype=np.float64)
+    nt = theta.shape[0]
+
+    if not isinstance(phi, np.ndarray):
+        phi = np.array(phi, dtype=np.float64)
+    nph = phi.shape[0]
+
+    if not isinstance(pa, np.ndarray):
+        pa = np.array(pa, dtype=np.float64)
+    npa = pa.shape[0]
+
+    if (nt != nph) or (nt != npa) or (nph != npa):
+        raise RuntimeError("all input angle arrays must have the same length")
+
+    q = ctoast.qarray_from_angles(nt, theta, phi, pa, IAU)
+
+    if nt == 1:
+        return q
+    else:
+        return q.reshape((nt, 4))
+
+
+def to_angles(q, IAU=False):
+    nq = None
+    if q.ndim == 1:
+        nq = 1
+    else:
+        nq = q.shape[0]
+    return ctoast.qarray_to_angles(nq, q.flatten().astype(np.float64, copy=False), IAU)
+

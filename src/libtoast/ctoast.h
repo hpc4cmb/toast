@@ -97,6 +97,12 @@ void ctoast_qarray_from_rotmat ( const double * rotmat, double * q );
 
 void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2, double * q );
 
+void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi, 
+    double * const pa, double * quat, int IAU );
+
+void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta, 
+    double * phi, double * pa, int IAU );
+
 // FFT
 
 typedef enum {

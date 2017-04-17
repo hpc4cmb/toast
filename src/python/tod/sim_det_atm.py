@@ -18,6 +18,15 @@ from ..ctoast import (atm_sim_alloc, atm_sim_free,
     atm_sim_simulate, atm_sim_observe)
 
 
+# FIXME:  For now, we use a fixed distribution of the "weather" (wind speed,
+# temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base 
+# classes (TODSatellite and TODGround).  The TODGround class and descendants
+# will have methods to return the site conditions for a given CES.  Once that
+# is in place, then we should have this operator call those methods for each
+# observation to get the actual weather conditions.  Simulating a realization
+# of the weather could then move to a class that derives from TODGround.
+
+
 class OpSimAtmosphere(Operator):
     """
     Operator which generates atmosphere timestreams.
@@ -44,12 +53,21 @@ class OpSimAtmosphere(Operator):
         gangsize (int): size of the gangs that create slices.
         fnear (float): multiplier for the near field simulation.
         fixed_r (float): positive number for start of integration.
+        w_center (float):  central value of the wind speed distribution.
+        w_sigma (float):  sigma of the wind speed distribution.
+        wdir_center (float):  central value of the wind direction distribution.
+        wdir_sigma (float):  sigma of the wind direction distribution.
+        z0_center (float):  central value of the water vapor distribution.
+        z0_sigma (float):  sigma of the water vapor distribution.
+        T0_center (float):  central value of the temperature distribution.
+        T0_sigma (float):  sigma of the temperature distribution.
 
     """
     def __init__(self, out='atm', lmin_center=0.01, lmin_sigma=0.001, 
         lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0, xstep=100.0, 
         ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0, gangsize=-1, 
-        fnear=0.1):
+        fnear=0.1, w_center=25, w_sigma=10, wdir_center=0, wdir_sigma=100, 
+        z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -86,35 +104,20 @@ class OpSimAtmosphere(Operator):
             tod = obs['tod']
             comm = tod.mpicomm
 
-            # FIXME: these functions don't exist.  It also probably makes more
-            # sense to read a vector of wind properties and then find the
-            # averages here, rather than have the TOD class provide a method
-            # which returns the averages...
-
-            # Call functions from TOD object to get the wind speed and
-            # direction for this observation.
-
-            w_center, w_sigma = tod.average_wind_speed()
-            wdir_center, wdir_sigma = tod.average_water_vapor()
-
-            # Call functions from TOD object to get the water vapor
-            # distribution for this observation.
-
-            z0_center, z0_sigma = tod.average_water_vapor()
-
-            # Call functions from TOD object to get the ground temperature
-            # for this observation.
-
-            T0_center, T0_sigma = tod.average_ground_temperature()
+            # FIXME: This is where (eventually) we should get the wind speed,
+            # wind direction, temperature, and water vapor from the tod
+            # object, which will be derived from the new TODGround base class.
 
             # Read the extent of the AZ/EL boresight pointing, and use that 
             # to compute the range of angles needed for simulating the slab.
 
-            az_bore, el_bore = tod.read_boresight()
-            azmin = np.min(az_bore) # plus some margin...
-            azmax = np.max(az_bore) # plus some margin...
-            elmin = np.min(el_bore) # plus some margin...
-            elmax = np.max(el_bore) # plus some margin...
+            (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
+
+            # Go through all detectors and compute the maximum angular extent
+            # of the focalplane from the boresight.  Add some margin.
+
+
+
 
             # Get the timestamps
 
@@ -134,11 +137,16 @@ class OpSimAtmosphere(Operator):
 
             for det in tod.local_dets:
 
-                # FIXME: We need to standardize the interface to get AZ/EL
-                # detector pointing...
-                az, el = tod.read_pntg_azel(detector=det)
+                azelquat = tod.read_pntg(detector=det, azel=True)
 
                 atmdata = np.zeros(nsamp, dtype=np.float64)
+
+                # Convert Az/El quaternion of the detector back into angles for
+                # the simulation.
+
+                
+
+                # Integrate detector signal
 
                 atm_sim_observe(sim, times, az, el, atmdata, nsamp, self._fixed_r)
 

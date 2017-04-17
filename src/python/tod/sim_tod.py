@@ -717,6 +717,19 @@ class TODGround(TOD):
 
         return t*x + y
 
+    @property
+    def scan_range(self):
+        """
+        (tuple):  The extent of the boresight pointing as (min_az, max_az, 
+            min_el, max_el).
+        """
+        min_el = self._patch_el
+        max_el = self._patch_el
+        min_az = self._patch_az - self._throw / 2
+        max_az = self._patch_az + self._throw / 2
+        return (min_az, max_az, min_el, max_el)
+    
+
     def simulate_scan(self, samples):
         # simulate the scanning with turnarounds. Regardless of firsttime,
         # we must simulate from the beginning of the CES.
