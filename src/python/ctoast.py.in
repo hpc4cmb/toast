@@ -731,10 +731,14 @@ def atm_sim_alloc(azmin, azmax, elmin, elmax, tmin, tmax, lmin_center=0.01,
     z0_sigma=0.0, T0_center=280.0, T0_sigma=10.0, zatm=40000.0, zmax=2000.0, 
     xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0, 
     comm=MPI.COMM_WORLD, gangsize=-1, fnear=0.1):
+
+    comm_ptr = MPI._addressof(comm)
+    c_comm = MPI_Comm.from_address(comm_ptr)
+
     return lib.ctoast_atm_sim_alloc(azmin, azmax, elmin, elmax, tmin, tmax, 
         lmin_center, lmin_sigma, lmax_center, lmax_sigma, w_center, w_sigma, 
         wdir_center, wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma, 
-        zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, comm, 
+        zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, c_comm, 
         gangsize, fnear)
 
 lib.ctoast_atm_sim_free.restype = None

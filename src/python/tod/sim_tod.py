@@ -487,7 +487,7 @@ class TODSatellite(TOD):
         if self._boresight is None:
             raise RuntimeError("you must set the precession axis before reading detector pointing")
         detquat = self._fp[detector]
-        data = qa.mult(self._boresight, detquat)
+        data = qa.mult(self._boresight[start:start+n], detquat)
         return data
 
 
@@ -721,12 +721,12 @@ class TODGround(TOD):
     def scan_range(self):
         """
         (tuple):  The extent of the boresight pointing as (min_az, max_az, 
-            min_el, max_el).
+            min_el, max_el) in radians.
         """
-        min_el = self._patch_el
-        max_el = self._patch_el
-        min_az = self._patch_az - self._throw / 2
-        max_az = self._patch_az + self._throw / 2
+        min_el = self._patch_el * degree
+        max_el = self._patch_el * degree
+        min_az = self._patch_az * degree - self._throw / 2
+        max_az = self._patch_az * degree + self._throw / 2
         return (min_az, max_az, min_el, max_el)
     
 
@@ -915,9 +915,9 @@ class TODGround(TOD):
     def _get_pntg(self, detector, start, n, azel=False):
         detquat = self._fp[detector]
         if azel:
-            data = qa.mult(self._boresight_azel, detquat)
+            data = qa.mult(self._boresight_azel[start:start+n], detquat)
         else:
-            data = qa.mult(self._boresight, detquat)
+            data = qa.mult(self._boresight[start:start+n], detquat)
         return data
 
     def _put_pntg(self, detector, start, data):

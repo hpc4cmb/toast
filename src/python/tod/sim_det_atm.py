@@ -6,6 +6,8 @@ from ..mpi import MPI, MPI_Comm
 
 import numpy as np
 
+from scipy.constants import degree
+
 import healpy as hp
 
 from .. import qarray as qa
@@ -66,7 +68,7 @@ class OpSimAtmosphere(Operator):
     def __init__(self, out='atm', lmin_center=0.01, lmin_sigma=0.001, 
         lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0, xstep=100.0, 
         ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0, gangsize=-1, 
-        fnear=0.1, w_center=25, w_sigma=10, wdir_center=0, wdir_sigma=100, 
+        fnear=0.1, fixed_r=-1, w_center=25, w_sigma=10, wdir_center=0, wdir_sigma=100, 
         z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10):
 
         # We call the parent class constructor, which currently does nothing
@@ -87,6 +89,17 @@ class OpSimAtmosphere(Operator):
         self._gangsize = gangsize
         self._fnear = fnear
         self._fixed_r = fixed_r
+
+        # FIXME: eventually these will come from the TOD object
+        # for each obs...
+        self._w_center = w_center
+        self._w_sigma = w_sigma
+        self._wdir_center = wdir_center
+        self._wdir_sigma = wdir_sigma
+        self._z0_center = z0_center
+        self._z0_sigma = z0_sigma
+        self._T0_center = T0_center
+        self._T0_sigma = T0_sigma
 
 
     def exec(self, data):
@@ -122,17 +135,21 @@ class OpSimAtmosphere(Operator):
             # jump through hoops by getting one sample of the pointing.
 
             zaxis = np.array([0.0, 0.0, 1.0])
-            detdirs = []
+            detdir = []
+            detmeanx = 0.0
+            detmeany = 0.0
             for det in tod.local_dets:
                 dquat = tod.read_pntg(detector=det, local_start=0, n=1)
-                detdirs.append(qa.rotate(dquat, zaxis).flatten())
+                dvec = qa.rotate(dquat, zaxis).flatten()
+                detmeanx += dvec[0]
+                detmeany += dvec[1]
+                detdir.append(dvec)
+            detmeanx /= len(detdir)
+            detmeany /= len(detdir)
 
-            detangs = []
-            for d in range(1, len(tod.local_dets)):
-                detangs.append(np.dot(detdirs[d], detdirs[0]))
+            detrad = [ np.sqrt((detdir[t][0] - detmeanx)**2 + (detdir[t][1] - detmeany)**2) for t in range(len(detdir)) ]
 
-            fp_diameter = np.max(np.arccos(detangs)) * 180.0 / np.pi
-            fp_radius = 0.5 * fp_diameter
+            fp_radius = np.arcsin(np.max(detrad))
 
             azmin = min_az_bore - 1.01 * fp_radius
             azmax = max_az_bore + 1.01 * fp_radius
@@ -143,13 +160,14 @@ class OpSimAtmosphere(Operator):
 
             times = tod.read_times()
 
-            sim = atm_sim_alloc(azmin, azmax, elmin, elmax, times[0], times[-1],
-                self._lmin_center, self._lmin_sigma, self._lmax_center, 
-                self._lmax_sigma, w_center, w_sigma, wdir_center, wdir_sigma, 
-                z0_center, z0_sigma, T0_center, T0_sigma, self._zatm, 
-                self._zmax, self._xstep, self._ystep, self._zstep, 
-                self._nelem_sim_max, self._verbosity, comm, self._gangsize, 
-                self._fnear)
+            sim = atm_sim_alloc(azmin, azmax, elmin, elmax, times[0], 
+                times[-1], self._lmin_center, self._lmin_sigma, 
+                self._lmax_center, self._lmax_sigma, self._w_center, 
+                self._w_sigma, self._wdir_center, self._wdir_sigma, 
+                self._z0_center, self._z0_sigma, self._T0_center, 
+                self._T0_sigma, self._zatm, self._zmax, self._xstep, 
+                self._ystep, self._zstep, self._nelem_sim_max, 
+                self._verbosity, comm, self._gangsize, self._fnear)
 
             atm_sim_simulate(sim, 0)
 

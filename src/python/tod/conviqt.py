@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
+from ..mpi import MPI, MPI_Comm
 
 import os
 
@@ -12,8 +12,6 @@ from ctypes.util import find_library
 import healpy as hp
 import numpy as np
 import numpy.ctypeslib as npc
-
-from ..ctoast import MPI_Comm
 
 from .. import qarray as qa
 from ..dist import Comm, Data

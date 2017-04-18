@@ -92,8 +92,9 @@ def main():
 
     global_start = MPI.Wtime()
 
-    parser = argparse.ArgumentParser(description='Simulate ground-based '
-                                     'boresight pointing and make a noise map.')
+    parser = argparse.ArgumentParser(description="Simulate ground-based "
+                        "boresight pointing.  Simulate atmosphere and make "
+                        "maps for some number of noise Monte Carlos.")
     parser.add_argument('--samplerate',
                         required=False, default=40.0, type=np.float,
                         help='Detector sample rate (Hz)')
@@ -148,6 +149,71 @@ def main():
     parser.add_argument('--CES_stop',
                         required=False, default=1000, type=np.float,
                         help='Stop time of the CES')
+
+    parser.add_argument('--atm_lmin_center',
+                        required=False, default=0.01, type=np.float,
+                        help='Kolmogorov turbulence dissipation scale center')
+    parser.add_argument('--atm_lmin_sigma',
+                        required=False, default=0.001, type=np.float,
+                        help='Kolmogorov turbulence dissipation scale sigma')
+    parser.add_argument('--atm_lmax_center',
+                        required=False, default=10.0, type=np.float,
+                        help='Kolmogorov turbulence injection scale center')
+    parser.add_argument('--atm_lmax_sigma',
+                        required=False, default=10.0, type=np.float,
+                        help='Kolmogorov turbulence injection scale sigma')
+    parser.add_argument('--atm_zatm',
+                        required=False, default=40000.0, type=np.float,
+                        help='atmosphere extent for temperature profile')
+    parser.add_argument('--atm_zmax',
+                        required=False, default=2000.0, type=np.float,
+                        help='atmosphere extent for water vapor integration')
+    parser.add_argument('--atm_xstep',
+                        required=False, default=100.0, type=np.float,
+                        help='size of volume elements in X direction')
+    parser.add_argument('--atm_ystep',
+                        required=False, default=100.0, type=np.float,
+                        help='size of volume elements in Y direction')
+    parser.add_argument('--atm_zstep',
+                        required=False, default=100.0, type=np.float,
+                        help='size of volume elements in Z direction')
+    parser.add_argument('--atm_nelem_sim_max',
+                        required=False, default=1000, type=np.int,
+                        help='controls the size of the simulation slices')
+    parser.add_argument('--atm_gangsize',
+                        required=False, default=-1, type=np.int,
+                        help='size of the gangs that create slices')
+    parser.add_argument('--atm_fnear',
+                        required=False, default=0.1, type=np.float,
+                        help='multiplier for the near field simulation')
+    parser.add_argument('--atm_fixed_r',
+                        required=False, default=-1, type=np.int,
+                        help='positive number for start of integration')
+    parser.add_argument('--atm_w_center',
+                        required=False, default=25.0, type=np.float,
+                        help='central value of the wind speed distribution')
+    parser.add_argument('--atm_w_sigma',
+                        required=False, default=10.0, type=np.float,
+                        help='sigma of the wind speed distribution')
+    parser.add_argument('--atm_wdir_center',
+                        required=False, default=0.0, type=np.float,
+                        help='central value of the wind direction distribution')
+    parser.add_argument('--atm_wdir_sigma',
+                        required=False, default=100.0, type=np.float,
+                        help='sigma of the wind direction distribution')
+    parser.add_argument('--atm_z0_center',
+                        required=False, default=2000.0, type=np.float,
+                        help='central value of the water vapor distribution')
+    parser.add_argument('--atm_z0_sigma',
+                        required=False, default=0.0, type=np.float,
+                        help='sigma of the water vapor distribution')
+    parser.add_argument('--atm_T0_center',
+                        required=False, default=280.0, type=np.float,
+                        help='central value of the temperature distribution')
+    parser.add_argument('--atm_T0_sigma',
+                        required=False, default=10.0, type=np.float,
+                        help='sigma of the temperature distribution')
+
     parser.add_argument('--outdir',
                         required=False, default='out',
                         help='Output directory')
@@ -207,12 +273,14 @@ def main():
 
     # Load focalplane information
 
+    nullquat = np.array([0,0,0,1], dtype=np.float64)
+
     if comm.comm_world.rank == 0:
         if args.fp is None:
             # in this case, create a fake detector at the boresight
             # with a pure white noise spectrum.
             fake = {}
-            fake['quat'] = np.array([0.0, 0.0, 1.0, 0.0])
+            fake['quat'] = nullquat
             fake['fwhm'] = 30.0
             fake['fknee'] = 0.0
             fake['fmin'] = 1e-9
@@ -339,6 +407,31 @@ def main():
               ''.format(stop-start))
     start = stop
 
+    # Simulate the atmosphere signal
+
+    atm = tt.OpSimAtmosphere(out='signal', lmin_center=args.atm_lmin_center, 
+        lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center, 
+        lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm, zmax=args.atm_zmax, 
+        xstep=args.atm_xstep, ystep=args.atm_ystep, zstep=args.atm_zstep, 
+        nelem_sim_max=args.atm_nelem_sim_max, verbosity=int(args.debug), 
+        gangsize=args.atm_gangsize, fnear=args.atm_fnear, 
+        fixed_r=args.atm_fixed_r, w_center=args.atm_w_center, 
+        w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center, 
+        wdir_sigma=args.atm_wdir_sigma, z0_center=args.atm_z0_center, 
+        z0_sigma=args.atm_z0_sigma, T0_center=args.atm_T0_center, 
+        T0_sigma=args.atm_T0_sigma)
+
+    atm.exec(data)
+
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print('Atmosphere simulation took {:.3f} s'.format(elapsed))
+    start = stop
+
+    # We could also scan from a map and accumulate to 'signal' here...
+
     # make a Healpix pointing matrix.
 
     pointing = tt.OpPointingHpix(
@@ -353,6 +446,10 @@ def main():
     if comm.comm_world.rank == 0:
         print('Pointing generation took {:.3f} s'.format(elapsed))
     start = stop
+
+    # Operator for signal copying, used in each MC iteration
+
+    sigcopy = tt.OpCacheCopy("signal", "total")
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -479,13 +576,14 @@ def main():
                       ''.format(mc, elapsed))
             start = stop
 
-            # clear all noise data from the cache, so that we can generate
-            # new noise timestreams.
-            tod.cache.clear('noise_.*')
+            # Copy the signal timestreams to the total ones before
+            # accumulating the noise.
+
+            sigcopy.exec(data)
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out='noise', realization=mc)
+            nse = tt.OpSimNoise(out='total', realization=mc)
             nse.exec(data)
 
             comm.comm_world.barrier()
@@ -497,7 +595,7 @@ def main():
             start = stop
 
             zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(zmap=zmap, name='noise')
+            build_zmap = tm.OpAccumDiag(zmap=zmap, name='total')
             build_zmap.exec(data)
             zmap.allreduce()
 
@@ -581,13 +679,15 @@ def main():
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc+nmc):
-            # clear all noise data from the cache, so that we can generate
-            # new noise timestreams.
-            tod.cache.clear('noise_.*')
+
+            # Copy the signal timestreams to the total ones before
+            # accumulating the noise.
+
+            sigcopy.exec(data)
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out='noise', realization=mc)
+            nse = tt.OpSimNoise(out='total', realization=mc)
             nse.exec(data)
 
             comm.comm_world.barrier()
@@ -613,7 +713,7 @@ def main():
                 if comm.comm_world.rank == 0:
                     handle.close()
 
-            madam = tm.OpMadam(params=pars, detweights=detweights, name='noise',
+            madam = tm.OpMadam(params=pars, detweights=detweights, name='total',
                                common_flag_mask=args.common_flag_mask)
             madam.exec(data)
 
