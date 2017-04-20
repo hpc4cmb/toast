@@ -18,7 +18,7 @@ from ..tod.tod import *
 from ..tod.interval import *
 from ..tod.pointing import *
 from ..tod.sim_tod import *
-from ..tod.sim_detdata import *
+from ..tod.sim_det_noise import *
 from ..tod.sim_noise import *
 from ..tod.sim_interval import *
 from ..map import *

@@ -14,7 +14,7 @@ from ..tod.tod import *
 from ..tod.pointing import *
 from ..tod.noise import *
 from ..tod.sim_noise import *
-from ..tod.sim_detdata import *
+from ..tod.sim_det_noise import *
 from ..tod.sim_tod import *
 
 from ..fod import autocov_psd
