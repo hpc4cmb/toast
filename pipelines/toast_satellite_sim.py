@@ -19,7 +19,7 @@ import toast
 import toast.tod as tt
 import toast.map as tm
 
-import toast.tod.qarray as qa
+import toast.qarray as qa
 
 
 def view_focalplane(fp, outfile):
