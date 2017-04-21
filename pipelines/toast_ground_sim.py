@@ -92,9 +92,10 @@ def main():
 
     global_start = MPI.Wtime()
 
-    parser = argparse.ArgumentParser(description="Simulate ground-based "
-                        "boresight pointing.  Simulate atmosphere and make "
-                        "maps for some number of noise Monte Carlos.")
+    parser = argparse.ArgumentParser(
+        description="Simulate ground-based boresight pointing.  Simulate "
+        "atmosphere and make maps for some number of noise Monte Carlos.",
+        fromfile_prefix_chars='@')
     parser.add_argument('--samplerate',
                         required=False, default=40.0, type=np.float,
                         help='Detector sample rate (Hz)')
