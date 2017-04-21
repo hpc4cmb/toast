@@ -53,9 +53,11 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
       
     int ierr;
     ierr = MPI_Comm_size( comm, &ntask );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to get size of MPI communicator." );
+    if ( ierr != MPI_SUCCESS )
+      throw std::runtime_error( "Failed to get size of MPI communicator." );
     ierr = MPI_Comm_rank( comm, &rank );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to get rank in MPI communicator." );
+    if ( ierr != MPI_SUCCESS )
+      throw std::runtime_error( "Failed to get rank in MPI communicator." );
 
     if ( gangsize == 1 ) {
         ngang = ntask;
@@ -66,14 +68,18 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     } else if ( gangsize > 0 and 2*gangsize <= ntask ) {
         ngang = ntask / gangsize;
         gang = rank / gangsize;
-        // If the last gang is smaller than the rest, it will be merged with the second-to-last gang
+        // If the last gang is smaller than the rest, it will be merged with
+	// the second-to-last gang
         if ( gang > ngang-1 ) gang = ngang - 1;
         ierr = MPI_Comm_split( comm, gang, rank, &comm_gang );
-        if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to split MPI communicator." );
+        if ( ierr != MPI_SUCCESS )
+	  throw std::runtime_error( "Failed to split MPI communicator." );
         ierr = MPI_Comm_size( comm_gang, &ntask_gang );
-        if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to get size of the split MPI communicator." );
+        if ( ierr != MPI_SUCCESS )
+	  throw std::runtime_error( "Failed to get size of the split MPI communicator." );
         ierr = MPI_Comm_rank( comm_gang, &rank_gang );
-        if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to get rank in the split MPI communicator." );
+        if ( ierr != MPI_SUCCESS )
+	  throw std::runtime_error( "Failed to get rank in the split MPI communicator." );
     } else {
         ngang = 1;
         gang = 0;
@@ -89,9 +95,12 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         << ngang << " gangs, " << nthread << " threads per process." << std::endl;
 
     if ( azmin >= azmax ) throw std::runtime_error( "atmsim: azmin >= azmax." );
+    if ( elmin < 0 ) throw std::runtime_error( "atmsim: elmin < 0." );
+    if ( elmax > M_PI_2 ) throw std::runtime_error( "atmsim: elmax > pi/2." );
     if ( elmin >= elmax ) throw std::runtime_error( "atmsim: elmin >= elmax." );
     if ( tmin > tmax ) throw std::runtime_error( "atmsim: tmin > tmax." );
-    if ( lmin_center > lmax_center ) throw std::runtime_error( "atmsim: lmin_center > lmax_center." );
+    if ( lmin_center > lmax_center )
+      throw std::runtime_error( "atmsim: lmin_center > lmax_center." );
 
     xstepinv = 1 / xstep;
     ystepinv = 1 / ystep;
