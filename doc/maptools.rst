@@ -19,22 +19,31 @@ Distributed Pixel-space Data
 Diagonal Noise Covariance
 ------------------------------
 
-.. autoclass:: toast.map.OpInvCovariance
+.. autoclass:: toast.map.OpAccumDiag
     :members:
 
 .. autofunction:: toast.map.covariance_invert
 
 .. autofunction:: toast.map.covariance_rcond
 
+.. autofunction:: toast.map.covariance_multiply
+
+.. autofunction:: toast.map.covariance_apply
+
 
 Native Mapmaking
 -----------------------
 
-Still to-do.  See `git milestone here <https://github.com/tskisner/pytoast/milestones/Native%20Mapmaking%20Tools>`_
+Using the distributed diagonal noise covariance tools, one can make a simple
+binned map.  Porting the old TOAST map-maker to this version of TOAST is still
+on the to-do list.
 
 
 External Madam Interface
 ----------------------------------
+
+If the MADAM library is installed and in your shared library search path, then
+you can use it to make maps.
 
 .. autoclass:: toast.map.OpMadam
     :members:

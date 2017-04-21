@@ -27,7 +27,14 @@ In order to load a full python-3.5 stack, and also all dependencies needed by to
 Install TOAST
 ------------------
 
-When installing *any* software at NERSC, we need to keep several things in mind:
+If you are using a stable release of TOAST, there may already be an installation
+you can use.  Do::
+
+    %> module avail toast
+
+to see if something is already built meets your needs.  If not, then you will have
+to install TOAST yourself.  When installing *any* software at NERSC, we need to 
+keep several things in mind:
 
     *  The home directories are small.
 
@@ -46,11 +53,10 @@ be purged.  If you have not used the tools for a month or so, you should probabl
 reinstall just to be sure that everything is in place.  
 
 First, we pick a location to install our software.  For this example, we will
-be installing to a "software" directory in our scratch space.  First create
-these directories::
+be installing to a "software" directory in our scratch space.  First make sure
+that exists::
 
-    %> mkdir -p ${SCRATCH}/software/toast/bin
-    %> mkdir -p ${SCRATCH}/software/toast/lib/python3.5/site-packages
+    %> mkdir -p ${SCRATCH}/software
 
 Now we will create a small shell function that loads this location into our search
 paths for executables and python packages.  Add this function to ~/.bashrc.ext and
@@ -68,18 +74,30 @@ Now checkout the toast source in your home directory somewhere::
     %> cd
     %> git clone https://github.com/hpc4cmb/toast.git
 
-Now we can run our function::
+Then configure and build the software.  Unless you know what you are doing, you
+should probably use the platform config example for the machine you are building
+for::
+
+    %> cd toast
+    %> ./autogen.sh
+    %> ./platforms/edison_gnu_mkl.sh --prefix=${SCRATCH}/software/toast
+
+Now we can run our function to load this installation into our environment::
 
     %> toast
 
-And now we can install toast.  On NERSC systems, MPI is not allowed to be run on
-the login nodes.  Since toast uses MPI, we have to set a special environment 
-variable when running setup.py.  This will disable MPI inside toast during installation::
+On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to 
+run our unittests, we first get an interactive compute node::
 
-    %> TOAST_NO_MPI=1 python3 setup.py install --prefix=${SCRATCH}/software/toast
+    %> salloc
 
-Whenever you update your git checkout of toast (or if you have not used toast for
-a month or so), just re-run the above command to update your installation.
+and then run the tests::
+
+    %> srun python -c "import toast; toast.test()"
+
+You should read through the many good NERSC webpages that describe how to use the
+different machines.  There are `pages for edison <http://www.nersc.gov/users/computational-systems/edison/running-jobs/>`_
+and `pages for cori <http://www.nersc.gov/users/computational-systems/cori/running-jobs/>`_.
 
 
 Install Experiment Packages
@@ -87,6 +105,12 @@ Install Experiment Packages
 
 If you are a member of Planck, Core, or LiteBIRD, you can get access to separate
 git repos with experiment-specific scripts and tools.  You can install these to
-the same location as toast using the same command above.  Re-run the install
-command when you update your git checkout.
+the same location as toast.  All of those packages currently use distutils, and
+you will need to do the installation from a compute node (since importing the
+toast python module will load MPI)::
+
+    %> cd toast-<experiment>
+    %> salloc
+    %> srun python setup.py clean
+    %> srun python setup.py install --prefix=${SCRATCH}/software/toast
 
