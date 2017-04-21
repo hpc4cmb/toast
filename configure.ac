@@ -4,7 +4,7 @@ dnl
 dnl +------------------------
 dnl | Initialize package info
 dnl +------------------------
-AC_INIT([TOAST], [2.2.0], [work@theodorekisner.com], [toast], [https://github.com/hpc4cmb/toast])
+AC_INIT([TOAST], m4_esyscmd_s([m4/git-version.sh]), [work@theodorekisner.com], [toast], [https://github.com/hpc4cmb/toast])
 AC_CONFIG_SRCDIR([Makefile.am])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_HEADERS(config.h)
