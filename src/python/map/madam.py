@@ -389,6 +389,7 @@ class OpMadam(Operator):
                             if not np.allclose(psds[det][-1][1], psd):
                                 psds[det] += [(timestamps[0], psd)]
 
+            commonflags = None
             for d in range(ndet):
                 # Get the signal.
                 cachename = None
@@ -448,14 +449,19 @@ class OpMadam(Operator):
 
                 # Always purge the pixels but restore them from the Madam
                 # buffers when purge_pixels=False
+                del pixels
                 tod.cache.clear(pattern=pixelsname)
-                
-                if self._purge_tod and self._name is not None:
+
+                del signal
+                if self._name is not None and (
+                        self._purge_tod or self._name == self._name_out):
                     tod.cache.clear(pattern=cachename)
 
+                del flags
                 if self._purge_flags and self._flag_name is not None:
                     tod.cache.clear(pattern=cacheflagname)
 
+            del commonflags
             if self._purge_flags and self._common_flag_name is not None:
                 tod.cache.clear(pattern=self._common_flag_name)
             global_offset = offset
@@ -486,10 +492,12 @@ class OpMadam(Operator):
                 # buffers when purge_weights=False.
                 # Handle special case when Madam only stores a subset of
                 # the weights.
+                del weights
                 if not self._purge_weights and (nnz != nnz_full):
                     pass
                 else:
                     tod.cache.clear(pattern=weightsname)
+
             global_offset = offset
 
         if self._cached:
