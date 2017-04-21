@@ -182,7 +182,7 @@ class OpSimAtmosphere(Operator):
                 # Convert Az/El quaternion of the detector back into angles for
                 # the simulation.
 
-                az, el, pa = qarray.to_angles(azelquat)
+                az, el, pa = qa.to_angles(azelquat)
 
                 # Integrate detector signal
 
