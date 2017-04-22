@@ -2,13 +2,13 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
-
 from ..mpi import MPI
 from .mpi import MPITestCase
 
 from ..cache import *
 
 import sys
+import warnings
 
 
 class CacheTest(MPITestCase):
@@ -77,6 +77,24 @@ class CacheTest(MPITestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("cache create test took {:.3f} s".format(elapsed))
+
+
+    def test_clear(self):
+        start = MPI.Wtime()
+
+        for k, v in self.types.items():
+            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
+            del ref
+
+        warnings.filterwarnings('error')
+        self.cache.clear('.*')
+        warnings.resetwarnings()
+
+        self.cache.clear()
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("cache clear test took {:.3f} s".format(elapsed))
 
 
     def test_alias(self):
