@@ -5,6 +5,7 @@
 from ..mpi import MPI
 
 import os
+import sys
 import unittest
 import warnings
 
@@ -33,7 +34,7 @@ from . import map_ground as testmapground
 from . import binned as testbinned
 
 
-def test():
+def test(name=None):
     # We run tests with COMM_WORLD
     comm = MPI.COMM_WORLD
     
@@ -46,9 +47,10 @@ def test():
 
     outdir = comm.bcast(outdir, root=0)
 
-    # Run tests from the compiled library.  This separately uses
-    # MPI_COMM_WORLD.
-    test_ctoast()
+    if (name is None) or (name == "ctoast") :
+        # Run tests from the compiled library.  This separately uses
+        # MPI_COMM_WORLD.
+        test_ctoast()
 
     # Run python tests.
 
@@ -56,23 +58,27 @@ def test():
     mpirunner = MPITestRunner(verbosity=2)
     suite = unittest.TestSuite()
 
-    suite.addTest( loader.loadTestsFromModule(testcbuffer) )
-    suite.addTest( loader.loadTestsFromModule(testcache) )
-    suite.addTest( loader.loadTestsFromModule(testrng) )
-    suite.addTest( loader.loadTestsFromModule(testfft) )
-    suite.addTest( loader.loadTestsFromModule(testdist) )
-    suite.addTest( loader.loadTestsFromModule(testqarray) )
-    suite.addTest( loader.loadTestsFromModule(testtod) )
-    suite.addTest( loader.loadTestsFromModule(testpsdmath) )
-    suite.addTest( loader.loadTestsFromModule(testintervals) )
-    suite.addTest( loader.loadTestsFromModule(testopspmat) )
-    suite.addTest( loader.loadTestsFromModule(testcov) )
-    suite.addTest( loader.loadTestsFromModule(testopsdipole) )
-    suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
-    suite.addTest( loader.loadTestsFromModule(testopsmadam) )
-    suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
-    suite.addTest( loader.loadTestsFromModule(testmapground) )
-    suite.addTest( loader.loadTestsFromModule(testbinned) )
+    if name is None:
+        suite.addTest( loader.loadTestsFromModule(testcbuffer) )
+        suite.addTest( loader.loadTestsFromModule(testcache) )
+        suite.addTest( loader.loadTestsFromModule(testrng) )
+        suite.addTest( loader.loadTestsFromModule(testfft) )
+        suite.addTest( loader.loadTestsFromModule(testdist) )
+        suite.addTest( loader.loadTestsFromModule(testqarray) )
+        suite.addTest( loader.loadTestsFromModule(testtod) )
+        suite.addTest( loader.loadTestsFromModule(testpsdmath) )
+        suite.addTest( loader.loadTestsFromModule(testintervals) )
+        suite.addTest( loader.loadTestsFromModule(testopspmat) )
+        suite.addTest( loader.loadTestsFromModule(testcov) )
+        suite.addTest( loader.loadTestsFromModule(testopsdipole) )
+        suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
+        suite.addTest( loader.loadTestsFromModule(testopsmadam) )
+        suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
+        suite.addTest( loader.loadTestsFromModule(testmapground) )
+        suite.addTest( loader.loadTestsFromModule(testbinned) )
+    elif name != "ctoast":
+        modname = "toast.tests.{}".format(name)
+        suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
 
     with warnings.catch_warnings(record=True) as w:
         # Cause all toast warnings to be shown.

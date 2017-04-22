@@ -125,6 +125,7 @@ class OpSimAtmosphere(Operator):
             # to compute the range of angles needed for simulating the slab.
 
             (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
+            #print("boresight scan range = {}, {}, {}, {}".format(min_az_bore, max_az_bore, min_el_bore, max_el_bore))
 
             # Go through all detectors and compute the maximum angular extent
             # of the focalplane from the boresight.  Add a tiny margin, since
@@ -139,7 +140,7 @@ class OpSimAtmosphere(Operator):
             detmeanx = 0.0
             detmeany = 0.0
             for det in tod.local_dets:
-                dquat = tod.read_pntg(detector=det, local_start=0, n=1)
+                dquat = tod.read_pntg(detector=det, local_start=0, n=1, azel=True)
                 dvec = qa.rotate(dquat, zaxis).flatten()
                 detmeanx += dvec[0]
                 detmeany += dvec[1]
@@ -147,14 +148,20 @@ class OpSimAtmosphere(Operator):
             detmeanx /= len(detdir)
             detmeany /= len(detdir)
 
+            #print("detmeanx = {}, detmeany = {}".format(detmeanx, detmeany))
+
             detrad = [ np.sqrt((detdir[t][0] - detmeanx)**2 + (detdir[t][1] - detmeany)**2) for t in range(len(detdir)) ]
 
             fp_radius = np.arcsin(np.max(detrad))
+
+            #print("fp_radius = {}", fp_radius)
 
             azmin = min_az_bore - 1.01 * fp_radius
             azmax = max_az_bore + 1.01 * fp_radius
             elmin = min_el_bore - 1.01 * fp_radius
             elmax = max_el_bore + 1.01 * fp_radius
+
+            #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
 
             # Get the timestamps
 
