@@ -7,8 +7,8 @@ MPICC = mpicc
 MPICXX = mpicxx
 MPIFC = mpifort
 
-CFLAGS = -O3 -fPIC -std=gnu99 -pthread
-CXXFLAGS = -O3 -fPIC -std=c++11 -pthread
+CFLAGS = -O3 -fPIC -pthread
+CXXFLAGS = -O3 -fPIC -pthread
 FCFLAGS = -O3 -fPIC -fexceptions -pthread
 
 OPENMP_CFLAGS = -fopenmp

@@ -12,7 +12,7 @@ if [ -e "${topdir}/@CONFFILE@.sh" ]; then
     source "${topdir}/@CONFFILE@.sh"
 fi
 
-# Install DESI dependencies from source.
+# Install TOAST dependencies from source.
 
 mkdir -p @CONDA_PREFIX@/bin
 mkdir -p @CONDA_PREFIX@/lib
@@ -44,6 +44,15 @@ conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
 
 @pip_pkgs@
 
+# Copy patches
+
+if [ ! -e ./conf ]; then
+    # this is an out-of-source build, copy patches
+    rm -rf ./rules
+    mkdir ./rules
+    cp ${topdir}/rules/patch_* ./rules/
+fi
+
 # Autotools
 
 @m4@
@@ -61,6 +70,10 @@ conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
 # Install CFITSIO.
 
 @cfitsio@
+
+# Install wcslib
+
+@wcslib@
 
 # Install FFTW.
 
@@ -85,6 +98,13 @@ conda list --export | grep -v conda > "@CONDA_PREFIX@/pkg_list.txt"
 # Install PyMPIT for environment testing
 
 @pympit@
+
+# Remove patches if needed
+
+if [ ! -e ./conf ]; then
+    # this is an out-of-source build
+    rm -rf ./rules
+fi
 
 # Compile python modules
 

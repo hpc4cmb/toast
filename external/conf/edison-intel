@@ -13,9 +13,8 @@ MPIFC = ftn
 
 # Compile flags
 
-CFLAGS = -O3 -g -fPIC -xAVX -std=gnu99 -pthread
-CXXFLAGS = -O3 -g -fPIC -xAVX -std=c++11 -pthread
-# -DBOOST_NO_CXX11_HDR_UNORDERED_MAP
+CFLAGS = -O3 -g -fPIC -xAVX -pthread
+CXXFLAGS = -O3 -g -fPIC -xAVX -pthread
 FCFLAGS = -O3 -g -fPIC -xAVX -fexceptions -pthread
 
 OPENMP_CFLAGS = -qopenmp

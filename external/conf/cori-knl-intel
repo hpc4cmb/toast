@@ -13,8 +13,8 @@ MPIFC = ftn
 
 # Compile flags
 
-CFLAGS = -O3 -g -fPIC -xMIC-AVX512 -std=gnu99 -pthread
-CXXFLAGS = -O3 -g -fPIC -xMIC-AVX512 -std=c++11 -pthread
+CFLAGS = -O3 -g -fPIC -xMIC-AVX512 -pthread
+CXXFLAGS = -O3 -g -fPIC -xMIC-AVX512 -pthread
 FCFLAGS = -O3 -g -fPIC -xMIC-AVX512 -fexceptions -pthread
 
 OPENMP_CFLAGS = -qopenmp

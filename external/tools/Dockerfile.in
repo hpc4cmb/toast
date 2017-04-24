@@ -57,6 +57,11 @@ RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz
     && tar xzf mkl_11.3.3_include.tar.gz -C /usr/include --strip=1 \
     && rm mkl_11.3.3_include.tar.gz
 
+# Copy all patch files to current working directory
+
+RUN mkdir ./rules
+ADD rules/patch_* ./rules/
+
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
 # of shifter.
@@ -70,6 +75,10 @@ RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz
 # Install CFITSIO.
 
 @cfitsio@
+
+# Install wcslib
+
+@wcslib@
 
 # Install FFTW.
 
@@ -94,6 +103,10 @@ RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz
 # Install PyMPIT for environment testing
 
 @pympit@
+
+# Remove the temporary patches
+
+RUN rm -rf ./rules
 
 # Precompile all python modules
 

@@ -13,9 +13,9 @@ MPIFC = mpifort
 
 # Compile flags
 
-CFLAGS = -O3 -fPIC -std=gnu99 -pthread
-CXXFLAGS = -O3 -fPIC -std=c++11 -pthread
-FCFLAGS = -O3 -fPIC -fexceptions -pthread
+CFLAGS = -O3 -fPIC -pthread
+CXXFLAGS = -O3 -fPIC -pthread
+FCFLAGS = -O3 -fPIC -pthread
 
 OPENMP_CFLAGS = -fopenmp
 OPENMP_CXXFLAGS = -fopenmp
