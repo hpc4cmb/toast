@@ -38,8 +38,8 @@ module files.  For docker builds, a Dockerfile is created.  As an example,
 suppose we are installing the software stack into our scratch directory
 on edison.nersc.gov using the gcc config::
 
-    $> PREFIX=${SCRATCH}/software/toastdeps CONFIG=edison-gcc make clean
-    $> PREFIX=${SCRATCH}/software/toastdeps CONFIG=edison-gcc make script
+    $> PREFIX=${SCRATCH}/software/toast-gcc CONFIG=edison-gcc make clean
+    $> PREFIX=${SCRATCH}/software/toast-gcc CONFIG=edison-gcc make script
 
 If you don't have the $VERSION environment variable set, then a version
 string based on the git revision history is used.  If you don't have the
@@ -78,12 +78,12 @@ we can look at it afterwards if there are any problems::
 After installation, the $PREFIX directory will contain directories
 and files::
 
-    $PREFIX/toastdeps/$VERSION_conda
-    $PREFIX/toastdeps/$VERSION_aux
-    $PREFIX/modulefiles/toastdeps/$VERSION
-    $PREFIX/modulefiles/toastdeps/.version_$VERSION
+    $PREFIX/toast-deps/$VERSION_conda
+    $PREFIX/toast-deps/$VERSION_aux
+    $PREFIX/modulefiles/toast-deps/$VERSION
+    $PREFIX/modulefiles/toast-deps/.version_$VERSION
 
-If you want to make this version of toastdeps the default, then just
+If you want to make this version of toast-deps the default, then just
 do::
 
     $> ln -s .version_$VERSION .version
