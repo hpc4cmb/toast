@@ -2,7 +2,7 @@ curl -SL https://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz \
     -o libtool-2.4.6.tar.gz \
     && tar xzf libtool-2.4.6.tar.gz \
     && cd libtool-2.4.6 \
-    && CC="@CC@" CFLAGS="@CFLAGS@" ./configure @CROSS@ \
+    && CC="gcc" ./configure @CROSS@ \
     --prefix="@AUX_PREFIX@" \
     && make -j 4 && make install \
     && cd .. \

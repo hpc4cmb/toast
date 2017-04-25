@@ -53,7 +53,9 @@ if [ ! -e ./conf ]; then
     cp ${topdir}/rules/patch_* ./rules/
 fi
 
-# Autotools
+# Autotools.  Since these tools are needed to run on the build
+# machine, we forcibly build them with gcc, even if we are using
+# other compilers for the host system.
 
 @m4@
 
