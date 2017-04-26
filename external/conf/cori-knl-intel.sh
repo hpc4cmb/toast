@@ -14,5 +14,6 @@ module swap craype-haswell craype-mic-knl
 module swap intel intel/17.0.1.132
 module load gcc/6.2.0
 module load git
+module load cmake
 export CRAYPE_LINK_TYPE=dynamic
 
