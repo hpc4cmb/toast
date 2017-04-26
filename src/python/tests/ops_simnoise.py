@@ -91,7 +91,7 @@ class OpSimNoiseTest(MPITestCase):
         self.alpha["high"] = 2.0
         self.NET["high"] = 10.0
 
-        self.totsamp = 20000
+        self.totsamp = 100000
 
         self.oversample = 2
 
