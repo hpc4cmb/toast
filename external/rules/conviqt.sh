@@ -1,4 +1,4 @@
-curl -SL https://www.dropbox.com/s/ecqjps0nwe132kt/libconviqt-1.0.2.tar.bz2?dl=1 \
+curl -SL https://www.dropbox.com/s/4tzjn9bgq7enkf9/libconviqt-1.0.2.tar.bz2?dl=0 \
     -o libconviqt-1.0.2.tar.bz2 \
     && tar -xjf libconviqt-1.0.2.tar.bz2 \
     && cd libconviqt-1.0.2 \
