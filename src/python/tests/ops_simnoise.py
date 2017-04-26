@@ -312,6 +312,27 @@ class OpSimNoiseTest(MPITestCase):
                 tpsd[good] /= tcount[good]
                 bintruth[det] = tpsd
 
+        hpy = None
+        if self.comm.rank == 0:
+            if "TOAST_TEST_BIGTOD" in os.environ.keys():
+                try:
+                    import h5py as hpy
+                except ImportError:
+                    # just write the first realization as usual
+                    hpy = None
+
+        # if we have the h5py module and a special environment variable is set, 
+        # then process zero will dump out its full timestream data for more 
+        # extensive sharing / tests.  Just dump a few detectors to keep the 
+        # file size reasonable.
+
+        hf = None
+        dset = {}
+        if hpy is not None:
+            hf = hpy.File(os.path.join(self.outdir, "out_test_simnoise_tod.hdf5"), "w")
+            for det in ['white', 'f1a', 'f2a']:
+                dset[det] = hf.create_dataset(det, (self.MC, self.totsamp), dtype="float64")
+
         # Run both the numpy FFT case and the toast FFT case.
 
         for case in ['npFFT', 'toastFFT']:
@@ -353,6 +374,10 @@ class OpSimNoiseTest(MPITestCase):
                     variance = np.vdot(td-dclevel, td-dclevel) / ntod
                     todvar[det][r] = variance
 
+                    if hf is not None and case == "toastFFT":
+                        if det in dset:
+                            dset[det][r,:] = td[:]
+
                     # compute the PSD
                     buffer = np.zeros(cfftlen, dtype=np.float64)
                     offset = (cfftlen - len(td)) // 2
@@ -366,6 +391,9 @@ class OpSimNoiseTest(MPITestCase):
                     checkpsd[det][:,r] = bpsd[:]
 
                 tod.cache.clear()
+
+            if hf is not None:
+                hf.close()
 
             if self.comm.rank == 0:
                 np.savetxt(os.path.join(self.outdir,"out_{}_test_simnoise_tod_var.txt".format(case)), np.transpose([todvar[self.dets[0]], todvar[self.dets[1]], todvar[self.dets[2]], todvar[self.dets[3]], todvar[self.dets[4]]]), delimiter=' ')
