@@ -11,7 +11,7 @@ if [ "x${loadedintel}" = x ]; then
     fi
 fi
 module swap craype-haswell craype-mic-knl
-module swap intel intel/17.0.1.132
+module swap intel intel/17.0.3.191
 module load gcc/6.2.0
 module load git
 module load cmake
