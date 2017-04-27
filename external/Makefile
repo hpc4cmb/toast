@@ -17,6 +17,11 @@ endif
 
 .PRECIOUS : $(wildcard conf/*)
 
+# Override arcane Make suffix rule for SCCS which 
+# wipes our config scripts...
+
+% : %.sh
+
 # Config related files
 
 CONFIG_FILE := conf/$(CONFIG)

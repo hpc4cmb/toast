@@ -43,7 +43,8 @@ rng.py \
 fft.py \
 qarray.py \
 op.py \
-healpix.py
+healpix.py \
+vis.py
 
 
 toast_LTLIBRARIES = cbuffer.la

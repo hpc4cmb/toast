@@ -17,6 +17,7 @@ fi
 mkdir -p @CONDA_PREFIX@/bin
 mkdir -p @CONDA_PREFIX@/lib
 mkdir -p @AUX_PREFIX@/lib/python@PYVERSION@/site-packages
+ln -s @AUX_PREFIX@/lib @AUX_PREFIX@/lib64
 
 export PATH=@AUX_PREFIX@/bin:@CONDA_PREFIX@/bin:${PATH}
 export CPATH=@AUX_PREFIX@/include:${CPATH}
@@ -68,6 +69,10 @@ fi
 # Install mpi4py.
 
 @mpi4py@
+
+# Install zlib.
+
+@zlib@
 
 # Install CFITSIO.
 

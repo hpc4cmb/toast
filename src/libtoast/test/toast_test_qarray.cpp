@@ -299,7 +299,9 @@ TEST_F( qarrayTest, torotmat ) {
     qarray::to_rotmat ( qeasy, result );
 
     for ( size_t i = 0; i < 9; ++i ) {
-        EXPECT_FLOAT_EQ( check[i], result[i] );
+        if ( ::fabs ( check[i] ) > 1.0e-12 ) {
+            EXPECT_FLOAT_EQ( check[i], result[i] );
+        }
     }
 }
 
