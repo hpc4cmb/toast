@@ -128,7 +128,7 @@ class Cache(object):
                 mat = pat.match(n)
                 if mat is not None:
                     names.append(n)
-            del r
+                del r
             for n in names:
                 self.destroy(n)
         return

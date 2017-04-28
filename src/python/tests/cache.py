@@ -88,6 +88,7 @@ class CacheTest(MPITestCase):
 
         warnings.filterwarnings('error')
         self.cache.clear('.*')
+        self.cache.clear('.*')
         warnings.resetwarnings()
 
         self.cache.clear()
