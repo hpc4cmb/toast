@@ -10,5 +10,6 @@ conda install --copy --yes \
     jupyter \
     psutil \
     ephem \
+    virtualenv \
     && python -c "import matplotlib.font_manager" \
     && rm -rf @CONDA_PREFIX@/pkgs/*

@@ -29,11 +29,14 @@ Bdets = tt.hex_layout(npix, width, angwidth, fwhm, "fake_", "B", Bpol)
 dets = Adets.copy()
 dets.update(Bdets)
 
-for d in dets:
+indx = 0
+for d in sorted(dets.keys()):
     dets[d]["fknee"] = 0.05
     dets[d]["fmin"] = 1.0e-5
     dets[d]["alpha"] = 1.0
     dets[d]["NET"] = 60.0e-6
+    dets[d]["index"] = indx
+    indx += 1
 
 tt.plot_focalplane(dets, 6.0, 6.0, "fp_fake.png")
 

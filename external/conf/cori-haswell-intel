@@ -50,5 +50,5 @@ BOOSTCHAIN = intel-linux
 # Group and permissions to set
 
 CHGRP = hpcosmo
-CHMOD = a+rX,g+w,o-w
+CHMOD = a+rX,g-w,o-w
 
