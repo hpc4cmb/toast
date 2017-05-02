@@ -21,67 +21,68 @@ import toast.map as tm
 
 import toast.qarray as qa
 
+from toast.vis import set_backend
 
-def view_focalplane(fp, outfile):
-    # To avoid python overhead in large MPI jobs, place the
-    # matplotlib import inside this function, which is only called
-    # when the --debug option is specified.
-    import matplotlib
-    # Force matplotlib to not use any Xwindows backend.
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+# def view_focalplane(fp, outfile):
+#     # To avoid python overhead in large MPI jobs, place the
+#     # matplotlib import inside this function, which is only called
+#     # when the --debug option is specified.
+#     import matplotlib
+#     # Force matplotlib to not use any Xwindows backend.
+#     matplotlib.use("Agg")
+#     import matplotlib.pyplot as plt
 
-    # field of view, in degrees
-    width = 10.0
-    height = 10.0
+#     # field of view, in degrees
+#     width = 10.0
+#     height = 10.0
             
-    fig = plt.figure( figsize=(12,12), dpi=100 )
-    ax = fig.add_subplot(1, 1, 1)
+#     fig = plt.figure( figsize=(12,12), dpi=100 )
+#     ax = fig.add_subplot(1, 1, 1)
 
-    half_width = 0.5 * width
-    half_height = 0.5 * height
-    ax.set_xlabel("Degrees", fontsize="large")
-    ax.set_ylabel("Degrees", fontsize="large")
-    ax.set_xlim([-half_width, half_width])
-    ax.set_ylim([-half_height, half_height])
+#     half_width = 0.5 * width
+#     half_height = 0.5 * height
+#     ax.set_xlabel("Degrees", fontsize="large")
+#     ax.set_ylabel("Degrees", fontsize="large")
+#     ax.set_xlim([-half_width, half_width])
+#     ax.set_ylim([-half_height, half_height])
 
-    xaxis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-    yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-    zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+#     xaxis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+#     yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+#     zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
-    for det in sorted(fp.keys()):
+#     for det in sorted(fp.keys()):
 
-        # radius in degrees
-        detradius = 0.5 * fp[det]["fwhm"] / 60.0
+#         # radius in degrees
+#         detradius = 0.5 * fp[det]["fwhm"] / 60.0
 
-        # rotation from boresight
-        dir = qa.rotate(fp[det]["quat"], zaxis).flatten()
-        ang = np.arctan2(dir[1], dir[0])
+#         # rotation from boresight
+#         dir = qa.rotate(fp[det]["quat"], zaxis).flatten()
+#         ang = np.arctan2(dir[1], dir[0])
 
-        orient = qa.rotate(fp[det]["quat"], xaxis).flatten()
-        polang = np.arctan2(orient[1], orient[0])
+#         orient = qa.rotate(fp[det]["quat"], xaxis).flatten()
+#         polang = np.arctan2(orient[1], orient[0])
 
-        mag = np.arccos(dir[2]) * 180.0 / np.pi
-        xpos = mag * np.cos(ang)
-        ypos = mag * np.sin(ang)
+#         mag = np.arccos(dir[2]) * 180.0 / np.pi
+#         xpos = mag * np.cos(ang)
+#         ypos = mag * np.sin(ang)
 
-        circ = plt.Circle((xpos, ypos), radius=detradius, fc="white", ec="k")
-        ax.add_artist(circ)
+#         circ = plt.Circle((xpos, ypos), radius=detradius, fc="white", ec="k")
+#         ax.add_artist(circ)
 
-        xtail = xpos - detradius * np.cos(polang)
-        ytail = ypos - detradius * np.sin(polang)
-        dx = 2.0 * detradius * np.cos(polang)
-        dy = 2.0 * detradius * np.sin(polang)    
+#         xtail = xpos - detradius * np.cos(polang)
+#         ytail = ypos - detradius * np.sin(polang)
+#         dx = 2.0 * detradius * np.cos(polang)
+#         dy = 2.0 * detradius * np.sin(polang)    
 
-        detcolor = None
-        if "color" in fp[det].keys():
-            detcolor = fp[det]["color"]
-        ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius, 
-            head_width=0.3*detradius, head_length=0.3*detradius, 
-            fc=detcolor, ec=detcolor, length_includes_head=True)
+#         detcolor = None
+#         if "color" in fp[det].keys():
+#             detcolor = fp[det]["color"]
+#         ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius, 
+#             head_width=0.3*detradius, head_length=0.3*detradius, 
+#             fc=detcolor, ec=detcolor, length_includes_head=True)
 
-    plt.savefig(outfile)
-    return
+#     plt.savefig(outfile)
+#     return
 
 
 def main():
@@ -212,7 +213,8 @@ def main():
     if args.debug:
         if comm.comm_world.rank == 0:
             outfile = "{}_focalplane.png".format(args.outdir)
-            view_focalplane(fp, outfile)
+            set_backend()
+            tt.plot_focalplane(fp, 10.0, 10.0, outfile)
 
     # Since we are simulating noise timestreams, we want
     # them to be contiguous and reproducible over the whole
@@ -240,8 +242,7 @@ def main():
 
     # Distribute the observations uniformly
 
-    (group_firstobs, group_numobs) = toast.distribute_uniform(
-        args.numobs, comm.ngroups)
+    groupdist = toast.distribute_uniform(args.numobs, comm.ngroups)
 
     # Compute global time and sample ranges of all observations
 
@@ -256,7 +257,7 @@ def main():
     NET = {}
     rates = {}
     for d in detectors:
-        rates[d] = samplerate
+        rates[d] = args.samplerate
         fmin[d] = fp[d]["fmin"]
         fknee[d] = fp[d]["fknee"]
         alpha[d] = fp[d]["alpha"]
@@ -270,6 +271,9 @@ def main():
     data = toast.Data(comm)
     
     # Every process group creates its observations
+
+    group_firstobs = groupdist[comm.group][0]
+    group_numobs = groupdist[comm.group][1]
 
     for ob in range(group_firstobs, group_firstobs + group_numobs):
         tod = tt.TODSatellite(
@@ -327,8 +331,8 @@ def main():
 
     # make a Healpix pointing matrix.
 
-    pointing = tt.OpPointingHpix(nside=nside, nest=True, mode="IQU", 
-        hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
+    pointing = tt.OpPointingHpix(nside=args.nside, nest=True, mode="IQU", 
+        hwprpm=args.hwprpm, hwpstep=hwpstep, hwpsteptime=args.hwpsteptime)
     pointing.exec(data)
 
     comm.comm_world.barrier()
@@ -345,7 +349,7 @@ def main():
     detweights = {}
     for d in detectors:
         net = fp[d]["NET"]
-        detweights[d] = 1.0 / (samplerate * net * net)
+        detweights[d] = 1.0 / (args.samplerate * net * net)
 
     if not args.madam:
         if comm.comm_world.rank == 0:
@@ -551,7 +555,7 @@ def main():
                             key, value = result.group(1), result.group(2)
                             pars[key] = value
 
-        pars[ "base_first" ] = baseline
+        pars[ "base_first" ] = args.baseline
         pars[ "nside_map" ] = args.nside
         if args.noisefilter:
             pars[ "kfilter" ] = "T"
