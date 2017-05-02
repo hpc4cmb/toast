@@ -234,7 +234,7 @@ class OpPointingHpix(Operator):
 
                 elif self._mode == 'IQU':
 
-                    orient = qa.rotate(pdata.reshape(-1, 4), np.tile(xaxis, nsamp).reshape(-1,3))
+                    orient = qa.rotate(pdata.reshape(-1, 4), np.tile(xaxis, nsamp).reshape(-1,3)).reshape((-1, 3))
 
                     by = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
                     bx = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])

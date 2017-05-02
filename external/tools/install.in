@@ -17,7 +17,11 @@ fi
 mkdir -p @CONDA_PREFIX@/bin
 mkdir -p @CONDA_PREFIX@/lib
 mkdir -p @AUX_PREFIX@/lib/python@PYVERSION@/site-packages
-ln -s @AUX_PREFIX@/lib @AUX_PREFIX@/lib64
+pushd @AUX_PREFIX@
+if [ ! -e lib64 ]; then
+    ln -s lib lib64
+fi
+popd > /dev/null
 
 export PATH=@AUX_PREFIX@/bin:@CONDA_PREFIX@/bin:${PATH}
 export CPATH=@AUX_PREFIX@/include:${CPATH}
@@ -66,13 +70,15 @@ fi
 
 @automake@
 
+# Install zlib.  This is needed so that matplotlib and libpng
+# find a newer zlib than the system one.  We build this with gcc
+# since we also need it on the build machine for things like git!
+
+@zlib@
+
 # Install mpi4py.
 
 @mpi4py@
-
-# Install zlib.
-
-@zlib@
 
 # Install CFITSIO.
 

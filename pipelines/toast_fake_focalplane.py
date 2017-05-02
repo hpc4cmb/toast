@@ -8,17 +8,56 @@
 # example pipelines.
 
 import pickle
+import argparse
+
 import numpy as np
 
 import toast.tod as tt
 
-# Make one big hexagon layout at the center of the focalplane.
-# Set the FWHM to be 5 arcmin, a 5 degree FOV, and 631 pixels.
+parser = argparse.ArgumentParser( description="Simulate fake hexagonal focalplane." )
 
-npix = 631
-fwhm = 5.0 / 60.0
+parser.add_argument( "--minpix", required=False, type=int, default=100, 
+        help="minimum number of pixels to use" )
+
+parser.add_argument( "--out", required=False, default="fp_fake.pkl", 
+        help="Output pickle file" )
+
+parser.add_argument( "--fwhm", required=False, type=float, default=5.0, 
+        help="beam FWHM in arcmin" )
+
+parser.add_argument( "--fov", required=False, type=float, default=5.0, 
+        help="Field of View in degrees" )
+
+parser.add_argument( "--psd_fknee", required=False, type=float, default=0.05, 
+        help="Detector noise model f_knee" )
+
+parser.add_argument( "--psd_NET", required=False, type=float, default=60.0e-6, 
+        help="Detector noise model NET" )
+
+parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0, 
+        help="Detector noise model slope" )
+
+parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5, 
+        help="Detector noise model f_min" )
+    
+args = parser.parse_args()
+
+# Make one big hexagon layout at the center of the focalplane.
+# Compute the number of pixels that is at least the number requested.
+
+test = args.minpix - 1
+nrings = 1
+while (test - 6 * nrings) >= 0:
+    test -= 6 * nrings
+    nrings += 1
+
+npix = 1
+for r in range(1, nrings):
+    npix += 6 * r
+
+fwhm = args.fwhm / 60.0
 width = 100.0
-angwidth = 5.0
+angwidth = args.fov
 
 Apol = tt.hex_pol_angles_qu(npix, offset=0.0)
 Bpol = tt.hex_pol_angles_qu(npix, offset=90.0)
@@ -29,11 +68,14 @@ Bdets = tt.hex_layout(npix, width, angwidth, fwhm, "fake_", "B", Bpol)
 dets = Adets.copy()
 dets.update(Bdets)
 
-for d in dets:
+indx = 0
+for d in sorted(dets.keys()):
     dets[d]["fknee"] = 0.05
     dets[d]["fmin"] = 1.0e-5
     dets[d]["alpha"] = 1.0
     dets[d]["NET"] = 60.0e-6
+    dets[d]["index"] = indx
+    indx += 1
 
 tt.plot_focalplane(dets, 6.0, 6.0, "fp_fake.png")
 

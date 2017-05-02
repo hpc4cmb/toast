@@ -80,13 +80,19 @@ class TOD(object):
             detbreaks=detbreaks, sampsizes=sampsizes, sampbreaks=sampbreaks)
 
         if self._sizes is None:
+            # in this case, the chunks just come from the uniform distribution.
             self._sizes = [ self._dist_samples[x][1] for x in range(self._sampranks) ]
 
         if self._mpicomm.rank == 0:
             # check that all processes have some data, otherwise print warning
-            for r in range(self._mpicomm.size):
+            for d in range(self._detranks):
+                if len(self._dist_dets[d]) == 0:
+                    print("WARNING: detector rank {} has no detectors"
+                    " assigned.".format(d))
+            for r in range(self._sampranks):
                 if self._dist_samples[r][1] <= 0:
-                    print("WARNING: process {} has no data assigned in TOD.  Use fewer processes.".format(r))
+                    print("WARNING: sample rank {} has no data assigned "
+                    "in TOD.".format(r))
 
         self.cache = Cache()
         """
