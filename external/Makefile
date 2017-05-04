@@ -7,9 +7,11 @@ ifndef CONFIG
   CONFIG := $(error CONFIG undefined)undefined
 endif
 
+gitdesc := $(shell git describe --tags --dirty --always | cut -d "-" -f 1)
+gitcnt := $(shell git rev-list --count HEAD)
+
+TOASTVERSION := "$(gitdesc).dev$(gitcnt)"
 ifndef VERSION
-  gitdesc := $(shell git describe --tags --dirty --always | cut -d "-" -f 1)
-  gitcnt := $(shell git rev-list --count HEAD)
   VERSION := "$(gitdesc).dev$(gitcnt)"
 endif
 
