@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# This script assumes that the "toast-deps" module has been loaded.
+
+OPTS="$@"
+
+#export CC=icc
+#export CXX=icpc
+export MPICC=mpiicc
+export MPICXX=mpiicpc
+export CFLAGS="-O3 -g -fPIC -xMIC-AVX512 -pthread"
+export CXXFLAGS="-O3 -g -fPIC -xMIC-AVX512 -pthread"
+export OPENMP_CFLAGS="-qopenmp"
+export OPENMP_CXXFLAGS="-qopenmp"
+export LDFLAGS="-lpthread -liomp5"
+
+./configure ${OPTS} \
+    --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu \
+    --with-math="-limf" \
+    --with-mkl="${TACC_INTEL_DIR}/mkl/lib/intel64" \
+    --with-elemental="${TACC_ELEMENTAL_DIR}/${TACC_ELEMENTAL_VARIANT}"
+
