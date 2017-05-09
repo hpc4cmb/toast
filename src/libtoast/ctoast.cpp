@@ -594,28 +594,38 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
     double zmax, double xstep, double ystep, double zstep, long nelem_sim_max, 
     int verbosity, MPI_Comm comm, int gangsize, double fnear ) {
 
+#ifdef HAVE_ELEMENTAL
     return reinterpret_cast < ctoast_atm_sim * > ( new toast::atm::sim ( azmin, 
         azmax, elmin, elmax, tmin, tmax, lmin_center, lmin_sigma, lmax_center, 
         lmax_sigma, w_center, w_sigma, wdir_center, wdir_sigma, z0_center, 
         z0_sigma, T0_center, T0_sigma, zatm, zmax, xstep, ystep, zstep, 
         nelem_sim_max, verbosity, comm, gangsize, fnear ) );
+#else
+    return NULL;
+#endif
 }
 
 void ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
+#ifdef HAVE_ELEMENTAL
     delete reinterpret_cast < toast::atm::sim * > ( sim );
+#endif
     return;
 }
 
 void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat ) {
+#ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
     sm->simulate( (save_covmat != 0) );
+#endif
     return;
 }
 
 void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double *el, 
     double *tod, long nsamp, double fixed_r ) {
+#ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
     sm->observe( t, az, el, tod, nsamp, fixed_r );
+#endif
     return;
 }
 

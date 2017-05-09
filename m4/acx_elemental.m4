@@ -68,14 +68,15 @@ acx_elemental_ok=no
 acx_elemental_default="-lEl"
 
 ELEMENTAL_CPPFLAGS=""
-ELEMENTAL="$acx_elemental_default"
+ELEMENTAL_LDFLAGS=""
+ELEMENTAL_LIBS="$acx_elemental_default"
 
 AC_ARG_WITH(elemental, [AC_HELP_STRING([--with-elemental=<PATH>], [use the Elemental installed in <PATH>.])])
 
 if test x"$with_elemental" != x; then
    if test x"$with_elemental" != xno; then
       ELEMENTAL_CPPFLAGS="-I$with_elemental/include"
-      ELEMENTAL="-L$with_elemental/lib64 -L$with_elemental/lib $acx_elemental_default"
+      ELEMENTAL_LDFLAGS="-L$with_elemental/lib64 -L$with_elemental/lib"
    else
       acx_elemental_ok=disable
    fi
@@ -94,15 +95,33 @@ else
    # so check that the library has been built with eigen routines.
 
    CPPFLAGS="$CPPFLAGS $ELEMENTAL_CPPFLAGS"
+   ELEMENTAL="$ELEMENTAL_LDFLAGS $ELEMENTAL_LIBS"
    LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
 
    AC_CHECK_HEADERS([El.hpp])
 
-   if test "x$ELEMENTAL" != x; then
+   AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
+   AC_LINK_IFELSE([AC_LANG_PROGRAM([
+      [#include <El.hpp>]
+   ],[
+      using namespace std;
+      using namespace El;
+      DistMatrix < double, MC, MR > cov ( 4, 4 );
+      DistMatrix < double, MC, MR > W ( 4, 4 );
+      DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
+      HermitianEig ( LOWER, cov, eigvals, W );
+   ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
+
+   AC_MSG_RESULT($acx_elemental_ok)
+
+   if test $acx_elemental_ok = no; then
+      ELEMENTAL_LIBS="$acx_elemental_default -lpmrrr"
+      ELEMENTAL="$ELEMENTAL_LDFLAGS $ELEMENTAL_LIBS"
+      LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
 
       AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
       AC_LINK_IFELSE([AC_LANG_PROGRAM([
-        [#include <El.hpp>]
+         [#include <El.hpp>]
       ],[
          using namespace std;
          using namespace El;
@@ -113,64 +132,46 @@ else
       ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
 
       AC_MSG_RESULT($acx_elemental_ok)
+   fi
 
-      if test $acx_elemental_ok = no; then
-         ELEMENTAL="$acx_elemental_default -lpmrrr"
-         LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
+   if test $acx_elemental_ok = no; then
+      ELEMENTAL_LIBS="$acx_elemental_default -lpmrrr -llapack-addons"
+      ELEMENTAL="$ELEMENTAL_LDFLAGS $ELEMENTAL_LIBS"
+      LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
 
-         AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
-         AC_LINK_IFELSE([AC_LANG_PROGRAM([
-           [#include <El.hpp>]
-         ],[
-            using namespace std;
-            using namespace El;
-            DistMatrix < double, MC, MR > cov ( 4, 4 );
-            DistMatrix < double, MC, MR > W ( 4, 4 );
-            DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
-            HermitianEig ( LOWER, cov, eigvals, W );
-         ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
+      AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
+      AC_LINK_IFELSE([AC_LANG_PROGRAM([
+         [#include <El.hpp>]
+      ],[
+         using namespace std;
+         using namespace El;
+         DistMatrix < double, MC, MR > cov ( 4, 4 );
+         DistMatrix < double, MC, MR > W ( 4, 4 );
+         DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
+         HermitianEig ( LOWER, cov, eigvals, W );
+      ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
 
-         AC_MSG_RESULT($acx_elemental_ok)
-      fi
+      AC_MSG_RESULT($acx_elemental_ok)
+   fi
 
-      if test $acx_elemental_ok = no; then
-         ELEMENTAL="$acx_elemental_default -lpmrrr -llapack-addons"
-         LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
+   if test $acx_elemental_ok = no; then
+      ELEMENTAL_LIBS="$acx_elemental_default -llapack-addons"
+      ELEMENTAL="$ELEMENTAL_LDFLAGS $ELEMENTAL_LIBS"
+      LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
 
-         AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
-         AC_LINK_IFELSE([AC_LANG_PROGRAM([
-           [#include <El.hpp>]
-         ],[
-            using namespace std;
-            using namespace El;
-            DistMatrix < double, MC, MR > cov ( 4, 4 );
-            DistMatrix < double, MC, MR > W ( 4, 4 );
-            DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
-            HermitianEig ( LOWER, cov, eigvals, W );
-         ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
+      AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
+      AC_LINK_IFELSE([AC_LANG_PROGRAM([
+         [#include <El.hpp>]
+      ],[
+         using namespace std;
+         using namespace El;
+         DistMatrix < double, MC, MR > cov ( 4, 4 );
+         DistMatrix < double, MC, MR > W ( 4, 4 );
+         DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
+         HermitianEig ( LOWER, cov, eigvals, W );
+      ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
 
-         AC_MSG_RESULT($acx_elemental_ok)
-      fi
-
-      if test $acx_elemental_ok = no; then
-         ELEMENTAL="$acx_elemental_default -llapack-addons"
-         LIBS="$ELEMENTAL $acx_elemental_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
-
-         AC_MSG_CHECKING([for El::HermitianEig in $ELEMENTAL])
-         AC_LINK_IFELSE([AC_LANG_PROGRAM([
-           [#include <El.hpp>]
-         ],[
-            using namespace std;
-            using namespace El;
-            DistMatrix < double, MC, MR > cov ( 4, 4 );
-            DistMatrix < double, MC, MR > W ( 4, 4 );
-            DistMatrix < double, VR, STAR > eigvals ( 4, 1 );
-            HermitianEig ( LOWER, cov, eigvals, W );
-         ])],[acx_elemental_ok=yes;AC_DEFINE(HAVE_ELEMENTAL,1,[Define if you have the Elemental library.])])
-
-         AC_MSG_RESULT($acx_elemental_ok)
-      fi
-
+      AC_MSG_RESULT($acx_elemental_ok)
    fi
 
    if test $acx_elemental_ok = no; then
