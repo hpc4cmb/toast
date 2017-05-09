@@ -1,0 +1,43 @@
+
+# Serial compilers
+
+CC = icc
+CXX = icpc
+FC = ifort
+
+# MPI compilers
+
+MPICC = mpiicc
+MPICXX = mpiicpc
+MPIFC = mpiifort
+
+# Compile flags
+
+CFLAGS = -O3 -g -fPIC -xMIC-AVX512 -pthread
+CXXFLAGS = -O3 -g -fPIC -xMIC-AVX512 -pthread
+FCFLAGS = -O3 -g -fPIC -xMIC-AVX512 -fexceptions -pthread
+
+OPENMP_CFLAGS = -qopenmp
+OPENMP_CXXFLAGS = -qopenmp
+LDFLAGS = -lpthread -liomp5
+
+# Are we doing a cross-compile?
+
+CROSS = --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu
+
+# Miniconda install
+
+INTEL_CONDA = yes
+MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+PYVERSION = 3.5
+
+# For BLAS/LAPACK, use MKL
+
+BLAS = -L${TACC_INTEL_DIR}/mkl/lib/intel64 -lmkl_rt -fopenmp -lpthread -lmemkind -lm -ldl
+LAPACK = 
+
+# Group and permissions to set
+
+CHGRP = G-818225
+CHMOD = a+rX,g-w,o-w
+
