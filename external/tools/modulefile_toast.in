@@ -1,0 +1,32 @@
+#%Module###<-magic cookie ####################################################
+##
+##   TOAST
+##
+##
+# variables for Tcl script use only
+set     version  @VERSION@
+
+module-whatis "Loads a version of TOAST."
+
+proc ModulesHelp { } {
+  global version
+  puts stderr "\t\t TOAST - Version $version\n"
+  puts stderr "\t This loads a version of TOAST."
+  puts stderr ""
+}
+
+conflict toast
+
+if [ module-info mode load ] {
+  if [ is-loaded toast-deps ] {
+  } else {
+    module load toast-deps/@DEPS@
+  }
+}
+
+prepend-path PATH "@PREFIX@/bin"
+prepend-path CPATH "@PREFIX@/include"
+prepend-path LD_LIBRARY_PATH "@PREFIX@/lib"
+prepend-path LIBRARY_PATH "@PREFIX@/lib"
+prepend-path PYTHONPATH "@PREFIX@/lib/python@PYVERSION@/site-packages"
+

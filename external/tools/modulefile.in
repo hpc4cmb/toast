@@ -25,14 +25,14 @@ unsetenv PYTHONSTARTUP
 
 # This is the conda environment location
 prepend-path PATH "@CONDA_PREFIX@/bin"
-setenv PYTHONPATH "@CONDA_PREFIX@/lib/python3.5/site-packages"
+setenv PYTHONPATH "@CONDA_PREFIX@/lib/python@PYVERSION@/site-packages"
 
 # This is the location of the extra compiled software
 prepend-path PATH "@AUX_PREFIX@/bin"
 prepend-path CPATH "@AUX_PREFIX@/include"
 prepend-path LD_LIBRARY_PATH "@AUX_PREFIX@/lib"
 prepend-path LIBRARY_PATH "@AUX_PREFIX@/lib"
-prepend-path PYTHONPATH "@AUX_PREFIX@/lib/python3.5/site-packages"
+prepend-path PYTHONPATH "@AUX_PREFIX@/lib/python@PYVERSION@/site-packages"
 
 # FIXME: Disabling these for now, since they override
 # the compiler choices used by distutils, resulting
