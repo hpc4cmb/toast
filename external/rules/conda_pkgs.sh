@@ -7,9 +7,10 @@ conda install --copy --yes \
     pyyaml \
     astropy \
     h5py \
-    jupyter \
     psutil \
     ephem \
     virtualenv \
+    && conda install --copy --yes -c defaults \
+    ipython ipython-notebook \
     && python -c "import matplotlib.font_manager" \
     && rm -rf @CONDA_PREFIX@/pkgs/*
