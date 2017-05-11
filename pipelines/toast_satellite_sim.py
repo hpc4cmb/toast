@@ -23,67 +23,6 @@ import toast.qarray as qa
 
 from toast.vis import set_backend
 
-# def view_focalplane(fp, outfile):
-#     # To avoid python overhead in large MPI jobs, place the
-#     # matplotlib import inside this function, which is only called
-#     # when the --debug option is specified.
-#     import matplotlib
-#     # Force matplotlib to not use any Xwindows backend.
-#     matplotlib.use("Agg")
-#     import matplotlib.pyplot as plt
-
-#     # field of view, in degrees
-#     width = 10.0
-#     height = 10.0
-            
-#     fig = plt.figure( figsize=(12,12), dpi=100 )
-#     ax = fig.add_subplot(1, 1, 1)
-
-#     half_width = 0.5 * width
-#     half_height = 0.5 * height
-#     ax.set_xlabel("Degrees", fontsize="large")
-#     ax.set_ylabel("Degrees", fontsize="large")
-#     ax.set_xlim([-half_width, half_width])
-#     ax.set_ylim([-half_height, half_height])
-
-#     xaxis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-#     yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
-#     zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-
-#     for det in sorted(fp.keys()):
-
-#         # radius in degrees
-#         detradius = 0.5 * fp[det]["fwhm"] / 60.0
-
-#         # rotation from boresight
-#         dir = qa.rotate(fp[det]["quat"], zaxis).flatten()
-#         ang = np.arctan2(dir[1], dir[0])
-
-#         orient = qa.rotate(fp[det]["quat"], xaxis).flatten()
-#         polang = np.arctan2(orient[1], orient[0])
-
-#         mag = np.arccos(dir[2]) * 180.0 / np.pi
-#         xpos = mag * np.cos(ang)
-#         ypos = mag * np.sin(ang)
-
-#         circ = plt.Circle((xpos, ypos), radius=detradius, fc="white", ec="k")
-#         ax.add_artist(circ)
-
-#         xtail = xpos - detradius * np.cos(polang)
-#         ytail = ypos - detradius * np.sin(polang)
-#         dx = 2.0 * detradius * np.cos(polang)
-#         dy = 2.0 * detradius * np.sin(polang)    
-
-#         detcolor = None
-#         if "color" in fp[det].keys():
-#             detcolor = fp[det]["color"]
-#         ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius, 
-#             head_width=0.3*detradius, head_length=0.3*detradius, 
-#             fc=detcolor, ec=detcolor, length_includes_head=True)
-
-#     plt.savefig(outfile)
-#     return
-
 
 def main():
 
@@ -94,7 +33,7 @@ def main():
 
     parser = argparse.ArgumentParser( description="Simulate satellite boresight pointing and make a noise map." )
 
-    parser.add_argument( "--groupsize", required=False, type=int, default=1, 
+    parser.add_argument( "--groupsize", required=False, type=int, default=0, 
         help="size of processor groups used to distribute observations" )
 
     parser.add_argument( "--samplerate", required=False, type=float, 
@@ -164,13 +103,17 @@ def main():
     
     args = parser.parse_args()
 
+    groupsize = args.groupsize
+    if groupsize == 0:
+        groupsize = MPI.COMM_WORLD.size
+
     # This is the 2-level toast communicator.
 
-    if MPI.COMM_WORLD.size % args.groupsize != 0:
+    if MPI.COMM_WORLD.size % groupsize != 0:
         if MPI.COMM_WORLD.rank == 0:
             print("WARNING:  process groupsize does not evenly divide into "
                 "total number of processes")
-    comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=args.groupsize)
+    comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=groupsize)
 
     # get options
 
@@ -222,7 +165,7 @@ def main():
     # observation, so ensure that our group size is not larger
     # than the number of detectors we have.
 
-    if args.groupsize > len(fp.keys()):
+    if groupsize > len(fp.keys()):
         if comm.comm_world.rank == 0:
             print("process group is too large for the number of detectors")
             comm.comm_world.Abort()

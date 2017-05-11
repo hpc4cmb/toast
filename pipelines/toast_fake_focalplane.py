@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser( description="Simulate fake hexagonal focalplan
 parser.add_argument( "--minpix", required=False, type=int, default=100, 
         help="minimum number of pixels to use" )
 
-parser.add_argument( "--out", required=False, default="fp_fake.pkl", 
-        help="Output pickle file" )
+parser.add_argument( "--out", required=False, default="fp_fake", 
+        help="Root name of output pickle file" )
 
 parser.add_argument( "--fwhm", required=False, type=float, default=5.0, 
         help="beam FWHM in arcmin" )
@@ -52,8 +52,10 @@ while (test - 6 * nrings) >= 0:
     nrings += 1
 
 npix = 1
-for r in range(1, nrings):
+for r in range(1, nrings+1):
     npix += 6 * r
+
+print("using {} pixels ({} detectors)".format(npix, npix*2))
 
 fwhm = args.fwhm / 60.0
 width = 100.0
@@ -77,8 +79,9 @@ for d in sorted(dets.keys()):
     dets[d]["index"] = indx
     indx += 1
 
-tt.plot_focalplane(dets, 6.0, 6.0, "fp_fake.png")
+outfile="{}_{}".format(args.out, npix)
+tt.plot_focalplane(dets, 6.0, 6.0, "{}.png".format(outfile))
 
-with open("fp_fake.pkl", "wb") as p:
+with open("{}.pkl".format(outfile), "wb") as p:
     pickle.dump(dets, p)
 
