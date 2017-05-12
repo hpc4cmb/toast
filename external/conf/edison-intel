@@ -10,6 +10,10 @@ FC = ifort
 MPICC = cc
 MPICXX = CC
 MPIFC = ftn
+MPI_CPPFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/include
+MPI_LDFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/lib
+MPI_CXXLIB = mpichcxx
+MPI_LIB = mpich
 
 # Compile flags
 
@@ -30,13 +34,6 @@ CROSS =
 INTEL_CONDA = yes
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 PYVERSION = 3.5
-
-# Use Cray MPICH
-
-MPI_CPPFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/include
-MPI_LDFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/lib
-MPI_CXXLIB = mpichcxx
-MPI_LIB = mpich
 
 # For BLAS/LAPACK, use MKL
 

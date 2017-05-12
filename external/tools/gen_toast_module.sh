@@ -22,12 +22,14 @@ sub="${sub} -e 's#@PREFIX@#${prefix}#g'"
 sub="${sub} -e 's#@DEPS@#${deps}#g'"
 
 out="mod_toast-${version}"
+rm -f ${out}
 
 while IFS='' read -r line || [[ -n "${line}" ]]; do
     echo "${line}" | eval sed ${sub} >> "${out}"
 done < "${topdir}/modulefile_toast.in"
 
 out="modver_toast-${version}"
+rm -f ${out}
 
 while IFS='' read -r line || [[ -n "${line}" ]]; do
     echo "${line}" | eval sed ${sub} >> "${out}"

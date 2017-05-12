@@ -24,9 +24,9 @@ if [ module-info mode load ] {
   }
 }
 
-prepend-path PATH "@PREFIX@/bin"
-prepend-path CPATH "@PREFIX@/include"
-prepend-path LD_LIBRARY_PATH "@PREFIX@/lib"
-prepend-path LIBRARY_PATH "@PREFIX@/lib"
-prepend-path PYTHONPATH "@PREFIX@/lib/python@PYVERSION@/site-packages"
+prepend-path PATH "@PREFIX@/toast/@VERSION@/bin"
+prepend-path CPATH "@PREFIX@/toast/@VERSION@/include"
+prepend-path LD_LIBRARY_PATH "@PREFIX@/toast/@VERSION@/lib"
+prepend-path LIBRARY_PATH "@PREFIX@/toast/@VERSION@/lib"
+prepend-path PYTHONPATH "@PREFIX@/toast/@VERSION@/lib/python@PYVERSION@/site-packages"
 

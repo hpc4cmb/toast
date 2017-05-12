@@ -10,6 +10,12 @@ FC = ifort
 MPICC = mpiicc
 MPICXX = mpiicpc
 MPIFC = mpiifort
+MPI_CPPFLAGS = /opt/intel/impi/2017.0.098/intel64/include
+MPI_LDFLAGS = /opt/intel/impi/2017.0.098/intel64/lib
+MPI_CXXLIB = mpicxx
+MPI_LIB = mpi
+MPI_EXTRA_COMP =
+MPI_EXTRA_LINK = -lssp
 
 # Compile flags
 
