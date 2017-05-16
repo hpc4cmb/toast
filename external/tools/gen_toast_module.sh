@@ -65,5 +65,14 @@ while IFS='' read -r line || [[ -n "${line}" ]]; do
     echo "${line}" | eval sed ${sub} >> "${out}"
 done < "${topdir}/version.in"
 
+out="mod_install_toast-${version}.sh"
+echo '#!/bin/bash' > ${out}
+echo "mkdir -p ${prefix}/modulefiles/toast" >> ${out}
+echo "cp mod_toast-${version} ${prefix}/modulefiles/toast/${version}" >> ${out}
+echo "cp modver_toast-${version} ${prefix}/modulefiles/toast/.version_${version}" >> ${out}
+echo "chmod -R a+rX ${prefix}/toast" >> ${out}
+echo "chmod -R a+rX ${prefix}/modulefiles/toast" >> ${out}
+chmod +x ${out}
+
 echo "run configure with --prefix=${prefix}/toast/${version}"
 
