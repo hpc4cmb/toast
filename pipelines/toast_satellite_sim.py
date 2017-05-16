@@ -313,7 +313,7 @@ def main():
         localpix = lc.exec(data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, subnpix)
+        allsm = np.floor_divide(localpix, submap)
         sm = set(allsm)
         localsm = np.array(sorted(sm), dtype=np.int64)
 
@@ -561,6 +561,7 @@ def main():
     elapsed = stop - global_start
     if comm.comm_world.rank == 0:
         print("Total Time:  {:.2f} seconds".format(elapsed))
+    MPI.Finalize()
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ class OpLocalPixels(Operator):
             for det in tod.local_dets:
                 pixelsname = "{}_{}".format(self._pixels, det)
                 pixels = tod.cache.reference(pixelsname)
-                local = np.unique(np.concatenate(local, np.unique(pixels)))
+                local = np.unique(np.concatenate((local, np.unique(pixels))))
                 del pixels
 
         return local

@@ -37,7 +37,7 @@ void toast::rng::dist_uint64 ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
 
         c[0] = counter1;
 
-        #pragma omp parallel for schedule(static)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             c[1] = counter2 + i;
             r = rng ( c, k );
@@ -63,7 +63,7 @@ void toast::rng::dist_uniform_01 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
         c[0] = counter1;
 
-        #pragma omp parallel for schedule(static)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             c[1] = counter2 + i;
             r = rng ( c, k );
@@ -89,7 +89,7 @@ void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
         c[0] = counter1;
 
-        #pragma omp parallel for schedule(static)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             c[1] = counter2 + i;
             r = rng ( c, k );
@@ -140,7 +140,7 @@ void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
 
         c[0] = counter1;
 
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp for schedule(dynamic)
         for ( size_t i = 0; i < n; ++i ) {
             c[1] = counter2 + i;
             r = rng ( c, k );
