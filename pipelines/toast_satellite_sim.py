@@ -78,6 +78,9 @@ def main():
 
     parser.add_argument( "--nside", required=False, type=int, default=64, 
         help="Healpix NSIDE" )
+    parser.add_argument( "--subnside", required=False, type=int, default=4, 
+        help="Distributed pixel sub-map NSIDE" )
+
     parser.add_argument( "--baseline", required=False, type=float, 
         default=60.0, help="Destriping baseline length (seconds)" )
     parser.add_argument( "--noisefilter", required=False, default=False, 
@@ -122,6 +125,13 @@ def main():
         hwpstep = float(args.hwpstep)
 
     npix = 12 * args.nside * args.nside
+
+    subnside = args.subnside
+    if subnside > args.nside:
+        subnside = args.nside
+    subnpix = 12 * subnside * subnside
+
+    submap = npix // subnpix
 
     start = MPI.Wtime()
 
@@ -298,11 +308,6 @@ def main():
         if comm.comm_world.rank == 0:
             print("Not using Madam, will only make a binned map!")
 
-        subnside = 16
-        if subnside > args.nside:
-            subnside = args.nside
-        subnpix = 12 * subnside * subnside
-
         # get locally hit pixels
         lc = tm.OpLocalPixels()
         localpix = lc.exec(data)
@@ -316,11 +321,11 @@ def main():
         # noise weighted map, and hits
 
         invnpp = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6, 
-            dtype=np.float64, submap=subnpix, local=localsm)
+            dtype=np.float64, submap=submap, local=localsm)
         hits = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1, 
-            dtype=np.int64, submap=subnpix, local=localsm)
+            dtype=np.int64, submap=submap, local=localsm)
         zmap = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3, 
-            dtype=np.float64, submap=subnpix, local=localsm)
+            dtype=np.float64, submap=submap, local=localsm)
 
         # compute the hits and covariance once, since the pointing and noise
         # weights are fixed.
@@ -470,9 +475,6 @@ def main():
         pars = {}
 
         cross = args.nside // 2
-        submap = 16
-        if submap > args.nside:
-            submap = args.nside
 
         pars[ "temperature_only" ] = "F"
         pars[ "force_pol" ] = "T"
@@ -485,7 +487,7 @@ def main():
         pars[ "write_hits" ] = "T"
         pars[ "run_submap_test" ] = "T"
         pars[ "nside_cross" ] = cross
-        pars[ "nside_submap" ] = submap
+        pars[ "nside_submap" ] = subnside
 
         if args.madampar is not None:
             pat = re.compile(r"\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*")
