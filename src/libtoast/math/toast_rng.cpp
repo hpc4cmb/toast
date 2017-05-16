@@ -106,29 +106,29 @@ void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint6
 void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
 
 
-#ifdef HAVE_MKL
+// #ifdef HAVE_MKL
 
-    // first compute uniform randoms on [0.0, 1.0)
+//     // first compute uniform randoms on [0.0, 1.0)
 
-    double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+//     double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-    toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
-    for ( size_t i = 0; i < n; ++i ) {
-        uni[i] = 2.0 * uni[i] - 1.0;
-    }
+//     toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
+//     for ( size_t i = 0; i < n; ++i ) {
+//         uni[i] = 2.0 * uni[i] - 1.0;
+//     }
 
-    // now use MKL inverse error function
+//     // now use MKL inverse error function
 
-    vdErfInv ( n, uni, data );
+//     vdErfInv ( n, uni, data );
 
-    toast::mem::aligned_free ( uni );
+//     toast::mem::aligned_free ( uni );
 
-    double rttwo = ::sqrt(2.0);
-    for ( size_t i = 0; i < n; ++i ) {
-        data[i] *= rttwo;
-    }
+//     double rttwo = ::sqrt(2.0);
+//     for ( size_t i = 0; i < n; ++i ) {
+//         data[i] *= rttwo;
+//     }
 
-#else
+// #else
 
     #pragma omp parallel default(shared)
     {
@@ -148,7 +148,7 @@ void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
         }
     }
 
-#endif
+// #endif
 
     return;
 }
