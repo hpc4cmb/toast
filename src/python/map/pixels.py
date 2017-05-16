@@ -55,19 +55,17 @@ class OpLocalPixels(Operator):
         crank = comm.comm_rank
 
         # initialize the local pixel set
-        local = set()
+        local = np.zeros(0, dtype=np.int64)
 
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
                 pixelsname = "{}_{}".format(self._pixels, det)
                 pixels = tod.cache.reference(pixelsname)
-                local.update(set(pixels))
+                local = np.unique(np.concatenate(local, np.unique(pixels)))
                 del pixels
 
-        ret = np.zeros(len(local), dtype=np.int64)
-        ret[:] = sorted(local)
-        return ret
+        return local
 
 
 class DistPixels(object):

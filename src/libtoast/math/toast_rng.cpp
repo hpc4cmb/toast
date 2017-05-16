@@ -11,6 +11,10 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <sstream>
 
+#ifdef HAVE_MKL
+#  include <mkl.h>
+#endif
+
 
 #include <Random123/threefry.h>
 #include <Random123/uniform.hpp>
@@ -101,6 +105,31 @@ void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
 void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
 
+
+#ifdef HAVE_MKL
+
+    // first compute uniform randoms on [0.0, 1.0)
+
+    double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
+    for ( size_t i = 0; i < n; ++i ) {
+        uni[i] = 2.0 * uni[i] - 1.0;
+    }
+
+    // now use MKL inverse error function
+
+    vdErfInv ( n, uni, data );
+
+    toast::mem::aligned_free ( uni );
+
+    double rttwo = ::sqrt(2.0);
+    for ( size_t i = 0; i < n; ++i ) {
+        data[i] *= rttwo;
+    }
+
+#else
+
     #pragma omp parallel default(shared)
     {
         RNG rng;
@@ -111,13 +140,15 @@ void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
 
         c[0] = counter1;
 
-        #pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(dynamic)
         for ( size_t i = 0; i < n; ++i ) {
             c[1] = counter2 + i;
             r = rng ( c, k );
             data[i] = ::sqrt ( -2.0 * ::log ( r123::u01 < double, uint64_t > ( r[0] ) ) ) * ::cos ( TWOPI * r123::u01 < double, uint64_t > ( r[1] ) );
         }
     }
+
+#endif
 
     return;
 }
