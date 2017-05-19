@@ -179,7 +179,7 @@ def main():
                         required=False, default=100.0, type=np.float,
                         help='size of volume elements in Z direction')
     parser.add_argument('--atm_nelem_sim_max',
-                        required=False, default=1000, type=np.int,
+                        required=False, default=6000, type=np.int,
                         help='controls the size of the simulation slices')
     parser.add_argument('--atm_gangsize',
                         required=False, default=-1, type=np.int,
@@ -191,10 +191,10 @@ def main():
                         required=False, default=-1, type=np.int,
                         help='positive number for start of integration')
     parser.add_argument('--atm_w_center',
-                        required=False, default=25.0, type=np.float,
+                        required=False, default=10.0, type=np.float,
                         help='central value of the wind speed distribution')
     parser.add_argument('--atm_w_sigma',
-                        required=False, default=10.0, type=np.float,
+                        required=False, default=1.0, type=np.float,
                         help='sigma of the wind speed distribution')
     parser.add_argument('--atm_wdir_center',
                         required=False, default=0.0, type=np.float,
@@ -328,7 +328,7 @@ def main():
             outfile = '{}_focalplane.png'.format(args.outdir)
             view_focalplane(fp, outfile)
 
-    # The distributed timestream data
+            # The distributed timestream data
 
     data = toast.Data(comm)
 

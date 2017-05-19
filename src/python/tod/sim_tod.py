@@ -666,6 +666,10 @@ class TODGround(TOD):
             raise RuntimeError('TODGround: sky patch is below {} degrees '
                                'at {:.2f} degrees midway through the scan.'
                                ''.format(self._el_min, self._patch_el/degree))
+        self._min_az = None
+        self._max_az = None
+        self._min_el = None
+        self._min_el = None
 
         # Is the Sun above the horizon?
         sun = ephem.Sun()
@@ -700,6 +704,11 @@ class TODGround(TOD):
 
         self._boresight_azel, self._boresight = self.translate_pointing()
 
+    def __del__(self):
+
+        del self._az
+        self.cache.clear()
+
     def to_JD(self, t):
         # Convert TOAST UTC time stamp to Julian date
 
@@ -721,13 +730,15 @@ class TODGround(TOD):
     def scan_range(self):
         """
         (tuple):  The extent of the boresight pointing as (min_az, max_az, 
-            min_el, max_el) in radians.
+            min_el, max_el) in radians.  Includes turnarounds.
         """
-        min_el = self._patch_el * degree
-        max_el = self._patch_el * degree
-        min_az = self._patch_az * degree - self._throw / 2
-        max_az = self._patch_az * degree + self._throw / 2
-        return (min_az, max_az, min_el, max_el)
+        if self._min_az is None:
+            self._min_az = np.amin(self._az)
+            self._max_az = np.amax(self._az)
+            self._min_el = self._el
+            self._max_el = self._el
+
+        return self._min_az, self._max_az, self._min_el, self._max_el
     
 
     def simulate_scan(self, samples):
@@ -816,9 +827,7 @@ class TODGround(TOD):
         self._az = self.cache.put('az', self._az[ind])
         self._commonflags = self.cache.put('commonflags', self._commonflags[ind])
 
-        elquat = qa.rotation(ZAXIS, self._el)
-        azelquats = qa.rotation(ZAXIS, self._az)
-        azelquats = qa.mult(azelquats, elquat)
+        azelquats = qa.from_angles(np.pi/2 - np.ones(n)*self._el, self._az, np.zeros(n), IAU=False)
         azel_orients = qa.rotate(azelquats, orient)
         el_orients, az_orients = hp.vec2ang(azel_orients)
         del azel_orients

@@ -6,7 +6,7 @@ from ..mpi import MPI, MPI_Comm
 
 import numpy as np
 
-from scipy.constants import degree
+from scipy.constants import degree, arcmin
 
 import healpy as hp
 
@@ -65,10 +65,10 @@ class OpSimAtmosphere(Operator):
         T0_sigma (float):  sigma of the temperature distribution.
 
     """
-    def __init__(self, out='atm', lmin_center=0.01, lmin_sigma=0.001, 
-        lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0, xstep=100.0, 
-        ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0, gangsize=-1, 
-        fnear=0.1, fixed_r=-1, w_center=25, w_sigma=10, wdir_center=0, wdir_sigma=100, 
+    def __init__(self, out='atm', lmin_center=0.01, lmin_sigma=0.001,
+        lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0, xstep=100.0,
+        ystep=100.0, zstep=100.0, nelem_sim_max=10000, verbosity=0, gangsize=-1,
+        fnear=0.1, fixed_r=-1, w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
         z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10):
 
         # We call the parent class constructor, which currently does nothing
@@ -125,7 +125,8 @@ class OpSimAtmosphere(Operator):
             # to compute the range of angles needed for simulating the slab.
 
             (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
-            #print("boresight scan range = {}, {}, {}, {}".format(min_az_bore, max_az_bore, min_el_bore, max_el_bore))
+            #print("boresight scan range = {}, {}, {}, {}".format(
+            #min_az_bore, max_az_bore, min_el_bore, max_el_bore))
 
             # Go through all detectors and compute the maximum angular extent
             # of the focalplane from the boresight.  Add a tiny margin, since
@@ -140,7 +141,8 @@ class OpSimAtmosphere(Operator):
             detmeanx = 0.0
             detmeany = 0.0
             for det in tod.local_dets:
-                dquat = tod.read_pntg(detector=det, local_start=0, n=1, azel=True)
+                dquat = tod.read_pntg(
+                    detector=det, local_start=0, n=1, azel=True)
                 dvec = qa.rotate(dquat, zaxis).flatten()
                 detmeanx += dvec[0]
                 detmeany += dvec[1]
@@ -150,16 +152,18 @@ class OpSimAtmosphere(Operator):
 
             #print("detmeanx = {}, detmeany = {}".format(detmeanx, detmeany))
 
-            detrad = [ np.sqrt((detdir[t][0] - detmeanx)**2 + (detdir[t][1] - detmeany)**2) for t in range(len(detdir)) ]
+            detrad = [np.sqrt((detdir[t][0] - detmeanx)**2
+                              + (detdir[t][1] - detmeany)**2)
+                      for t in range(len(detdir))]
 
-            fp_radius = np.arcsin(np.max(detrad))
+            fp_radius = np.arcsin(np.max(detrad)) + 1 * arcmin
 
             #print("fp_radius = {}", fp_radius)
 
-            azmin = min_az_bore - 1.01 * fp_radius
-            azmax = max_az_bore + 1.01 * fp_radius
-            elmin = min_el_bore - 1.01 * fp_radius
-            elmax = max_el_bore + 1.01 * fp_radius
+            azmin = min_az_bore - fp_radius
+            azmax = max_az_bore + fp_radius
+            elmin = min_el_bore - fp_radius
+            elmax = max_el_bore + fp_radius
 
             #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
 
@@ -167,13 +171,13 @@ class OpSimAtmosphere(Operator):
 
             times = tod.read_times()
 
-            sim = atm_sim_alloc(azmin, azmax, elmin, elmax, times[0], 
-                times[-1], self._lmin_center, self._lmin_sigma, 
-                self._lmax_center, self._lmax_sigma, self._w_center, 
-                self._w_sigma, self._wdir_center, self._wdir_sigma, 
-                self._z0_center, self._z0_sigma, self._T0_center, 
-                self._T0_sigma, self._zatm, self._zmax, self._xstep, 
-                self._ystep, self._zstep, self._nelem_sim_max, 
+            sim = atm_sim_alloc(azmin, azmax, elmin, elmax, times[0],
+                times[-1], self._lmin_center, self._lmin_sigma,
+                self._lmax_center, self._lmax_sigma, self._w_center,
+                self._w_sigma, self._wdir_center, self._wdir_sigma,
+                self._z0_center, self._z0_sigma, self._T0_center,
+                self._T0_sigma, self._zatm, self._zmax, self._xstep,
+                self._ystep, self._zstep, self._nelem_sim_max,
                 self._verbosity, comm, self._gangsize, self._fnear)
 
             atm_sim_simulate(sim, 0)
@@ -189,11 +193,27 @@ class OpSimAtmosphere(Operator):
                 # Convert Az/El quaternion of the detector back into angles for
                 # the simulation.
 
-                az, el, pa = qa.to_angles(azelquat)
+                theta, phi, pa = qa.to_angles(azelquat)
+                az = phi
+                el = np.pi/2 - theta
+
+                azmin_det = np.amin(az)
+                azmax_det = np.amax(az)
+                elmin_det = np.amin(el)
+                elmax_det = np.amax(el)
+                if (azmin_det < azmin or azmax < azmax_det or
+                    elmin_det < elmin or elmax < elmax_det):
+                    raise RuntimeError(
+                        'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
+                        'is not contained in [{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
+                        ''.format(
+                            azmin_det, azmax_det, elmin_det, elmax_det,
+                            azmin, azmax, elmin, elmax))
 
                 # Integrate detector signal
 
-                atm_sim_observe(sim, times, az, el, atmdata, nsamp, self._fixed_r)
+                atm_sim_observe(
+                    sim, times, az, el, atmdata, nsamp, self._fixed_r)
 
                 # write to cache
 
@@ -203,12 +223,9 @@ class OpSimAtmosphere(Operator):
                 if tod.cache.exists(cachename):
                     ref = tod.cache.reference(cachename)
                 else:
-                    ref = tod.cache.create(cachename, np.float64,
-                                (tod.local_samples[1],))
+                    ref = tod.cache.create(cachename, np.float64, (nsamp,))
 
-                ref[local_offset:local_offset+chunk_samp] += atmdata
+                ref += atmdata
                 del ref
 
-
         return
-
