@@ -343,7 +343,7 @@ class OpCacheCopy(Operator):
                         outref = tod.cache.create(outname, np.float64,
                                     (tod.local_samples[1],))
 
-                    outref[local_offset:local_offset+chunk_samp] = inref[local_offset:local_offset+chunk_samp]
+                    outref[:] = inref[:]
 
                     del outref
                     del inref

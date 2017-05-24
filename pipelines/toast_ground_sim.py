@@ -88,7 +88,8 @@ def main():
     comm = toast.Comm()
 
     if comm.comm_world.rank == 0:
-        print("Running with {} processes".format(comm.comm_world.size))
+        print("Running with {} processes".format(comm.comm_world.size),
+              flush=True)
 
     global_start = MPI.Wtime()
 
@@ -140,10 +141,12 @@ def main():
                         required=False, default=0.0, type=np.float,
                         help='The rate (in RPM) of the HWP rotation')
     parser.add_argument('--hwpstep', required=False, default=None,
-                        help='For stepped HWP, the angle in degrees of each step')
+                        help='For stepped HWP, the angle in degrees '
+                        'of each step')
     parser.add_argument('--hwpsteptime',
                         required=False, default=0.0, type=np.float,
-                        help='For stepped HWP, the the time in seconds between steps')
+                        help='For stepped HWP, the the time in seconds '
+                        'between steps')
     parser.add_argument('--CES_start',
                         required=False, default=0, type=np.float,
                         help='Start time of the CES')
@@ -187,9 +190,6 @@ def main():
     parser.add_argument('--atm_fnear',
                         required=False, default=0.1, type=np.float,
                         help='multiplier for the near field simulation')
-    parser.add_argument('--atm_fixed_r',
-                        required=False, default=-1, type=np.int,
-                        help='positive number for start of integration')
     parser.add_argument('--atm_w_center',
                         required=False, default=10.0, type=np.float,
                         help='central value of the wind speed distribution')
@@ -320,7 +320,8 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Create focalplane:  {:.2f} seconds'.format(stop-start))
+        print('Create focalplane:  {:.2f} seconds'.format(stop-start),
+              flush=True)
     start = stop
 
     if args.debug:
@@ -369,7 +370,7 @@ def main():
             allow_sun_up=args.allow_sun_up,
             sampsizes=None)
     except RuntimeError as e:
-        print('Failed to create the CES scan: {}'.format(e))
+        print('Failed to create the CES scan: {}'.format(e), flush=True)
         return
 
     # Create the noise model for this observation
@@ -405,21 +406,22 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print('Read parameters, compute data distribution:  {:.2f} seconds'
-              ''.format(stop-start))
+              ''.format(stop-start), flush=True)
     start = stop
 
     # Simulate the atmosphere signal
 
-    atm = tt.OpSimAtmosphere(out='signal', lmin_center=args.atm_lmin_center, 
-        lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center, 
-        lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm, zmax=args.atm_zmax, 
-        xstep=args.atm_xstep, ystep=args.atm_ystep, zstep=args.atm_zstep, 
-        nelem_sim_max=args.atm_nelem_sim_max, verbosity=int(args.debug), 
-        gangsize=args.atm_gangsize, fnear=args.atm_fnear, 
-        fixed_r=args.atm_fixed_r, w_center=args.atm_w_center, 
-        w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center, 
-        wdir_sigma=args.atm_wdir_sigma, z0_center=args.atm_z0_center, 
-        z0_sigma=args.atm_z0_sigma, T0_center=args.atm_T0_center, 
+    atm = tt.OpSimAtmosphere(
+        out='signal', lmin_center=args.atm_lmin_center,
+        lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center,
+        lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm, zmax=args.atm_zmax,
+        xstep=args.atm_xstep, ystep=args.atm_ystep, zstep=args.atm_zstep,
+        nelem_sim_max=args.atm_nelem_sim_max, verbosity=int(args.debug),
+        gangsize=args.atm_gangsize, fnear=args.atm_fnear,
+        w_center=args.atm_w_center,
+        w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
+        wdir_sigma=args.atm_wdir_sigma, z0_center=args.atm_z0_center,
+        z0_sigma=args.atm_z0_sigma, T0_center=args.atm_T0_center,
         T0_sigma=args.atm_T0_sigma)
 
     atm.exec(data)
@@ -428,7 +430,7 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Atmosphere simulation took {:.3f} s'.format(elapsed))
+        print('Atmosphere simulation took {:.3f} s'.format(elapsed), flush=True)
     start = stop
 
     # We could also scan from a map and accumulate to 'signal' here...
@@ -445,7 +447,7 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Pointing generation took {:.3f} s'.format(elapsed))
+        print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
     start = stop
 
     # Operator for signal copying, used in each MC iteration
@@ -463,7 +465,7 @@ def main():
 
     if not args.madam:
         if comm.comm_world.rank == 0:
-            print('Not using Madam, will only make a binned map!')
+            print('Not using Madam, will only make a binned map!', flush=True)
 
         subnside = 16
         if subnside > nside:
@@ -506,7 +508,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Building hits and N_pp^-1 took {:.3f} s'.format(elapsed))
+            print('Building hits and N_pp^-1 took {:.3f} s'.format(elapsed),
+                  flush=True)
         start = stop
 
         hits.write_healpix_fits('{}_hits.fits'.format(args.outdir))
@@ -516,7 +519,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Writing hits and N_pp^-1 took {:.3f} s'.format(elapsed))
+            print('Writing hits and N_pp^-1 took {:.3f} s'.format(elapsed),
+                  flush=True)
         start = stop
 
         # invert it
@@ -526,7 +530,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Inverting N_pp^-1 took {:.3f} s'.format(elapsed))
+            print('Inverting N_pp^-1 took {:.3f} s'.format(elapsed),
+                  flush=True)
         start = stop
 
         invnpp.write_healpix_fits('{}_npp.fits'.format(args.outdir))
@@ -535,9 +540,11 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Writing N_pp took {:.3f} s'.format(elapsed))
+            print('Writing N_pp took {:.3f} s'.format(elapsed),
+                  flush=True)
         start = stop
 
+        """
         # in debug mode, print out data distribution information
         if args.debug:
             handle = None
@@ -554,6 +561,7 @@ def main():
                 print('Dumping debug data distribution took {:.3f} s'
                       ''.format(elapsed))
             start = stop
+        """
 
         mcstart = start
 
@@ -574,7 +582,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('Creating output dir {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed))
+                      ''.format(mc, elapsed), flush=True)
             start = stop
 
             # Copy the signal timestreams to the total ones before
@@ -592,7 +600,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('  Noise simulation {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed))
+                      ''.format(mc, elapsed), flush=True)
             start = stop
 
             zmap.data.fill(0.0)
@@ -605,7 +613,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('  Building noise weighted map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed))
+                      ''.format(mc, elapsed), flush=True)
             start = stop
 
             tm.covariance_apply(invnpp, zmap)
@@ -615,7 +623,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('  Computing binned map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed))
+                      ''.format(mc, elapsed), flush=True)
             start = stop
         
             zmap.write_healpix_fits(os.path.join(outpath, 'binned.fits'))
@@ -625,10 +633,11 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('  Writing binned map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed))
+                      ''.format(mc, elapsed), flush=True)
             elapsed = stop - mcstart
             if comm.comm_world.rank == 0:
-                print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed))
+                print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
+                      flush=True)
             start = stop
 
     else:
@@ -695,7 +704,8 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Noise simulation took {:.3f} s'.format(elapsed))
+                print('Noise simulation took {:.3f} s'.format(elapsed),
+                      flush=True)
             start = stop
 
             # create output directory for this realization
@@ -704,6 +714,7 @@ def main():
                 if not os.path.isdir(pars['path_output']):
                     os.makedirs(pars['path_output'])
 
+            """
             # in debug mode, print out data distribution information
             if args.debug:
                 handle = None
@@ -713,6 +724,7 @@ def main():
                 data.info(handle)
                 if comm.comm_world.rank == 0:
                     handle.close()
+            """
 
             madam = tm.OpMadam(params=pars, detweights=detweights, name='total',
                                common_flag_mask=args.common_flag_mask)
@@ -722,13 +734,13 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Mapmaking took {:.3f} s'.format(elapsed))
+                print('Mapmaking took {:.3f} s'.format(elapsed), flush=True)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     elapsed = stop - global_start
     if comm.comm_world.rank == 0:
-        print('Total Time:  {:.2f} seconds'.format(elapsed))
+        print('Total Time:  {:.2f} seconds'.format(elapsed), flush=True)
 
 
 if __name__ == '__main__':

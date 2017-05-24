@@ -206,20 +206,21 @@ void ctoast_string_free ( size_t nstring, char ** str );
 struct ctoast_atm_sim_;
 typedef struct ctoast_atm_sim_ ctoast_atm_sim;
 
-ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax, 
-    double elmin, double elmax, double tmin, double tmax, double lmin_center, 
-    double lmin_sigma, double lmax_center, double lmax_sigma, double w_center, 
-    double w_sigma, double wdir_center, double wdir_sigma, double z0_center, 
-    double z0_sigma, double T0_center, double T0_sigma, double zatm, 
-    double zmax, double xstep, double ystep, double zstep, long nelem_sim_max, 
-    int verbosity, MPI_Comm comm, int gangsize, double fnear );
+ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
+    double elmin, double elmax, double tmin, double tmax, double lmin_center,
+    double lmin_sigma, double lmax_center, double lmax_sigma, double w_center,
+    double w_sigma, double wdir_center, double wdir_sigma, double z0_center,
+    double z0_sigma, double T0_center, double T0_sigma, double zatm,
+    double zmax, double xstep, double ystep, double zstep, long nelem_sim_max,
+    int verbosity, MPI_Comm comm, int gangsize, double fnear,
+    uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2 );
 
 void ctoast_atm_sim_free ( ctoast_atm_sim * sim );
 
 void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat );
 
-void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double *el, 
-    double *tod, long nsamp, double fixed_r );
+void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
+    double *el, double *tod, long nsamp, double fixed_r );
 
 
 //--------------------------------------
