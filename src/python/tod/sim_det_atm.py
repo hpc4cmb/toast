@@ -120,6 +120,11 @@ class OpSimAtmosphere(Operator):
         """
 
         for obs in data.obs:
+            try:
+                obsname = obs['name']
+            except:
+                obsname = 'observation'
+
             obsindx = 0
             if 'id' in obs:
                 obsindx = obs['id']
@@ -201,6 +206,11 @@ class OpSimAtmosphere(Operator):
             elmin = comm.allreduce(elmin, op=MPI.MIN)
             elmax = comm.allreduce(elmax, op=MPI.MAX)
 
+            if elmin < 0 or elmax > np.pi/2:
+                raise RuntimeError(
+                    'Error in CES elevation: elmin = {:.2f}, elmax = {:.2f}'
+                    ''.format(elmin, elmax))
+
             #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
 
             # Get the timestamps
@@ -260,8 +270,8 @@ class OpSimAtmosphere(Operator):
                     ax.set_xlabel('az [deg]')
                     ax.set_ylabel('el [deg]')
                     ax.set_yticks([elmin/degree, elmax/degree])
-                    plt.savefig('atm_t_{:04}_r_{:04}.png'.format(
-                        int(t), int(r)))
+                    plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
+                        obsname, int(t), int(r)))
                     plt.close()
 
             nsamp = tod.local_samples[1]

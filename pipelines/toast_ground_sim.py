@@ -10,6 +10,8 @@ import os
 import re
 import argparse
 import pickle
+from datetime import datetime
+import dateutil.parser
 
 import numpy as np
 from scipy.constants import degree
@@ -97,46 +99,26 @@ def main():
         description="Simulate ground-based boresight pointing.  Simulate "
         "atmosphere and make maps for some number of noise Monte Carlos.",
         fromfile_prefix_chars='@')
+    parser.add_argument('--groupsize',
+                        required=False, type=np.int,
+                        help='Size of a process group assigned to a CES')
+    parser.add_argument('--schedule',
+                        required=True,
+                        help='CES schedule file from toast_ground_schedule.py')
     parser.add_argument('--samplerate',
-                        required=False, default=40.0, type=np.float,
+                        required=False, default=100.0, type=np.float,
                         help='Detector sample rate (Hz)')
-    parser.add_argument('--site_lon',
-                        required=False, default=10.0,
-                        help='Observing site longitude [pyEphem string]')
-    parser.add_argument('--site_lat',
-                        required=False, default=10.0,
-                        help='Observing site latitude [pyEphem string]')
-    parser.add_argument('--site_alt',
-                        required=False, default=10.0, type=np.float,
-                        help='Observing site altitude [meters]')
-    parser.add_argument('--patch_lon',
-                        required=False, default=30.0,
-                        help='Sky patch longitude [pyEphem string]')
-    parser.add_argument('--patch_lat',
-                        required=False, default=30.0,
-                        help='Sky patch latitude [pyEphem string]')
-    parser.add_argument('--patch_coord',
-                        required=False, default='C',
-                        help='Sky patch coordinate system [C,E,G]')
-    parser.add_argument('--throw',
-                        required=False, default=5.0, type=np.float,
-                        help='Sky patch width in azimuth [degrees]')
     parser.add_argument('--scanrate',
                         required=False, default=6.0, type=np.float,
                         help='Scanning rate [deg / s]')
     parser.add_argument('--scan_accel',
-                        required=False, default=6.0, type=np.float,
+                        required=False, default=3.0, type=np.float,
                         help='Scanning rate change [deg / s^2]')
-    parser.add_argument('--el_min',
-                        required=False, default=0.0, type=np.float,
-                        help='Minimum elevation for a CES')
     parser.add_argument('--sun_angle_min',
                         required=False, default=90.0, type=np.float,
-                        help='Minimum angular distance between the Sun and '
-                        'the sky patch')
-    parser.add_argument('--allow_sun_up',
-                        required=False, default=False, action='store_true',
-                        help='If specified, allow day time scans.')
+                        help='Minimum azimuthal distance between the Sun and '
+                        'the bore sight [deg]')
+
     parser.add_argument('--hwprpm',
                         required=False, default=0.0, type=np.float,
                         help='The rate (in RPM) of the HWP rotation')
@@ -147,12 +129,6 @@ def main():
                         required=False, default=0.0, type=np.float,
                         help='For stepped HWP, the the time in seconds '
                         'between steps')
-    parser.add_argument('--CES_start',
-                        required=False, default=0, type=np.float,
-                        help='Start time of the CES')
-    parser.add_argument('--CES_stop',
-                        required=False, default=1000, type=np.float,
-                        help='Stop time of the CES')
 
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
@@ -170,31 +146,31 @@ def main():
                         required=False, default=40000.0, type=np.float,
                         help='atmosphere extent for temperature profile')
     parser.add_argument('--atm_zmax',
-                        required=False, default=2000.0, type=np.float,
+                        required=False, default=200.0, type=np.float,
                         help='atmosphere extent for water vapor integration')
     parser.add_argument('--atm_xstep',
-                        required=False, default=100.0, type=np.float,
+                        required=False, default=10.0, type=np.float,
                         help='size of volume elements in X direction')
     parser.add_argument('--atm_ystep',
-                        required=False, default=100.0, type=np.float,
+                        required=False, default=10.0, type=np.float,
                         help='size of volume elements in Y direction')
     parser.add_argument('--atm_zstep',
-                        required=False, default=100.0, type=np.float,
+                        required=False, default=10.0, type=np.float,
                         help='size of volume elements in Z direction')
     parser.add_argument('--atm_nelem_sim_max',
-                        required=False, default=6000, type=np.int,
+                        required=False, default=1000, type=np.int,
                         help='controls the size of the simulation slices')
     parser.add_argument('--atm_gangsize',
-                        required=False, default=-1, type=np.int,
+                        required=False, default=1, type=np.int,
                         help='size of the gangs that create slices')
     parser.add_argument('--atm_fnear',
-                        required=False, default=0.1, type=np.float,
+                        required=False, default=0.3, type=np.float,
                         help='multiplier for the near field simulation')
     parser.add_argument('--atm_w_center',
-                        required=False, default=10.0, type=np.float,
+                        required=False, default=1.0, type=np.float,
                         help='central value of the wind speed distribution')
     parser.add_argument('--atm_w_sigma',
-                        required=False, default=1.0, type=np.float,
+                        required=False, default=0.1, type=np.float,
                         help='sigma of the wind speed distribution')
     parser.add_argument('--atm_wdir_center',
                         required=False, default=0.0, type=np.float,
@@ -222,7 +198,7 @@ def main():
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
     parser.add_argument('--nside',
-                        required=False, default=1024, type=np.int,
+                        required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
     parser.add_argument('--baseline',
                         required=False, default=60.0, type=np.float,
@@ -256,6 +232,57 @@ def main():
                         ' can specify a valid matplotlib color string.')
 
     args = parser.parse_args()
+
+    if args.groupsize:
+        comm = toast.Comm(groupsize=args.groupsize)
+
+    # Load the schedule
+    fn = args.schedule
+    if not os.path.isfile(fn):
+        raise RuntimeError('No such schedule file: {}'.format(fn))
+    if comm.comm_world.rank == 0:
+        start = MPI.Wtime()
+        f = open(fn, 'r')
+        while True:
+            line = f.readline()
+            if line.startswith('#'):
+                continue
+            site_name, site_lat, site_lon, site_alt = line.split()
+            site_alt = float(site_alt)
+            site = [site_name, site_lat, site_lon, site_alt]
+            break
+        all_ces = []
+        for line in f:
+            if line.startswith('#'):
+                continue
+            start_date, start_time, stop_date, stop_time, mjdstart, mjdstop, \
+                name, azmin, azmax, el, \
+                rs, sun_el1, sun_az1, sun_el2, sun_az2, scan = line.split()
+            start_time = start_date + ' ' + start_time
+            stop_time = stop_date + ' ' + stop_time
+            try:
+                start_time = dateutil.parser.parse(start_time + ' +0000')
+                stop_time = dateutil.parser.parse(stop_time + ' +0000')
+            except:
+                start_time = dateutil.parser.parse(start_time)
+                stop_time = dateutil.parser.parse(stop_time)
+
+            start_timestamp = start_time.timestamp()
+            stop_timestamp = stop_time.timestamp()
+
+            all_ces.append([start_timestamp, stop_timestamp, name, int(scan),
+                            float(azmin), float(azmax), float(el)])
+        f.close()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        print('Load schedule:  {:.2f} seconds'.format(stop-start),
+              flush=True)
+    else:
+        site = None
+        all_ces = None
+
+    site_name, site_lat, site_lon, site_alt = comm.comm_world.bcast(site)
+    all_ces = comm.comm_world.bcast(all_ces)
 
     # get options
 
@@ -329,78 +356,78 @@ def main():
             outfile = '{}_focalplane.png'.format(args.outdir)
             view_focalplane(fp, outfile)
 
-            # The distributed timestream data
+    # Build observations out of the CES:es
 
     data = toast.Data(comm)
-
-    # FIXME: what format will we assume the CES times to be?
-
-    CES_start = args.CES_start
-    CES_stop = args.CES_stop
-
-    totsamples = int((CES_stop - CES_start) * args.samplerate)
-
-    # create the single TOD for this observation
 
     detectors = sorted(fp.keys())
     detquats = {}
     for d in detectors:
         detquats[d] = fp[d]['quat']
 
-    try:
-        tod = tt.TODGround(
-            comm.comm_group, 
-            detquats,
-            totsamples,
-            firsttime=CES_start,
-            rate=args.samplerate,
-            site_lon=args.site_lon,
-            site_lat=args.site_lat,
-            site_alt=args.site_alt,
-            patch_lon=args.patch_lon,
-            patch_lat=args.patch_lat,
-            patch_coord=args.patch_coord,
-            throw=args.throw,
-            scanrate=args.scanrate,
-            scan_accel=args.scan_accel,
-            CES_start=None,
-            CES_stop=None,
-            el_min=args.el_min,
-            sun_angle_min=args.sun_angle_min,
-            allow_sun_up=args.allow_sun_up,
-            sampsizes=None)
-    except RuntimeError as e:
-        print('Failed to create the CES scan: {}'.format(e), flush=True)
-        return
+    for ices, ces in enumerate(all_ces):
 
-    # Create the noise model for this observation
+        # Assign the CES:es to process groups in a round-robin schedule
+        if ices % comm.ngroups != comm.group:
+            continue
 
-    fmin = {}
-    fknee = {}
-    alpha = {}
-    NET = {}
-    rates = {}
-    for d in detectors:
-        rates[d] = args.samplerate
-        fmin[d] = fp[d]['fmin']
-        fknee[d] = fp[d]['fknee']
-        alpha[d] = fp[d]['alpha']
-        NET[d] = fp[d]['NET']
+        CES_start, CES_stop, name, scan, azmin, azmax, el = ces
 
-    noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
-                             fknee=fknee, alpha=alpha, NET=NET)
+        totsamples = int((CES_stop - CES_start) * args.samplerate)
 
-    # Create the (single) observation
+        # create the single TOD for this observation
 
-    ob = {}
-    ob['name'] = 'CES'
-    ob['tod'] = tod
-    ob['intervals'] = None
-    ob['baselines'] = None
-    ob['noise'] = noise
-    ob['id'] = 0
+        try:
+            tod = tt.TODGround(
+                comm.comm_group,
+                detquats,
+                totsamples,
+                firsttime=CES_start,
+                rate=args.samplerate,
+                site_lon=site_lon,
+                site_lat=site_lat,
+                site_alt=site_alt,
+                azmin=azmin,
+                azmax=azmax,
+                el=el,
+                scanrate=args.scanrate,
+                scan_accel=args.scan_accel,
+                CES_start=None,
+                CES_stop=None,
+                sun_angle_min=args.sun_angle_min,
+                sampsizes=None)
+        except RuntimeError as e:
+            print('Failed to create the CES scan: {}'.format(e), flush=True)
+            return
 
-    data.obs.append(ob)
+        # Create the noise model for this observation
+
+        fmin = {}
+        fknee = {}
+        alpha = {}
+        NET = {}
+        rates = {}
+        for d in detectors:
+            rates[d] = args.samplerate
+            fmin[d] = fp[d]['fmin']
+            fknee[d] = fp[d]['fknee']
+            alpha[d] = fp[d]['alpha']
+            NET[d] = fp[d]['NET']
+
+        noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
+                                 fknee=fknee, alpha=alpha, NET=NET)
+
+        # Create the (single) observation
+
+        ob = {}
+        ob['name'] = 'CES-{}-{}'.format(name, scan)
+        ob['tod'] = tod
+        ob['intervals'] = None
+        ob['baselines'] = None
+        ob['noise'] = noise
+        ob['id'] = 0
+
+        data.obs.append(ob)
 
     stop = MPI.Wtime()
     elapsed = stop - start
@@ -411,6 +438,7 @@ def main():
 
     # Simulate the atmosphere signal
 
+    """
     atm = tt.OpSimAtmosphere(
         out='signal', lmin_center=args.atm_lmin_center,
         lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center,
@@ -425,6 +453,7 @@ def main():
         T0_sigma=args.atm_T0_sigma)
 
     atm.exec(data)
+    """
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
@@ -653,7 +682,7 @@ def main():
 
         pars[ 'temperature_only' ] = 'F'
         pars[ 'force_pol' ] = 'T'
-        pars[ 'kfirst' ] = 'T'
+        pars[ 'kfirst' ] = 'F' # 'T' DEBUG
         pars[ 'concatenate_messages' ] = 'T'
         pars[ 'write_map' ] = 'T'
         pars[ 'write_binmap' ] = 'T'
