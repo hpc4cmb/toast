@@ -122,6 +122,7 @@ def main():
     # Parse the patch definitions
 
     if args.debug:
+        hp.mollview(None, coord=args.patch_coord, title='Patch locations')
         hp.graticule(30)
 
     patches = []
@@ -167,8 +168,8 @@ def main():
             lat = [corner._dec/degree for corner in corners]
             lon.append(lon[0])
             lat.append(lat[0])
-            hp.projplot(lon, lat, '-', threshold=1, lonlat=True)
-            hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True)
+            hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C')
+            hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True, coord='C')
 
     # Normalize the weights
     for i in range(len(patches)):

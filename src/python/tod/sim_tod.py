@@ -19,8 +19,8 @@ except:
 from .. import qarray as qa
 
 from .tod import TOD
-
 from .noise import Noise
+from .pointing_math import quat_equ2ecl, quat_equ2gal
 
 from ..op import Operator
 
@@ -572,6 +572,8 @@ class TODGround(TOD):
             cannot be split.
         sampbreaks (list):  Optional list of hard breaks in the sample
             distribution.
+        coord (str):  Sky coordinate system.  One of
+            C (Equatorial), E (Ecliptic) or G (Galactic)
     """
 
     TURNAROUND = 1
@@ -587,7 +589,7 @@ class TODGround(TOD):
                  scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  detindx=None, detranks=1, detbreaks=None,
-                 sampsizes=None, sampbreaks=None):
+                 sampsizes=None, sampbreaks=None, coord='C'):
 
         if ephem is None:
             raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
@@ -626,6 +628,9 @@ class TODGround(TOD):
         self._CES_stop = CES_stop
         self._el_min = el_min
         self._sun_angle_min = sun_angle_min
+        if coord not in 'CEG':
+            raise RuntimeError('Unknown coordinate system: {}'.format(coord))
+        self._coord = coord
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -834,6 +839,16 @@ class TODGround(TOD):
         qD = qa.rotation(XAXIS, np.pi/2-dec)
         qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
         q = qa.mult(qR, qa.mult(qD, qP))
+
+        if self._coord != 'C':
+            # Add the coordinate system rotation
+            if self._coord == 'G':
+                q = qa.mult(quat_equ2gal, q)
+            elif self._coord == 'E':
+                q = qa.mult(quat_equ2ecl, q)
+            else:
+                raise RuntimeError(
+                    'Unknown coordinate system: {}'.format(self._coord))
 
         return q
 

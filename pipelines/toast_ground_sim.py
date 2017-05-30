@@ -102,6 +102,10 @@ def main():
     parser.add_argument('--groupsize',
                         required=False, type=np.int,
                         help='Size of a process group assigned to a CES')
+
+    parser.add_argument('--coord',
+                        required=False, default='C',
+                        help='Sky coordinate system [C,E,G]')
     parser.add_argument('--schedule',
                         required=True,
                         help='CES schedule file from toast_ground_schedule.py')
@@ -109,10 +113,10 @@ def main():
                         required=False, default=100.0, type=np.float,
                         help='Detector sample rate (Hz)')
     parser.add_argument('--scanrate',
-                        required=False, default=6.0, type=np.float,
+                        required=False, default=1.0, type=np.float,
                         help='Scanning rate [deg / s]')
     parser.add_argument('--scan_accel',
-                        required=False, default=3.0, type=np.float,
+                        required=False, default=0.5, type=np.float,
                         help='Scanning rate change [deg / s^2]')
     parser.add_argument('--sun_angle_min',
                         required=False, default=90.0, type=np.float,
@@ -256,8 +260,10 @@ def main():
             if line.startswith('#'):
                 continue
             start_date, start_time, stop_date, stop_time, mjdstart, mjdstop, \
-                name, azmin, azmax, el, \
-                rs, sun_el1, sun_az1, sun_el2, sun_az2, scan = line.split()
+                name, azmin, azmax, el, rs, \
+                sun_el1, sun_az1, sun_el2, sun_az2, \
+                moon_el1, moon_az1, moon_el2, moon_az2, moon_phase, \
+                scan = line.split()
             start_time = start_date + ' ' + start_time
             stop_time = stop_date + ' ' + stop_time
             try:
@@ -395,6 +401,7 @@ def main():
                 CES_start=None,
                 CES_stop=None,
                 sun_angle_min=args.sun_angle_min,
+                coord=args.coord,
                 sampsizes=None)
         except RuntimeError as e:
             print('Failed to create the CES scan: {}'.format(e), flush=True)
