@@ -18,7 +18,7 @@ a BSD-style license that can be found in the LICENSE file.
 
 
 // Fixed length at which we have enough work to justify using threads.
-const static int toast_qarray_ompthresh = 10;
+const static int toast_qarray_ompthresh = 100;
 
 
 // Dot product of lists of arrays.
@@ -36,7 +36,7 @@ void toast::qarray::list_dot ( size_t n, size_t m, size_t d, double const * a,
             }
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             dotprod[i] = 0.0;
             for ( size_t j = 0; j < d; ++j ) {
@@ -96,7 +96,7 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
             }
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             for ( size_t j = 0; j < d; ++j ) {
                 q_out[m * i + j] = q_in[m * i + j] / norm[i];
@@ -128,7 +128,7 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
             }
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             for ( size_t j = 0; j < d; ++j ) {
                 q[m * i + j] /= norm[i];
@@ -240,7 +240,7 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
             y2 = -q_unit[1] * q_unit[1];
             yz =  q_unit[1] * q_unit[2];
             z2 = -q_unit[2] * q_unit[2];
-            #pragma omp parallel for default(shared) private(i, vfin, vfout) schedule(dynamic)
+            #pragma omp parallel for default(shared) private(i, vfin, vfout) schedule(static)
             for ( i = 0; i < n; ++i ) {
                 vfin = 3 * i * chv;
                 vfout = 3 * i;
@@ -256,7 +256,7 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
             }
 
         } else {
-            #pragma omp parallel for default(shared) private(i, vfin, vfout, qf, xw, yw, zw, x2, xy, xz, y2, yz, z2) schedule(dynamic)
+            #pragma omp parallel for default(shared) private(i, vfin, vfout, qf, xw, yw, zw, x2, xy, xz, y2, yz, z2) schedule(static)
             for ( i = 0; i < n; ++i ) {
                 vfin = 3 * i * chv;
                 vfout = 3 * i;
@@ -339,7 +339,7 @@ void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const 
                 - p[pf + 2] * q[qf + 2] + p[pf + 3] * q[qf + 3];
         }
     } else {
-        #pragma omp parallel for default(shared) private(i, f, pf, qf) schedule(dynamic)
+        #pragma omp parallel for default(shared) private(i, f, pf, qf) schedule(static)
         for ( i = 0; i < n; ++i ) {
             f = 4 * i;
             pf = 4 * i * chp;
@@ -379,7 +379,7 @@ void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * t
 
         size_t off = 0;
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n_targettime; ++i ) {
             // scroll forward to the correct time sample
             while ( ( off+1 < n_time ) && ( time[off+1] < targettime[i] ) ) {
@@ -433,7 +433,7 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
     
     double exp_q_w;
 
-    #pragma omp parallel for default(shared) private(exp_q_w) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(exp_q_w) schedule(static)
     for ( size_t i = 0; i < n; ++i ) {
         exp_q_w = ::exp ( q_in[4*i + 3] );
         q_out[4*i + 3] = exp_q_w * ::cos ( normv[i] );
@@ -463,7 +463,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
     double tmp;
 
-    #pragma omp parallel for default(shared) private(tmp) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(tmp) schedule(static)
     for ( size_t i = 0; i < n; ++i ) {
         q_out[4*i + 3] = ::log ( normq[i] );
         tmp = ::acos ( q_in[4*i + 3] / normq[i] );
@@ -561,7 +561,7 @@ void toast::qarray::to_axisangle ( size_t n, double const * q, double * axis, do
         size_t qf;
         double tmp;
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             qf = 4 * i;
             vf = 3 * i;
@@ -693,7 +693,7 @@ void toast::qarray::from_angles ( size_t n, double const * theta,
         double qP[4];
         double qtemp[4];
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             qf = 4 * i;
 
@@ -768,7 +768,7 @@ void toast::qarray::to_angles ( size_t n, double const * quat, double * theta,
         double orient[3];
         double qtemp[4];
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( size_t i = 0; i < n; ++i ) {
             qf = 4 * i;
 

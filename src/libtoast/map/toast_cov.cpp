@@ -32,7 +32,7 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
         double tzdata[nnz];
         double tinvnpp[block];
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( i = 0; i < nsamp; ++i ) {
             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
                 zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
@@ -79,7 +79,7 @@ void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64
         int64_t i, j, k;
         int64_t hpx;
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( i = 0; i < nsamp; ++i ) {
             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
                 hpx = (indx_submap[i] * subsize) + indx_pix[i];
@@ -111,7 +111,7 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
 
         double tinvnpp[block];
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( i = 0; i < nsamp; ++i ) {
             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
                 hpx = (indx_submap[i] * subsize) + indx_pix[i];
@@ -154,7 +154,7 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
 
         double tzdata[nnz];
 
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for ( i = 0; i < nsamp; ++i ) {
             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
                 zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
@@ -280,7 +280,7 @@ void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_
             // Here we "unroll" the loop over submaps and pixels within each submap.
             // This allows us to distribute the total pixels across all threads.
 
-            #pragma omp for schedule(dynamic)
+            #pragma omp for schedule(static)
             for ( i = 0; i < (nsub * subsize); ++i ) {
 
                 dpx = i * block;
@@ -431,7 +431,7 @@ void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
             // Here we "unroll" the loop over submaps and pixels within each submap.
             // This allows us to distribute the total pixels across all threads.
 
-            #pragma omp for schedule(dynamic)
+            #pragma omp for schedule(static)
             for ( i = 0; i < (nsub * subsize); ++i ) {
                 
                 px = i * block;

@@ -18,7 +18,7 @@ a BSD-style license that can be found in the LICENSE file.
 
 
 // Fixed length at which we have enough work to justify using threads.
-const static int toast_sf_ompthresh = 10;
+const static int toast_sf_ompthresh = 100;
 
 
 #ifdef HAVE_MKL
@@ -132,7 +132,7 @@ void toast::sf::sin ( int n, double const * ang, double * sinout ) {
             sinout[i] = ::sin ( ang[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             sinout[i] = ::sin ( ang[i] );
         }
@@ -153,7 +153,7 @@ void toast::sf::cos ( int n, double const * ang, double * cosout ) {
             cosout[i] = ::cos ( ang[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             cosout[i] = ::cos ( ang[i] );
         }
@@ -175,7 +175,7 @@ void toast::sf::sincos ( int n, double const * ang, double * sinout, double * co
             cosout[i] = ::cos ( ang[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             sinout[i] = ::sin ( ang[i] );
             cosout[i] = ::cos ( ang[i] );
@@ -197,7 +197,7 @@ void toast::sf::atan2 ( int n, double const * y, double const * x, double * ang 
             ang[i] = ::atan2 ( y[i], x[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             ang[i] = ::atan2 ( y[i], x[i] );
         }
@@ -218,7 +218,7 @@ void toast::sf::sqrt ( int n, double const * in, double * out ) {
             out[i] = ::sqrt ( in[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             out[i] = ::sqrt ( in[i] );
         }
@@ -238,7 +238,7 @@ void toast::sf::rsqrt ( int n, double const * in, double * out ) {
             out[i] = 1.0 / ::sqrt ( in[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             out[i] = 1.0 / ::sqrt ( in[i] );
         }
@@ -259,7 +259,7 @@ void toast::sf::exp ( int n, double const * in, double * out ) {
             out[i] = ::exp ( in[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             out[i] = ::exp ( in[i] );
         }
@@ -280,7 +280,7 @@ void toast::sf::log ( int n, double const * in, double * out ) {
             out[i] = ::log ( in[i] );
         }
     } else {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for ( int i = 0; i < n; ++i ) {
             out[i] = ::log ( in[i] );
         }
@@ -309,7 +309,7 @@ void toast::sf::fast_sin ( int n, double const * ang, double * sinout ) {
     int quad;
     int i;
 
-    #pragma omp parallel for default(shared) private(i, sx, sx2, quot, rem, x, quad) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(i, sx, sx2, quot, rem, x, quad) schedule(static)
     for ( i = 0; i < n; i++ ) {
         quot = ang[i] * INV_TWOPI;
         rem = quot - floor ( quot );
@@ -361,7 +361,7 @@ void toast::sf::fast_cos ( int n, double const * ang, double * cosout ) {
     int quad;
     int i;
 
-    #pragma omp parallel for default(shared) private(i, cx, cx2, quot, rem, x, quad) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(i, cx, cx2, quot, rem, x, quad) schedule(static)
     for ( i = 0; i < n; i++ ) {
         quot = ang[i] * INV_TWOPI;
         rem = quot - floor ( quot );
@@ -412,7 +412,7 @@ void toast::sf::fast_sincos ( int n, double const * ang, double * sinout, double
     int quad;
     int i;
 
-    #pragma omp parallel for default(shared) private(i, sx, cx, sx2, cx2, quot, rem, x, quad) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(i, sx, cx, sx2, cx2, quot, rem, x, quad) schedule(static)
     for ( i = 0; i < n; i++ ) {
         quot = ang[i] * INV_TWOPI;
         rem = quot - floor ( quot );
@@ -472,7 +472,7 @@ void toast::sf::fast_atan2 ( int n, double const * y, double const * x, double *
     int region;
     int sign;
 
-    #pragma omp parallel for default(shared) private(i, r, r2, complement, region, sign) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(i, r, r2, complement, region, sign) schedule(static)
     for ( i = 0; i < n; i++ ) {
 
         r = y[i] / x[i];
@@ -572,7 +572,7 @@ void toast::sf::fast_erfinv ( int n, double const * in, double * out ) {
             arg[i] = ( 1.0 - ab ) * ( 1.0 + ab );
         }
     } else {
-        #pragma omp parallel for default(shared) private(i, ab) schedule(dynamic)
+        #pragma omp parallel for default(shared) private(i, ab) schedule(static)
         for ( i = 0; i < n; ++i ) {
             ab = ::fabs ( in[i] );
             arg[i] = ( 1.0 - ab ) * ( 1.0 + ab );
@@ -584,7 +584,7 @@ void toast::sf::fast_erfinv ( int n, double const * in, double * out ) {
     double p;
     double w;
 
-    #pragma omp parallel for default(shared) private(i, p, w) schedule(dynamic)
+    #pragma omp parallel for default(shared) private(i, p, w) schedule(static)
     for ( i = 0; i < n; ++i ) {
         
         w = - lg[i];

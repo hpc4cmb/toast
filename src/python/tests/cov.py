@@ -26,8 +26,6 @@ class CovarianceTest(MPITestCase):
 
     def setUp(self):
 
-        print("running covariancetest setup")
-
         self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
