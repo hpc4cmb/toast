@@ -429,7 +429,7 @@ def main():
         ob = {}
         ob['name'] = 'CES-{}-{}'.format(name, scan)
         ob['tod'] = tod
-        ob['intervals'] = None
+        ob['intervals'] = tod.subscans
         ob['baselines'] = None
         ob['noise'] = noise
         ob['id'] = 0

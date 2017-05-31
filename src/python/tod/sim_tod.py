@@ -19,6 +19,7 @@ except:
 from .. import qarray as qa
 
 from .tod import TOD
+from .interval import Interval
 from .noise import Noise
 from .pointing_math import quat_equ2ecl, quat_equ2gal
 
@@ -647,7 +648,16 @@ class TODGround(TOD):
 
         # Set the boresight pointing based on the given scan parameters
 
-        sizes = self.simulate_scan(samples)
+        sizes, starts = self.simulate_scan(samples)
+
+        self._subscans = []
+        for subscan_start, subscan_length in zip(starts, sizes):
+            tstart = self._firsttime + subscan_start / self._rate
+            tstop = tstart + subscan_length / self._rate
+            istart = subscan_start
+            istop = istart + subscan_length - 1
+            self._subscans.append(
+                Interval(start=tstart, stop=tstop, first=istart, last=istop))
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -665,13 +675,26 @@ class TODGround(TOD):
         self.cache.clear()
 
     def to_JD(self, t):
-        # Convert TOAST UTC time stamp to Julian date
+        """
+        Convert TOAST UTC time stamp to Julian date
+        """
         return t / 86400. + 2440587.5
 
     def to_DJD(self, t):
-        # Convert TOAST UTC time stamp to Dublin Julian date used
-        # by pyEphem.
+        """
+        Convert TOAST UTC time stamp to Dublin Julian date used
+        by pyEphem.
+        """
         return self.to_JD(t) - 2415020
+
+    @property
+    def subscans(self):
+        """
+        (list):  Toast Interval objects that match the subscans,
+            including turnarounds.  The list can be used as toast
+            observation intervals.
+        """
+        return self._subscans
 
     @property
     def scan_range(self):
@@ -708,6 +731,8 @@ class TODGround(TOD):
         dazdt = scanrate
         scan_accel = self._scan_accel / self._rate # per sample, not per second
         tol = self._rate / 10
+        # the index, i, is relative to the start of the tod object.
+        # If CES begun before the TOD, first values of i are negative.
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
         starts = [0] # Subscan start indices
         while True:
@@ -761,7 +786,7 @@ class TODGround(TOD):
         if np.sum(sizes) != samples:
             raise RuntimeError('Subscans do not match samples')
 
-        return sizes
+        return sizes, starts[:-1]
 
     def translate_pointing(self):
 
