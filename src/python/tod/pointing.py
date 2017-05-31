@@ -13,6 +13,8 @@ from ..op import Operator
 from ..dist import Comm, Data
 from .tod import TOD
 
+from .. import ctoast as ct
+
 
 
 class OpPointingHpix(Operator):
@@ -239,15 +241,14 @@ class OpPointingHpix(Operator):
                     by = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
                     bx = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])
                         
-                    detang = np.arctan2(by, bx)
+                    detang = ct.sf_fast_atan2(by, bx)
 
                     if hwpang is not None:
                         detang += 2.0*hwpang
                     detang *= 2.0
 
-                    cang = np.cos(detang)
-                    sang = np.sin(detang)
-                     
+                    sang, cang = ct.sf_fast_sincos(detang)
+
                     Ival = np.ones_like(cang)
                     Ival *= cal
                     Qval = cang
