@@ -26,6 +26,7 @@ tod_math.py \
 pointing_math.py \
 pointing.py \
 noise.py \
+polyfilter.py \
 interval.py \
 sim_interval.py \
 sim_noise.py \

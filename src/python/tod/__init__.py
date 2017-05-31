@@ -32,6 +32,8 @@ from .sim_focalplane import (hex_layout, rhombus_layout,
 
 from .noise import Noise
 
+from .polyfilter import OpPolyFilter
+
 from .pointing_math import quat2angle, aberrate
 
 from .tod_math import (calibrate, dipole, sim_noise_timestream,

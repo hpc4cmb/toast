@@ -35,6 +35,7 @@ ops_dipole.py \
 ops_madam.py \
 ops_pmat.py \
 ops_simnoise.py \
+ops_polyfilter.py \
 psd_math.py \
 qarray.py \
 rng.py \

@@ -28,6 +28,7 @@ from . import cov as testcov
 from . import ops_pmat as testopspmat
 from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
+from . import ops_polyfilter as testopspolyfilter
 from . import ops_madam as testopsmadam
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
@@ -72,6 +73,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testcov) )
         suite.addTest( loader.loadTestsFromModule(testopsdipole) )
         suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
+        suite.addTest( loader.loadTestsFromModule(testopspolyfilter) )
         suite.addTest( loader.loadTestsFromModule(testopsmadam) )
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
