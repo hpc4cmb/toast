@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by 
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 
 import numpy as np
 
@@ -37,7 +38,7 @@ class OpPolyFilter(Operator):
            on polynomial filter failures.
     """
 
-    def __init__(self, order=1, pattern='.*', name='signal',
+    def __init__(self, order=1, pattern=r'.*', name='signal',
                  common_flag_name='common_flags', common_flag_mask=255,
                  flag_name='flags', flag_mask=255, poly_flag_mask=1):
 
@@ -73,6 +74,15 @@ class OpPolyFilter(Operator):
         for obs in data.obs:
             tod = obs['tod']
             tod_first = tod.local_samples[0]
+            tod_nsamp = tod.local_samples[1]
+
+            # get the total list of intervals
+            intervals = None
+            if 'intervals' in obs.keys():
+                intervals = obs['intervals']
+            if intervals is None:
+                intervals = [Interval(start=0.0, stop=0.0, first=0,
+                                      last=(tod.total_samples-1))]
 
              # Cache the output common flags
             cachename = self._common_flag_name
@@ -83,8 +93,13 @@ class OpPolyFilter(Operator):
                 common_ref = tod.cache.put(cachename, common_flag)
                 del common_flag
 
+            pat = re.compile(self._pattern)
+
             for det in tod.local_dets:
                 # Test the detector pattern
+
+                if not pat.match(det):
+                    continue
 
                 # Cache the output signal
                 cachename = '{}_{}'.format(self._name, det)
@@ -105,28 +120,38 @@ class OpPolyFilter(Operator):
                     flag_ref = tod.cache.put(cachename, flag)
                     del flag, dummy
 
-                # Iterate over each chunk.
+                # Iterate over each interval
 
-                chunk_first = tod_first
-                for curchunk in range(tod.local_chunks[1]):
-                    abschunk = tod.local_chunks[0] + curchunk
-                    chunk_samp = tod.total_chunks[abschunk]
-                    local_offset = chunk_first - tod_first
-
-                    ind = slice(local_offset, local_offset + chunk_samp)
-                    sig = ref[ind]
-                    good = np.logical_and(
-                        common_ref[ind] & self._common_flag_mask == 0,
-                        flag_ref[ind] & self._flag_mask == 0)
-                    x = np.arange(chunk_samp)
-                    try:
-                        p = np.polyfit(x[good], sig[good], self._order)
-                        sig -= np.polyval(p, x)
-                    except:
-                        # Polynomial fitting failed, flag the entire chunk
-                        flag_ref[ind] |= self._poly_flag_mask
-
-                    chunk_first += chunk_samp
+                for ival in intervals:
+                    if ival.last >= tod_first and \
+                       ival.first < tod_first + tod_nsamp:
+                        # This interval overlaps with this tod.
+                        # Apply the filter to the overlap.
+                        local_start = ival.first - tod_first
+                        local_stop = ival.last - tod_first
+                        if local_start < 0:
+                            local_start = 0
+                        if local_stop > tod_nsamp:
+                            local_stop = tod_nsamp
+                        ind = slice(local_start, local_stop)
+                        n = local_stop - local_start
+                        sig = ref[ind]
+                        good = np.logical_and(
+                            common_ref[ind] & self._common_flag_mask == 0,
+                            flag_ref[ind] & self._flag_mask == 0)
+                        # The X-coordinate should be symmetric
+                        x = np.arange(n) * 10 / n - 5
+                        try:
+                            # Subtracting the mean improves the
+                            # condition number
+                            sig -= np.mean(sig[good])
+                            # Fit and subtract the polynomial
+                            p = np.polyfit(x[good], sig[good], self._order)
+                            sig -= np.polyval(p, x)
+                        except:
+                            # Polynomial fitting failed, flag the
+                            # failed region.
+                            flag_ref[ind] |= self._poly_flag_mask
 
                 del ref
                 del flag_ref

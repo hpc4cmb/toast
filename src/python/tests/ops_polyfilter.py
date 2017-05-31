@@ -13,7 +13,7 @@ import numpy.testing as nt
 
 import scipy.interpolate as si
 
-from ..tod import OpPolyFilter
+from ..tod import OpPolyFilter, Interval
 from ..tod.tod import *
 from ..tod.pointing import *
 from ..tod.noise import *
@@ -45,7 +45,7 @@ class OpPolyFilterTest(MPITestCase):
 
         self.order = 5
 
-        self.dets = ['f1a', 'f1b', 'f2a', 'f2b', 'white', 'high']
+        self.dets = ['f1a_apply', 'f1b_apply', 'f2a', 'f2b', 'white', 'high']
         self.fp = {}
         for d in self.dets:
             self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
@@ -58,17 +58,17 @@ class OpPolyFilterTest(MPITestCase):
         self.alpha = {}
         self.NET = {}
 
-        self.rates['f1a'] = self.rate
-        self.fmin['f1a'] = 1.0e-5
-        self.fknee['f1a'] = 0.15
-        self.alpha['f1a'] = 1.0
-        self.NET['f1a'] = 10.0
+        self.rates['f1a_apply'] = self.rate
+        self.fmin['f1a_apply'] = 1.0e-5
+        self.fknee['f1a_apply'] = 0.15
+        self.alpha['f1a_apply'] = 1.0
+        self.NET['f1a_apply'] = 10.0
 
-        self.rates['f1b'] = self.rate
-        self.fmin['f1b'] = 1.0e-5
-        self.fknee['f1b'] = 0.1
-        self.alpha['f1b'] = 1.0
-        self.NET['f1b'] = 10.0
+        self.rates['f1b_apply'] = self.rate
+        self.fmin['f1b_apply'] = 1.0e-5
+        self.fknee['f1b_apply'] = 0.1
+        self.alpha['f1b_apply'] = 1.0
+        self.NET['f1b_apply'] = 10.0
 
         self.rates['f2a'] = self.rate
         self.fmin['f2a'] = 1.0e-5
@@ -130,11 +130,19 @@ class OpPolyFilterTest(MPITestCase):
             NET=self.NET
         )
 
+        intervals = []
+        interval_len = 100
+        for istart in range(0, self.totsamp, interval_len):
+            istop = min(istart + interval_len, self.totsamp)
+            intervals.append(Interval(
+                start=istart/self.rate, stop=istop/self.rate,
+                first=istart, last=istop))
+
         ob = {}
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
-        ob['intervals'] = None
+        ob['intervals'] = intervals
         ob['baselines'] = None
         ob['noise'] = self.nse
 
@@ -166,7 +174,7 @@ class OpPolyFilterTest(MPITestCase):
 
         # Filter timestreams
 
-        op = OpPolyFilter(name='noise', order=self.order)
+        op = OpPolyFilter(name='noise', order=self.order, pattern=r'.*apply.*')
         op.exec(self.data)
 
         stop = MPI.Wtime()
@@ -179,7 +187,9 @@ class OpPolyFilterTest(MPITestCase):
             y = tod.cache.reference(cachename)
             rms = np.std(y)
             old = old_rms[det]
-            if rms / old > 1e-10:
+            if rms / old > 1e-10 and 'apply' in det:
+                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
+            if rms / old < 1e-1 and 'apply' not in det:
                 raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
 
         self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))
