@@ -126,9 +126,7 @@ class OpSimDipoleTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
@@ -192,18 +190,11 @@ class OpSimDipoleTest(MPITestCase):
             
             minmap = np.min(data)
             maxmap = np.max(data)
-            print(minmap)
-            print(maxmap)
-            print(self.dip_check)
             nt.assert_almost_equal(maxmap, self.dip_check, decimal=5)
             nt.assert_almost_equal(minmap, -self.dip_check, decimal=5)
 
             minloc = np.argmin(data)
             maxloc = np.argmax(data)
-            print(minloc)
-            print(maxloc)
-            print(self.dip_min_pix)
-            print(self.dip_max_pix)
             nt.assert_equal(minloc, self.dip_min_pix)
             nt.assert_equal(maxloc, self.dip_max_pix)
 
@@ -211,6 +202,8 @@ class OpSimDipoleTest(MPITestCase):
             hp.mollview(data, xsize=1600, nest=False)
             plt.savefig(outfile)
             plt.close()
+
+        #self.assertTrue(False)
 
         stop = MPI.Wtime()
         elapsed = stop - start

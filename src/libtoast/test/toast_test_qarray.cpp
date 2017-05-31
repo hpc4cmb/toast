@@ -101,7 +101,7 @@ TEST_F( qarrayTest, norm ) {
 TEST_F( qarrayTest, mult ) {
     double result[4];
 
-    qarray::mult ( 1, q1, q2, result );
+    qarray::mult ( 1, q1, 1, q2, result );
 
     for ( size_t i = 0; i < 4; ++i ) {
         EXPECT_FLOAT_EQ( mult_result[i], result[i] );
@@ -114,20 +114,21 @@ TEST_F( qarrayTest, multarray ) {
     double in1[4*n];
     double in2[4*n];
     double result[4*n];
-    double null[4*n];
+    double null[4];
+
+    null[0] = 0.0;
+    null[1] = 0.0;
+    null[2] = 0.0;
+    null[3] = 1.0;
 
     for ( size_t i = 0; i < n; ++i ) {
         for ( size_t j = 0; j < 4; ++j ) {
             in1[4*i+j] = q1[j];
             in2[4*i+j] = q2[j];
-            null[4*i+j] = 0.0;
-            if ( j == 3 ) {
-                null[4*i+j] = 1.0;
-            }
         }
     }
 
-    qarray::mult ( n, in1, in2, result );
+    qarray::mult ( n, in1, n, in2, result );
 
     for ( size_t i = 0; i < n; ++i ) {
         for ( size_t j = 0; j < 4; ++j ) {
@@ -135,7 +136,7 @@ TEST_F( qarrayTest, multarray ) {
         }
     }
 
-    qarray::mult ( n, in1, null, result );
+    qarray::mult ( n, in1, 1, null, result );
 
     for ( size_t i = 0; i < n; ++i ) {
         for ( size_t j = 0; j < 4; ++j ) {
@@ -148,7 +149,7 @@ TEST_F( qarrayTest, multarray ) {
 TEST_F( qarrayTest, rot1 ) {
     double result[3];
 
-    qarray::rotate ( 1, q1, vec, result );
+    qarray::rotate ( 1, q1, 1, vec, result );
 
     for ( size_t i = 0; i < 3; ++i ) {
         EXPECT_FLOAT_EQ( rot_by_q1[i], result[i] );
@@ -173,7 +174,7 @@ TEST_F( qarrayTest, rotarray ) {
         }
     }
 
-    qarray::rotate ( n, qin, vin, result );
+    qarray::rotate ( n, qin, n, vin, result );
 
     for ( size_t i = 0; i < 3; ++i ) {
         EXPECT_FLOAT_EQ( rot_by_q1[i], result[i] );
@@ -381,8 +382,8 @@ TEST_F( qarrayTest, thetaphipa ) {
     double check;
 
     for ( size_t i = 0; i < n; ++i ) {
-        qarray::rotate ( 1, &(quat[4*i]), zaxis, dir );
-        qarray::rotate ( 1, &(quat[4*i]), xaxis, orient );
+        qarray::rotate ( 1, &(quat[4*i]), 1, zaxis, dir );
+        qarray::rotate ( 1, &(quat[4*i]), 1, xaxis, orient );
 
         ASSERT_NEAR( toast::PI_2 - ::asin(dir[2]), theta[i], 1.0e-6 );
 
@@ -453,8 +454,8 @@ TEST_F( qarrayTest, thetaphipa ) {
     // axes to the correct place.
 
     for ( size_t i = 0; i < n; ++i ) {
-        qarray::rotate ( 1, &(quat[4*i]), zaxis, dir );
-        qarray::rotate ( 1, &(quat[4*i]), xaxis, orient );
+        qarray::rotate ( 1, &(quat[4*i]), 1, zaxis, dir );
+        qarray::rotate ( 1, &(quat[4*i]), 1, xaxis, orient );
 
         ASSERT_NEAR( toast::PI_2 - ::asin (dir[2]), theta[i], 1.0e-6 );
 

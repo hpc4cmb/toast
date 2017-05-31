@@ -15,6 +15,9 @@ cinv = 1e3 / c # Inverse light speed in km / s ( the assumed unit for velocity )
 xaxis, yaxis, zaxis = np.eye( 3, dtype=np.float64 )
 
 
+# FIXME: this basically duplicates toast.qarray.to_angles().  We should remove
+# this function at some point.
+
 def quat2angle( quat, no_pa=False ):
     """
     Convert orientation quaternions into pointing angles.

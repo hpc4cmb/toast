@@ -27,6 +27,7 @@ namespace toast { namespace sf {
     void fast_rsqrt ( int n, double const * in, double * out );
     void fast_exp ( int n, double const * in, double * out );
     void fast_log ( int n, double const * in, double * out );
+    void fast_erfinv ( int n, double const * in, double * out );
 
 
 } }

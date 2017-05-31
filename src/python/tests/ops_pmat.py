@@ -70,7 +70,7 @@ class OpPointingHpixTest(MPITestCase):
             self.data.obs.append(ob)
 
     def tearDown(self):
-        pass
+        del self.data
 
 
     def test_hpix_simple(self):

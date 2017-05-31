@@ -172,13 +172,13 @@ void ctoast_qarray_normalize_inplace ( size_t n, size_t m, size_t d, double * q 
     return;
 }
 
-void ctoast_qarray_rotate ( size_t n, double const * q, double const * v_in, double * v_out ) {
-    toast::qarray::rotate ( n, q, v_in, v_out );
+void ctoast_qarray_rotate ( size_t nq, double const * q, size_t nv, double const * v_in, double * v_out ) {
+    toast::qarray::rotate ( nq, q, nv, v_in, v_out );
     return;
 }
 
-void ctoast_qarray_mult ( size_t n, double const * p, double const * q, double * r ) {
-    toast::qarray::mult ( n, p, q, r );
+void ctoast_qarray_mult ( size_t np, double const * p, size_t nq, double const * q, double * r ) {
+    toast::qarray::mult ( np, p, nq, q, r );
     return;
 }
 

@@ -25,6 +25,9 @@ from .. import ctoast as ctoast
 class CovarianceTest(MPITestCase):
 
     def setUp(self):
+
+        print("running covariancetest setup")
+
         self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
@@ -132,7 +135,7 @@ class CovarianceTest(MPITestCase):
 
 
     def tearDown(self):
-        pass
+        del self.data
 
 
     def test_accum(self):
@@ -249,10 +252,7 @@ class CovarianceTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
-        #print(localsm)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct a distributed map to store the covariance and hits
 
@@ -310,9 +310,7 @@ class CovarianceTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct a distributed map to store the covariance and hits
 
@@ -339,9 +337,7 @@ class CovarianceTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct a distributed map to store the covariance and hits
 
@@ -403,9 +399,7 @@ class CovarianceTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct a distributed map to store the covariance and hits
 

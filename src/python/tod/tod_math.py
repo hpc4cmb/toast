@@ -268,7 +268,8 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
     beta = inv_light * speed.flatten()
 
-    dir = qa.rotate(pntg, np.tile(zaxis, nsamp).reshape((-1,3)))
+    dir = qa.rotate(pntg, zaxis)
+    #dir = qa.rotate(pntg, np.tile(zaxis, nsamp).reshape((-1,3)))
 
     dipoletod = None
     if freq == 0:

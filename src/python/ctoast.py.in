@@ -238,16 +238,19 @@ lib.ctoast_qarray_list_dot.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
 
 def qarray_list_dot(n, m, d, a, b):
     dotprod = np.zeros(n, dtype=np.float64)
-    lib.ctoast_qarray_list_dot(n, m, d, a, b, dotprod)
+    ac = np.require(a, requirements=["C"])
+    bc = np.require(b, requirements=["C"])
+    lib.ctoast_qarray_list_dot(n, m, d, ac, bc, dotprod)
     return dotprod
 
 lib.ctoast_qarray_inv.restype = None
 lib.ctoast_qarray_inv.argtypes = [ ct.c_ulong, npf64 ]
 
 def qarray_inv(n, q):
-    qcopy = np.copy(q)
-    lib.ctoast_qarray_inv(n, qcopy)
-    return qcopy
+    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out[:] = q[:]
+    lib.ctoast_qarray_inv(n, q_out)
+    return q_out
 
 lib.ctoast_qarray_amplitude.restype = None
 lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
@@ -255,7 +258,8 @@ lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
 
 def qarray_amplitude(n, m, d, v):
     amp = np.zeros(n, dtype=np.float64)
-    lib.ctoast_qarray_amplitude(n, m, d, v, amp)
+    vc = np.require(v, requirements=["C"])
+    lib.ctoast_qarray_amplitude(n, m, d, vc, amp)
     return amp
 
 lib.ctoast_qarray_normalize.restype = None
@@ -263,24 +267,35 @@ lib.ctoast_qarray_normalize.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
     npf64, npf64 ]
 
 def qarray_normalize(n, m, d, q_in):
-    q_out = np.zeros_like(q_in)
-    lib.ctoast_qarray_normalize(n, m, d, q_in, q_out)
+    q_out = np.zeros(4*n, dtype=np.float64)
+    qc = np.require(q_in, requirements=["C"])
+    lib.ctoast_qarray_normalize(n, m, d, qc, q_out)
     return q_out
 
 lib.ctoast_qarray_rotate.restype = None
-lib.ctoast_qarray_rotate.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+lib.ctoast_qarray_rotate.argtypes = [ ct.c_ulong, npf64, ct.c_ulong, npf64, npf64 ]
 
-def qarray_rotate(n, q, v_in):
-    v_out = np.zeros_like(v_in)
-    lib.ctoast_qarray_rotate(n, q, v_in, v_out)
+def qarray_rotate(nq, q, nv, v_in):
+    n = nq
+    if nv > n:
+        n = nv
+    v_out = np.zeros(3*n, dtype=np.float64)
+    qc = np.require(q, requirements=["C"])
+    vc = np.require(v_in, requirements=["C"])
+    lib.ctoast_qarray_rotate(nq, qc, nv, vc, v_out)
     return v_out
 
 lib.ctoast_qarray_mult.restype = None
-lib.ctoast_qarray_mult.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+lib.ctoast_qarray_mult.argtypes = [ ct.c_ulong, npf64, ct.c_ulong, npf64, npf64 ]
 
-def qarray_mult(n, p, q):
-    r = np.zeros_like(p)
-    lib.ctoast_qarray_mult(n, p, q, r)
+def qarray_mult(pn, p, nq, q):
+    n = nq
+    if pn > n:
+        n = pn
+    r = np.zeros(4*n, dtype=np.float64)
+    pc = np.require(p, requirements=["C"])
+    qc = np.require(q, requirements=["C"])
+    lib.ctoast_qarray_mult(pn, pc, nq, qc, r)
     return r
 
 lib.ctoast_qarray_slerp.restype = None
@@ -289,31 +304,37 @@ lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, npf64,
 
 def qarray_slerp(n_time, n_targettime, time, targettime, q_in):
     q_interp = np.zeros(n_targettime*4, dtype=np.float64)
-    lib.ctoast_qarray_slerp(n_time, n_targettime, time, targettime, q_in, q_interp)
+    tc = np.require(time, requirements=["C"])
+    ttc = np.require(targettime, requirements=["C"])
+    qc = np.require(q_in, requirements=["C"])
+    lib.ctoast_qarray_slerp(n_time, n_targettime, tc, ttc, qc, q_interp)
     return q_interp
 
 lib.ctoast_qarray_exp.restype = None
 lib.ctoast_qarray_exp.argtypes = [ ct.c_ulong, npf64, npf64 ]
 
 def qarray_exp(n, q_in):
-    q_out = np.zeros_like(q_in)
-    lib.ctoast_qarray_exp(n, q_in, q_out)
+    q_out = np.zeros(4*n, dtype=np.float64)
+    qc = np.require(q_in, requirements=["C"])
+    lib.ctoast_qarray_exp(n, qc, q_out)
     return q_out
 
 lib.ctoast_qarray_ln.restype = None
 lib.ctoast_qarray_ln.argtypes = [ ct.c_ulong, npf64, npf64 ]
 
 def qarray_ln(n, q_in):
-    q_out = np.zeros_like(q_in)
-    lib.ctoast_qarray_ln(n, q_in, q_out)
+    q_out = np.zeros(4*n, dtype=np.float64)
+    qc = np.require(q_in, requirements=["C"])
+    lib.ctoast_qarray_ln(n, qc, q_out)
     return q_out
 
 lib.ctoast_qarray_pow.restype = None
 lib.ctoast_qarray_pow.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
 
 def qarray_pow(n, p, q_in):
-    q_out = np.zeros_like(q_in)
-    lib.ctoast_qarray_pow(n, p, q_in, q_out)
+    q_out = np.zeros(4*n, dtype=np.float64)
+    qc = np.require(q_in, requirements=["C"])
+    lib.ctoast_qarray_pow(n, p, qc, q_out)
     return q_out
 
 lib.ctoast_qarray_from_axisangle.restype = None
@@ -322,7 +343,9 @@ lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, npf64,
 
 def qarray_from_axisangle(n, axis, angle):
     q_out = np.zeros(n*4, dtype=np.float64)
-    lib.ctoast_qarray_from_axisangle(n, axis, angle, q_out)
+    axc = np.require(axis, requirements=["C"])
+    anc = np.require(angle, requirements=["C"])
+    lib.ctoast_qarray_from_axisangle(n, axc, anc, q_out)
     return q_out
 
 lib.ctoast_qarray_to_axisangle.restype = None
@@ -332,7 +355,8 @@ lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, npf64, npf64,
 def qarray_to_axisangle(n, q):
     axis = np.zeros(n*3, dtype=np.float64)
     angle = np.zeros(n, dtype=np.float64)
-    lib.ctoast_qarray_to_axisangle(n, q, axis, angle)
+    qc = np.require(q, requirements=["C"])
+    lib.ctoast_qarray_to_axisangle(n, qc, axis, angle)
     return (axis, angle)
 
 lib.ctoast_qarray_to_rotmat.restype = None
@@ -340,7 +364,8 @@ lib.ctoast_qarray_to_rotmat.argtypes = [ npf64, npf64 ]
 
 def qarray_to_rotmat(q):
     rotmat = np.zeros(9, dtype=np.float64)
-    lib.ctoast_qarray_to_rotmat(q, rotmat)
+    qc = np.require(q, requirements=["C"])
+    lib.ctoast_qarray_to_rotmat(qc, rotmat)
     return rotmat
 
 lib.ctoast_qarray_from_rotmat.restype = None
@@ -348,7 +373,8 @@ lib.ctoast_qarray_from_rotmat.argtypes = [ npf64, npf64 ]
 
 def qarray_from_rotmat(rotmat):
     q = np.zeros(4, dtype=np.float64)
-    lib.ctoast_qarray_from_rotmat(rotmat, q)
+    rc = np.require(rotmat, requirements=["C"])
+    lib.ctoast_qarray_from_rotmat(rc, q)
     return q
 
 lib.ctoast_qarray_from_vectors.restype = None
@@ -356,7 +382,9 @@ lib.ctoast_qarray_from_vectors.argtypes = [ npf64, npf64, npf64 ]
 
 def qarray_from_vectors(vec1, vec2):
     q = np.zeros(4, dtype=np.float64)
-    lib.ctoast_qarray_from_vectors(vec1, vec2, q)
+    vc1 = np.require(vec1, requirements=["C"])
+    vc2 = np.require(vec2, requirements=["C"])
+    lib.ctoast_qarray_from_vectors(vc1, vc2, q)
     return q
 
 lib.ctoast_qarray_from_angles.restype = None
@@ -367,7 +395,10 @@ def qarray_from_angles(n, theta, phi, pa, IAU=False):
     iau = 0
     if IAU:
         iau = 1
-    lib.ctoast_qarray_from_angles(n, theta, phi, pa, q, iau)
+    thc = np.require(theta, requirements=["C"])
+    phc = np.require(phi, requirements=["C"])
+    pac = np.require(pa, requirements=["C"])
+    lib.ctoast_qarray_from_angles(n, thc, phc, pac, q, iau)
     return q
 
 lib.ctoast_qarray_to_angles.restype = None
@@ -380,7 +411,8 @@ def qarray_to_angles(n, quat, IAU=False):
     iau = 0
     if IAU:
         iau = 1
-    lib.ctoast_qarray_to_angles(n, quat, theta, phi, pa, iau)
+    qc = np.require(quat, requirements=["C"])
+    lib.ctoast_qarray_to_angles(n, qc, theta, phi, pa, iau)
     return (theta, phi, pa)
 
 # FFT

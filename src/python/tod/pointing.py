@@ -215,7 +215,7 @@ class OpPointingHpix(Operator):
                 if self._apply_flags:
                     pdata[common != 0,:] = nullquat
 
-                dir = qa.rotate(pdata, np.tile(zaxis, nsamp).reshape(-1,3))
+                dir = qa.rotate(pdata, zaxis)
 
                 #pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
                 pixels = None
@@ -234,7 +234,7 @@ class OpPointingHpix(Operator):
 
                 elif self._mode == 'IQU':
 
-                    orient = qa.rotate(pdata.reshape(-1, 4), np.tile(xaxis, nsamp).reshape(-1,3)).reshape((-1, 3))
+                    orient = qa.rotate(pdata, xaxis)
 
                     by = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
                     bx = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])

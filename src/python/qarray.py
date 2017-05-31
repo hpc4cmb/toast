@@ -101,8 +101,7 @@ def norm(q):
 def rotate(q, v):
     """
     Use a quaternion or array of quaternions (q) to rotate a vector or 
-    array of vectors (v).  If the number of dimensions of both q and v 
-    are 2, then they must have the same leading dimension.
+    array of vectors (v).
     """
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
@@ -121,19 +120,14 @@ def rotate(q, v):
 
     if (nq > 1) and (nv > 1) and (nq != nv):
         raise RuntimeError("quaternion and vector arrays must have length one or matching lengths.")
-    n = np.max([nq, nv])
 
-    vv = v
-    if nv != n:
-        vv = np.tile(v, n)
-    qq = q
-    if nq != n:
-        qq = np.tile(q, n)
-
-    ret = ctoast.qarray_rotate(n, qq.flatten().astype(np.float64, copy=False), vv.flatten().astype(np.float64, copy=False))
+    ret = ctoast.qarray_rotate(nq, q.flatten().astype(np.float64, copy=False), nv, v.flatten().astype(np.float64, copy=False))
     if (nq == 1) and (nv == 1):
         return ret
     else:
+        n = nq
+        if nv > n:
+            n = nv
         return ret.reshape((n, 3))
 
 
@@ -158,19 +152,14 @@ def mult(p, q):
 
     if (nq > 1) and (pn > 1) and (nq != pn):
         raise RuntimeError("quaternion arrays must have length one or matching lengths.")
-    n = np.max([nq, pn])
 
-    pp = p
-    if pn != n:
-        pp = np.tile(p, n)
-    qq = q
-    if nq != n:
-        qq = np.tile(q, n)
-
-    ret = ctoast.qarray_mult(n, pp.flatten().astype(np.float64, copy=False), qq.flatten().astype(np.float64, copy=False))
-    if n == 1:
+    ret = ctoast.qarray_mult(pn, p.flatten().astype(np.float64, copy=False), nq, q.flatten().astype(np.float64, copy=False))
+    if (pn == 1) and (nq == 1):
         return ret
     else:
+        n = nq
+        if pn > n:
+            n = pn
         return ret.reshape((n,4))
 
 

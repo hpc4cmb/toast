@@ -313,9 +313,7 @@ def main():
         localpix = lc.exec(data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, submap)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, submap))
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
