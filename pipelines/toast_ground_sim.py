@@ -103,11 +103,9 @@ def main():
                         required=False, type=np.int,
                         help='Size of a process group assigned to a CES')
 
-    parser.add_argument('--coord',
-                        required=False, default='C',
+    parser.add_argument('--coord', required=False, default='C',
                         help='Sky coordinate system [C,E,G]')
-    parser.add_argument('--schedule',
-                        required=True,
+    parser.add_argument('--schedule', required=True,
                         help='CES schedule file from toast_ground_schedule.py')
     parser.add_argument('--samplerate',
                         required=False, default=100.0, type=np.float,
@@ -133,6 +131,18 @@ def main():
                         required=False, default=0.0, type=np.float,
                         help='For stepped HWP, the the time in seconds '
                         'between steps')
+
+    parser.add_argument('--input_map', required=False,
+                        help='Input map for signal')
+    parser.add_argument('--map_nside',
+                        required=False, default=512, type=np.int,
+                        help='Input map nside')
+    parser.add_argument('--map_nnz',
+                        required=False, default=1, type=np.int,
+                        help='Input map number of columns.')
+    parser.add_argument('--nside_submap',
+                        required=False, default=8, type=np.int,
+                        help='Submap resolution parameter.')
 
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
@@ -443,6 +453,41 @@ def main():
               ''.format(stop-start), flush=True)
     start = stop
 
+    # make a Healpix pointing matrix.
+
+    pointing = tt.OpPointingHpix(
+        nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep,
+        hwpsteptime=hwpsteptime)
+
+    pointing.exec(data)
+
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
+    start = stop
+
+    if args.input_map:
+        # Scan the sky signal
+        if  comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
+            raise RuntimeError(
+                'Input map does not exist: {}'.format(args.input_map))
+        npix_map = 12*args.map_nside**2
+        submapsize = npix_map * args.nside_submap**2 // args.map_nside**2
+        distmap = tm.DistPixels(size=npix_map, nnz=args.map_nnz, dtype=np.float32,
+                                submap=submapsize)
+        distmap.read_healpix_fits(args.input_map)
+        scansim = tt.OpSimScan(distmap=distmap, out='signal')
+        scansim.exec(data)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('Read and sampled input map:  {:.2f} seconds'
+                  ''.format(stop-start), flush=True)
+        start = stop
+
     # Simulate the atmosphere signal
 
     """
@@ -467,23 +512,6 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print('Atmosphere simulation took {:.3f} s'.format(elapsed), flush=True)
-    start = stop
-
-    # We could also scan from a map and accumulate to 'signal' here...
-
-    # make a Healpix pointing matrix.
-
-    pointing = tt.OpPointingHpix(
-        nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep,
-        hwpsteptime=hwpsteptime)
-
-    pointing.exec(data)
-
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
     start = stop
 
     # Operator for signal copying, used in each MC iteration
