@@ -59,10 +59,10 @@ def main():
                         required=False, default='C',
                         help='Sky patch coordinate system [C,E,G]')
     parser.add_argument('--el_min',
-                        required=False, default=0.0, type=np.float,
+                        required=False, default=30.0, type=np.float,
                         help='Minimum elevation for a CES')
     parser.add_argument('--el_max',
-                        required=False, default=90.0, type=np.float,
+                        required=False, default=80.0, type=np.float,
                         help='Maximum elevation for a CES')
     parser.add_argument('--fp_radius',
                         required=False, default=0.0, type=np.float,
@@ -76,7 +76,7 @@ def main():
                         help='Minimum distance between the Sun and '
                         'the bore sight [deg]')
     parser.add_argument('--moon_angle_min',
-                        required=False, default=10.0, type=np.float,
+                        required=False, default=20.0, type=np.float,
                         help='Minimum distance between the Moon and '
                         'the bore sight [deg]')
     parser.add_argument('--sun_el_max',

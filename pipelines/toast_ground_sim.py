@@ -114,12 +114,16 @@ def main():
                         required=False, default=1.0, type=np.float,
                         help='Scanning rate [deg / s]')
     parser.add_argument('--scan_accel',
-                        required=False, default=0.5, type=np.float,
+                        required=False, default=1.0, type=np.float,
                         help='Scanning rate change [deg / s^2]')
     parser.add_argument('--sun_angle_min',
                         required=False, default=90.0, type=np.float,
                         help='Minimum azimuthal distance between the Sun and '
                         'the bore sight [deg]')
+
+    parser.add_argument('--polyorder',
+                        required=False, default=1, type=np.int,
+                        help='Polynomial order for the polyfilter')
 
     parser.add_argument('--hwprpm',
                         required=False, default=0.0, type=np.float,
@@ -251,10 +255,10 @@ def main():
         comm = toast.Comm(groupsize=args.groupsize)
 
     # Load the schedule
-    fn = args.schedule
-    if not os.path.isfile(fn):
-        raise RuntimeError('No such schedule file: {}'.format(fn))
     if comm.comm_world.rank == 0:
+        fn = args.schedule
+        if not os.path.isfile(fn):
+            raise RuntimeError('No such schedule file: {}'.format(fn))
         start = MPI.Wtime()
         f = open(fn, 'r')
         while True:
@@ -446,6 +450,10 @@ def main():
 
         data.obs.append(ob)
 
+    if len(data.obs) == 0:
+        raise RuntimeError('Too many tasks. Every MPI task must '
+                           'be assigned to at least one process.')
+
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
@@ -490,7 +498,6 @@ def main():
 
     # Simulate the atmosphere signal
 
-    """
     atm = tt.OpSimAtmosphere(
         out='signal', lmin_center=args.atm_lmin_center,
         lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center,
@@ -505,7 +512,6 @@ def main():
         T0_sigma=args.atm_T0_sigma)
 
     atm.exec(data)
-    """
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
@@ -772,6 +778,25 @@ def main():
                       flush=True)
             start = stop
 
+            common_flag_name = None
+            flag_name = None
+            if args.polyorder:
+                common_flag_name = 'common_flags'
+                flag_name = 'flags'
+                polyfilter = tt.OpPolyFilter(
+                    order=args.polyorder, name='total',
+                    common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask,
+                    flag_name=flag_name)
+                polyfilter.exec(data)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Polynomial filtering took {:.3f} s'.format(elapsed), flush=True)
+                start = stop
+
             # create output directory for this realization
             pars[ 'path_output' ] = '{}_{:03d}'.format(args.outdir, mc)
             if comm.comm_world.rank == 0:
@@ -791,7 +816,9 @@ def main():
             """
 
             madam = tm.OpMadam(params=pars, detweights=detweights, name='total',
-                               common_flag_mask=args.common_flag_mask)
+                               common_flag_name=common_flag_name,
+                               common_flag_mask=args.common_flag_mask,
+                               flag_name=flag_name)
             madam.exec(data)
 
             comm.comm_world.barrier()
