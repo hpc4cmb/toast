@@ -399,10 +399,15 @@ def main():
                     to_cross[els > el + args.fp_radius * degree] = False
                 else:
                     to_cross[els < el - args.fp_radius * degree] = False
-                if np.any(old_to_cross != to_cross):
+                # Allow for focal plane radius margin
+                in_transit = np.logical_and(
+                    els > el - args.fp_radius * degree,
+                    els < el + args.fp_radius * degree)
+                if np.any(old_to_cross != to_cross) or np.any(in_transit):
                     # Record the azimuths for the corners at the time of
                     # the crossing
                     mask = old_to_cross != to_cross
+                    mask[in_transit] = True
                     azmin = min(
                         azmin, np.amin(old_az[mask]), np.amin(azs[mask]))
                     azmax = max(
@@ -423,8 +428,9 @@ def main():
                 # we are, scan from the maximum to the minimum
                 azmin, azmax = azmax, azmin
             # Add the focal plane radius to the scan width
-            azmin = (azmin - args.fp_radius * degree) % (2*np.pi)
-            azmax = (azmax + args.fp_radius * degree) % (2*np.pi)
+            fp_radius = args.fp_radius * degree / np.cos(el)
+            azmin = (azmin - fp_radius) % (2*np.pi)
+            azmax = (azmax + fp_radius) % (2*np.pi)
             ces_start = datetime.utcfromtimestamp(t).strftime(
                 '%Y-%m-%d %H:%M:%S %Z')
             ces_stop = datetime.utcfromtimestamp(tstop).strftime(
