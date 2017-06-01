@@ -55,14 +55,17 @@ class OpLocalPixels(Operator):
         crank = comm.comm_rank
 
         # initialize the local pixel set
-        local = np.zeros(0, dtype=np.int64)
+        local = None
 
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
                 pixelsname = "{}_{}".format(self._pixels, det)
                 pixels = tod.cache.reference(pixelsname)
-                local = np.unique(np.concatenate((local, np.unique(pixels))))
+                if local is None:
+                    local = np.unique(pixels)
+                else:
+                    local = np.unique(np.concatenate((local, np.unique(pixels))))
                 del pixels
 
         return local
@@ -110,18 +113,21 @@ class DistPixels(object):
             local = np.array(sorted(sm), dtype=np.int64)
 
         self._local = local
-        self._glob2loc = {}
+        self._nglob = self._size // self._submap
+        self._glob2loc = None
         self._cache = Cache()
         self._commsize = 5000000
 
         # our data is a 3D array of submap, pixel, values
         # we allocate this as a contiguous block
 
+        self.data = None
         if self._local is None:
-            self.data = None
             self._nsub = 0
         else:
             self._nsub = len(self._local)
+            self._glob2loc = np.empty(self._nglob, dtype=np.int64)
+            self._glob2loc[:] = -1
             for g in enumerate(self._local):
                 self._glob2loc[g[1]] = g[0]
             if (self._submap * self._local.max()) > self._size:
@@ -209,8 +215,7 @@ class DistPixels(object):
         sm = np.floor_divide(safe_gl, self._submap)
         pix = np.mod(safe_gl, self._submap)
         pix[bad] = -1
-        f = (self._glob2loc[x] for x in sm)
-        lsm = np.fromiter(f, np.int64, count=len(sm))
+        lsm = self._glob2loc[sm]
         return (lsm, pix)
 
 
@@ -363,7 +368,7 @@ class DistPixels(object):
                 self._comm.Bcast(buf, root=0)
                 # loop over these submaps, and copy any that we are assigned
                 for sm in range(submap_off, submap_off+comm_submap):
-                    if sm in self._glob2loc.keys():
+                    if sm in self._local:
                         loc = self._glob2loc[sm]
                         self.data[loc,:,:] = view[sm-submap_off,:,:]
                 out_off = 0
@@ -377,7 +382,7 @@ class DistPixels(object):
             self._comm.Bcast(buf, root=0)
             # loop over these submaps, and copy any that we are assigned
             for sm in range(submap_off, submap_off+comm_submap):
-                if sm in self._glob2loc.keys():
+                if sm in self._local:
                     loc = self._glob2loc[sm]
                     self.data[loc,:,:] = view[sm-submap_off,:,:]
 

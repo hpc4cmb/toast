@@ -7,37 +7,111 @@ a BSD-style license that can be found in the LICENSE file.
 #include <toast_map_internal.hpp>
 
 #include <cstring>
+#include <iostream>
 
 #ifdef _OPENMP
 #  include <omp.h>
 #endif
 
 
+// void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+//     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+//     double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
+
+//     #pragma omp parallel default(shared)
+//     {
+
+//         int64_t i, j, k;
+//         int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+//         int64_t zpx;
+//         int64_t hpx;
+//         int64_t ipx;
+//         int64_t off;
+//         double zsig;
+
+//         double tzdata[nnz];
+//         double tinvnpp[block];
+
+//         #pragma omp for schedule(static)
+//         for ( i = 0; i < nsamp; ++i ) {
+//             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+//                 zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+//                 hpx = (indx_submap[i] * subsize) + indx_pix[i];
+//                 ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+//                 zsig = scale * signal[i];
+                
+//                 memset ( tzdata, 0, nnz*sizeof(double) );
+//                 memset ( tinvnpp, 0, block*sizeof(double) );
+
+//                 off = 0;
+//                 for ( j = 0; j < nnz; ++j ) {
+//                     tzdata[j] += zsig * weights[i * nnz + j];
+//                     for ( k = j; k < nnz; ++k ) {
+//                         tinvnpp[off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+//                         off += 1;
+//                     }
+//                 }
+
+//                 #pragma omp critical ( accumdiag )
+//                 {
+//                     hits[hpx] += 1;
+//                     for ( j = 0; j < nnz; ++j ) {
+//                         zdata[zpx + j] += tzdata[j];
+//                     }
+//                     for ( j = 0; j < block; ++j ) {
+//                         invnpp[ipx + j] += tinvnpp[j];
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     return;
+// }
+
+
 void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
 
-    int64_t i, j, k;
-    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
-    int64_t zpx;
-    int64_t hpx;
-    int64_t ipx;
-    int64_t off;
-    double zsig;
+    #pragma omp parallel default(shared)
+    {
 
-    for ( i = 0; i < nsamp; ++i ) {
-        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-            zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-            hpx = (indx_submap[i] * subsize) + indx_pix[i];
-            ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
-            hits[hpx] += 1;
-            zsig = scale * signal[i];
-            off = 0;
-            for ( j = 0; j < nnz; ++j ) {
-                zdata[zpx + j] += zsig * weights[i * nnz + j];
-                for ( k = j; k < nnz; ++k ) {
-                    invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                    off += 1;
+        int64_t i, j, k;
+        int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+        int64_t zpx;
+        int64_t hpx;
+        int64_t ipx;
+        int64_t off;
+
+        int threads = 1;
+        int trank = 0;
+
+        #ifdef _OPENMP
+        threads = omp_get_num_threads();
+        trank = omp_get_thread_num();
+        #endif
+
+        int tpix;
+
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
+                    zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+                    ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+
+                    off = 0;
+                    for ( j = 0; j < nnz; ++j ) {
+                        zdata[zpx + j] += scale * signal[i] * weights[i * nnz + j];
+                        for ( k = j; k < nnz; ++k ) {
+                            invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                            off += 1;
+                        }
+                    }
+
+                    hits[hpx] += 1;
                 }
             }
         }
@@ -47,45 +121,152 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
 }
 
 
+// void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+//     int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
+
+//     #pragma omp parallel default(shared)
+//     {
+
+//         int64_t i, j, k;
+//         int64_t hpx;
+
+//         #pragma omp for schedule(static)
+//         for ( i = 0; i < nsamp; ++i ) {
+//             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+//                 hpx = (indx_submap[i] * subsize) + indx_pix[i];
+//                 #pragma omp critical ( accumdiaghits )
+//                 {
+//                     hits[hpx] += 1;
+//                 }
+//             }
+//         }
+
+//     }
+
+//     return;
+// }
+
+
 void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
     int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
 
-    int64_t i, j, k;
-    int64_t hpx;
+    #pragma omp parallel default(shared)
+    {
 
-    for ( i = 0; i < nsamp; ++i ) {
-        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-            hpx = (indx_submap[i] * subsize) + indx_pix[i];
-            hits[hpx] += 1;
+        int64_t i, j, k;
+        int64_t hpx;
+
+        int threads = 1;
+        int trank = 0;
+
+        #ifdef _OPENMP
+        threads = omp_get_num_threads();
+        trank = omp_get_thread_num();
+        #endif
+
+        int tpix;
+
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
+                    hits[hpx] += 1;
+                }    
+            }
         }
+
     }
 
     return;
 }
+
+
+// void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+//     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+//     double scale, int64_t * hits, double * invnpp ) {
+
+//     #pragma omp parallel default(shared)
+//     {
+
+//         int64_t i, j, k;
+//         int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+//         int64_t hpx;
+//         int64_t ipx;
+//         int64_t off;
+
+//         double tinvnpp[block];
+
+//         #pragma omp for schedule(static)
+//         for ( i = 0; i < nsamp; ++i ) {
+//             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+//                 hpx = (indx_submap[i] * subsize) + indx_pix[i];
+//                 ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+
+//                 memset ( tinvnpp, 0, block*sizeof(double) );
+
+//                 off = 0;
+//                 for ( j = 0; j < nnz; ++j ) {
+//                     for ( k = j; k < nnz; ++k ) {
+//                         tinvnpp[off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+//                         off += 1;
+//                     }
+//                 }
+
+//                 #pragma omp critical ( accumdiaginvnpp )
+//                 {
+//                     hits[hpx] += 1;
+//                     for ( j = 0; j < block; ++j ) {
+//                         invnpp[ipx + j] += tinvnpp[j];
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     return;
+// }
 
 
 void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, int64_t * hits, double * invnpp ) {
 
-    int64_t i, j, k;
-    int64_t block = (int64_t)(nnz * (nnz+1) / 2);
-    int64_t hpx;
-    int64_t ipx;
-    int64_t off;
+    #pragma omp parallel default(shared)
+    {
 
-    for ( i = 0; i < nsamp; ++i ) {
-        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-            hpx = (indx_submap[i] * subsize) + indx_pix[i];
-            ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
-            //printf("cpp %ld : hpx=%ld, ipx=%ld, hits[hpx]=%e, invnpp =", i, hpx, ipx, hits[hpx]);
-            hits[hpx] += 1;
-            off = 0;
-            for ( j = 0; j < nnz; ++j ) {
-                for ( k = j; k < nnz; ++k ) {
-                    //printf("cpp     %ld = %e\n", off, invnpp[ipx + off]);
-                    invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
-                    off += 1;
+        int64_t i, j, k;
+        int64_t block = (int64_t)(nnz * (nnz+1) / 2);
+        int64_t hpx;
+        int64_t ipx;
+        int64_t off;
+
+        int threads = 1;
+        int trank = 0;
+
+        #ifdef _OPENMP
+        threads = omp_get_num_threads();
+        trank = omp_get_thread_num();
+        #endif
+
+        int tpix;
+
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
+                    ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
+
+                    off = 0;
+                    for ( j = 0; j < nnz; ++j ) {
+                        for ( k = j; k < nnz; ++k ) {
+                            invnpp[ipx + off] += scale * weights[i * nnz + j] * weights[i * nnz + k];
+                            off += 1;
+                        }
+                    }
+
+                    hits[hpx] += 1;
                 }
             }
         }
@@ -95,20 +276,75 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
 }
 
 
+// void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+//     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+//     double scale, double const * signal, double * zdata ) {
+
+//     #pragma omp parallel default(shared)
+//     {
+//         int64_t i, j, k;
+//         int64_t zpx;
+//         double zsig;
+
+//         double tzdata[nnz];
+
+//         #pragma omp for schedule(static)
+//         for ( i = 0; i < nsamp; ++i ) {
+//             if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+//                 zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+//                 zsig = scale * signal[i];
+
+//                 memset ( tzdata, 0, nnz*sizeof(double) );
+
+//                 for ( j = 0; j < nnz; ++j ) {
+//                     tzdata[j] += zsig * weights[i * nnz + j];
+//                 }
+
+//                 #pragma omp critical ( accumdiagzmap )
+//                 {
+//                     for ( j = 0; j < nnz; ++j ) {
+//                         zdata[zpx + j] += tzdata[j];
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     return;
+// }
+
+
 void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata ) {
 
-    int64_t i, j, k;
-    int64_t zpx;
-    double zsig;
+    #pragma omp parallel default(shared)
+    {
+        int64_t i, j, k;
+        int64_t hpx;
+        int64_t zpx;
+        
+        int threads = 1;
+        int trank = 0;
 
-    for ( i = 0; i < nsamp; ++i ) {
-        if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-            zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-            zsig = scale * signal[i];
-            for ( j = 0; j < nnz; ++j ) {
-                zdata[zpx + j] += zsig * weights[i * nnz + j];
+        #ifdef _OPENMP
+        threads = omp_get_num_threads();
+        trank = omp_get_thread_num();
+        #endif
+
+        int tpix;
+
+        for ( i = 0; i < nsamp; ++i ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
+                    zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
+
+                    for ( j = 0; j < nnz; ++j ) {
+                        zdata[zpx + j] += scale * signal[i] * weights[i * nnz + j];
+                    }
+                }
             }
         }
     }

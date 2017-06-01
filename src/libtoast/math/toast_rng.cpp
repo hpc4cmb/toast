@@ -105,50 +105,25 @@ void toast::rng::dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint6
 
 void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data ) {
 
+    // first compute uniform randoms on [0.0, 1.0)
 
-// #ifdef HAVE_MKL
+    double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-//     // first compute uniform randoms on [0.0, 1.0)
-
-//     double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-//     toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
-//     for ( size_t i = 0; i < n; ++i ) {
-//         uni[i] = 2.0 * uni[i] - 1.0;
-//     }
-
-//     // now use MKL inverse error function
-
-//     vdErfInv ( n, uni, data );
-
-//     toast::mem::aligned_free ( uni );
-
-//     double rttwo = ::sqrt(2.0);
-//     for ( size_t i = 0; i < n; ++i ) {
-//         data[i] *= rttwo;
-//     }
-
-// #else
-
-    #pragma omp parallel default(shared)
-    {
-        RNG rng;
-        RNG::ctr_type c;
-        RNG::ukey_type uk = {{ key1, key2 }};
-        RNG::key_type k = uk;
-        RNG::ctr_type r;
-
-        c[0] = counter1;
-
-        #pragma omp for schedule(dynamic)
-        for ( size_t i = 0; i < n; ++i ) {
-            c[1] = counter2 + i;
-            r = rng ( c, k );
-            data[i] = ::sqrt ( -2.0 * ::log ( r123::u01 < double, uint64_t > ( r[0] ) ) ) * ::cos ( TWOPI * r123::u01 < double, uint64_t > ( r[1] ) );
-        }
+    toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
+    for ( size_t i = 0; i < n; ++i ) {
+        uni[i] = 2.0 * uni[i] - 1.0;
     }
 
-// #endif
+    // now use the inverse error function
+
+    toast::sf::fast_erfinv ( n, uni, data );
+
+    toast::mem::aligned_free ( uni );
+
+    double rttwo = ::sqrt(2.0);
+    for ( size_t i = 0; i < n; ++i ) {
+        data[i] *= rttwo;
+    }
 
     return;
 }

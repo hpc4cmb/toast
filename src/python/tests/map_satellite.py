@@ -327,7 +327,7 @@ class MapSatelliteTest(MPITestCase):
                 print("pixrms = ", pixrms)
                 print("todrms = ", todrms)
                 print("relerr = ", relerr)
-                self.assertTrue(relerr < 0.02)
+                self.assertTrue(relerr < 0.05)
 
         else:
             print("libmadam not available, skipping tests")
@@ -351,9 +351,7 @@ class MapSatelliteTest(MPITestCase):
 
         # pick a submap size and find the local submaps.
         submapsize = np.floor_divide(self.sim_nside, 16)
-        allsm = np.floor_divide(localpix, submapsize)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, submapsize))
 
         # construct a distributed map which has the gradient        
         npix = 12 * self.sim_nside * self.sim_nside
@@ -451,9 +449,7 @@ class MapSatelliteTest(MPITestCase):
 
         # pick a submap size and find the local submaps.
         submapsize = np.floor_divide(self.sim_nside, 16)
-        allsm = np.floor_divide(localpix, submapsize)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, submapsize))
 
         # construct a distributed map which has the gradient        
         npix = 12 * self.sim_nside * self.sim_nside
@@ -552,9 +548,7 @@ class MapSatelliteTest(MPITestCase):
 
         # pick a submap size and find the local submaps.
         submapsize = np.floor_divide(self.sim_nside, 16)
-        allsm = np.floor_divide(localpix, submapsize)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, submapsize))
 
         # construct a distributed map which has the gradient        
         npix = 12 * self.sim_nside * self.sim_nside

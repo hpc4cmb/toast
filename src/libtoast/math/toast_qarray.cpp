@@ -10,17 +10,41 @@ a BSD-style license that can be found in the LICENSE file.
 #include <cmath>
 
 #include <sstream>
+#include <iostream>
+
+#ifdef _OPENMP
+#  include <omp.h>
+#endif
+
+
+// Fixed length at which we have enough work to justify using threads.
+const static int toast_qarray_ompthresh = 100;
 
 
 // Dot product of lists of arrays.
 
-void toast::qarray::list_dot ( size_t n, size_t m, size_t d, double const * a, double const * b, double * dotprod ) {
-    for ( size_t i = 0; i < n; ++i ) {
-        dotprod[i] = 0.0;
-        for ( size_t j = 0; j < d; ++j ) {
-            dotprod[i] += a[m * i + j] * b[m * i + j];
+void toast::qarray::list_dot ( size_t n, size_t m, size_t d, double const * a, 
+    double const * b, double * dotprod ) {
+
+    int nt = omp_get_num_threads();
+    
+    if ( n < toast_qarray_ompthresh * nt ) {
+        for ( size_t i = 0; i < n; ++i ) {
+            dotprod[i] = 0.0;
+            for ( size_t j = 0; j < d; ++j ) {
+                dotprod[i] += a[m * i + j] * b[m * i + j];
+            }
+        }
+    } else {
+        #pragma omp parallel for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            dotprod[i] = 0.0;
+            for ( size_t j = 0; j < d; ++j ) {
+                dotprod[i] += a[m * i + j] * b[m * i + j];
+            }
         }
     }
+
     return;
 }
 
@@ -40,10 +64,16 @@ void toast::qarray::inv ( size_t n, double * q ) {
 // Norm of quaternion array
 
 void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, double * norm ) {
-    toast::qarray::list_dot ( n, m, d, v, v, norm );
-    for ( size_t i = 0; i < n; ++i ) {
-        norm[i] = ::sqrt ( norm[i] );
-    }
+    
+    double * temp = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    toast::qarray::list_dot ( n, m, d, v, v, temp );
+
+    toast::sf::sqrt ( n, temp, norm );
+
+    toast::mem::aligned_free ( temp );
+
     return;
 }
 
@@ -52,17 +82,30 @@ void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, 
 
 void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_in, double * q_out ) {
 
-    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, m, d, q_in, norm );
 
-    for ( size_t i = 0; i < n; ++i ) {
-        for ( size_t j = 0; j < d; ++j ) {
-            q_out[m * i + j] = q_in[m * i + j] / norm[i];
+    int nt = omp_get_num_threads();
+
+    if ( n < toast_qarray_ompthresh * nt ) {
+        for ( size_t i = 0; i < n; ++i ) {
+            for ( size_t j = 0; j < d; ++j ) {
+                q_out[m * i + j] = q_in[m * i + j] / norm[i];
+            }
+        }
+    } else {
+        #pragma omp parallel for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            for ( size_t j = 0; j < d; ++j ) {
+                q_out[m * i + j] = q_in[m * i + j] / norm[i];
+            }
         }
     }
 
     toast::mem::aligned_free ( norm );
+
     return;
 }
 
@@ -71,71 +114,247 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
 
 void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q ) {
 
-    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, m, d, q, norm );
 
-    for ( size_t i = 0; i < n; ++i ) {
-        for ( size_t j = 0; j < d; ++j ) {
-            q[m * i + j] /= norm[i];
+    int nt = omp_get_num_threads();
+
+    if ( n < toast_qarray_ompthresh * nt ) {
+        for ( size_t i = 0; i < n; ++i ) {
+            for ( size_t j = 0; j < d; ++j ) {
+                q[m * i + j] /= norm[i];
+            }
+        }
+    } else {
+        #pragma omp parallel for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            for ( size_t j = 0; j < d; ++j ) {
+                q[m * i + j] /= norm[i];
+            }
         }
     }
 
     toast::mem::aligned_free ( norm );
+
     return;
 }
 
 
 // Rotate an array of vectors by an array of quaternions.
 
-void toast::qarray::rotate ( size_t n, double const * q, double const * v_in, double * v_out ) {
+void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double const * v_in, double * v_out ) {
 
-    double * q_unit = static_cast < double * > ( toast::mem::aligned_alloc ( 4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    size_t n = nq;
+    if ( nv > n ) {
+        n = nv;
+    }
 
-    toast::qarray::normalize ( n, 4, 4, q, q_unit );
+    double * q_unit = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        4 * nq * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
+    toast::qarray::normalize ( nq, 4, 4, q, q_unit );
+
+    size_t i;
     size_t vf;
+    size_t vfin;
+    size_t vfout;
     size_t qf;
     double xw, yw, zw, x2, xy, xz, y2, yz, z2;
 
-    for ( size_t i = 0; i < n; ++i ) {
-        vf = 3 * i;
-        qf = 4 * i;
-        xw =  q_unit[qf + 3] * q_unit[qf + 0];
-        yw =  q_unit[qf + 3] * q_unit[qf + 1];
-        zw =  q_unit[qf + 3] * q_unit[qf + 2];
-        x2 = -q_unit[qf + 0] * q_unit[qf + 0];
-        xy =  q_unit[qf + 0] * q_unit[qf + 1];
-        xz =  q_unit[qf + 0] * q_unit[qf + 2];
-        y2 = -q_unit[qf + 1] * q_unit[qf + 1];
-        yz =  q_unit[qf + 1] * q_unit[qf + 2];
-        z2 = -q_unit[qf + 2] * q_unit[qf + 2];
+    int nt = omp_get_num_threads();
 
-        v_out[vf + 0] = 2*( (y2 + z2) * v_in[vf + 0] + (xy - zw) * v_in[vf + 1] + (yw + xz) * v_in[vf + 2] ) + v_in[vf + 0];
-        v_out[vf + 1] = 2*( (zw + xy) * v_in[vf + 0] + (x2 + z2) * v_in[vf + 1] + (yz - xw) * v_in[vf + 2] ) + v_in[vf + 1];
-        v_out[vf + 2] = 2*( (xz - yw) * v_in[vf + 0] + (xw + yz) * v_in[vf + 1] + (x2 + y2) * v_in[vf + 2] ) + v_in[vf + 2];
+    // this is to avoid branching inside the for loop.
+    size_t chv;
+    size_t chq;
+    if ( nv == 1 ) {
+        chv = 0;
+    } else {
+        chv = 1;
+    }
+    if ( nq == 1 ) {
+        chq = 0;
+    } else {
+        chq = 1;
+    }
+
+    if ( n < toast_qarray_ompthresh * nt ) {
+        if ( nq == 1 ) {
+            xw =  q_unit[3] * q_unit[0];
+            yw =  q_unit[3] * q_unit[1];
+            zw =  q_unit[3] * q_unit[2];
+            x2 = -q_unit[0] * q_unit[0];
+            xy =  q_unit[0] * q_unit[1];
+            xz =  q_unit[0] * q_unit[2];
+            y2 = -q_unit[1] * q_unit[1];
+            yz =  q_unit[1] * q_unit[2];
+            z2 = -q_unit[2] * q_unit[2];
+            for ( i = 0; i < n; ++i ) {
+                vfin = 3 * i * chv;
+                vfout = 3 * i;
+                v_out[vfout + 0] = 2*( (y2 + z2) * v_in[vfin + 0] + 
+                    (xy - zw) * v_in[vfin + 1] + (yw + xz) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 0];
+                v_out[vfout + 1] = 2*( (zw + xy) * v_in[vfin + 0] + 
+                    (x2 + z2) * v_in[vfin + 1] + (yz - xw) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 1];
+                v_out[vfout + 2] = 2*( (xz - yw) * v_in[vfin + 0] + 
+                    (xw + yz) * v_in[vfin + 1] + (x2 + y2) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 2];
+            }
+        } else {
+            for ( i = 0; i < n; ++i ) {
+                vfin = 3 * i * chv;
+                vfout = 3 * i;
+                qf = 4 * i * chq;
+                xw =  q_unit[qf + 3] * q_unit[qf + 0];
+                yw =  q_unit[qf + 3] * q_unit[qf + 1];
+                zw =  q_unit[qf + 3] * q_unit[qf + 2];
+                x2 = -q_unit[qf + 0] * q_unit[qf + 0];
+                xy =  q_unit[qf + 0] * q_unit[qf + 1];
+                xz =  q_unit[qf + 0] * q_unit[qf + 2];
+                y2 = -q_unit[qf + 1] * q_unit[qf + 1];
+                yz =  q_unit[qf + 1] * q_unit[qf + 2];
+                z2 = -q_unit[qf + 2] * q_unit[qf + 2];
+
+                v_out[vfout + 0] = 2*( (y2 + z2) * v_in[vfin + 0] + 
+                    (xy - zw) * v_in[vfin + 1] + (yw + xz) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 0];
+                v_out[vfout + 1] = 2*( (zw + xy) * v_in[vfin + 0] + 
+                    (x2 + z2) * v_in[vfin + 1] + (yz - xw) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 1];
+                v_out[vfout + 2] = 2*( (xz - yw) * v_in[vfin + 0] + 
+                    (xw + yz) * v_in[vfin + 1] + (x2 + y2) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 2];
+            }
+        }
+    } else {
+        if ( nq == 1 ) {
+            xw =  q_unit[3] * q_unit[0];
+            yw =  q_unit[3] * q_unit[1];
+            zw =  q_unit[3] * q_unit[2];
+            x2 = -q_unit[0] * q_unit[0];
+            xy =  q_unit[0] * q_unit[1];
+            xz =  q_unit[0] * q_unit[2];
+            y2 = -q_unit[1] * q_unit[1];
+            yz =  q_unit[1] * q_unit[2];
+            z2 = -q_unit[2] * q_unit[2];
+            #pragma omp parallel for default(shared) private(i, vfin, vfout) schedule(static)
+            for ( i = 0; i < n; ++i ) {
+                vfin = 3 * i * chv;
+                vfout = 3 * i;
+                v_out[vfout + 0] = 2*( (y2 + z2) * v_in[vfin + 0] + 
+                    (xy - zw) * v_in[vfin + 1] + (yw + xz) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 0];
+                v_out[vfout + 1] = 2*( (zw + xy) * v_in[vfin + 0] + 
+                    (x2 + z2) * v_in[vfin + 1] + (yz - xw) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 1];
+                v_out[vfout + 2] = 2*( (xz - yw) * v_in[vfin + 0] + 
+                    (xw + yz) * v_in[vfin + 1] + (x2 + y2) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 2];
+            }
+
+        } else {
+            #pragma omp parallel for default(shared) private(i, vfin, vfout, qf, xw, yw, zw, x2, xy, xz, y2, yz, z2) schedule(static)
+            for ( i = 0; i < n; ++i ) {
+                vfin = 3 * i * chv;
+                vfout = 3 * i;
+                qf = 4 * i * chq;
+                // if ( i % 1000 == 0 ) {
+                //     std::ostringstream o;
+                //     o << i << " t=" << omp_get_thread_num() << " chv = " << chv << " chq = " << chq << " vfin = " << vfin << " vfout = " << vfout << " qf = " << qf;
+                //     std::cout << o.str() << std::endl;
+                // }
+                xw =  q_unit[qf + 3] * q_unit[qf + 0];
+                yw =  q_unit[qf + 3] * q_unit[qf + 1];
+                zw =  q_unit[qf + 3] * q_unit[qf + 2];
+                x2 = -q_unit[qf + 0] * q_unit[qf + 0];
+                xy =  q_unit[qf + 0] * q_unit[qf + 1];
+                xz =  q_unit[qf + 0] * q_unit[qf + 2];
+                y2 = -q_unit[qf + 1] * q_unit[qf + 1];
+                yz =  q_unit[qf + 1] * q_unit[qf + 2];
+                z2 = -q_unit[qf + 2] * q_unit[qf + 2];
+                v_out[vfout + 0] = 2*( (y2 + z2) * v_in[vfin + 0] + 
+                    (xy - zw) * v_in[vfin + 1] + (yw + xz) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 0];
+                v_out[vfout + 1] = 2*( (zw + xy) * v_in[vfin + 0] + 
+                    (x2 + z2) * v_in[vfin + 1] + (yz - xw) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 1];
+                v_out[vfout + 2] = 2*( (xz - yw) * v_in[vfin + 0] + 
+                    (xw + yz) * v_in[vfin + 1] + (x2 + y2) * v_in[vfin + 2] ) 
+                    + v_in[vfin + 2];
+            }
+        }
     }
 
     toast::mem::aligned_free ( q_unit );
+
     return;
 }
 
 
 // Multiply arrays of quaternions.
 
-void toast::qarray::mult ( size_t n, double const * p, double const * q, double * r ) {
-    size_t qf;
-    for ( size_t i = 0; i < n; ++i ) {
-        qf = 4 * i;
-        r[qf + 0] =  p[qf + 0] * q[qf + 3] + p[qf + 1] * q[qf + 2] 
-            - p[qf + 2] * q[qf + 1] + p[qf + 3] * q[qf + 0];
-        r[qf + 1] = -p[qf + 0] * q[qf + 2] + p[qf + 1] * q[qf + 3] 
-            + p[qf + 2] * q[qf + 0] + p[qf + 3] * q[qf + 1];
-        r[qf + 2] =  p[qf + 0] * q[qf + 1] - p[qf + 1] * q[qf + 0] 
-            + p[qf + 2] * q[qf + 3] + p[qf + 3] * q[qf + 2];
-        r[qf + 3] = -p[qf + 0] * q[qf + 0] - p[qf + 1] * q[qf + 1] 
-            - p[qf + 2] * q[qf + 2] + p[qf + 3] * q[qf + 3];
+void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const * q, double * r ) {
+
+    int nt = omp_get_num_threads();
+
+    size_t n = np;
+    if ( nq > n ) {
+        n = nq;
     }
+
+    // this is to avoid branching inside the for loop.
+    size_t chp;
+    size_t chq;
+    if ( np == 1 ) {
+        chp = 0;
+    } else {
+        chp = 1;
+    }
+    if ( nq == 1 ) {
+        chq = 0;
+    } else {
+        chq = 1;
+    }
+
+    size_t i;
+    size_t pf;
+    size_t qf;
+    size_t f;
+
+    if ( n < toast_qarray_ompthresh * nt ) {
+        for ( size_t i = 0; i < n; ++i ) {
+            f = 4 * i;
+            pf = 4 * i * chp;
+            qf = 4 * i * chq;
+            r[f + 0] =  p[pf + 0] * q[qf + 3] + p[pf + 1] * q[qf + 2] 
+                - p[pf + 2] * q[qf + 1] + p[pf + 3] * q[qf + 0];
+            r[f + 1] = -p[pf + 0] * q[qf + 2] + p[pf + 1] * q[qf + 3] 
+                + p[pf + 2] * q[qf + 0] + p[pf + 3] * q[qf + 1];
+            r[f + 2] =  p[pf + 0] * q[qf + 1] - p[pf + 1] * q[qf + 0] 
+                + p[pf + 2] * q[qf + 3] + p[pf + 3] * q[qf + 2];
+            r[f + 3] = -p[pf + 0] * q[qf + 0] - p[pf + 1] * q[qf + 1] 
+                - p[pf + 2] * q[qf + 2] + p[pf + 3] * q[qf + 3];
+        }
+    } else {
+        #pragma omp parallel for default(shared) private(i, f, pf, qf) schedule(static)
+        for ( i = 0; i < n; ++i ) {
+            f = 4 * i;
+            pf = 4 * i * chp;
+            qf = 4 * i * chq;
+            r[f + 0] =  p[pf + 0] * q[qf + 3] + p[pf + 1] * q[qf + 2] 
+                - p[pf + 2] * q[qf + 1] + p[pf + 3] * q[qf + 0];
+            r[f + 1] = -p[pf + 0] * q[qf + 2] + p[pf + 1] * q[qf + 3] 
+                + p[pf + 2] * q[qf + 0] + p[pf + 3] * q[qf + 1];
+            r[f + 2] =  p[pf + 0] * q[qf + 1] - p[pf + 1] * q[qf + 0] 
+                + p[pf + 2] * q[qf + 3] + p[pf + 3] * q[qf + 2];
+            r[f + 3] = -p[pf + 0] * q[qf + 0] - p[pf + 1] * q[qf + 1] 
+                - p[pf + 2] * q[qf + 2] + p[pf + 3] * q[qf + 3];
+        }
+    }
+
     return;
 }
 
@@ -144,55 +363,59 @@ void toast::qarray::mult ( size_t n, double const * p, double const * q, double 
 
 void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * time, double const * targettime, double const * q_in, double * q_interp ) {
 
-    double diff;
-    double frac;
-    double costheta;
-    double const * qlow;
-    double const * qhigh;
-    double theta;
-    double invsintheta;
-    double norm;
-    double * q;
-    double ratio1;
-    double ratio2;
+    #pragma omp parallel default(shared)
+    {
+        double diff;
+        double frac;
+        double costheta;
+        double const * qlow;
+        double const * qhigh;
+        double theta;
+        double invsintheta;
+        double norm;
+        double * q;
+        double ratio1;
+        double ratio2;
 
-    size_t off = 0;
+        size_t off = 0;
 
-    for ( size_t i = 0; i < n_targettime; ++i ) {
-        // scroll forward to the correct time sample
-        while ( ( off+1 < n_time ) && ( time[off+1] < targettime[i] ) ) {
-            ++off;
+        #pragma omp for schedule(static)
+        for ( size_t i = 0; i < n_targettime; ++i ) {
+            // scroll forward to the correct time sample
+            while ( ( off+1 < n_time ) && ( time[off+1] < targettime[i] ) ) {
+                ++off;
+            }
+            diff = time[off+1] - time[off];
+            frac = ( targettime[i] - time[off] ) / diff;
+
+            qlow = &( q_in[4*off] );
+            qhigh = &( q_in[4*(off + 1)] );
+            q = &( q_interp[4*i] );
+
+            costheta = qlow[0] * qhigh[0] + qlow[1] * qhigh[1] + qlow[2] * qhigh[2] + qlow[3] * qhigh[3];
+            
+            if ( ::fabs ( costheta - 1.0 ) < 1.0e-10 ) {
+                q[0] = qlow[0];
+                q[1] = qlow[1];
+                q[2] = qlow[2];
+                q[3] = qlow[3];
+            } else {
+                theta = ::acos ( costheta );
+                invsintheta = 1.0 / ::sqrt ( 1.0 - costheta * costheta );
+                ratio1 = ::sin ( ( 1.0 - frac ) * theta ) * invsintheta;
+                ratio2 = ::sin ( frac * theta ) * invsintheta;
+                q[0] = ratio1 * qlow[0] + ratio2 * qhigh[0];
+                q[1] = ratio1 * qlow[1] + ratio2 * qhigh[1];
+                q[2] = ratio1 * qlow[2] + ratio2 * qhigh[2];
+                q[3] = ratio1 * qlow[3] + ratio2 * qhigh[3];
+            }
+            
+            norm = 1.0 / ::sqrt ( q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3] );
+            q[0] *= norm;
+            q[1] *= norm;
+            q[2] *= norm;
+            q[3] *= norm;
         }
-        diff = time[off+1] - time[off];
-        frac = ( targettime[i] - time[off] ) / diff;
-
-        qlow = &( q_in[4*off] );
-        qhigh = &( q_in[4*(off + 1)] );
-        q = &( q_interp[4*i] );
-
-        costheta = qlow[0] * qhigh[0] + qlow[1] * qhigh[1] + qlow[2] * qhigh[2] + qlow[3] * qhigh[3];
-        
-        if ( ::fabs ( costheta - 1.0 ) < 1.0e-10 ) {
-            q[0] = qlow[0];
-            q[1] = qlow[1];
-            q[2] = qlow[2];
-            q[3] = qlow[3];
-        } else {
-            theta = ::acos ( costheta );
-            invsintheta = 1.0 / ::sqrt ( 1.0 - costheta * costheta );
-            ratio1 = ::sin ( ( 1.0 - frac ) * theta ) * invsintheta;
-            ratio2 = ::sin ( frac * theta ) * invsintheta;
-            q[0] = ratio1 * qlow[0] + ratio2 * qhigh[0];
-            q[1] = ratio1 * qlow[1] + ratio2 * qhigh[1];
-            q[2] = ratio1 * qlow[2] + ratio2 * qhigh[2];
-            q[3] = ratio1 * qlow[3] + ratio2 * qhigh[3];
-        }
-        
-        norm = 1.0 / ::sqrt ( q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3] );
-        q[0] *= norm;
-        q[1] *= norm;
-        q[2] *= norm;
-        q[3] *= norm;
     }
 
     return;
@@ -203,12 +426,14 @@ void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * t
 
 void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normv = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * normv = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, 4, 3, q_in, normv );
     
     double exp_q_w;
 
+    #pragma omp parallel for default(shared) private(exp_q_w) schedule(static)
     for ( size_t i = 0; i < n; ++i ) {
         exp_q_w = ::exp ( q_in[4*i + 3] );
         q_out[4*i + 3] = exp_q_w * ::cos ( normv[i] );
@@ -220,6 +445,7 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
     }
 
     toast::mem::aligned_free ( normv );
+
     return;
 }
 
@@ -228,18 +454,18 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normq = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * normq = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::amplitude ( n, 4, 4, q_in, normq );
-
-    for ( size_t i = 0; i < n; ++i ) {
-        q_out[4*i + 3] = ::log ( normq[i] );
-    }
 
     toast::qarray::normalize ( n, 4, 3, q_in, q_out );
 
     double tmp;
+
+    #pragma omp parallel for default(shared) private(tmp) schedule(static)
     for ( size_t i = 0; i < n; ++i ) {
+        q_out[4*i + 3] = ::log ( normq[i] );
         tmp = ::acos ( q_in[4*i + 3] / normq[i] );
         for ( size_t j = 0; j < 3; ++j ) {
             q_out[4*i + j] *= tmp;
@@ -247,6 +473,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
     }
 
     toast::mem::aligned_free ( normq );
+
     return;
 }
 
@@ -255,9 +482,11 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
     
-    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( 4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
     toast::qarray::ln ( n, q_in, q_tmp );
+
     for ( size_t i = 0; i < n; ++i ) {
         for ( size_t j = 0; j < 4; ++j ) {
             q_tmp[4*i + j] *= p[i];
@@ -267,6 +496,7 @@ void toast::qarray::pow ( size_t n, double const * p, double const * q_in, doubl
     toast::qarray::exp ( n, q_tmp, q_out );
 
     toast::mem::aligned_free ( q_tmp );
+
     return;
 }
 
@@ -275,39 +505,77 @@ void toast::qarray::pow ( size_t n, double const * p, double const * q_in, doubl
 // axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 
 void toast::qarray::from_axisangle ( size_t n, double const * axis, double const * angle, double * q_out ) {
-    double sin_a;
-    for ( size_t i = 0; i < n; ++i ) {
-        sin_a = ::sin ( 0.5 * angle[i] );
-        for ( size_t j = 0; j < 3; ++j ) {
-            q_out[4*i + j] = axis[3*i + j] * sin_a;
+
+    if ( n == 1 ) {
+
+        double sin_a;
+
+        for ( size_t i = 0; i < n; ++i ) {
+            sin_a = ::sin ( 0.5 * angle[i] );
+            for ( size_t j = 0; j < 3; ++j ) {
+                q_out[4*i + j] = axis[3*i + j] * sin_a;
+            }
+            q_out[4*i + 3] = ::cos ( 0.5 * angle[i] );
         }
-        q_out[4*i + 3] = ::cos ( 0.5 * angle[i] );
+
+    } else {
+
+        double * a = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+        for ( size_t i = 0; i < n; ++i ) {
+            a[i] = 0.5 * angle[i];
+        }
+
+        double * sin_a = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+        double * cos_a = static_cast < double * > ( toast::mem::aligned_alloc ( 
+        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+        toast::sf::sincos ( n, a, sin_a, cos_a );
+    
+        for ( size_t i = 0; i < n; ++i ) {
+            for ( size_t j = 0; j < 3; ++j ) {
+                q_out[4*i + j] = axis[3*i + j] * sin_a[i];
+            }
+            q_out[4*i + 3] = cos_a[i];
+        }
+    
+        toast::mem::aligned_free ( a );
+        toast::mem::aligned_free ( sin_a );
+        toast::mem::aligned_free ( cos_a );
     }
+
     return;
 }
 
 
-//Returns the axis and angle of rotation of a quaternion.
+// Returns the axis and angle of rotation of a quaternion.
 
 void toast::qarray::to_axisangle ( size_t n, double const * q, double * axis, double * angle ) {
 
-    size_t vf;
-    size_t qf;
-    double tmp;
+    #pragma omp parallel default(shared)
+    {
+        size_t vf;
+        size_t qf;
+        double tmp;
 
-    for ( size_t i = 0; i < n; ++i ) {
-        qf = 4 * i;
-        vf = 3 * i;
-        angle[i] = 2.0 * ::acos ( q[qf+3] );
-        if ( angle[i] < 1e-10 ) {
-            axis[vf+0] = 0;
-            axis[vf+1] = 0;
-            axis[vf+2] = 0;
-        } else {
-            tmp = 1.0 / ::sin ( 0.5 * angle[i] );
-            axis[vf+0] = q[qf+0] * tmp;
-            axis[vf+1] = q[qf+1] * tmp;
-            axis[vf+2] = q[qf+2] * tmp;
+        #pragma omp for schedule(static)
+        for ( size_t i = 0; i < n; ++i ) {
+            qf = 4 * i;
+            vf = 3 * i;
+            angle[i] = 2.0 * ::acos ( q[qf+3] );
+            if ( angle[i] < 1e-10 ) {
+                axis[vf+0] = 0;
+                axis[vf+1] = 0;
+                axis[vf+2] = 0;
+            } else {
+                tmp = 1.0 / ::sin ( 0.5 * angle[i] );
+                axis[vf+0] = q[qf+0] * tmp;
+                axis[vf+1] = q[qf+1] * tmp;
+                axis[vf+2] = q[qf+2] * tmp;
+            }
         }
     }
     return;
@@ -461,8 +729,8 @@ void toast::qarray::from_angles ( size_t n, double const * theta,
             qP[2] = ::sin ( 0.5 * angP );
             qP[3] = ::cos ( 0.5 * angP );
 
-            toast::qarray::mult ( 1, qD, qP, qtemp );
-            toast::qarray::mult ( 1, qR, qtemp, &(quat[qf]) );
+            toast::qarray::mult ( 1, qD, 1, qP, qtemp );
+            toast::qarray::mult ( 1, qR, 1, qtemp, &(quat[qf]) );
 
             norm = 0.0;
             norm += quat[qf] * quat[qf];
@@ -515,8 +783,8 @@ void toast::qarray::to_angles ( size_t n, double const * quat, double * theta,
             qtemp[2] = quat[qf+2] * norm;
             qtemp[3] = quat[qf+3] * norm;
 
-            toast::qarray::rotate ( 1, qtemp, zaxis, dir );
-            toast::qarray::rotate ( 1, qtemp, xaxis, orient );
+            toast::qarray::rotate ( 1, qtemp, 1, zaxis, dir );
+            toast::qarray::rotate ( 1, qtemp, 1, xaxis, orient );
 
             theta[i] = toast::PI_2 - ::asin ( dir[2] );
             phi[i] = ::atan2 ( dir[1], dir[0] );

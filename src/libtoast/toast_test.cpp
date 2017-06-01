@@ -13,7 +13,9 @@ using namespace toast;
 
 
 int main ( int argc, char *argv[] ) {
-    return toast::test::runner ( argc, argv );
+    int ret = toast::test::runner ( argc, argv );
+    toast::finalize();
+    return ret;
 }
 
 

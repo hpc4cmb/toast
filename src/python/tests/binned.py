@@ -181,9 +181,7 @@ class BinnedTest(MPITestCase):
         localpix = lc.exec(self.data)
 
         # find the locally hit submaps.
-        allsm = np.floor_divide(localpix, self.subnpix)
-        sm = set(allsm)
-        localsm = np.array(sorted(sm), dtype=np.int64)
+        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits

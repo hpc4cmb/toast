@@ -75,9 +75,9 @@ void ctoast_qarray_normalize ( size_t n, size_t m, size_t d, double const * q_in
 
 void ctoast_qarray_normalize_inplace ( size_t n, size_t m, size_t d, double * q );
 
-void ctoast_qarray_rotate ( size_t n, double const * q, double const * v_in, double * v_out );
+void ctoast_qarray_rotate ( size_t np, double const * q, size_t nv, double const * v_in, double * v_out );
 
-void ctoast_qarray_mult ( size_t n, double const * p, double const * q, double * r );
+void ctoast_qarray_mult ( size_t np, double const * p, size_t nq, double const * q, double * r );
 
 void ctoast_qarray_slerp ( size_t n_time, size_t n_targettime, double const * time, double const * targettime, double const * q_in, double * q_interp );
 

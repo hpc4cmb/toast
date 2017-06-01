@@ -82,6 +82,23 @@ class QarrayTest(MPITestCase):
         my_rot_result = qarray.rotate(np.vstack([self.q1,self.q2]), self.vec)
         np.testing.assert_array_almost_equal(my_rot_result , np.vstack([self.rot_by_q1, self.rot_by_q2]).reshape((2, 3)))
 
+        zaxis = np.array([0.0, 0.0, 1.0])
+
+        nsamp = 1000
+        theta = (1.0 / np.pi) * np.arange(nsamp, dtype=np.float64)
+        phi = (10.0 / (2.0 * np.pi)) * np.arange(nsamp, dtype=np.float64)
+        pa = np.zeros(nsamp, dtype=np.float64)
+
+        quats = qarray.from_angles(theta, phi, pa)
+
+        check = np.zeros( (nsamp, 3), dtype=np.float64)
+        for i in range(nsamp):
+            check[i,:] = qarray.rotate(quats[i], zaxis)
+
+        dir = qarray.rotate(quats, zaxis)
+
+        np.testing.assert_array_almost_equal(dir, check)
+
 
     def test_slerp(self):
         q = qarray.norm(np.array([[2., 3, 4, 5],
