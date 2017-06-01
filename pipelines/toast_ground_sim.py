@@ -155,6 +155,10 @@ def main():
     parser.add_argument('--skip_atmosphere',
                         required=False, default=False, action='store_true',
                         help='Disable simulating the atmosphere.')
+    parser.add_argument('--fp_radius',
+                        required=False, default=1, type=np.float,
+                        help='Focal plane radius assumed in the atmospheric '
+                        'simulation.')
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
                         help='Kolmogorov turbulence dissipation scale center')
@@ -503,30 +507,6 @@ def main():
                   ''.format(stop-start), flush=True)
         start = stop
 
-    if not args.skip_atmosphere:
-        # Simulate the atmosphere signal
-        atm = tt.OpSimAtmosphere(
-            out='signal', lmin_center=args.atm_lmin_center,
-            lmin_sigma=args.atm_lmin_sigma, lmax_center=args.atm_lmax_center,
-            lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm, zmax=args.atm_zmax,
-            xstep=args.atm_xstep, ystep=args.atm_ystep, zstep=args.atm_zstep,
-            nelem_sim_max=args.atm_nelem_sim_max, verbosity=int(args.debug),
-            gangsize=args.atm_gangsize, fnear=args.atm_fnear,
-            w_center=args.atm_w_center,
-            w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
-            wdir_sigma=args.atm_wdir_sigma, z0_center=args.atm_z0_center,
-            z0_sigma=args.atm_z0_sigma, T0_center=args.atm_T0_center,
-            T0_sigma=args.atm_T0_sigma)
-
-        atm.exec(data)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Atmosphere simulation took {:.3f} s'.format(elapsed), flush=True)
-        start = stop
-
     # Operator for signal copying, used in each MC iteration
 
     sigcopy = tt.OpCacheCopy("signal", "total")
@@ -765,12 +745,47 @@ def main():
         firstmc = int(args.MC_start)
         nmc = int(args.MC_count)
 
+        common_flag_name = None
+        flag_name = None
+
         for mc in range(firstmc, firstmc+nmc):
 
             # Copy the signal timestreams to the total ones before
             # accumulating the noise.
 
             sigcopy.exec(data)
+
+            if not args.skip_atmosphere:
+                # Simulate the atmosphere signal
+                common_flag_name = 'common_flags'
+                flag_name = 'flags'
+                atm = tt.OpSimAtmosphere(
+                    out='total', realization=mc,
+                    lmin_center=args.atm_lmin_center,
+                    lmin_sigma=args.atm_lmin_sigma,
+                    lmax_center=args.atm_lmax_center,
+                    lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm,
+                    zmax=args.atm_zmax, xstep=args.atm_xstep,
+                    ystep=args.atm_ystep, zstep=args.atm_zstep,
+                    nelem_sim_max=args.atm_nelem_sim_max,
+                    verbosity=int(args.debug), gangsize=args.atm_gangsize,
+                    fnear=args.atm_fnear, w_center=args.atm_w_center,
+                    w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
+                    wdir_sigma=args.atm_wdir_sigma,
+                    z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
+                    T0_center=args.atm_T0_center, T0_sigma=args.atm_T0_sigma,
+                    fp_radius=args.fp_radius, apply_flags=True,
+                    common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask, flag_name=flag_name)
+
+                atm.exec(data)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Atmosphere simulation took {:.3f} s'.format(elapsed), flush=True)
+                start = stop
 
             # simulate noise
 
@@ -784,9 +799,6 @@ def main():
                 print('Noise simulation took {:.3f} s'.format(elapsed),
                       flush=True)
             start = stop
-
-            common_flag_name = None
-            flag_name = None
 
             if args.polyorder:
                 common_flag_name = 'common_flags'

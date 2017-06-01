@@ -66,6 +66,18 @@ class OpSimAtmosphere(Operator):
         T0_center (float):  central value of the temperature distribution.
         T0_sigma (float):  sigma of the temperature distribution.
         fp_radius (float):  focal plane radius in degrees.
+        common_flag_name (str):  Cache name of the output common flags.
+            If it already exists, it is used.  Otherwise flags
+            are read from the tod object and stored in the cache under
+            common_flag_name.
+        common_flag_mask (byte):  Bitmask to use when flagging data
+           based on the common flags.
+        flag_name (str):  Cache name of the output detector flags will
+            be <flag_name>_<detector>.  If the object exists, it is
+            used.  Otherwise flags are read from the tod object.
+        flag_mask (byte):  Bitmask to use when flagging data
+           based on the detector flags.
+        apply_flags (bool):  When True, flagged samples are not simulated.
 
     """
     def __init__(
@@ -76,7 +88,9 @@ class OpSimAtmosphere(Operator):
             verbosity=0, gangsize=-1,
             fnear=0.1, w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
-            fp_radius=1):
+            fp_radius=1, apply_flags=False,
+            common_flag_name='common_flags', common_flag_mask=255,
+            flag_name='flags', flag_mask=255):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -97,7 +111,6 @@ class OpSimAtmosphere(Operator):
         self._verbosity = verbosity
         self._gangsize = gangsize
         self._fnear = fnear
-        self._fp_radius = fp_radius
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -110,6 +123,13 @@ class OpSimAtmosphere(Operator):
         self._T0_center = T0_center
         self._T0_sigma = T0_sigma
 
+        self._fp_radius = fp_radius
+
+        self._apply_flags = apply_flags
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
 
     def exec(self, data):
         """
@@ -155,6 +175,15 @@ class OpSimAtmosphere(Operator):
 
             tod = obs['tod']
             comm = tod.mpicomm
+
+             # Cache the output common flags
+            cachename = self._common_flag_name
+            if tod.cache.exists(cachename):
+                common_ref = tod.cache.reference(cachename)
+            else:
+                common_flag = tod.read_common_flags()
+                common_ref = tod.cache.put(cachename, common_flag)
+                del common_flag
 
             # FIXME: This is where (eventually) we should get the wind speed,
             # wind direction, temperature, and water vapor from the tod
@@ -291,9 +320,35 @@ class OpSimAtmosphere(Operator):
 
             for det in tod.local_dets:
 
-                azelquat = tod.read_pntg(detector=det, azel=True)
+                # Cache the output signal
+                cachename = '{}_{}'.format(self._out, det)
+                if tod.cache.exists(cachename):
+                    ref = tod.cache.reference(cachename)
+                else:
+                    ref = tod.cache.create(cachename, np.float64, (nsamp,))
 
-                atmdata = np.zeros(nsamp, dtype=np.float64)
+                # Cache the output flags
+                cachename = '{}_{}'.format(self._flag_name, det)
+                if tod.cache.exists(cachename):
+                    flag_ref = tod.cache.reference(cachename)
+                else:
+                    # read_flags always returns both common and detector
+                    # flags but we already cached the common flags.
+                    flag, dummy = tod.read_flags(detector=det)
+                    flag_ref = tod.cache.put(cachename, flag)
+                    del flag, dummy
+
+                if self._apply_flags:
+                    good = np.logical_and(
+                        common_ref & self._common_flag_mask == 0,
+                        flag_ref & self._flag_mask == 0)
+                    ngood = np.sum(good)
+                    azelquat = tod.read_pntg(detector=det, azel=True)[good]
+                    atmdata = np.zeros(ngood, dtype=np.float64)
+                else:
+                    ngood = nsamp
+                    azelquat = tod.read_pntg(detector=det, azel=True)
+                    atmdata = np.zeros(nsamp, dtype=np.float64)
 
                 # Convert Az/El quaternion of the detector back into
                 # angles for the simulation.
@@ -318,19 +373,13 @@ class OpSimAtmosphere(Operator):
                 # Integrate detector signal
 
                 atm_sim_observe(
-                    sim, times, az, el, atmdata, nsamp, 0)
+                    sim, times, az, el, atmdata, ngood, 0)
 
-                # write to cache
-
-                cachename = "{}_{}".format(self._out, det)
-
-                ref = None
-                if tod.cache.exists(cachename):
-                    ref = tod.cache.reference(cachename)
+                if self._apply_flags:
+                    ref[good] += atmdata
                 else:
-                    ref = tod.cache.create(cachename, np.float64, (nsamp,))
+                    ref += atmdata
 
-                ref += atmdata
                 del ref
 
         return
