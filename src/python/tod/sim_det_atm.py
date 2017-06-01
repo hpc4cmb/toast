@@ -65,6 +65,7 @@ class OpSimAtmosphere(Operator):
         z0_sigma (float):  sigma of the water vapor distribution.
         T0_center (float):  central value of the temperature distribution.
         T0_sigma (float):  sigma of the temperature distribution.
+        fp_radius (float):  focal plane radius in degrees.
 
     """
     def __init__(
@@ -74,7 +75,8 @@ class OpSimAtmosphere(Operator):
             xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=10000,
             verbosity=0, gangsize=-1,
             fnear=0.1, w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
-            z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10):
+            z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
+            fp_radius=1):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -95,6 +97,7 @@ class OpSimAtmosphere(Operator):
         self._verbosity = verbosity
         self._gangsize = gangsize
         self._fnear = fnear
+        self._fp_radius = fp_radius
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -164,37 +167,47 @@ class OpSimAtmosphere(Operator):
             #print("boresight scan range = {}, {}, {}, {}".format(
             #min_az_bore, max_az_bore, min_el_bore, max_el_bore))
 
-            # Go through all detectors and compute the maximum angular extent
-            # of the focalplane from the boresight.  Add a tiny margin, since
-            # the atmosphere simulation already adds some margin.
+            if self._verbosity:
 
-            # FIXME: the TOD class should really provide a method to return
-            # the detector quaternions relative to the boresight.  For now, we
-            # jump through hoops by getting one sample of the pointing.
+                # Go through all detectors and compute the maximum angular extent
+                # of the focalplane from the boresight.  Add a tiny margin, since
+                # the atmosphere simulation already adds some margin.
 
-            zaxis = np.array([0.0, 0.0, 1.0])
-            detdir = []
-            detmeanx = 0.0
-            detmeany = 0.0
-            for det in tod.local_dets:
-                dquat = tod.read_pntg(
-                    detector=det, local_start=0, n=1, azel=True)
-                dvec = qa.rotate(dquat, zaxis).flatten()
-                detmeanx += dvec[0]
-                detmeany += dvec[1]
-                detdir.append(dvec)
-            detmeanx /= len(detdir)
-            detmeany /= len(detdir)
+                # FIXME: the TOD class should really provide a method to return
+                # the detector quaternions relative to the boresight.  For now, we
+                # jump through hoops by getting one sample of the pointing.
 
-            #print("detmeanx = {}, detmeany = {}".format(detmeanx, detmeany))
+                zaxis = np.array([0.0, 0.0, 1.0])
+                detdir = []
+                detmeanx = 0.0
+                detmeany = 0.0
+                for det in tod.local_dets:
+                    dquat = tod.read_pntg(
+                        detector=det, local_start=0, n=1, azel=True)
+                    dvec = qa.rotate(dquat, zaxis).flatten()
+                    detmeanx += dvec[0]
+                    detmeany += dvec[1]
+                    detdir.append(dvec)
+                detmeanx /= len(detdir)
+                detmeany /= len(detdir)
 
-            detrad = [np.sqrt((detdir[t][0] - detmeanx)**2
-                              + (detdir[t][1] - detmeany)**2)
-                      for t in range(len(detdir))]
+                #print("detmeanx = {}, detmeany = {}".format(detmeanx, detmeany))
 
-            fp_radius = np.arcsin(np.max(detrad)) + 30 * arcmin
+                detrad = [np.sqrt((detdir[t][0] - detmeanx)**2
+                                  + (detdir[t][1] - detmeany)**2)
+                          for t in range(len(detdir))]
 
-            #print("fp_radius = {}", fp_radius)
+                fp_radius = np.arcsin(np.max(detrad)) / degree
+                if fp_radius > self._fp_radius:
+                    raise RuntimeError(
+                        'Detectors in the TOD span {:.2} degrees, but the '
+                        'atmosphere simulation only covers {:.2f} degrees'
+                        ''.format(fp_radius, self._fp_radius))
+
+            # Use the fixed focal plane radius so that changing the actual
+            # set of detectors will not affect the simulated atmosphere.
+
+            fp_radius = self._fp_radius * degree
 
             azmin = min_az_bore - fp_radius
             azmax = max_az_bore + fp_radius

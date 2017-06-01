@@ -702,11 +702,6 @@ class TODGround(TOD):
         (tuple):  The extent of the boresight pointing as (min_az, max_az, 
             min_el, max_el) in radians.  Includes turnarounds.
         """
-        if self._min_az is None:
-            self._min_az = np.amin(self._az)
-            self._max_az = np.amax(self._az)
-            self._min_el = self._el
-            self._max_el = self._el
 
         return self._min_az, self._max_az, self._min_el, self._max_el
 
@@ -730,6 +725,7 @@ class TODGround(TOD):
         scanrate /= np.cos(self._el)
         dazdt = scanrate
         scan_accel = self._scan_accel / self._rate # per sample, not per second
+        scan_accel /= np.cos(self._el)
         tol = self._rate / 10
         # the index, i, is relative to the start of the tod object.
         # If CES begun before the TOD, first values of i are negative.
@@ -785,6 +781,14 @@ class TODGround(TOD):
         sizes = np.diff(starts)
         if np.sum(sizes) != samples:
             raise RuntimeError('Subscans do not match samples')
+
+        # Store the scan range before discarding samples not assigned
+        # to this process
+
+        self._min_az = np.amin(self._az)
+        self._max_az = np.amax(self._az)
+        self._min_el = self._el
+        self._max_el = self._el
 
         return sizes, starts[:-1]
 
@@ -916,6 +920,29 @@ class TODGround(TOD):
         else:
             data = qa.mult(self._boresight[start:start+n], detquat)
         return data
+
+    def read_boresight_az(self, local_start=0, n=0):
+        """
+        Read the boresight azimuth.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            (array): a numpy array containing the timestamps.
+        """
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError('cannot read boresight azimuth - process has no '
+                               'assigned local samples')
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError('local sample range {} - {} is invalid'.format(
+                local_start, local_start+n-1))
+
+        return self._az[local_start:local_start+n]
 
     def _put_pntg(self, detector, start, data):
         raise RuntimeError('cannot write data to simulated pointing')

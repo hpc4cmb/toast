@@ -29,7 +29,7 @@ class OpPolyFilter(Operator):
             common_flag_name.
         common_flag_mask (byte):  Bitmask to use when flagging data
            based on the common flags.
-        flag_name (str):  Cache Name of the output detector flags will
+        flag_name (str):  Cache name of the output detector flags will
             be <flag_name>_<detector>.  If the object exists, it is
             used.  Otherwise flags are read from the tod object.
         flag_mask (byte):  Bitmask to use when flagging data

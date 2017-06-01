@@ -29,6 +29,7 @@ from . import ops_pmat as testopspmat
 from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
 from . import ops_polyfilter as testopspolyfilter
+from . import ops_groundfilter as testopsgroundfilter
 from . import ops_madam as testopsmadam
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
