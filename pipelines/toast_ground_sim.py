@@ -117,13 +117,17 @@ def main():
                         required=False, default=1.0, type=np.float,
                         help='Scanning rate change [deg / s^2]')
     parser.add_argument('--sun_angle_min',
-                        required=False, default=90.0, type=np.float,
+                        required=False, default=30.0, type=np.float,
                         help='Minimum azimuthal distance between the Sun and '
                         'the bore sight [deg]')
 
     parser.add_argument('--polyorder',
-                        required=False, default=1, type=np.int,
+                        required=False, type=np.int,
                         help='Polynomial order for the polyfilter')
+
+    parser.add_argument('--wbin_ground',
+                        required=False, type=np.float,
+                        help='Ground template bin width [degrees]')
 
     parser.add_argument('--hwprpm',
                         required=False, default=0.0, type=np.float,
@@ -783,6 +787,7 @@ def main():
 
             common_flag_name = None
             flag_name = None
+
             if args.polyorder:
                 common_flag_name = 'common_flags'
                 flag_name = 'flags'
@@ -798,6 +803,23 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('Polynomial filtering took {:.3f} s'.format(elapsed), flush=True)
+                start = stop
+
+            if args.wbin_ground:
+                common_flag_name = 'common_flags'
+                flag_name = 'flags'
+                groundfilter = tt.OpGroundFilter(
+                    wbin=args.wbin_ground, name='total',
+                    common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask,
+                    flag_name=flag_name)
+                groundfilter.exec(data)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Ground filtering took {:.3f} s'.format(elapsed), flush=True)
                 start = stop
 
             # create output directory for this realization
