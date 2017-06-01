@@ -92,14 +92,14 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
         trank = omp_get_thread_num();
         #endif
 
-        int tblock;
+        int tpix;
 
         for ( i = 0; i < nsamp; ++i ) {
-            tblock = i % threads;
-            if ( tblock == trank ) {
-                if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
                     zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-                    hpx = (indx_submap[i] * subsize) + indx_pix[i];
                     ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
 
                     off = 0;
@@ -164,13 +164,13 @@ void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64
         trank = omp_get_thread_num();
         #endif
 
-        int tblock;
+        int tpix;
 
         for ( i = 0; i < nsamp; ++i ) {
-            tblock = i % threads;
-            if ( tblock == trank ) {
-                if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                    hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
                     hits[hpx] += 1;
                 }    
             }
@@ -249,13 +249,13 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
         trank = omp_get_thread_num();
         #endif
 
-        int tblock;
+        int tpix;
 
         for ( i = 0; i < nsamp; ++i ) {
-            tblock = i % threads;
-            if ( tblock == trank ) {
-                if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                    hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
                     ipx = (indx_submap[i] * subsize * block) + (indx_pix[i] * block);
 
                     off = 0;
@@ -321,6 +321,7 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
     #pragma omp parallel default(shared)
     {
         int64_t i, j, k;
+        int64_t hpx;
         int64_t zpx;
         
         int threads = 1;
@@ -331,12 +332,13 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
         trank = omp_get_thread_num();
         #endif
 
-        int tblock;
+        int tpix;
 
         for ( i = 0; i < nsamp; ++i ) {
-            tblock = i % threads;
-            if ( tblock == trank ) {
-                if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
+                hpx = (indx_submap[i] * subsize) + indx_pix[i];
+                tpix = hpx % threads;
+                if ( tpix == trank ) {
                     zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
 
                     for ( j = 0; j < nnz; ++j ) {
