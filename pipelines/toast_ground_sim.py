@@ -12,6 +12,7 @@ import argparse
 import pickle
 from datetime import datetime
 import dateutil.parser
+import traceback
 
 import numpy as np
 from scipy.constants import degree
@@ -23,64 +24,6 @@ import toast.qarray as qa
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
-
-
-def view_focalplane(fp, outfile):
-    # To avoid python overhead in large MPI jobs, place the
-    # matplotlib import inside this function, which is only called
-    # when the --debug option is specified.
-    import matplotlib
-    # Force matplotlib to not use any Xwindows backend.
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-
-    # field of view, in degrees
-    width = 10.0
-    height = 10.0
-            
-    fig = plt.figure( figsize=(12,12), dpi=100 )
-    ax = fig.add_subplot(1, 1, 1)
-
-    half_width = 0.5 * width
-    half_height = 0.5 * height
-    ax.set_xlabel('Degrees', fontsize='large')
-    ax.set_ylabel('Degrees', fontsize='large')
-    ax.set_xlim([-half_width, half_width])
-    ax.set_ylim([-half_height, half_height])
-
-    for det in sorted(fp.keys()):
-
-        # radius in degrees
-        detradius = 0.5 * fp[det]['fwhm'] / 60.0
-
-        # rotation from boresight
-        dir = qa.rotate(fp[det]['quat'], ZAXIS).flatten()
-        ang = np.arctan2(dir[1], dir[0])
-
-        orient = qa.rotate(fp[det]['quat'], XAXIS).flatten()
-        polang = np.arctan2(orient[1], orient[0])
-
-        mag = np.arccos(dir[2]) * 180.0 / np.pi
-        xpos = mag * np.cos(ang)
-        ypos = mag * np.sin(ang)
-
-        circ = plt.Circle((xpos, ypos), radius=detradius, fc='white', ec='k')
-        ax.add_artist(circ)
-
-        xtail = xpos - detradius * np.cos(polang)
-        ytail = ypos - detradius * np.sin(polang)
-        dx = 2.0 * detradius * np.cos(polang)
-        dy = 2.0 * detradius * np.sin(polang)    
-
-        detcolor = None
-        if 'color' in fp[det].keys():
-            detcolor = fp[det]['color']
-        ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius,
-                 head_width=0.3*detradius, head_length=0.3*detradius,
-                 fc=detcolor, ec=detcolor, length_includes_head=True)
-
-    plt.savefig(outfile)
-    return
 
 
 def main():
@@ -384,7 +327,7 @@ def main():
     if args.debug:
         if comm.comm_world.rank == 0:
             outfile = '{}_focalplane.png'.format(args.outdir)
-            view_focalplane(fp, outfile)
+            tt.plot_focalplane(fp, 6, 6, outfile)
 
     # Build observations out of the CES:es
 
@@ -855,4 +798,29 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        print('Exception occurred: "{}"'.format(e), flush=True)
+        #raise # DEBUG
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        print('*** print_tb:')
+        traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
+        print('*** print_exception:')
+        traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                  limit=2, file=sys.stdout)
+        print('*** print_exc:')
+        traceback.print_exc()
+        print('*** format_exc, first and last line:')
+        formatted_lines = traceback.format_exc().splitlines()
+        print(formatted_lines[0])
+        print(formatted_lines[-1])
+        print('*** format_exception:')
+        print(repr(traceback.format_exception(exc_type, exc_value,
+                                              exc_traceback)))
+        print('*** extract_tb:')
+        print(repr(traceback.extract_tb(exc_traceback)))
+        print('*** format_tb:')
+        print(repr(traceback.format_tb(exc_traceback)))
+        print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
+        MPI.COMM_WORLD.Abort()
