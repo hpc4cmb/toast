@@ -28,6 +28,7 @@ pointing.py \
 noise.py \
 polyfilter.py \
 groundfilter.py \
+gainscrambler.py \
 interval.py \
 sim_interval.py \
 sim_noise.py \

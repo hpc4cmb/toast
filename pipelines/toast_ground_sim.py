@@ -129,6 +129,10 @@ def main():
                         required=False, type=np.float,
                         help='Ground template bin width [degrees]')
 
+    parser.add_argument('--gain_sigma',
+                        required=False, type=np.float,
+                        help='Gain error distribution')
+
     parser.add_argument('--hwprpm',
                         required=False, default=0.0, type=np.float,
                         help='The rate (in RPM) of the HWP rotation')
@@ -719,6 +723,18 @@ def main():
             print('Noise simulation took {:.3f} s'.format(elapsed),
                   flush=True)
         start = stop
+
+        if args.gain_sigma:
+            scrambler = tt.OpGainScrambler(
+                sigma=args.gain_sigma, name='total', realization=mc)
+            scrambler.exec(data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('Gain scrambling took {:.3f} s'.format(elapsed), flush=True)
+            start = stop
 
         if args.polyorder:
             common_flag_name = 'common_flags'
