@@ -334,6 +334,32 @@ class DistPixels(object):
         # we only ever have a couple FITS blocks in memory.
         fdata = None
         if self._comm.rank == 0:
+            # Check that the file is in expected format
+            errors = ''
+            h = hp.fitsfunc.pf.open(path, 'readonly')
+            nside = hp.npix2nside(self._size)
+            nside_map = h[1].header['nside']
+            if nside_map != nside:
+                errors += 'Wrong NSide: {} has {}, expected {}\n' \
+                          ''.format(path, nside_map, nside)
+            map_nested = False
+            if 'order' in h[1].header \
+               and 'NEST' in h[1].header['order'].upper():
+                map_nested = True
+            if 'ordering' in h[1].header \
+               and 'NEST' in h[1].header['ordering'].upper():
+                map_nested = True
+            if map_nested != self._nest:
+                errors += 'Wrong ordering: {} has nest={}, expected nest={}\n' \
+                            ''.format(path, map_nested, self._nest)
+            map_nnz = h[1].header['tfields']
+            if map_nnz != self._nnz:
+                errors += 'Wrong number of columns: {} has {}, expected {}\n' \
+                          ''.format(path, map_nnz, self._nnz)
+            h.close()
+            if len(errors) != 0:
+                raise RuntimeError(errors)
+            # Now read the map
             fdata = hp.read_map(path, field=None, dtype=self._dtype, memmap=True, nest=self._nest)
             if self._nnz == 1:
                 fdata = (fdata, )
@@ -474,6 +500,9 @@ class DistPixels(object):
             submap_off += ncomm
 
         if self._comm.rank == 0:
-            hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False, nest=self._nest)
+            try:
+                hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False, nest=self._nest)
+            except:
+                hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False, nest=self._nest, overwrite=True)
 
         return
