@@ -454,11 +454,14 @@ class Data(object):
                     procstr = "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(procstr, data[0], flags[0], data[-1], flags[-1])
                     good = np.where(((flags & flag_mask) | (common & common_flag_mask)) == 0)[0]
                     procstr = "{}        {} good samples\n".format(procstr, len(good))
-                    min = np.min(data[good])
-                    max = np.max(data[good])
-                    mean = np.mean(data[good])
-                    rms = np.std(data[good])
-                    procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
+                    try:
+                        min = np.min(data[good])
+                        max = np.max(data[good])
+                        mean = np.mean(data[good])
+                        rms = np.std(data[good])
+                        procstr = "{}        min = {:.4e}, max = {:.4e}, mean = {:.4e}, rms = {:.4e}\n".format(procstr, min, max, mean, rms)
+                    except:
+                        procstr = "{}        min = N/A, max = N/A, mean = N/A, rms = N/A\n".format(procstr)
 
                 for cname in tod.cache.keys():
                     procstr = "{}    cache {}:\n".format(procstr, cname)

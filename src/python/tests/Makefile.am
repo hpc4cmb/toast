@@ -36,6 +36,8 @@ ops_madam.py \
 ops_pmat.py \
 ops_simnoise.py \
 ops_polyfilter.py \
+ops_groundfilter.py \
+ops_gainscrambler.py \
 psd_math.py \
 qarray.py \
 rng.py \
