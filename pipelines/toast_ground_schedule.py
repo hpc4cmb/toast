@@ -156,11 +156,11 @@ def main():
                 raise RuntimeError('Unknown coordinate system: {}'.format(
                     args.patch_coord))
             center = ephem.Equatorial(center)
-            # Synthesize 6 corners around the center
+            # Synthesize 8 corners around the center
             phi = center.ra
             theta = center.dec
             r = width / 2
-            ncorner = 6
+            ncorner = 8
             angstep = 2 * np.pi / ncorner
             for icorner in range(ncorner):
                 ang = angstep * icorner

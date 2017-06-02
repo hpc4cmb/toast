@@ -506,7 +506,7 @@ def main():
             raise RuntimeError(
                 'Input map does not exist: {}'.format(args.input_map))
         distmap = tm.DistPixels(
-            comm=comm.comm_group, size=npix, nnz=3,
+            comm=comm.comm_world, size=npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
         distmap.read_healpix_fits(args.input_map)
         scansim = tt.OpSimScan(distmap=distmap, out='signal')
@@ -542,11 +542,11 @@ def main():
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
+        invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
                                dtype=np.float64, submap=subnpix, local=localsm)
-        hits = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1,
+        hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
                              dtype=np.int64, submap=subnpix, local=localsm)
-        zmap = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3,
+        zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
                              dtype=np.float64, submap=subnpix, local=localsm)
 
         # compute the hits and covariance once, since the pointing and noise
