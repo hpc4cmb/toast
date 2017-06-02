@@ -54,7 +54,8 @@ def main():
     parser.add_argument('--patch',
                         required=True, action='append',
                         help='Patch definition: '
-                        'name,weight,lon1,lat1,lon2,lat2 ...')
+                        'name,weight,lon1,lat1,lon2,lat2 ... '
+                        'OR name,weight,lon,lat,width')
     parser.add_argument('--patch_coord',
                         required=False, default='C',
                         help='Sky patch coordinate system [C,E,G]')
@@ -121,10 +122,6 @@ def main():
 
     # Parse the patch definitions
 
-    if args.debug:
-        hp.mollview(None, coord=args.patch_coord, title='Patch locations')
-        hp.graticule(30)
-
     patches = []
     hits = {}
     total_weight = 0
@@ -137,39 +134,90 @@ def main():
         i = 2
         corners = []
         print('Adding patch "{}" {} '.format(name, weight), end='')
-        while i < len(parts):
-            print(' ({}, {})'.format(parts[i], parts[i+1]), end='')
-            lon = float(parts[i]) * degree
-            lat = float(parts[i+1]) * degree
-            i += 2    
+        if len(parts[i:]) == 3:
+            print('Center-and-width format ', end='')
+            # Patch center and width format
+            try:
+                # Assume coordinates in degrees
+                lon = float(parts[i]) * degree
+                lat = float(parts[i+1]) * degree
+            except:
+                # Failed simple interpreration, assume pyEphem strings
+                lon = parts[i]
+                lat = parts[i+1]
+            width = float(parts[i+2]) * degree
             if args.patch_coord == 'C':
-                corner = ephem.Equatorial(lon, lat, epoch='2000')
+                center = ephem.Equatorial(lon, lat, epoch='2000')
             elif args.patch_coord == 'E':
-                corner = ephem.Ecliptic(lon, lat, epoch='2000')
+                center = ephem.Ecliptic(lon, lat, epoch='2000')
             elif args.patch_coord == 'G':
-                corner = ephem.Galactic(lon, lat, epoch='2000')
+                center = ephem.Galactic(lon, lat, epoch='2000')
             else:
                 raise RuntimeError('Unknown coordinate system: {}'.format(
                     args.patch_coord))
-            corner = ephem.Equatorial(corner)
-            if corner.dec > 80*degree or corner.dec < -80*degree:
-                raise RuntimeError(
-                    '{} has at least one circumpolar corner. '
-                    'Circumpolar targeting not yet implemented'.format(name))
-            patch_corner = ephem.FixedBody()
-            patch_corner._ra = corner.ra
-            patch_corner._dec = corner.dec
-            corners.append(patch_corner)
+            center = ephem.Equatorial(center)
+            # Synthesize 6 corners around the center
+            phi = center.ra
+            theta = center.dec
+            r = width / 2
+            ncorner = 6
+            angstep = 2 * np.pi / ncorner
+            for icorner in range(ncorner):
+                ang = angstep * icorner
+                delta_theta = np.cos(ang) * r
+                delta_phi = np.sin(ang) * r / np.cos(theta + delta_theta)
+                patch_corner = ephem.FixedBody()
+                patch_corner._ra = phi + delta_phi
+                patch_corner._dec = theta + delta_theta
+                corners.append(patch_corner)
+        else:
+            # Explicit patch corners
+            print('Explicit-corners format ', end='')
+            while i < len(parts):
+                print(' ({}, {})'.format(parts[i], parts[i+1]), end='')
+                try:
+                    # Assume coordinates in degrees
+                    lon = float(parts[i]) * degree
+                    lat = float(parts[i+1]) * degree
+                except:
+                    # Failed simple interpreration, assume pyEphem strings
+                    lon = parts[i]
+                    lat = parts[i+1]
+                i += 2
+                if args.patch_coord == 'C':
+                    corner = ephem.Equatorial(lon, lat, epoch='2000')
+                elif args.patch_coord == 'E':
+                    corner = ephem.Ecliptic(lon, lat, epoch='2000')
+                elif args.patch_coord == 'G':
+                    corner = ephem.Galactic(lon, lat, epoch='2000')
+                else:
+                    raise RuntimeError('Unknown coordinate system: {}'.format(
+                        args.patch_coord))
+                corner = ephem.Equatorial(corner)
+                if corner.dec > 80*degree or corner.dec < -80*degree:
+                    raise RuntimeError(
+                        '{} has at least one circumpolar corner. '
+                        'Circumpolar targeting not yet implemented'.format(name))
+                patch_corner = ephem.FixedBody()
+                patch_corner._ra = corner.ra
+                patch_corner._dec = corner.dec
+                corners.append(patch_corner)
         print('')
         patches.append([name, weight, corners])
 
-        if args.debug:
-            lon = [corner._ra/degree for corner in corners]
-            lat = [corner._dec/degree for corner in corners]
-            lon.append(lon[0])
-            lat.append(lat[0])
-            hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C')
-            hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True, coord='C')
+    if args.debug:
+        for iplot, coord in enumerate('CEG'):
+            hp.mollview(None, coord=coord, title='Patch locations',
+                        sub=[2,2,1+iplot])
+            hp.graticule(30)
+            for name, weight, corners in patches:
+                lon = [corner._ra/degree for corner in corners]
+                lat = [corner._dec/degree for corner in corners]
+                lon.append(lon[0])
+                lat.append(lat[0])
+                hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C')
+                hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True,
+                            coord='C')
 
     # Normalize the weights
     for i in range(len(patches)):
@@ -212,6 +260,10 @@ def main():
             'Pass'))
 
     while t < stop_timestamp:
+        if args.debug:
+            tstring = datetime.utcfromtimestamp(t).strftime(
+                '%Y-%m-%d %H:%M:%S %Z')
+            print('t =  {}'.format(tstring), flush=True)
         # Determine which patches are visible
         observer.date = to_DJD(t)
         sun.compute(observer)
@@ -460,7 +512,8 @@ def main():
             if args.debug:
                 tstring = datetime.utcfromtimestamp(t).strftime(
                     '%Y-%m-%d %H:%M:%S %Z')
-                print('No patches visible at {}: {}'.format(tstring, not_visible))
+                print('No patches visible at {}: {}'.format(
+                    tstring, not_visible), flush=True)
             t += tstep
 
     fout.close()
