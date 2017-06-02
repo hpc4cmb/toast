@@ -218,6 +218,9 @@ def main():
         sun_el = sun.alt / degree
         sun_az = sun.az / degree
         if sun_el > args.sun_el_max:
+            if args.debug:
+                print('Sun elevation is {:.2f} > {:.2f}. Moving on.'.format(
+                    sun_el, args.sun_el_max), flush=True)
             t += tstep
             continue
         moon.compute(observer)
