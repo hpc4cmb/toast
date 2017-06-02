@@ -671,8 +671,11 @@ class TODGround(TOD):
 
     def __del__(self):
 
-        del self._az
-        self.cache.clear()
+        try:
+            del self._az
+            self.cache.clear()
+        except:
+            pass
 
     def to_JD(self, t):
         """

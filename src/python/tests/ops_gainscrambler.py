@@ -176,7 +176,7 @@ class OpGainScramblerTest(MPITestCase):
             y = tod.cache.reference(cachename)
             rms = np.std(y)
             old = old_rms[det]
-            if np.abs(rms / old) - 2 < 1e-3 and 'apply' in det:
+            if np.abs(rms / old) - 2 > 1e-3 and 'apply' in det:
                 raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
             if np.abs(rms / old) - 1 > 1e-10 and 'apply' not in det:
                 raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
