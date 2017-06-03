@@ -7,6 +7,7 @@
 from toast.mpi import MPI
 
 import os
+import sys
 import re
 import argparse
 import pickle
