@@ -238,8 +238,8 @@ class OpSimAtmosphere(Operator):
 
             fp_radius = self._fp_radius * degree
 
-            azmin = min_az_bore - fp_radius
-            azmax = max_az_bore + fp_radius
+            azmin = min_az_bore - fp_radius / np.cos(max_el_bore)
+            azmax = max_az_bore + fp_radius / np.cos(max_el_bore)
             elmin = min_el_bore - fp_radius
             elmax = max_el_bore + fp_radius
 
