@@ -356,6 +356,7 @@ def main():
                 comm.comm_group,
                 detquats,
                 totsamples,
+                detranks=comm.comm_group.size,
                 firsttime=CES_start,
                 rate=args.samplerate,
                 site_lon=site_lon,
