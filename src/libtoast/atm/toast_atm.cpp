@@ -574,11 +574,12 @@ void toast::atm::sim::draw() {
 
     // Draw 100 gaussian variates to use in drawing the simulation parameters
 
-    const size_t nrand = 100;
+    const size_t nrand = 10000;
     double randn[nrand];
     rng::dist_normal( nrand, key1, key2, counter1, counter2, randn );
     counter2 += nrand;
     double *prand=randn;
+    long irand=0;
 
     if ( rank == 0 ) {
         lmin = 0;
@@ -591,13 +592,21 @@ void toast::atm::sim::draw() {
         while( lmin >= lmax ){
             lmin = 0;
             lmax = 0;
-            while (lmin <= 0) lmin = lmin_center + *(prand++) * lmin_sigma;
-            while (lmax <= 0) lmax = lmax_center + *(prand++) * lmax_sigma;
+            while (lmin <= 0 && irand < nrand-1)
+                lmin = lmin_center + randn[irand++] * lmin_sigma;
+            while (lmax <= 0 && irand < nrand-1)
+                lmax = lmax_center + randn[irand++] * lmax_sigma;
         }
-        while (w < 0 ) w = w_center + *(prand++) * w_sigma;
-        wdir = fmod( wdir_center + *(prand++) * wdir_sigma, M_PI );
-        while (z0 <= 0) z0 = z0_center + *(prand++) * z0_sigma;
-        while (T0 <= 0) T0 = T0_center + *(prand++) * T0_sigma;
+        while (w < 0 && irand < nrand-1)
+            w = w_center + randn[irand++] * w_sigma;
+        wdir = fmod( wdir_center + randn[irand++] * wdir_sigma, M_PI );
+        while (z0 <= 0 && irand < nrand)
+            z0 = z0_center + randn[irand++] * z0_sigma;
+        while (T0 <= 0 && irand < nrand)
+            T0 = T0_center + randn[irand++] * T0_sigma;
+
+        if (irand == nrand)
+            throw std::runtime_error( "Failed to draw parameters so satisfy boundary conditions" );
     }
 
     int ierr;
