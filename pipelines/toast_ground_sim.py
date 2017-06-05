@@ -172,9 +172,12 @@ def main():
     parser.add_argument('--nside',
                         required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
-    parser.add_argument('--baseline',
-                        required=False, default=60.0, type=np.float,
+    parser.add_argument('--baseline_length',
+                        required=False, default=10000.0, type=np.float,
                         help='Destriping baseline length (seconds)')
+    parser.add_argument('--baseline_order',
+                        required=False, default=0, type=np.int,
+                        help='Destriping baseline polynomial order')
     parser.add_argument('--noisefilter',
                         required=False, default=False, action='store_true',
                         help='Destripe with the noise filter enabled')
@@ -479,9 +482,6 @@ def main():
     common_flag_name = None
     flag_name = None
 
-    if comm.comm_world.rank == 0:
-        print('Not using Madam, will only bin maps!', flush=True)
-
     # construct distributed maps to store the covariance,
     # noise weighted map, and hits
 
@@ -573,7 +573,7 @@ def main():
 
         pars = {}
 
-        cross = int(nside / 2)
+        cross = nside # int(nside / 2)
         submap = 16
         if submap > nside:
             submap = nside
@@ -602,7 +602,8 @@ def main():
                             key, value = result.group(1), result.group(2)
                             pars[key] = value
 
-        pars[ 'base_first' ] = args.baseline
+        pars[ 'base_first' ] = args.baseline_length
+        pars[ 'basis_order' ] = args.baseline_order
         pars[ 'nside_map' ] = nside
         if args.noisefilter:
             pars[ 'kfilter' ] = 'T'

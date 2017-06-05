@@ -650,14 +650,33 @@ class TODGround(TOD):
 
         sizes, starts = self.simulate_scan(samples)
 
+        # Create a list of subscans that excludes the turnarounds
+
         self._subscans = []
         for subscan_start, subscan_length in zip(starts, sizes):
-            tstart = self._firsttime + subscan_start / self._rate
-            tstop = tstart + subscan_length / self._rate
             istart = subscan_start
-            istop = istart + subscan_length - 1
+            istop_scan = istart + subscan_length
+            while self._commonflags[istart] & self.TURNAROUND != 0:
+                istart += 1
+                if istart >= istop_scan:
+                    break
+            istop = istart
+            incomplete = False
+            while self._commonflags[istop] & self.TURNAROUND == 0:
+                istop += 1
+                if istop >= istop_scan:
+                    incomplete = True
+                    break
+            if incomplete:
+                # The last subscan did not finish in time, cut it from the list
+                self._commonflags[istart:istop] |= self.TURNAROUND
+                break
+            if istop - istart < 1:
+                continue
+            tstart = self._firsttime + istart / self._rate
+            tstop = self._firsttime + istop / self._rate
             self._subscans.append(
-                Interval(start=tstart, stop=tstop, first=istart, last=istop))
+                Interval(start=tstart, stop=tstop, first=istart, last=istop-1))
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
