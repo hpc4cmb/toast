@@ -443,6 +443,10 @@ def main():
     # get locally hit pixels
     lc = tm.OpLocalPixels()
     localpix = lc.exec(data)
+    if localpix is None:
+        raise RuntimeError(
+            'Process {} has no hit pixels. Perhaps there are fewer detectors '
+            'than processes in the group?'.format(comm.comm_world.rank))
 
     # find the locally hit submaps.
     localsm = np.unique(np.floor_divide(localpix, subnpix))
