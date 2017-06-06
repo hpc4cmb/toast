@@ -483,7 +483,6 @@ def main():
         pars[ "write_matrix" ] = "T"
         pars[ "write_wcov" ] = "T"
         pars[ "write_hits" ] = "T"
-        pars[ "run_submap_test" ] = "T"
         pars[ "nside_cross" ] = cross
         pars[ "nside_submap" ] = subnside
 
