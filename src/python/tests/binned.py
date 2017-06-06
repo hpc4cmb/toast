@@ -250,7 +250,6 @@ class BinnedTest(MPITestCase):
         pars[ 'write_wcov' ] = 'T'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, detweights=detweights, name="noise",

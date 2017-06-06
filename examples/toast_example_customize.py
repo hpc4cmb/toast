@@ -191,7 +191,6 @@ pars[ 'write_matrix' ] = 'T'
 pars[ 'write_wcov' ] = 'T'
 pars[ 'write_hits' ] = 'T'
 pars[ 'kfilter' ] = 'F'
-pars[ 'run_submap_test' ] = 'T'                
 pars[ 'fsample' ] = samplerate
 pars[ 'path_output' ] = outdir
 

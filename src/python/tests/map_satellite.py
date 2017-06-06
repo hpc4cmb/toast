@@ -189,7 +189,6 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, name='grad', purge=True)
@@ -279,7 +278,6 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, detweights=detweights, name='noise')
@@ -390,7 +388,6 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, name='scan')
@@ -488,7 +485,6 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, name='scan')
@@ -587,7 +583,6 @@ class MapSatelliteTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
 
         madam = OpMadam(params=pars, name='scan')

@@ -196,7 +196,6 @@ class MapGroundTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
@@ -286,7 +285,6 @@ class MapGroundTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
@@ -399,7 +397,6 @@ class MapGroundTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
@@ -498,7 +495,6 @@ class MapGroundTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
@@ -598,7 +594,6 @@ class MapGroundTest(MPITestCase):
         pars[ 'write_wcov' ] = 'F'
         pars[ 'write_hits' ] = 'T'
         pars[ 'kfilter' ] = 'F'
-        pars[ 'run_submap_test' ] = 'F'
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
