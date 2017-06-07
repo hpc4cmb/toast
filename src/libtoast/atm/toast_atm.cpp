@@ -197,9 +197,15 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             std::cerr << "Resizing realizations to " << nelem << std::endl;
         }
 
-        realization.resize(nelem);
-        realization_near.resize(nelem);
-        realization_verynear.resize(nelem);
+        try {
+            realization.resize(nelem);
+            realization_near.resize(nelem);
+            realization_verynear.resize(nelem);
+        } catch ( std::bad_alloc & e ) {
+            std::cerr << rank << " : Out of memory allocating realizations. nelem = "
+                      << nelem << std::endl;
+            throw;
+        }
 
         double t1 = MPI_Wtime();
 
@@ -897,10 +903,16 @@ void toast::atm::sim::compress_volume() {
 
     double t1 = MPI_Wtime();
 
-    compressed_index.resize( nn, -1 );
-    full_index.resize( nn, -1 );
-
-    std::vector<unsigned char> hit( nn, false );
+    std::vector<unsigned char> hit;
+    try {
+        compressed_index.resize( nn, -1 );
+        full_index.resize( nn, -1 );
+        hit.resize( nn, false );
+    } catch ( std::bad_alloc & e ) {
+        std::cerr << rank << " : Out of memory allocating element indices. nn = "
+                  << nn << std::endl;
+        throw;
+    }
 
     // Start by flagging all elements that are hit
 
