@@ -11,6 +11,7 @@ import pickle
 import argparse
 
 import numpy as np
+from scipy.constants import degree
 
 import toast.tod as tt
 
@@ -60,7 +61,8 @@ print("using {} pixels ({} detectors)".format(npix, npix*2))
 
 fwhm = args.fwhm / 60.0
 width = 100.0
-angwidth = args.fov
+# Translate the field-of-view into distance between flag sides
+angwidth = args.fov * np.cos(30 * degree)
 
 Apol = tt.hex_pol_angles_qu(npix, offset=0.0)
 Bpol = tt.hex_pol_angles_qu(npix, offset=90.0)
@@ -79,7 +81,7 @@ for indx, d in enumerate(sorted(dets.keys())):
     dets[d]["index"] = indx
 
 outfile = "{}_{}".format(args.out, npix)
-tt.plot_focalplane(dets, 6.0, 6.0, "{}.png".format(outfile))
+tt.plot_focalplane(dets, args.fov, args.fov, "{}.png".format(outfile))
 
 with open("{}.pkl".format(outfile), "wb") as p:
     pickle.dump(dets, p)
