@@ -214,6 +214,10 @@ def main():
     if args.groupsize:
         comm = toast.Comm(groupsize=args.groupsize)
 
+    if comm.comm_world.rank == 0:
+        if not os.path.isdir(args.outdir):
+            os.makedirs(args.outdir)
+
     # Load the schedule
     if comm.comm_world.rank == 0:
         print('\nAll parameters:')
@@ -336,7 +340,7 @@ def main():
 
     if args.debug:
         if comm.comm_world.rank == 0:
-            outfile = '{}_focalplane.png'.format(args.outdir)
+            outfile = '{}/focalplane.png'.format(args.outdir)
             tt.plot_focalplane(fp, 6, 6, outfile)
 
     # Build observations out of the CES:es
@@ -530,8 +534,8 @@ def main():
                   flush=True)
         start = stop
 
-        hits.write_healpix_fits('{}_hits.fits'.format(args.outdir))
-        invnpp.write_healpix_fits('{}_invnpp.fits'.format(args.outdir))
+        hits.write_healpix_fits('{}/hits.fits'.format(args.outdir))
+        invnpp.write_healpix_fits('{}/invnpp.fits'.format(args.outdir))
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -552,7 +556,7 @@ def main():
                   flush=True)
         start = stop
 
-        invnpp.write_healpix_fits('{}_npp.fits'.format(args.outdir))
+        invnpp.write_healpix_fits('{}/npp.fits'.format(args.outdir))
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -592,15 +596,14 @@ def main():
         if submap > nside:
             submap = nside
 
-        pars[ 'temperature_only' ] = 'F'
-        pars[ 'force_pol' ] = 'T'
-        pars[ 'kfirst' ] = 'T'
-        pars[ 'concatenate_messages' ] = 'T'
-        pars[ 'write_map' ] = 'T'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'T'
-        pars[ 'write_wcov' ] = 'T'
-        pars[ 'write_hits' ] = 'T'
+        pars[ 'temperature_only' ] = False
+        pars[ 'force_pol' ] = True
+        pars[ 'kfirst' ] = True
+        pars[ 'write_map' ] = True
+        pars[ 'write_binmap' ] = True
+        pars[ 'write_matrix' ] = True
+        pars[ 'write_wcov' ] = True
+        pars[ 'write_hits' ] = True
         pars[ 'nside_cross' ] = cross
         pars[ 'nside_submap' ] = submap
 
@@ -695,7 +698,7 @@ def main():
 
         # Prepare output directory
 
-        outpath = '{}_{:03d}'.format(args.outdir, mc)
+        outpath = '{}/{:03d}'.format(args.outdir, mc)
         if comm.comm_world.rank == 0:
             if not os.path.isdir(outpath):
                 os.makedirs(outpath)
@@ -705,6 +708,10 @@ def main():
         if args.madam:
             # create output directory for this realization
             pars['path_output'] = outpath
+            if mc != firstmc:
+                pars['write_matrix'] = False
+                pars['write_wcov'] = False
+                pars['write_hits'] = False
 
             """
             # in debug mode, print out data distribution information
