@@ -710,6 +710,14 @@ class TODGround(TOD):
             detranks=detranks, detbreaks=detbreaks, sampsizes=sizes, 
             sampbreaks=sampbreaks)
 
+        if self._report_timing:
+            mpicomm.Barrier()
+            tstop = MPI.Wtime()
+            if mpicomm.rank == 0 and tstop-tstart > 1:
+                print('TODGround: Called parent constructor in {:.2f} s'
+                      ''.format(tstop - tstart), flush=True)
+            tstop = tstart
+
         self._boresight_azel, self._boresight = self.translate_pointing()
 
         if self._report_timing:
@@ -854,15 +862,23 @@ class TODGround(TOD):
         orient = XAXIS
         sun = ephem.Sun()
 
-        offset, n = self.local_samples
-        ind = slice(offset, offset+n)
-        self._az = self.cache.put('az', self._az[ind])
-        self._commonflags = self.cache.put('commonflags',
-                                           self._commonflags[ind])
+        # At this point, all processes still have all of the scan
 
-        azelquats = qa.from_angles(np.pi/2 - np.ones(n)*self._el,
-                                   self._az, np.zeros(n), IAU=False)
-        azel_orients = qa.rotate(azelquats, orient)
+        nsamp = len(self._az)
+        rank = self._mpicomm.rank
+        ntask = self._mpicomm.size
+        nsamp_task = nsamp // ntask + 1
+        my_start = rank * nsamp_task
+        my_stop = min(my_start+nsamp_task, nsamp)
+        my_nsamp = max(0, my_stop-my_start)
+        my_ind = slice(my_start, my_stop)
+
+        my_az = self._az[my_ind]
+
+        my_azelquats = qa.from_angles(
+            np.pi/2 - np.ones(my_nsamp)*self._el,
+            my_az, np.zeros(my_nsamp), IAU=False)
+        azel_orients = qa.rotate(my_azelquats, orient)
         el_orients, az_orients = hp.vec2ang(azel_orients)
         del azel_orients
 
@@ -871,27 +887,31 @@ class TODGround(TOD):
         ra_orients = []
         dec_orients = []
 
-        times = self.to_DJD(self.read_times())
+        commonflags = self._commonflags[my_ind].copy()
 
-        for i in range(n):
+        times = self.to_DJD(self.read_times(my_start, my_nsamp))
+
+        for i in range(my_nsamp):
             el_orient, az_orient = el_orients[i], az_orients[i]
 
             t = times[i]
 
             self._observer.date = t
+            """
+            The sun angle is already handled by the schedule
             sun.compute(self._observer)
             if sun.alt > 0:
                 self._commonflags[i] |= self.SUN_UP
 
-                az = self._az[i]
-                angle = az - sun.az
+                angle = my_az[i] - sun.az
                 if angle < -2*np.pi: angle += 2*np.pi
                 if angle > 2*np.pi: angle -= 2*np.pi
 
                 if angle / degree < self._sun_angle_min:
-                    self._commonflags[i] |= self.SUN_CLOSE
+                    commonflags[i] |= self.SUN_CLOSE
+            """
 
-            ra_dir, dec_dir = self._observer.radec_of(self._az[i], self._el)
+            ra_dir, dec_dir = self._observer.radec_of(my_az[i], self._el)
             ra_orient, dec_orient = self._observer.radec_of(az_orient, el_orient)
 
             ra_dirs.append(ra_dir)
@@ -913,7 +933,24 @@ class TODGround(TOD):
             - radec_orients[1]*radec_dirs[2]*radec_dirs[1]
         pas = np.arctan2(x, y)
 
-        return azelquats, self.radec2quat(ra_dirs, dec_dirs, pas)
+        my_quats = self.radec2quat(ra_dirs, dec_dirs, pas)
+
+        azelquats = np.vstack(self._mpicomm.allgather(my_azelquats))
+        del my_azelquats
+
+        quats = np.vstack(self._mpicomm.allgather(my_quats))
+        del my_quats
+
+        # Crop the azimuth and common flags to match the returned quaternions
+
+        offset, n = self.local_samples
+        ind = slice(offset, offset+n)
+
+        self._az = self.cache.put('az', self._az[ind])
+        self._commonflags = self.cache.put('commonflags',
+                                           self._commonflags[ind])
+
+        return azelquats[ind], quats[ind]
 
     def radec2quat(self, ra, dec, pa):
 
