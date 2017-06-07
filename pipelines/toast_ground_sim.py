@@ -425,8 +425,9 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Read parameters, compute data distribution:  {:.2f} seconds'
-              ''.format(stop-start), flush=True)
+        print('Read parameters, compute data distribution and simulate scans: '
+              '{:.2f} seconds'.format(stop-start), flush=True)
+
     start = stop
 
     # make a Healpix pointing matrix.

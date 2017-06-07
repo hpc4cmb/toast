@@ -575,6 +575,8 @@ class TODGround(TOD):
             distribution.
         coord (str):  Sky coordinate system.  One of
             C (Equatorial), E (Ecliptic) or G (Galactic)
+        report_timing (bool):  Report the time spent simulating the scan
+            and translating the pointing.
     """
 
     TURNAROUND = 1
@@ -590,7 +592,8 @@ class TODGround(TOD):
                  scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  detindx=None, detranks=1, detbreaks=None,
-                 sampsizes=None, sampbreaks=None, coord='C'):
+                 sampsizes=None, sampbreaks=None, coord='C',
+                 report_timing=True):
 
         if ephem is None:
             raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
@@ -632,6 +635,7 @@ class TODGround(TOD):
         if coord not in 'CEG':
             raise RuntimeError('Unknown coordinate system: {}'.format(coord))
         self._coord = coord
+        self._report_timing = report_timing
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -648,7 +652,19 @@ class TODGround(TOD):
 
         # Set the boresight pointing based on the given scan parameters
 
+        if self._report_timing:
+            mpicomm.Barrier()
+            tstart = MPI.Wtime()
+
         sizes, starts = self.simulate_scan(samples)
+
+        if self._report_timing:
+            mpicomm.Barrier()
+            tstop = MPI.Wtime()
+            if mpicomm.rank == 0 and tstop-tstart > 1:
+                print('TODGround: Simulated scan in {:.2f} s'
+                      ''.format(tstop - tstart), flush=True)
+            tstart = tstop
 
         # Create a list of subscans that excludes the turnarounds
 
@@ -673,10 +689,18 @@ class TODGround(TOD):
                 break
             if istop - istart < 1:
                 continue
-            tstart = self._firsttime + istart / self._rate
-            tstop = self._firsttime + istop / self._rate
+            start = self._firsttime + istart / self._rate
+            stop = self._firsttime + istop / self._rate
             self._subscans.append(
-                Interval(start=tstart, stop=tstop, first=istart, last=istop-1))
+                Interval(start=start, stop=stop, first=istart, last=istop-1))
+
+        if self._report_timing:
+            mpicomm.Barrier()
+            tstop = MPI.Wtime()
+            if mpicomm.rank == 0 and tstop-tstart > 1:
+                print('TODGround: Listed valid intervals in {:.2f} s'
+                      ''.format(tstop - tstart), flush=True)
+            tstop = tstart
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -687,6 +711,13 @@ class TODGround(TOD):
             sampbreaks=sampbreaks)
 
         self._boresight_azel, self._boresight = self.translate_pointing()
+
+        if self._report_timing:
+            mpicomm.Barrier()
+            tstop = MPI.Wtime()
+            if mpicomm.rank == 0 and tstop-tstart > 1:
+                print('TODGround: Translated scan pointing in {:.2f} s'
+                      ''.format(tstop - tstart), flush=True)
 
     def __del__(self):
 

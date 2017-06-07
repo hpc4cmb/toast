@@ -284,8 +284,8 @@ class OpSimAtmosphere(Operator):
             if self._report_timing:
                 comm.Barrier()
                 tstop = MPI.Wtime()
-                if comm.rank == 0:
-                    print('Initialized atmosphere in {:.2f} s'
+                if comm.rank == 0 and tstop-tstart > 1:
+                    print('OpSimAtmosphere: Initialized atmosphere in {:.2f} s'
                           ''.format(tstop - tstart), flush=True)
                 tstart = tstop
 
@@ -294,8 +294,8 @@ class OpSimAtmosphere(Operator):
             if self._report_timing:
                 comm.Barrier()
                 tstop = MPI.Wtime()
-                if comm.rank == 0:
-                    print('Simulated atmosphere in {:.2f} s'
+                if comm.rank == 0 and tstop-tstart > 1:
+                    print('OpSimAtmosphere: Simulated atmosphere in {:.2f} s'
                           ''.format(tstop - tstart), flush=True)
                 tstart = tstop
 
@@ -411,8 +411,8 @@ class OpSimAtmosphere(Operator):
             if self._report_timing:
                 comm.Barrier()
                 tstop = MPI.Wtime()
-                if comm.rank == 0:
-                    print('Observed atmosphere in {:.2f} s'
+                if comm.rank == 0 and tstop-tstart > 1:
+                    print('OpSimAtmosphere: Observed atmosphere in {:.2f} s'
                           ''.format(tstop - tstart), flush=True)
 
         return
