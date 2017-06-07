@@ -304,7 +304,7 @@ class OpSimAtmosphere(Operator):
                     tmax = tmax_tot
                     istop = times.size
 
-                if comm.rank == 0: # and self._verbosity:
+                if comm.rank == 0 and tmax < tmax_tot:
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
                           'of ([{:.2f}, {:.2f}])'.format(
                               tmin, tmax, tmin_tot, tmax_tot), flush=True)

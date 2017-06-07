@@ -141,6 +141,9 @@ def main():
     parser.add_argument('--atm_fnear',
                         required=False, default=0.3, type=np.float,
                         help='multiplier for the near field simulation')
+    parser.add_argument('--atm_wind_time',
+                        required=False, default=36000.0, type=np.float,
+                        help='Minimum time to simulate without discontinuity')
     parser.add_argument('--atm_w_center',
                         required=False, default=1.0, type=np.float,
                         help='central value of the wind speed distribution')
@@ -654,7 +657,8 @@ def main():
                 ystep=args.atm_ystep, zstep=args.atm_zstep,
                 nelem_sim_max=args.atm_nelem_sim_max,
                 verbosity=int(args.debug), gangsize=args.atm_gangsize,
-                fnear=args.atm_fnear, w_center=args.atm_w_center,
+                fnear=args.atm_fnear,
+                wind_time_min=args.atm_wind_time, w_center=args.atm_w_center,
                 w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
                 wdir_sigma=args.atm_wdir_sigma,
                 z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
