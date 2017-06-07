@@ -726,6 +726,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('Madam took {:.3f} s'.format(elapsed), flush=True)
+            start = stop
 
         # Filter and bin
 
