@@ -95,6 +95,9 @@ def main():
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
+    parser.add_argument('--out',
+                        required=False, default='schedule.txt',
+                        help='Output filename')
 
     args = parser.parse_args()
 
@@ -232,7 +235,7 @@ def main():
     sun = ephem.Sun()
     moon = ephem.Moon()
     tstep = 600
-    fout = open('schedule.txt', 'w')
+    fout = open(args.out, 'w')
 
     fout.write('#{:15} {:15} {:15} {:15}\n'.format(
         'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
