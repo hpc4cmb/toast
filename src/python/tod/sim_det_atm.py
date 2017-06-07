@@ -78,7 +78,8 @@ class OpSimAtmosphere(Operator):
         flag_mask (byte):  Bitmask to use when flagging data
            based on the detector flags.
         apply_flags (bool):  When True, flagged samples are not simulated.
-
+        report_timing (bool):  Print out time taken to initialize,
+             simulate and observe
     """
     def __init__(
             self, out='atm', realization=0, component=123456,
@@ -90,7 +91,7 @@ class OpSimAtmosphere(Operator):
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             fp_radius=1, apply_flags=False,
             common_flag_name='common_flags', common_flag_mask=255,
-            flag_name='flags', flag_mask=255):
+            flag_name='flags', flag_mask=255, report_timing=True):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -130,6 +131,7 @@ class OpSimAtmosphere(Operator):
         self._common_flag_mask = common_flag_mask
         self._flag_name = flag_name
         self._flag_mask = flag_mask
+        self._report_timing = report_timing
 
     def exec(self, data):
         """
@@ -264,6 +266,10 @@ class OpSimAtmosphere(Operator):
             tmin = comm.allreduce(tmin, op=MPI.MIN)
             tmax = comm.allreduce(tmax, op=MPI.MAX)
 
+            if self._report_timing:
+                comm.Barrier()
+                tstart = MPI.Wtime()
+
             sim = atm_sim_alloc(
                 azmin, azmax, elmin, elmax, tmin, tmax,
                 self._lmin_center, self._lmin_sigma,
@@ -275,7 +281,23 @@ class OpSimAtmosphere(Operator):
                 self._verbosity, comm, self._gangsize, self._fnear,
                 key1, key2, counter1, counter2)
 
+            if self._report_timing:
+                comm.Barrier()
+                tstop = MPI.Wtime()
+                if comm.rank == 0:
+                    print('Initialized atmosphere in {:.2f} s'
+                          ''.format(tstop - tstart), flush=True)
+                tstart = tstop
+
             atm_sim_simulate(sim, 0)
+
+            if self._report_timing:
+                comm.Barrier()
+                tstop = MPI.Wtime()
+                if comm.rank == 0:
+                    print('Simulated atmosphere in {:.2f} s'
+                          ''.format(tstop - tstart), flush=True)
+                tstart = tstop
 
             if self._verbosity > 0:
                 # Create snapshots of the atmosphere
@@ -317,6 +339,10 @@ class OpSimAtmosphere(Operator):
                     plt.close()
 
             nsamp = tod.local_samples[1]
+
+            if self._report_timing:
+                comm.Barrier()
+                tstart = MPI.Wtime()
 
             for det in tod.local_dets:
 
@@ -381,5 +407,12 @@ class OpSimAtmosphere(Operator):
                     ref += atmdata
 
                 del ref
+
+            if self._report_timing:
+                comm.Barrier()
+                tstop = MPI.Wtime()
+                if comm.rank == 0:
+                    print('Observed atmosphere in {:.2f} s'
+                          ''.format(tstop - tstart), flush=True)
 
         return
