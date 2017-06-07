@@ -41,8 +41,8 @@ class OpSimAtmosphere(Operator):
     Args:
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        realization (int): if simulating multiple realizations, the realization
-            index.
+        realization (int): if simulating multiple realizations, the
+            realization index.
         component (int): the component index to use for this noise simulation.
         lmin_center (float): Kolmogorov turbulence dissipation scale center.
         lmin_sigma (float): Kolmogorov turbulence dissipation scale sigma.
@@ -80,6 +80,8 @@ class OpSimAtmosphere(Operator):
         apply_flags (bool):  When True, flagged samples are not simulated.
         report_timing (bool):  Print out time taken to initialize,
              simulate and observe
+        wind_time_min (float):  Minimum time to simulate before
+            discarding the volume and creating a new one [seconds].
     """
     def __init__(
             self, out='atm', realization=0, component=123456,
@@ -91,7 +93,8 @@ class OpSimAtmosphere(Operator):
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             fp_radius=1, apply_flags=False,
             common_flag_name='common_flags', common_flag_mask=255,
-            flag_name='flags', flag_mask=255, report_timing=True):
+            flag_name='flags', flag_mask=255, report_timing=True,
+            wind_time_min=600):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -132,6 +135,7 @@ class OpSimAtmosphere(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._report_timing = report_timing
+        self._wind_time_min = wind_time_min
 
     def exec(self, data):
         """
@@ -255,6 +259,17 @@ class OpSimAtmosphere(Operator):
                     'Error in CES elevation: elmin = {:.2f}, elmax = {:.2f}'
                     ''.format(elmin, elmax))
 
+            # Determine an appropriate time interval to simulate based
+            # on field of view and wind speed.  Wind time is the time it
+            # takes for the entire field of view to be replaced by wind.
+
+            dist = self._zmax / np.tan(elmin)
+            width = 2 * dist * np.tan((azmax - azmin)/2)
+            wind_time = width / self._w_center
+            wind_time = max(self._wind_time_min, wind_time)
+            if comm.rank == 0 and self._verbosity:
+                print('Wind time = {:.2f} s'.format(wind_time), flush=True)
+
             #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
 
             # Get the timestamps
@@ -263,156 +278,192 @@ class OpSimAtmosphere(Operator):
 
             tmin = times[0]
             tmax = times[-1]
-            tmin = comm.allreduce(tmin, op=MPI.MIN)
-            tmax = comm.allreduce(tmax, op=MPI.MAX)
+            tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
+            tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
 
-            if self._report_timing:
-                comm.Barrier()
-                tstart = MPI.Wtime()
+            tmin = tmin_tot
+            istart = 0
+            while tmin < tmax_tot:
+                while times[istart] < tmin:
+                    istart += 1
 
-            sim = atm_sim_alloc(
-                azmin, azmax, elmin, elmax, tmin, tmax,
-                self._lmin_center, self._lmin_sigma,
-                self._lmax_center, self._lmax_sigma, self._w_center,
-                self._w_sigma, self._wdir_center, self._wdir_sigma,
-                self._z0_center, self._z0_sigma, self._T0_center,
-                self._T0_sigma, self._zatm, self._zmax, self._xstep,
-                self._ystep, self._zstep, self._nelem_sim_max,
-                self._verbosity, comm, self._gangsize, self._fnear,
-                key1, key2, counter1, counter2)
-
-            if self._report_timing:
-                comm.Barrier()
-                tstop = MPI.Wtime()
-                if comm.rank == 0 and tstop-tstart > 1:
-                    print('OpSimAtmosphere: Initialized atmosphere in {:.2f} s'
-                          ''.format(tstop - tstart), flush=True)
-                tstart = tstop
-
-            atm_sim_simulate(sim, 0)
-
-            if self._report_timing:
-                comm.Barrier()
-                tstop = MPI.Wtime()
-                if comm.rank == 0 and tstop-tstart > 1:
-                    print('OpSimAtmosphere: Simulated atmosphere in {:.2f} s'
-                          ''.format(tstop - tstart), flush=True)
-                tstart = tstop
-
-            if self._verbosity > 0:
-                # Create snapshots of the atmosphere
-                import matplotlib.pyplot as plt
-                import sys
-                azelstep = .01 * degree
-                azgrid = np.linspace( azmin, azmax, (azmax-azmin)//azelstep+1 )
-                elgrid = np.linspace( elmin, elmax, (elmax-elmin)//azelstep+1 )
-                AZ, EL = np.meshgrid( azgrid, elgrid )
-                nn = AZ.size
-                az = AZ.ravel()
-                el = EL.ravel()
-                atmdata = np.zeros(nn, dtype=np.float64)
-                atmtimes = np.zeros(nn, dtype=np.float64)
-
-                rank = comm.rank
-                ntask = comm.size
-                r = 0
-                t = 0
-                #for i, r in enumerate(np.linspace(1, 5000, 100)):
-                for i, t in enumerate(np.linspace(tmin, tmax, 100)):
-                    if i % ntask != rank:
-                        continue
-                    atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
-                    atmdata2d = atmdata.reshape(AZ.shape)
-                    plt.figure()
-                    plt.imshow(atmdata2d, interpolation='nearest',
-                               origin='lower', extent=np.array(
-                                   [azmin, azmax, elmin, elmax])/degree,
-                               cmap=plt.get_cmap('Blues'))
-                    plt.colorbar()
-                    ax = plt.gca()
-                    ax.set_title('t = {:15.1f} s, r = {:15.1f} m'.format(t, r))
-                    ax.set_xlabel('az [deg]')
-                    ax.set_ylabel('el [deg]')
-                    ax.set_yticks([elmin/degree, elmax/degree])
-                    plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
-                        obsname, int(t), int(r)))
-                    plt.close()
-
-            nsamp = tod.local_samples[1]
-
-            if self._report_timing:
-                comm.Barrier()
-                tstart = MPI.Wtime()
-
-            for det in tod.local_dets:
-
-                # Cache the output signal
-                cachename = '{}_{}'.format(self._out, det)
-                if tod.cache.exists(cachename):
-                    ref = tod.cache.reference(cachename)
+                tmax = tmin + wind_time
+                if tmax < tmax_tot:
+                    # Extend the scan to the next turnaround
+                    istop = istart
+                    while istop < times.size and times[istop] < tmax:
+                        istop += 1
+                    while istop < times.size and \
+                          common_ref[istop] | tod.TURNAROUND == 0:
+                        istop += 1
+                    if istop < times.size:
+                        tmax = times[istop]
+                    else:
+                        tmax = tmax_tot
                 else:
-                    ref = tod.cache.create(cachename, np.float64, (nsamp,))
+                    tmax = tmax_tot
+                    istop = times.size
 
-                # Cache the output flags
-                cachename = '{}_{}'.format(self._flag_name, det)
-                if tod.cache.exists(cachename):
-                    flag_ref = tod.cache.reference(cachename)
-                else:
-                    # read_flags always returns both common and detector
-                    # flags but we already cached the common flags.
-                    flag, dummy = tod.read_flags(detector=det)
-                    flag_ref = tod.cache.put(cachename, flag)
-                    del flag, dummy
+                if comm.rank == 0: # and self._verbosity:
+                    print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
+                          'of ([{:.2f}, {:.2f}])'.format(
+                              tmin, tmax, tmin_tot, tmax_tot), flush=True)
 
-                if self._apply_flags:
-                    good = np.logical_and(
-                        common_ref & self._common_flag_mask == 0,
-                        flag_ref & self._flag_mask == 0)
-                    ngood = np.sum(good)
-                    azelquat = tod.read_pntg(detector=det, azel=True)[good]
-                    atmdata = np.zeros(ngood, dtype=np.float64)
-                else:
-                    ngood = nsamp
-                    azelquat = tod.read_pntg(detector=det, azel=True)
-                    atmdata = np.zeros(nsamp, dtype=np.float64)
+                ind = slice(istart, istop)
+                nind = istop - istart
 
-                # Convert Az/El quaternion of the detector back into
-                # angles for the simulation.
+                if self._report_timing:
+                    comm.Barrier()
+                    tstart = MPI.Wtime()
 
-                theta, phi, pa = qa.to_angles(azelquat)
-                az = phi
-                el = np.pi/2 - theta
+                sim = atm_sim_alloc(
+                    azmin, azmax, elmin, elmax, tmin, tmax,
+                    self._lmin_center, self._lmin_sigma,
+                    self._lmax_center, self._lmax_sigma, self._w_center,
+                    self._w_sigma, self._wdir_center, self._wdir_sigma,
+                    self._z0_center, self._z0_sigma, self._T0_center,
+                    self._T0_sigma, self._zatm, self._zmax, self._xstep,
+                    self._ystep, self._zstep, self._nelem_sim_max,
+                    self._verbosity, comm, self._gangsize, self._fnear,
+                    key1, key2, counter1, counter2)
 
-                azmin_det = np.amin(az)
-                azmax_det = np.amax(az)
-                elmin_det = np.amin(el)
-                elmax_det = np.amax(el)
-                if (azmin_det < azmin or azmax < azmax_det or
-                    elmin_det < elmin or elmax < elmax_det):
-                    raise RuntimeError(
-                        'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
-                        'is not contained in [{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
-                        ''.format(
-                            azmin_det, azmax_det, elmin_det, elmax_det,
-                            azmin, azmax, elmin, elmax))
+                if self._report_timing:
+                    comm.Barrier()
+                    tstop = MPI.Wtime()
+                    if comm.rank == 0 and tstop-tstart > 1:
+                        print('OpSimAtmosphere: Initialized atmosphere in {:.2f} s'
+                              ''.format(tstop - tstart), flush=True)
+                    tstart = tstop
 
-                # Integrate detector signal
+                atm_sim_simulate(sim, 0)
 
-                atm_sim_observe(
-                    sim, times, az, el, atmdata, ngood, 0)
+                if self._report_timing:
+                    comm.Barrier()
+                    tstop = MPI.Wtime()
+                    if comm.rank == 0 and tstop-tstart > 1:
+                        print('OpSimAtmosphere: Simulated atmosphere in {:.2f} s'
+                              ''.format(tstop - tstart), flush=True)
+                    tstart = tstop
 
-                if self._apply_flags:
-                    ref[good] += atmdata
-                else:
-                    ref += atmdata
+                if self._verbosity > 0:
+                    # Create snapshots of the atmosphere
+                    import matplotlib.pyplot as plt
+                    import sys
+                    azelstep = .01 * degree
+                    azgrid = np.linspace( azmin, azmax, (azmax-azmin)//azelstep+1 )
+                    elgrid = np.linspace( elmin, elmax, (elmax-elmin)//azelstep+1 )
+                    AZ, EL = np.meshgrid( azgrid, elgrid )
+                    nn = AZ.size
+                    az = AZ.ravel()
+                    el = EL.ravel()
+                    atmdata = np.zeros(nn, dtype=np.float64)
+                    atmtimes = np.zeros(nn, dtype=np.float64)
 
-                del ref
+                    rank = comm.rank
+                    ntask = comm.size
+                    r = 0
+                    t = 0
+                    #for i, r in enumerate(np.linspace(1, 5000, 100)):
+                    for i, t in enumerate(np.linspace(tmin, tmax, 100)):
+                        if i % ntask != rank:
+                            continue
+                        atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
+                        atmdata2d = atmdata.reshape(AZ.shape)
+                        plt.figure()
+                        plt.imshow(atmdata2d, interpolation='nearest',
+                                   origin='lower', extent=np.array(
+                                       [azmin, azmax, elmin, elmax])/degree,
+                                   cmap=plt.get_cmap('Blues'))
+                        plt.colorbar()
+                        ax = plt.gca()
+                        ax.set_title('t = {:15.1f} s, r = {:15.1f} m'.format(t, r))
+                        ax.set_xlabel('az [deg]')
+                        ax.set_ylabel('el [deg]')
+                        ax.set_yticks([elmin/degree, elmax/degree])
+                        plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
+                            obsname, int(t), int(r)))
+                        plt.close()
 
-            if self._report_timing:
-                comm.Barrier()
-                tstop = MPI.Wtime()
-                if comm.rank == 0 and tstop-tstart > 1:
-                    print('OpSimAtmosphere: Observed atmosphere in {:.2f} s'
-                          ''.format(tstop - tstart), flush=True)
+                nsamp = tod.local_samples[1]
+
+                if self._report_timing:
+                    comm.Barrier()
+                    tstart = MPI.Wtime()
+
+                for det in tod.local_dets:
+
+                    # Cache the output signal
+                    cachename = '{}_{}'.format(self._out, det)
+                    if tod.cache.exists(cachename):
+                        ref = tod.cache.reference(cachename)
+                    else:
+                        ref = tod.cache.create(cachename, np.float64, (nsamp,))
+
+                    # Cache the output flags
+                    cachename = '{}_{}'.format(self._flag_name, det)
+                    if tod.cache.exists(cachename):
+                        flag_ref = tod.cache.reference(cachename)
+                    else:
+                        # read_flags always returns both common and detector
+                        # flags but we already cached the common flags.
+                        flag, dummy = tod.read_flags(detector=det)
+                        flag_ref = tod.cache.put(cachename, flag)
+                        del flag, dummy
+
+                    if self._apply_flags:
+                        good = np.logical_and(
+                            common_ref[ind] & self._common_flag_mask == 0,
+                            flag_ref[ind] & self._flag_mask == 0)
+                        ngood = np.sum(good)
+                        azelquat = tod.read_pntg(
+                            detector=det, local_start=istart, n=nind,
+                            azel=True)[good]
+                        atmdata = np.zeros(ngood, dtype=np.float64)
+                    else:
+                        ngood = nind
+                        azelquat = tod.read_pntg(
+                            detector=det, local_start=istart, n=nind, azel=True)
+                        atmdata = np.zeros(nind, dtype=np.float64)
+
+                    # Convert Az/El quaternion of the detector back into
+                    # angles for the simulation.
+
+                    theta, phi, pa = qa.to_angles(azelquat)
+                    az = phi
+                    el = np.pi/2 - theta
+
+                    azmin_det = np.amin(az)
+                    azmax_det = np.amax(az)
+                    elmin_det = np.amin(el)
+                    elmax_det = np.amax(el)
+                    if (azmin_det < azmin or azmax < azmax_det or
+                        elmin_det < elmin or elmax < elmax_det):
+                        raise RuntimeError(
+                            'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
+                            'is not contained in [{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
+                            ''.format(
+                                azmin_det, azmax_det, elmin_det, elmax_det,
+                                azmin, azmax, elmin, elmax))
+
+                    # Integrate detector signal
+
+                    atm_sim_observe(
+                        sim, times[ind], az, el, atmdata, ngood, 0)
+
+                    if self._apply_flags:
+                        ref[ind][good] += atmdata
+                    else:
+                        ref[ind] += atmdata
+
+                    del ref
+
+                if self._report_timing:
+                    comm.Barrier()
+                    tstop = MPI.Wtime()
+                    if comm.rank == 0 and tstop-tstart > 1:
+                        print('OpSimAtmosphere: Observed atmosphere in {:.2f} s'
+                              ''.format(tstop - tstart), flush=True)
+
+                tmin = tmax
 
         return
