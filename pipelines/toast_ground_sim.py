@@ -216,6 +216,9 @@ def main():
 
     # Load the schedule
     if comm.comm_world.rank == 0:
+        print('\nAll parameters:')
+        print(args, flush=True)
+        print('')
         fn = args.schedule
         if not os.path.isfile(fn):
             raise RuntimeError('No such schedule file: {}'.format(fn))
