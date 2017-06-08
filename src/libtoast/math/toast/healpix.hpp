@@ -27,51 +27,51 @@ namespace toast { namespace healpix {
 
             void reset ( int64_t nside );
 
-            void vec2zphi ( int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz );
+            void vec2zphi ( int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz ) const;
 
-            void theta2z ( int64_t n, double const * theta, int * region, double * z, double * rtz );
+            void theta2z ( int64_t n, double const * theta, int * region, double * z, double * rtz ) const;
 
-            void zphi2nest ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
+            void zphi2nest ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) const;
 
-            void zphi2ring ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix );
+            void zphi2ring ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) const;
 
-            void ang2nest ( int64_t n, double const * theta, double const * phi, int64_t * pix );
+            void ang2nest ( int64_t n, double const * theta, double const * phi, int64_t * pix ) const;
 
-            void ang2ring ( int64_t n, double const * theta, double const * phi, int64_t * pix );
+            void ang2ring ( int64_t n, double const * theta, double const * phi, int64_t * pix ) const;
 
-            void vec2nest ( int64_t n, double const * vec, int64_t * pix );
+            void vec2nest ( int64_t n, double const * vec, int64_t * pix ) const;
 
-            void vec2ring ( int64_t n, double const * vec, int64_t * pix );
+            void vec2ring ( int64_t n, double const * vec, int64_t * pix ) const;
 
-            void ring2nest ( int64_t n, int64_t const * ringpix, int64_t * nestpix );
+            void ring2nest ( int64_t n, int64_t const * ringpix, int64_t * nestpix ) const;
 
-            void nest2ring ( int64_t n, int64_t const * nestpix, int64_t * ringpix );
+            void nest2ring ( int64_t n, int64_t const * nestpix, int64_t * ringpix ) const;
 
-            void degrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
+            void degrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const;
 
-            void degrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
+            void degrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const;
 
-            void upgrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
+            void upgrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const;
 
-            void upgrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix );
+            void upgrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const;
 
         private :
 
             void init ( );
 
-            inline uint64_t xy2pix_ ( uint64_t x, uint64_t y ) {
+            inline uint64_t xy2pix_ ( uint64_t x, uint64_t y ) const {
                 return ( utab_[x & 0xff] | ( utab_[(x>>8) & 0xff] << 16 ) | ( utab_[(x>>16) & 0xff] << 32 ) | ( utab_[(x>>24) & 0xff] << 48 ) | ( utab_[y & 0xff] << 1 ) | ( utab_[(y>>8) & 0xff] << 17 ) | ( utab_[(y>>16) & 0xff] << 33 ) | ( utab_[(y>>24) & 0xff] << 49 ) );
             }
 
-            inline uint64_t x2pix_ ( uint64_t x ) {
+            inline uint64_t x2pix_ ( uint64_t x ) const {
                 return ( utab_[x & 0xff] | ( utab_[x>>8] << 16 ) | ( utab_[(x>>16) & 0xff] << 32 ) | (utab_[(x>>24) & 0xff] << 48 ) );
             }
 
-            inline uint64_t y2pix_ ( uint64_t y ) {
+            inline uint64_t y2pix_ ( uint64_t y ) const {
                 return ( ( utab_[y&0xff] << 1 ) | ( utab_[y>>8] << 17 ) | ( utab_[(y>>16) & 0xff] << 33 ) | ( utab_[(y>>24) & 0xff] << 49 ) );
             }
 
-            inline void pix2xy_ ( uint64_t pix, uint64_t & x, uint64_t & y ) {
+            inline void pix2xy_ ( uint64_t pix, uint64_t & x, uint64_t & y ) const {
                 uint64_t raw;
                 raw = ( pix & 0x5555ull ) | (( pix & 0x55550000ull ) >> 15 ) | (( pix & 0x555500000000ull ) >> 16 ) | (( pix & 0x5555000000000000ull ) >> 31 );
                 x = ctab_[raw & 0xff] | ( ctab_[(raw >> 8) & 0xff] << 4 ) | ( ctab_[(raw >> 16) & 0xff] << 16 ) | ( ctab_[(raw >> 24) & 0xff] << 20 );

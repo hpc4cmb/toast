@@ -25,13 +25,26 @@ libc = ct.CDLL(libc_path, mode=ct.RTLD_GLOBAL)
 libc.free.restype = None
 libc.free.argtypes = [ ct.c_void_p ]
 
-# numpy pointer types that we use frequently
+# numpy pointer types that we use frequently.  These types handle treating "None"
+# as a NULL pointer.  See:
+#
+#  https://stackoverflow.com/questions/32120178/how-can-i-pass-null-to-an-external-library-using-ctypes-with-an-argument-decla
+#
 
-npi8 = npc.ndpointer(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS")
-npi32 = npc.ndpointer(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS")
-npi64 = npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS")
-npu64 = npc.ndpointer(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS")
-npf64 = npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
+def wrapped_ndptr(*args, **kwargs):
+    base = npc.ndpointer(*args, **kwargs)
+    def from_param(cls, obj):
+        if obj is None:
+            return obj
+        return base.from_param(obj)
+    return type(base.__name__, (base,), {'from_param': classmethod(from_param)})
+
+npu8 = wrapped_ndptr(dtype=np.uint8, ndim=1, flags="C_CONTIGUOUS")
+npi8 = wrapped_ndptr(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS")
+npi32 = wrapped_ndptr(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS")
+npi64 = wrapped_ndptr(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS")
+npu64 = wrapped_ndptr(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS")
+npf64 = wrapped_ndptr(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
 
 p_c_char = ct.POINTER(ct.c_char)
 pp_c_char = ct.POINTER(p_c_char)
@@ -805,7 +818,60 @@ def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
 #  TOD sublibrary
 #--------------------------------------
 
+lib.ctoast_pointing_healpix_matrix.restype = None
+lib.ctoast_pointing_healpix_matrix.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
+    ct.c_double, ct.c_double, ct.c_char_p, ct.c_ulong, npf64, npf64, npu8, npi64, 
+    npf64 ]
 
+def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
+    pixels, weights):
+
+    inest = 0
+    if nest:
+        inest = 1
+
+    if pdata.ndim != 2:
+        raise RuntimeError("pointing quaternions should have 2 dimensions")
+    n = pdata.shape[0]
+
+    if pixels.shape[0] != n:
+        raise RuntimeError("pixels array has wrong length")
+
+    if not pixels.flags["C"]:
+        raise RuntimeError("pixels array must be in C_CONTIGUOUS memory")
+
+    nnz = 1
+    if mode == "IQU":
+        nnz = 3
+
+    if weights.shape[0] != n:
+        raise RuntimeError("weights array has wrong length")
+
+    if weights.shape[1] != nnz:
+        raise RuntimeError("weights array has wrong NNZ for mode {}".format(mode))
+
+    if not weights.flags["C"]:
+        raise RuntimeError("weights array must be in C_CONTIGUOUS memory")
+
+    cpdata = np.require(pdata, requirements=["C"])
+
+    chwpang = None
+    if hwpang is not None:
+        if hwpang.shape[0] != n:
+            raise RuntimeError("HWP angle array has wrong length")
+        chwpang = np.require(hwpang, requirements=["C"])
+
+    cflags = None
+    if flags is not None:
+        if flags.shape[0] != n:
+            raise RuntimeError("flags array has wrong length")
+        cflags = np.require(flags, requirements=["C"])
+
+    lib.ctoast_pointing_healpix_matrix(hpix, inest, eps, cal, 
+        ct.c_char_p(mode.encode('utf-8')), n, cpdata.reshape(-1), chwpang, 
+        cflags, pixels, weights.reshape(-1))
+
+    return
 
 
 #--------------------------------------

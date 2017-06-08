@@ -181,7 +181,7 @@ void toast::healpix::pixels::reset ( int64_t nside ) {
 }
 
 
-void toast::healpix::pixels::vec2zphi ( int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz ) {
+void toast::healpix::pixels::vec2zphi ( int64_t n, double const * vec, double * phi, int * region, double * z, double * rtz ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -232,7 +232,7 @@ void toast::healpix::pixels::vec2zphi ( int64_t n, double const * vec, double * 
 }
 
 
-void toast::healpix::pixels::theta2z ( int64_t n, double const * theta, int * region, double * z, double * rtz ) {
+void toast::healpix::pixels::theta2z ( int64_t n, double const * theta, int * region, double * z, double * rtz ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -271,7 +271,7 @@ void toast::healpix::pixels::theta2z ( int64_t n, double const * theta, int * re
 }
 
 
-void toast::healpix::pixels::zphi2nest ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) {
+void toast::healpix::pixels::zphi2nest ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) const {
   
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -351,7 +351,7 @@ void toast::healpix::pixels::zphi2nest ( int64_t n, double const * phi, int cons
 }
 
 
-void toast::healpix::pixels::zphi2ring ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) {
+void toast::healpix::pixels::zphi2ring ( int64_t n, double const * phi, int const * region, double const * z, double const * rtz, int64_t * pix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -408,7 +408,7 @@ void toast::healpix::pixels::zphi2ring ( int64_t n, double const * phi, int cons
 }
 
 
-void toast::healpix::pixels::ang2nest ( int64_t n, double const * theta, double const * phi, int64_t * pix ) {
+void toast::healpix::pixels::ang2nest ( int64_t n, double const * theta, double const * phi, int64_t * pix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -430,7 +430,7 @@ void toast::healpix::pixels::ang2nest ( int64_t n, double const * theta, double 
 }
 
 
-void toast::healpix::pixels::ang2ring ( int64_t n, double const * theta, double const * phi, int64_t * pix ) {
+void toast::healpix::pixels::ang2ring ( int64_t n, double const * theta, double const * phi, int64_t * pix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -452,7 +452,7 @@ void toast::healpix::pixels::ang2ring ( int64_t n, double const * theta, double 
 }
 
 
-void toast::healpix::pixels::vec2nest ( int64_t n, double const * vec, int64_t * pix ) {
+void toast::healpix::pixels::vec2nest ( int64_t n, double const * vec, int64_t * pix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -476,7 +476,7 @@ void toast::healpix::pixels::vec2nest ( int64_t n, double const * vec, int64_t *
 }
 
 
-void toast::healpix::pixels::vec2ring ( int64_t n, double const * vec, int64_t * pix ) {
+void toast::healpix::pixels::vec2ring ( int64_t n, double const * vec, int64_t * pix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -500,7 +500,7 @@ void toast::healpix::pixels::vec2ring ( int64_t n, double const * vec, int64_t *
 }
 
 
-void toast::healpix::pixels::ring2nest ( int64_t n, int64_t const * ringpix, int64_t * nestpix ) {
+void toast::healpix::pixels::ring2nest ( int64_t n, int64_t const * ringpix, int64_t * nestpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -601,7 +601,7 @@ void toast::healpix::pixels::ring2nest ( int64_t n, int64_t const * ringpix, int
 }
 
 
-void toast::healpix::pixels::nest2ring ( int64_t n, int64_t const * nestpix, int64_t * ringpix ) {
+void toast::healpix::pixels::nest2ring ( int64_t n, int64_t const * nestpix, int64_t * ringpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -660,7 +660,7 @@ void toast::healpix::pixels::nest2ring ( int64_t n, int64_t const * nestpix, int
 }
 
 
-void toast::healpix::pixels::degrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
+void toast::healpix::pixels::degrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -682,7 +682,7 @@ void toast::healpix::pixels::degrade_ring ( int factor, int64_t n, int64_t const
 }
 
 
-void toast::healpix::pixels::degrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
+void toast::healpix::pixels::degrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -698,7 +698,7 @@ void toast::healpix::pixels::degrade_nest ( int factor, int64_t n, int64_t const
 }
 
 
-void toast::healpix::pixels::upgrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
+void toast::healpix::pixels::upgrade_ring ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
@@ -720,7 +720,7 @@ void toast::healpix::pixels::upgrade_ring ( int factor, int64_t n, int64_t const
 }
 
 
-void toast::healpix::pixels::upgrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) {
+void toast::healpix::pixels::upgrade_nest ( int factor, int64_t n, int64_t const * inpix, int64_t * outpix ) const {
 
     if ( n > std::numeric_limits<int>::max() ) {
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
