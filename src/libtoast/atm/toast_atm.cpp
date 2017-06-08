@@ -939,10 +939,18 @@ void toast::atm::sim::compress_volume() {
 
     // For extra margin, flag all the neighbors of the hit elements
 
-    std::vector<unsigned char> hit2 = hit;
-#pragma omp parallel for schedule(static, 10)
-    for (long ix=1; ix<nx-1; ++ix) {
+    int ierr;
+    ierr = MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
+                          MPI_UNSIGNED_CHAR, MPI_LOR, comm );
+    if ( ierr != MPI_SUCCESS )
+        throw std::runtime_error( "Failed to gather hits" );
 
+    std::vector<unsigned char> hit2 = hit;
+
+    for (long ix=1; ix<nx-1; ++ix) {
+        if ( ix % ntask != rank ) continue;
+
+#pragma omp parallel for schedule(static, 10)
         for (long iy=1; iy<ny-1; ++iy) {
 
             for (long iz=1; iz<nz-1; ++iz) {
@@ -979,7 +987,6 @@ void toast::atm::sim::compress_volume() {
 
     hit2.resize(0);
 
-    int ierr;
     ierr = MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
                           MPI_UNSIGNED_CHAR, MPI_LOR, comm );
     if ( ierr != MPI_SUCCESS )
@@ -1374,9 +1381,10 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
             if ( rank_gang == 0 && verbosity > 0 ) {
                 std::cerr << std::endl;
                 std::cerr << "Gang # " << gang << " near = " << near
-                          << " Cholesky decomposition done in " << t2-t1 << " s. N = "
-                          << nelem_slice << " ntask = " << ntask << " nthread = "
-                          << nthread << std::endl;
+                          << " Cholesky decomposition done in " << t2-t1
+                          << " s. N = " << nelem_slice
+                          << " ntask_gang = " << ntask_gang
+                          << " nthread = " << nthread << std::endl;
             }
 
             *cov = cov_temp;
