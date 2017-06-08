@@ -241,7 +241,8 @@ void toast::atm::sim::simulate( bool save_covmat ) {
                         preal = &realization_verynear;
                         scale = fnear * fnear;
                         break;
-                    default : throw std::runtime_error( "Unknown field." );
+                    default :
+                        throw std::runtime_error( "Unknown field." );
                         break;
                     }
 

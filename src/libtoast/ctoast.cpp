@@ -617,7 +617,15 @@ void ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
 void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat ) {
 #ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
-    sm->simulate( (save_covmat != 0) );
+    try {
+        sm->simulate( (save_covmat != 0) );
+    } catch ( std::exception &e ) {
+        std::cerr << "ERROR simulating the atmosphere: " << e.what() << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
+    } catch ( ... ) {
+        std::cerr << "unknown ERROR simulating the atmosphere" << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
+    }
 #endif
     return;
 }
@@ -626,7 +634,15 @@ void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double
     double *tod, long nsamp, double fixed_r ) {
 #ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
-    sm->observe( t, az, el, tod, nsamp, fixed_r );
+    try {
+        sm->observe( t, az, el, tod, nsamp, fixed_r );
+    } catch ( std::exception &e ) {
+        std::cerr << "ERROR observing the atmosphere: " << e.what() << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
+    } catch ( ... ) {
+        std::cerr << "unknown ERROR observing the atmosphere" << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
+    }
 #endif
     return;
 }
