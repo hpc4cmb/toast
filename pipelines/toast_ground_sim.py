@@ -674,7 +674,8 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Atmosphere simulation took {:.3f} s'.format(elapsed), flush=True)
+                print('Atmosphere simulation took {:.3f} s'.format(elapsed),
+                      flush=True)
             start = stop
 
         if not args.skip_noise:
