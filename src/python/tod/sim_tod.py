@@ -731,6 +731,13 @@ class TODGround(TOD):
 
         try:
             del self._az
+        except:
+            pass
+        try:
+            del self._commonflags
+        except:
+            pass
+        try:
             self.cache.clear()
         except:
             pass
