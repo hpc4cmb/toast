@@ -642,7 +642,7 @@ void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest,
 
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
 
-    std::string modestr = std::string(mode);
+    std::string modestr(mode);
     bool bnest = true;
     if ( nest == 0 ) {
         bnest = false;
