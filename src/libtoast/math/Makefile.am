@@ -27,6 +27,7 @@ libtoast_math_la_includedir = $(includedir)/toast
 
 libtoast_math_la_include_HEADERS = \
 toast/memory.hpp \
+toast/mpi_shmem.hpp \
 toast/rng.hpp \
 toast/qarray.hpp \
 toast/math.hpp \
@@ -38,6 +39,7 @@ toast/lapack.hpp
 libtoast_math_la_SOURCES = \
 toast_math.cpp \
 toast_memory.cpp \
+toast_mpi_shmem.cpp \
 toast_rng.cpp \
 toast_qarray.cpp \
 toast_fft.cpp \
