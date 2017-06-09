@@ -9,6 +9,8 @@
 
 #include "mpi.h"
 
+#include <cstring>
+#include <stdlib.h>
 
 namespace toast { namespace mpi_shmem {
 
@@ -17,15 +19,15 @@ class mpi_shmem {
 
 public:
 
-    mpi_shmem ( MPI_Comm comm=MPI_COMM_WORLD ) : comm( comm ) {
+    mpi_shmem ( MPI_Comm comm=MPI_COMM_WORLD ) : comm_( comm ) {
 
         // Split the provided communicator into groups that share
         // memory (are on the same node).
 
         MPI_Comm_split_type( comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
-                             &shmcomm );
-        MPI_Comm_size( shmcomm, &ntasks );
-        MPI_Comm_rank( shmcomm, &rank );
+                             &shmcomm_ );
+        MPI_Comm_size( shmcomm_, &ntasks_ );
+        MPI_Comm_rank( shmcomm_, &rank_ );
 
     }
 
@@ -33,25 +35,27 @@ public:
         allocate( n );
     }
 
-    T operator[] ( int i ) const { return global[i]; }
-    T & operator[] ( int i ) { return global[i]; }
-    
+    T operator[] ( int i ) const { return global_[i]; }
+    T & operator[] ( int i ) { return global_[i]; }
+
 
     T * allocate( size_t n ) {
 
         // Determine the number of elements each process should offer
         // for the shared allocation
 
-        int my_n = n / ntasks;
+        nlocal_ = n / ntasks_;
 
-        if ( my_n * ntasks < n ) my_n += 1;
-        if ( my_n * (rank + 1) > n ) my_n = n - my_n * rank;
-        if ( my_n < 0 ) my_n = 0;
+        if ( nlocal_ * ntasks_ < n ) nlocal_ += 1;
+        if ( nlocal_ * (rank_ + 1) > n ) nlocal_ = n - nlocal_ * rank_;
+        if ( nlocal_ < 0 ) nlocal_ = 0;
 
         // Allocate the shared memory
 
-        MPI_Win_allocate_shared( my_n * sizeof( T ), sizeof( T ), MPI_INFO_NULL,
-                                 shmcomm, &local, &win );
+        MPI_Win_allocate_shared( nlocal_ * sizeof( T ), sizeof( T ),
+                                 MPI_INFO_NULL, shmcomm_, &local_, &win_ );
+
+        n_ = n;
 
         // Get a pointer to the beginning of the shared memory
         // on rank # 0
@@ -59,43 +63,70 @@ public:
         MPI_Aint nn;
         int disp;
 
-        MPI_Win_shared_query( win, 0, &nn, &disp, &global );
+        MPI_Win_shared_query( win_, 0, &nn, &disp, &global_ );
 
-        return global;
+        return global_;
     }
 
     void free() {
-
-        if ( global ) {
-            MPI_Win_free( &win );
-            local = NULL;
-            global = NULL;
-            n = 0;
+        if ( global_ ) {
+            MPI_Win_free( &win_ );
+            local_ = NULL;
+            global_ = NULL;
+            n_ = 0;
+            nlocal_ = 0;
         }
+    }
 
+    void set( T val ) {
+        for ( int i=0; i<nlocal_; ++i )
+            local_[i] = val;
     }
 
     T * resize( size_t n ) {
-        free();
 
-        return allocate( n );
+        // If there is memory already allocated, preserve its
+        // contents.
+
+        size_t n_copy;
+        T *temp;
+
+        if (n < n_)
+            n_copy = n;
+        else
+            n_copy = n;
+
+        if ( n_copy > 0 && rank_ == 0 ) {
+            temp = ( T* ) std::malloc( sizeof(T) * n_copy );
+            std::memcpy( temp, global_, sizeof(T) * n_copy );
+        }
+
+        free();
+        allocate( n );
+
+        if ( n_copy > 0 && rank_ == 0 ) {
+            std::memcpy( global_, temp, sizeof(T) * n_copy );
+            std::free( temp );
+        }
+
+        return global_;
     }
 
-
-    T * data() { return global; }
-
-    size_t size() { return n; }
+    T * data() { return global_; }
+    size_t size() { return n_; }
+    int rank() { return rank_; }
+    int ntasks() { return ntasks_; }
 
     ~mpi_shmem() { free(); }
 
 private:
 
-    T * local = NULL;
-    T * global = NULL;
-    size_t n = 0;
-    MPI_Comm comm, shmcomm;
-    MPI_Win win=MPI_WIN_NULL;
-    int ntasks, rank;
+    T * local_ = NULL;
+    T * global_ = NULL;
+    size_t n_ = 0, nlocal_ = 0;
+    MPI_Comm comm_, shmcomm_;
+    MPI_Win win_=MPI_WIN_NULL;
+    int ntasks_, rank_;
 
 };
 
