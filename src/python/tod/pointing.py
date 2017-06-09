@@ -138,8 +138,10 @@ class OpPointingHpix(Operator):
 
         if self._mode == "I":
             self._nnz = 1
-        else:
+        elif self._mode == "IQU":
             self._nnz = 3
+        else:
+            raise RuntimeError("Unsupported mode")
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
