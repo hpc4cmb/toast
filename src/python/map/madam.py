@@ -224,13 +224,25 @@ class OpMadam(Operator):
 
         if len(data.obs) != 1:
             nsamp = 0
+            tod0 = data.obs[0]['tod']
+            detectors0 = tod0.local_dets
             for obs in data.obs:
                 tod = obs['tod']
-                if tod.mpicomm.size != 1:
+                # For the moment, we require that all observations have
+                # the same set of detectors
+                detectors = tod.local_dets
+                dets_are_same = True
+                if len(detectors0) != len(detectors):
+                    dets_are_same = False
+                else:
+                    for det1, det2 in zip(detectors0, detectors):
+                        if det1 != det2:
+                            dets_are_same = False
+                            break
+                if not dets_are_same:
                     raise RuntimeError(
-                        'When calling Madam, TOD must either be globally '
-                        'distributed or each observation assigned to exactly '
-                        'one task')
+                        'When calling Madam, all TOD assigned to a process '
+                        'must have the same local detectors.')
                 nsamp += tod.local_samples[1]
         else:
             tod = data.obs[0]['tod']

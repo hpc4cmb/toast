@@ -355,11 +355,12 @@ def main():
     for d in detectors:
         detquats[d] = fp[d]['quat']
 
-    for ices, ces in enumerate(all_ces):
+    groupdist = toast.distribute_uniform(len(all_ces), comm.ngroups)
+    group_firstobs = groupdist[comm.group][0]
+    group_numobs = groupdist[comm.group][1]
 
-        # Assign the CES:es to process groups in a round-robin schedule
-        if ices % comm.ngroups != comm.group:
-            continue
+    for ices in range(group_firstobs, group_firstobs + group_numobs):
+        ces = all_ces[ices]
 
         CES_start, CES_stop, name, scan, azmin, azmax, el = ces
 
