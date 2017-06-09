@@ -17,6 +17,44 @@ from .. import ctoast as ct
 
 
 
+def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=None, flags=None,   
+    eps=0.0, cal=1.0):
+    """
+    Compute the HEALPix pointing matrix for one detector.
+
+    This takes an array of quaternions and computes the healpix pixel 
+    indices and weights.  The weights are computed based on a response model
+    that includes a perfect HWP and optional cross polar reponse and 
+    calibration.
+
+    For memory efficiency, this function takes pre-allocated arrays for the 
+    pixels and weights.  When calling this function for many detectors, you
+    should allocate those memory buffers once, if possible.
+
+    Args:
+        hpix (healpix.Pixels): the healpix class for this projection
+        nest (bool): if True, use NESTED ordering
+        mode (str): either "I" or "IQU"
+        pdata (array): a 2D array of size number of samples by 4
+        pixels (array): a 1D array of numpy.int64
+        weights (array): a 2D array of contiguous memory, with size 
+            samples x NNZ, where NNZ is either one or three, depending on mode.
+        hwpang (array): optional array of HWP angles in radians
+        flags (array): optional array of flags (type = numpy.uint8) to apply
+        eps (float): cross polar response (0 == no crosspol, 1 == unpolarized)
+        cal (float): extra calibration factor to apply to the weights
+
+    Returns:
+        Nothing.
+
+    """    
+    ct.pointing_healpix_matrix(hpix.hpix, nest, eps, cal, mode, pdata, hwpang, flags,
+    pixels, weights)
+
+    return
+
+
+
 class OpPointingHpix(Operator):
     """
     Operator which generates I/Q/U healpix pointing weights.
@@ -97,6 +135,13 @@ class OpPointingHpix(Operator):
 
         # initialize the healpix pixels object
         self.hpix = hp.Pixels(self._nside)
+
+        if self._mode == "I":
+            self._nnz = 1
+        elif self._mode == "IQU":
+            self._nnz = 3
+        else:
+            raise RuntimeError("Unsupported mode")
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -210,56 +255,11 @@ class OpPointingHpix(Operator):
                 if self._cal is not None:
                     cal = self._cal[det]
 
-                eta = (1 - eps) / ( 1 + eps )
+                # We are not modifying this data, so we can use the raw
+                # reference here, which might point to Cache memory.
+                pdata = tod.read_pntg(detector=det)
 
-                pdata = np.copy(tod.read_pntg(detector=det))
-
-                if self._apply_flags:
-                    pdata[common != 0,:] = nullquat
-
-                dir = qa.rotate(pdata, zaxis)
-
-                #pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2], nest=self._nest)
-                pixels = None
-                if self._nest:
-                    pixels = self.hpix.vec2nest(dir)
-                else:
-                    pixels = self.hpix.vec2ring(dir)
-
-                if self._apply_flags:
-                    pixels[common != 0] = -1
-
-                if self._mode == 'I':
-                    
-                    weights = np.ones((nsamp,1), dtype=np.float64)
-                    weights *= cal
-
-                elif self._mode == 'IQU':
-
-                    orient = qa.rotate(pdata, xaxis)
-
-                    by = orient[:,0] * dir[:,1] - orient[:,1] * dir[:,0]
-                    bx = orient[:,0] * (-dir[:,2] * dir[:,0]) + orient[:,1] * (-dir[:,2] * dir[:,1]) + orient[:,2] * (dir[:,0] * dir[:,0] + dir[:,1] * dir[:,1])
-                        
-                    detang = ct.sf_fast_atan2(by, bx)
-
-                    if hwpang is not None:
-                        detang += 2.0*hwpang
-                    detang *= 2.0
-
-                    sang, cang = ct.sf_fast_sincos(detang)
-
-                    Ival = np.ones_like(cang)
-                    Ival *= cal
-                    Qval = cang
-                    Qval *= (eta * cal)
-                    Uval = sang
-                    Uval *= (eta * cal)
-
-                    weights = np.ravel(np.column_stack((Ival, Qval, Uval))).reshape(-1,3)
-
-                else:
-                    raise RuntimeError("invalid mode for healpix pointing")
+                # Create cache objects and use that memory directly
 
                 pixelsname = "{}_{}".format(self._pixels, det)
                 weightsname = "{}_{}".format(self._weights, det)
@@ -270,18 +270,22 @@ class OpPointingHpix(Operator):
                 if tod.cache.exists(pixelsname):
                     pixelsref = tod.cache.reference(pixelsname)
                 else:
-                    pixelsref = tod.cache.create(pixelsname, np.int64, (tod.local_samples[1],))
+                    pixelsref = tod.cache.create(pixelsname, np.int64, 
+                        (tod.local_samples[1],))
 
                 if tod.cache.exists(weightsname):
                     weightsref = tod.cache.reference(weightsname)
                 else:
-                    weightsref = tod.cache.create(weightsname, np.float64, (tod.local_samples[1],weights.shape[1]))
+                    weightsref = tod.cache.create(weightsname, np.float64, 
+                        (tod.local_samples[1], self._nnz))
 
-                pixelsref[:] = pixels
-                weightsref[:,:] = weights
+                healpix_pointing_matrix(self.hpix, self._nest, self._mode, 
+                    pdata, pixelsref, weightsref, hwpang=hwpang, flags=common,   
+                    eps=eps, cal=cal)
 
                 del pixelsref
                 del weightsref
+                del pdata
 
             del common
 

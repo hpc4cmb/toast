@@ -51,6 +51,18 @@ class OpAccumDiag(Operator):
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
             containing the pointing weights to use.
+        nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
+        nest (bool): if True, use NESTED ordering.
+        mode (string): either "I" or "IQU"
+        cal (dict): dictionary of calibration values per detector. A None
+            value means a value of 1.0 for all detectors.
+        epsilon (dict): dictionary of cross-polar response per detector. A
+            None value means epsilon is zero for all detectors.
+        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
+            it is the rate (in RPM) of constant rotation.
+        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
+            is the step in degrees.
+        hwpsteptime: The time in minutes between HWP steps.
     """
 
     def __init__(self, zmap=None, hits=None, invnpp=None, detweights=None, name=None, flag_name=None, 

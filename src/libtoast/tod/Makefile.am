@@ -27,9 +27,11 @@ libtoast_tod_la_includedir = $(includedir)/toast
 
 libtoast_tod_la_include_HEADERS = \
 toast/tod.hpp \
-toast/sim_noise.hpp
+toast/sim_noise.hpp \
+toast/pointing.hpp
 
 libtoast_tod_la_SOURCES = \
-toast_sim_noise.cpp
+toast_sim_noise.cpp \
+toast_pointing.cpp
 
 

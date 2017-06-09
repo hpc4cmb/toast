@@ -651,8 +651,24 @@ void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double
 // TOD sub-library
 //--------------------------------------
 
+void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest, 
+    double eps, double cal, char const * mode, size_t n, double const * pdata,
+    double const * hwpang, uint8_t const * flags, int64_t * pixels, 
+    double * weights ) {
 
+    toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
 
+    std::string modestr(mode);
+    bool bnest = true;
+    if ( nest == 0 ) {
+        bnest = false;
+    }
+
+    toast::pointing::healpix_matrix ( (*hp), bnest, eps, cal, modestr, n,
+        pdata, hwpang, flags, pixels, weights );
+
+    return;
+}
 
 //--------------------------------------
 // FOD sub-library

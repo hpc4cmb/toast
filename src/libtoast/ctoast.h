@@ -227,7 +227,10 @@ void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
 // TOD sub-library
 //--------------------------------------
 
-
+void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest, 
+    double eps, double cal, char const * mode, size_t n, double const * pdata,
+    double const * hwpang, uint8_t const * flags, int64_t * pixels, 
+    double * weights );
 
 //--------------------------------------
 // FOD sub-library
