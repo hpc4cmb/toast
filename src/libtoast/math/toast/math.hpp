@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
+All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
@@ -79,10 +79,10 @@ namespace toast {
 
         private:
             // use C strings here for passing to what()
-            static size_t const msg_len_ = 1024; 
+            static size_t const msg_len_ = 1024;
             char msg_[ msg_len_ ];
 
-    };  
+    };
 
     typedef void (*TOAST_EXCEPTION_HANDLER) ( toast::exception & e );
 
@@ -113,6 +113,6 @@ namespace toast {
 #include <toast/qarray.hpp>
 #include <toast/fft.hpp>
 #include <toast/healpix.hpp>
+#include <toast/mpi_shmem.hpp>
 
 #endif
-

@@ -145,5 +145,19 @@ class covTest : public ::testing::Test {
 };
 
 
+class mpiShmemTest : public ::testing::Test {
+
+    public :
+
+        mpiShmemTest () { }
+        ~mpiShmemTest () { }
+        virtual void SetUp() { }
+        virtual void TearDown() { }
+
+        static const size_t n;
+
+};
+
+
 
 #endif

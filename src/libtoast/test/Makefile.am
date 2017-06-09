@@ -43,6 +43,7 @@ toast_test_sf.cpp \
 toast_test_healpix.cpp \
 toast_test_fft.cpp \
 toast_test_cov.cpp \
+toast_test_mpi_shmem.cpp \
 toast_test_runner.cpp
 
 libtoast_test_la_LIBADD = $(AM_LIBS)
