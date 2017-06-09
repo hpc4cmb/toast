@@ -20,6 +20,9 @@
 
 namespace toast { namespace atm {
 
+typedef mpi_shmem::mpi_shmem<double> mpi_shmem_double;
+typedef mpi_shmem::mpi_shmem<long> mpi_shmem_long;
+
 #ifdef HAVE_ELEMENTAL
 
 class sim {
@@ -79,24 +82,24 @@ private :
     double xstep, ystep, zstep, delta_x, delta_y, delta_z;
     double xstepinv, ystepinv, zstepinv;
     double fnear, fnearinv, rnear, rverynear;
-    long nx, ny, nz, nn, nelem, xstride, ystride, zstride;
+    long nx, ny, nz, nn, xstride, ystride, zstride;
+    size_t nelem;
     double xtel, ytel, ztel; // Telescope position
     double lmin, lmax, w, wdir, z0, T0, wx, wy;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
     double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation grid
     // Mapping between full volume and observation cone
-    std::vector<long> compressed_index;
+    mpi_shmem_long *compressed_index;
     // Inverse mapping between full volume and observation cone
-    std::vector<long> full_index;
-    std::vector<double> atmosphere; // The actual realization
+    mpi_shmem_long *full_index;
     void draw(); // Draw values of lmin, lmax, w, wdir, T0 (and optionally z0)
     void get_volume(); // Determine the rectangular volume needed
     // determine of the given coordinates are within observed volume
     bool in_cone(double x, double y, double z);
     void compress_volume(); // Find the volume elements really needed
     El::Grid *grid=NULL;
-    std::vector<double> realization, realization_near, realization_verynear;
+    mpi_shmem_double *realization, *realization_near, *realization_verynear;
     // Find the next range of compressed indices to simulate
     void get_slice( long &ind_start, long &ind_stop );
     // Use the atmospheric parameters for volume element covariance
@@ -107,14 +110,14 @@ private :
                           long ind_stop, bool save_covmat=false, int near=0 );
     // Create a realization out of the square root covariance matrix
     void apply_covariance( El::DistMatrix<double> *cov,
-                           std::vector<double> &realization, long ind_start,
+                           double *realization, long ind_start,
                            long ind_stop, int near=0 );
     // Compressed index to xyz-coordinates
     void ind2coord( long i, double *coord );
     // xyz-coordinates to Compressed index
     long coord2ind( double x, double y, double z );
     // Interpolate the realization value to given coordinates
-    double interp( std::vector<double> &realization, double x, double y,
+    double interp( double *realization, double x, double y,
                    double z, std::vector<long> &last_ind,
                    std::vector<double> &last_nodes );
     // Evaluate the covariance matrix

@@ -198,9 +198,12 @@ void toast::atm::sim::simulate( bool save_covmat ) {
         }
 
         try {
-            realization.resize(nelem);
-            realization_near.resize(nelem);
-            realization_verynear.resize(nelem);
+            realization = new mpi_shmem_double(nelem, comm);
+            realization->set( 0 );
+            realization_near = new mpi_shmem_double(nelem, comm);
+            realization_near->set( 0 );
+            realization_verynear = new mpi_shmem_double(nelem, comm);
+            realization_verynear->set( 0 );
         } catch ( std::bad_alloc & e ) {
             std::cerr << rank << " : Out of memory allocating realizations. nelem = "
                       << nelem << std::endl;
@@ -225,20 +228,20 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             if ( slice % ngang == gang ) {
                 for (int near=0; near<3; ++near) {
 
-                    std::vector<double> *preal;
+                    double *preal;
                     double scale;
 
                     switch ( near ) {
                     case 0 :
-                        preal = &realization;
+                        preal = realization->data();
                         scale = 1;
                         break;
                     case 1 :
-                        preal = &realization_near;
+                        preal = realization_near->data();
                         scale = fnear;
                         break;
                     case 2 :
-                        preal = &realization_verynear;
+                        preal = realization_verynear->data();
                         scale = fnear * fnear;
                         break;
                     default :
@@ -249,7 +252,7 @@ void toast::atm::sim::simulate( bool save_covmat ) {
                     El::DistMatrix<double> *cov = build_covariance( ind_start, ind_stop,
                                                                     save_covmat, scale );
                     sqrt_covariance( cov, ind_start, ind_stop, save_covmat, near );
-                    apply_covariance( cov, *preal, ind_start, ind_stop, near );
+                    apply_covariance( cov, preal, ind_start, ind_stop, near );
 
                     delete cov;
                 }
@@ -267,15 +270,15 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             ind_stop = slice_stops[slice];
             int root_gang = slice % ngang;
             int root = root_gang * gangsize;
-            int ierr = MPI_Bcast( realization.data()+ind_start, ind_stop-ind_start,
+            int ierr = MPI_Bcast( realization->data()+ind_start, ind_stop-ind_start,
                                   MPI_DOUBLE, root, comm );
             if ( ierr != MPI_SUCCESS )
                 throw std::runtime_error( "Failed to broadcast the realization" );
-            ierr = MPI_Bcast( realization_near.data()+ind_start, ind_stop-ind_start,
+            ierr = MPI_Bcast( realization_near->data()+ind_start, ind_stop-ind_start,
                               MPI_DOUBLE, root, comm );
             if ( ierr != MPI_SUCCESS )
                 throw std::runtime_error( "Failed to broadcast the near realization" );
-            ierr = MPI_Bcast( realization_verynear.data()+ind_start,
+            ierr = MPI_Bcast( realization_verynear->data()+ind_start,
                               ind_stop-ind_start, MPI_DOUBLE, root, comm );
             if ( ierr != MPI_SUCCESS )
                 throw std::runtime_error( "Failed to broadcast the near realization" );
@@ -305,7 +308,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     ind_start = ind_stop;
 
-    long ix_start = full_index[ind_start] / xstride;
+    long ix_start = (*full_index)[ind_start] / xstride;
     long ix1 = ix_start;
     long ix2;
 
@@ -314,7 +317,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
         while ( ix1 == ix2 ) {
             ++ind_stop;
             if ( ind_stop == nelem ) break;
-            ix2 = full_index[ind_stop] / xstride;
+            ix2 = (*full_index)[ind_stop] / xstride;
         }
         if ( ind_stop == nelem ) break;
         if ( ind_stop - ind_start > nelem_sim_max ) break;
@@ -340,11 +343,11 @@ void toast::atm::sim::smooth() {
 
     double coord[3];
 
-    std::vector<double> smoothed_realization(realization.size());
-    std::vector<double> smoothed_realization_near(realization.size());
-    std::vector<double> smoothed_realization_verynear(realization.size());
+    std::vector<double> smoothed_realization(realization->size());
+    std::vector<double> smoothed_realization_near(realization->size());
+    std::vector<double> smoothed_realization_verynear(realization->size());
 
-    for ( size_t i=0; i < full_index.size(); ++i ) {
+    for ( size_t i=0; i < full_index->size(); ++i ) {
         ind2coord( i, coord );
         long ix = coord[0] * xstepinv;
         long iy = coord[1] * ystepinv;
@@ -353,7 +356,7 @@ void toast::atm::sim::smooth() {
         long offset = ix * xstride + iy * ystride + iz * zstride;
 
         long w = 3; // width of the smoothing kernel
-        long ifullmax = compressed_index.size();
+        long ifullmax = compressed_index->size();
 
         std::vector<double> vals;
         std::vector<double> vals_near;
@@ -377,12 +380,12 @@ void toast::atm::sim::smooth() {
                     if ( ifull < 0 || ifull >= ifullmax )
                         throw std::runtime_error( "Index out of range in smoothing." );
 
-                    long ii = compressed_index[ifull];
+                    long ii = (*compressed_index)[ifull];
 
                     if (ii >= 0) {
-                        vals.push_back( realization[ii] );
-                        vals_near.push_back( realization_near[ii] );
-                        vals_verynear.push_back( realization_verynear[ii] );
+                        vals.push_back( (*realization)[ii] );
+                        vals_near.push_back( (*realization_near)[ii] );
+                        vals_verynear.push_back( (*realization_verynear)[ii] );
                     }
                 }
             }
@@ -395,9 +398,13 @@ void toast::atm::sim::smooth() {
         smoothed_realization_verynear[i] = mean( vals_verynear );
     }
 
-    realization = smoothed_realization;
-    realization_near = smoothed_realization_near;
-    realization_verynear = smoothed_realization_verynear;
+    if ( realization->rank() == 0 ) {
+        for ( int i=0; i<realization->size(); ++i ) {
+            (*realization)[i] = smoothed_realization[i];
+            (*realization_near)[i] = smoothed_realization_near[i];
+            (*realization_verynear)[i] = smoothed_realization_verynear[i];
+        }
+    }
 
     double t2 = MPI_Wtime();
 
@@ -466,17 +473,17 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                 // Coordinates at distance r. The scan is centered on the X-axis
 
                 int near=0;
-                std::vector<double> *preal = &realization;
+                double *preal = realization->data();
                 double r_eff = r;
                 if ( r < rverynear ) {
                     // Use the very near field simulation
                     near = 2;
-                    preal = &realization_verynear;
+                    preal = realization_verynear->data();
                     r_eff *= fnearinv * fnearinv;
                 } else if ( r < rnear ) {
                     // Use the near field simulation
                     near = 1;
-                    preal = &realization_near;
+                    preal = realization_near->data();
                     r_eff *= fnearinv;
                 }
 
@@ -524,7 +531,7 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
                 double step_val;
                 try {
-                    step_val = interp( *preal, x, y, z, last_ind, last_nodes )
+                    step_val = interp( preal, x, y, z, last_ind, last_nodes )
                         * (1 - z_eff * zatm_inv);
                 } catch ( const std::runtime_error& e ) {
                     std::ostringstream o;
@@ -751,7 +758,7 @@ void toast::atm::sim::initialize_kolmogorov() {
 #ifdef DEBUG
     nr /= 10;
 #endif
-    
+
     rstep = (rmax - rmin) / (nr-1);
     rstep_inv = 1. / rstep;
 
@@ -767,12 +774,12 @@ void toast::atm::sim::initialize_kolmogorov() {
     double kappa0 = 0.75 * kappamin;
     double kappa0sq = kappa0 * kappa0; // Optimize
     long nkappa = 1000000; // Number of integration steps needs to be large
-    
+
 #ifdef DEBUG
     std::cerr << "DEBUG = True: reducing kappa grid." << std::endl;
     nkappa /= 100;
 #endif
-    
+
     double upper_limit = 10*kappamax;
     double kappastep = upper_limit / (nkappa - 1);
     double slope1 = 7. / 6.;
@@ -787,7 +794,7 @@ void toast::atm::sim::initialize_kolmogorov() {
                   << " 1/m, kappamax =  " << kappamax
                   << " 1/m. nkappa = " << nkappa << std::endl;
     }
-    
+
     // Use Newton's method to integrate the correlation function
 
     long nr_task = nr / ntask + 1;
@@ -897,7 +904,7 @@ double toast::atm::sim::kolmogorov( double r ) {
     return val;
 }
 
-  
+
 void toast::atm::sim::compress_volume() {
 
     // Establish a mapping between full volume indices and observed volume indices
@@ -906,8 +913,12 @@ void toast::atm::sim::compress_volume() {
 
     std::vector<unsigned char> hit;
     try {
-        compressed_index.resize( nn, -1 );
-        full_index.resize( nn, -1 );
+        compressed_index = new mpi_shmem_long( nn, comm );
+        compressed_index->set( -1 );
+
+        full_index = new mpi_shmem_long( nn, comm );
+        full_index->set( -1 );
+
         hit.resize( nn, false );
     } catch ( std::bad_alloc & e ) {
         std::cerr << rank << " : Out of memory allocating element indices. nn = "
@@ -997,24 +1008,17 @@ void toast::atm::sim::compress_volume() {
 
     long i=0;
     for (long ifull=0; ifull<nn; ++ifull) {
-#ifdef DEBUG
-        if ( hit.at(ifull) ) {
-            full_index.at(i) = ifull;
-            compressed_index.at(ifull) = i;
-            ++i;
-        }
-#else
         if ( hit[ifull] ) {
-            full_index[i] = ifull;
-            compressed_index[ifull] = i;
+            (*full_index)[i] = ifull;
+            (*compressed_index)[ifull] = i;
             ++i;
         }
-#endif
     }
 
+    hit.resize(0);
     nelem = i;
 
-    full_index.resize( nelem );
+    full_index->resize( nelem );
 
     double t2 = MPI_Wtime();
 
@@ -1090,7 +1094,7 @@ void toast::atm::sim::ind2coord( long i, double *coord ) {
 
     // Translate a compressed index into xyz-coordinates
 
-    long ifull = full_index[i];
+    long ifull = (*full_index)[i];
 
     long ix = ifull / xstride;
     long iy = (ifull - ix*xstride) / ystride;
@@ -1122,11 +1126,11 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
 
     size_t ifull = ix * xstride + iy * ystride + iz * zstride;
 
-    return compressed_index[ifull];
+    return (*compressed_index)[ifull];
 }
 
 
-double toast::atm::sim::interp( std::vector<double> &realization, double x, 
+double toast::atm::sim::interp( double *realization, double x,
 				double y, double z, std::vector<long> &last_ind,
 				std::vector<double> &last_nodes ) {
 
@@ -1168,41 +1172,20 @@ double toast::atm::sim::interp( std::vector<double> &realization, double x,
         size_t ifull110 = ifull100 + ystride;
         size_t ifull111 = ifull110 + zstride;
 
-#ifdef DEBUG
-        long i000 = compressed_index.at(ifull000);
-        long i001 = compressed_index.at(ifull001);
-        long i010 = compressed_index.at(ifull010);
-        long i011 = compressed_index.at(ifull011);
-        long i100 = compressed_index.at(ifull100);
-        long i101 = compressed_index.at(ifull101);
-        long i110 = compressed_index.at(ifull110);
-        long i111 = compressed_index.at(ifull111);
-#else
-        long i000 = compressed_index[ifull000];
-        long i001 = compressed_index[ifull001];
-        long i010 = compressed_index[ifull010];
-        long i011 = compressed_index[ifull011];
-        long i100 = compressed_index[ifull100];
-        long i101 = compressed_index[ifull101];
-        long i110 = compressed_index[ifull110];
-        long i111 = compressed_index[ifull111];
-#endif
+        long i000 = (*compressed_index)[ifull000];
+        long i001 = (*compressed_index)[ifull001];
+        long i010 = (*compressed_index)[ifull010];
+        long i011 = (*compressed_index)[ifull011];
+        long i100 = (*compressed_index)[ifull100];
+        long i101 = (*compressed_index)[ifull101];
+        long i110 = (*compressed_index)[ifull110];
+        long i111 = (*compressed_index)[ifull111];
 
         if (i001 < 0) i001 = i000;
         if (i011 < 0) i011 = i010;
         if (i101 < 0) i101 = i100;
         if (i111 < 0) i111 = i110;
 
-#ifdef DEBUG
-        c000 = realization.at(i000);
-        c001 = realization.at(i001);
-        c010 = realization.at(i010);
-        c011 = realization.at(i011);
-        c100 = realization.at(i100);
-        c101 = realization.at(i101);
-        c110 = realization.at(i110);
-        c111 = realization.at(i111);
-#else
         c000 = realization[i000];
         c001 = realization[i001];
         c010 = realization[i010];
@@ -1211,7 +1194,6 @@ double toast::atm::sim::interp( std::vector<double> &realization, double x,
         c101 = realization[i101];
         c110 = realization[i110];
         c111 = realization[i111];
-#endif
 
         last_ind[0] = ix;
         last_ind[1] = iy;
@@ -1351,7 +1333,7 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2,
 }
 
 
-void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov, 
+void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 				       long ind_start, long ind_stop,
 				       bool save_covmat, int near ) {
 
@@ -1437,7 +1419,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
 
 void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
-					std::vector<double> &realization,
+					double *realization,
 					long ind_start, long ind_stop,
 					int near ) {
 
