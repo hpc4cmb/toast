@@ -457,6 +457,8 @@ class OpSimAtmosphere(Operator):
 
                     del ref
 
+                atm_sim_free(sim)
+
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()

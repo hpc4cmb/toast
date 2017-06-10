@@ -180,6 +180,11 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 
 toast::atm::sim::~sim() {
     if ( grid ) delete grid;
+    if ( compressed_index ) delete compressed_index;
+    if ( full_index ) delete full_index;
+    if ( realization ) delete realization;
+    if ( realization_near ) delete realization_near;
+    if ( realization_verynear ) delete realization_verynear;
 }
 
 

@@ -90,16 +90,17 @@ private :
     long nelem_sim_max; // Size of the independent X-direction slices.
     double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation grid
     // Mapping between full volume and observation cone
-    mpi_shmem_long *compressed_index;
+    mpi_shmem_long *compressed_index=NULL;
     // Inverse mapping between full volume and observation cone
-    mpi_shmem_long *full_index;
+    mpi_shmem_long *full_index=NULL;
     void draw(); // Draw values of lmin, lmax, w, wdir, T0 (and optionally z0)
     void get_volume(); // Determine the rectangular volume needed
     // determine of the given coordinates are within observed volume
     bool in_cone(double x, double y, double z);
     void compress_volume(); // Find the volume elements really needed
     El::Grid *grid=NULL;
-    mpi_shmem_double *realization, *realization_near, *realization_verynear;
+    mpi_shmem_double *realization=NULL, *realization_near=NULL,
+        *realization_verynear=NULL;
     // Find the next range of compressed indices to simulate
     void get_slice( long &ind_start, long &ind_stop );
     // Use the atmospheric parameters for volume element covariance
