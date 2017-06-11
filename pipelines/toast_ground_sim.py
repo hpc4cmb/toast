@@ -34,8 +34,8 @@ def main():
     comm = toast.Comm()
 
     if comm.comm_world.rank == 0:
-        print("Running with {} processes".format(comm.comm_world.size),
-              flush=True)
+        print('Running with {} processes at {}'.format(
+            comm.comm_world.size, str(datetime.now())), flush=True)
 
     global_start = MPI.Wtime()
 
@@ -492,7 +492,8 @@ def main():
 
     # Operator for signal copying, used in each MC iteration
 
-    sigcopy = tt.OpCacheCopy("signal", "total")
+    sigcopy = tt.OpCacheCopy('signal', 'total')
+    sigcopy_madam = tt.OpCacheCopy('total', 'total_madam')
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -715,40 +716,9 @@ def main():
             if not os.path.isdir(outpath):
                 os.makedirs(outpath)
 
-        # Optional Madam mapmaking
-
         if args.madam:
-            # create output directory for this realization
-            pars['path_output'] = outpath
-            if mc != firstmc:
-                pars['write_matrix'] = False
-                pars['write_wcov'] = False
-                pars['write_hits'] = False
-
-            """
-            # in debug mode, print out data distribution information
-            if args.debug:
-                handle = None
-                if comm.comm_world.rank == 0:
-                    handle = open(
-                        os.path.join(pars['path_output'], 'distdata.txt'), 'w')
-                data.info(handle)
-                if comm.comm_world.rank == 0:
-                    handle.close()
-            """
-
-            madam = tm.OpMadam(params=pars, detweights=detweights, name='total',
-                               common_flag_name=common_flag_name,
-                               common_flag_mask=args.common_flag_mask,
-                               flag_name=flag_name)
-            madam.exec(data)
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('Madam took {:.3f} s'.format(elapsed), flush=True)
-            start = stop
+            # Make a copy of the timeline for Madam
+            sigcopy_madam.exec(data)
 
         # Filter and bin
 
@@ -831,6 +801,42 @@ def main():
             if comm.comm_world.rank == 0:
                 print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
                       flush=True)
+            start = stop
+
+        # Optional Madam mapmaking
+
+        if args.madam:
+            # create output directory for this realization
+            pars['path_output'] = outpath
+            if mc != firstmc:
+                pars['write_matrix'] = False
+                pars['write_wcov'] = False
+                pars['write_hits'] = False
+
+            """
+            # in debug mode, print out data distribution information
+            if args.debug:
+                handle = None
+                if comm.comm_world.rank == 0:
+                    handle = open(
+                        os.path.join(pars['path_output'], 'distdata.txt'), 'w')
+                data.info(handle)
+                if comm.comm_world.rank == 0:
+                    handle.close()
+            """
+
+            madam = tm.OpMadam(
+                params=pars, detweights=detweights, name='total_madam',
+                common_flag_name=common_flag_name, flag_name=flag_name,
+                common_flag_mask=args.common_flag_mask)
+
+            madam.exec(data)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('Madam took {:.3f} s'.format(elapsed), flush=True)
             start = stop
 
     comm.comm_world.barrier()
