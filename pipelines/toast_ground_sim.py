@@ -178,6 +178,9 @@ def main():
     parser.add_argument('--nside',
                         required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
+    parser.add_argument('--iter_max',
+                        required=False, default=1000, type=np.int,
+                        help='Maximum number of CG iterations in Madam')
     parser.add_argument('--baseline_length',
                         required=False, default=10000.0, type=np.float,
                         help='Destriping baseline length (seconds)')
@@ -596,21 +599,21 @@ def main():
 
         pars = {}
 
-        cross = nside # int(nside / 2)
+        cross = nside // 2
         submap = 16
         if submap > nside:
             submap = nside
 
-        pars[ 'temperature_only' ] = False
-        pars[ 'force_pol' ] = True
-        pars[ 'kfirst' ] = True
-        pars[ 'write_map' ] = True
-        pars[ 'write_binmap' ] = True
-        pars[ 'write_matrix' ] = True
-        pars[ 'write_wcov' ] = True
-        pars[ 'write_hits' ] = True
-        pars[ 'nside_cross' ] = cross
-        pars[ 'nside_submap' ] = submap
+        pars['temperature_only'] = False
+        pars['force_pol'] = True
+        pars['kfirst'] = True
+        pars['write_map'] = True
+        pars['write_binmap'] = True
+        pars['write_matrix'] = True
+        pars['write_wcov'] = True
+        pars['write_hits'] = True
+        pars['nside_cross'] = cross
+        pars['nside_submap'] = submap
 
         if args.madampar is not None:
             pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
@@ -623,14 +626,16 @@ def main():
                             key, value = result.group(1), result.group(2)
                             pars[key] = value
 
-        pars[ 'base_first' ] = args.baseline_length
-        pars[ 'basis_order' ] = args.baseline_order
-        pars[ 'nside_map' ] = nside
+        pars['base_first'] = args.baseline_length
+        pars['basis_order'] = args.baseline_order
+        pars['nside_map'] = nside
         if args.noisefilter:
-            pars[ 'kfilter' ] = 'T'
+            pars['kfilter'] = True
         else:
-            pars[ 'kfilter' ] = 'F'
-        pars[ 'fsample' ] = args.samplerate
+            pars['kfilter'] = False
+        pars['precond_width'] = 1
+        pars['fsample'] = args.samplerate
+        pars['iter_max'] = args.iter_max
 
     # Loop over Monte Carlos
 
