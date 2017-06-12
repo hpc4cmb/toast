@@ -196,6 +196,9 @@ def main():
     parser.add_argument('--madampar',
                         required=False, default=None,
                         help='Madam parameter file')
+    parser.add_argument('--madam_allreduce',
+                        required=False, default=False, action='store_true',
+                        help='Use allreduce communication in Madam')
     parser.add_argument('--common_flag_mask',
                         required=False, default=1, type=np.uint8,
                         help='Common flag mask')
@@ -615,6 +618,7 @@ def main():
         pars['write_hits'] = True
         pars['nside_cross'] = cross
         pars['nside_submap'] = submap
+        pars['allreduce'] = args.madam_allreduce
 
         if args.madampar is not None:
             pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
