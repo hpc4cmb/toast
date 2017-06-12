@@ -700,7 +700,7 @@ class TODGround(TOD):
             if mpicomm.rank == 0 and tstop-tstart > 1:
                 print('TODGround: Listed valid intervals in {:.2f} s'
                       ''.format(tstop - tstart), flush=True)
-            tstop = tstart
+            tstart = tstop
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -716,7 +716,7 @@ class TODGround(TOD):
             if mpicomm.rank == 0 and tstop-tstart > 1:
                 print('TODGround: Called parent constructor in {:.2f} s'
                       ''.format(tstop - tstart), flush=True)
-            tstop = tstart
+            tstart = tstop
 
         self._boresight_azel, self._boresight = self.translate_pointing()
 
