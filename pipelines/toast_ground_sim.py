@@ -720,6 +720,53 @@ def main():
             # Make a copy of the timeline for Madam
             sigcopy_madam.exec(data)
 
+        if not args.skip_bin:
+
+            # Bin a map using the toast facilities
+
+            mcstart = MPI.Wtime()
+
+            zmap.data.fill(0.0)
+            build_zmap = tm.OpAccumDiag(
+                detweights=detweights, zmap=zmap, name='total',
+                flag_name=flag_name, common_flag_name=common_flag_name,
+                common_flag_mask=args.common_flag_mask)
+            build_zmap.exec(data)
+            zmap.allreduce()
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('  Building noise weighted map {:04d} took {:.3f} s'
+                      ''.format(mc, elapsed), flush=True)
+            start = stop
+
+            tm.covariance_apply(invnpp, zmap)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('  Computing binned map {:04d} took {:.3f} s'
+                      ''.format(mc, elapsed), flush=True)
+            start = stop
+
+            fn = os.path.join(outpath, 'binned.fits')
+            zmap.write_healpix_fits(fn)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('  Writing binned map {:04d} to {} took {:.3f} s'
+                      ''.format(mc, fn, elapsed), flush=True)
+            elapsed = stop - mcstart
+            if comm.comm_world.rank == 0:
+                print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
+                      flush=True)
+            start = stop
+
         # Filter and bin
 
         if args.polyorder:
@@ -784,18 +831,18 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('  Computing binned map {:04d} took {:.3f} s'
+                print('  Computing filtered map {:04d} took {:.3f} s'
                       ''.format(mc, elapsed), flush=True)
             start = stop
 
-            fn = os.path.join(outpath, 'binned.fits')
+            fn = os.path.join(outpath, 'filtered.fits')
             zmap.write_healpix_fits(fn)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('  Writing binned map {:04d} to {} took {:.3f} s'
+                print('  Writing filtered map {:04d} to {} took {:.3f} s'
                       ''.format(mc, fn, elapsed), flush=True)
             elapsed = stop - mcstart
             if comm.comm_world.rank == 0:
