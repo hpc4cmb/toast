@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI, MPI_Comm
@@ -21,7 +21,7 @@ from ..ctoast import (atm_sim_alloc, atm_sim_free,
 
 
 # FIXME:  For now, we use a fixed distribution of the "weather" (wind speed,
-# temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base 
+# temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base
 # classes (TODSatellite and TODGround).  The TODGround class and descendants
 # will have methods to return the site conditions for a given CES.  Once that
 # is in place, then we should have this operator call those methods for each
@@ -33,9 +33,9 @@ class OpSimAtmosphere(Operator):
     """
     Operator which generates atmosphere timestreams.
 
-    All processes collectively generate the atmospheric realization.  Then 
+    All processes collectively generate the atmospheric realization.  Then
     each process passes through its local data and observes the atmosphere.
-    This operator is only compatible with TOD objects that can return AZ/EL 
+    This operator is only compatible with TOD objects that can return AZ/EL
     pointing.
 
     Args:
@@ -195,7 +195,7 @@ class OpSimAtmosphere(Operator):
             # wind direction, temperature, and water vapor from the tod
             # object, which will be derived from the new TODGround base class.
 
-            # Read the extent of the AZ/EL boresight pointing, and use that 
+            # Read the extent of the AZ/EL boresight pointing, and use that
             # to compute the range of angles needed for simulating the slab.
 
             (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
@@ -363,17 +363,30 @@ class OpSimAtmosphere(Operator):
                     ntask = comm.size
                     r = 0
                     t = 0
-                    #for i, r in enumerate(np.linspace(1, 5000, 100)):
-                    for i, t in enumerate(np.linspace(tmin, tmax, 100)):
+                    my_snapshots = []
+                    vmin = None
+                    vmax = None
+                    for i, t in enumerate(np.arange(tmin, tmax, 10)):
                         if i % ntask != rank:
                             continue
                         atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
+                        if vmin is None:
+                            vmin = np.amin(atmdata)
+                            vmax = np.amax(atmdata)
+                        vmin = min(vmin, np.amin(atmdata))
+                        vmax = max(vmax, np.amax(atmdata))
                         atmdata2d = atmdata.reshape(AZ.shape)
+                        my_snapshots.append((t, r, atmdata2d.copy()))
+
+                    vmin = comm.allreduce(vmin, op=MPI.MIN)
+                    vmax = comm.allreduce(vmax, op=MPI.MAX)
+
+                    for t, r, atmdata2d in my_snapshots:
                         plt.figure()
                         plt.imshow(atmdata2d, interpolation='nearest',
                                    origin='lower', extent=np.array(
                                        [azmin, azmax, elmin, elmax])/degree,
-                                   cmap=plt.get_cmap('Blues'))
+                                   cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
                         plt.colorbar()
                         ax = plt.gca()
                         ax.set_title('t = {:15.1f} s, r = {:15.1f} m'.format(t, r))
@@ -383,6 +396,7 @@ class OpSimAtmosphere(Operator):
                         plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
                             obsname, int(t), int(r)))
                         plt.close()
+                    del my_snapshots
 
                 nsamp = tod.local_samples[1]
 

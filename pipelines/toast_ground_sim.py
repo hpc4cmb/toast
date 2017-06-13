@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from toast.mpi import MPI
@@ -253,7 +253,7 @@ def main():
                 name, azmin, azmax, el, rs, \
                 sun_el1, sun_az1, sun_el2, sun_az2, \
                 moon_el1, moon_az1, moon_el2, moon_az2, moon_phase, \
-                scan = line.split()
+                scan, subscan = line.split()
             start_time = start_date + ' ' + start_time
             stop_time = stop_date + ' ' + stop_time
             try:
