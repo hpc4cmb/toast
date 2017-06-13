@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 # This script creates CES schedule file that can be used as input
@@ -92,6 +92,12 @@ def main():
     parser.add_argument('--gap',
                         required=False, default=100, type=np.float,
                         help='Gap between CES:es [seconds]')
+    parser.add_argument('--gap_small',
+                        required=False, default=10, type=np.float,
+                        help='Gap between split CES:es [seconds]')
+    parser.add_argument('--ces_max_time',
+                        required=False, default=900, type=np.float,
+                        help='Maximum length of a CES [seconds]')
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
@@ -218,6 +224,8 @@ def main():
                 lat = [corner._dec/degree for corner in corners]
                 lon.append(lon[0])
                 lat.append(lat[0])
+                print('{} corners:\n lon = {}\n lat= {}'.format(name, lon, lat),
+                      flush=True)
                 hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C')
                 hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True,
                             coord='C')
@@ -246,13 +254,13 @@ def main():
                 '{:15} {:8} {:8} {:8} {:5} ' \
                 '{:8} {:8} {:8} {:8} ' \
                 '{:8} {:8} {:8} {:8} {:5} ' \
-                '{:5}\n'
-                
+                '{:5} {:3}\n'
+
     fout_fmt = ' {:20} {:20} {:14.6f} {:14.6f} ' \
                '{:15} {:8.2f} {:8.2f} {:8.2f} {:5} ' \
                '{:8.2f} {:8.2f} {:8.2f} {:8.2f} ' \
                '{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} ' \
-               '{:5}\n'
+               '{:5} {:3}\n'
 
     fout.write(
         fout_fmt0.format(
@@ -260,7 +268,7 @@ def main():
             'Patch name', 'Az min', 'Az max', 'El', 'R/S',
             'Sun el1', 'Sun az1', 'Sun el2', 'Sun az2',
             'Moon el1', 'Moon az1', 'Moon el2', 'Moon az2', 'Phase',
-            'Pass'))
+            'Pass', 'Sub'))
 
     while t < stop_timestamp:
         if args.debug:
@@ -406,6 +414,9 @@ def main():
             old_az = azs.copy()
             old_el = els.copy()
             old_to_cross = to_cross.copy()
+            azmins = []
+            azmaxs = []
+            aztimes = []
             while True:
                 tstop += tstep / 10
                 if tstop > stop_timestamp:
@@ -457,19 +468,29 @@ def main():
                     to_cross[els > el + args.fp_radius * degree] = False
                 else:
                     to_cross[els < el - args.fp_radius * degree] = False
-                # Allow for focal plane radius margin
-                in_transit = np.logical_and(
-                    els > el - args.fp_radius * degree,
-                    els < el + args.fp_radius * degree)
-                if np.any(old_to_cross != to_cross) or np.any(in_transit):
-                    # Record the azimuths for the corners at the time of
-                    # the crossing
-                    mask = old_to_cross != to_cross
-                    mask[in_transit] = True
-                    azmin = min(
-                        azmin, np.amin(old_az[mask]), np.amin(azs[mask]))
-                    azmax = max(
-                        azmax, np.amax(old_az[mask]), np.amax(azs[mask]))
+                # Find the pairs of corners that are on opposite sides
+                # of the CES line.  Record the crossing azimuth of a
+                # line between the corners.
+                azs_cross = []
+                for i in range(ncorner):
+                    j = (i + 1) % ncorner
+                    for el0 in [el,
+                                el - args.fp_radius*degree,
+                                el - args.fp_radius*degree]:
+                        if (els[i] - el0)*(els[j] - el0) < 0:
+                            az1 = azs[i]
+                            az2 = azs[j]
+                            el1 = els[i] - el0
+                            el2 = els[j] - el0
+                            if az1 - az2 < -2*np.pi:
+                                az2 += 2*np.pi
+                            az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
+                            azs_cross.append(az_cross)
+                if len(azs_cross) > 0:
+                    azs_cross = np.sort(azs_cross)
+                    azmins.append(azs_cross[0])
+                    azmaxs.append(azs_cross[-1])
+                    aztimes.append(tstop)
                 if np.all(np.logical_not(to_cross)):
                     # All corners made it across the CES line.
                     success = True
@@ -481,30 +502,64 @@ def main():
                 # CES failed due to the Sun, Moon or patch changing direction.
                 # Try the next patch instead.
                 continue
-            # Check if we are scanning across the zero meridian
-            if azmax - azmin > np.pi:
-                # we are, scan from the maximum to the minimum
-                azmin, azmax = azmax, azmin
-            # Add the focal plane radius to the scan width
-            fp_radius = args.fp_radius * degree / np.cos(el)
-            azmin = (azmin - fp_radius) % (2*np.pi)
-            azmax = (azmax + fp_radius) % (2*np.pi)
-            ces_start = datetime.utcfromtimestamp(t).strftime(
-                '%Y-%m-%d %H:%M:%S %Z')
-            ces_stop = datetime.utcfromtimestamp(tstop).strftime(
-                '%Y-%m-%d %H:%M:%S %Z')
-            # Create an entry in the schedule
+            ces_time = tstop - t
+            if ces_time > args.ces_max_time:
+                nsub = np.int(np.ceil(ces_time / args.ces_max_time))
+                ces_time /= nsub
+            aztimes = np.array(aztimes)
+            azmins = np.array(azmins)
+            azmaxs = np.array(azmaxs)
             rising_string = 'R' if rising else 'S'
             hits[name] += 1
-            fout.write(
-                fout_fmt.format(
-                    ces_start, ces_stop, to_MJD(t), to_MJD(tstop),
-                    name,
-                    azmin/degree, azmax/degree, el/degree,
-                    rising_string,
-                    sun_el, sun_az, sun.alt/degree, sun.az/degree,
-                    moon_el, moon_az, moon.alt/degree, moon.az/degree,
-                    moon_phase, hits[name]))
+            t1 = t
+            isub = -1
+            while t1 < tstop:
+                isub += 1
+                t2 = min(t1 + ces_time, tstop)
+                ind = np.logical_and(aztimes >= t1, aztimes <= t2)
+                if np.all(aztimes > t2):
+                    ind[0] = True
+                if np.all(aztimes < t1):
+                    ind[-1] = True
+                azmin = np.amin(azmins[ind])
+                azmax = np.amax(azmaxs[ind])
+                # Check if we are scanning across the zero meridian
+                if azmax - azmin > np.pi:
+                    # we are, scan from the maximum to the minimum
+                    azmin = np.amin(azmaxs[ind])
+                    azmax = np.amax(azmin[ind])
+                # Add the focal plane radius to the scan width
+                fp_radius = args.fp_radius * degree / np.cos(el)
+                azmin = (azmin - fp_radius) % (2*np.pi)
+                azmax = (azmax + fp_radius) % (2*np.pi)
+                ces_start = datetime.utcfromtimestamp(t1).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                ces_stop = datetime.utcfromtimestamp(t2).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                # Get the Sun and Moon locations at the beginning and end
+                observer.date = to_DJD(t1)
+                sun.compute(observer)
+                moon.compute(observer)
+                sun_az1, sun_el1 = sun.az/degree, sun.alt/degree
+                moon_az1, moon_el1 = moon.az/degree, moon.alt/degree
+                moon_phase1 = moon.phase
+                observer.date = to_DJD(t2)
+                sun.compute(observer)
+                moon.compute(observer)
+                sun_az2, sun_el2 = sun.az/degree, sun.alt/degree
+                moon_az2, moon_el2 = moon.az/degree, moon.alt/degree
+                moon_phase2 = moon.phase
+                # Create an entry in the schedule
+                fout.write(
+                    fout_fmt.format(
+                        ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
+                        name,
+                        azmin/degree, azmax/degree, el/degree,
+                        rising_string,
+                        sun_el1, sun_az1, sun_el2, sun_az2,
+                        moon_el1, moon_az1, moon_el2, moon_az2,
+                        0.005*(moon_phase1 + moon_phase2), hits[name], isub))
+                t1 = t2 + args.gap_small
             # Advance the time
             t = tstop
             # Add the gap
