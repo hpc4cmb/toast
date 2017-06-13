@@ -32,12 +32,14 @@ def to_DJD(t):
     # This is the time format used by PyEphem
     return to_JD(t) - 2415020
 
-def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_name, site_lat, site_lon, site_alt, debug, sun_el_max, sun_avoidance_angle, sun_angle_min, moon_angle_min, el_min, el_max, fp_radius, ces_max_time, patches):
+def build_schedule(
+        start_timestamp, stop_timestamp, gap, gap_small, fn,
+        site_name, site_lat, site_lon, site_alt, debug,
+        sun_el_max, sun_avoidance_angle,
+        sun_angle_min, moon_angle_min,
+        el_min, el_max, fp_radius,
+        ces_max_time, patches):
 
-    t = start_timestamp
-    sun = ephem.Sun()
-    moon = ephem.Moon()
-    tstep = 600
     fout = open(fn, 'w')
 
     fout.write('#{:15} {:15} {:15} {:15}\n'.format(
@@ -77,7 +79,14 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
     for patch in patches:
         hits[patch[0]] = 0
 
+    t = start_timestamp
+    sun = ephem.Sun()
+    moon = ephem.Moon()
+    tstep = 600
+
     while t < stop_timestamp:
+        # Determine which patches are observable at time t.
+
         if debug:
             tstring = datetime.utcfromtimestamp(t).strftime(
                 '%Y-%m-%d %H:%M:%S %Z')
@@ -85,25 +94,21 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
         # Determine which patches are visible
         observer.date = to_DJD(t)
         sun.compute(observer)
-        sun_el = sun.alt / degree
-        sun_az = sun.az / degree
-        if sun_el > sun_el_max:
+        if sun.alt > sun_el_max:
             if debug:
                 print('Sun elevation is {:.2f} > {:.2f}. Moving on.'.format(
                     sun_el, sun_el_max), flush=True)
             t += tstep
             continue
         moon.compute(observer)
-        moon_el = moon.alt / degree
-        moon_az = moon.az / degree
-        moon_phase = moon.moon_phase
+
         visible = []
         not_visible = []
         for (name, weight, corners) in patches:
             # Reject all patches that have even one corner too close
             # to the sun, all setting patches that are not completely
             # above el_min and all rising patches that do not have
-            # at least one corner above al_min.
+            # at least one corner above el_min.
             in_view = True
             corners[0].compute(observer)
             el0 = corners[0].alt
@@ -115,29 +120,29 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
             els = np.zeros(len(corners))
             for i, corner in enumerate(corners):
                 corner.compute(observer)
-                if not rising and corner.alt / degree < el_min:
+                if not rising and corner.alt < el_min:
                     # At least one corner is too low
                     not_visible.append((
                         name, 'Too low {:.2f}'.format(corner.alt / degree)))
                     in_view = False
                     break
-                if rising and corner.alt / degree > el_max:
+                if rising and corner.alt > el_max:
                     # At least one corner is too high
                     not_visible.append((
                         name, 'Too high {:.2f}'.format(corner.alt / degree)))
                     in_view = False
                     break
                 els[i] = corner.alt
-                if sun.alt > sun_avoidance_angle * degree:
+                if sun.alt > sun_avoidance_angle:
                     # Sun is high enough to apply sun_angle_min check
-                    angle = ephem.separation(sun, corner) / degree
+                    angle = ephem.separation(sun, corner)
                     if angle < sun_angle_min:
                         # Patch is too close to the Sun
                         not_visible.append((
                             name, 'Too close to Sun {:.2f}'.format(angle)))
                         in_view = False
                         break
-                angle = ephem.separation(moon, corner) / degree
+                angle = ephem.separation(moon, corner)
                 if angle < moon_angle_min:
                     # Patch is too close to the Moon
                     not_visible.append((
@@ -145,14 +150,14 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
                     in_view = False
                     break
             if rising and in_view:
-                elmax = np.amax(els) / degree
+                elmax = np.amax(els)
                 if elmax < el_min:
                     # All corners are too low
                     not_visible.append((
                         name, 'Too low {:.2f}'.format(corner.alt / degree)))
                     in_view = False
             if not rising and in_view:
-                elmin = np.amin(els) / degree
+                elmin = np.amin(els)
                 if elmin > el_max:
                     # All corners are too high
                     not_visible.append((
@@ -174,6 +179,7 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
         #   2) Sun does not move too close during the scan
         # If the criteria are not met, advance the time by a step
         # and try again
+
         for i in range(len(visible)-1):
             for j in range(i+1, len(visible)):
                 iname, iweight, icorners = visible[i]
@@ -231,7 +237,7 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
                     break
                 observer.date = to_DJD(tstop)
                 sun.compute(observer)
-                if sun.alt / degree > sun_el_max:
+                if sun.alt > sun_el_max:
                     not_visible.append((
                         name, 'Sun too high {:.2f}'.format(sun.alt / degree)))
                     break
@@ -242,9 +248,9 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
                     corner.compute(observer)
                     azs[i] = corner.az
                     els[i] = corner.alt
-                    if sun.alt > sun_avoidance_angle * degree:
+                    if sun.alt > sun_avoidance_angle:
                         # Check if the sun has moved too close
-                        angle = ephem.separation(sun, corner) / degree
+                        angle = ephem.separation(sun, corner)
                         if angle < sun_angle_min:
                             # Patch is too close to the Sun
                             not_visible.append((
@@ -252,7 +258,7 @@ def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_nam
                             sun_too_close = True
                             break
                     # Check if the sun has moved too close
-                    angle = ephem.separation(moon, corner) / degree
+                    angle = ephem.separation(moon, corner)
                     if angle < moon_angle_min:
                         # Patch is too close to the Moon
                         not_visible.append((
@@ -558,7 +564,7 @@ def main():
     if args.debug:
         for iplot, coord in enumerate('CEG'):
             hp.mollview(None, coord=coord, title='Patch locations',
-                        sub=[2,2,1+iplot])
+                        sub=[2, 2, 1+iplot])
             hp.graticule(30)
             for name, weight, corners in patches:
                 lon = [corner._ra/degree for corner in corners]
@@ -571,15 +577,21 @@ def main():
                 hp.projtext(np.amin(lon), np.amax(lat)+5, name, lonlat=True,
                             coord='C')
 
-    # Normalize the weights
-    for i in range(len(patches)):
-        patches[i][1] /= total_weight
-
     if args.debug:
         plt.savefig('patches.png')
         plt.close()
 
-    build_schedule(start_timestamp, stop_timestamp, args.gap, args.gap_small, args.out, args.site_name, args.site_lat, args.site_lon, args.site_alt, args.debug, args.sun_el_max, args.sun_avoidance_angle, args.sun_angle_min, args.moon_angle_min, args.el_min, args.el_max, args.fp_radius*degree, args.ces_max_time, patches)
+    # Normalize the weights
+    for i in range(len(patches)):
+        patches[i][1] /= total_weight
+
+    build_schedule(
+        start_timestamp, stop_timestamp, args.gap, args.gap_small, args.out,
+        args.site_name, args.site_lat, args.site_lon, args.site_alt, args.debug,
+        args.sun_el_max*degree, args.sun_avoidance_angle*degree,
+        args.sun_angle_min*degree, args.moon_angle_min*degree,
+        args.el_min*degree, args.el_max*degree, args.fp_radius*degree,
+        args.ces_max_time, patches)
 
 if __name__ == '__main__':
     main()
