@@ -32,6 +32,357 @@ def to_DJD(t):
     # This is the time format used by PyEphem
     return to_JD(t) - 2415020
 
+def build_schedule(start_timestamp, stop_timestamp, gap, gap_small, fn, site_name, site_lat, site_lon, site_alt, debug, sun_el_max, sun_avoidance_angle, sun_angle_min, moon_angle_min, el_min, el_max, fp_radius, ces_max_time, patches):
+
+    t = start_timestamp
+    sun = ephem.Sun()
+    moon = ephem.Moon()
+    tstep = 600
+    fout = open(fn, 'w')
+
+    fout.write('#{:15} {:15} {:15} {:15}\n'.format(
+        'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
+    fout.write(' {:15} {:15} {:15} {:15.6f}\n'.format(
+        site_name, site_lat, site_lon, site_alt))
+
+    fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
+                '{:15} {:8} {:8} {:8} {:5} ' \
+                '{:8} {:8} {:8} {:8} ' \
+                '{:8} {:8} {:8} {:8} {:5} ' \
+                '{:5} {:3}\n'
+
+    fout_fmt = ' {:20} {:20} {:14.6f} {:14.6f} ' \
+               '{:15} {:8.2f} {:8.2f} {:8.2f} {:5} ' \
+               '{:8.2f} {:8.2f} {:8.2f} {:8.2f} ' \
+               '{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} ' \
+               '{:5} {:3}\n'
+
+    fout.write(
+        fout_fmt0.format(
+            'Start time UTC', 'Stop time UTC', 'Start MJD', 'Stop MJD',
+            'Patch name', 'Az min', 'Az max', 'El', 'R/S',
+            'Sun el1', 'Sun az1', 'Sun el2', 'Sun az2',
+            'Moon el1', 'Moon az1', 'Moon el2', 'Moon az2', 'Phase',
+            'Pass', 'Sub'))
+
+    observer = ephem.Observer()
+    observer.lon = site_lon
+    observer.lat = site_lat
+    observer.elevation = site_alt # In meters
+    observer.epoch = '2000'
+    observer.temp = 0 # in Celcius
+    observer.compute_pressure()
+
+    hits = {}
+    for patch in patches:
+        hits[patch[0]] = 0
+
+    while t < stop_timestamp:
+        if debug:
+            tstring = datetime.utcfromtimestamp(t).strftime(
+                '%Y-%m-%d %H:%M:%S %Z')
+            print('t =  {}'.format(tstring), flush=True)
+        # Determine which patches are visible
+        observer.date = to_DJD(t)
+        sun.compute(observer)
+        sun_el = sun.alt / degree
+        sun_az = sun.az / degree
+        if sun_el > sun_el_max:
+            if debug:
+                print('Sun elevation is {:.2f} > {:.2f}. Moving on.'.format(
+                    sun_el, sun_el_max), flush=True)
+            t += tstep
+            continue
+        moon.compute(observer)
+        moon_el = moon.alt / degree
+        moon_az = moon.az / degree
+        moon_phase = moon.moon_phase
+        visible = []
+        not_visible = []
+        for (name, weight, corners) in patches:
+            # Reject all patches that have even one corner too close
+            # to the sun, all setting patches that are not completely
+            # above el_min and all rising patches that do not have
+            # at least one corner above al_min.
+            in_view = True
+            corners[0].compute(observer)
+            el0 = corners[0].alt
+            observer.date = to_DJD(t+100)
+            corners[0].compute(observer)
+            el1 = corners[0].alt
+            rising = el1 > el0
+            observer.date = to_DJD(t)
+            els = np.zeros(len(corners))
+            for i, corner in enumerate(corners):
+                corner.compute(observer)
+                if not rising and corner.alt / degree < el_min:
+                    # At least one corner is too low
+                    not_visible.append((
+                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
+                    in_view = False
+                    break
+                if rising and corner.alt / degree > el_max:
+                    # At least one corner is too high
+                    not_visible.append((
+                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
+                    in_view = False
+                    break
+                els[i] = corner.alt
+                if sun.alt > sun_avoidance_angle * degree:
+                    # Sun is high enough to apply sun_angle_min check
+                    angle = ephem.separation(sun, corner) / degree
+                    if angle < sun_angle_min:
+                        # Patch is too close to the Sun
+                        not_visible.append((
+                            name, 'Too close to Sun {:.2f}'.format(angle)))
+                        in_view = False
+                        break
+                angle = ephem.separation(moon, corner) / degree
+                if angle < moon_angle_min:
+                    # Patch is too close to the Moon
+                    not_visible.append((
+                        name, 'Too close to Moon {:.2f}'.format(angle)))
+                    in_view = False
+                    break
+            if rising and in_view:
+                elmax = np.amax(els) / degree
+                if elmax < el_min:
+                    # All corners are too low
+                    not_visible.append((
+                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
+                    in_view = False
+            if not rising and in_view:
+                elmin = np.amin(els) / degree
+                if elmin > el_max:
+                    # All corners are too high
+                    not_visible.append((
+                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
+                    in_view = False
+            if in_view:
+                visible.append((name, weight, corners))
+        if len(visible) == 0:
+            if debug:
+                tstring = datetime.utcfromtimestamp(t).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                print('No patches visible at {}: {}'.format(tstring, not_visible))
+            t += tstep
+            continue
+
+        # Order the targets by priority and attempt to observe them
+        # until we find one that meets all criteria:
+        #   1) All corners cross the CES
+        #   2) Sun does not move too close during the scan
+        # If the criteria are not met, advance the time by a step
+        # and try again
+        for i in range(len(visible)-1):
+            for j in range(i+1, len(visible)):
+                iname, iweight, icorners = visible[i]
+                ihit = hits[iname]
+                jname, jweight, jcorners = visible[i]
+                jhit = hits[jname]
+                if ihit*jweight < jhit*iweight:
+                    visible[i], visible[j] = visible[j], visible[i]
+
+        success = False
+        for (name, weight, corners) in visible:
+            # Start by determining if the patch is rising or setting
+            az0 = corners[0].az
+            els0 = np.array([corner.alt for corner in corners])
+            observer.date = to_DJD(t+100)
+            for corner in corners:
+                corner.compute(observer)
+            els1 = np.array([corner.alt for corner in corners])
+            rising = np.all(els0 < els1)
+            ambiguous = np.any((els0 < els1) != rising)
+            if ambiguous:
+                # This patch is rotating.  It is unlikely all corners
+                # would make across a CES line.
+                not_visible.append((name, 'Rotating'))
+                continue
+            observer.date = to_DJD(t)
+            for corner in corners:
+                corner.compute(observer)
+            # Then determine an elevation that all corners will cross
+            ncorner = len(corners)
+            azs = np.zeros(ncorner)
+            els = np.zeros(ncorner)
+            for i, corner in enumerate(corners):
+                azs[i] = corner.az
+                els[i] = corner.alt
+            if rising:
+                el = np.amax(els) + fp_radius
+            else:
+                el = np.amin(els) - fp_radius
+            azmin = 1e10
+            azmax = -1e10
+            # and now track when all corners are past the elevation
+            tstop = t
+            to_cross = np.ones(len(corners), dtype=np.bool)
+            old_az = azs.copy()
+            old_el = els.copy()
+            old_to_cross = to_cross.copy()
+            azmins = []
+            azmaxs = []
+            aztimes = []
+            while True:
+                tstop += tstep / 10
+                if tstop > stop_timestamp:
+                    not_visible.append((name, 'Ran out of time'))
+                    break
+                observer.date = to_DJD(tstop)
+                sun.compute(observer)
+                if sun.alt / degree > sun_el_max:
+                    not_visible.append((
+                        name, 'Sun too high {:.2f}'.format(sun.alt / degree)))
+                    break
+                moon.compute(observer)
+                sun_too_close = False
+                moon_too_close = False
+                for i, corner in enumerate(corners):
+                    corner.compute(observer)
+                    azs[i] = corner.az
+                    els[i] = corner.alt
+                    if sun.alt > sun_avoidance_angle * degree:
+                        # Check if the sun has moved too close
+                        angle = ephem.separation(sun, corner) / degree
+                        if angle < sun_angle_min:
+                            # Patch is too close to the Sun
+                            not_visible.append((
+                                name, 'Too close to Sun {:.2f}'.format(angle)))
+                            sun_too_close = True
+                            break
+                    # Check if the sun has moved too close
+                    angle = ephem.separation(moon, corner) / degree
+                    if angle < moon_angle_min:
+                        # Patch is too close to the Moon
+                        not_visible.append((
+                            name, 'Too close to Moon {:.2f}'.format(angle)))
+                        moon_too_close = True
+                        break
+                if sun_too_close or moon_too_close:
+                    break
+
+                # The patch may change direction without all corners
+                # crossing the CES line
+                rising_now = np.all((old_el < els)[to_cross])
+                ambiguous = np.any((old_el < els)[to_cross] != rising_now)
+                if ambiguous or rising != rising_now:
+                    # The patch changed direction without crossing the
+                    # CES line.  Move on to the next target
+                    not_visible.append((name, 'Changed direction'))
+                    break
+                if rising:
+                    to_cross[els > el + fp_radius] = False
+                else:
+                    to_cross[els < el - fp_radius] = False
+                # Find the pairs of corners that are on opposite sides
+                # of the CES line.  Record the crossing azimuth of a
+                # line between the corners.
+                azs_cross = []
+                for i in range(ncorner):
+                    j = (i + 1) % ncorner
+                    for el0 in [el,
+                                el - fp_radius,
+                                el - fp_radius]:
+                        if (els[i] - el0)*(els[j] - el0) < 0:
+                            az1 = azs[i]
+                            az2 = azs[j]
+                            el1 = els[i] - el0
+                            el2 = els[j] - el0
+                            if az1 - az2 < -2*np.pi:
+                                az2 += 2*np.pi
+                            az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
+                            azs_cross.append(az_cross)
+                if len(azs_cross) > 0:
+                    azs_cross = np.sort(azs_cross)
+                    azmins.append(azs_cross[0])
+                    azmaxs.append(azs_cross[-1])
+                    aztimes.append(tstop)
+                if np.all(np.logical_not(to_cross)):
+                    # All corners made it across the CES line.
+                    success = True
+                    break
+                old_az = azs.copy()
+                old_el = els.copy()
+                old_to_cross = to_cross.copy()
+            if not success:
+                # CES failed due to the Sun, Moon or patch changing direction.
+                # Try the next patch instead.
+                continue
+            ces_time = tstop - t
+            if ces_time > ces_max_time:
+                nsub = np.int(np.ceil(ces_time / ces_max_time))
+                ces_time /= nsub
+            aztimes = np.array(aztimes)
+            azmins = np.array(azmins)
+            azmaxs = np.array(azmaxs)
+            rising_string = 'R' if rising else 'S'
+            hits[name] += 1
+            t1 = t
+            isub = -1
+            while t1 < tstop:
+                isub += 1
+                t2 = min(t1 + ces_time, tstop)
+                ind = np.logical_and(aztimes >= t1, aztimes <= t2)
+                if np.all(aztimes > t2):
+                    ind[0] = True
+                if np.all(aztimes < t1):
+                    ind[-1] = True
+                azmin = np.amin(azmins[ind])
+                azmax = np.amax(azmaxs[ind])
+                # Check if we are scanning across the zero meridian
+                if azmax - azmin > np.pi:
+                    # we are, scan from the maximum to the minimum
+                    azmin = np.amin(azmaxs[ind])
+                    azmax = np.amax(azmin[ind])
+                # Add the focal plane radius to the scan width
+                fp_radius_eff = fp_radius / np.cos(el)
+                azmin = (azmin - fp_radius_eff) % (2*np.pi)
+                azmax = (azmax + fp_radius_eff) % (2*np.pi)
+                ces_start = datetime.utcfromtimestamp(t1).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                ces_stop = datetime.utcfromtimestamp(t2).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                # Get the Sun and Moon locations at the beginning and end
+                observer.date = to_DJD(t1)
+                sun.compute(observer)
+                moon.compute(observer)
+                sun_az1, sun_el1 = sun.az/degree, sun.alt/degree
+                moon_az1, moon_el1 = moon.az/degree, moon.alt/degree
+                moon_phase1 = moon.phase
+                observer.date = to_DJD(t2)
+                sun.compute(observer)
+                moon.compute(observer)
+                sun_az2, sun_el2 = sun.az/degree, sun.alt/degree
+                moon_az2, moon_el2 = moon.az/degree, moon.alt/degree
+                moon_phase2 = moon.phase
+                # Create an entry in the schedule
+                fout.write(
+                    fout_fmt.format(
+                        ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
+                        name,
+                        azmin/degree, azmax/degree, el/degree,
+                        rising_string,
+                        sun_el1, sun_az1, sun_el2, sun_az2,
+                        moon_el1, moon_az1, moon_el2, moon_az2,
+                        0.005*(moon_phase1 + moon_phase2), hits[name], isub))
+                t1 = t2 + gap_small
+            # Advance the time
+            t = tstop
+            # Add the gap
+            t += gap
+            break
+
+        if not success:
+            if debug:
+                tstring = datetime.utcfromtimestamp(t).strftime(
+                    '%Y-%m-%d %H:%M:%S %Z')
+                print('No patches visible at {}: {}'.format(
+                    tstring, not_visible), flush=True)
+            t += tstep
+
+    fout.close()
+
 
 def main():
 
@@ -121,23 +472,13 @@ def main():
         import healpy as hp
         import matplotlib.pyplot as plt
 
-    observer = ephem.Observer()
-    observer.lon = args.site_lon
-    observer.lat = args.site_lat
-    observer.elevation = args.site_alt # In meters
-    observer.epoch = '2000'
-    observer.temp = 0 # in Celcius
-    observer.compute_pressure()
-
     # Parse the patch definitions
 
     patches = []
-    hits = {}
     total_weight = 0
     for patch_def in args.patch:
         parts = patch_def.split(',')
         name = parts[0]
-        hits[name] = 0
         weight = float(parts[1])
         total_weight += weight
         i = 2
@@ -238,343 +579,7 @@ def main():
         plt.savefig('patches.png')
         plt.close()
 
-    t = start_timestamp
-    gap = args.gap
-    sun = ephem.Sun()
-    moon = ephem.Moon()
-    tstep = 600
-    fout = open(args.out, 'w')
-
-    fout.write('#{:15} {:15} {:15} {:15}\n'.format(
-        'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
-    fout.write(' {:15} {:15} {:15} {:15.6f}\n'.format(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt))
-
-    fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
-                '{:15} {:8} {:8} {:8} {:5} ' \
-                '{:8} {:8} {:8} {:8} ' \
-                '{:8} {:8} {:8} {:8} {:5} ' \
-                '{:5} {:3}\n'
-
-    fout_fmt = ' {:20} {:20} {:14.6f} {:14.6f} ' \
-               '{:15} {:8.2f} {:8.2f} {:8.2f} {:5} ' \
-               '{:8.2f} {:8.2f} {:8.2f} {:8.2f} ' \
-               '{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} ' \
-               '{:5} {:3}\n'
-
-    fout.write(
-        fout_fmt0.format(
-            'Start time UTC', 'Stop time UTC', 'Start MJD', 'Stop MJD',
-            'Patch name', 'Az min', 'Az max', 'El', 'R/S',
-            'Sun el1', 'Sun az1', 'Sun el2', 'Sun az2',
-            'Moon el1', 'Moon az1', 'Moon el2', 'Moon az2', 'Phase',
-            'Pass', 'Sub'))
-
-    while t < stop_timestamp:
-        if args.debug:
-            tstring = datetime.utcfromtimestamp(t).strftime(
-                '%Y-%m-%d %H:%M:%S %Z')
-            print('t =  {}'.format(tstring), flush=True)
-        # Determine which patches are visible
-        observer.date = to_DJD(t)
-        sun.compute(observer)
-        sun_el = sun.alt / degree
-        sun_az = sun.az / degree
-        if sun_el > args.sun_el_max:
-            if args.debug:
-                print('Sun elevation is {:.2f} > {:.2f}. Moving on.'.format(
-                    sun_el, args.sun_el_max), flush=True)
-            t += tstep
-            continue
-        moon.compute(observer)
-        moon_el = moon.alt / degree
-        moon_az = moon.az / degree
-        moon_phase = moon.moon_phase
-        visible = []
-        not_visible = []
-        for (name, weight, corners) in patches:
-            # Reject all patches that have even one corner too close
-            # to the sun, all setting patches that are not completely
-            # above el_min and all rising patches that do not have
-            # at least one corner above al_min.
-            in_view = True
-            corners[0].compute(observer)
-            el0 = corners[0].alt
-            observer.date = to_DJD(t+100)
-            corners[0].compute(observer)
-            el1 = corners[0].alt
-            rising = el1 > el0
-            observer.date = to_DJD(t)
-            els = np.zeros(len(corners))
-            for i, corner in enumerate(corners):
-                corner.compute(observer)
-                if not rising and corner.alt / degree < args.el_min:
-                    # At least one corner is too low
-                    not_visible.append((
-                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-                    break
-                if rising and corner.alt / degree > args.el_max:
-                    # At least one corner is too high
-                    not_visible.append((
-                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-                    break
-                els[i] = corner.alt
-                if sun.alt > args.sun_avoidance_angle * degree:
-                    # Sun is high enough to apply sun_angle_min check
-                    angle = ephem.separation(sun, corner) / degree
-                    if angle < args.sun_angle_min:
-                        # Patch is too close to the Sun
-                        not_visible.append((
-                            name, 'Too close to Sun {:.2f}'.format(angle)))
-                        in_view = False
-                        break
-                angle = ephem.separation(moon, corner) / degree
-                if angle < args.moon_angle_min:
-                    # Patch is too close to the Moon
-                    not_visible.append((
-                        name, 'Too close to Moon {:.2f}'.format(angle)))
-                    in_view = False
-                    break
-            if rising and in_view:
-                elmax = np.amax(els) / degree
-                if elmax < args.el_min:
-                    # All corners are too low
-                    not_visible.append((
-                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-            if not rising and in_view:
-                elmin = np.amin(els) / degree
-                if elmin > args.el_max:
-                    # All corners are too high
-                    not_visible.append((
-                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-            if in_view:
-                visible.append((name, weight, corners))
-        if len(visible) == 0:
-            if args.debug:
-                tstring = datetime.utcfromtimestamp(t).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                print('No patches visible at {}: {}'.format(tstring, not_visible))
-            t += tstep
-            continue
-
-        # Order the targets by priority and attempt to observe them
-        # until we find one that meets all criteria:
-        #   1) All corners cross the CES
-        #   2) Sun does not move too close during the scan
-        # If the criteria are not met, advance the time by a step
-        # and try again
-        for i in range(len(visible)-1):
-            for j in range(i+1, len(visible)):
-                iname, iweight, icorners = visible[i]
-                ihit = hits[iname]
-                jname, jweight, jcorners = visible[i]
-                jhit = hits[jname]
-                if ihit*jweight < jhit*iweight:
-                    visible[i], visible[j] = visible[j], visible[i]
-
-        success = False
-        for (name, weight, corners) in visible:
-            # Start by determining if the patch is rising or setting
-            az0 = corners[0].az
-            els0 = np.array([corner.alt for corner in corners])
-            observer.date = to_DJD(t+100)
-            for corner in corners:
-                corner.compute(observer)
-            els1 = np.array([corner.alt for corner in corners])
-            rising = np.all(els0 < els1)
-            ambiguous = np.any((els0 < els1) != rising)
-            if ambiguous:
-                # This patch is rotating.  It is unlikely all corners
-                # would make across a CES line.
-                not_visible.append((name, 'Rotating'))
-                continue
-            observer.date = to_DJD(t)
-            for corner in corners:
-                corner.compute(observer)
-            # Then determine an elevation that all corners will cross
-            ncorner = len(corners)
-            azs = np.zeros(ncorner)
-            els = np.zeros(ncorner)
-            for i, corner in enumerate(corners):
-                azs[i] = corner.az
-                els[i] = corner.alt
-            if rising:
-                el = np.amax(els) + args.fp_radius * degree
-            else:
-                el = np.amin(els) - args.fp_radius * degree
-            azmin = 1e10
-            azmax = -1e10
-            # and now track when all corners are past the elevation
-            tstop = t
-            to_cross = np.ones(len(corners), dtype=np.bool)
-            old_az = azs.copy()
-            old_el = els.copy()
-            old_to_cross = to_cross.copy()
-            azmins = []
-            azmaxs = []
-            aztimes = []
-            while True:
-                tstop += tstep / 10
-                if tstop > stop_timestamp:
-                    not_visible.append((name, 'Ran out of time'))
-                    break
-                observer.date = to_DJD(tstop)
-                sun.compute(observer)
-                if sun.alt / degree > args.sun_el_max:
-                    not_visible.append((
-                        name, 'Sun too high {:.2f}'.format(sun.alt / degree)))
-                    break
-                moon.compute(observer)
-                sun_too_close = False
-                moon_too_close = False
-                for i, corner in enumerate(corners):
-                    corner.compute(observer)
-                    azs[i] = corner.az
-                    els[i] = corner.alt
-                    if sun.alt > args.sun_avoidance_angle * degree:
-                        # Check if the sun has moved too close
-                        angle = ephem.separation(sun, corner) / degree
-                        if angle < args.sun_angle_min:
-                            # Patch is too close to the Sun
-                            not_visible.append((
-                                name, 'Too close to Sun {:.2f}'.format(angle)))
-                            sun_too_close = True
-                            break
-                    # Check if the sun has moved too close
-                    angle = ephem.separation(moon, corner) / degree
-                    if angle < args.moon_angle_min:
-                        # Patch is too close to the Moon
-                        not_visible.append((
-                            name, 'Too close to Moon {:.2f}'.format(angle)))
-                        moon_too_close = True
-                        break
-                if sun_too_close or moon_too_close:
-                    break
-
-                # The patch may change direction without all corners
-                # crossing the CES line
-                rising_now = np.all((old_el < els)[to_cross])
-                ambiguous = np.any((old_el < els)[to_cross] != rising_now)
-                if ambiguous or rising != rising_now:
-                    # The patch changed direction without crossing the
-                    # CES line.  Move on to the next target
-                    not_visible.append((name, 'Changed direction'))
-                    break
-                if rising:
-                    to_cross[els > el + args.fp_radius * degree] = False
-                else:
-                    to_cross[els < el - args.fp_radius * degree] = False
-                # Find the pairs of corners that are on opposite sides
-                # of the CES line.  Record the crossing azimuth of a
-                # line between the corners.
-                azs_cross = []
-                for i in range(ncorner):
-                    j = (i + 1) % ncorner
-                    for el0 in [el,
-                                el - args.fp_radius*degree,
-                                el - args.fp_radius*degree]:
-                        if (els[i] - el0)*(els[j] - el0) < 0:
-                            az1 = azs[i]
-                            az2 = azs[j]
-                            el1 = els[i] - el0
-                            el2 = els[j] - el0
-                            if az1 - az2 < -2*np.pi:
-                                az2 += 2*np.pi
-                            az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
-                            azs_cross.append(az_cross)
-                if len(azs_cross) > 0:
-                    azs_cross = np.sort(azs_cross)
-                    azmins.append(azs_cross[0])
-                    azmaxs.append(azs_cross[-1])
-                    aztimes.append(tstop)
-                if np.all(np.logical_not(to_cross)):
-                    # All corners made it across the CES line.
-                    success = True
-                    break
-                old_az = azs.copy()
-                old_el = els.copy()
-                old_to_cross = to_cross.copy()
-            if not success:
-                # CES failed due to the Sun, Moon or patch changing direction.
-                # Try the next patch instead.
-                continue
-            ces_time = tstop - t
-            if ces_time > args.ces_max_time:
-                nsub = np.int(np.ceil(ces_time / args.ces_max_time))
-                ces_time /= nsub
-            aztimes = np.array(aztimes)
-            azmins = np.array(azmins)
-            azmaxs = np.array(azmaxs)
-            rising_string = 'R' if rising else 'S'
-            hits[name] += 1
-            t1 = t
-            isub = -1
-            while t1 < tstop:
-                isub += 1
-                t2 = min(t1 + ces_time, tstop)
-                ind = np.logical_and(aztimes >= t1, aztimes <= t2)
-                if np.all(aztimes > t2):
-                    ind[0] = True
-                if np.all(aztimes < t1):
-                    ind[-1] = True
-                azmin = np.amin(azmins[ind])
-                azmax = np.amax(azmaxs[ind])
-                # Check if we are scanning across the zero meridian
-                if azmax - azmin > np.pi:
-                    # we are, scan from the maximum to the minimum
-                    azmin = np.amin(azmaxs[ind])
-                    azmax = np.amax(azmin[ind])
-                # Add the focal plane radius to the scan width
-                fp_radius = args.fp_radius * degree / np.cos(el)
-                azmin = (azmin - fp_radius) % (2*np.pi)
-                azmax = (azmax + fp_radius) % (2*np.pi)
-                ces_start = datetime.utcfromtimestamp(t1).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                ces_stop = datetime.utcfromtimestamp(t2).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                # Get the Sun and Moon locations at the beginning and end
-                observer.date = to_DJD(t1)
-                sun.compute(observer)
-                moon.compute(observer)
-                sun_az1, sun_el1 = sun.az/degree, sun.alt/degree
-                moon_az1, moon_el1 = moon.az/degree, moon.alt/degree
-                moon_phase1 = moon.phase
-                observer.date = to_DJD(t2)
-                sun.compute(observer)
-                moon.compute(observer)
-                sun_az2, sun_el2 = sun.az/degree, sun.alt/degree
-                moon_az2, moon_el2 = moon.az/degree, moon.alt/degree
-                moon_phase2 = moon.phase
-                # Create an entry in the schedule
-                fout.write(
-                    fout_fmt.format(
-                        ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
-                        name,
-                        azmin/degree, azmax/degree, el/degree,
-                        rising_string,
-                        sun_el1, sun_az1, sun_el2, sun_az2,
-                        moon_el1, moon_az1, moon_el2, moon_az2,
-                        0.005*(moon_phase1 + moon_phase2), hits[name], isub))
-                t1 = t2 + args.gap_small
-            # Advance the time
-            t = tstop
-            # Add the gap
-            t += gap
-            break
-
-        if not success:
-            if args.debug:
-                tstring = datetime.utcfromtimestamp(t).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                print('No patches visible at {}: {}'.format(
-                    tstring, not_visible), flush=True)
-            t += tstep
-
-    fout.close()
+    build_schedule(start_timestamp, stop_timestamp, args.gap, args.gap_small, args.out, args.site_name, args.site_lat, args.site_lon, args.site_alt, args.debug, args.sun_el_max, args.sun_avoidance_angle, args.sun_angle_min, args.moon_angle_min, args.el_min, args.el_max, args.fp_radius*degree, args.ces_max_time, patches)
 
 if __name__ == '__main__':
     main()
