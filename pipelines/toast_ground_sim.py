@@ -549,15 +549,26 @@ def main():
                   flush=True)
         start = stop
 
-        hits.write_healpix_fits('{}/hits.fits'.format(args.outdir))
-        invnpp.write_healpix_fits('{}/invnpp.fits'.format(args.outdir))
+        fn = '{}/hits.fits'.format(args.outdir)
+        hits.write_healpix_fits(fn)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Writing hits and N_pp^-1 took {:.3f} s'.format(elapsed),
-                  flush=True)
+            print('Writing hit map to {} took {:.3f} s'
+                  ''.format(fn, elapsed), flush=True)
+        start = stop
+
+        fn = '{}/invnpp.fits'.format(args.outdir)
+        invnpp.write_healpix_fits(fn)
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('Writing N_pp^-1 to {} took {:.3f} s'
+                  ''.format(fn, elapsed), flush=True)
         start = stop
 
         # invert it

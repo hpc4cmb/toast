@@ -383,7 +383,7 @@ class OpSimAtmosphere(Operator):
                     vmax = comm.allreduce(vmax, op=MPI.MAX)
 
                     for t, r, atmdata2d in my_snapshots:
-                        plt.figure()
+                        plt.figure(figsize=[12,4])
                         plt.imshow(atmdata2d, interpolation='nearest',
                                    origin='lower', extent=np.array(
                                        [azmin, azmax, elmin, elmax])/degree,
