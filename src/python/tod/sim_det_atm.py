@@ -364,15 +364,12 @@ class OpSimAtmosphere(Operator):
                     r = 0
                     t = 0
                     my_snapshots = []
-                    vmin = None
-                    vmax = None
+                    vmin = 1e30
+                    vmax = -1e30
                     for i, t in enumerate(np.arange(tmin, tmax, 10)):
                         if i % ntask != rank:
                             continue
                         atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
-                        if vmin is None:
-                            vmin = np.amin(atmdata)
-                            vmax = np.amax(atmdata)
                         vmin = min(vmin, np.amin(atmdata))
                         vmax = max(vmax, np.amax(atmdata))
                         atmdata2d = atmdata.reshape(AZ.shape)
