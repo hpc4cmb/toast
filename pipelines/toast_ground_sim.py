@@ -117,6 +117,9 @@ def main():
     parser.add_argument('--atm_lmax_sigma',
                         required=False, default=10.0, type=np.float,
                         help='Kolmogorov turbulence injection scale sigma')
+    parser.add_argument('--atm_gain',
+                        required=False, default=2e-7, type=np.float,
+                        help='Atmospheric gain, modulated by T0.')
     parser.add_argument('--atm_zatm',
                         required=False, default=40000.0, type=np.float,
                         help='atmosphere extent for temperature profile')
@@ -662,7 +665,7 @@ def main():
                 out='total', realization=mc,
                 lmin_center=args.atm_lmin_center,
                 lmin_sigma=args.atm_lmin_sigma,
-                lmax_center=args.atm_lmax_center,
+                lmax_center=args.atm_lmax_center, gain=args.atm_gain,
                 lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm,
                 zmax=args.atm_zmax, xstep=args.atm_xstep,
                 ystep=args.atm_ystep, zstep=args.atm_zstep,

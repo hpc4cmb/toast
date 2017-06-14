@@ -48,6 +48,7 @@ class OpSimAtmosphere(Operator):
         lmin_sigma (float): Kolmogorov turbulence dissipation scale sigma.
         lmax_center (float): Kolmogorov turbulence injection scale center.
         lmax_sigma (float): Kolmogorov turbulence injection scale sigma.
+        gain (float): Scaling applied to the simulated TOD.
         zatm (float): atmosphere extent for temperature profile.
         zmax (float): atmosphere extent for water vapor integration.
         xstep (float): size of volume elements in X direction.
@@ -88,7 +89,7 @@ class OpSimAtmosphere(Operator):
             lmin_center=0.01, lmin_sigma=0.001,
             lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0,
             xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=10000,
-            verbosity=0, gangsize=-1,
+            verbosity=0, gangsize=-1, gain=1,
             fnear=0.1, w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             fp_radius=1, apply_flags=False,
@@ -106,6 +107,7 @@ class OpSimAtmosphere(Operator):
         self._lmin_sigma = lmin_sigma
         self._lmax_center = lmax_center
         self._lmax_sigma = lmax_sigma
+        self._gain = gain
         self._zatm = zatm
         self._zmax = zmax
         self._xstep = xstep
@@ -370,6 +372,8 @@ class OpSimAtmosphere(Operator):
                         if i % ntask != rank:
                             continue
                         atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
+                        if self._gain:
+                            atmdata *= self._gain
                         vmin = min(vmin, np.amin(atmdata))
                         vmax = max(vmax, np.amax(atmdata))
                         atmdata2d = atmdata.reshape(AZ.shape)
@@ -458,8 +462,10 @@ class OpSimAtmosphere(Operator):
 
                     # Integrate detector signal
 
-                    atm_sim_observe(
-                        sim, times[ind], az, el, atmdata, ngood, 0)
+                    atm_sim_observe(sim, times[ind], az, el, atmdata, ngood, 0)
+
+                    if self._gain:
+                        atmdata *= self._gain
 
                     if self._apply_flags:
                         ref[ind][good] += atmdata
