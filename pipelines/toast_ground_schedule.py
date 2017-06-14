@@ -106,33 +106,15 @@ def build_schedule(
         not_visible = []
         for (name, weight, corners) in patches:
             # Reject all patches that have even one corner too close
-            # to the sun, all setting patches that are not completely
-            # above el_min and all rising patches that do not have
-            # at least one corner above el_min.
-            in_view = True
-            corners[0].compute(observer)
-            el0 = corners[0].alt
-            observer.date = to_DJD(t+100)
-            corners[0].compute(observer)
-            el1 = corners[0].alt
-            rising = el1 > el0
-            observer.date = to_DJD(t)
-            els = np.zeros(len(corners))
+            # to the Sun or the Moon and patches that are completely
+            # below the horizon
+            in_view = False
+            ncorner = len(corners)
             for i, corner in enumerate(corners):
                 corner.compute(observer)
-                if not rising and corner.alt < el_min:
-                    # At least one corner is too low
-                    not_visible.append((
-                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-                    break
-                elif rising and corner.alt > el_max:
-                    # At least one corner is too high
-                    not_visible.append((
-                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-                    break
-                els[i] = corner.alt
+                if corner.alt > el_min:
+                    # At least one corner is visible
+                    in_view = True
                 if sun.alt > sun_avoidance_angle:
                     # Sun is high enough to apply sun_angle_min check
                     angle = ephem.separation(sun, corner)
@@ -152,20 +134,9 @@ def build_schedule(
                             'Too close to Moon {:.2f}'.format(angle / degree)))
                         in_view = False
                         break
-            if rising and in_view:
-                elmax = np.amax(els)
-                if elmax < el_min:
-                    # All corners are too low
+                if i == ncorner-1 and not in_view:
                     not_visible.append((
-                        name, 'Too low {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
-            if not rising and in_view:
-                elmin = np.amin(els)
-                if elmin > el_max:
-                    # All corners are too high
-                    not_visible.append((
-                        name, 'Too high {:.2f}'.format(corner.alt / degree)))
-                    in_view = False
+                        name, 'Below the horizon.'))
             if in_view:
                 visible.append((name, weight, corners))
 
@@ -177,10 +148,9 @@ def build_schedule(
             t += tstep
             continue
 
-        # Order the targets by priority and attempt to observe them
-        # until we find one that meets all criteria:
-        #   1) All corners cross the CES
-        #   2) Sun does not move too close during the scan
+        # Order the targets by priority and attempt to observe with both
+        # a rising and setting scans until we find one that can be
+        # succesfully scanned.
         # If the criteria are not met, advance the time by a step
         # and try again
 
@@ -195,130 +165,116 @@ def build_schedule(
 
         success = False
         for (name, weight, corners) in visible:
-            # Start by determining if the patch is rising or setting
-            az0 = corners[0].az
-            els0 = np.array([corner.alt for corner in corners])
-            observer.date = to_DJD(t+100)
-            for corner in corners:
-                corner.compute(observer)
-            els1 = np.array([corner.alt for corner in corners])
-            rising = np.all(els0 < els1)
-            ambiguous = np.any((els0 < els1) != rising)
-            if ambiguous:
-                # This patch is rotating.  It is unlikely all corners
-                # would make across a CES line.
-                not_visible.append((name, 'Rotating'))
-                continue
-            observer.date = to_DJD(t)
-            for corner in corners:
-                corner.compute(observer)
-            # Then determine an elevation that all corners will cross
-            ncorner = len(corners)
-            azs = np.zeros(ncorner)
-            els = np.zeros(ncorner)
-            for i, corner in enumerate(corners):
-                azs[i] = corner.az
-                els[i] = corner.alt
-            if rising:
-                el = np.amax(els) + fp_radius
-            else:
-                el = np.amin(els) - fp_radius
-            azmin = 1e10
-            azmax = -1e10
-            # and now track when all corners are past the elevation
-            tstop = t
-            to_cross = np.ones(len(corners), dtype=np.bool)
-            old_az = azs.copy()
-            old_el = els.copy()
-            old_to_cross = to_cross.copy()
-            azmins = []
-            azmaxs = []
-            aztimes = []
-            while True:
-                tstop += tstep / 10
-                if tstop > stop_timestamp:
-                    not_visible.append((name, 'Ran out of time'))
-                    break
-                observer.date = to_DJD(tstop)
-                sun.compute(observer)
-                if sun.alt > sun_el_max:
-                    not_visible.append((
-                        name, 'Sun too high {:.2f}'.format(sun.alt / degree)))
-                    break
-                moon.compute(observer)
-                sun_too_close = False
-                moon_too_close = False
-                for i, corner in enumerate(corners):
+            for rising in [True, False]:
+                observer.date = to_DJD(t)
+                for corner in corners:
                     corner.compute(observer)
+                # Then determine an elevation that all corners will cross
+                ncorner = len(corners)
+                azs = np.zeros(ncorner)
+                els = np.zeros(ncorner)
+                for i, corner in enumerate(corners):
                     azs[i] = corner.az
                     els[i] = corner.alt
-                    if sun.alt > sun_avoidance_angle:
-                        # Check if the Sun has moved too close
-                        angle = ephem.separation(sun, corner)
-                        if angle < sun_angle_min:
-                            # Patch is too close to the Sun
-                            not_visible.append((
-                                name, 'Too close to Sun {:.2f}'.format(angle)))
-                            sun_too_close = True
-                            break
-                    if moon.alt > 0:
-                        # Check if the Moon has moved too close
-                        angle = ephem.separation(moon, corner)
-                        if angle < moon_angle_min:
-                            # Patch is too close to the Moon
-                            not_visible.append((
-                                name, 'Too close to Moon {:.2f}'.format(angle)))
-                            moon_too_close = True
-                            break
-                if sun_too_close or moon_too_close:
-                    break
-
-                # The patch may change direction without all corners
-                # crossing the CES line
-                rising_now = np.all((old_el < els)[to_cross])
-                ambiguous = np.any((old_el < els)[to_cross] != rising_now)
-                if ambiguous or rising != rising_now:
-                    # The patch changed direction without crossing the
-                    # CES line.  Move on to the next target
-                    not_visible.append((name, 'Changed direction'))
-                    break
                 if rising:
-                    to_cross[els > el + fp_radius] = False
+                    ind = azs <= np.pi
+                    if np.sum(ind) == 0:
+                        not_visible.append((
+                            name, 'No rising corners'))
+                        continue
+                    el = np.amax(els[ind]) + fp_radius
                 else:
-                    to_cross[els < el - fp_radius] = False
-                # Find the pairs of corners that are on opposite sides
-                # of the CES line.  Record the crossing azimuth of a
-                # line between the corners.
-                azs_cross = []
-                for i in range(ncorner):
-                    j = (i + 1) % ncorner
-                    for el0 in [el,
-                                el - fp_radius,
-                                el - fp_radius]:
-                        if (els[i] - el0)*(els[j] - el0) < 0:
-                            az1 = azs[i]
-                            az2 = azs[j]
-                            el1 = els[i] - el0
-                            el2 = els[j] - el0
-                            if az1 - az2 < -2*np.pi:
-                                az2 += 2*np.pi
-                            az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
-                            azs_cross.append(az_cross)
-                if len(azs_cross) > 0:
-                    azs_cross = np.sort(azs_cross)
-                    azmins.append(azs_cross[0])
-                    azmaxs.append(azs_cross[-1])
-                    aztimes.append(tstop)
-                if np.all(np.logical_not(to_cross)):
-                    # All corners made it across the CES line.
-                    success = True
-                    break
+                    ind = azs >= np.pi
+                    if np.sum(ind) == 0:
+                        not_visible.append((
+                            name, 'No setting corners'))
+                        continue
+                    el = np.amin(els[ind]) - fp_radius
+                if el < el_min:
+                    not_visible.append((
+                        name,
+                        'el < el_min ({:.2f} < {:.2f}) rising = {}'.format(
+                            el/degree, el_min/degree, rising)))
+                    continue
+                if el > el_max:
+                    not_visible.append((
+                        name,
+                        'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
+                            el/degree, el_max/degree, rising)))
+                    continue
+                azmin = 1e10
+                azmax = -1e10
+                # and now track when all corners are past the elevation
+                tstop = t
+                to_cross = np.ones(len(corners), dtype=np.bool)
                 old_az = azs.copy()
                 old_el = els.copy()
                 old_to_cross = to_cross.copy()
+                azmins = []
+                azmaxs = []
+                aztimes = []
+                while True:
+                    tstop += tstep / 10
+                    if tstop > stop_timestamp or tstop - t > 86400:
+                        not_visible.append((name, 'Ran out of time rising = {}'
+                                            ''.format(rising)))
+                        break
+                    observer.date = to_DJD(tstop)
+                    sun.compute(observer)
+                    if sun.alt > sun_el_max:
+                        not_visible.append((
+                            name,
+                            'Sun too high {:.2f} rising = {}'
+                            ''.format(sun.alt/degree, rising)))
+                        break
+                    for i, corner in enumerate(corners):
+                        corner.compute(observer)
+                        azs[i] = corner.az
+                        els[i] = corner.alt
+                    if rising:
+                        good = azs <= np.pi
+                        to_cross[np.logical_and(els > el+fp_radius, good)] \
+                            = False
+                    else:
+                        good = azs >= np.pi
+                        to_cross[np.logical_and(els < el-fp_radius, good)] \
+                            = False
+                    # Find the pairs of corners that are on opposite sides
+                    # of the CES line.  Record the crossing azimuth of a
+                    # line between the corners.
+                    azs_cross = []
+                    for i in range(ncorner):
+                        j = (i + 1) % ncorner
+                        for el0 in [el,
+                                    el - fp_radius,
+                                    el - fp_radius]:
+                            if (els[i] - el0)*(els[j] - el0) < 0:
+                                az1 = azs[i]
+                                az2 = azs[j]
+                                el1 = els[i] - el0
+                                el2 = els[j] - el0
+                                if az1 - az2 < -2*np.pi:
+                                    az2 += 2*np.pi
+                                az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
+                                if (rising and az_cross <= np.pi) or \
+                                   (not rising and az_cross >= np.pi):
+                                    azs_cross.append(az_cross)
+                    if len(azs_cross) > 0:
+                        azs_cross = np.sort(azs_cross)
+                        azmins.append(azs_cross[0])
+                        azmaxs.append(azs_cross[-1])
+                        aztimes.append(tstop)
+                    if np.all(np.logical_not(to_cross)):
+                        # All corners made it across the CES line.
+                        success = True
+                        break
+                    old_az = azs.copy()
+                    old_el = els.copy()
+                    old_to_cross = to_cross.copy()
+                if success:
+                    break
             if not success:
-                # CES failed due to the Sun, Moon or patch changing direction.
-                # Try the next patch instead.
+                # CES failed.  Try observing the next patch.
                 continue
             ces_time = tstop - t
             if ces_time > ces_max_time:
@@ -674,9 +630,10 @@ def main():
                 lat.append(lat[0])
                 print('{} corners:\n lon = {}\n lat= {}'.format(name, lon, lat),
                       flush=True)
-                hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C')
-                hp.projtext(lon[0], lat[0], name,
-                            lonlat=True, coord='C')
+                hp.projplot(lon, lat, 'r-', threshold=1, lonlat=True, coord='C',
+                            lw=2)
+                hp.projtext(lon[0], lat[0], name, lonlat=True, coord='C',
+                            fontsize=14)
 
     if args.debug:
         plt.savefig('patches.png')
