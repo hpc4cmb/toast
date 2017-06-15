@@ -916,7 +916,6 @@ if __name__ == '__main__':
         main()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
-        #raise # DEBUG
         exc_type, exc_value, exc_traceback = sys.exc_info()
         print('*** print_tb:')
         traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)

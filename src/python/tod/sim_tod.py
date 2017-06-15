@@ -791,7 +791,6 @@ class TODGround(TOD):
         scanrate = self._scanrate / self._rate # per sample, not per second
         # Modulate scan rate so that the rate on sky is constant
         scanrate /= np.cos(self._el)
-        dazdt = scanrate
         scan_accel = self._scan_accel / self._rate # per sample, not per second
         scan_accel /= np.cos(self._el)
         tol = self._rate / 10
@@ -800,50 +799,79 @@ class TODGround(TOD):
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
         starts = [0] # Subscan start indices
         while True:
+            #
             # Left to right, fixed rate
-            while az_last < lim_right:
-                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_SCAN
-                i += 1
-                if i == samples: break
-                az_last += dazdt
-                if i >= 0: self._az[i] = az_last
-            if i == samples: break
+            #
+            dazdt = scanrate
+            nstep = min(int((lim_right-az_last) // dazdt) + 1, samples-i)
+            offset_in = max(0, -i)
+            offset_out = max(0, i)
+            ngood = nstep - offset_in
+            if ngood > 0:
+                self._commonflags[offset_out:offset_out+ngood] \
+                    |= self.LEFTRIGHT_SCAN
+                self._az[offset_out:offset_out+ngood] \
+                    = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
+            i += nstep
+            if i == samples:
+                break
+            az_last += dazdt*nstep
+            #
             # Left to right, turnaround
-            while dazdt > -scanrate:
-                if i >= 0: self._commonflags[i] |= self.LEFTRIGHT_TURNAROUND
-                i += 1
-                if i == samples: break
-                dazdt -= scan_accel
-                if dazdt < 0 and -dazdt / scan_accel <= 1 and i > 0:
-                    # New subscan begins
-                    starts.append(i)
-                if dazdt < -scanrate:
-                    dazdt = -scanrate
-                az_last += dazdt
-                if i >= 0: self._az[i] = az_last
-            if i == samples: break
+            #
+            nstep = min(int((2*scanrate) // scan_accel) + 1, samples-i)
+            offset_in = max(0, -i)
+            offset_out = max(0, i)
+            ngood = nstep - offset_in
+            if ngood > 0:
+                self._commonflags[offset_out:offset_out+ngood] \
+                    |= self.LEFTRIGHT_TURNAROUND
+                ii = np.arange(offset_in, offset_in+ngood)
+                self._az[offset_out:offset_out+ngood] \
+                    = az_last + ii*dazdt - 0.5*scan_accel*ii**2
+            i += nstep
+            if i == samples:
+                break
+            az_last += dazdt*nstep - .5*scan_accel*nstep**2
+            #
             # Right to left, fixed rate
-            while az_last > lim_left:
-                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_SCAN
-                i += 1
-                if i == samples: break
-                az_last += dazdt
-                if i >= 0: self._az[i] = az_last
+            #
+            dazdt = -scanrate
+            nstep = min(int((lim_left-az_last) // dazdt) + 1, samples-i)
+            offset_in = max(0, -i)
+            offset_out = max(0, i)
+            ngood = nstep - offset_in
+            if ngood > 0:
+                self._commonflags[offset_out:offset_out+ngood] \
+                    |= self.RIGHTLEFT_SCAN
+                self._az[offset_out:offset_out+ngood] \
+                    = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
+                halfway = i + nstep//2
+                if halfway > 0:
+                    starts.append(halfway)
+            i += nstep
             if i == samples: break
+            az_last += dazdt*nstep
+            #
             # Right to left, turnaround
-            while dazdt < scanrate:
-                if i >= 0: self._commonflags[i] |= self.RIGHTLEFT_TURNAROUND
-                i += 1
-                if i == samples: break
-                dazdt += scan_accel
-                if dazdt > 0 and dazdt / scan_accel <= 1 and i > 0:
-                    # New subscan begins
-                    starts.append(i)
-                if dazdt > scanrate:
-                    dazdt = scanrate
-                az_last += dazdt
-                if i >= 0: self._az[i] = az_last
-            if i == samples: break
+            #
+            nstep = min(int((2*scanrate) // scan_accel) + 1, samples-i)
+            offset_in = max(0, -i)
+            offset_out = max(0, i)
+            ngood = nstep - offset_in
+            if ngood > 0:
+                self._commonflags[offset_out:offset_out+ngood] \
+                    |= self.RIGHTLEFT_TURNAROUND
+                ii = np.arange(offset_in, offset_in+ngood)
+                self._az[offset_out:offset_out+ngood] \
+                    = az_last + ii*dazdt + 0.5*scan_accel*ii**2
+                halfway = i + nstep//2
+                if halfway > 0:
+                    starts.append(halfway)
+            i += nstep
+            if i == samples:
+                break
+            az_last += dazdt*nstep + .5*scan_accel*nstep**2
 
         starts.append(samples)
         sizes = np.diff(starts)
