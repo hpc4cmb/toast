@@ -671,33 +671,17 @@ class TODGround(TOD):
                       ''.format(tstop - tstart), flush=True)
             tstart = tstop
 
-        # Create a list of subscans that excludes the turnarounds
+        # Create a list of subscans that excludes the turnarounds.
+        # All processes in the group still have all samples.
 
         self._subscans = []
-        for subscan_start, subscan_length in zip(starts, sizes):
-            istart = subscan_start
-            istop_scan = istart + subscan_length
-            while self._commonflags[istart] & self.TURNAROUND != 0:
-                istart += 1
-                if istart >= istop_scan:
-                    break
-            istop = istart
-            incomplete = False
-            while self._commonflags[istop] & self.TURNAROUND == 0:
-                istop += 1
-                if istop >= istop_scan:
-                    incomplete = True
-                    break
-            if incomplete:
-                # The last subscan did not finish in time, cut it from the list
-                self._commonflags[istart:istop] |= self.TURNAROUND
-                break
-            if istop - istart < 1:
-                continue
+        for istart, istop in zip(self._stable_starts, self._stable_stops):
             start = self._firsttime + istart / self._rate
             stop = self._firsttime + istop / self._rate
             self._subscans.append(
                 Interval(start=start, stop=stop, first=istart, last=istop-1))
+
+        self._commonflags[istop:] |= self.TURNAROUND
 
         if self._report_timing:
             mpicomm.Barrier()
@@ -811,10 +795,13 @@ class TODGround(TOD):
         # If CES begun before the TOD, first values of i are negative.
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
         starts = [0] # Subscan start indices
+        self._stable_starts = []
+        self._stable_stops = []
         while True:
             #
             # Left to right, fixed rate
             #
+            self._stable_starts.append(i)
             dazdt = scanrate
             nstep = min(int((lim_right-az_last) // dazdt) + 1, samples-i)
             offset_in = max(0, -i)
@@ -826,6 +813,7 @@ class TODGround(TOD):
                 self._az[offset_out:offset_out+ngood] \
                     = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
             i += nstep
+            self._stable_stops.append(i)
             if i == samples:
                 break
             az_last += dazdt*nstep
@@ -853,6 +841,7 @@ class TODGround(TOD):
             #
             # Right to left, fixed rate
             #
+            self._stable_starts.append(i)
             dazdt = -scanrate
             nstep = min(int((lim_left-az_last) // dazdt) + 1, samples-i)
             offset_in = max(0, -i)
@@ -864,6 +853,7 @@ class TODGround(TOD):
                 self._az[offset_out:offset_out+ngood] \
                     = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
             i += nstep
+            self._stable_stops.append(i)
             if i == samples: break
             az_last += dazdt*nstep
             #
