@@ -79,10 +79,10 @@ class OpMemoryCounter(Operator):
             print()
             print('Memory usage statistics: ')
             print('- Max memory (task): {:.2f} GB'.format(
-                tot_task_max / 2**20))
+                tot_task_max / 2**30))
             print('- Max memory (group): {:.2f} GB'.format(
-                tot_group_max / 2**20))
-            print('Total memory: {:.2f} GB'.format(tot_world / 2**20))
+                tot_group_max / 2**30))
+            print('Total memory: {:.2f} GB'.format(tot_world / 2**30))
             print('', flush=True)
 
         return tot_world
