@@ -806,10 +806,10 @@ void toast::atm::sim::initialize_kolmogorov() {
 
     // Use Newton's method to integrate the correlation function
 
-    long nr_task = nr / ntask + 1;
-    long first_r = nr_task * rank;
-    long last_r = first_r + nr_task;
-    if (last_r > nr) last_r = nr;
+    long nkappa_task = nkappa / ntask + 1;
+    long first_kappa = nkappa_task * rank;
+    long last_kappa = first_kappa + nkappa_task;
+    if (last_kappa > nkappa) last_kappa = nkappa;
 
     // Precalculate the power spectrum function
 
@@ -846,13 +846,13 @@ void toast::atm::sim::initialize_kolmogorov() {
     double ifac3 = 1. / (2.*3.);
 
 #pragma omp parallel for schedule(static, 10)
-    for ( long ir=first_r; ir<last_r; ++ir ) {
+    for ( long ir=0; ir<nr; ++ir ) {
         double r = rmin + (exp(ir*nri*tau)-1)*enorm*(rmax-rmin);
         double val = 0;
         if ( r * kappamax < 1e-2 ) {
             // special limit r -> 0,
             // sin(kappa.r)/r -> kappa - kappa^3*r^2/3!
-            for ( long ikappa=nkappa-1; ikappa>=0; --ikappa ) {
+            for ( long ikappa=first_kappa; ikappa<last_kappa; ++ikappa ) {
                 double kappa = ikappa*kappastep;
                 double kappa2 = kappa * kappa;
                 double kappa4 = kappa2 * kappa2;
@@ -860,7 +860,7 @@ void toast::atm::sim::initialize_kolmogorov() {
                 val += phi[ ikappa ] * (kappa2 - r2*kappa4*ifac3);
             }
         } else {
-            for ( long ikappa=nkappa-1; ikappa>=0; --ikappa ) {
+            for ( long ikappa=first_kappa; ikappa<last_kappa; ++ikappa ) {
                 double kappa = ikappa*kappastep;
                 val += phi[ ikappa ] * sin( kappa * r ) * kappa;
             }
@@ -872,10 +872,6 @@ void toast::atm::sim::initialize_kolmogorov() {
     }
 
     int ierr;
-    ierr = MPI_Allreduce( MPI_IN_PLACE, kolmo_x.data(), (int)nr,
-                          MPI_DOUBLE, MPI_SUM, comm );
-    if ( ierr != MPI_SUCCESS )
-        throw std::runtime_error( "Failed to allreduce kolmo_x." );
     ierr = MPI_Allreduce( MPI_IN_PLACE, kolmo_y.data(), (int)nr,
                           MPI_DOUBLE, MPI_SUM, comm );
     if ( ierr != MPI_SUCCESS )
