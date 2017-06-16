@@ -1,5 +1,5 @@
 # Copyright (c) 2015 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import re
@@ -120,7 +120,7 @@ class Cache(object):
                     if sys.getrefcount(self._refs[k]) > 2:
                         warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
                     del self._refs[k]
-            self._refs.clear()            
+            self._refs.clear()
         else:
             pat = re.compile(pattern)
             names = []
@@ -156,7 +156,7 @@ class Cache(object):
                     raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
                 flatsize *= shape[s]
             self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
-            
+
         return self._refs[name]
 
 
@@ -187,7 +187,7 @@ class Cache(object):
 
         ref = self.create(name, mydata.dtype, mydata.shape)
         ref[:] = mydata
-        
+
         return ref
 
 
@@ -213,7 +213,7 @@ class Cache(object):
         """
         Deallocate the specified buffer.
 
-        Only call this if all numpy arrays that reference the memory 
+        Only call this if all numpy arrays that reference the memory
         are out of use.
 
         Args:
@@ -285,7 +285,7 @@ class Cache(object):
 
         The returned array will wrap a pointer to the raw buffer, but will
         not claim ownership.  When the numpy array is garbage collected, it
-        will NOT attempt to free the memory (you must manually use the 
+        will NOT attempt to free the memory (you must manually use the
         destroy method).
 
         Args:
@@ -299,7 +299,7 @@ class Cache(object):
             raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
         return ref
 
-    
+
     def keys(self):
         """
         Return a list of all the keys in the cache.
@@ -326,20 +326,30 @@ class Cache(object):
         return self._aliases.copy()
 
 
-    def report(self):
+    def report(self, silent=False):
         """
         Report memory usage.
+
+        Args:
+            silent (bool):  Count and return the memory without printing.
+
+        Returns:
+            (int):  Amount of allocated memory in bytes
         """
 
-        print('Cache memory usage:')
-        
+        if not silent:
+            print('Cache memory usage:')
+
         tot = 0
         for key in self.keys():
             ref = self.reference(key)
             sz = ref.nbytes
             del ref
             tot += sz
-            print(' - {:25} {:5.2f} MB'.format(key,sz/2**20))
-                  
-        print(' {:27} {:5.2f} MB'.format('TOTAL',tot/2**20))
-            
+            if not silent:
+                print(' - {:25} {:5.2f} MB'.format(key, sz/2**20))
+
+        if not silent:
+            print(' {:27} {:5.2f} MB'.format('TOTAL', tot/2**20))
+
+        return tot

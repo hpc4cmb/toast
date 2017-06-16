@@ -650,6 +650,11 @@ class TODGround(TOD):
         self._min_el = None
         self._min_el = None
 
+        self._az = None
+        self._commonflags = None
+        self._boresight_azel = None
+        self._boresight = None
+
         # Set the boresight pointing based on the given scan parameters
 
         if self._report_timing:
@@ -718,7 +723,7 @@ class TODGround(TOD):
                       ''.format(tstop - tstart), flush=True)
             tstart = tstop
 
-        self._boresight_azel, self._boresight = self.translate_pointing()
+        self.translate_pointing()
 
         if self._report_timing:
             mpicomm.Barrier()
@@ -729,6 +734,14 @@ class TODGround(TOD):
 
     def __del__(self):
 
+        try:
+            del self._boresight_azel
+        except:
+            pass
+        try:
+            del self._boresight
+        except:
+            pass
         try:
             del self._az
         except:
@@ -984,10 +997,13 @@ class TODGround(TOD):
         ind = slice(offset, offset+n)
 
         self._az = self.cache.put('az', self._az[ind])
-        self._commonflags = self.cache.put('commonflags',
-                                           self._commonflags[ind])
+        self._commonflags = self.cache.put(
+            'commonflags', self._commonflags[ind])
+        self._boresight_azel = self.cache.put(
+            'boresize_azel', azelquats[ind])
+        self._boresight = self.cache.put('boresize', quats[ind])
 
-        return azelquats[ind], quats[ind]
+        return
 
     def radec2quat(self, ra, dec, pa):
 

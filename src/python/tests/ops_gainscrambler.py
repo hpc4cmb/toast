@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -111,22 +111,22 @@ class OpGainScramblerTest(MPITestCase):
         # Construct an empty TOD (no pointing needed)
 
         self.tod = TODHpixSpiral(
-            self.toastcomm.comm_group, 
-            self.fp, 
-            self.totsamp, 
-            firsttime=0.0, 
-            rate=self.rate, 
-            nside=512, 
+            self.toastcomm.comm_group,
+            self.fp,
+            self.totsamp,
+            firsttime=0.0,
+            rate=self.rate,
+            nside=512,
             sampsizes=chunks)
 
         # construct an analytic noise model
 
         self.nse = AnalyticNoise(
-            rate=self.rates, 
-            fmin=self.fmin, 
-            detectors=self.dets, 
-            fknee=self.fknee, 
-            alpha=self.alpha, 
+            rate=self.rates,
+            fmin=self.fmin,
+            detectors=self.dets,
+            fknee=self.fknee,
+            alpha=self.alpha,
             NET=self.NET
         )
 
@@ -170,7 +170,7 @@ class OpGainScramblerTest(MPITestCase):
         elapsed = stop - start
 
         # Ensure RMS changes for the implicated detectors
-        
+
         for det in tod.local_dets:
             cachename = 'noise_{}'.format(det)
             y = tod.cache.reference(cachename)
@@ -182,4 +182,3 @@ class OpGainScramblerTest(MPITestCase):
                 raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
 
         self.print_in_turns('gainscrambler test took {:.3f} s'.format(elapsed))
-

@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -31,6 +31,7 @@ from . import ops_simnoise as testopssimnoise
 from . import ops_polyfilter as testopspolyfilter
 from . import ops_groundfilter as testopsgroundfilter
 from . import ops_gainscrambler as testopsgainscrambler
+from . import ops_memorycounter as testopsmemorycounter
 from . import ops_madam as testopsmadam
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
@@ -40,7 +41,7 @@ from . import binned as testbinned
 def test(name=None):
     # We run tests with COMM_WORLD
     comm = MPI.COMM_WORLD
-    
+
     outdir = "toast_test_output"
 
     if comm.rank == 0:
@@ -78,6 +79,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testopspolyfilter) )
         suite.addTest( loader.loadTestsFromModule(testopsgroundfilter) )
         suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
+        suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
         suite.addTest( loader.loadTestsFromModule(testopsmadam) )
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
@@ -92,4 +94,3 @@ def test(name=None):
         mpirunner.run(suite)
 
     return
-

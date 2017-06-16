@@ -13,7 +13,7 @@ import numpy.testing as nt
 
 import scipy.interpolate as si
 
-from ..tod import OpPolyFilter, Interval
+from ..tod import OpMemoryCounter
 from ..tod.tod import *
 from ..tod.pointing import *
 from ..tod.noise import *
@@ -24,7 +24,7 @@ from ..tod.sim_tod import *
 from .. import rng as rng
 
 
-class OpPolyFilterTest(MPITestCase):
+class OpMemoryCounterTest(MPITestCase):
 
     def setUp(self):
         self.outdir = 'toast_test_output'
@@ -42,8 +42,6 @@ class OpPolyFilterTest(MPITestCase):
             self.ngroup = 1
         self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
         self.data = Data(self.toastcomm)
-
-        self.order = 5
 
         self.dets = ['f1a_apply', 'f1b_apply', 'f2a', 'f2b', 'white', 'high']
         self.fp = {}
@@ -130,66 +128,38 @@ class OpPolyFilterTest(MPITestCase):
             NET=self.NET
         )
 
-        intervals = []
-        interval_len = 100
-        for istart in range(0, self.totsamp, interval_len):
-            istop = min(istart + interval_len, self.totsamp)
-            intervals.append(Interval(
-                start=istart/self.rate, stop=istop/self.rate,
-                first=istart, last=istop))
-
         ob = {}
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
-        ob['intervals'] = intervals
+        ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = self.nse
 
         self.data.obs.append(ob)
 
-    def test_filter(self):
+    def test_counter(self):
         start = MPI.Wtime()
 
         ob = self.data.obs[0]
         tod = ob['tod']
         nse = ob['noise']
 
+        counter = OpMemoryCounter()
+
+        tot_old = counter.exec(self.data)
+
         # generate timestreams
 
         op = OpSimNoise()
         op.exec(self.data)
 
-        # Replace the noise with a polynomial fit
+        tot_new = counter.exec(self.data)
 
-        old_rms = {}
-
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            x = np.arange(y.size)
-            p = np.polyfit(x, y, self.order)
-            y[:] = np.polyval(p, x)
-            old_rms[det] = np.std(y)
-
-        # Filter timestreams
-
-        op = OpPolyFilter(name='noise', order=self.order, pattern=r'.*apply.*')
-        op.exec(self.data)
+        np.testing.assert_equal(
+            tot_new - tot_old, self.totsamp * len(self.dets) * 8)
 
         stop = MPI.Wtime()
         elapsed = stop - start
 
-        # Ensure all timestreams are zeroed out by the filter
-
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            rms = np.std(y)
-            old = old_rms[det]
-            if rms / old > 1e-10 and 'apply' in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
-            if rms / old < 1e-1 and 'apply' not in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
-
-        self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))
+        self.print_in_turns('memorycounter test took {:.3f} s'.format(elapsed))
