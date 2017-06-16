@@ -371,6 +371,10 @@ def main():
 
     data = toast.Data(comm)
 
+    distobjects = []
+    counter = tt.OpMemoryCounter()
+    counter.exec(data)
+
     detectors = sorted(fp.keys())
     detquats = {}
     for d in detectors:
@@ -451,6 +455,8 @@ def main():
         raise RuntimeError('Too many tasks. Every MPI task must '
                            'be assigned to at least one process.')
 
+    counter.exec(data)
+
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
@@ -473,6 +479,8 @@ def main():
     if comm.comm_world.rank == 0:
         print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
     start = stop
+
+    counter.exec(data)
 
     if not args.skip_bin or args.input_map:
 
@@ -501,6 +509,7 @@ def main():
         distmap = tm.DistPixels(
             comm=comm.comm_world, size=npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
+        distobjects.append(distmap)
         distmap.read_healpix_fits(args.input_map)
         scansim = tt.OpSimScan(distmap=distmap, out='signal')
         scansim.exec(data)
@@ -511,6 +520,9 @@ def main():
             print('Read and sampled input map:  {:.2f} seconds'
                   ''.format(stop-start), flush=True)
         start = stop
+
+        counter = tt.OpMemoryCounter(*distobjects)
+        counter.exec(data)
 
     # Operator for signal copying, used in each MC iteration
 
@@ -536,10 +548,13 @@ def main():
 
         invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
                                dtype=np.float64, submap=subnpix, local=localsm)
+        distobjects.append(invnpp)
         hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
                              dtype=np.int64, submap=subnpix, local=localsm)
+        distobjects.append(hits)
         zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
                              dtype=np.float64, submap=subnpix, local=localsm)
+        distobjects.append(zmap)
 
         # compute the hits and covariance once, since the pointing and noise
         # weights are fixed.
@@ -565,6 +580,9 @@ def main():
                   flush=True)
         start = stop
 
+        counter = tt.OpMemoryCounter(*distobjects)
+        counter.exec(data)
+
         fn = '{}/hits.fits'.format(args.outdir)
         hits.write_healpix_fits(fn)
 
@@ -575,6 +593,9 @@ def main():
             print('Writing hit map to {} took {:.3f} s'
                   ''.format(fn, elapsed), flush=True)
         start = stop
+
+        distobjects.remove(hits)
+        del hits
 
         fn = '{}/invnpp.fits'.format(args.outdir)
         invnpp.write_healpix_fits(fn)
@@ -607,6 +628,9 @@ def main():
             print('Writing N_pp took {:.3f} s'.format(elapsed),
                   flush=True)
         start = stop
+
+        counter = tt.OpMemoryCounter(*distobjects)
+        counter.exec(data)
 
     """
     # in debug mode, print out data distribution information
@@ -817,7 +841,8 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Polynomial filtering took {:.3f} s'.format(elapsed), flush=True)
+                print('Polynomial filtering took {:.3f} s'.format(elapsed),
+                      flush=True)
             start = stop
 
         if args.wbin_ground:
@@ -834,7 +859,8 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Ground filtering took {:.3f} s'.format(elapsed), flush=True)
+                print('Ground filtering took {:.3f} s'.format(elapsed),
+                      flush=True)
             start = stop
 
         if args.polyorder or args.wbin_ground:
@@ -883,6 +909,8 @@ def main():
                 print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
                       flush=True)
             start = stop
+
+        counter.exec(data)
 
         # Optional Madam mapmaking
 
