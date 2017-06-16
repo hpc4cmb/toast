@@ -819,7 +819,8 @@ class TODGround(TOD):
             #
             # Left to right, turnaround
             #
-            nstep = min(int((2*scanrate) // scan_accel) + 1, samples-i)
+            nstep_full = int((2*scanrate) // scan_accel) + 1
+            nstep = min(int(nstep_full), samples-i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
@@ -829,6 +830,9 @@ class TODGround(TOD):
                 ii = np.arange(offset_in, offset_in+ngood)
                 self._az[offset_out:offset_out+ngood] \
                     = az_last + ii*dazdt - 0.5*scan_accel*ii**2
+                halfway = i + nstep_full//2
+                if halfway > 0 and halfway < samples:
+                    starts.append(halfway)
             i += nstep
             if i == samples:
                 break
@@ -846,16 +850,14 @@ class TODGround(TOD):
                     |= self.RIGHTLEFT_SCAN
                 self._az[offset_out:offset_out+ngood] \
                     = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
-                halfway = i + nstep//2
-                if halfway > 0:
-                    starts.append(halfway)
             i += nstep
             if i == samples: break
             az_last += dazdt*nstep
             #
             # Right to left, turnaround
             #
-            nstep = min(int((2*scanrate) // scan_accel) + 1, samples-i)
+            nstep_full = int((2*scanrate) // scan_accel) + 1
+            nstep = min(int(nstep_full), samples-i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
@@ -865,8 +867,8 @@ class TODGround(TOD):
                 ii = np.arange(offset_in, offset_in+ngood)
                 self._az[offset_out:offset_out+ngood] \
                     = az_last + ii*dazdt + 0.5*scan_accel*ii**2
-                halfway = i + nstep//2
-                if halfway > 0:
+                halfway = i + nstep_full//2
+                if halfway > 0 and halfway < samples:
                     starts.append(halfway)
             i += nstep
             if i == samples:

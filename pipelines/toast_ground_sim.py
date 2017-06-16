@@ -269,8 +269,9 @@ def main():
             start_timestamp = start_time.timestamp()
             stop_timestamp = stop_time.timestamp()
 
-            all_ces.append([start_timestamp, stop_timestamp, name, int(scan),
-                            float(azmin), float(azmax), float(el)])
+            all_ces.append([
+                start_timestamp, stop_timestamp, name, float(mjdstart),
+                int(scan), int(subscan), float(azmin), float(azmax), float(el)])
         f.close()
         stop = MPI.Wtime()
         elapsed = stop - start
@@ -382,7 +383,8 @@ def main():
     for ices in range(group_firstobs, group_firstobs + group_numobs):
         ces = all_ces[ices]
 
-        CES_start, CES_stop, name, scan, azmin, azmax, el = ces
+        CES_start, CES_stop, name, mjdstart, scan, subscan, azmin, azmax, \
+            el = ces
 
         totsamples = int((CES_stop - CES_start) * args.samplerate)
 
@@ -433,12 +435,15 @@ def main():
         # Create the (single) observation
 
         ob = {}
-        ob['name'] = 'CES-{}-{}'.format(name, scan)
+        ob['name'] = 'CES-{}-{}-{}'.format(name, scan, subscan)
         ob['tod'] = tod
-        ob['intervals'] = tod.subscans
+        if len(tod.subscans) > 0:
+            ob['intervals'] = tod.subscans
+        else:
+            raise RuntimeError('{} has no valid intervals'.format(ob['name']))
         ob['baselines'] = None
         ob['noise'] = noise
-        ob['id'] = 0
+        ob['id'] = int(mjdstart * 10000)
 
         data.obs.append(ob)
 

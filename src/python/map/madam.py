@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -95,9 +95,9 @@ class OpMadam(Operator):
         flag_name (str): the name of the cache object
             (<flag_name>_<detector>) to use for the detector flags.
             If None, use the TOD.
-        flag_mask (int): the integer bit mask (0-255) that should be 
+        flag_mask (int): the integer bit mask (0-255) that should be
             used with the detector flags in a bitwise AND.
-        common_flag_name (str): the name of the cache object 
+        common_flag_name (str): the name of the cache object
             to use for the common flags.  If None, use the TOD.
         common_flag_mask (int): the integer bit mask (0-255) that should
             be used with the common flags in a bitwise AND.
@@ -343,9 +343,19 @@ class OpMadam(Operator):
                     period_ranges.append((local_start, local_stop + 1))
             obs_period_ranges.append(period_ranges)
 
+        nsamp_tot_full = comm.allreduce(nsamp, op=MPI.SUM)
         nperiod = len(period_lengths)
         period_lengths = np.array(period_lengths, dtype=np.int64)
         nsamp = np.sum(period_lengths, dtype=np.int64)
+        nsamp_tot = comm.allreduce(nsamp, op=MPI.SUM)
+        if nsamp_tot == 0:
+            raise RuntimeError(
+                'No samples in valid intervals: nsamp_tot_full = {}, '
+                'nsamp_tot = {}'.format(nsamp_tot_full, nsamp_tot))
+        if comm.rank == 0:
+            print('OpMadam: {:.2f} % of samples are included in valid '
+                  'intervals.'.format(nsamp_tot*100./nsamp_tot_full))
+
         # Madam expects starting indices, not period lengths
         periods = np.zeros(nperiod, dtype=np.int64)
         for i, n in enumerate(period_lengths[:-1]):
