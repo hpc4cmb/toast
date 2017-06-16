@@ -753,6 +753,7 @@ void toast::atm::sim::get_volume() {
 
 void toast::atm::sim::initialize_kolmogorov() {
 
+    MPI_Barrier( comm );
     double t1 = MPI_Wtime();
 
     // Numerically integrate the modified Kolmogorov spectrum for the
@@ -813,15 +814,17 @@ void toast::atm::sim::initialize_kolmogorov() {
 
     // Precalculate the power spectrum function
 
-    std::vector<double> phi(nkappa);
+    std::vector<double> phi(last_kappa - first_kappa);
 #pragma omp parallel for schedule(static, 10)
-    for ( long ikappa=0; ikappa<nkappa; ++ikappa ) {
+    for ( long ikappa=first_kappa; ikappa<last_kappa; ++ikappa ) {
         double kappa = ikappa*kappastep;
         double kkl = kappa * invkappal;
-        phi[ikappa] = ( 1. + 1.802 * kkl - 0.254 * pow( kkl, slope1 ) )
+        phi[ikappa-first_kappa] =
+            ( 1. + 1.802 * kkl - 0.254 * pow( kkl, slope1 ) )
             * exp( -kkl*kkl ) * pow( kappa*kappa + kappa0sq, slope2 );
     }
 
+    /*
     if ( rank == 0 && verbosity > 0) {
         std::ofstream f;
         std::ostringstream fname;
@@ -831,11 +834,12 @@ void toast::atm::sim::initialize_kolmogorov() {
             f << ikappa*kappastep << " " << phi[ikappa] << std::endl;
         f.close();
     }
+    */
 
     // Newton's method factors, not part of the power spectrum
 
-    phi[0] /= 2;
-    phi[nkappa-1] /= 2;
+    if ( first_kappa == 0 ) phi[0] /= 2;
+    if ( last_kappa == nkappa ) phi[last_kappa-first_kappa-1] /= 2;
 
     // Integrate the power spectrum for a spherically symmetric
     // correlation function
@@ -857,12 +861,12 @@ void toast::atm::sim::initialize_kolmogorov() {
                 double kappa2 = kappa * kappa;
                 double kappa4 = kappa2 * kappa2;
                 double r2 = r * r;
-                val += phi[ ikappa ] * (kappa2 - r2*kappa4*ifac3);
+                val += phi[ikappa - first_kappa] * (kappa2 - r2*kappa4*ifac3);
             }
         } else {
             for ( long ikappa=first_kappa; ikappa<last_kappa; ++ikappa ) {
                 double kappa = ikappa*kappastep;
-                val += phi[ ikappa ] * sin( kappa * r ) * kappa;
+                val += phi[ikappa - first_kappa] * sin( kappa * r ) * kappa;
             }
             val /= r;
         }
