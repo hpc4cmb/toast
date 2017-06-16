@@ -453,15 +453,15 @@ def main():
 
     if len(data.obs) == 0:
         raise RuntimeError('Too many tasks. Every MPI task must '
-                           'be assigned to at least one process.')
-
-    counter.exec(data)
+                           'be assigned to at least one observation.')
 
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print('Read parameters, compute data distribution and simulate scans: '
               '{:.2f} seconds'.format(stop-start), flush=True)
+
+    counter.exec(data)
 
     start = stop
 
