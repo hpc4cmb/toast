@@ -83,6 +83,7 @@ private :
     double xstepinv, ystepinv, zstepinv;
     double fnear, fnearinv, rnear, rverynear;
     long nx, ny, nz, nn, xstride, ystride, zstride;
+    double xstrideinv, ystrideinv, zstrideinv;
     size_t nelem;
     double xtel, ytel, ztel; // Telescope position
     double lmin, lmax, w, wdir, z0, T0, wx, wy;

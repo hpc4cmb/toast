@@ -134,6 +134,8 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 
     az0 = azmin + delta_az / 2;
 
+    if ( fnear >= 1 ) throw std::runtime_error( "atmsim: fnear >= 1." );
+
     fnearinv = 1 / fnear;
 
     if ( rank == 0 && verbosity > 0 ) {
@@ -313,7 +315,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     ind_start = ind_stop;
 
-    long ix_start = (*full_index)[ind_start] / xstride;
+    long ix_start = (*full_index)[ind_start] * xstrideinv;
     long ix1 = ix_start;
     long ix2;
 
@@ -322,7 +324,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
         while ( ix1 == ix2 ) {
             ++ind_stop;
             if ( ind_stop == nelem ) break;
-            ix2 = (*full_index)[ind_stop] / xstride;
+            ix2 = (*full_index)[ind_stop] * xstrideinv;
         }
         if ( ind_stop == nelem ) break;
         if ( ind_stop - ind_start > nelem_sim_max ) break;
@@ -480,6 +482,9 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                 int near=0;
                 double *preal = realization->data();
                 double r_eff = r;
+
+                double z = r_eff * sin_el;
+
                 if ( r < rverynear ) {
                     // Use the very near field simulation
                     near = 2;
@@ -492,32 +497,24 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                     r_eff *= fnearinv;
                 }
 
-                double z = r_eff * sin_el;
+                double z_eff = r_eff * sin_el;
                 if ( z >= zmax ) break;
                 double rproj = r_eff * cos_el;
-                double x = xtel_now + rproj * cos_az;
-                double y = ytel_now - rproj * sin_az;
-
-                double x_eff = x;
-                double y_eff = y;
-                double z_eff = z;
-                for (int j=0; j < near; ++j) {
-                    x_eff *= fnear;
-                    y_eff *= fnear;
-                    z_eff *= fnear;
-                }
+                double x_eff = xtel_now + rproj*cos_az;
+                double y_eff = ytel_now - rproj*sin_az;
 
 #ifdef DEBUG
-                if ( x < 0 || x > delta_x ||
-                     y < 0 || y > delta_y ||
-                     z < 0 || z > delta_z ) {
+                if ( x_eff < 0 || x_eff > delta_x ||
+                     y_eff < 0 || y_eff > delta_y ||
+                     z_eff < 0 || z_eff > delta_z ) {
                     std::ostringstream o;
                     o.precision( 16 );
                     o << "atmsim::observe : observation point out of bounds ("
-                      << x << " / " << delta_x << ", "
-                      << y << " / " << delta_y << ", "
-                      << z << " / " << delta_z << ")" << std::endl
-                      << "( t, t-tmin, az, az-az0, el, r, r_eff, r_proj ) = " << std::endl
+                      << x_eff << " / " << delta_x << ", "
+                      << y_eff << " / " << delta_y << ", "
+                      << z_eff << " / " << delta_z << ")" << std::endl
+                      << "( t, t-tmin, az, az-az0, el, r, r_eff, r_proj ) = "
+                      << std::endl
                       << "( " << t[i] << ", " << t_now << ", " << az[i]
                       << ", " << az_now << ", " << el[i] << ", "
                       << r << ", " << r_eff << ", " << rproj
@@ -536,20 +533,23 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
                 double step_val;
                 try {
-                    step_val = interp( preal, x, y, z, last_ind, last_nodes )
-                        * (1 - z_eff * zatm_inv);
+                    step_val = interp( preal, x_eff, y_eff, z_eff, last_ind,
+                                       last_nodes )
+                        * (1. - z * zatm_inv);
                 } catch ( const std::runtime_error& e ) {
                     std::ostringstream o;
                     o.precision( 16 );
                     o << "atmsim::observe : interp failed at ("
-                      << x << " /  " << delta_x << ", " << y << " / " << delta_y << ", "
-                      << z << " / " << delta_z << ")"
-                      << "( t, az, el ) " << "( " << t[i] << ", " << az[i] << ", "
-                      << el[i] << ") with " << e.what() << std::endl;
+                      << x_eff << " /  " << delta_x << ", " << y_eff << " / "
+                      << delta_y << ", " << z_eff << " / " << delta_z << ")"
+                      << "( t, az, el ) " << "( " << t[i] << ", " << az[i]
+                      << ", " << el[i] << ") with " << e.what() << std::endl;
                     throw std::runtime_error( o.str().c_str() );
                 }
 
-                // In the near field the steps are shorter and so the weights are smaller
+                // In the near field the steps are shorter and so the
+                // weights are smaller
+
                 for (int j=0; j < near; ++j) step_val *= fnear;
                 val += step_val;
 
@@ -724,6 +724,10 @@ void toast::atm::sim::get_volume() {
     ystride = zstride * nz;
     xstride = ystride * ny;
 
+    xstrideinv = 1. / xstride;
+    ystrideinv = 1. / ystride;
+    zstrideinv = 1. / zstride;
+
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Simulation volume:" << std::endl;
@@ -758,7 +762,7 @@ void toast::atm::sim::initialize_kolmogorov() {
     rmin = 0;
     double diag = sqrt( delta_x*delta_x + delta_y*delta_y);
     rmax = sqrt( diag*diag + delta_z*delta_z );
-    nr = 10000; // Size of the interpolation grid
+    nr = 1000; // Size of the interpolation grid
 
 #ifdef DEBUG
     nr /= 10;
@@ -818,6 +822,16 @@ void toast::atm::sim::initialize_kolmogorov() {
             * exp( -kkl*kkl ) * pow( kappa*kappa + kappa0sq, slope2 );
     }
 
+    if ( rank == 0 && verbosity > 0) {
+        std::ofstream f;
+        std::ostringstream fname;
+        fname << "kolmogorov_f.txt";
+        f.open( fname.str(), std::ios::out );
+        for ( int ikappa=0; ikappa<nkappa; ++ikappa )
+            f << ikappa*kappastep << " " << phi[ikappa] << std::endl;
+        f.close();
+    }
+
     // Newton's method factors, not part of the power spectrum
 
     phi[0] /= 2;
@@ -826,21 +840,29 @@ void toast::atm::sim::initialize_kolmogorov() {
     // Integrate the power spectrum for a spherically symmetric
     // correlation function
 
+    double nri = 1. / (nr-1);
+    double tau = 10.;
+    double enorm = 1. / (exp(tau) - 1.);
+    double ifac3 = 1. / (2.*3.);
+
 #pragma omp parallel for schedule(static, 10)
     for ( long ir=first_r; ir<last_r; ++ir ) {
-        double r = rmin + ir*rstep;
+        double r = rmin + (exp(ir*nri*tau)-1)*enorm*(rmax-rmin);
         double val = 0;
-        if (r == 0) {
-            // special limit r -> 0, sin(kappa.r)/r -> kappa
+        if ( r * kappamax < 1e-2 ) {
+            // special limit r -> 0,
+            // sin(kappa.r)/r -> kappa - kappa^3*r^2/3!
             for ( long ikappa=nkappa-1; ikappa>=0; --ikappa ) {
                 double kappa = ikappa*kappastep;
-                double kappasq = kappa * kappa;
-                val += phi[ikappa] * kappasq;
+                double kappa2 = kappa * kappa;
+                double kappa4 = kappa2 * kappa2;
+                double r2 = r * r;
+                val += phi[ ikappa ] * (kappa2 - r2*kappa4*ifac3);
             }
         } else {
             for ( long ikappa=nkappa-1; ikappa>=0; --ikappa ) {
                 double kappa = ikappa*kappastep;
-                val += phi[ikappa] * sin( kappa * r ) * kappa;
+                val += phi[ ikappa ] * sin( kappa * r ) * kappa;
             }
             val /= r;
         }
@@ -859,7 +881,12 @@ void toast::atm::sim::initialize_kolmogorov() {
     if ( ierr != MPI_SUCCESS )
         throw std::runtime_error( "Failed to allreduce kolmo_y." );
 
-    if ( rank == 0 && verbosity > 10) {
+    // Normalize
+
+    double norm = 1. / kolmo_y[0];
+    for ( int i=0; i<nr; ++i ) kolmo_y[i] *= norm;
+
+    if ( rank == 0 && verbosity > 0) {
         std::ofstream f;
         std::ostringstream fname;
         fname << "kolmogorov.txt";
@@ -885,17 +912,27 @@ double toast::atm::sim::kolmogorov( double r ) {
     if ( r == 0 ) return kolmo_y[0];
     if ( r == rmax ) return kolmo_y[nr-1];
 
-    // Simple linear interpolation for now. Assume the r-grid is regular so
-    // we don't need to search for the interpolation points.
-
-    long ir = (r - rmin) * rstep_inv;
-
-    if ( ir < 0 || ir > nr-2 ) {
+    if ( r < rmin || r > rmax ) {
         std::ostringstream o;
         o.precision( 16 );
         o << "Kolmogorov value requested at " << r
           << ", outside gridded range [" << rmin << ", " << rmax << "].";
         throw std::runtime_error( o.str().c_str() );
+    }
+
+    // Simple linear interpolation for now.  Use a bisection method
+    // to find the rigth elements.
+
+    long low = 0, high = nr-1;
+    long ir;
+
+    while ( true ) {
+        ir = low + 0.5*(high-low);
+        if (kolmo_x[ir] <= r and r <= kolmo_x[ir+1]) break;
+        if (r < kolmo_x[ir])
+            high = ir;
+        else
+            low = ir;
     }
 
     double rlow = kolmo_x[ir];
@@ -904,7 +941,7 @@ double toast::atm::sim::kolmogorov( double r ) {
     double vlow = kolmo_y[ir];
     double vhigh = kolmo_y[ir+1];
 
-    double val = (1-rdist) * vlow + rdist * vhigh;
+    double val = (1-rdist)*vlow + rdist*vhigh;
 
     return val;
 }
@@ -1101,8 +1138,8 @@ void toast::atm::sim::ind2coord( long i, double *coord ) {
 
     long ifull = (*full_index)[i];
 
-    long ix = ifull / xstride;
-    long iy = (ifull - ix*xstride) / ystride;
+    long ix = ifull * xstrideinv;
+    long iy = (ifull - ix*xstride) * ystrideinv;
     long iz = ifull - ix*xstride - iy*ystride;
 
     coord[0] = ix * xstep;
@@ -1115,9 +1152,9 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
 
     // Translate xyz-coordinates into a compressed index
 
-    long ix = x / xstep;
-    long iy = y / ystep;
-    long iz = z / zstep;
+    long ix = x * xstepinv;
+    long iy = y * ystepinv;
+    long iz = z * zstepinv;
 
     if ( ix < 0 || ix > nx-1 || iy < 0 || iy > ny-1 || iz < 0 || iz > nz-1 ) {
         std::ostringstream o;
@@ -1278,6 +1315,7 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
     int nrow = cov->LocalHeight();
     int ncol = cov->LocalWidth();
 
+#pragma omp parallel for schedule(static, 10)
     for (int icol=0; icol<ncol; ++icol) {
         for (int irow=0; irow<nrow; ++irow) {
 
@@ -1361,7 +1399,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
                           << std::endl;
             }
 
-            El::Cholesky( El::UPPER, cov_temp );
+            El::Cholesky( El::LOWER, cov_temp );
 
             MPI_Barrier( comm_gang );
             double t2 = MPI_Wtime();
@@ -1485,7 +1523,11 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
 
     // El::Trmv is not implemented yet in Elemental
     //El::Trmv( El::UPPER, El::NORMAL, El::NON_UNIT, *cov, slice_realization );
-    El::Trmm( El::LEFT, El::UPPER, El::NORMAL, El::NON_UNIT,
+    //El::Trmm( El::LEFT, El::LOWER, El::NORMAL, El::NON_UNIT,
+    //          1.0, *cov, slice_realization );
+    // For some reason, multiplying from the left only used the
+    // diagonal elements.
+    El::Trmm( El::RIGHT, El::LOWER, El::TRANSPOSE, El::NON_UNIT,
               1.0, *cov, slice_realization );
 
     // Subtract the mean of the slice to reduce step between the slices

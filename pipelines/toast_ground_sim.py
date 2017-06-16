@@ -338,6 +338,17 @@ def main():
             fake3['NET'] = 1.0
             fake3['color'] = 'r'
             fp['bore3'] = fake3
+            # Fourth detector at 67.5 degree polarization angle
+            fake4 = {}
+            zrot = qa.rotation(ZAXIS, 67.5*degree)
+            fake4['quat'] = qa.mult(fake['quat'], zrot)
+            fake4['fwhm'] = 30.0
+            fake4['fknee'] = 0.0
+            fake4['fmin'] = 1e-9
+            fake4['alpha'] = 1.0
+            fake4['NET'] = 1.0
+            fake4['color'] = 'r'
+            fp['bore4'] = fake4
         else:
             with open(args.fp, 'rb') as p:
                 fp = pickle.load(p)
@@ -821,7 +832,7 @@ def main():
                 print('Ground filtering took {:.3f} s'.format(elapsed), flush=True)
             start = stop
 
-        if not args.skip_bin:
+        if args.polyorder or args.wbin_ground:
 
             # Bin a map using the toast facilities
 
