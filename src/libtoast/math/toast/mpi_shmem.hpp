@@ -24,11 +24,15 @@ public:
         // Split the provided communicator into groups that share
         // memory (are on the same node).
 
-        MPI_Comm_split_type( comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
-                             &shmcomm_ );
-        MPI_Comm_size( shmcomm_, &ntasks_ );
-        MPI_Comm_rank( shmcomm_, &rank_ );
+        if ( MPI_Comm_split_type( comm, MPI_COMM_TYPE_SHARED, 0,
+                                  MPI_INFO_NULL, &shmcomm_ ) )
+            throw std::runtime_error( "Failed to split communicator by node." );
 
+        if ( MPI_Comm_size( shmcomm_, &ntasks_ ) )
+            throw std::runtime_error( "Failed to get node communicator size" );
+
+        if ( MPI_Comm_rank( shmcomm_, &rank_ ) )
+            throw std::runtime_error( "Failed to get node communicator rank" );
     }
 
     mpi_shmem ( size_t n, MPI_Comm comm=MPI_COMM_WORLD ) : mpi_shmem( comm ) {
@@ -52,8 +56,10 @@ public:
 
         // Allocate the shared memory
 
-        MPI_Win_allocate_shared( nlocal_ * sizeof( T ), sizeof( T ),
-                                 MPI_INFO_NULL, shmcomm_, &local_, &win_ );
+        if ( MPI_Win_allocate_shared(
+                 nlocal_ * sizeof( T ), sizeof( T ), MPI_INFO_NULL, shmcomm_,
+                 &local_, &win_ ) )
+            throw std::runtime_error( "Failed to allocate shared memory." );
 
         n_ = n;
 
@@ -63,14 +69,16 @@ public:
         MPI_Aint nn;
         int disp;
 
-        MPI_Win_shared_query( win_, 0, &nn, &disp, &global_ );
+        if ( MPI_Win_shared_query( win_, 0, &nn, &disp, &global_ ) )
+            throw std::runtime_error( "Failed to query shared memory address." );
 
         return global_;
     }
 
     void free() {
         if ( global_ ) {
-            MPI_Win_free( &win_ );
+            if ( MPI_Win_free( &win_ ) )
+                throw std::runtime_error( "Failed to free shared memory." );
             local_ = NULL;
             global_ = NULL;
             n_ = 0;
@@ -125,7 +133,7 @@ private:
     T * global_ = NULL;
     size_t n_ = 0, nlocal_ = 0;
     MPI_Comm comm_, shmcomm_;
-    MPI_Win win_=MPI_WIN_NULL;
+    MPI_Win win_ = MPI_WIN_NULL;
     int ntasks_, rank_;
 
 };
