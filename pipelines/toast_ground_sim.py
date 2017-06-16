@@ -181,16 +181,16 @@ def main():
     parser.add_argument('--nside',
                         required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
-    parser.add_argument('--iter_max',
+    parser.add_argument('--madam_iter_max',
                         required=False, default=1000, type=np.int,
                         help='Maximum number of CG iterations in Madam')
-    parser.add_argument('--baseline_length',
+    parser.add_argument('--madam_baseline_length',
                         required=False, default=10000.0, type=np.float,
                         help='Destriping baseline length (seconds)')
-    parser.add_argument('--baseline_order',
+    parser.add_argument('--madam_baseline_order',
                         required=False, default=0, type=np.int,
                         help='Destriping baseline polynomial order')
-    parser.add_argument('--noisefilter',
+    parser.add_argument('--madam_noisefilter',
                         required=False, default=False, action='store_true',
                         help='Destripe with the noise filter enabled')
     parser.add_argument('--madam',
@@ -451,6 +451,11 @@ def main():
 
         data.obs.append(ob)
 
+    if args.skip_atmosphere:
+        for ob in data.obs:
+            tod = ob['tod']
+            tod.free_azel_quats()
+
     if len(data.obs) == 0:
         raise RuntimeError('Too many tasks. Every MPI task must '
                            'be assigned to at least one observation.')
@@ -479,6 +484,10 @@ def main():
     if comm.comm_world.rank == 0:
         print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
     start = stop
+
+    for ob in data.obs:
+        tod = ob['tod']
+        tod.free_radec_quats()
 
     counter.exec(data)
 
@@ -685,16 +694,16 @@ def main():
                             key, value = result.group(1), result.group(2)
                             pars[key] = value
 
-        pars['base_first'] = args.baseline_length
-        pars['basis_order'] = args.baseline_order
+        pars['base_first'] = args.madam_baseline_length
+        pars['basis_order'] = args.madam_baseline_order
         pars['nside_map'] = nside
-        if args.noisefilter:
+        if args.madam_noisefilter:
             pars['kfilter'] = True
         else:
             pars['kfilter'] = False
         pars['precond_width'] = 1
         pars['fsample'] = args.samplerate
-        pars['iter_max'] = args.iter_max
+        pars['iter_max'] = args.madam_iter_max
 
     # Loop over Monte Carlos
 

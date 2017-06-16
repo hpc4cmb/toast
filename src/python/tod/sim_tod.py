@@ -990,10 +990,24 @@ class TODGround(TOD):
         self._commonflags = self.cache.put(
             'commonflags', self._commonflags[ind])
         self._boresight_azel = self.cache.put(
-            'boresize_azel', azelquats[ind])
-        self._boresight = self.cache.put('boresize', quats[ind])
+            'boresight_azel', azelquats[ind])
+        self._boresight = self.cache.put('boresight_radec', quats[ind])
 
         return
+
+    def free_azel_quats(self):
+        self._boresight_azel = None
+        #try:
+        self.cache.destroy('boresight_azel')
+        #except:
+        #    pass
+
+    def free_radec_quats(self):
+        self._boresight = None
+        #try:
+        self.cache.destroy('boresight_radec')
+        #except:
+        #    pass
 
     def radec2quat(self, ra, dec, pa):
 
@@ -1049,8 +1063,12 @@ class TODGround(TOD):
     def _get_pntg(self, detector, start, n, azel=False):
         detquat = self._fp[detector]
         if azel:
+            if self._boresight_azel is None:
+                raise runtimeError('Boresight azel pointing was purged.')
             data = qa.mult(self._boresight_azel[start:start+n], detquat)
         else:
+            if self._boresight is None:
+                raise runtimeError('Boresight radec pointing was purged.')
             data = qa.mult(self._boresight[start:start+n], detquat)
         return data
 
