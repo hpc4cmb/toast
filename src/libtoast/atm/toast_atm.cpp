@@ -141,10 +141,12 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Input parameters:" << std::endl;
-        std::cerr << "             az = [" << azmin << " - " << azmax
-                  << "] (" << delta_az << " radians)" << std::endl;
-        std::cerr << "             el = [" << elmin << " - " << elmax
-                  << "] (" << delta_el << " radians)" << std::endl;
+        std::cerr << "             az = [" << azmin*180./M_PI << " - "
+                  << azmax*180./M_PI << "] (" << delta_az*180./M_PI
+                  << " degrees)" << std::endl;
+        std::cerr << "             el = [" << elmin*180./M_PI << " - "
+                  << elmax*180./M_PI << "] (" << delta_el*180/M_PI
+                  << " degrees)" << std::endl;
         std::cerr << "              t = [" << tmin << " - " << tmax
                   << "] (" << delta_t << " s)" << std::endl;
         std::cerr << "           lmin = " << lmin_center << " +- " << lmin_sigma
@@ -153,8 +155,8 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
                   << " m" << std::endl;
         std::cerr << "              w = " << w_center << " +- " << w_sigma
                   << " m" << std::endl;
-        std::cerr << "           wdir = " << wdir_center << " +- " << wdir_sigma
-                  << " radians " << std::endl;
+        std::cerr << "           wdir = " << wdir_center*180./M_PI << " +- "
+                  << wdir_sigma*180./M_PI << " degrees " << std::endl;
         std::cerr << "             z0 = " << z0_center << " +- " << z0_sigma
                   << " m" << std::endl;
         std::cerr << "             T0 = " << T0_center << " +- " << T0_sigma
@@ -444,12 +446,13 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 #pragma omp parallel for schedule(static, 100)
         for ( long i=0; i<nsamp; ++i ) {
 
-            if ( az[i] < azmin || az[i] > azmax || el[i] < elmin || el[i] > elmax ) {
+            if ( az[i] < azmin || az[i] > azmax
+                 || el[i] < elmin || el[i] > elmax ) {
                 std::ostringstream o;
                 o.precision( 16 );
-                o << "atmsim::observe : observation out of bounds (az, el, t) = ("
-                  << az[i] << ",  " << el[i] << ", " << t[i] << ") allowed: ("
-                  << azmin << " - "<< azmax << ", "
+                o << "atmsim::observe : observation out of bounds (az, el, t)"
+                  << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
+                  << ") allowed: (" << azmin << " - "<< azmax << ", "
                   << elmin << " - "<< elmax << ", "
                   << tmin << " - "<< tmax << ")"
                   << std::endl;
@@ -464,6 +467,7 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
             double ytel_now = ytel - wy*t_now;
 
             double sin_el = sin( el_now );
+            double sin_el_max = sin( elmax );
             double cos_el = cos( el_now );
             double sin_az = sin( az_now );
             double cos_az = cos( az_now );
@@ -483,7 +487,15 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                 double *preal = realization->data();
                 double r_eff = r;
 
-                double z = r_eff * sin_el;
+                // Check if the top of the focal plane hits zmax at
+                // this distance.  This way all lines-of-sight get
+                // integrated to the same distance
+                double z = r * sin_el_max;
+                if ( z >= zmax ) break;
+
+                // We'll need to actual height later for the
+                // interpolated value
+                z = r * sin_el;
 
                 if ( r < rverynear ) {
                     // Use the very near field simulation
@@ -498,7 +510,6 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                 }
 
                 double z_eff = r_eff * sin_el;
-                if ( z >= zmax ) break;
                 double rproj = r_eff * cos_el;
                 double x_eff = xtel_now + rproj*cos_az;
                 double y_eff = ytel_now - rproj*sin_az;
@@ -665,7 +676,7 @@ void toast::atm::sim::draw() {
         std::cerr << "    w = " << w << " m/s" << std::endl;
         std::cerr << "   wx = " << wx << " m/s" << std::endl;
         std::cerr << "   wy = " << wy << " m/s" << std::endl;
-        std::cerr << " wdir = " << wdir << " radians" << std::endl;
+        std::cerr << " wdir = " << wdir*180./M_PI << " degrees" << std::endl;
         std::cerr << "   z0 = " << z0 << " m" << std::endl;
         std::cerr << "   T0 = " << T0 << " K" << std::endl;
     }
