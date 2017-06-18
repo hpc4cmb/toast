@@ -351,9 +351,10 @@ class OpSimAtmosphere(Operator):
                     # Create snapshots of the atmosphere
                     import matplotlib.pyplot as plt
                     import sys
-                    azelstep = .01 * degree
-                    azgrid = np.linspace( azmin, azmax, (azmax-azmin)//azelstep+1 )
-                    elgrid = np.linspace( elmin, elmax, (elmax-elmin)//azelstep+1 )
+                    elstep = .01 * degree
+                    azstep = elstep * np.cos(0.5*(elmin+elmax))
+                    azgrid = np.linspace( azmin, azmax, (azmax-azmin)//azstep+1 )
+                    elgrid = np.linspace( elmin, elmax, (elmax-elmin)//elstep+1 )
                     AZ, EL = np.meshgrid( azgrid, elgrid )
                     nn = AZ.size
                     az = AZ.ravel()
@@ -386,7 +387,8 @@ class OpSimAtmosphere(Operator):
                         plt.figure(figsize=[12,4])
                         plt.imshow(atmdata2d, interpolation='nearest',
                                    origin='lower', extent=np.array(
-                                       [azmin, azmax, elmin, elmax])/degree,
+                                       [0, (azmax-azmin)*np.cos(0.5*(elmin+elmax)),
+                                        elmin, elmax])/degree,
                                    cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
                         plt.colorbar()
                         ax = plt.gca()
