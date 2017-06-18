@@ -51,7 +51,6 @@ public :
          long nelem_sim_max=1000, // Size of the simulation slices
          int verbosity=0, MPI_Comm comm=MPI_COMM_WORLD,
          int gangsize=-1, // Size of the gangs that create slices
-         double fnear=0.1, // Multiplier for the near field simulation
          uint64_t key1=0, uint64_t key2=0, // RNG keys
          uint64_t counter1=0, uint64_t counter2=0 ); // RNG counters
 
@@ -81,7 +80,6 @@ private :
     double zatm, zmax;
     double xstep, ystep, zstep, delta_x, delta_y, delta_z;
     double xstepinv, ystepinv, zstepinv;
-    double fnear, fnearinv, rnear, rverynear;
     long nx, ny, nz, nn, xstride, ystride, zstride;
     double xstrideinv, ystrideinv, zstrideinv;
     size_t nelem;
@@ -100,20 +98,18 @@ private :
     bool in_cone(double x, double y, double z);
     void compress_volume(); // Find the volume elements really needed
     El::Grid *grid=NULL;
-    mpi_shmem_double *realization=NULL, *realization_near=NULL,
-        *realization_verynear=NULL;
+    mpi_shmem_double *realization=NULL;
     // Find the next range of compressed indices to simulate
     void get_slice( long &ind_start, long &ind_stop );
     // Use the atmospheric parameters for volume element covariance
     El::DistMatrix<double> * build_covariance( long ind_start, long ind_stop,
-                                               bool save_covmat, double scale );
+                                               bool save_covmat );
     // Cholesky decompose (square root) the covariance matrix
     void sqrt_covariance( El::DistMatrix<double> *cov, long ind_start,
-                          long ind_stop, bool save_covmat=false, int near=0 );
+                          long ind_stop, bool save_covmat=false );
     // Create a realization out of the square root covariance matrix
     void apply_covariance( El::DistMatrix<double> *cov,
-                           double *realization, long ind_start,
-                           long ind_stop, int near=0 );
+                           double *realization, long ind_start, long ind_stop );
     // Compressed index to xyz-coordinates
     void ind2coord( long i, double *coord );
     // xyz-coordinates to Compressed index
@@ -123,7 +119,7 @@ private :
                    double z, std::vector<long> &last_ind,
                    std::vector<double> &last_nodes );
     // Evaluate the covariance matrix
-    double cov_eval( double *coord1, double *coord2, double scale=1 );
+    double cov_eval( double *coord1, double *coord2 );
     // Integrate the correlation from the Kolmorov spectrum
     void initialize_kolmogorov();
     // Interpolate the correlation from precomputed grid

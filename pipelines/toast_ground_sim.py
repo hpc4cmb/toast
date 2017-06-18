@@ -141,9 +141,6 @@ def main():
     parser.add_argument('--atm_gangsize',
                         required=False, default=1, type=np.int,
                         help='size of the gangs that create slices')
-    parser.add_argument('--atm_fnear',
-                        required=False, default=0.3, type=np.float,
-                        help='multiplier for the near field simulation')
     parser.add_argument('--atm_wind_time',
                         required=False, default=36000.0, type=np.float,
                         help='Minimum time to simulate without discontinuity')
@@ -731,7 +728,6 @@ def main():
                 ystep=args.atm_ystep, zstep=args.atm_zstep,
                 nelem_sim_max=args.atm_nelem_sim_max,
                 verbosity=int(args.debug), gangsize=args.atm_gangsize,
-                fnear=args.atm_fnear,
                 wind_time_min=args.atm_wind_time, w_center=args.atm_w_center,
                 w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
                 wdir_sigma=args.atm_wdir_sigma,

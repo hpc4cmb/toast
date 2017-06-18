@@ -57,7 +57,6 @@ class OpSimAtmosphere(Operator):
         nelem_sim_max (int): controls the size of the simulation slices.
         verbosity (int): more information is printed for values > 0.
         gangsize (int): size of the gangs that create slices.
-        fnear (float): multiplier for the near field simulation.
         w_center (float):  central value of the wind speed distribution.
         w_sigma (float):  sigma of the wind speed distribution.
         wdir_center (float):  central value of the wind direction distribution.
@@ -90,7 +89,7 @@ class OpSimAtmosphere(Operator):
             lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0,
             xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=10000,
             verbosity=0, gangsize=-1, gain=1,
-            fnear=0.1, w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
+            w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             fp_radius=1, apply_flags=False,
             common_flag_name='common_flags', common_flag_mask=255,
@@ -116,7 +115,6 @@ class OpSimAtmosphere(Operator):
         self._nelem_sim_max = nelem_sim_max
         self._verbosity = verbosity
         self._gangsize = gangsize
-        self._fnear = fnear
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -326,15 +324,15 @@ class OpSimAtmosphere(Operator):
                     self._z0_center, self._z0_sigma, self._T0_center,
                     self._T0_sigma, self._zatm, self._zmax, self._xstep,
                     self._ystep, self._zstep, self._nelem_sim_max,
-                    self._verbosity, comm, self._gangsize, self._fnear,
+                    self._verbosity, comm, self._gangsize,
                     key1, key2, counter1, counter2)
 
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
-                        print('OpSimAtmosphere: Initialized atmosphere in {:.2f} s'
-                              ''.format(tstop - tstart), flush=True)
+                        print('OpSimAtmosphere: Initialized atmosphere in '
+                              '{:.2f} s'.format(tstop - tstart), flush=True)
                     tstart = tstop
 
                 atm_sim_simulate(sim, 0)
@@ -385,14 +383,16 @@ class OpSimAtmosphere(Operator):
 
                     for t, r, atmdata2d in my_snapshots:
                         plt.figure(figsize=[12,4])
-                        plt.imshow(atmdata2d, interpolation='nearest',
-                                   origin='lower', extent=np.array(
-                                       [0, (azmax-azmin)*np.cos(0.5*(elmin+elmax)),
-                                        elmin, elmax])/degree,
-                                   cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
+                        plt.imshow(
+                            atmdata2d, interpolation='nearest',
+                            origin='lower', extent=np.array(
+                                [0, (azmax-azmin)*np.cos(0.5*(elmin+elmax)),
+                                 elmin, elmax])/degree,
+                            cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
                         plt.colorbar()
                         ax = plt.gca()
-                        ax.set_title('t = {:15.1f} s, r = {:15.1f} m'.format(t, r))
+                        ax.set_title(
+                            't = {:15.1f} s, r = {:15.1f} m'.format(t, r))
                         ax.set_xlabel('az [deg]')
                         ax.set_ylabel('el [deg]')
                         ax.set_yticks([elmin/degree, elmax/degree])
@@ -457,7 +457,8 @@ class OpSimAtmosphere(Operator):
                         elmin_det < elmin or elmax < elmax_det):
                         raise RuntimeError(
                             'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
-                            'is not contained in [{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
+                            'is not contained in [{:.5f}, {:.5f}], '
+                            '[{:.5f} {:.5f}]'
                             ''.format(
                                 azmin_det, azmax_det, elmin_det, elmax_det,
                                 azmin, azmax, elmin, elmax))

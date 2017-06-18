@@ -769,7 +769,7 @@ lib.ctoast_atm_sim_alloc.argtypes = [
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_long, ct.c_int, MPI_Comm, ct.c_int, ct.c_double,
+    ct.c_long, ct.c_int, MPI_Comm, ct.c_int,
     ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong]
 
 def atm_sim_alloc(
@@ -778,7 +778,7 @@ def atm_sim_alloc(
         w_sigma=10.0, wdir_center=0.0, wdir_sigma=100.0, z0_center=2000.0,
         z0_sigma=0.0, T0_center=280.0, T0_sigma=10.0, zatm=40000.0, zmax=2000.0,
         xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0,
-        comm=MPI.COMM_WORLD, gangsize=-1, fnear=0.1,
+        comm=MPI.COMM_WORLD, gangsize=-1,
         key1=0, key2=0, counter1=0, counter2=0):
 
     comm_ptr = MPI._addressof(comm)
@@ -789,7 +789,7 @@ def atm_sim_alloc(
         lmin_center, lmin_sigma, lmax_center, lmax_sigma, w_center, w_sigma,
         wdir_center, wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma,
         zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, c_comm,
-        gangsize, fnear, key1, key2, counter1, counter2)
+        gangsize, key1, key2, counter1, counter2)
 
 lib.ctoast_atm_sim_free.restype = None
 lib.ctoast_atm_sim_free.argtypes = [ ct.POINTER(cATMSim) ]

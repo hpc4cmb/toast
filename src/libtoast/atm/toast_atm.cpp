@@ -46,7 +46,7 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 		      double zatm, double zmax,
 		      double xstep, double ystep, double zstep,
 		      long nelem_sim_max,
-		      int verbosity, MPI_Comm comm, int gangsize, double fnear,
+		      int verbosity, MPI_Comm comm, int gangsize,
 		      uint64_t key1,uint64_t key2,
 		      uint64_t counter1, uint64_t counter2
     ) : azmin(azmin), azmax(azmax),
@@ -60,16 +60,13 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         zatm(zatm), zmax(zmax), xstep(xstep), ystep(ystep),
         zstep(zstep), nelem_sim_max(nelem_sim_max),
         verbosity(verbosity),
-        comm(comm), gangsize(gangsize), fnear(fnear),
+        comm(comm), gangsize(gangsize),
         key1(key1), key2(key2),
         counter1(counter1), counter2(counter2) {
 
-    int ierr;
-    ierr = MPI_Comm_size( comm, &ntask );
-    if ( ierr != MPI_SUCCESS )
+    if ( MPI_Comm_size( comm, &ntask ) )
         throw std::runtime_error( "Failed to get size of MPI communicator." );
-    ierr = MPI_Comm_rank( comm, &rank );
-    if ( ierr != MPI_SUCCESS )
+    if ( MPI_Comm_rank( comm, &rank ) )
         throw std::runtime_error( "Failed to get rank in MPI communicator." );
 
     if ( gangsize == 1 ) {
@@ -84,15 +81,12 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         // If the last gang is smaller than the rest, it will be merged with
         // the second-to-last gang
         if ( gang > ngang-1 ) gang = ngang - 1;
-        ierr = MPI_Comm_split( comm, gang, rank, &comm_gang );
-        if ( ierr != MPI_SUCCESS )
+        if ( MPI_Comm_split( comm, gang, rank, &comm_gang ) )
             throw std::runtime_error( "Failed to split MPI communicator." );
-        ierr = MPI_Comm_size( comm_gang, &ntask_gang );
-        if ( ierr != MPI_SUCCESS )
+        if ( MPI_Comm_size( comm_gang, &ntask_gang ) )
             throw std::runtime_error( "Failed to get size of the split MPI "
                                       "communicator." );
-        ierr = MPI_Comm_rank( comm_gang, &rank_gang );
-        if ( ierr != MPI_SUCCESS )
+        if ( MPI_Comm_rank( comm_gang, &rank_gang ) )
             throw std::runtime_error( "Failed to get rank in the split MPI "
                                       "communicator." );
     } else {
@@ -134,10 +128,6 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 
     az0 = azmin + delta_az / 2;
 
-    if ( fnear >= 1 ) throw std::runtime_error( "atmsim: fnear >= 1." );
-
-    fnearinv = 1 / fnear;
-
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Input parameters:" << std::endl;
@@ -167,7 +157,6 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         std::cerr << "          ystep = " << ystep << " m" << std::endl;
         std::cerr << "          zstep = " << zstep << " m" << std::endl;
         std::cerr << "  nelem_sim_max = " << nelem_sim_max << std::endl;
-        std::cerr << "          fnear = " << fnear << std::endl;
         std::cerr << "      verbosity = " << verbosity << std::endl;
     }
 
@@ -187,8 +176,6 @@ toast::atm::sim::~sim() {
     if ( compressed_index ) delete compressed_index;
     if ( full_index ) delete full_index;
     if ( realization ) delete realization;
-    if ( realization_near ) delete realization_near;
-    if ( realization_verynear ) delete realization_verynear;
 }
 
 
@@ -209,12 +196,9 @@ void toast::atm::sim::simulate( bool save_covmat ) {
         try {
             realization = new mpi_shmem_double(nelem, comm);
             realization->set( 0 );
-            realization_near = new mpi_shmem_double(nelem, comm);
-            realization_near->set( 0 );
-            realization_verynear = new mpi_shmem_double(nelem, comm);
-            realization_verynear->set( 0 );
         } catch ( std::bad_alloc & e ) {
-            std::cerr << rank << " : Out of memory allocating realizations. nelem = "
+            std::cerr << rank
+                      << " : Out of memory allocating realizations. nelem = "
                       << nelem << std::endl;
             throw;
         }
@@ -235,36 +219,14 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             slice_stops.push_back(ind_stop);
 
             if ( slice % ngang == gang ) {
-                for (int near=0; near<3; ++near) {
 
-                    double *preal;
-                    double scale;
+                El::DistMatrix<double> *cov = build_covariance(
+                    ind_start, ind_stop, save_covmat );
+                sqrt_covariance( cov, ind_start, ind_stop, save_covmat );
+                apply_covariance(
+                    cov, realization->data(), ind_start, ind_stop );
 
-                    switch ( near ) {
-                    case 0 :
-                        preal = realization->data();
-                        scale = 1;
-                        break;
-                    case 1 :
-                        preal = realization_near->data();
-                        scale = fnear;
-                        break;
-                    case 2 :
-                        preal = realization_verynear->data();
-                        scale = fnear * fnear;
-                        break;
-                    default :
-                        throw std::runtime_error( "Unknown field." );
-                        break;
-                    }
-
-                    El::DistMatrix<double> *cov = build_covariance( ind_start, ind_stop,
-                                                                    save_covmat, scale );
-                    sqrt_covariance( cov, ind_start, ind_stop, save_covmat, near );
-                    apply_covariance( cov, preal, ind_start, ind_stop, near );
-
-                    delete cov;
-                }
+                delete cov;
             }
 
             if ( ind_stop == nelem ) break;
@@ -279,18 +241,9 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             ind_stop = slice_stops[slice];
             int root_gang = slice % ngang;
             int root = root_gang * gangsize;
-            int ierr = MPI_Bcast( realization->data()+ind_start, ind_stop-ind_start,
-                                  MPI_DOUBLE, root, comm );
-            if ( ierr != MPI_SUCCESS )
+            if ( MPI_Bcast( realization->data()+ind_start, ind_stop-ind_start,
+                            MPI_DOUBLE, root, comm ) )
                 throw std::runtime_error( "Failed to broadcast the realization" );
-            ierr = MPI_Bcast( realization_near->data()+ind_start, ind_stop-ind_start,
-                              MPI_DOUBLE, root, comm );
-            if ( ierr != MPI_SUCCESS )
-                throw std::runtime_error( "Failed to broadcast the near realization" );
-            ierr = MPI_Bcast( realization_verynear->data()+ind_start,
-                              ind_stop-ind_start, MPI_DOUBLE, root, comm );
-            if ( ierr != MPI_SUCCESS )
-                throw std::runtime_error( "Failed to broadcast the near realization" );
         }
 
         //smooth();
@@ -300,11 +253,13 @@ void toast::atm::sim::simulate( bool save_covmat ) {
 
         if ( rank == 0 && verbosity > 0 ) {
             std::cerr << std::endl;
-            std::cerr << "Realization constructed in " << t2-t1 << " s." << std::endl;
+            std::cerr << "Realization constructed in " << t2-t1 << " s."
+                      << std::endl;
         }
 
     } catch ( const std::exception& e ) {
-        std::cerr << "WARNING: atm::simulate failed with: " << e.what() << std::endl;
+        std::cerr << "WARNING: atm::simulate failed with: " << e.what()
+                  << std::endl;
     }
 
     return;
@@ -353,8 +308,6 @@ void toast::atm::sim::smooth() {
     double coord[3];
 
     std::vector<double> smoothed_realization(realization->size());
-    std::vector<double> smoothed_realization_near(realization->size());
-    std::vector<double> smoothed_realization_verynear(realization->size());
 
     for ( size_t i=0; i < full_index->size(); ++i ) {
         ind2coord( i, coord );
@@ -368,8 +321,6 @@ void toast::atm::sim::smooth() {
         long ifullmax = compressed_index->size();
 
         std::vector<double> vals;
-        std::vector<double> vals_near;
-        std::vector<double> vals_verynear;
 
         //for (int xoff=-w; xoff <= w; ++xoff) {
         for (int xoff=0; xoff <= 0; ++xoff) {
@@ -384,17 +335,17 @@ void toast::atm::sim::smooth() {
                     if ( iz + zoff < 0 ) continue;
                     if ( iz + zoff >= nz ) break;
 
-                    long ifull = offset + xoff*xstride + yoff*ystride + zoff*zstride;
+                    long ifull = offset + xoff*xstride + yoff*ystride
+                        + zoff*zstride;
 
                     if ( ifull < 0 || ifull >= ifullmax )
-                        throw std::runtime_error( "Index out of range in smoothing." );
+                        throw std::runtime_error(
+                            "Index out of range in smoothing." );
 
                     long ii = (*compressed_index)[ifull];
 
                     if (ii >= 0) {
                         vals.push_back( (*realization)[ii] );
-                        vals_near.push_back( (*realization_near)[ii] );
-                        vals_verynear.push_back( (*realization_verynear)[ii] );
                     }
                 }
             }
@@ -403,15 +354,11 @@ void toast::atm::sim::smooth() {
         // Get the smoothed value
 
         smoothed_realization[i] = mean( vals );
-        smoothed_realization_near[i] = mean( vals_near );
-        smoothed_realization_verynear[i] = mean( vals_verynear );
     }
 
     if ( realization->rank() == 0 ) {
         for ( int i=0; i<realization->size(); ++i ) {
             (*realization)[i] = smoothed_realization[i];
-            (*realization_near)[i] = smoothed_realization_near[i];
-            (*realization_verynear)[i] = smoothed_realization_verynear[i];
         }
     }
 
@@ -432,9 +379,9 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
         double t1 = MPI_Wtime();
 
         double rstep = xstep;
-        if ( ystep < rstep ) rstep = ystep;
-        if ( zstep < rstep ) rstep = zstep;
-        rstep /= 3;
+        //if ( ystep < rstep ) rstep = ystep;
+        //if ( zstep < rstep ) rstep = zstep;
+        //rstep /= 3;
         //if ( fixed_r > 0 ) rstep = 1;
 
         // For each sample, integrate along the line of sight by summing
@@ -483,9 +430,7 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
                 // Coordinates at distance r. The scan is centered on the X-axis
 
-                int near=0;
                 double *preal = realization->data();
-                double r_eff = r;
 
                 // Check if the top of the focal plane hits zmax at
                 // this distance.  This way all lines-of-sight get
@@ -497,38 +442,25 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                 // interpolated value
                 z = r * sin_el;
 
-                if ( r < rverynear ) {
-                    // Use the very near field simulation
-                    near = 2;
-                    preal = realization_verynear->data();
-                    r_eff *= fnearinv * fnearinv;
-                } else if ( r < rnear ) {
-                    // Use the near field simulation
-                    near = 1;
-                    preal = realization_near->data();
-                    r_eff *= fnearinv;
-                }
-
-                double z_eff = r_eff * sin_el;
-                double rproj = r_eff * cos_el;
-                double x_eff = xtel_now + rproj*cos_az;
-                double y_eff = ytel_now - rproj*sin_az;
+                double rproj = r * cos_el;
+                double x = xtel_now + rproj*cos_az;
+                double y = ytel_now - rproj*sin_az;
 
 #ifdef DEBUG
-                if ( x_eff < 0 || x_eff > delta_x ||
-                     y_eff < 0 || y_eff > delta_y ||
-                     z_eff < 0 || z_eff > delta_z ) {
+                if ( x < 0 || x > delta_x ||
+                     y < 0 || y > delta_y ||
+                     z < 0 || z > delta_z ) {
                     std::ostringstream o;
                     o.precision( 16 );
                     o << "atmsim::observe : observation point out of bounds ("
-                      << x_eff << " / " << delta_x << ", "
-                      << y_eff << " / " << delta_y << ", "
-                      << z_eff << " / " << delta_z << ")" << std::endl
-                      << "( t, t-tmin, az, az-az0, el, r, r_eff, r_proj ) = "
+                      << x << " / " << delta_x << ", "
+                      << y << " / " << delta_y << ", "
+                      << z << " / " << delta_z << ")" << std::endl
+                      << "( t, t-tmin, az, az-az0, el, r, r_proj ) = "
                       << std::endl
                       << "( " << t[i] << ", " << t_now << ", " << az[i]
                       << ", " << az_now << ", " << el[i] << ", "
-                      << r << ", " << r_eff << ", " << rproj
+                      << r << ", " << rproj
                       << ")" << std::endl
                       << "(x_tel, y_tel, x_tel_now, y_tel_now, wx, wy) = ("
                       << xtel << ", " << ytel << ", "
@@ -544,32 +476,25 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
                 double step_val;
                 try {
-                    step_val = interp( preal, x_eff, y_eff, z_eff, last_ind,
+                    step_val = interp( preal, x, y, z, last_ind,
                                        last_nodes )
                         * (1. - z * zatm_inv);
                 } catch ( const std::runtime_error& e ) {
                     std::ostringstream o;
                     o.precision( 16 );
                     o << "atmsim::observe : interp failed at ("
-                      << x_eff << " /  " << delta_x << ", " << y_eff << " / "
-                      << delta_y << ", " << z_eff << " / " << delta_z << ")"
+                      << x << " /  " << delta_x << ", " << y << " / "
+                      << delta_y << ", " << z << " / " << delta_z << ")"
                       << "( t, az, el ) " << "( " << t[i] << ", " << az[i]
                       << ", " << el[i] << ") with " << e.what() << std::endl;
                     throw std::runtime_error( o.str().c_str() );
                 }
 
-                // In the near field the steps are shorter and so the
-                // weights are smaller
-
-                for (int j=0; j < near; ++j) step_val *= fnear;
                 val += step_val;
 
                 // Prepare for the next step
 
-                double step = rstep;
-                for (int j=0; j < near; ++j) step *= fnear;
-
-                r += step;
+                r += rstep;
 
                 if ( fixed_r > 0 ) break;
                 //if ( fixed_r > 0 and r > fixed_r ) break;
@@ -590,7 +515,8 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
         }
 
     } catch ( const std::exception& e ) {
-        std::cerr << "WARNING: atm::observe failed with: " << e.what() << std::endl;
+        std::cerr << "WARNING: atm::observe failed with: " << e.what()
+                  << std::endl;
     } catch ( ... ) {
         std::cerr << "WARNING: atm::observe failed with an unknown exception."
                   << std::endl;
@@ -636,28 +562,27 @@ void toast::atm::sim::draw() {
             T0 = T0_center + randn[irand++] * T0_sigma;
 
         if (irand == nrand)
-            throw std::runtime_error( "Failed to draw parameters so satisfy boundary conditions" );
+            throw std::runtime_error(
+                "Failed to draw parameters so satisfy boundary conditions" );
     }
 
-    int ierr;
+    if ( MPI_Bcast( &lmin, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast lmin" );
 
-    ierr = MPI_Bcast( &lmin, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast lmin" );
+    if ( MPI_Bcast( &lmax, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast lmax" );
 
-    ierr = MPI_Bcast( &lmax, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast lmax" );
+    if ( MPI_Bcast( &w, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast w" );
 
-    ierr =MPI_Bcast( &w, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast w" );
+    if ( MPI_Bcast( &wdir, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast wdir" );
 
-    ierr = MPI_Bcast( &wdir, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast wdir" );
+    if ( MPI_Bcast( &z0, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast z0" );
 
-    ierr = MPI_Bcast( &z0, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast z0" );
-
-    ierr= MPI_Bcast( &T0, 1, MPI_DOUBLE, 0, comm );
-    if ( ierr != MPI_SUCCESS ) throw std::runtime_error( "Failed to bcast T0" );
+    if ( MPI_Bcast( &T0, 1, MPI_DOUBLE, 0, comm ) )
+        throw std::runtime_error( "Failed to bcast T0" );
 
     wx = w * sin( wdir );
     wy = w * cos( wdir );
@@ -692,10 +617,6 @@ void toast::atm::sim::get_volume() {
     delta_z = zmax;
     // Maximum distance observed through the simulated volume
     double maxdist = delta_z / sin(elmin);
-    // Maximum distance to employ the near field simulation
-    rnear = delta_z / sin(elmax) * fnear;
-    // Maximum distance to employ the very near field simulation
-    rverynear = rnear * fnear;
     // Volume length
     delta_x = maxdist * cos(elmin);
     // Volume width
@@ -746,8 +667,6 @@ void toast::atm::sim::get_volume() {
         std::cerr << "    length = " << delta_x << " m" << std::endl;
         std::cerr << "     width = " << delta_y << " m " << std::endl;
         std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
-        std::cerr << "     rnear = " << rnear << " m" << std::endl;
-        std::cerr << " rverynear = " << rverynear << " m" << std::endl;
         std::cerr << "        nx = " << nx << std::endl;
         std::cerr << "        ny = " << ny << std::endl;
         std::cerr << "        nz = " << nz << std::endl;
@@ -836,15 +755,15 @@ void toast::atm::sim::initialize_kolmogorov() {
     }
 
     /*
-    if ( rank == 0 && verbosity > 0) {
-        std::ofstream f;
-        std::ostringstream fname;
-        fname << "kolmogorov_f.txt";
-        f.open( fname.str(), std::ios::out );
-        for ( int ikappa=0; ikappa<nkappa; ++ikappa )
-            f << ikappa*kappastep << " " << phi[ikappa] << std::endl;
-        f.close();
-    }
+      if ( rank == 0 && verbosity > 0) {
+      std::ofstream f;
+      std::ostringstream fname;
+      fname << "kolmogorov_f.txt";
+      f.open( fname.str(), std::ios::out );
+      for ( int ikappa=0; ikappa<nkappa; ++ikappa )
+      f << ikappa*kappastep << " " << phi[ikappa] << std::endl;
+      f.close();
+      }
     */
 
     // Newton's method factors, not part of the power spectrum
@@ -886,10 +805,8 @@ void toast::atm::sim::initialize_kolmogorov() {
         kolmo_y[ ir ] = val;
     }
 
-    int ierr;
-    ierr = MPI_Allreduce( MPI_IN_PLACE, kolmo_y.data(), (int)nr,
-                          MPI_DOUBLE, MPI_SUM, comm );
-    if ( ierr != MPI_SUCCESS )
+    if ( MPI_Allreduce( MPI_IN_PLACE, kolmo_y.data(), (int)nr,
+                        MPI_DOUBLE, MPI_SUM, comm ) )
         throw std::runtime_error( "Failed to allreduce kolmo_y." );
 
     // Normalize
@@ -960,7 +877,8 @@ double toast::atm::sim::kolmogorov( double r ) {
 
 void toast::atm::sim::compress_volume() {
 
-    // Establish a mapping between full volume indices and observed volume indices
+    // Establish a mapping between full volume indices and observed
+    // volume indices
 
     double t1 = MPI_Wtime();
 
@@ -1004,10 +922,8 @@ void toast::atm::sim::compress_volume() {
 
     // For extra margin, flag all the neighbors of the hit elements
 
-    int ierr;
-    ierr = MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
-                          MPI_UNSIGNED_CHAR, MPI_LOR, comm );
-    if ( ierr != MPI_SUCCESS )
+    if ( MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
+                        MPI_UNSIGNED_CHAR, MPI_LOR, comm ) )
         throw std::runtime_error( "Failed to gather hits" );
 
     std::vector<unsigned char> hit2 = hit;
@@ -1033,7 +949,8 @@ void toast::atm::sim::compress_volume() {
                             if ( iy + ymul < 0 || iy + ymul > ny-1 ) continue;
 
                             for ( double zmul=-1; zmul < 3; ++zmul ) {
-                                if ( iz + zmul < 0 || iz + zmul > nz-1 ) continue;
+                                if ( iz + zmul < 0 || iz + zmul > nz-1 )
+                                    continue;
 
 #ifdef DEBUG
                                 hit.at( offset + xmul*xstride
@@ -1052,9 +969,8 @@ void toast::atm::sim::compress_volume() {
 
     hit2.resize(0);
 
-    ierr = MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
-                          MPI_UNSIGNED_CHAR, MPI_LOR, comm );
-    if ( ierr != MPI_SUCCESS )
+    if ( MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
+                        MPI_UNSIGNED_CHAR, MPI_LOR, comm ) )
         throw std::runtime_error( "Failed to gather hits" );
 
     // Then create the mappings between the compressed and full indices
@@ -1078,7 +994,8 @@ void toast::atm::sim::compress_volume() {
     if ( rank == 0 and verbosity > 0 ) {
         std::cerr << "Volume compressed in " << t2-t1 << " s." << std::endl;
         std::cerr << i << " / " << nn
-                  << " volume elements are needed for the simulation" << std::endl;
+                  << " volume elements are needed for the simulation"
+                  << std::endl;
     }
 
     if ( nelem == 0 )
@@ -1202,7 +1119,8 @@ double toast::atm::sim::interp( double *realization, double x,
     if ( ix != last_ind[0] || iy != last_ind[1] || iz != last_ind[2] ) {
 
 #ifdef DEBUG
-        if ( ix < 0 || ix > nx-2 || iy < 0 || iy > ny-2 || iz < 0 || iz > nz-2 ) {
+        if ( ix < 0 || ix > nx-2 || iy < 0 || iy > ny-2
+             || iz < 0 || iz > nz-2 ) {
             std::ostringstream o;
             o.precision( 16 );
             o << "atmsim::interp : full index out of bounds at ("
@@ -1285,10 +1203,8 @@ double toast::atm::sim::interp( double *realization, double x,
 }
 
 
-El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
-							   long ind_stop,
-							   bool save_covmat,
-							   double scale ) {
+El::DistMatrix<double> *toast::atm::sim::build_covariance(
+    long ind_start, long ind_stop, bool save_covmat ) {
 
     double t1 = MPI_Wtime();
 
@@ -1302,7 +1218,8 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
         // Distributed element-element covariance matrix
         cov = new El::DistMatrix<double>( nelem_slice, nelem_slice, *grid );
     } catch ( std::bad_alloc & e ) {
-        std::cerr << rank << " : Out of memory allocating covariance." << std::endl;
+        std::cerr << rank << " : Out of memory allocating covariance."
+                  << std::endl;
         throw;
     }
 
@@ -1310,10 +1227,9 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
 
     double my_mem = cov->AllocatedMemory() * 2 * sizeof(double) / pow(2.0, 20);
     double tot_mem;
-    int ierr = MPI_Allreduce( &my_mem, &tot_mem, 1, MPI_DOUBLE, MPI_SUM,
-                              comm_gang );
-    if ( ierr != MPI_SUCCESS )
-        throw std::runtime_error( "Failed to allreduce covariance matrix size." );
+    if ( MPI_Allreduce( &my_mem, &tot_mem, 1, MPI_DOUBLE, MPI_SUM, comm_gang ) )
+        throw std::runtime_error(
+            "Failed to allreduce covariance matrix size." );
     if ( rank_gang == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Gang # " << gang << " Allocated " << tot_mem
@@ -1343,7 +1259,7 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
 
             // Evaluate the covariance between the two coordinates
 
-            double val = cov_eval(colcoord, rowcoord, scale);
+            double val = cov_eval( colcoord, rowcoord );
             cov->SetLocal( irow, icol, val );
         }
     }
@@ -1364,8 +1280,7 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance( long ind_start,
 }
 
 
-double toast::atm::sim::cov_eval( double *coord1, double *coord2,
-				  double scale ) {
+double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
 
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
@@ -1375,12 +1290,12 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2,
 
     // Water vapor altitude factor
 
-    double chi1 = exp( -(z1+z2) * scale / (2*z0) );
+    double chi1 = exp( -(z1+z2) / (2*z0) );
 
     // Kolmogorov factor
 
     double dx = x1-x2, dy=y1-y2, dz=z1-z2;
-    double r = sqrt( dx*dx + dy*dy + dz*dz ) * scale;
+    double r = sqrt( dx*dx + dy*dy + dz*dz );
     double chi2 = kolmogorov( r );
 
     return chi1 * chi2;
@@ -1389,7 +1304,7 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2,
 
 void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 				       long ind_start, long ind_stop,
-				       bool save_covmat, int near ) {
+				       bool save_covmat ) {
 
     // Cholesky decompose the covariance matrix.  If the matrix is singular,
     // regularize it by adding power to the diagonal.
@@ -1405,7 +1320,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
             if ( rank_gang == 0 && verbosity > 0 ) {
                 std::cerr << std::endl;
-                std::cerr << "Gang # " << gang << " near = " << near
+                std::cerr << "Gang # " << gang
                           << " Cholesky decomposing covariance ... "
                           << std::endl;
             }
@@ -1417,7 +1332,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
             if ( rank_gang == 0 && verbosity > 0 ) {
                 std::cerr << std::endl;
-                std::cerr << "Gang # " << gang << " near = " << near
+                std::cerr << "Gang # " << gang
                           << " Cholesky decomposition done in " << t2-t1
                           << " s. N = " << nelem_slice
                           << " ntask_gang = " << ntask_gang
@@ -1432,12 +1347,13 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
             if ( rank_gang == 0 && verbosity > 0 ) {
                 std::cerr << std::endl;
-                std::cerr << "Gang # " << gang << " near = " << near
-                          << " Cholesky decomposition failed on attempt " << attempt
+                std::cerr << "Gang # " << gang
+                          << " Cholesky decomposition failed on attempt "
+                          << attempt
                           << ". Regularizing matrix. " << std::endl;
                 if ( attempt == 9 ) {
-                    //El::Write( *cov, "failed_covmat", El::BINARY_FLAT ); // DEBUG
-                    throw std::runtime_error( "Failed to decompose covariance matrix." );
+                    throw std::runtime_error(
+                        "Failed to decompose covariance matrix." );
                 }
             }
 
@@ -1464,7 +1380,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
     if ( save_covmat ) {
         std::ostringstream fname;
-        fname << "sqrt_covariance_" << near << "_" << ind_start << "_" << ind_stop;
+        fname << "sqrt_covariance_" << ind_start << "_" << ind_stop;
         El::Write( *cov, fname.str(), El::BINARY_FLAT );
     }
 
@@ -1474,8 +1390,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
 void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
 					double *realization,
-					long ind_start, long ind_stop,
-					int near ) {
+					long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();
 
@@ -1516,7 +1431,7 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
 
         std::ofstream f;
         std::ostringstream fname;
-        fname << "raw_realization_" << near << "_"
+        fname << "raw_realization_"
               << ind_start << "_" << ind_stop << ".txt";
         f.open( fname.str(), std::ios::out );
         for ( long ielem=0; ielem<nelem_slice; ielem++ ) {
@@ -1557,7 +1472,7 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
 
     if ( rank_gang == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
-        std::cerr << "Gang # " << gang << " near = " << near
+        std::cerr << "Gang # " << gang
                   << " Realization slice (" << ind_start << " -- " << ind_stop
                   << ") var = " << var << ", constructed in "
                   << t2-t1 << " s." << std::endl;
@@ -1566,7 +1481,7 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
     if ( rank_gang == 0 && verbosity > 10 ) {
         std::ofstream f;
         std::ostringstream fname;
-        fname << "realization_" << near << "_"
+        fname << "realization_"
               << ind_start << "_" << ind_stop << ".txt";
         f.open( fname.str(), std::ios::out );
         for ( long ielem=0; ielem<nelem_slice; ielem++ ) {
@@ -1578,7 +1493,8 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
         f.close();
     }
 
-    // Copy the slice realization over appropriate indices in the full realization
+    // Copy the slice realization over appropriate indices in
+    // the full realization
     // FIXME: This is where we would blend slices
 
     for ( long i=ind_start; i<ind_stop; ++i ) {

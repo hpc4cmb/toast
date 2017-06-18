@@ -592,16 +592,18 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
     double w_sigma, double wdir_center, double wdir_sigma, double z0_center,
     double z0_sigma, double T0_center, double T0_sigma, double zatm,
     double zmax, double xstep, double ystep, double zstep, long nelem_sim_max,
-    int verbosity, MPI_Comm comm, int gangsize, double fnear,
+    int verbosity, MPI_Comm comm, int gangsize,
     uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2 ) {
 
 #ifdef HAVE_ELEMENTAL
-    return reinterpret_cast < ctoast_atm_sim * > ( new toast::atm::sim ( azmin,
-        azmax, elmin, elmax, tmin, tmax, lmin_center, lmin_sigma, lmax_center,
-        lmax_sigma, w_center, w_sigma, wdir_center, wdir_sigma, z0_center,
-        z0_sigma, T0_center, T0_sigma, zatm, zmax, xstep, ystep, zstep,
-	nelem_sim_max, verbosity, comm, gangsize, fnear,
-	key1, key2, counter1, counter2 ) );
+    return reinterpret_cast < ctoast_atm_sim * > (
+        new toast::atm::sim ( azmin, azmax, elmin, elmax, tmin, tmax,
+                              lmin_center, lmin_sigma, lmax_center,
+                              lmax_sigma, w_center, w_sigma, wdir_center,
+                              wdir_sigma, z0_center, z0_sigma, T0_center,
+                              T0_sigma, zatm, zmax, xstep, ystep, zstep,
+                              nelem_sim_max, verbosity, comm, gangsize,
+                              key1, key2, counter1, counter2 ) );
 #else
     return NULL;
 #endif
