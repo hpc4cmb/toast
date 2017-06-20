@@ -182,6 +182,10 @@ class OpSimAtmosphere(Operator):
             tod = obs['tod']
             comm = tod.mpicomm
 
+            if comm.rank == 0:
+                print('Setting up atmosphere simulation for {}'
+                      ''.format(obsname), flush=True)
+
              # Cache the output common flags
             cachename = self._common_flag_name
             if tod.cache.exists(cachename):
@@ -318,6 +322,10 @@ class OpSimAtmosphere(Operator):
                     comm.Barrier()
                     tstart = MPI.Wtime()
 
+                if comm.rank == 0:
+                    print('Instantiating the atmosphere for {}'
+                          ''.format(obsname), flush=True)
+
                 sim = atm_sim_alloc(
                     azmin, azmax, elmin, elmax, tmin, tmax,
                     self._lmin_center, self._lmin_sigma,
@@ -336,6 +344,10 @@ class OpSimAtmosphere(Operator):
                         print('OpSimAtmosphere: Initialized atmosphere in '
                               '{:.2f} s'.format(tstop - tstart), flush=True)
                     tstart = tstop
+
+                if comm.rank == 0:
+                    print('Simulating the atmosphere for {}'
+                          ''.format(obsname), flush=True)
 
                 atm_sim_simulate(sim, 0)
 
@@ -408,6 +420,10 @@ class OpSimAtmosphere(Operator):
                 if self._report_timing:
                     comm.Barrier()
                     tstart = MPI.Wtime()
+
+                if comm.rank == 0:
+                    print('Observing the atmosphere for {}'
+                          ''.format(obsname), flush=True)
 
                 for det in tod.local_dets:
 
