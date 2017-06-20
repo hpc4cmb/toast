@@ -182,9 +182,11 @@ class OpSimAtmosphere(Operator):
             tod = obs['tod']
             comm = tod.mpicomm
 
+            comm.Barrier()
             if comm.rank == 0:
                 print('Setting up atmosphere simulation for {}'
                       ''.format(obsname), flush=True)
+            comm.Barrier()
 
              # Cache the output common flags
             cachename = self._common_flag_name
@@ -213,8 +215,9 @@ class OpSimAtmosphere(Operator):
                 # the atmosphere simulation already adds some margin.
 
                 # FIXME: the TOD class should really provide a method to return
-                # the detector quaternions relative to the boresight.  For now, we
-                # jump through hoops by getting one sample of the pointing.
+                # the detector quaternions relative to the boresight.
+                # For now, we jump through hoops by getting one sample
+                # of the pointing.
 
                 zaxis = np.array([0.0, 0.0, 1.0])
                 detdir = []
@@ -275,6 +278,7 @@ class OpSimAtmosphere(Operator):
             wind_time = max(self._wind_time_min, wind_time)
             if comm.rank == 0 and self._verbosity:
                 print('Wind time = {:.2f} s'.format(wind_time), flush=True)
+            comm.Barrier()
 
             #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
 
@@ -314,6 +318,7 @@ class OpSimAtmosphere(Operator):
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
                           'of ([{:.2f}, {:.2f}])'.format(
                               tmin, tmax, tmin_tot, tmax_tot), flush=True)
+                comm.Barrier()
 
                 ind = slice(istart, istop)
                 nind = istop - istart
@@ -322,9 +327,11 @@ class OpSimAtmosphere(Operator):
                     comm.Barrier()
                     tstart = MPI.Wtime()
 
+                comm.Barrier()
                 if comm.rank == 0:
                     print('Instantiating the atmosphere for {}'
                           ''.format(obsname), flush=True)
+                comm.Barrier()
 
                 sim = atm_sim_alloc(
                     azmin, azmax, elmin, elmax, tmin, tmax,
@@ -345,9 +352,11 @@ class OpSimAtmosphere(Operator):
                               '{:.2f} s'.format(tstop - tstart), flush=True)
                     tstart = tstop
 
+                comm.Barrier()
                 if comm.rank == 0:
                     print('Simulating the atmosphere for {}'
                           ''.format(obsname), flush=True)
+                comm.Barrier()
 
                 atm_sim_simulate(sim, 0)
 
