@@ -47,6 +47,9 @@ def main():
                         required=False, type=np.int,
                         help='Size of a process group assigned to a CES')
 
+
+    parser.add_argument('--timezone', required=False, type=np.int, default=0,
+                        help='Offset to apply to MJD to separate days [hours]')
     parser.add_argument('--coord', required=False, default='C',
                         help='Sky coordinate system [C,E,G]')
     parser.add_argument('--schedule', required=True,
@@ -377,7 +380,38 @@ def main():
     for d in detectors:
         detquats[d] = fp[d]['quat']
 
-    groupdist = toast.distribute_uniform(len(all_ces), comm.ngroups)
+    nces = len(all_ces)
+
+    breaks = []
+    do_break = False
+    for i in range(nces-1):
+        # If current and next CES are on different days, insert a break
+        tz = args.timezone / 24.
+        start1 = all_ces[i][3] # MJD start
+        start2 = all_ces[i+1][3] # MJD start
+        scan1 = all_ces[i][4]
+        scan2 = all_ces[i+1][4]
+        if scan1 != scan2 and do_break:
+            breaks.append(i + 1)
+            do_break = False
+            continue
+        day1 = int(start1 + tz)
+        day2 = int(start2 + tz)
+        if day1 != day2:
+            if scan1 == scan2:
+                # We want an entire CES, even if it crosses the day bound.
+                # Wait until the scan number changes.
+                do_break = True
+            else:
+                breaks.append(i + 1)
+
+    nbreak = len(breaks)
+    if nbreak != comm.ngroups-1:
+        raise RuntimeError(
+            'Number of observing days ({}) does not match number of process '
+            'groups ({}).'.format(nbreak+1, comm.ngroups))
+
+    groupdist = toast.distribute_uniform(nces, comm.ngroups, breaks=breaks)
     group_firstobs = groupdist[comm.group][0]
     group_numobs = groupdist[comm.group][1]
 
@@ -452,6 +486,14 @@ def main():
         for ob in data.obs:
             tod = ob['tod']
             tod.free_azel_quats()
+
+    comm.comm_world.Barrier()
+
+    if comm.comm_group.rank == 0:
+        print('Group # {:4} has {} observations.'.format(
+            comm.group, len(data.obs)), flush=True)
+
+    comm.comm_world.Barrier()
 
     if len(data.obs) == 0:
         raise RuntimeError('Too many tasks. Every MPI task must '

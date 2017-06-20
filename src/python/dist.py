@@ -234,16 +234,27 @@ def distribute_uniform(totalsize, groups, breaks=None):
         all_breaks = all_breaks[all_breaks > 0]
         all_breaks = all_breaks[all_breaks < totalsize]
         all_breaks = np.sort(all_breaks)
+        if len(all_breaks) > groups-1:
+            raise RuntimeError(
+                'Cannot distribute {} chunks with {} breaks over {} groups'
+                ''.format(totalsize, len(all_breaks), groups))
         groupcounts = []
         groupsizes = []
         offset = 0
+        groupsleft = groups
+        totalleft = totalsize
         for brk in all_breaks:
             length = brk - offset
-            groupcounts.append(int(np.round(groups*length/totalsize)))
+            groupcount = int(np.round(groupsleft*length/totalleft))
+            groupcount = max(1, groupcount)
+            groupcount = min(groupcount, groupsleft)
+            groupcounts.append(groupcount)
             groupsizes.append(length)
+            groupsleft -= groupcount
+            totalleft -= length
             offset = brk
-        groupcounts.append(groups - np.sum(groupcounts))
-        groupsizes.append(totalsize - offset)
+        groupcounts.append(groupsleft)
+        groupsizes.append(totalleft)
     else:
         groupcounts = [groups]
         groupsizes = [totalsize]
