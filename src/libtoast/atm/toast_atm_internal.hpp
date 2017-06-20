@@ -71,20 +71,21 @@ private :
     int rank, ntask, rank_gang, ntask_gang, nthread, gangsize, gang, ngang;
     int verbosity;
     uint64_t key1, key2, counter1, counter2;
-    double azmin, azmax, elmin, elmax, tmin, tmax;
-    double tanmin, tanmax, sinmin, sinmax; // In-cone calculation helpers
+    double azmin, azmax, elmin, elmax, tmin, tmax, sinel0, cosel0;
+    double tanmin, tanmax; // In-cone calculation helpers
     double lmin_center, lmin_sigma, lmax_center, lmax_sigma,
         w_center, w_sigma, wdir_center, wdir_sigma,
-        z0_center, z0_sigma, T0_center, T0_sigma;
-    double az0, delta_az, delta_el, delta_t;
+        z0_center, z0_sigma, T0_center, T0_sigma, z0inv;
+    double az0, el0, delta_az, delta_el, delta_t;
     double zatm, zmax;
     double xstep, ystep, zstep, delta_x, delta_y, delta_z;
+    double xstart, ystart, zstart, xxstep, yystep, zzstep;
+    double delta_y_cone, delta_z_cone;
     double xstepinv, ystepinv, zstepinv;
     long nx, ny, nz, nn, xstride, ystride, zstride;
     double xstrideinv, ystrideinv, zstrideinv;
     size_t nelem;
-    double xtel, ytel, ztel; // Telescope position
-    double lmin, lmax, w, wdir, z0, T0, wx, wy;
+    double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
     double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation grid
@@ -109,14 +110,13 @@ private :
                           long ind_stop, bool save_covmat=false );
     // Create a realization out of the square root covariance matrix
     void apply_covariance( El::DistMatrix<double> *cov,
-                           double *realization, long ind_start, long ind_stop );
+                           long ind_start, long ind_stop );
     // Compressed index to xyz-coordinates
     void ind2coord( long i, double *coord );
     // xyz-coordinates to Compressed index
     long coord2ind( double x, double y, double z );
     // Interpolate the realization value to given coordinates
-    double interp( double *realization, double x, double y,
-                   double z, std::vector<long> &last_ind,
+    double interp( double x, double y, double z, std::vector<long> &last_ind,
                    std::vector<double> &last_nodes );
     // Evaluate the covariance matrix
     double cov_eval( double *coord1, double *coord2 );

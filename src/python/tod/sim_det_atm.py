@@ -265,7 +265,9 @@ class OpSimAtmosphere(Operator):
 
             dist = self._zmax / np.tan(elmin)
             width = 2 * dist * np.tan((azmax - azmin)/2)
-            wind_time = width / self._w_center
+            wind_time = 0
+            if self._w_center != 0:
+                wind_time = width / self._w_center
             wind_time = max(self._wind_time_min, wind_time)
             if comm.rank == 0 and self._verbosity:
                 print('Wind time = {:.2f} s'.format(wind_time), flush=True)

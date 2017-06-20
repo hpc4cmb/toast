@@ -10,6 +10,7 @@
 #include "mpi.h"
 
 #include <cstring>
+#include <iostream>
 #include <stdlib.h>
 
 namespace toast { namespace mpi_shmem {

@@ -17,12 +17,14 @@
 
 
 double median( std::vector<double> vec ) {
+    if ( vec.size() == 0 ) return 0;
+
     sort( vec.begin(), vec.end());
     int half1 = (vec.size() - 1) * .5;
     int half2 = vec.size() * .5;
 
     return .5 *( vec[half1] + vec[half2] );
-} // median
+}
 
 
 double mean( std::vector<double> vec ) {
@@ -32,7 +34,7 @@ double mean( std::vector<double> vec ) {
     for ( auto& val : vec ) sum += val;
 
     return sum / vec.size();
-} // mean
+}
 
 
 toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
@@ -116,17 +118,23 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     ystepinv = 1 / ystep;
     zstepinv = 1 / zstep;
 
-    delta_az = azmax - azmin;
-    delta_el = elmax - elmin;
+    delta_az = ( azmax - azmin );
+    delta_el = ( elmax - elmin );
     delta_t = tmax - tmin;
 
-    double tol = 0.5 * M_PI / 180; // 0.5 degree tolerance
-    tanmin = tan( elmin - tol ); // speed up the in-cone calculation
-    tanmax = tan( elmax + tol ); // speed up the in-cone calculation
-    sinmin = sin( -0.5*delta_az - tol ); // speed up the in-cone calculation
-    sinmax = sin(  0.5*delta_az + tol ); // speed up the in-cone calculation
-
     az0 = azmin + delta_az / 2;
+    el0 = elmin + delta_el / 2;
+    sinel0 = sin( el0 );
+    cosel0 = cos( el0 );
+
+    xxstep = xstep*cosel0 - zstep*sinel0;
+    yystep = ystep;
+    zzstep = xstep*sinel0 + zstep*cosel0;
+
+    // speed up the in-cone calculation
+    double tol = 0.1 * M_PI / 180; // 0.1 degree tolerance
+    tanmin = tan( -0.5*delta_az - tol );
+    tanmax = tan(  0.5*delta_az + tol );
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
@@ -153,9 +161,14 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
                   << " K" << std::endl;
         std::cerr << "           zatm = " << zatm << " m" << std::endl;
         std::cerr << "           zmax = " << zmax << " m" << std::endl;
+        std::cerr << "       scan frame: " << std::endl;
         std::cerr << "          xstep = " << xstep << " m" << std::endl;
         std::cerr << "          ystep = " << ystep << " m" << std::endl;
         std::cerr << "          zstep = " << zstep << " m" << std::endl;
+        std::cerr << " horizontal frame: " << std::endl;
+        std::cerr << "         xxstep = " << xxstep << " m" << std::endl;
+        std::cerr << "         yystep = " << yystep << " m" << std::endl;
+        std::cerr << "         zzstep = " << zzstep << " m" << std::endl;
         std::cerr << "  nelem_sim_max = " << nelem_sim_max << std::endl;
         std::cerr << "      verbosity = " << verbosity << std::endl;
     }
@@ -190,7 +203,7 @@ void toast::atm::sim::simulate( bool save_covmat ) {
         compress_volume();
 
         if ( rank == 0 and verbosity > 0 ) {
-            std::cerr << "Resizing realizations to " << nelem << std::endl;
+            std::cerr << "Resizing realization to " << nelem << std::endl;
         }
 
         try {
@@ -198,7 +211,7 @@ void toast::atm::sim::simulate( bool save_covmat ) {
             realization->set( 0 );
         } catch ( std::bad_alloc & e ) {
             std::cerr << rank
-                      << " : Out of memory allocating realizations. nelem = "
+                      << " : Out of memory allocating realization. nelem = "
                       << nelem << std::endl;
             throw;
         }
@@ -223,8 +236,7 @@ void toast::atm::sim::simulate( bool save_covmat ) {
                 El::DistMatrix<double> *cov = build_covariance(
                     ind_start, ind_stop, save_covmat );
                 sqrt_covariance( cov, ind_start, ind_stop, save_covmat );
-                apply_covariance(
-                    cov, realization->data(), ind_start, ind_stop );
+                apply_covariance( cov, ind_start, ind_stop );
 
                 delete cov;
             }
@@ -378,12 +390,6 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
         double t1 = MPI_Wtime();
 
-        double rstep = xstep;
-        //if ( ystep < rstep ) rstep = ystep;
-        //if ( zstep < rstep ) rstep = zstep;
-        //rstep /= 3;
-        //if ( fixed_r > 0 ) rstep = 1;
-
         // For each sample, integrate along the line of sight by summing
         // the atmosphere values. See Church (1995) Section 2.2, first equation.
         // We omit the optical depth factor which is close to unity.
@@ -410,8 +416,9 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
             double az_now = az[i] - az0; // Relative to center of field
             double el_now = el[i];
 
-            double xtel_now = xtel - wx*t_now;
-            double ytel_now = ytel - wy*t_now;
+            double xtel_now = wx*t_now;
+            double ytel_now = wy*t_now;
+            double ztel_now = wz*t_now;
 
             double sin_el = sin( el_now );
             double sin_el_max = sin( elmax );
@@ -419,74 +426,90 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
             double sin_az = sin( az_now );
             double cos_az = cos( az_now );
 
-            double val = 0;
-            double r = 1; // Start integration at a reasonable distance
-            if ( fixed_r > 0 ) r = fixed_r;
+            // We want to choose rstart and rstep so that we exactly
+            // sample the volume at the center of the volume elements in
+            // the X (in scan) direction.
+
+            /*
+              double rstart = 10;
+              double dr = 1;
+              double dz = dr * sin_el;
+              double drproj = dr * cos_el;
+              double dx = drproj * cos_az;
+              double dxx = dx*cosel0 + dz*sinel0;
+              double rstep = xstep / dxx;
+
+              double r = rstart; // Start integration at a reasonable distance
+
+              double z = r * sin_el;
+              double rproj = r * cos_el;
+              double x = xtel_now + rproj*cos_az;
+              double xx = x*cosel0 + z*sinel0;
+              long ix = (xx-xstart) * xstepinv;
+              double frac = (xx - (xstart + (double)ix*xstep)) * xstepinv;
+              frac += .5;
+              r += (1-frac) * rstep;
+            */
+
+            double r = 10.;
+            double rstep = xstep;
 
             std::vector<long> last_ind(3);
             std::vector<double> last_nodes(8);
+
+            double val = 0;
+            if ( fixed_r > 0 ) r = fixed_r;
 
             while ( true ) {
 
                 // Coordinates at distance r. The scan is centered on the X-axis
 
-                double *preal = realization->data();
-
                 // Check if the top of the focal plane hits zmax at
                 // this distance.  This way all lines-of-sight get
                 // integrated to the same distance
-                double z = r * sin_el_max;
-                if ( z >= zmax ) break;
+                double zz = r * sin_el_max;
+                if ( zz >= zmax ) break;
 
-                // We'll need to actual height later for the
-                // interpolated value
-                z = r * sin_el;
+                // Horizontal coordinates
 
+                zz = r * sin_el;
                 double rproj = r * cos_el;
-                double x = xtel_now + rproj*cos_az;
-                double y = ytel_now - rproj*sin_az;
+                double xx = rproj * cos_az;
+                double yy = -rproj * sin_az;
 
-#ifdef DEBUG
-                if ( x < 0 || x > delta_x ||
-                     y < 0 || y > delta_y ||
-                     z < 0 || z > delta_z ) {
-                    std::ostringstream o;
-                    o.precision( 16 );
-                    o << "atmsim::observe : observation point out of bounds ("
-                      << x << " / " << delta_x << ", "
-                      << y << " / " << delta_y << ", "
-                      << z << " / " << delta_z << ")" << std::endl
-                      << "( t, t-tmin, az, az-az0, el, r, r_proj ) = "
-                      << std::endl
-                      << "( " << t[i] << ", " << t_now << ", " << az[i]
-                      << ", " << az_now << ", " << el[i] << ", "
-                      << r << ", " << rproj
-                      << ")" << std::endl
-                      << "(x_tel, y_tel, x_tel_now, y_tel_now, wx, wy) = ("
-                      << xtel << ", " << ytel << ", "
-                      << xtel_now << ", " << ytel_now << ", "
-                      << wx << ", " << wy << ")" << std::endl;
-                    std::cerr << o.str();
-                    throw std::runtime_error( o.str().c_str() );
-                }
-#endif
+                // Rotate to scan frame
+
+                double x = xx*cosel0 + zz*sinel0;
+                double y = yy;
+                double z = -xx*sinel0 + zz*cosel0;
+
+                // Translate by the wind
+
+                x += xtel_now;
+                y += ytel_now;
+                z += ztel_now;
 
                 // Combine atmospheric emission (via interpolation) with the
                 // ambient temperature
 
                 double step_val;
                 try {
-                    step_val = interp( preal, x, y, z, last_ind,
-                                       last_nodes )
+                    step_val = interp( x, y, z, last_ind, last_nodes )
                         * (1. - z * zatm_inv);
                 } catch ( const std::runtime_error& e ) {
                     std::ostringstream o;
                     o.precision( 16 );
-                    o << "atmsim::observe : interp failed at ("
-                      << x << " /  " << delta_x << ", " << y << " / "
-                      << delta_y << ", " << z << " / " << delta_z << ")"
-                      << "( t, az, el ) " << "( " << t[i] << ", " << az[i]
-                      << ", " << el[i] << ") with " << e.what() << std::endl;
+                    o << "atmsim::observe : interp failed at " << std::endl
+                      << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
+                      << std::endl
+                      << "xyz = (" << x << ", " << y << ", " << z << ")"
+                      << std::endl
+                      << "tele at (" << xtel_now << ", " << ytel_now << ", "
+                      << ztel_now << ")" << std::endl
+                      << "( t, az, el ) = " << "( " << t[i]-tmin << ", "
+                      << az_now*180/M_PI
+                      << " deg , " << el_now*180/M_PI << " deg) with "
+                      << std::endl << e.what() << std::endl;
                     throw std::runtime_error( o.str().c_str() );
                 }
 
@@ -584,14 +607,19 @@ void toast::atm::sim::draw() {
     if ( MPI_Bcast( &T0, 1, MPI_DOUBLE, 0, comm ) )
         throw std::runtime_error( "Failed to bcast T0" );
 
-    wx = w * sin( wdir );
+    // Precalculate the ratio for covariance
+
+    z0inv = 1. / (2. * z0);
+
+    // Wind parallel to surface
+
+    double wx_h = w * sin( wdir );
     wy = w * cos( wdir );
 
-    // Use the absolute values of the wind components to simplify
-    // translating the slab
+    // Rotate to a frame where scan is along X axis
 
-    wx = fabs( wx );
-    wy = fabs( wy );
+    wx = wx_h * cosel0;
+    wz = -wx_h * sinel0;
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
@@ -601,6 +629,7 @@ void toast::atm::sim::draw() {
         std::cerr << "    w = " << w << " m/s" << std::endl;
         std::cerr << "   wx = " << wx << " m/s" << std::endl;
         std::cerr << "   wy = " << wy << " m/s" << std::endl;
+        std::cerr << "   wz = " << wz << " m/s" << std::endl;
         std::cerr << " wdir = " << wdir*180./M_PI << " degrees" << std::endl;
         std::cerr << "   z0 = " << z0 << " m" << std::endl;
         std::cerr << "   T0 = " << T0 << " K" << std::endl;
@@ -612,36 +641,79 @@ void toast::atm::sim::draw() {
 
 void toast::atm::sim::get_volume() {
 
-    // Stationary volume
+    // Horizontal volume
 
-    delta_z = zmax;
+    double delta_z_h = zmax;
+    //std::cerr << "delta_z_h = " << delta_z_h << std::endl;
+
     // Maximum distance observed through the simulated volume
-    double maxdist = delta_z / sin(elmin);
+    double maxdist = delta_z_h / sinel0;
+    //std::cerr << "maxdist = " << maxdist << std::endl;
+
     // Volume length
-    delta_x = maxdist * cos(elmin);
-    // Volume width
-    delta_y = delta_x * tan(delta_az / 2) * 2;
+    double delta_x_h = maxdist * cos(elmin);
+    //std::cerr << "delta_x_h = " << delta_x_h << std::endl;
 
-    // Telescope position wrt the full volume
+    double x, y, z, xx, zz, r, rproj, z_min, z_max;
+    r = maxdist;
 
-    xtel = 0;
-    ytel = delta_y / 2;
-    ztel = 0;
+    z = r * sin(elmin);
+    rproj = r * cos(elmin);
+    x = rproj * cos(0);
+    z_min = -x*sinel0 + z*cosel0;
+
+    z = r * sin(elmax);
+    rproj = r * cos(elmax);
+    x = rproj * cos(delta_az/2);
+    z_max = -x*sinel0 + z*cosel0;
+
+    // Cone width
+    delta_y_cone = maxdist * tan(delta_az / 2.) * 2.;
+    //std::cerr << "delta_y_cone = " << delta_y_cone << std::endl;
+
+    // Cone height
+    delta_z_cone = z_max - z_min;
+    //std::cerr << "delta_z_cone = " << delta_z_cone << std::endl;
+
+    // Rotate to observation plane
+
+    delta_x = maxdist;
+    //std::cerr << "delta_x = " << delta_x << std::endl;
+    delta_z = delta_z_cone;
+    //std::cerr << "delta_z = " << delta_z << std::endl;
 
     // Wind effect
 
-    double wdx = wx * delta_t;
-    double wdy = wy * delta_t;
+    double wdx = std::abs(wx) * delta_t;
+    double wdy = std::abs(wy) * delta_t;
+    double wdz = std::abs(wz) * delta_t;
     delta_x += wdx;
-    delta_y += wdy;
-    xtel += wdx;
-    ytel += wdy;
+    delta_y = delta_y_cone + wdy;
+    delta_z += wdz;
 
     // Margin for interpolation
 
-    delta_x += 5 * xstep;
-    delta_y += ystep;
-    delta_z += zstep;
+    delta_x += xstep;
+    delta_y += 2*ystep;
+    delta_z += 2*zstep;
+
+    // Translate the volume to allow for wind.  Telescope sits
+    // at (0, 0, 0) at t=0
+
+    if ( wx < 0 )
+        xstart = -wdx;
+    else
+        xstart = 0;
+
+    if ( wy < 0 )
+        ystart = -0.5*delta_y_cone - wdy - ystep;
+    else
+        ystart = -0.5*delta_y_cone - ystep;
+
+    if ( wz < 0 )
+        zstart = z_min - wdz - zstep;
+    else
+        zstart = z_min - zstep;
 
     // Grid points
 
@@ -663,17 +735,19 @@ void toast::atm::sim::get_volume() {
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Simulation volume:" << std::endl;
-        std::cerr << "    height = " << delta_z << " m" << std::endl;
-        std::cerr << "    length = " << delta_x << " m" << std::endl;
-        std::cerr << "     width = " << delta_y << " m " << std::endl;
+        std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
+        std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
+        std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
+        std::cerr << "   delta_y_cone = " << delta_y_cone << " m" << std::endl;
+        std::cerr << "   delta_z_cone = " << delta_z_cone << " m" << std::endl;
+        std::cerr << "    xstart = " << xstart << " m" << std::endl;
+        std::cerr << "    ystart = " << ystart << " m" << std::endl;
+        std::cerr << "    zstart = " << zstart << " m" << std::endl;
         std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
         std::cerr << "        nx = " << nx << std::endl;
         std::cerr << "        ny = " << ny << std::endl;
         std::cerr << "        nz = " << nz << std::endl;
         std::cerr << "        nn = " << nn << std::endl;
-        std::cerr << "      xtel = " << xtel << " m" << std::endl;
-        std::cerr << "      ytel = " << ytel << " m" << std::endl;
-        std::cerr << "      ztel = " << ztel << " m" << std::endl;
     }
 
     initialize_kolmogorov();
@@ -714,12 +788,6 @@ void toast::atm::sim::initialize_kolmogorov() {
     double kappa0 = 0.75 * kappamin;
     double kappa0sq = kappa0 * kappa0; // Optimize
     long nkappa = 1000000; // Number of integration steps needs to be large
-
-#ifdef DEBUG
-    std::cerr << "DEBUG = True: reducing kappa grid." << std::endl;
-    nkappa /= 100;
-#endif
-
     double upper_limit = 10*kappamax;
     double kappastep = upper_limit / (nkappa - 1);
     double slope1 = 7. / 6.;
@@ -892,7 +960,8 @@ void toast::atm::sim::compress_volume() {
 
         hit.resize( nn, false );
     } catch ( std::bad_alloc & e ) {
-        std::cerr << rank << " : Out of memory allocating element indices. nn = "
+        std::cerr << rank
+                  << " : Out of memory allocating element indices. nn = "
                   << nn << std::endl;
         throw;
     }
@@ -901,14 +970,14 @@ void toast::atm::sim::compress_volume() {
 
     for (long ix=0; ix<nx-1; ++ix) {
         if ( ix % ntask != rank ) continue;
-        double x = ix * xstep;
+        double x = xstart + ix * xstep;
 
 #pragma omp parallel for schedule(static, 10)
         for (long iy=0; iy<ny-1; ++iy) {
-            double y = iy * ystep;
+            double y = ystart + iy * ystep;
 
             for (long iz=0; iz<nz-1; ++iz) {
-                double z = iz * zstep;
+                double z = zstart + iz * zstep;
                 if ( in_cone( x, y, z ) ) {
 #ifdef DEBUG
                     hit.at( ix * xstride + iy * ystride + iz * zstride ) = true;
@@ -1006,52 +1075,51 @@ void toast::atm::sim::compress_volume() {
 
 bool toast::atm::sim::in_cone( double x, double y, double z ) {
 
-    if ( z >= zmax ) return false;
+    // Input coordinates are in the scan frame
 
-    // The wind makes the calculation rather involved. For now, we simply
-    // perform a stationary in_cone check at a number of time points
+    // altitude in a horizontal coordinate system
+    double zz = x*sinel0 + z*cosel0;
+    if ( zz >= zmax ) return false;
 
-    double tstep = 1;
-    if ( wx != 0 ) tstep = xstep / wx;
-    if ( wy != 0 )
-        if ( tstep > ystep / wy) tstep = ystep / wy;
-    tstep /= 10;
-    long nt = delta_t / tstep + 1;
-    if (nt < 1) nt = 1;
+    // Find the times when coordinate z is in view
 
-    for ( long it=0; it<nt; ++it ) {
-        double t = it*tstep;
-        double xtel_now = xtel - wx*t;
-        double ytel_now = ytel - wy*t;
+    std::vector<double> tvec(2, 0.);
+
+    if ( wz != 0 ) {
+        tvec[0] = (z - 0.5*delta_z_cone) / wz;
+        tvec[1] = (z + 0.5*delta_z_cone) / wz;
+    }
+
+    // Check if (x, y) is in the cone at either time
+
+    for ( auto& t : tvec ) {
+        if ( t < 0 ) t = 0;
+        if ( t > delta_t ) t = delta_t;
+
+        double xtel_now = wx*t;
+        double ytel_now = wy*t;
 
         double dxmin = x - xtel_now;
+        if ( dxmin == 0 ) continue;
+
         double dxmax = dxmin + xstep;
-        // Is the point is behind the telescope at this time?
+
+        // Is the point behind the telescope at this time?
         if ( dxmin < 0 && dxmax < 0 ) continue;
 
-        double dymin = y - ytel_now;
-        double dymax = dymin + ystep;
+        // Are the x-y coordinates in the sector?
 
-        double rmin = sqrt(dxmin*dxmin + dymin*dymin);
-        double rmax = sqrt(dxmax*dxmax + dymax*dymax);
-        double rmininv = 1 / rmin;
-        double rmaxinv = 1 / rmax;
+        double aztan1 = (y - ytel_now) / (x - xtel_now);
+        double aztan2 = (y - ytel_now + ystep) / (x - xtel_now);
+        double aztan3 = (y - ytel_now) / (x - xtel_now + xstep);
+        double aztan4 = (y - ytel_now + ystep) / (x - xtel_now + xstep);
+        if ( (aztan1 < tanmin && aztan2 < tanmin
+              && aztan3 < tanmin && aztan4 < tanmin)
+             || (aztan1 > tanmax && aztan2 > tanmax
+                 && aztan3 > tanmax && aztan4 > tanmax) )
+            continue;
 
-        // Is it at the observed elevation?
-
-        double eltanmin = (z - zstep) * rmaxinv; // tangent of the xyz elevation
-        if ( eltanmin > tanmax ) continue;
-
-        double eltanmax = (z + zstep) * rmininv; // tangent of the xyz elevation
-        if ( eltanmax < tanmin ) continue;
-
-        // Is the data point in sector?
-
-        double sinazmin = (dymin - ystep) * rmaxinv;
-        if ( sinazmin > sinmax ) continue;
-
-        double sinazmax = (dymax + ystep) * rmaxinv;
-        if ( sinazmax < sinmin ) continue;
+        // Passed all the checks
 
         return true;
     }
@@ -1063,6 +1131,7 @@ bool toast::atm::sim::in_cone( double x, double y, double z ) {
 void toast::atm::sim::ind2coord( long i, double *coord ) {
 
     // Translate a compressed index into xyz-coordinates
+    // in the horizontal frame
 
     long ifull = (*full_index)[i];
 
@@ -1070,20 +1139,30 @@ void toast::atm::sim::ind2coord( long i, double *coord ) {
     long iy = (ifull - ix*xstride) * ystrideinv;
     long iz = ifull - ix*xstride - iy*ystride;
 
-    coord[0] = ix * xstep;
-    coord[1] = iy * ystep;
-    coord[2] = iz * zstep;
+    // coordinates in the scan frame
+
+    double x = xstart + ix*xstep;
+    double y = ystart + iy*ystep;
+    double z = zstart + iz*zstep;
+
+    // Into the horizontal frame
+
+    coord[0] = x*cosel0 - z*sinel0;
+    coord[1] = y;
+    coord[2] = x*sinel0 + z*cosel0;
+
 }
 
 
 long toast::atm::sim::coord2ind( double x, double y, double z ) {
 
-    // Translate xyz-coordinates into a compressed index
+    // Translate scan frame xyz-coordinates into a compressed index
 
-    long ix = x * xstepinv;
-    long iy = y * ystepinv;
-    long iz = z * zstepinv;
+    long ix = (x-xstart) * xstepinv;
+    long iy = (y-ystart) * ystepinv;
+    long iz = (z-zstart) * zstepinv;
 
+#ifdef DEBUG
     if ( ix < 0 || ix > nx-1 || iy < 0 || iy > ny-1 || iz < 0 || iz > nz-1 ) {
         std::ostringstream o;
         o.precision( 16 );
@@ -1093,6 +1172,7 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
           << iz << ", " << nz << ")";
         throw std::runtime_error( o.str().c_str() );
     }
+#endif
 
     size_t ifull = ix * xstride + iy * ystride + iz * zstride;
 
@@ -1100,19 +1180,34 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
 }
 
 
-double toast::atm::sim::interp( double *realization, double x,
-				double y, double z, std::vector<long> &last_ind,
+double toast::atm::sim::interp( double x, double y, double z,
+                                std::vector<long> &last_ind,
 				std::vector<double> &last_nodes ) {
 
     // Trilinear interpolation
 
-    long ix = x * xstepinv;
-    long iy = y * ystepinv;
-    long iz = z * zstepinv;
+    long ix = (x-xstart) * xstepinv;
+    long iy = (y-ystart) * ystepinv;
+    long iz = (z-zstart) * zstepinv;
 
-    double dx = (x - (double)ix * xstep) * xstepinv;
-    double dy = (y - (double)iy * ystep) * ystepinv;
-    double dz = (z - (double)iz * zstep) * zstepinv;
+    double dx = (x - (xstart + (double)ix*xstep)) * xstepinv;
+    double dy = (y - (ystart + (double)iy*ystep)) * ystepinv;
+    double dz = (z - (zstart + (double)iz*zstep)) * zstepinv;
+
+#ifdef DEBUG
+    if ( dx < 0 || dx > 1 || dy < 0 || dy > 1 || dz < 0 || dz > 1 ) {
+        std::ostringstream o;
+        o.precision( 16 );
+        o << "atmsim::interp : bad fractional step: " << std::endl
+          << "x = " << x << std::endl
+          << "y = " << y << std::endl
+          << "z = " << z << std::endl
+          << "dx = " << dx << std::endl
+          << "dy = " << dy << std::endl
+          << "dz = " << dz << std::endl;
+        throw std::runtime_error( o.str().c_str() );
+    }
+#endif
 
     double c000, c001, c010, c011, c100, c101, c110, c111;
 
@@ -1123,7 +1218,8 @@ double toast::atm::sim::interp( double *realization, double x,
              || iz < 0 || iz > nz-2 ) {
             std::ostringstream o;
             o.precision( 16 );
-            o << "atmsim::interp : full index out of bounds at ("
+            o << "atmsim::interp : full index out of bounds at"
+              << std::endl << "("
               << x << ", " << y << ", "<< z << ") = ("
               << ix << "/" << nx << ", "
               << iy << "/" << ny << ", "
@@ -1143,6 +1239,33 @@ double toast::atm::sim::interp( double *realization, double x,
         size_t ifull110 = ifull100 + ystride;
         size_t ifull111 = ifull110 + zstride;
 
+#ifdef DEBUG
+        long ifullmax = compressed_index->size()-1;
+        if (
+            ifull000 < 0 || ifull000 > ifullmax ||
+            ifull001 < 0 || ifull001 > ifullmax ||
+            ifull010 < 0 || ifull010 > ifullmax ||
+            ifull011 < 0 || ifull011 > ifullmax ||
+            ifull100 < 0 || ifull100 > ifullmax ||
+            ifull101 < 0 || ifull101 > ifullmax ||
+            ifull110 < 0 || ifull110 > ifullmax ||
+            ifull111 < 0 || ifull111 > ifullmax ) {
+            std::ostringstream o;
+            o.precision( 16 );
+            o << "atmsim::observe : bad full index. "
+              << "ifullmax = " << ifullmax << std::endl
+              << "ifull000 = " << ifull000 << std::endl
+              << "ifull001 = " << ifull001 << std::endl
+              << "ifull010 = " << ifull010 << std::endl
+              << "ifull011 = " << ifull011 << std::endl
+              << "ifull100 = " << ifull100 << std::endl
+              << "ifull101 = " << ifull101 << std::endl
+              << "ifull110 = " << ifull110 << std::endl
+              << "ifull111 = " << ifull111 << std::endl;
+            throw std::runtime_error( o.str().c_str() );
+        }
+#endif
+
         long i000 = (*compressed_index)[ifull000];
         long i001 = (*compressed_index)[ifull001];
         long i010 = (*compressed_index)[ifull010];
@@ -1157,14 +1280,45 @@ double toast::atm::sim::interp( double *realization, double x,
         if (i101 < 0) i101 = i100;
         if (i111 < 0) i111 = i110;
 
-        c000 = realization[i000];
-        c001 = realization[i001];
-        c010 = realization[i010];
-        c011 = realization[i011];
-        c100 = realization[i100];
-        c101 = realization[i101];
-        c110 = realization[i110];
-        c111 = realization[i111];
+#ifdef DEBUG
+        long imax = realization->size()-1;
+        if (
+            i000 < 0 || i000 > imax ||
+            i001 < 0 || i001 > imax ||
+            i010 < 0 || i010 > imax ||
+            i011 < 0 || i011 > imax ||
+            i100 < 0 || i100 > imax ||
+            i101 < 0 || i101 > imax ||
+            i110 < 0 || i110 > imax ||
+            i111 < 0 || i111 > imax ) {
+            std::ostringstream o;
+            o.precision( 16 );
+            o << "atmsim::observe : bad compressed index. "
+              << "imax = " << imax << std::endl
+              << "i000 = " << i000 << std::endl
+              << "i001 = " << i001 << std::endl
+              << "i010 = " << i010 << std::endl
+              << "i011 = " << i011 << std::endl
+              << "i100 = " << i100 << std::endl
+              << "i101 = " << i101 << std::endl
+              << "i110 = " << i110 << std::endl
+              << "i111 = " << i111 << std::endl
+              << "(x, y, z) = " << x << ", " << y << ", " << z << ")"
+              << std::endl
+              << "in_cone(x, y, z) = " << in_cone( x, y, z )
+              << std::endl;
+            throw std::runtime_error( o.str().c_str() );
+        }
+#endif
+
+        c000 = (*realization)[i000];
+        c001 = (*realization)[i001];
+        c010 = (*realization)[i010];
+        c011 = (*realization)[i011];
+        c100 = (*realization)[i100];
+        c101 = (*realization)[i101];
+        c110 = (*realization)[i110];
+        c111 = (*realization)[i111];
 
         last_ind[0] = ix;
         last_ind[1] = iy;
@@ -1284,21 +1438,54 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
 
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
+    // Coordinates are in the horizontal frame
 
-    double x1=coord1[0], y1=coord1[1], z1=coord1[2];
-    double x2=coord2[0], y2=coord2[1], z2=coord2[2];
+    const long nn = 1;
+    const double ndxinv = xxstep / (nn-1);
+    const double ndzinv = zzstep / (nn-1);
+    const double ninv = 1. / ( nn * nn );
 
-    // Water vapor altitude factor
+    double val = 0;
 
-    double chi1 = exp( -(z1+z2) / (2*z0) );
+    for ( int ii1=0; ii1<nn; ++ii1 ) {
+        double xx1 = coord1[0];
+        double yy1 = coord1[1];
+        double zz1 = coord1[2];
 
-    // Kolmogorov factor
+        if ( ii1 ) {
+            xx1 += ii1 * ndxinv;
+            zz1 += ii1 * ndzinv;
+        }
 
-    double dx = x1-x2, dy=y1-y2, dz=z1-z2;
-    double r = sqrt( dx*dx + dy*dy + dz*dz );
-    double chi2 = kolmogorov( r );
+        for ( int ii2=0; ii2<nn; ++ii2 ) {
+            double xx2 = coord2[0];
+            double yy2 = coord2[1];
+            double zz2 = coord2[2];
 
-    return chi1 * chi2;
+            if ( ii2 ) {
+                xx2 += ii2 * ndxinv;
+                zz2 += ii2 * ndzinv;
+            }
+
+            // Water vapor altitude factor
+
+            double chi1 = std::exp( -(zz1+zz2) * z0inv );
+
+            // Kolmogorov factor
+
+            double dx = xx1 - xx2;
+            double dy = yy1 - yy2;
+            double dz = zz1 - zz2;
+
+
+            double r = sqrt( dx*dx + dy*dy + dz*dz );
+            double chi2 = kolmogorov( r );
+
+            val += chi1 * chi2;
+        }
+    }
+
+    return val * ninv;
 }
 
 
@@ -1389,7 +1576,6 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 
 
 void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
-					double *realization,
 					long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();
@@ -1498,7 +1684,7 @@ void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
     // FIXME: This is where we would blend slices
 
     for ( long i=ind_start; i<ind_stop; ++i ) {
-        realization[i] = p[i-ind_start];
+        (*realization)[i] = p[i-ind_start];
     }
 
     return;
