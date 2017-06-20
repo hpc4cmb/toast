@@ -501,8 +501,9 @@ def main():
         localpix = lc.exec(data)
         if localpix is None:
             raise RuntimeError(
-                'Process {} has no hit pixels. Perhaps there are fewer detectors '
-                'than processes in the group?'.format(comm.comm_world.rank))
+                'Process {} has no hit pixels. Perhaps there are fewer '
+                'detectors than processes in the group?'.format(
+                    comm.comm_world.rank))
 
         # find the locally hit submaps.
         localsm = np.unique(np.floor_divide(localpix, subnpix))
@@ -562,11 +563,32 @@ def main():
                              dtype=np.float64, submap=subnpix, local=localsm)
         distobjects.append(zmap)
 
-        # compute the hits and covariance once, since the pointing and noise
-        # weights are fixed.
-
         invnpp.data.fill(0.0)
         hits.data.fill(0)
+
+        if comm.comm_group.size < comm.comm_world.size:
+            invnpp_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
+                                         dtype=np.float64, submap=subnpix,
+                                         local=localsm)
+            distobjects.append(invnpp_group)
+            hits_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1,
+                                       dtype=np.int64, submap=subnpix,
+                                       local=localsm)
+            distobjects.append(hits_group)
+            zmap_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3,
+                                       dtype=np.float64, submap=subnpix,
+                                       local=localsm)
+            distobjects.append(zmap_group)
+
+            invnpp_group.data.fill(0.0)
+            hits_group.data.fill(0)
+        else:
+            invnpp_group = None
+            hits_group = None
+            zmap_group = None
+
+        # compute the hits and covariance once, since the pointing and noise
+        # weights are fixed.
 
         build_invnpp = tm.OpAccumDiag(
             detweights=detweights, invnpp=invnpp, hits=hits,
@@ -586,6 +608,26 @@ def main():
                   flush=True)
         start = stop
 
+        if invnpp_group is not None:
+
+            build_invnpp_group = tm.OpAccumDiag(
+                detweights=detweights, invnpp=invnpp_group, hits=hits_group,
+                flag_name=flag_name, common_flag_name=common_flag_name,
+                common_flag_mask=args.common_flag_mask)
+
+            build_invnpp_group.exec(data)
+
+            invnpp_group.allreduce()
+            hits_group.allreduce()
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('Building group hits and N_pp^-1 took {:.3f} s'.format(
+                    elapsed), flush=True)
+                start = stop
+
         counter = tt.OpMemoryCounter(*distobjects)
         counter.exec(data)
 
@@ -603,6 +645,22 @@ def main():
         distobjects.remove(hits)
         del hits
 
+        if hits_group is not None:
+            fn = '{}/hits_group_{:04}.fits'.format(args.outdir, comm.group)
+
+            hits_group.write_healpix_fits(fn)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('Writing group hit map to {} took {:.3f} s'
+                      ''.format(fn, elapsed), flush=True)
+            start = stop
+
+            distobjects.remove(hits_group)
+            del hits_group
+
         fn = '{}/invnpp.fits'.format(args.outdir)
         invnpp.write_healpix_fits(fn)
 
@@ -613,6 +671,18 @@ def main():
             print('Writing N_pp^-1 to {} took {:.3f} s'
                   ''.format(fn, elapsed), flush=True)
         start = stop
+
+        if invnpp_group is not None:
+            fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir, comm.group)
+            invnpp_group.write_healpix_fits(fn)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('Writing group N_pp^-1 to {} took {:.3f} s'
+                      ''.format(fn, elapsed), flush=True)
+            start = stop
 
         # invert it
         tm.covariance_invert(invnpp, 1.0e-3)
@@ -625,15 +695,38 @@ def main():
                   flush=True)
         start = stop
 
-        invnpp.write_healpix_fits('{}/npp.fits'.format(args.outdir))
+        fn = '{}/npp.fits'.format(args.outdir)
+        invnpp.write_healpix_fits(fn)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Writing N_pp took {:.3f} s'.format(elapsed),
+            print('Writing N_pp to {} took {:.3f} s'.format(fn, elapsed),
                   flush=True)
         start = stop
+
+        if invnpp_group is not None:
+            tm.covariance_invert(invnpp_group, 1.0e-3)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('Inverting group N_pp^-1 took {:.3f} s'.format(elapsed),
+                      flush=True)
+            start = stop
+
+            fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
+            invnpp_group.write_healpix_fits(fn)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('Writing group N_pp to {} took {:.3f} s'.format(
+                    fn, elapsed), flush=True)
+            start = stop
 
         counter = tt.OpMemoryCounter(*distobjects)
         counter.exec(data)
@@ -824,6 +917,46 @@ def main():
             if comm.comm_world.rank == 0:
                 print('  Writing binned map {:04d} to {} took {:.3f} s'
                       ''.format(mc, fn, elapsed), flush=True)
+
+            if zmap_group is not None:
+
+                zmap_group.data.fill(0.0)
+                build_zmap_group = tm.OpAccumDiag(
+                    detweights=detweights, zmap=zmap_group, name='total',
+                    flag_name=flag_name, common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask)
+                build_zmap_group.exec(data)
+                zmap_group.allreduce()
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Building group noise weighted map {:04d} took '
+                          '{:.3f} s'.format(mc, elapsed), flush=True)
+                start = stop
+
+                tm.covariance_apply(invnpp_group, zmap_group)
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Computing binned map {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+                fn = os.path.join(outpath,
+                                  'binned_group_{:04}.fits'.format(comm.group))
+                zmap_group.write_healpix_fits(fn)
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Writing group binned map {:04d} to {} took '
+                          '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+
             elapsed = stop - mcstart
             if comm.comm_world.rank == 0:
                 print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
@@ -909,6 +1042,45 @@ def main():
             if comm.comm_world.rank == 0:
                 print('  Writing filtered map {:04d} to {} took {:.3f} s'
                       ''.format(mc, fn, elapsed), flush=True)
+
+            if zmap_group is not None:
+                zmap_group.data.fill(0.0)
+                build_zmap_group = tm.OpAccumDiag(
+                    detweights=detweights, zmap=zmap_group, name='total',
+                    flag_name=flag_name, common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask)
+                build_zmap_group.exec(data)
+                zmap_group.allreduce()
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Building group noise weighted map {:04d} took '
+                          '{:.3f} s'.format(mc, elapsed), flush=True)
+                start = stop
+
+                tm.covariance_apply(invnpp_group, zmap_group)
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Computing group filtered map {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+                fn = os.path.join(outpath,
+                                  'filtered_group_{:04}.fits'.format(comm.group))
+                zmap_group.write_healpix_fits(fn)
+
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('  Writing group filtered map {:04d} to {} took '
+                          '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+
             elapsed = stop - mcstart
             if comm.comm_world.rank == 0:
                 print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
