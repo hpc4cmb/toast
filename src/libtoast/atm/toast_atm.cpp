@@ -504,11 +504,14 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                       << std::endl
                       << "xyz = (" << x << ", " << y << ", " << z << ")"
                       << std::endl
+                      << "r = " << r << std::endl
                       << "tele at (" << xtel_now << ", " << ytel_now << ", "
                       << ztel_now << ")" << std::endl
                       << "( t, az, el ) = " << "( " << t[i]-tmin << ", "
                       << az_now*180/M_PI
-                      << " deg , " << el_now*180/M_PI << " deg) with "
+                      << " deg , " << el_now*180/M_PI << " deg) "
+                      << " in_cone(t) = " << in_cone( x, y, z, t_now )
+                      << " with "
                       << std::endl << e.what() << std::endl;
                     throw std::runtime_error( o.str().c_str() );
                 }
@@ -1073,7 +1076,7 @@ void toast::atm::sim::compress_volume() {
 }
 
 
-bool toast::atm::sim::in_cone( double x, double y, double z ) {
+bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
 
     // Input coordinates are in the scan frame
 
@@ -1081,30 +1084,24 @@ bool toast::atm::sim::in_cone( double x, double y, double z ) {
     double zz = x*sinel0 + z*cosel0;
     if ( zz >= zmax ) return false;
 
-    // Find the times when coordinate z is in view
+    // Check if (x, y) is in the cone at any time
 
-    std::vector<double> tvec(2, 0.);
+    double tstep = 10;
 
-    if ( wz != 0 ) {
-        tvec[0] = (z - 0.5*delta_z_cone) / wz;
-        tvec[1] = (z + 0.5*delta_z_cone) / wz;
-    }
-
-    // Check if (x, y) is in the cone at either time
-
-    for ( auto& t : tvec ) {
-        if ( t < 0 ) t = 0;
-        if ( t > delta_t ) t = delta_t;
+    for ( double t=0; t<delta_t; t+=tstep ) {
+        if ( t_in >= 0 ) {
+            if ( t != 0 ) break;
+            t = t_in;
+        }
 
         double xtel_now = wx*t;
         double ytel_now = wy*t;
 
         double dxmin = x - xtel_now;
-        if ( dxmin == 0 ) continue;
-
         double dxmax = dxmin + xstep;
 
         // Is the point behind the telescope at this time?
+
         if ( dxmin < 0 && dxmax < 0 ) continue;
 
         // Are the x-y coordinates in the sector?

@@ -96,7 +96,7 @@ private :
     void draw(); // Draw values of lmin, lmax, w, wdir, T0 (and optionally z0)
     void get_volume(); // Determine the rectangular volume needed
     // determine of the given coordinates are within observed volume
-    bool in_cone(double x, double y, double z);
+    bool in_cone( double x, double y, double z, double t_in=-1 );
     void compress_volume(); // Find the volume elements really needed
     El::Grid *grid=NULL;
     mpi_shmem_double *realization=NULL;
