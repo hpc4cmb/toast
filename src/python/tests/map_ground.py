@@ -334,7 +334,7 @@ class MapGroundTest(MPITestCase):
                 print("pixrms = ", pixrms)
                 print("todrms = ", todrms)
                 print("relerr = ", relerr)
-                self.assertTrue(relerr < 0.02)
+                self.assertTrue(relerr < 0.03)
 
         else:
             print("libmadam not available, skipping tests")

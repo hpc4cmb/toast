@@ -26,17 +26,21 @@ class OpLocalPixels(Operator):
             containing the pixel indices to use.
     """
 
-    def __init__(self, pixels='pixels'):
+    def __init__(self, pixels='pixels', pixmin=None, pixmax=None, no_hitmap=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
         self._timedist = True
         self._pixels = pixels
+        self._pixmin = pixmin
+        self._pixmax = pixmax
+        self._no_hitmap = no_hitmap
 
     def exec(self, data):
         """
-        Iterate over all observations and detectors and compute local pixels.
+        Iterate over all observations and detectors and compute
+        local pixels.
 
         Args:
             data (toast.Data): The distributed data.
@@ -57,18 +61,57 @@ class OpLocalPixels(Operator):
         # initialize the local pixel set
         local = None
 
-        for obs in data.obs:
-            tod = obs['tod']
-            for det in tod.local_dets:
-                pixelsname = "{}_{}".format(self._pixels, det)
-                pixels = tod.cache.reference(pixelsname)
-                if local is None:
-                    local = np.unique(pixels)
-                else:
-                    local = np.unique(np.concatenate((local, np.unique(pixels))))
-                del pixels
+        if self._no_hitmap:
+            # Avoid allocating extra memory at the cost of slower operation
+            for obs in data.obs:
+                tod = obs['tod']
+                for det in tod.local_dets:
+                    pixelsname = "{}_{}".format(self._pixels, det)
+                    pixels = tod.cache.reference(pixelsname)
+                    if local is None:
+                        local = np.unique(pixels)
+                    else:
+                        local = np.unique(np.concatenate((
+                            local, np.unique(pixels))))
+                    del pixels
+        else:
+            pixmin = self._pixmin
+            pixmax = self._pixmax
 
-        return local
+            if self._pixmin is None or self._pixmax is None:
+                # Find the overall pixel range before allocating the hit map
+                pixmin = 2**60
+                pixmax = -2**60
+                for obs in data.obs:
+                    tod = obs['tod']
+                    for det in tod.local_dets:
+                        pixelsname = "{}_{}".format(self._pixels, det)
+                        pixels = tod.cache.reference(pixelsname)
+                        pixmin = min(pixmin, np.amin(pixels))
+                        pixmax = max(pixmax, np.amax(pixels))
+                        del pixels
+
+                if pixmin == 2**60 and pixmax == -2**60:
+                    # No pixels
+                    return np.array([], dtype=np.int)
+
+            npix = pixmax - pixmin + 1
+            hitmap = np.zeros(npix, dtype=np.bool)
+
+            for obs in data.obs:
+                tod = obs['tod']
+                for det in tod.local_dets:
+                    pixelsname = "{}_{}".format(self._pixels, det)
+                    pixels = tod.cache.reference(pixelsname)
+                    hitmap[pixels - pixmin] = True
+                    del pixels
+
+            local = []
+            for pixel, hit in enumerate(hitmap):
+                if hit:
+                    local.append(pixel + pixmin)
+
+        return np.array(local)
 
 
 class DistPixels(object):
