@@ -1065,11 +1065,17 @@ void toast::atm::sim::compress_volume() {
 
     double t2 = MPI_Wtime();
 
-    if ( rank == 0 and verbosity > 0 ) {
-        std::cerr << "Volume compressed in " << t2-t1 << " s." << std::endl;
-        std::cerr << i << " / " << nn << "(" << i * 100. / nn << " %)"
-                  << " volume elements are needed for the simulation"
-                  << std::endl;
+    if ( rank == 0 ) {
+      //if ( verbosity > 0 ) {
+      std::cerr << "Volume compressed in " << t2-t1 << " s." << std::endl;
+      std::cerr << i << " / " << nn << "(" << i * 100. / nn << " %)"
+                << " volume elements are needed for the simulation"
+                << std::endl
+                << "nx = " << nx << " ny = " << ny << " nz = " << nz
+                << std::endl
+                << "wx = " << wx << " wy = " << wy << " wz = " << wz
+                << std::endl;
+      //}
     }
 
     if ( nelem == 0 )
