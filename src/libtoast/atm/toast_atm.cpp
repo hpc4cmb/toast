@@ -1080,7 +1080,7 @@ void toast::atm::sim::compress_volume() {
 
 bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
 
-    // Input coordinates are in the scan frame
+    // Input coordinates are in the scan frame, rotate to horizontal frame
 
     double tstep = 1;
 
@@ -1124,16 +1124,22 @@ bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
         if ( std::abs(dy) < 2*ystep && std::abs(dz) < 2*zstep )
             return true;
 
-        double el = std::asin( dz / r );
-        if ( std::abs(el) > 0.5*delta_el ) {
+        double dxx = dx*cosel0 - dz*sinel0;
+        double dyy = dy;
+        double dzz = dx*sinel0 + dz*cosel0;
+
+        double el = std::asin( dzz / r );
+        if ( el < elmin || el > elmax ) {
             if ( t_in >= 0 )
-                std::cerr << "abs(el) > delta_el/2: "
-                          << el*180/M_PI << " > "
-                          << 0.5*delta_el*180/M_PI << std::endl;
+                std::cerr << "el outside cone: "
+                          << el*180/M_PI << " not in "
+                          << elmin*180/M_PI << " - "
+                          << elmax*180/M_PI << std::endl;
             continue;
         }
 
-        double az = std::atan2( dy, dx+xstep );
+        dxx = (dx+xstep)*cosel0 - dz*sinel0;
+        double az = std::atan2( dyy, dxx );
         if ( std::abs(az) > 0.5*delta_az ) {
             if ( t_in >= 0 )
                 std::cerr << "abs(az) > delta_az/2 "
