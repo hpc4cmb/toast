@@ -2,17 +2,17 @@ curl -SL https://pypi.python.org/packages/ee/b8/f443e1de0b6495479fc73c5863b7b527
     -o mpi4py-2.0.0.tar.gz \
     && tar xzf mpi4py-2.0.0.tar.gz \
     && cd mpi4py-2.0.0 \
-    && echo "
-[toast]
-mpicc = @MPICC@
-mpicxx = @MPICXX@
-include_dirs = @MPI_CPPFLAGS@
-library_dirs = @MPI_LDFLAGS@
-runtime_library_dirs = @MPI_LDFLAGS@
-libraries = @MPI_LIB@
-extra_compile_args = @MPI_EXTRA_COMP@
-extra_link_args = @MPI_EXTRA_LINK@
-" > mpi.cfg \
+    && echo $'\n\
+[toast]\n\
+mpicc = @MPICC@\n\
+mpicxx = @MPICXX@\n\
+include_dirs = @MPI_CPPFLAGS@\n\
+library_dirs = @MPI_LDFLAGS@\n\
+runtime_library_dirs = @MPI_LDFLAGS@\n\
+libraries = @MPI_LIB@\n\
+extra_compile_args = @MPI_EXTRA_COMP@\n\
+extra_link_args = @MPI_EXTRA_LINK@\n\
+' > mpi.cfg \
     && python setup.py build --mpi=toast \
     && python setup.py install --prefix=@AUX_PREFIX@ \
     && cd .. \

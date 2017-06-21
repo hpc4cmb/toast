@@ -14,6 +14,8 @@ MPI_CPPFLAGS = /opt/cray/mpt/default/gni/mpich-gnu/5.1/include
 MPI_LDFLAGS = /opt/cray/mpt/default/gni/mpich-gnu/5.1/lib
 MPI_CXXLIB = mpichcxx
 MPI_LIB = mpich
+MPI_EXTRA_COMP =
+MPI_EXTRA_LINK =
 
 # Compile flags
 

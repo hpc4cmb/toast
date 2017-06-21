@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update \
     && apt-get install -y curl procps build-essential gfortran git subversion \
-    autoconf automake libtool m4 cmake \
+    autoconf automake libtool m4 cmake locales \
     && rm -fr /var/lib/apt/lists/*
 
 # Set up locales, to workaround a pip bug
@@ -56,6 +56,13 @@ RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz
     -o mkl_11.3.3_include.tar.gz \
     && tar xzf mkl_11.3.3_include.tar.gz -C /usr/include --strip=1 \
     && rm mkl_11.3.3_include.tar.gz
+
+# The conda TCL packages overwrite the system-installed regex.h.  So
+# now we force reinstall of the package that provides that
+
+RUN apt-get update \
+    && apt-get install -y --reinstall libc6-dev \
+    && rm -fr /var/lib/apt/lists/*
 
 # Copy all patch files to current working directory
 
