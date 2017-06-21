@@ -1043,7 +1043,7 @@ def main():
                       flush=True)
             start = stop
 
-        if args.polyorder or args.wbin_ground:
+        if not args.skip_bin and (args.polyorder or args.wbin_ground):
 
             # Bin a map using the toast facilities
 
