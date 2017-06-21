@@ -1220,7 +1220,8 @@ def main():
                 madam = tm.OpMadam(
                     params=pars, detweights=detweights, name='total_madam',
                     common_flag_name=common_flag_name, flag_name=flag_name,
-                    common_flag_mask=args.common_flag_mask)
+                    common_flag_mask=args.common_flag_mask,
+                    purge_tod=True)
 
                 madam.exec(data)
 
