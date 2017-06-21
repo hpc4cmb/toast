@@ -47,7 +47,6 @@ def main():
                         required=False, type=np.int,
                         help='Size of a process group assigned to a CES')
 
-
     parser.add_argument('--timezone', required=False, type=np.int, default=0,
                         help='Offset to apply to MJD to separate days [hours]')
     parser.add_argument('--coord', required=False, default='C',
@@ -220,6 +219,10 @@ def main():
                         '"fknee" (float, Hz), "alpha" (float), and '
                         '"NET" (float).  For optional plotting, the key "color"'
                         ' can specify a valid matplotlib color string.')
+    parser.add_argument('--nfreq',
+                        required=False, default=1, type=np.int,
+                        help='Number of frequencies with identical focal '
+                        'planes')
 
     args = parser.parse_args()
 
@@ -582,8 +585,22 @@ def main():
 
     # Operator for signal copying, used in each MC iteration
 
-    sigcopy = tt.OpCacheCopy('signal', 'total')
-    sigcopy_madam = tt.OpCacheCopy('total', 'total_madam')
+    if args.nfreq == 1:
+        totalname = 'total'
+        totalname_freq = 'total'
+    else:
+        totalname = 'total'
+        totalname_freq = 'total_freq'
+
+    sigcopy = tt.OpCacheCopy('signal', totalname)
+    if totalname != totalname_freq:
+        sigcopy_freq = tt.OpCacheCopy(totalname, totalname_freq, force=True)
+    else:
+        sigcopy_freq = None
+    if args.madam:
+        sigcopy_madam = tt.OpCacheCopy(totalname_freq, 'total_madam')
+    else:
+        sigcopy_madam = None
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -891,7 +908,7 @@ def main():
             common_flag_name = 'common_flags'
             flag_name = 'flags'
             atm = tt.OpSimAtmosphere(
-                out='total', realization=mc,
+                out=totalname, realization=mc,
                 lmin_center=args.atm_lmin_center,
                 lmin_sigma=args.atm_lmin_sigma,
                 lmax_center=args.atm_lmax_center, gain=args.atm_gain,
@@ -919,290 +936,300 @@ def main():
                       flush=True)
             start = stop
 
-        if not args.skip_noise:
-            # simulate noise
-            nse = tt.OpSimNoise(out='total', realization=mc)
-            nse.exec(data)
+        # Loop over frequencies with identical focal planes and identical
+        # atmospheric noise.
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Noise simulation took {:.3f} s'.format(elapsed),
-                  flush=True)
-        start = stop
+        for ifreq in range(args.nfreq):
 
-        if args.gain_sigma:
-            scrambler = tt.OpGainScrambler(
-                sigma=args.gain_sigma, name='total', realization=mc)
-            scrambler.exec(data)
+            if sigcopy_freq is not None:
+                # Make a copy of the atmosphere so we can scramble the gains
+                # repeatedly
+                sigcopy_freq.exec(data)
+
+            comm.comm_world.Barrier()
+            if comm.comm_world.rank == 0:
+                print('Processing frequency {} / {}, MC = {}'
+                      ''.format(ifreq+1, args.nfreq, mc), flush=True)
+
+            mcoffset = ifreq * 1000000
+
+            if not args.skip_noise:
+                # simulate noise
+                nse = tt.OpSimNoise(out=totalname_freq, realization=mc+mcoffset)
+                nse.exec(data)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print('Gain scrambling took {:.3f} s'.format(elapsed), flush=True)
+                print('Noise simulation took {:.3f} s'.format(elapsed),
+                      flush=True)
             start = stop
 
-        # Prepare output directory
+            if args.gain_sigma:
+                scrambler = tt.OpGainScrambler(
+                    sigma=args.gain_sigma, name=totalname_freq,
+                    realization=mc+mcoffset)
+                scrambler.exec(data)
 
-        outpath = '{}/{:03d}'.format(args.outdir, mc)
-        if comm.comm_world.rank == 0:
-            if not os.path.isdir(outpath):
-                os.makedirs(outpath)
-
-        if args.madam:
-            # Make a copy of the timeline for Madam
-            sigcopy_madam.exec(data)
-
-        if not args.skip_bin:
-
-            # Bin a map using the toast facilities
-
-            mcstart = MPI.Wtime()
-
-            zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(
-                detweights=detweights, zmap=zmap, name='total',
-                flag_name=flag_name, common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask)
-            build_zmap.exec(data)
-            zmap.allreduce()
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Building noise weighted map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed), flush=True)
-            start = stop
-
-            tm.covariance_apply(invnpp, zmap)
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Computing binned map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed), flush=True)
-            start = stop
-
-            fn = os.path.join(outpath, 'binned.fits')
-            zmap.write_healpix_fits(fn)
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Writing binned map {:04d} to {} took {:.3f} s'
-                      ''.format(mc, fn, elapsed), flush=True)
-
-            if zmap_group is not None:
-
-                zmap_group.data.fill(0.0)
-                build_zmap_group = tm.OpAccumDiag(
-                    detweights=detweights, zmap=zmap_group, name='total',
-                    flag_name=flag_name, common_flag_name=common_flag_name,
-                    common_flag_mask=args.common_flag_mask)
-                build_zmap_group.exec(data)
-                zmap_group.allreduce()
-
-                comm.comm_group.barrier()
+                comm.comm_world.barrier()
                 stop = MPI.Wtime()
                 elapsed = stop - start
-                if comm.comm_group.rank == 0:
-                    print('  Building group noise weighted map {:04d} took '
-                          '{:.3f} s'.format(mc, elapsed), flush=True)
+                if comm.comm_world.rank == 0:
+                    print('Gain scrambling took {:.3f} s'.format(elapsed),
+                          flush=True)
                 start = stop
 
-                tm.covariance_apply(invnpp_group, zmap_group)
+            # Prepare output directory
 
-                comm.comm_group.barrier()
+            outpath = '{}/{:08d}'.format(args.outdir, mc+mcoffset)
+            if comm.comm_world.rank == 0:
+                if not os.path.isdir(outpath):
+                    os.makedirs(outpath)
+
+            if sigcopy_madam is not None:
+                # Make a copy of the timeline for Madam
+                sigcopy_madam.exec(data)
+
+            if not args.skip_bin:
+
+                # Bin a map using the toast facilities
+
+                mcstart = MPI.Wtime()
+
+                zmap.data.fill(0.0)
+                build_zmap = tm.OpAccumDiag(
+                    detweights=detweights, zmap=zmap, name=totalname_freq,
+                    flag_name=flag_name, common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask)
+                build_zmap.exec(data)
+                zmap.allreduce()
+
+                comm.comm_world.barrier()
                 stop = MPI.Wtime()
                 elapsed = stop - start
-                if comm.comm_group.rank == 0:
+                if comm.comm_world.rank == 0:
+                    print('  Building noise weighted map {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+                tm.covariance_apply(invnpp, zmap)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
                     print('  Computing binned map {:04d} took {:.3f} s'
                           ''.format(mc, elapsed), flush=True)
                 start = stop
 
-                fn = os.path.join(outpath,
-                                  'binned_group_{:04}.fits'.format(comm.group))
-                zmap_group.write_healpix_fits(fn)
+                fn = os.path.join(outpath, 'binned.fits')
+                zmap.write_healpix_fits(fn)
 
-                comm.comm_group.barrier()
+                comm.comm_world.barrier()
                 stop = MPI.Wtime()
                 elapsed = stop - start
-                if comm.comm_group.rank == 0:
-                    print('  Writing group binned map {:04d} to {} took '
-                          '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+                if comm.comm_world.rank == 0:
+                    print('  Writing binned map {:04d} to {} took {:.3f} s'
+                          ''.format(mc, fn, elapsed), flush=True)
 
-            elapsed = stop - mcstart
-            if comm.comm_world.rank == 0:
-                print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
-                      flush=True)
-            start = stop
+                if zmap_group is not None:
 
-        # Filter and bin
+                    zmap_group.data.fill(0.0)
+                    build_zmap_group = tm.OpAccumDiag(
+                        detweights=detweights, zmap=zmap_group,
+                        name=totalname_freq,
+                        flag_name=flag_name, common_flag_name=common_flag_name,
+                        common_flag_mask=args.common_flag_mask)
+                    build_zmap_group.exec(data)
+                    zmap_group.allreduce()
 
-        if args.polyorder:
-            common_flag_name = 'common_flags'
-            flag_name = 'flags'
-            polyfilter = tt.OpPolyFilter(
-                order=args.polyorder, name='total',
-                common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask,
-                flag_name=flag_name)
-            polyfilter.exec(data)
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Building group noise weighted map {:04d} took '
+                              '{:.3f} s'.format(mc, elapsed), flush=True)
+                    start = stop
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('Polynomial filtering took {:.3f} s'.format(elapsed),
-                      flush=True)
-            start = stop
+                    tm.covariance_apply(invnpp_group, zmap_group)
 
-        if args.wbin_ground:
-            common_flag_name = 'common_flags'
-            flag_name = 'flags'
-            groundfilter = tt.OpGroundFilter(
-                wbin=args.wbin_ground, name='total',
-                common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask,
-                flag_name=flag_name)
-            groundfilter.exec(data)
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Computing binned map {:04d} took {:.3f} s'
+                              ''.format(mc, elapsed), flush=True)
+                    start = stop
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('Ground filtering took {:.3f} s'.format(elapsed),
-                      flush=True)
-            start = stop
+                    fn = os.path.join(outpath, 'binned_group_{:04}.fits'
+                                      ''.format(comm.group))
+                    zmap_group.write_healpix_fits(fn)
 
-        if not args.skip_bin and (args.polyorder or args.wbin_ground):
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Writing group binned map {:04d} to {} took '
+                              '{:.3f} s'.format(mc, fn, elapsed), flush=True)
 
-            # Bin a map using the toast facilities
-
-            mcstart = MPI.Wtime()
-
-            zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(
-                detweights=detweights, zmap=zmap, name='total',
-                flag_name=flag_name, common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask)
-            build_zmap.exec(data)
-            zmap.allreduce()
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Building noise weighted map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed), flush=True)
-            start = stop
-
-            tm.covariance_apply(invnpp, zmap)
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Computing filtered map {:04d} took {:.3f} s'
-                      ''.format(mc, elapsed), flush=True)
-            start = stop
-
-            fn = os.path.join(outpath, 'filtered.fits')
-            zmap.write_healpix_fits(fn)
-
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('  Writing filtered map {:04d} to {} took {:.3f} s'
-                      ''.format(mc, fn, elapsed), flush=True)
-
-            if zmap_group is not None:
-                zmap_group.data.fill(0.0)
-                build_zmap_group = tm.OpAccumDiag(
-                    detweights=detweights, zmap=zmap_group, name='total',
-                    flag_name=flag_name, common_flag_name=common_flag_name,
-                    common_flag_mask=args.common_flag_mask)
-                build_zmap_group.exec(data)
-                zmap_group.allreduce()
-
-                comm.comm_group.barrier()
-                stop = MPI.Wtime()
-                elapsed = stop - start
-                if comm.comm_group.rank == 0:
-                    print('  Building group noise weighted map {:04d} took '
-                          '{:.3f} s'.format(mc, elapsed), flush=True)
-                start = stop
-
-                tm.covariance_apply(invnpp_group, zmap_group)
-
-                comm.comm_group.barrier()
-                stop = MPI.Wtime()
-                elapsed = stop - start
-                if comm.comm_group.rank == 0:
-                    print('  Computing group filtered map {:04d} took {:.3f} s'
+                elapsed = stop - mcstart
+                if comm.comm_world.rank == 0:
+                    print('  Mapmaking {:04d} took {:.3f} s'
                           ''.format(mc, elapsed), flush=True)
                 start = stop
 
-                fn = os.path.join(outpath,
-                                  'filtered_group_{:04}.fits'.format(comm.group))
-                zmap_group.write_healpix_fits(fn)
+            # Filter and bin
 
-                comm.comm_group.barrier()
+            if args.polyorder:
+                common_flag_name = 'common_flags'
+                flag_name = 'flags'
+                polyfilter = tt.OpPolyFilter(
+                    order=args.polyorder, name=totalname_freq,
+                    common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask,
+                    flag_name=flag_name)
+                polyfilter.exec(data)
+
+                comm.comm_world.barrier()
                 stop = MPI.Wtime()
                 elapsed = stop - start
-                if comm.comm_group.rank == 0:
-                    print('  Writing group filtered map {:04d} to {} took '
-                          '{:.3f} s'.format(mc, fn, elapsed), flush=True)
-
-            elapsed = stop - mcstart
-            if comm.comm_world.rank == 0:
-                print('  Mapmaking {:04d} took {:.3f} s'.format(mc, elapsed),
-                      flush=True)
-            start = stop
-
-        counter.exec(data)
-
-        # Optional Madam mapmaking
-
-        if args.madam:
-            # create output directory for this realization
-            pars['path_output'] = outpath
-            if mc != firstmc:
-                pars['write_matrix'] = False
-                pars['write_wcov'] = False
-                pars['write_hits'] = False
-
-            """
-            # in debug mode, print out data distribution information
-            if args.debug:
-                handle = None
                 if comm.comm_world.rank == 0:
-                    handle = open(
-                        os.path.join(pars['path_output'], 'distdata.txt'), 'w')
-                data.info(handle)
+                    print('Polynomial filtering took {:.3f} s'.format(elapsed),
+                          flush=True)
+                start = stop
+
+            if args.wbin_ground:
+                common_flag_name = 'common_flags'
+                flag_name = 'flags'
+                groundfilter = tt.OpGroundFilter(
+                    wbin=args.wbin_ground, name=totalname_freq,
+                    common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask,
+                    flag_name=flag_name)
+                groundfilter.exec(data)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
                 if comm.comm_world.rank == 0:
-                    handle.close()
-            """
+                    print('Ground filtering took {:.3f} s'.format(elapsed),
+                          flush=True)
+                start = stop
 
-            madam = tm.OpMadam(
-                params=pars, detweights=detweights, name='total_madam',
-                common_flag_name=common_flag_name, flag_name=flag_name,
-                common_flag_mask=args.common_flag_mask)
+            if not args.skip_bin and (args.polyorder or args.wbin_ground):
 
-            madam.exec(data)
+                # Bin a map using the toast facilities
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('Madam took {:.3f} s'.format(elapsed), flush=True)
-            start = stop
+                mcstart = MPI.Wtime()
+
+                zmap.data.fill(0.0)
+                build_zmap = tm.OpAccumDiag(
+                    detweights=detweights, zmap=zmap, name=totalname_freq,
+                    flag_name=flag_name, common_flag_name=common_flag_name,
+                    common_flag_mask=args.common_flag_mask)
+                build_zmap.exec(data)
+                zmap.allreduce()
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('  Building noise weighted map {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+                tm.covariance_apply(invnpp, zmap)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('  Computing filtered map {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+                fn = os.path.join(outpath, 'filtered.fits')
+                zmap.write_healpix_fits(fn)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('  Writing filtered map {:04d} to {} took {:.3f} s'
+                          ''.format(mc, fn, elapsed), flush=True)
+
+                if zmap_group is not None:
+                    zmap_group.data.fill(0.0)
+                    build_zmap_group = tm.OpAccumDiag(
+                        detweights=detweights, zmap=zmap_group,
+                        name=totalname_freq,
+                        flag_name=flag_name, common_flag_name=common_flag_name,
+                        common_flag_mask=args.common_flag_mask)
+                    build_zmap_group.exec(data)
+                    zmap_group.allreduce()
+
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Building group noise weighted map {:04d} took '
+                              '{:.3f} s'.format(mc, elapsed), flush=True)
+                    start = stop
+
+                    tm.covariance_apply(invnpp_group, zmap_group)
+
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Computing group filtered map {:04d} '
+                              'took {:.3f} s'.format(mc, elapsed), flush=True)
+
+                    start = stop
+
+                    fn = os.path.join(outpath, 'filtered_group_{:04}.fits'
+                                      ''.format(comm.group))
+                    zmap_group.write_healpix_fits(fn)
+
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('  Writing group filtered map {:04d} to {} took '
+                              '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+
+                elapsed = stop - mcstart
+                if comm.comm_world.rank == 0:
+                    print('  Mapmaking {:04d} took {:.3f} s'
+                          ''.format(mc, elapsed), flush=True)
+                start = stop
+
+            counter.exec(data)
+
+            # Optional Madam mapmaking
+
+            if args.madam:
+                # create output directory for this realization
+                pars['path_output'] = outpath
+                if mc+mcoffset != firstmc:
+                    pars['write_matrix'] = False
+                    pars['write_wcov'] = False
+                    pars['write_hits'] = False
+
+                madam = tm.OpMadam(
+                    params=pars, detweights=detweights, name='total_madam',
+                    common_flag_name=common_flag_name, flag_name=flag_name,
+                    common_flag_mask=args.common_flag_mask)
+
+                madam.exec(data)
+
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Madam took {:.3f} s'.format(elapsed), flush=True)
+                start = stop
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()

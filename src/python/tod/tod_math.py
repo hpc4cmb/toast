@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -37,7 +37,7 @@ def calibrate( toitimes, toi, gaintimes, gains, order=0, inplace=False ):
 
     if len(gaintimes) == 1:
         g = gains
-    else:    
+    else:
         if order == 0:
             ind = np.searchsorted( gaintimes, toitimes )
             ind[ind > 0] -= 1
@@ -59,7 +59,7 @@ def calibrate( toitimes, toi, gaintimes, gains, order=0, inplace=False ):
 
 
 def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
-                         rate, firstsamp, samples, oversample, freq, psd, 
+                         rate, firstsamp, samples, oversample, freq, psd,
                          altfft=False):
     """
     Generate a noise timestream, given a starting RNG state.
@@ -74,7 +74,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     those four numbers in the following way:
 
     key1 = realization * 2^32 + telescope * 2^16 + component
-    key2 = obsindx * 2^32 + detindx 
+    key2 = obsindx * 2^32 + detindx
     counter1 = currently unused (0)
     counter2 = sample in stream
 
@@ -101,7 +101,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
         the timestream array, the interpolated PSD frequencies, and
             the interpolated PSD values.
     """
-    
+
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
@@ -135,7 +135,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
             "frequency for given sample rate: {} != {}".format(
                 freq[-1], nyquist))
 
-    # Perform a logarithmic interpolation.  In order to avoid zero values, we 
+    # Perform a logarithmic interpolation.  In order to avoid zero values, we
     # shift the PSD by a fixed amount in frequency and amplitude.
 
     psdshift = 0.01 * np.amin(psd[(psd > 0.0)])
@@ -147,7 +147,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
 
     interp = si.interp1d(logfreq, logpsd, kind='linear',
                          fill_value='extrapolate')
-    
+
     loginterp_psd = interp(loginterp_freq)
     interp_psd = np.power(10.0, loginterp_psd) - psdshift
 
@@ -160,11 +160,11 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     # gaussian Re/Im randoms, packed into a complex valued array
 
     key1 = realization * 4294967296 + telescope * 65536 + component
-    key2 = obsindx * 4294967296 + detindx 
+    key2 = obsindx * 4294967296 + detindx
     counter1 = 0
     counter2 = firstsamp * oversample
 
-    rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2), 
+    rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2),
         counter=(counter1, counter2))
 
     # pack data differently depending on the FFT implementation
@@ -204,7 +204,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     tdata[offset:offset+samples] -= DC
 
     # return the timestream and interpolated PSD for debugging.
-    
+
     return (tdata[offset:offset+samples], interp_freq, interp_psd)
 
 
@@ -214,17 +214,17 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
     This uses detector pointing, telescope velocity and the solar system
     motion to compute the observed dipole.  It is assumed that the detector
-    pointing, the telescope velocity vectors, and the solar system velocity 
+    pointing, the telescope velocity vectors, and the solar system velocity
     vector are all in the same coordinate system.
 
     Args:
         pntg (array): the 2D array of quaternions of detector pointing.
-        vel (array): 2D array of velocity vectors relative to the solar 
+        vel (array): 2D array of velocity vectors relative to the solar
             system barycenter.  if None, return only the solar system dipole.
             Units are km/s
         solar (array): a 3 element vector containing the solar system velocity
             vector relative to the CMB rest frame.  Units are km/s.
-        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen 
+        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen
             2009 (see arXiv:0911.1955)
         freq (float): optional observing frequency in Hz (NOT GHz).
 
@@ -299,15 +299,17 @@ class OpCacheCopy(Operator):
         in (str): use cache objects with name <in>_<detector>.
         out (str): copy data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
+        force (bool): force creating the target cache object.
     """
 
-    def __init__(self, input, output):
-        
+    def __init__(self, input, output, force=False):
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
         self._in = input
         self._out = output
+        self._force = force
 
     def exec(self, data):
         """
@@ -335,7 +337,10 @@ class OpCacheCopy(Operator):
                 inref = None
                 if tod.cache.exists(inname):
                     inref = tod.cache.reference(inname)
+                elif self._force:
+                    inref = np.zeros(tod.local_samples[1])
 
+                if inref is not None:
                     outref = None
                     if tod.cache.exists(outname):
                         outref = tod.cache.reference(outname)
@@ -349,5 +354,3 @@ class OpCacheCopy(Operator):
                     del inref
 
         return
-
-
