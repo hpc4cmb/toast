@@ -675,7 +675,11 @@ class TODGround(TOD):
         # All processes in the group still have all samples.
 
         self._subscans = []
+        self._subscan_min_length = 10 # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
+            if istop-istart < self._subscan_min_length:
+                self._commonflags[istart:istop] |= self.TURNAROUND
+                continue
             start = self._firsttime + istart / self._rate
             stop = self._firsttime + istop / self._rate
             self._subscans.append(
