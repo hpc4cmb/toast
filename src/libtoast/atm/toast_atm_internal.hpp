@@ -80,7 +80,7 @@ private :
     double zatm, zmax;
     double xstep, ystep, zstep, delta_x, delta_y, delta_z;
     double xstart, ystart, zstart, xxstep, yystep, zzstep;
-    double delta_y_cone, delta_z_cone;
+    double delta_y_cone, delta_z_cone, maxdist;
     double xstepinv, ystepinv, zstepinv;
     long nx, ny, nz, nn, xstride, ystride, zstride;
     double xstrideinv, ystrideinv, zstrideinv;
@@ -88,7 +88,8 @@ private :
     double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
-    double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation grid
+    double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation
+                                         // grid
     // Mapping between full volume and observation cone
     mpi_shmem_long *compressed_index=NULL;
     // Inverse mapping between full volume and observation cone

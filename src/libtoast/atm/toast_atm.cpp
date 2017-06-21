@@ -4,6 +4,8 @@
   a BSD-style license that can be found in the LICENSE file.
 */
 
+#define DEBUG
+
 #include <toast_atm_internal.hpp>
 
 #include <sstream>
@@ -14,7 +16,6 @@
 #include <functional>
 #include <cmath>
 #include <omp.h>
-
 
 double median( std::vector<double> vec ) {
     if ( vec.size() == 0 ) return 0;
@@ -302,9 +303,10 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << "X-slice: " << ix_start*xstep << " -- " << ix2*xstep
-                  << " ( " << nx*xstep << " )"
-                  << "( " << ind_start << " -- "<< ind_stop << " ) "
-                  << "( " << nelem << " )"<< std::endl;
+                  << " m out of  " << nx*xstep << " m"
+                  << " indices " << ind_start << " -- "<< ind_stop
+                  << " ( " << ind_stop - ind_start << " )"
+                  << " out of " << nelem << std::endl;
     }
 
     return;
@@ -451,7 +453,7 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
               r += (1-frac) * rstep;
             */
 
-            double r = 10.;
+            double r = 1.5 * xstep;
             double rstep = xstep;
 
             std::vector<long> last_ind(3);
@@ -650,7 +652,7 @@ void toast::atm::sim::get_volume() {
     //std::cerr << "delta_z_h = " << delta_z_h << std::endl;
 
     // Maximum distance observed through the simulated volume
-    double maxdist = delta_z_h / sinel0;
+    maxdist = delta_z_h / sinel0;
     //std::cerr << "maxdist = " << maxdist << std::endl;
 
     // Volume length
@@ -971,16 +973,16 @@ void toast::atm::sim::compress_volume() {
 
     // Start by flagging all elements that are hit
 
-    for (long ix=0; ix<nx-1; ++ix) {
+    for ( long ix=0; ix<nx-1; ++ix ) {
         if ( ix % ntask != rank ) continue;
-        double x = xstart + ix * xstep;
+        double x = xstart + ix*xstep;
 
 #pragma omp parallel for schedule(static, 10)
-        for (long iy=0; iy<ny-1; ++iy) {
-            double y = ystart + iy * ystep;
+        for ( long iy=0; iy<ny-1; ++iy ) {
+            double y = ystart + iy*ystep;
 
-            for (long iz=0; iz<nz-1; ++iz) {
-                double z = zstart + iz * zstep;
+            for ( long iz=0; iz<nz-1; ++iz ) {
+                double z = zstart + iz*zstep;
                 if ( in_cone( x, y, z ) ) {
 #ifdef DEBUG
                     hit.at( ix * xstride + iy * ystride + iz * zstride ) = true;
@@ -1065,7 +1067,7 @@ void toast::atm::sim::compress_volume() {
 
     if ( rank == 0 and verbosity > 0 ) {
         std::cerr << "Volume compressed in " << t2-t1 << " s." << std::endl;
-        std::cerr << i << " / " << nn
+        std::cerr << i << " / " << nn << "(" << i * 100. / nn << " %)"
                   << " volume elements are needed for the simulation"
                   << std::endl;
     }
@@ -1080,13 +1082,7 @@ bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
 
     // Input coordinates are in the scan frame
 
-    // altitude in a horizontal coordinate system
-    double zz = x*sinel0 + z*cosel0;
-    if ( zz >= zmax ) return false;
-
-    // Check if (x, y) is in the cone at any time
-
-    double tstep = 10;
+    double tstep = 1;
 
     for ( double t=0; t<delta_t; t+=tstep ) {
         if ( t_in >= 0 ) {
@@ -1094,27 +1090,57 @@ bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
             t = t_in;
         }
 
-        double xtel_now = wx*t;
-        double ytel_now = wy*t;
+        if ( t_in < 0 && delta_t - t < tstep ) t = delta_t;
 
-        double dxmin = x - xtel_now;
-        double dxmax = dxmin + xstep;
+        double xtel_now = wx * t;
+        double dx = x - xtel_now;
 
         // Is the point behind the telescope at this time?
 
-        if ( dxmin < 0 && dxmax < 0 ) continue;
-
-        // Are the x-y coordinates in the sector?
-
-        double aztan1 = (y - ytel_now) / (x - xtel_now);
-        double aztan2 = (y - ytel_now + ystep) / (x - xtel_now);
-        double aztan3 = (y - ytel_now) / (x - xtel_now + xstep);
-        double aztan4 = (y - ytel_now + ystep) / (x - xtel_now + xstep);
-        if ( (aztan1 < tanmin && aztan2 < tanmin
-              && aztan3 < tanmin && aztan4 < tanmin)
-             || (aztan1 > tanmax && aztan2 > tanmax
-                 && aztan3 > tanmax && aztan4 > tanmax) )
+        if ( dx + xstep < 0 ) {
+            if ( t_in >= 0 ) std::cerr << "dx + xstep < 0: " << dx << std::endl;
             continue;
+        }
+
+        // Check the rest of the spherical coordinates
+
+        double ytel_now = wy * t;
+        double dy = y - ytel_now;
+
+        double ztel_now = wz * t;
+        double dz = z - ztel_now;
+
+        double r = std::sqrt( dx*dx + dy*dy + dz*dz );
+        if ( r > maxdist*1.01 ) {
+            if ( t_in >= 0 ) std::cerr << "r > maxdist " << r << std::endl;
+            continue;
+        }
+
+        if (dz > 0)
+            dz -= zstep;
+        else
+            dz += zstep;
+
+        if ( std::abs(dy) < 2*ystep && std::abs(dz) < 2*zstep )
+            return true;
+
+        double el = std::asin( dz / r );
+        if ( std::abs(el) > 0.5*delta_el ) {
+            if ( t_in >= 0 )
+                std::cerr << "abs(el) > delta_el/2: "
+                          << el*180/M_PI << " > "
+                          << 0.5*delta_el*180/M_PI << std::endl;
+            continue;
+        }
+
+        double az = std::atan2( dy, dx+xstep );
+        if ( std::abs(az) > 0.5*delta_az ) {
+            if ( t_in >= 0 )
+                std::cerr << "abs(az) > delta_az/2 "
+                          << az*180/M_PI << " > "
+                          << 0.5*delta_az*180/M_PI << std::endl;
+            continue;
+        }
 
         // Passed all the checks
 
@@ -1271,11 +1297,6 @@ double toast::atm::sim::interp( double x, double y, double z,
         long i101 = (*compressed_index)[ifull101];
         long i110 = (*compressed_index)[ifull110];
         long i111 = (*compressed_index)[ifull111];
-
-        if (i001 < 0) i001 = i000;
-        if (i011 < 0) i011 = i010;
-        if (i101 < 0) i101 = i100;
-        if (i111 < 0) i111 = i110;
 
 #ifdef DEBUG
         long imax = realization->size()-1;
