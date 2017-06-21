@@ -550,6 +550,13 @@ def main():
         # find the locally hit submaps.
         localsm = np.unique(np.floor_divide(localpix, subnpix))
 
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('Local submaps identified in {:.3f} s'.format(elapsed), flush=True)
+        start = stop
+
     if args.input_map:
         # Scan the sky signal
         if  comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
@@ -608,6 +615,14 @@ def main():
         invnpp.data.fill(0.0)
         hits.data.fill(0)
 
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('distobjects initialized in {:.3f} s'
+                  ''.format(elapsed), flush=True)
+        start = stop
+
         if comm.comm_group.size < comm.comm_world.size:
             invnpp_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
                                          dtype=np.float64, submap=subnpix,
@@ -624,6 +639,14 @@ def main():
 
             invnpp_group.data.fill(0.0)
             hits_group.data.fill(0)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('group distobjects initialized in {:.3f} s'
+                      ''.format(elapsed), flush=True)
+            start = stop
         else:
             invnpp_group = None
             hits_group = None
@@ -639,6 +662,14 @@ def main():
 
         build_invnpp.exec(data)
 
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('distobjects accumulated in {:.3f} s'
+                  ''.format(elapsed), flush=True)
+        start = stop
+
         invnpp.allreduce()
         hits.allreduce()
 
@@ -646,18 +677,24 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Building hits and N_pp^-1 took {:.3f} s'.format(elapsed),
-                  flush=True)
+            print('distobjects reduced in {:.3f} s'.format(elapsed), flush=True)
         start = stop
 
         if invnpp_group is not None:
-
             build_invnpp_group = tm.OpAccumDiag(
                 detweights=detweights, invnpp=invnpp_group, hits=hits_group,
                 flag_name=flag_name, common_flag_name=common_flag_name,
                 common_flag_mask=args.common_flag_mask)
 
             build_invnpp_group.exec(data)
+
+            comm.comm_group.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_group.rank == 0:
+                print('group distobjects accumulated in {:.3f} s'
+                      ''.format(elapsed), flush=True)
+            start = stop
 
             invnpp_group.allreduce()
             hits_group.allreduce()
@@ -666,9 +703,9 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_group.rank == 0:
-                print('Building group hits and N_pp^-1 took {:.3f} s'.format(
-                    elapsed), flush=True)
-                start = stop
+                print('group distobjects reduced in {:.3f} s'
+                      ''.format(elapsed), flush=True)
+            start = stop
 
         counter = tt.OpMemoryCounter(*distobjects)
         counter.exec(data)
