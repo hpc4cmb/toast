@@ -19,7 +19,6 @@ from ..op import Operator
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
     atm_sim_simulate, atm_sim_observe)
 
-
 # FIXME:  For now, we use a fixed distribution of the "weather" (wind speed,
 # temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base
 # classes (TODSatellite and TODGround).  The TODGround class and descendants
