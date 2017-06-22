@@ -52,10 +52,10 @@ ENV ACCEPT_INTEL_PYTHON_EULA yes
 
 # Copy MKL headers into conda root
 
-RUN curl -SL https://www.dropbox.com/s/ldw9fylbelkfn1f/mkl_11.3.3_include.tar.gz?dl=1 \
-    -o mkl_11.3.3_include.tar.gz \
-    && tar xzf mkl_11.3.3_include.tar.gz -C /usr/include --strip=1 \
-    && rm mkl_11.3.3_include.tar.gz
+RUN curl -SL https://www.dropbox.com/s/pzps5m45mnmv6ap/mkl_2017.0.3_include.tar.gz?dl=1 \
+    -o mkl_2017.0.3_include.tar.gz \
+    && tar xzf mkl_2017.0.3_include.tar.gz -C /usr/include --strip=1 \
+    && rm mkl_2017.0.3_include.tar.gz
 
 # The conda TCL packages overwrite the system-installed regex.h.  So
 # now we force reinstall of the package that provides that
