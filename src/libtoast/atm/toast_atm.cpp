@@ -1016,13 +1016,13 @@ void toast::atm::sim::compress_volume() {
                     // Flag this element but also its neighbours to facilitate
                     // interpolation
 
-                    for ( double xmul=-1; xmul < 3; ++xmul ) {
+                    for ( double xmul=-2; xmul < 4; ++xmul ) {
                         if ( ix + xmul < 0 || ix + xmul > nx-1 ) continue;
 
-                        for ( double ymul=-1; ymul < 3; ++ymul ) {
+                        for ( double ymul=-2; ymul < 4; ++ymul ) {
                             if ( iy + ymul < 0 || iy + ymul > ny-1 ) continue;
 
-                            for ( double zmul=-1; zmul < 3; ++zmul ) {
+                            for ( double zmul=-2; zmul < 4; ++zmul ) {
                                 if ( iz + zmul < 0 || iz + zmul > nz-1 )
                                     continue;
 
@@ -1321,23 +1321,50 @@ double toast::atm::sim::interp( double x, double y, double z,
             i101 < 0 || i101 > imax ||
             i110 < 0 || i110 > imax ||
             i111 < 0 || i111 > imax ) {
-            std::ostringstream o;
-            o.precision( 16 );
-            o << "atmsim::observe : bad compressed index. "
-              << "imax = " << imax << std::endl
-              << "i000 = " << i000 << std::endl
-              << "i001 = " << i001 << std::endl
-              << "i010 = " << i010 << std::endl
-              << "i011 = " << i011 << std::endl
-              << "i100 = " << i100 << std::endl
-              << "i101 = " << i101 << std::endl
-              << "i110 = " << i110 << std::endl
-              << "i111 = " << i111 << std::endl
-              << "(x, y, z) = " << x << ", " << y << ", " << z << ")"
-              << std::endl
-              << "in_cone(x, y, z) = " << in_cone( x, y, z )
-              << std::endl;
-            throw std::runtime_error( o.str().c_str() );
+            //std::ostringstream o;
+            //o.precision( 16 );
+            //o << "atmsim::observe : bad compressed index. "
+            std::cerr << "atmsim::observe : bad compressed index. "
+                      << "imax = " << imax << std::endl
+                      << "i000 = " << i000 << std::endl
+                      << "i001 = " << i001 << std::endl
+                      << "i010 = " << i010 << std::endl
+                      << "i011 = " << i011 << std::endl
+                      << "i100 = " << i100 << std::endl
+                      << "i101 = " << i101 << std::endl
+                      << "i110 = " << i110 << std::endl
+                      << "i111 = " << i111 << std::endl
+                      << "(x, y, z) = " << x << ", " << y << ", " << z << ")"
+                      << std::endl
+                      << "in_cone(x, y, z) = " << in_cone( x, y, z )
+                      << std::endl;
+            //throw std::runtime_error( o.str().c_str() );
+            int good=0;
+            if ( i000 >= 0 && i000 < imax ) {
+                good = i000;
+            } else if ( i001 >= 0 && i001 < imax ) {
+                good = i001;
+            } else if ( i010 >= 0 && i010 < imax ) {
+                good = i010;
+            } else if ( i011 >= 0 && i011 < imax ) {
+                good = i011;
+            } else if ( i100 >= 0 && i100 < imax ) {
+                good = i100;
+            } else if ( i101 >= 0 && i101 < imax ) {
+                good = i101;
+            } else if ( i110 >= 0 && i110 < imax ) {
+                good = i110;
+            } else if ( i111 >= 0 && i111 < imax ) {
+                good = i111;
+            }
+            if ( i000 < 0 || i000 > imax ) i000 = good;
+            if ( i001 < 0 || i001 > imax ) i001 = good;
+            if ( i010 < 0 || i010 > imax ) i010 = good;
+            if ( i011 < 0 || i011 > imax ) i011 = good;
+            if ( i100 < 0 || i100 > imax ) i100 = good;
+            if ( i101 < 0 || i101 > imax ) i101 = good;
+            if ( i110 < 0 || i110 > imax ) i110 = good;
+            if ( i111 < 0 || i111 > imax ) i111 = good;
         }
 #endif
 

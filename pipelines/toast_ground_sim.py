@@ -101,6 +101,9 @@ def main():
     parser.add_argument('--skip_bin',
                         required=False, default=False, action='store_true',
                         help='Disable binning the map.')
+    parser.add_argument('--skip_hits',
+                        required=False, default=False, action='store_true',
+                        help='Do not save the 3x3 matrices and hitmaps')
 
     parser.add_argument('--fp_radius',
                         required=False, default=1, type=np.float,
@@ -653,15 +656,16 @@ def main():
         invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
                                dtype=np.float64, submap=subnpix, local=localsm)
         distobjects.append(invnpp)
+        invnpp.data.fill(0.0)
+
         hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
                              dtype=np.int64, submap=subnpix, local=localsm)
         distobjects.append(hits)
+        hits.data.fill(0)
+
         zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
                              dtype=np.float64, submap=subnpix, local=localsm)
         distobjects.append(zmap)
-
-        invnpp.data.fill(0.0)
-        hits.data.fill(0)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -671,22 +675,26 @@ def main():
                   ''.format(elapsed), flush=args.flush)
         start = stop
 
+        invnpp_group = None
+        hits_group = None
+        zmap_group = None
         if comm.comm_group.size < comm.comm_world.size:
             invnpp_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
                                          dtype=np.float64, submap=subnpix,
                                          local=localsm)
             distobjects.append(invnpp_group)
+            invnpp_group.data.fill(0.0)
+
             hits_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1,
                                        dtype=np.int64, submap=subnpix,
                                        local=localsm)
             distobjects.append(hits_group)
+            hits_group.data.fill(0)
+
             zmap_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3,
                                        dtype=np.float64, submap=subnpix,
                                        local=localsm)
             distobjects.append(zmap_group)
-
-            invnpp_group.data.fill(0.0)
-            hits_group.data.fill(0)
 
             comm.comm_group.barrier()
             stop = MPI.Wtime()
@@ -695,10 +703,6 @@ def main():
                 print('group distobjects initialized in {:.3f} s'
                       ''.format(elapsed), flush=args.flush)
             start = stop
-        else:
-            invnpp_group = None
-            hits_group = None
-            zmap_group = None
 
         # compute the hits and covariance once, since the pointing and noise
         # weights are fixed.
@@ -719,7 +723,8 @@ def main():
         start = stop
 
         invnpp.allreduce()
-        hits.allreduce()
+        if not args.skip_hits:
+            hits.allreduce()
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -746,7 +751,8 @@ def main():
             start = stop
 
             invnpp_group.allreduce()
-            hits_group.allreduce()
+            if not args.skip_hits:
+                hits_group.allreduce()
 
             comm.comm_group.barrier()
             stop = MPI.Wtime()
@@ -759,58 +765,55 @@ def main():
         counter = tt.OpMemoryCounter(*distobjects)
         counter.exec(data)
 
-        fn = '{}/hits.fits'.format(args.outdir)
-        hits.write_healpix_fits(fn)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Writing hit map to {} took {:.3f} s'
-                  ''.format(fn, elapsed), flush=args.flush)
-        start = stop
-
+        if not args.skip_hits:
+            fn = '{}/hits.fits'.format(args.outdir)
+            hits.write_healpix_fits(fn)
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('Writing hit map to {} took {:.3f} s'
+                      ''.format(fn, elapsed), flush=args.flush)
+            start = stop
         distobjects.remove(hits)
         del hits
 
         if hits_group is not None:
-            fn = '{}/hits_group_{:04}.fits'.format(args.outdir, comm.group)
-
-            hits_group.write_healpix_fits(fn)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_group.rank == 0:
-                print('Writing group hit map to {} took {:.3f} s'
-                      ''.format(fn, elapsed), flush=args.flush)
-            start = stop
-
+            if not args.skip_hits:
+                fn = '{}/hits_group_{:04}.fits'.format(args.outdir, comm.group)
+                hits_group.write_healpix_fits(fn)
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('Writing group hit map to {} took {:.3f} s'
+                          ''.format(fn, elapsed), flush=args.flush)
+                start = stop
             distobjects.remove(hits_group)
             del hits_group
 
-        fn = '{}/invnpp.fits'.format(args.outdir)
-        invnpp.write_healpix_fits(fn)
+            if not args.skip_hits:
+                fn = '{}/invnpp.fits'.format(args.outdir)
+                invnpp.write_healpix_fits(fn)
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Writing N_pp^-1 to {} took {:.3f} s'
+                          ''.format(fn, elapsed), flush=args.flush)
+                start = stop
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Writing N_pp^-1 to {} took {:.3f} s'
-                  ''.format(fn, elapsed), flush=args.flush)
-        start = stop
-
-        if invnpp_group is not None:
-            fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir, comm.group)
-            invnpp_group.write_healpix_fits(fn)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_group.rank == 0:
-                print('Writing group N_pp^-1 to {} took {:.3f} s'
-                      ''.format(fn, elapsed), flush=args.flush)
-            start = stop
+            if invnpp_group is not None:
+                if not args.skip_hits:
+                    fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir, comm.group)
+                    invnpp_group.write_healpix_fits(fn)
+                    comm.comm_group.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_group.rank == 0:
+                        print('Writing group N_pp^-1 to {} took {:.3f} s'
+                              ''.format(fn, elapsed), flush=args.flush)
+                    start = stop
 
         # invert it
         tm.covariance_invert(invnpp, 1.0e-3)
@@ -823,16 +826,16 @@ def main():
                   flush=args.flush)
         start = stop
 
-        fn = '{}/npp.fits'.format(args.outdir)
-        invnpp.write_healpix_fits(fn)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Writing N_pp to {} took {:.3f} s'.format(fn, elapsed),
-                  flush=args.flush)
-        start = stop
+        if not args.skip_hits:
+            fn = '{}/npp.fits'.format(args.outdir)
+            invnpp.write_healpix_fits(fn)
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('Writing N_pp to {} took {:.3f} s'.format(fn, elapsed),
+                      flush=args.flush)
+            start = stop
 
         if invnpp_group is not None:
             tm.covariance_invert(invnpp_group, 1.0e-3)
@@ -845,16 +848,16 @@ def main():
                       flush=args.flush)
             start = stop
 
-            fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
-            invnpp_group.write_healpix_fits(fn)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_group.rank == 0:
-                print('Writing group N_pp to {} took {:.3f} s'.format(
-                    fn, elapsed), flush=args.flush)
-            start = stop
+            if not args.skip_hits:
+                fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
+                invnpp_group.write_healpix_fits(fn)
+                comm.comm_group.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_group.rank == 0:
+                    print('Writing group N_pp to {} took {:.3f} s'.format(
+                        fn, elapsed), flush=args.flush)
+                start = stop
 
         counter = tt.OpMemoryCounter(*distobjects)
         counter.exec(data)
