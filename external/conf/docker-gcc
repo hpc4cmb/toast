@@ -27,7 +27,7 @@ PYVERSION = 3.5
 
 CROSS =
 
-BLAS = -L/usr/lib -lmkl_rt -fopenmp -lpthread -lm -ldl
+BLAS = -llapack -lopenblas -lm -ldl
 LAPACK = 
 
 BOOSTCHAIN = gcc
