@@ -11,6 +11,7 @@ SHELL ["/bin/bash", "-c"]
 RUN apt-get update \
     && apt-get install -y curl procps build-essential gfortran git subversion \
     autoconf automake libtool m4 cmake locales libfftw3-dev libopenblas-dev \
+    libgl1-mesa-glx xvfb \
     && rm -fr /var/lib/apt/lists/*
 
 # Set up locales, to workaround a pip bug
@@ -38,10 +39,6 @@ ENV PYTHONUSERBASE "/tmp"
 
 @conda_root@
 
-ENV ACCEPT_INTEL_PYTHON_EULA yes
-
-@conda_intel@
-
 # Install conda packages.
 
 @conda_pkgs@
@@ -52,10 +49,10 @@ ENV ACCEPT_INTEL_PYTHON_EULA yes
 
 # Copy MKL headers into conda root
 
-RUN curl -SL https://www.dropbox.com/s/pzps5m45mnmv6ap/mkl_2017.0.3_include.tar.gz?dl=1 \
-    -o mkl_2017.0.3_include.tar.gz \
-    && tar xzf mkl_2017.0.3_include.tar.gz -C /usr/include --strip=1 \
-    && rm mkl_2017.0.3_include.tar.gz
+# RUN curl -SL https://www.dropbox.com/s/pzps5m45mnmv6ap/mkl_2017.0.3_include.tar.gz?dl=1 \
+#    -o mkl_2017.0.3_include.tar.gz \
+#    && tar xzf mkl_2017.0.3_include.tar.gz -C /usr/include --strip=1 \
+#    && rm mkl_2017.0.3_include.tar.gz
 
 # Copy all patch files to current working directory
 
