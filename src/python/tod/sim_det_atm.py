@@ -184,7 +184,7 @@ class OpSimAtmosphere(Operator):
             comm.Barrier()
             if comm.rank == 0:
                 print('Setting up atmosphere simulation for {}'
-                      ''.format(obsname), flush=True)
+                      ''.format(obsname), flush=self._verbosity)
             comm.Barrier()
 
              # Cache the output common flags
@@ -276,7 +276,8 @@ class OpSimAtmosphere(Operator):
                 wind_time = width / self._w_center
             wind_time = max(self._wind_time_min, wind_time)
             if comm.rank == 0 and self._verbosity:
-                print('Wind time = {:.2f} s'.format(wind_time), flush=True)
+                print('Wind time = {:.2f} s'.format(wind_time),
+                      flush=self._verbosity)
             comm.Barrier()
 
             #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
@@ -316,7 +317,8 @@ class OpSimAtmosphere(Operator):
                 if comm.rank == 0 and tmax < tmax_tot:
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
                           'of ([{:.2f}, {:.2f}])'.format(
-                              tmin, tmax, tmin_tot, tmax_tot), flush=True)
+                              tmin, tmax, tmin_tot, tmax_tot),
+                          flush=self._verbosity)
                 comm.Barrier()
 
                 ind = slice(istart, istop)
@@ -329,7 +331,7 @@ class OpSimAtmosphere(Operator):
                 comm.Barrier()
                 if comm.rank == 0:
                     print('Instantiating the atmosphere for {}'
-                          ''.format(obsname), flush=True)
+                          ''.format(obsname), flush=self._verbosity)
                 comm.Barrier()
 
                 sim = atm_sim_alloc(
@@ -348,13 +350,14 @@ class OpSimAtmosphere(Operator):
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
                         print('OpSimAtmosphere: Initialized atmosphere in '
-                              '{:.2f} s'.format(tstop - tstart), flush=True)
+                              '{:.2f} s'.format(tstop - tstart),
+                              flush=self._verbosity)
                     tstart = tstop
 
                 comm.Barrier()
                 if comm.rank == 0:
                     print('Simulating the atmosphere for {}'
-                          ''.format(obsname), flush=True)
+                          ''.format(obsname), flush=self._verbosity)
                 comm.Barrier()
 
                 atm_sim_simulate(sim, 0)
@@ -364,7 +367,7 @@ class OpSimAtmosphere(Operator):
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
                         print('OpSimAtmosphere: Simulated atmosphere in {:.2f} s'
-                              ''.format(tstop - tstart), flush=True)
+                              ''.format(tstop - tstart), flush=self._verbosity)
                     tstart = tstop
 
                 if self._verbosity > 0:
@@ -432,7 +435,7 @@ class OpSimAtmosphere(Operator):
 
                 if comm.rank == 0:
                     print('Observing the atmosphere for {}'
-                          ''.format(obsname), flush=True)
+                          ''.format(obsname), flush=self._verbosity)
 
                 for det in tod.local_dets:
 
@@ -511,7 +514,7 @@ class OpSimAtmosphere(Operator):
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
                         print('OpSimAtmosphere: Observed atmosphere in {:.2f} s'
-                              ''.format(tstop - tstart), flush=True)
+                              ''.format(tstop - tstart), flush=self._verbosity)
 
                 tmin = tmax
 

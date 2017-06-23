@@ -176,6 +176,9 @@ def main():
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
+    parser.add_argument('--flush',
+                        required=False, default=False, action='store_true',
+                        help='Flush every print statement.')
     parser.add_argument('--nside',
                         required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
@@ -235,7 +238,7 @@ def main():
     # Load the schedule
     if comm.comm_world.rank == 0:
         print('\nAll parameters:')
-        print(args, flush=True)
+        print(args, flush=args.flush)
         print('')
         fn = args.schedule
         if not os.path.isfile(fn):
@@ -278,7 +281,7 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         print('Load schedule:  {:.2f} seconds'.format(stop-start),
-              flush=True)
+              flush=args.flush)
     else:
         site = None
         all_ces = None
@@ -361,7 +364,7 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print('Create focalplane:  {:.2f} seconds'.format(stop-start),
-              flush=True)
+              flush=args.flush)
     start = stop
 
     if args.debug:
@@ -449,7 +452,7 @@ def main():
                 coord=args.coord,
                 sampsizes=None)
         except RuntimeError as e:
-            print('Failed to create the CES scan: {}'.format(e), flush=True)
+            print('Failed to create the CES scan: {}'.format(e), flush=args.flush)
             return
 
         # Create the noise model for this observation
@@ -493,7 +496,7 @@ def main():
 
     if comm.comm_group.rank == 0:
         print('Group # {:4} has {} observations.'.format(
-            comm.group, len(data.obs)), flush=True)
+            comm.group, len(data.obs)), flush=args.flush)
 
     comm.comm_world.Barrier()
 
@@ -505,7 +508,7 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print('Read parameters, compute data distribution and simulate scans: '
-              '{:.2f} seconds'.format(stop-start), flush=True)
+              '{:.2f} seconds'.format(stop-start), flush=args.flush)
 
     counter.exec(data)
 
@@ -514,7 +517,7 @@ def main():
     # make a Healpix pointing matrix.
 
     if comm.comm_world.rank == 0:
-        print('Expanding pointing', flush=True)
+        print('Expanding pointing', flush=args.flush)
 
     pointing = tt.OpPointingHpix(
         nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep,
@@ -528,7 +531,8 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Pointing generation took {:.3f} s'.format(elapsed), flush=True)
+        print('Pointing generation took {:.3f} s'.format(elapsed),
+              flush=args.flush)
     start = stop
 
     for ob in data.obs:
@@ -538,7 +542,7 @@ def main():
     if not args.skip_bin or args.input_map:
 
         if comm.comm_world.rank == 0:
-            print('Scanning local pixels', flush=True)
+            print('Scanning local pixels', flush=args.flush)
 
         # Prepare for using distpixels objects
         subnside = 16
@@ -563,14 +567,14 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Local submaps identified in {:.3f} s'.format(elapsed),
-                  flush=True)
+                  flush=args.flush)
         start = stop
 
     signalname = None
 
     if args.input_map:
         if comm.comm_world.rank == 0:
-            print('Scanning input map', flush=True)
+            print('Scanning input map', flush=args.flush)
 
         # Scan the sky signal
         if  comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
@@ -591,7 +595,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Read and sampled input map:  {:.2f} seconds'
-                  ''.format(stop-start), flush=True)
+                  ''.format(stop-start), flush=args.flush)
         start = stop
         signalname = 'signal'
 
@@ -641,7 +645,7 @@ def main():
     if not args.skip_bin:
 
         if comm.comm_world.rank == 0:
-            print('Preparing distributed map', flush=True)
+            print('Preparing distributed map', flush=args.flush)
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
@@ -664,7 +668,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('distobjects initialized in {:.3f} s'
-                  ''.format(elapsed), flush=True)
+                  ''.format(elapsed), flush=args.flush)
         start = stop
 
         if comm.comm_group.size < comm.comm_world.size:
@@ -689,7 +693,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('group distobjects initialized in {:.3f} s'
-                      ''.format(elapsed), flush=True)
+                      ''.format(elapsed), flush=args.flush)
             start = stop
         else:
             invnpp_group = None
@@ -711,7 +715,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('distobjects accumulated in {:.3f} s'
-                  ''.format(elapsed), flush=True)
+                  ''.format(elapsed), flush=args.flush)
         start = stop
 
         invnpp.allreduce()
@@ -721,7 +725,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('distobjects reduced in {:.3f} s'.format(elapsed), flush=True)
+            print('distobjects reduced in {:.3f} s'.format(elapsed),
+                  flush=args.flush)
         start = stop
 
         if invnpp_group is not None:
@@ -737,7 +742,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('group distobjects accumulated in {:.3f} s'
-                      ''.format(elapsed), flush=True)
+                      ''.format(elapsed), flush=args.flush)
             start = stop
 
             invnpp_group.allreduce()
@@ -748,7 +753,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('group distobjects reduced in {:.3f} s'
-                      ''.format(elapsed), flush=True)
+                      ''.format(elapsed), flush=args.flush)
             start = stop
 
         counter = tt.OpMemoryCounter(*distobjects)
@@ -762,7 +767,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Writing hit map to {} took {:.3f} s'
-                  ''.format(fn, elapsed), flush=True)
+                  ''.format(fn, elapsed), flush=args.flush)
         start = stop
 
         distobjects.remove(hits)
@@ -778,7 +783,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('Writing group hit map to {} took {:.3f} s'
-                      ''.format(fn, elapsed), flush=True)
+                      ''.format(fn, elapsed), flush=args.flush)
             start = stop
 
             distobjects.remove(hits_group)
@@ -792,7 +797,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Writing N_pp^-1 to {} took {:.3f} s'
-                  ''.format(fn, elapsed), flush=True)
+                  ''.format(fn, elapsed), flush=args.flush)
         start = stop
 
         if invnpp_group is not None:
@@ -804,7 +809,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('Writing group N_pp^-1 to {} took {:.3f} s'
-                      ''.format(fn, elapsed), flush=True)
+                      ''.format(fn, elapsed), flush=args.flush)
             start = stop
 
         # invert it
@@ -815,7 +820,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Inverting N_pp^-1 took {:.3f} s'.format(elapsed),
-                  flush=True)
+                  flush=args.flush)
         start = stop
 
         fn = '{}/npp.fits'.format(args.outdir)
@@ -826,7 +831,7 @@ def main():
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Writing N_pp to {} took {:.3f} s'.format(fn, elapsed),
-                  flush=True)
+                  flush=args.flush)
         start = stop
 
         if invnpp_group is not None:
@@ -837,7 +842,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('Inverting group N_pp^-1 took {:.3f} s'.format(elapsed),
-                      flush=True)
+                      flush=args.flush)
             start = stop
 
             fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
@@ -848,7 +853,7 @@ def main():
             elapsed = stop - start
             if comm.comm_group.rank == 0:
                 print('Writing group N_pp to {} took {:.3f} s'.format(
-                    fn, elapsed), flush=True)
+                    fn, elapsed), flush=args.flush)
             start = stop
 
         counter = tt.OpMemoryCounter(*distobjects)
@@ -930,13 +935,13 @@ def main():
 
         if sigcopy is not None:
             if comm.comm_world.rank == 0:
-                print('Making a copy of the signal TOD', flush=True)
+                print('Making a copy of the signal TOD', flush=args.flush)
             sigcopy.exec(data)
             counter.exec(data)
 
         if not args.skip_atmosphere:
             if comm.comm_world.rank == 0:
-                print('Simulating atmosphere', flush=True)
+                print('Simulating atmosphere', flush=args.flush)
 
             # Simulate the atmosphere signal
             common_flag_name = 'common_flags'
@@ -968,7 +973,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print('Atmosphere simulation took {:.3f} s'.format(elapsed),
-                      flush=True)
+                      flush=args.flush)
             start = stop
 
         # Loop over frequencies with identical focal planes and identical
@@ -981,20 +986,20 @@ def main():
                 # repeatedly
                 if comm.comm_world.rank == 0:
                     print('Making a copy of the TOD for multifrequency',
-                          flush=True)
+                          flush=args.flush)
                 sigcopy_freq.exec(data)
                 counter.exec(data)
 
             comm.comm_world.Barrier()
             if comm.comm_world.rank == 0:
                 print('Processing frequency {} / {}, MC = {}'
-                      ''.format(ifreq+1, args.nfreq, mc), flush=True)
+                      ''.format(ifreq+1, args.nfreq, mc), flush=args.flush)
 
             mcoffset = ifreq * 1000000
 
             if not args.skip_noise:
                 if comm.comm_world.rank == 0:
-                    print('Simulating noise', flush=True)
+                    print('Simulating noise', flush=args.flush)
 
                 # simulate noise
                 nse = tt.OpSimNoise(out=totalname_freq, realization=mc+mcoffset)
@@ -1006,12 +1011,12 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('Noise simulation took {:.3f} s'.format(elapsed),
-                          flush=True)
+                          flush=args.flush)
                 start = stop
 
             if args.gain_sigma:
                 if comm.comm_world.rank == 0:
-                    print('Scrambling gains', flush=True)
+                    print('Scrambling gains', flush=args.flush)
 
                 scrambler = tt.OpGainScrambler(
                     sigma=args.gain_sigma, name=totalname_freq,
@@ -1025,7 +1030,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('Gain scrambling took {:.3f} s'.format(elapsed),
-                          flush=True)
+                          flush=args.flush)
                 start = stop
 
             # Prepare output directory
@@ -1038,13 +1043,13 @@ def main():
             if sigcopy_madam is not None:
                 # Make a copy of the timeline for Madam
                 if comm.comm_world.rank == 0:
-                    print('Making a copy of the TOD for Madam', flush=True)
+                    print('Making a copy of the TOD for Madam', flush=args.flush)
                 sigcopy_madam.exec(data)
                 counter.exec(data)
 
             if not args.skip_bin:
                 if comm.comm_world.rank == 0:
-                    print('Binning unfiltered maps', flush=True)
+                    print('Binning unfiltered maps', flush=args.flush)
 
                 # Bin a map using the toast facilities
 
@@ -1063,7 +1068,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Building noise weighted map {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
                 tm.covariance_apply(invnpp, zmap)
@@ -1073,7 +1078,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Computing binned map {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
                 fn = os.path.join(outpath, 'binned.fits')
@@ -1084,7 +1089,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Writing binned map {:04d} to {} took {:.3f} s'
-                          ''.format(mc, fn, elapsed), flush=True)
+                          ''.format(mc, fn, elapsed), flush=args.flush)
 
                 if zmap_group is not None:
 
@@ -1102,7 +1107,7 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Building group noise weighted map {:04d} took '
-                              '{:.3f} s'.format(mc, elapsed), flush=True)
+                              '{:.3f} s'.format(mc, elapsed), flush=args.flush)
                     start = stop
 
                     tm.covariance_apply(invnpp_group, zmap_group)
@@ -1112,7 +1117,7 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Computing binned map {:04d} took {:.3f} s'
-                              ''.format(mc, elapsed), flush=True)
+                              ''.format(mc, elapsed), flush=args.flush)
                     start = stop
 
                     fn = os.path.join(outpath, 'binned_group_{:04}.fits'
@@ -1124,21 +1129,22 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Writing group binned map {:04d} to {} took '
-                              '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+                              '{:.3f} s'.format(mc, fn, elapsed),
+                              flush=args.flush)
 
                 counter.exec(data)
 
                 elapsed = stop - mcstart
                 if comm.comm_world.rank == 0:
                     print('  Mapmaking {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
             # Filter and bin
 
             if args.polyorder:
                 if comm.comm_world.rank == 0:
-                    print('Polyfiltering signal', flush=True)
+                    print('Polyfiltering signal', flush=args.flush)
                 common_flag_name = 'common_flags'
                 flag_name = 'flags'
                 polyfilter = tt.OpPolyFilter(
@@ -1155,12 +1161,12 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('Polynomial filtering took {:.3f} s'.format(elapsed),
-                          flush=True)
+                          flush=args.flush)
                 start = stop
 
             if args.wbin_ground:
                 if comm.comm_world.rank == 0:
-                    print('Ground filtering signal', flush=True)
+                    print('Ground filtering signal', flush=args.flush)
                 common_flag_name = 'common_flags'
                 flag_name = 'flags'
                 groundfilter = tt.OpGroundFilter(
@@ -1177,12 +1183,12 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('Ground filtering took {:.3f} s'.format(elapsed),
-                          flush=True)
+                          flush=args.flush)
                 start = stop
 
             if not args.skip_bin and (args.polyorder or args.wbin_ground):
                 if comm.comm_world.rank == 0:
-                    print('Binning filtered maps', flush=True)
+                    print('Binning filtered maps', flush=args.flush)
 
                 # Bin a map using the toast facilities
 
@@ -1201,7 +1207,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Building noise weighted map {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
                 tm.covariance_apply(invnpp, zmap)
@@ -1211,7 +1217,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Computing filtered map {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
                 fn = os.path.join(outpath, 'filtered.fits')
@@ -1222,7 +1228,7 @@ def main():
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
                     print('  Writing filtered map {:04d} to {} took {:.3f} s'
-                          ''.format(mc, fn, elapsed), flush=True)
+                          ''.format(mc, fn, elapsed), flush=args.flush)
 
                 if zmap_group is not None:
                     zmap_group.data.fill(0.0)
@@ -1239,7 +1245,7 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Building group noise weighted map {:04d} took '
-                              '{:.3f} s'.format(mc, elapsed), flush=True)
+                              '{:.3f} s'.format(mc, elapsed), flush=args.flush)
                     start = stop
 
                     tm.covariance_apply(invnpp_group, zmap_group)
@@ -1249,7 +1255,7 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Computing group filtered map {:04d} '
-                              'took {:.3f} s'.format(mc, elapsed), flush=True)
+                              'took {:.3f} s'.format(mc, elapsed), flush=args.flush)
 
                     start = stop
 
@@ -1262,14 +1268,14 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Writing group filtered map {:04d} to {} took '
-                              '{:.3f} s'.format(mc, fn, elapsed), flush=True)
+                              '{:.3f} s'.format(mc, fn, elapsed), flush=args.flush)
 
                 counter.exec(data)
 
                 elapsed = stop - mcstart
                 if comm.comm_world.rank == 0:
                     print('  Mapmaking {:04d} took {:.3f} s'
-                          ''.format(mc, elapsed), flush=True)
+                          ''.format(mc, elapsed), flush=args.flush)
                 start = stop
 
             if sigclear is not None:
@@ -1283,7 +1289,7 @@ def main():
 
             if args.madam:
                 if comm.comm_world.rank == 0:
-                    print('Destriping signal', flush=True)
+                    print('Destriping signal', flush=args.flush)
 
                 # create output directory for this realization
                 pars['path_output'] = outpath
@@ -1305,7 +1311,8 @@ def main():
                 stop = MPI.Wtime()
                 elapsed = stop - start
                 if comm.comm_world.rank == 0:
-                    print('Madam took {:.3f} s'.format(elapsed), flush=True)
+                    print('Madam took {:.3f} s'.format(elapsed),
+                          flush=args.flush)
                 start = stop
 
     counter.exec(data)
