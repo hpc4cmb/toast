@@ -47,7 +47,7 @@ namespace toast { namespace fft {
             r1d ( int64_t length, int64_t n, plan_type type, direction dir, double scale );
 
             int64_t length_;
-            int64_t n_;
+            int64_t mult_;
             double scale_;
             plan_type type_;
             direction dir_;

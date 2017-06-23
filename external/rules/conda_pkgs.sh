@@ -10,7 +10,6 @@ conda install --copy --yes \
     psutil \
     ephem \
     virtualenv \
-    memory_profiler \
     && conda install --copy --yes -c defaults \
     ipython ipython-notebook \
     && python -c "import matplotlib.font_manager" \

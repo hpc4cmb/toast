@@ -14,7 +14,7 @@ using namespace std;
 using namespace toast;
 
 
-const int64_t fftTest::length = 64;
+const int64_t fftTest::length = 65536;
 const int64_t fftTest::n = 5;
 
 
@@ -31,10 +31,8 @@ TEST_F( fftTest, roundtrip ) {
 
     for ( int64_t i = 0; i < n; ++i ) {
         rng::dist_normal ( length, 0, 0, 0, i*length, forward->tdata()[i] );
-        compare[i].resize ( length );
         for ( int64_t j = 0; j < length; ++j ) {
-            compare[i][j] = forward->tdata()[i][j];
-            //std::cout << forward->tdata()[i][j] << std::endl;
+            compare[i].push_back ( forward->tdata()[i][j] );
         }
     }
 
@@ -50,7 +48,7 @@ TEST_F( fftTest, roundtrip ) {
         double mean = 0.0;
         for ( int64_t j = 0; j < length; ++j ) {
             mean += forward->fdata()[i][j];
-            //std::cerr << forward->fdata()[i][j] << std::endl;
+            //std::cerr << forward->fdata()[0][j] << std::endl;
         }
         mean /= (double)length;
         //std::cout << "mean[" << i << "] = " << mean << std::endl;
@@ -63,9 +61,9 @@ TEST_F( fftTest, roundtrip ) {
 
         double outlier = ::fabs( var - ((double)length / 2.0) );
 
-        //std::cout << "var[" << i << "] = " << var << ", (len / 2) = " << ((double)length / 2.0) << " sigma = " << sigma << " outlier = " << outlier << std::endl;
-
         ASSERT_TRUE( outlier < 3.0 * sigma );
+
+        //std::cout << "var[" << i << "] = " << var << ", (len / 2) = " << ((double)length / 2.0) << " sigma = " << sigma << " outlier = " << outlier << std::endl;
     }
 
 

@@ -64,7 +64,6 @@ AC_DEFUN([ACX_MKL], [
 AC_PREREQ(2.50)
 AC_REQUIRE([ACX_MATH])
 AC_REQUIRE([AX_PTHREAD])
-AC_REQUIRE([AX_OPENMP])
 
 acx_mkl_ok=no
 acx_mkl_ldflags=""
@@ -98,8 +97,8 @@ else
    # a compiler wrapper script)
 
    MKL="$acx_mkl_ldflags -lmkl_rt -lmemkind -ldl"
-   CPPFLAGS="$acx_mkl_save_CPPFLAGS $OPENMP_CFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
-   LIBS="$acx_mkl_save_LIBS $MKL $OPENMP_CFLAGS $PTHREAD_LIBS $MATH"
+   CPPFLAGS="$acx_mkl_save_CPPFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
+   LIBS="$acx_mkl_save_LIBS $MKL $PTHREAD_LIBS $MATH"
 
    AC_CHECK_HEADERS([mkl_dfti.h])
 
@@ -110,8 +109,8 @@ else
    if test $acx_mkl_ok = no; then
 
       MKL="$acx_mkl_ldflags -lmkl_rt -ldl"
-      CPPFLAGS="$acx_mkl_save_CPPFLAGS $OPENMP_CFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
-      LIBS="$acx_mkl_save_LIBS $MKL $OPENMP_CFLAGS $PTHREAD_LIBS $MATH"
+      CPPFLAGS="$acx_mkl_save_CPPFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
+      LIBS="$acx_mkl_save_LIBS $MKL $PTHREAD_LIBS $MATH"
 
       AC_CHECK_HEADERS([mkl_dfti.h])
 
