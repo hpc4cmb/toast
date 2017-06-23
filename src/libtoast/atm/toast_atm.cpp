@@ -1229,18 +1229,24 @@ double toast::atm::sim::interp( double x, double y, double z,
     double dy = (y - (ystart + (double)iy*ystep)) * ystepinv;
     double dz = (z - (zstart + (double)iz*zstep)) * zstepinv;
 
-#ifdef DEBUG
+#ifdef DEBUG    
     if ( dx < 0 || dx > 1 || dy < 0 || dy > 1 || dz < 0 || dz > 1 ) {
-        std::ostringstream o;
-        o.precision( 16 );
-        o << "atmsim::interp : bad fractional step: " << std::endl
-          << "x = " << x << std::endl
-          << "y = " << y << std::endl
-          << "z = " << z << std::endl
-          << "dx = " << dx << std::endl
-          << "dy = " << dy << std::endl
-          << "dz = " << dz << std::endl;
-        throw std::runtime_error( o.str().c_str() );
+        //std::ostringstream o;
+        //o.precision( 16 );
+        std::cerr << "atmsim::interp : bad fractional step: " << std::endl
+                 << "x = " << x << std::endl
+                 << "y = " << y << std::endl
+                 << "z = " << z << std::endl
+                 << "dx = " << dx << std::endl
+                 << "dy = " << dy << std::endl
+                 << "dz = " << dz << std::endl;
+        //throw std::runtime_error( o.str().c_str() );
+        if ( dx < 0 ) dx = 0;
+        if ( dx > 1 ) dx = 1;        
+        if ( dy < 0 ) dy = 0;
+        if ( dy > 1 ) dy = 1;
+        if ( dz < 0 ) dz = 0;
+        if ( dz > 1 ) dz = 1;        
     }
 #endif
 
@@ -1251,15 +1257,21 @@ double toast::atm::sim::interp( double x, double y, double z,
 #ifdef DEBUG
         if ( ix < 0 || ix > nx-2 || iy < 0 || iy > ny-2
              || iz < 0 || iz > nz-2 ) {
-            std::ostringstream o;
-            o.precision( 16 );
-            o << "atmsim::interp : full index out of bounds at"
-              << std::endl << "("
-              << x << ", " << y << ", "<< z << ") = ("
-              << ix << "/" << nx << ", "
-              << iy << "/" << ny << ", "
-              << iz << "/" << nz << ")";
-            throw std::runtime_error( o.str().c_str() );
+            //std::ostringstream o;
+            //o.precision( 16 );
+            std::cerr << "atmsim::interp : full index out of bounds at"
+                      << std::endl << "("
+                      << x << ", " << y << ", "<< z << ") = ("
+                      << ix << "/" << nx << ", "
+                      << iy << "/" << ny << ", "
+                      << iz << "/" << nz << ")";
+            //throw std::runtime_error( o.str().c_str() );
+            if ( ix < 0 ) ix = 0;
+            if ( ix > nx-2 ) ix = nx-2;
+            if ( iy < 0 ) iy = 0;
+            if ( iy > ny-2 ) iy = ny-2;
+            if ( iz < 0 ) iz = 0;
+            if ( iz > nz-2 ) iz = nz-2;
         }
 #endif
 
