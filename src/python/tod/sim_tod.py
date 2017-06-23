@@ -1057,8 +1057,7 @@ class TODGround(TOD):
     def _get_times(self, start, n):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
-        stamps = start_time + np.arange(n) / self._rate
-        return stamps
+        return start_time + np.arange(n) / self._rate
 
     def _put_times(self, start, stamps):
         raise RuntimeError('cannot write timestamps to simulated data streams')
@@ -1069,12 +1068,11 @@ class TODGround(TOD):
         if azel:
             if self._boresight_azel is None:
                 raise runtimeError('Boresight azel pointing was purged.')
-            data = qa.mult(self._boresight_azel[start:start+n], detquat)
+            return qa.mult(self._boresight_azel[start:start+n], detquat)
         else:
             if self._boresight is None:
                 raise runtimeError('Boresight radec pointing was purged.')
-            data = qa.mult(self._boresight[start:start+n], detquat)
-        return data
+            return qa.mult(self._boresight[start:start+n], detquat)
 
     def read_boresight_az(self, local_start=0, n=0):
         """

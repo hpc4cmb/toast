@@ -26,7 +26,6 @@ import toast.qarray as qa
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
-
 def main():
 
     # This is the 2-level toast communicator.  By default,
@@ -514,11 +513,16 @@ def main():
 
     # make a Healpix pointing matrix.
 
+    if comm.comm_world.rank == 0:
+        print('Expanding pointing', flush=True)
+
     pointing = tt.OpPointingHpix(
         nside=nside, nest=True, mode='IQU', hwprpm=hwprpm, hwpstep=hwpstep,
         hwpsteptime=hwpsteptime)
 
     pointing.exec(data)
+
+    counter.exec(data)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
@@ -531,9 +535,10 @@ def main():
         tod = ob['tod']
         tod.free_radec_quats()
 
-    counter.exec(data)
-
     if not args.skip_bin or args.input_map:
+
+        if comm.comm_world.rank == 0:
+            print('Scanning local pixels', flush=True)
 
         # Prepare for using distpixels objects
         subnside = 16
@@ -557,10 +562,16 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Local submaps identified in {:.3f} s'.format(elapsed), flush=True)
+            print('Local submaps identified in {:.3f} s'.format(elapsed),
+                  flush=True)
         start = stop
 
+    signalname = None
+
     if args.input_map:
+        if comm.comm_world.rank == 0:
+            print('Scanning input map', flush=True)
+
         # Scan the sky signal
         if  comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
             raise RuntimeError(
@@ -573,15 +584,16 @@ def main():
         scansim = tt.OpSimScan(distmap=distmap, out='signal')
         scansim.exec(data)
 
+        counter = tt.OpMemoryCounter(*distobjects)
+        counter.exec(data)
+
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
             print('Read and sampled input map:  {:.2f} seconds'
                   ''.format(stop-start), flush=True)
         start = stop
-
-        counter = tt.OpMemoryCounter(*distobjects)
-        counter.exec(data)
+        signalname = 'signal'
 
     # Operator for signal copying, used in each MC iteration
 
@@ -592,15 +604,27 @@ def main():
         totalname = 'total'
         totalname_freq = 'total_freq'
 
-    sigcopy = tt.OpCacheCopy('signal', totalname)
+    if args.skip_bin:
+        totalname_madam = totalname_freq
+    else:
+        totalname_madam = 'total_madam'
+
+    if signalname is not None:
+        sigcopy = tt.OpCacheCopy(signalname, totalname)
+    else:
+        sigcopy = None
+
     if totalname != totalname_freq:
         sigcopy_freq = tt.OpCacheCopy(totalname, totalname_freq, force=True)
     else:
         sigcopy_freq = None
-    if args.madam:
-        sigcopy_madam = tt.OpCacheCopy(totalname_freq, 'total_madam')
+
+    if args.madam and totalname_freq != totalname_madam:
+        sigcopy_madam = tt.OpCacheCopy(totalname_freq, totalname_madam)
+        sigclear = tt.OpCacheClear(totalname_freq)
     else:
         sigcopy_madam = None
+        sigclear = None
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -615,6 +639,9 @@ def main():
     flag_name = None
 
     if not args.skip_bin:
+
+        if comm.comm_world.rank == 0:
+            print('Preparing distributed map', flush=True)
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
@@ -901,9 +928,16 @@ def main():
         # Copy the signal timestreams to the total ones before
         # accumulating the noise.
 
-        sigcopy.exec(data)
+        if sigcopy is not None:
+            if comm.comm_world.rank == 0:
+                print('Making a copy of the signal TOD', flush=True)
+            sigcopy.exec(data)
+            counter.exec(data)
 
         if not args.skip_atmosphere:
+            if comm.comm_world.rank == 0:
+                print('Simulating atmosphere', flush=True)
+
             # Simulate the atmosphere signal
             common_flag_name = 'common_flags'
             flag_name = 'flags'
@@ -927,6 +961,7 @@ def main():
                 common_flag_mask=args.common_flag_mask, flag_name=flag_name)
 
             atm.exec(data)
+            counter.exec(data)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -944,7 +979,11 @@ def main():
             if sigcopy_freq is not None:
                 # Make a copy of the atmosphere so we can scramble the gains
                 # repeatedly
+                if comm.comm_world.rank == 0:
+                    print('Making a copy of the TOD for multifrequency',
+                          flush=True)
                 sigcopy_freq.exec(data)
+                counter.exec(data)
 
             comm.comm_world.Barrier()
             if comm.comm_world.rank == 0:
@@ -954,23 +993,32 @@ def main():
             mcoffset = ifreq * 1000000
 
             if not args.skip_noise:
+                if comm.comm_world.rank == 0:
+                    print('Simulating noise', flush=True)
+
                 # simulate noise
                 nse = tt.OpSimNoise(out=totalname_freq, realization=mc+mcoffset)
                 nse.exec(data)
+                counter.exec(data)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print('Noise simulation took {:.3f} s'.format(elapsed),
-                      flush=True)
-            start = stop
+                comm.comm_world.barrier()
+                stop = MPI.Wtime()
+                elapsed = stop - start
+                if comm.comm_world.rank == 0:
+                    print('Noise simulation took {:.3f} s'.format(elapsed),
+                          flush=True)
+                start = stop
 
             if args.gain_sigma:
+                if comm.comm_world.rank == 0:
+                    print('Scrambling gains', flush=True)
+
                 scrambler = tt.OpGainScrambler(
                     sigma=args.gain_sigma, name=totalname_freq,
                     realization=mc+mcoffset)
                 scrambler.exec(data)
+
+                counter.exec(data)
 
                 comm.comm_world.barrier()
                 stop = MPI.Wtime()
@@ -989,9 +1037,14 @@ def main():
 
             if sigcopy_madam is not None:
                 # Make a copy of the timeline for Madam
+                if comm.comm_world.rank == 0:
+                    print('Making a copy of the TOD for Madam', flush=True)
                 sigcopy_madam.exec(data)
+                counter.exec(data)
 
             if not args.skip_bin:
+                if comm.comm_world.rank == 0:
+                    print('Binning unfiltered maps', flush=True)
 
                 # Bin a map using the toast facilities
 
@@ -1073,6 +1126,8 @@ def main():
                         print('  Writing group binned map {:04d} to {} took '
                               '{:.3f} s'.format(mc, fn, elapsed), flush=True)
 
+                counter.exec(data)
+
                 elapsed = stop - mcstart
                 if comm.comm_world.rank == 0:
                     print('  Mapmaking {:04d} took {:.3f} s'
@@ -1082,6 +1137,8 @@ def main():
             # Filter and bin
 
             if args.polyorder:
+                if comm.comm_world.rank == 0:
+                    print('Polyfiltering signal', flush=True)
                 common_flag_name = 'common_flags'
                 flag_name = 'flags'
                 polyfilter = tt.OpPolyFilter(
@@ -1090,6 +1147,8 @@ def main():
                     common_flag_mask=args.common_flag_mask,
                     flag_name=flag_name)
                 polyfilter.exec(data)
+
+                counter.exec(data)
 
                 comm.comm_world.barrier()
                 stop = MPI.Wtime()
@@ -1100,6 +1159,8 @@ def main():
                 start = stop
 
             if args.wbin_ground:
+                if comm.comm_world.rank == 0:
+                    print('Ground filtering signal', flush=True)
                 common_flag_name = 'common_flags'
                 flag_name = 'flags'
                 groundfilter = tt.OpGroundFilter(
@@ -1108,6 +1169,8 @@ def main():
                     common_flag_mask=args.common_flag_mask,
                     flag_name=flag_name)
                 groundfilter.exec(data)
+
+                counter.exec(data)
 
                 comm.comm_world.barrier()
                 stop = MPI.Wtime()
@@ -1118,6 +1181,8 @@ def main():
                 start = stop
 
             if not args.skip_bin and (args.polyorder or args.wbin_ground):
+                if comm.comm_world.rank == 0:
+                    print('Binning filtered maps', flush=True)
 
                 # Bin a map using the toast facilities
 
@@ -1199,17 +1264,27 @@ def main():
                         print('  Writing group filtered map {:04d} to {} took '
                               '{:.3f} s'.format(mc, fn, elapsed), flush=True)
 
+                counter.exec(data)
+
                 elapsed = stop - mcstart
                 if comm.comm_world.rank == 0:
                     print('  Mapmaking {:04d} took {:.3f} s'
                           ''.format(mc, elapsed), flush=True)
                 start = stop
 
+            if sigclear is not None:
+                if comm.comm_world.rank == 0:
+                    print('Clearing filtered signal')
+                sigclear.exec(data)
+
             counter.exec(data)
 
             # Optional Madam mapmaking
 
             if args.madam:
+                if comm.comm_world.rank == 0:
+                    print('Destriping signal', flush=True)
+
                 # create output directory for this realization
                 pars['path_output'] = outpath
                 if mc+mcoffset != firstmc:
@@ -1218,12 +1293,13 @@ def main():
                     pars['write_hits'] = False
 
                 madam = tm.OpMadam(
-                    params=pars, detweights=detweights, name='total_madam',
+                    params=pars, detweights=detweights, name=totalname_madam,
                     common_flag_name=common_flag_name, flag_name=flag_name,
                     common_flag_mask=args.common_flag_mask,
                     purge_tod=True)
 
                 madam.exec(data)
+                counter.exec(data)
 
                 comm.comm_world.barrier()
                 stop = MPI.Wtime()
@@ -1231,6 +1307,8 @@ def main():
                 if comm.comm_world.rank == 0:
                     print('Madam took {:.3f} s'.format(elapsed), flush=True)
                 start = stop
+
+    counter.exec(data)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()

@@ -354,3 +354,46 @@ class OpCacheCopy(Operator):
                     del inref
 
         return
+
+
+class OpCacheClear(Operator):
+    """
+    Operator which destroys cache objects matching the given pattern.
+
+    Args:
+        name (str): use cache objects with name <name>_<detector>.
+    """
+
+    def __init__(self, name):
+
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
+
+        self._name = name
+
+    def exec(self, data):
+        """
+        Clear timestreams.
+
+        This iterates over all observations and detectors and clears cache
+        objects whose names match the specified pattern.
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
+        comm = data.comm
+
+        for obs in data.obs:
+
+            tod = obs['tod']
+
+            for det in tod.local_dets:
+
+                # if the cache object exists, destroy it
+
+                name = "{}_{}".format(self._name, det)
+
+                if tod.cache.exists(name):
+                    tod.cache.destroy(name)
+
+        return

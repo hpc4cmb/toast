@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -17,17 +17,17 @@ from .. import ctoast as ct
 
 
 
-def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=None, flags=None,   
+def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=None, flags=None,
     eps=0.0, cal=1.0):
     """
     Compute the HEALPix pointing matrix for one detector.
 
-    This takes an array of quaternions and computes the healpix pixel 
+    This takes an array of quaternions and computes the healpix pixel
     indices and weights.  The weights are computed based on a response model
-    that includes a perfect HWP and optional cross polar reponse and 
+    that includes a perfect HWP and optional cross polar reponse and
     calibration.
 
-    For memory efficiency, this function takes pre-allocated arrays for the 
+    For memory efficiency, this function takes pre-allocated arrays for the
     pixels and weights.  When calling this function for many detectors, you
     should allocate those memory buffers once, if possible.
 
@@ -37,7 +37,7 @@ def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=Non
         mode (str): either "I" or "IQU"
         pdata (array): a 2D array of size number of samples by 4
         pixels (array): a 1D array of numpy.int64
-        weights (array): a 2D array of contiguous memory, with size 
+        weights (array): a 2D array of contiguous memory, with size
             samples x NNZ, where NNZ is either one or three, depending on mode.
         hwpang (array): optional array of HWP angles in radians
         flags (array): optional array of flags (type = numpy.uint8) to apply
@@ -47,7 +47,7 @@ def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=Non
     Returns:
         Nothing.
 
-    """    
+    """
     ct.pointing_healpix_matrix(hpix.hpix, nest, eps, cal, mode, pdata, hwpang, flags,
     pixels, weights)
 
@@ -63,7 +63,7 @@ class OpPointingHpix(Operator):
     assuming that the detector is a linear polarizer followed by a total
     power measurement.  An optional dictionary of calibration factors may
     be specified.  Additional options include specifying a constant cross-polar
-    response (eps) and a rotating, perfect half-wave plate.  The timestream 
+    response (eps) and a rotating, perfect half-wave plate.  The timestream
     model is then (see Jones, et al, 2006):
 
     .. math::
@@ -78,9 +78,9 @@ class OpPointingHpix(Operator):
     Args:
         pixels (str): write pixels to the cache with name <pixels>_<detector>.
             If the named cache objects do not exist, then they are created.
-        weights (str): write pixel weights to the cache with name 
-            <weights>_<detector>.  If the named cache objects do not exist, 
-            then they are created. 
+        weights (str): write pixel weights to the cache with name
+            <weights>_<detector>.  If the named cache objects do not exist,
+            then they are created.
         nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
         nest (bool): if True, use NESTED ordering.
         mode (string): either "I" or "IQU"
@@ -168,7 +168,6 @@ class OpPointingHpix(Operator):
         """
         return self._mode
 
-
     def exec(self, data):
         """
         Create pixels and weights.
@@ -203,6 +202,7 @@ class OpPointingHpix(Operator):
             times = tod.read_times(local_start=0, n=tod.local_samples[1])
             dt = np.mean(times[1:-1] - times[0:-2])
             rate = 1.0 / dt
+            del times
 
             # generate HWP angles
 
@@ -212,7 +212,7 @@ class OpPointingHpix(Operator):
 
             if self._hwprate is not None:
                 # continuous HWP
-                # HWP increment per sample is: 
+                # HWP increment per sample is:
                 # (hwprate / samplerate)
                 hwpincr = self._hwprate / rate
                 startang = np.fmod(first * hwpincr, 2*np.pi)
@@ -240,9 +240,11 @@ class OpPointingHpix(Operator):
             common = None
             if self._apply_flags:
                 if self._common_flag_name is not None:
-                    common = np.copy(tod.cache.reference(self._common_flag_name))
+                    common = tod.cache.reference(self._common_flag_name)
                 else:
+                    # This could be a pointer to cache
                     common = tod.read_common_flags()
+                common = np.copy(common)
                 common &= self._common_flag_mask
 
             for det in tod.local_dets:
@@ -263,24 +265,24 @@ class OpPointingHpix(Operator):
 
                 pixelsname = "{}_{}".format(self._pixels, det)
                 weightsname = "{}_{}".format(self._weights, det)
-                
+
                 pixelsref = None
                 weightsref = None
 
                 if tod.cache.exists(pixelsname):
                     pixelsref = tod.cache.reference(pixelsname)
                 else:
-                    pixelsref = tod.cache.create(pixelsname, np.int64, 
+                    pixelsref = tod.cache.create(pixelsname, np.int64,
                         (tod.local_samples[1],))
 
                 if tod.cache.exists(weightsname):
                     weightsref = tod.cache.reference(weightsname)
                 else:
-                    weightsref = tod.cache.create(weightsname, np.float64, 
+                    weightsref = tod.cache.create(weightsname, np.float64,
                         (tod.local_samples[1], self._nnz))
 
-                healpix_pointing_matrix(self.hpix, self._nest, self._mode, 
-                    pdata, pixelsref, weightsref, hwpang=hwpang, flags=common,   
+                healpix_pointing_matrix(self.hpix, self._nest, self._mode,
+                    pdata, pixelsref, weightsref, hwpang=hwpang, flags=common,
                     eps=eps, cal=cal)
 
                 del pixelsref
@@ -290,4 +292,3 @@ class OpPointingHpix(Operator):
             del common
 
         return
-
