@@ -14,7 +14,7 @@ module_dir="${moddir}/toast-deps"
 
 if [ "x${docker}" = "xyes" ]; then
     compiled_prefix="/usr"
-    conda_prefix="/usr"
+    conda_prefix="/usr/local"
 fi
 
 # Create list of substitutions

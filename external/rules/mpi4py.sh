@@ -14,6 +14,6 @@ extra_compile_args = @MPI_EXTRA_COMP@\n\
 extra_link_args = @MPI_EXTRA_LINK@\n\
 ' > mpi.cfg \
     && python setup.py build --mpi=toast \
-    && python setup.py install --prefix=@AUX_PREFIX@ \
+    && python setup.py install --prefix=@CONDA_PREFIX@ \
     && cd .. \
     && rm -rf mpi4py*

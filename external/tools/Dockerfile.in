@@ -10,7 +10,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update \
     && apt-get install -y curl procps build-essential gfortran git subversion \
-    autoconf automake libtool m4 cmake locales \
+    autoconf automake libtool m4 cmake locales libfftw3-dev libopenblas-dev \
     && rm -fr /var/lib/apt/lists/*
 
 # Set up locales, to workaround a pip bug
@@ -57,17 +57,13 @@ RUN curl -SL https://www.dropbox.com/s/pzps5m45mnmv6ap/mkl_2017.0.3_include.tar.
     && tar xzf mkl_2017.0.3_include.tar.gz -C /usr/include --strip=1 \
     && rm mkl_2017.0.3_include.tar.gz
 
-# The conda TCL packages overwrite the system-installed regex.h.  So
-# now we force reinstall of the package that provides that
-
-RUN apt-get update \
-    && apt-get install -y --reinstall libc6-dev \
-    && rm -fr /var/lib/apt/lists/*
-
 # Copy all patch files to current working directory
 
 RUN mkdir ./rules
 ADD rules/patch_* ./rules/
+
+RUN mkdir -p /usr/lib/python3.5/site-packages
+ENV PYTHONPATH /usr/lib/python3.5/site-packages
 
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
@@ -106,10 +102,6 @@ ADD rules/patch_* ./rules/
 # Install elemental
 
 @elemental@
-
-# Install PyMPIT for environment testing
-
-@pympit@
 
 # Remove the temporary patches
 
