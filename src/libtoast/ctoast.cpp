@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
+All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
@@ -227,13 +227,13 @@ void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2, doub
     return;
 }
 
-void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi, 
+void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi,
     double * const pa, double * quat, int IAU ) {
     toast::qarray::from_angles ( n, theta, phi, pa, quat, (IAU != 0) );
     return;
 }
 
-void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta, 
+void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta,
     double * phi, double * pa, int IAU ) {
     toast::qarray::to_angles ( n, quat, theta, phi, pa, (IAU != 0) );
     return;
@@ -551,7 +551,7 @@ void ctoast_healpix_pixels_upgrade_nest ( ctoast_healpix_pixels * hpix, int fact
 
 char ** ctoast_string_alloc ( size_t nstring, size_t length ) {
     char ** ret = (char**) malloc( nstring * sizeof(char*) );
-    
+
     if ( ! ret ) {
         std::ostringstream o;
         o << "failed to allocate array of " << nstring << " C strings";
@@ -586,14 +586,15 @@ void ctoast_string_free ( size_t nstring, char ** str ) {
 // Atmosphere sub-library
 //--------------------------------------
 
-ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
-    double elmin, double elmax, double tmin, double tmax, double lmin_center,
-    double lmin_sigma, double lmax_center, double lmax_sigma, double w_center,
-    double w_sigma, double wdir_center, double wdir_sigma, double z0_center,
-    double z0_sigma, double T0_center, double T0_sigma, double zatm,
-    double zmax, double xstep, double ystep, double zstep, long nelem_sim_max,
-    int verbosity, MPI_Comm comm, int gangsize,
-    uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2 ) {
+ctoast_atm_sim * ctoast_atm_sim_alloc (
+    double azmin, double azmax, double elmin, double elmax, double tmin,
+    double tmax, double lmin_center, double lmin_sigma, double lmax_center,
+    double lmax_sigma, double w_center, double w_sigma, double wdir_center,
+    double wdir_sigma, double z0_center, double z0_sigma, double T0_center,
+    double T0_sigma, double zatm, double zmax, double xstep, double ystep,
+    double zstep, long nelem_sim_max, int verbosity, MPI_Comm comm,
+    int gangsize, uint64_t key1, uint64_t key2, uint64_t counter1,
+    uint64_t counter2, char *cachedir ) {
 
 #ifdef HAVE_ELEMENTAL
     return reinterpret_cast < ctoast_atm_sim * > (
@@ -603,7 +604,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
                               wdir_sigma, z0_center, z0_sigma, T0_center,
                               T0_sigma, zatm, zmax, xstep, ystep, zstep,
                               nelem_sim_max, verbosity, comm, gangsize,
-                              key1, key2, counter1, counter2 ) );
+                              key1, key2, counter1, counter2, cachedir ) );
 #else
     return NULL;
 #endif
@@ -616,13 +617,14 @@ void ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
     return;
 }
 
-void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat ) {
+void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
 #ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
     try {
-        sm->simulate( (save_covmat != 0) );
+        sm->simulate( (use_cache != 0) );
     } catch ( std::exception &e ) {
-        std::cerr << "ERROR simulating the atmosphere: " << e.what() << std::endl;
+        std::cerr << "ERROR simulating the atmosphere: " << e.what()
+                  << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
     } catch ( ... ) {
         std::cerr << "unknown ERROR simulating the atmosphere" << std::endl;
@@ -632,7 +634,8 @@ void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat ) {
     return;
 }
 
-void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double *el, 
+void ctoast_atm_sim_observe(
+    ctoast_atm_sim * sim, double *t, double *az, double *el,
     double *tod, long nsamp, double fixed_r ) {
 #ifdef HAVE_ELEMENTAL
     toast::atm::sim * sm = reinterpret_cast < toast::atm::sim * > ( sim );
@@ -653,9 +656,9 @@ void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az, double
 // TOD sub-library
 //--------------------------------------
 
-void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest, 
+void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest,
     double eps, double cal, char const * mode, size_t n, double const * pdata,
-    double const * hwpang, uint8_t const * flags, int64_t * pixels, 
+    double const * hwpang, uint8_t const * flags, int64_t * pixels,
     double * weights ) {
 
     toast::healpix::pixels * hp = reinterpret_cast < toast::healpix::pixels * > ( hpix );
@@ -686,46 +689,46 @@ void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, in
 // Map sub-library
 //--------------------------------------
 
-void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
-    toast::cov::accumulate_diagonal ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+    toast::cov::accumulate_diagonal ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
         weights, scale, signal, zdata, hits, invnpp );
     return;
 }
 
-void ctoast_cov_accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+void ctoast_cov_accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
     int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
-    toast::cov::accumulate_diagonal_hits ( nsub, subsize, nnz, nsamp, indx_submap, 
+    toast::cov::accumulate_diagonal_hits ( nsub, subsize, nnz, nsamp, indx_submap,
         indx_pix, hits );
     return;
 }
 
-void ctoast_cov_accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, int64_t * hits, double * invnpp ) {
-    toast::cov::accumulate_diagonal_invnpp ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+    toast::cov::accumulate_diagonal_invnpp ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
         weights, scale, hits, invnpp );
     return;
 }
 
-void ctoast_cov_accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, double const * signal, double * zdata ) {
-    toast::cov::accumulate_zmap ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+    toast::cov::accumulate_zmap ( nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
         weights, scale, signal, zdata );
     return;
 }
 
-void ctoast_cov_eigendecompose_diagonal ( int64_t nsub, int64_t subsize, 
-    int64_t nnz, double * data, double * cond, double threshold, 
+void ctoast_cov_eigendecompose_diagonal ( int64_t nsub, int64_t subsize,
+    int64_t nnz, double * data, double * cond, double threshold,
     int32_t do_invert, int32_t do_rcond ) {
-    toast::cov::eigendecompose_diagonal ( nsub, subsize, nnz, data, cond, 
+    toast::cov::eigendecompose_diagonal ( nsub, subsize, nnz, data, cond,
         threshold, do_invert, do_rcond );
     return;
 }
 
-void ctoast_cov_multiply_diagonal ( int64_t nsub, int64_t subsize, 
+void ctoast_cov_multiply_diagonal ( int64_t nsub, int64_t subsize,
     int64_t nnz, double * data1, double const * data2 ) {
     toast::cov::multiply_diagonal ( nsub, subsize, nnz, data1, data2 );
     return;
@@ -745,5 +748,3 @@ void ctoast_cov_apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
 int ctoast_test_runner ( int argc, char *argv[] ) {
     return toast::test::runner ( argc, argv );
 }
-
-

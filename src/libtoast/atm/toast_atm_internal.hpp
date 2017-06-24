@@ -52,13 +52,14 @@ public :
          int verbosity=0, MPI_Comm comm=MPI_COMM_WORLD,
          int gangsize=-1, // Size of the gangs that create slices
          uint64_t key1=0, uint64_t key2=0, // RNG keys
-         uint64_t counter1=0, uint64_t counter2=0 ); // RNG counters
+         uint64_t counter1=0, uint64_t counter2=0, // RNG counters
+         char *cachedir=NULL );
 
     ~sim();
 
     // we can simulate a number of realizations for the same CES
     // and distribution of parameters
-    void simulate( bool save_covmat );
+    void simulate( bool use_cache );
 
     // ::observe can only be called after ::simulate and only with
     // compatible arguments.
@@ -67,10 +68,11 @@ public :
 
 private :
 
-    MPI_Comm comm, comm_gang;
+    MPI_Comm comm=MPI_COMM_NULL, comm_gang=MPI_COMM_NULL;
+    std::string cachedir;
     int rank, ntask, rank_gang, ntask_gang, nthread, gangsize, gang, ngang;
     int verbosity;
-    uint64_t key1, key2, counter1, counter2;
+    uint64_t key1, key2, counter1, counter2, counter1start, counter2start;
     double azmin, azmax, elmin, elmax, tmin, tmax, sinel0, cosel0;
     double tanmin, tanmax; // In-cone calculation helpers
     double lmin_center, lmin_sigma, lmax_center, lmax_sigma,
@@ -85,6 +87,7 @@ private :
     long nx, ny, nz, nn, xstride, ystride, zstride;
     double xstrideinv, ystrideinv, zstrideinv;
     size_t nelem;
+    bool cached=false;
     double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
@@ -104,11 +107,10 @@ private :
     // Find the next range of compressed indices to simulate
     void get_slice( long &ind_start, long &ind_stop );
     // Use the atmospheric parameters for volume element covariance
-    El::DistMatrix<double> * build_covariance( long ind_start, long ind_stop,
-                                               bool save_covmat );
+    El::DistMatrix<double> * build_covariance( long ind_start, long ind_stop );
     // Cholesky decompose (square root) the covariance matrix
     void sqrt_covariance( El::DistMatrix<double> *cov, long ind_start,
-                          long ind_stop, bool save_covmat=false );
+                          long ind_stop );
     // Create a realization out of the square root covariance matrix
     void apply_covariance( El::DistMatrix<double> *cov,
                            long ind_start, long ind_stop );
@@ -128,7 +130,8 @@ private :
     void smooth(); // Smooth the realization
     std::vector<double> kolmo_x;
     std::vector<double> kolmo_y;
-
+    void load_realization();
+    void save_realization();
 };
 
 #endif

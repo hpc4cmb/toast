@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
+All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
@@ -97,10 +97,10 @@ void ctoast_qarray_from_rotmat ( const double * rotmat, double * q );
 
 void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2, double * q );
 
-void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi, 
+void ctoast_qarray_from_angles ( size_t n, double const * theta, double const * phi,
     double * const pa, double * quat, int IAU );
 
-void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta, 
+void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta,
     double * phi, double * pa, int IAU );
 
 // FFT
@@ -109,7 +109,7 @@ typedef enum {
     PLAN_FAST = 0,
     PLAN_BEST = 1
 } ctoast_fft_plan_type;
-  
+
 typedef enum {
     FORWARD = 0,
     BACKWARD = 1
@@ -212,12 +212,12 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
     double w_sigma, double wdir_center, double wdir_sigma, double z0_center,
     double z0_sigma, double T0_center, double T0_sigma, double zatm,
     double zmax, double xstep, double ystep, double zstep, long nelem_sim_max,
-    int verbosity, MPI_Comm comm, int gangsize,
-    uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2 );
+    int verbosity, MPI_Comm comm, int gangsize, uint64_t key1, uint64_t key2,
+    uint64_t counter1, uint64_t counter2, char *cachedir );
 
 void ctoast_atm_sim_free ( ctoast_atm_sim * sim );
 
-void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int save_covmat );
+void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache );
 
 void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
     double *el, double *tod, long nsamp, double fixed_r );
@@ -227,9 +227,9 @@ void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
 // TOD sub-library
 //--------------------------------------
 
-void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest, 
+void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest,
     double eps, double cal, char const * mode, size_t n, double const * pdata,
-    double const * hwpang, uint8_t const * flags, int64_t * pixels, 
+    double const * hwpang, uint8_t const * flags, int64_t * pixels,
     double * weights );
 
 //--------------------------------------
@@ -242,26 +242,26 @@ void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, in
 // Map sub-library
 //--------------------------------------
 
-void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp );
 
-void ctoast_cov_accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
+void ctoast_cov_accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
     int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits );
 
-void ctoast_cov_accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, int64_t * hits, double * invnpp );
 
-void ctoast_cov_accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+void ctoast_cov_accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
+    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights,
     double scale, double const * signal, double * zdata );
 
-void ctoast_cov_eigendecompose_diagonal ( int64_t nsub, int64_t subsize, 
-    int64_t nnz, double * data, double * cond, double threshold, 
+void ctoast_cov_eigendecompose_diagonal ( int64_t nsub, int64_t subsize,
+    int64_t nnz, double * data, double * cond, double threshold,
     int32_t do_invert, int32_t do_rcond );
 
-void ctoast_cov_multiply_diagonal ( int64_t nsub, int64_t subsize, 
+void ctoast_cov_multiply_diagonal ( int64_t nsub, int64_t subsize,
     int64_t nnz, double * data1, double const * data2 );
 
 void ctoast_cov_apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
@@ -280,5 +280,3 @@ int ctoast_test_runner ( int argc, char *argv[] );
 #endif
 
 #endif
-
-

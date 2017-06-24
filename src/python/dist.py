@@ -42,6 +42,8 @@ class Comm(object):
             self._gsize = self._wsize
 
         self._ngroups = int(self._wsize / self._gsize)
+        if self._ngroups*self._gsize != self._wsize:
+            raise RuntimeError('Requested group size ')
         self._group = int(self._wrank / self._gsize)
 
         self._grank = self._wrank % self._gsize

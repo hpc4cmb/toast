@@ -172,6 +172,9 @@ def main():
     parser.add_argument('--atm_T0_sigma',
                         required=False, default=10.0, type=np.float,
                         help='sigma of the temperature distribution')
+    parser.add_argument('--atm_cache',
+                        required=False, default='atm_cache',
+                        help='Atmosphere cache directory')
 
     parser.add_argument('--outdir',
                         required=False, default='out',
@@ -945,6 +948,8 @@ def main():
         if not args.skip_atmosphere:
             if comm.comm_world.rank == 0:
                 print('Simulating atmosphere', flush=args.flush)
+                if args.atm_cache and not os.path.isdir(args.atm_cache):
+                    os.makedirs(args.atm_cache)
 
             # Simulate the atmosphere signal
             common_flag_name = 'common_flags'
@@ -966,7 +971,8 @@ def main():
                 T0_center=args.atm_T0_center, T0_sigma=args.atm_T0_sigma,
                 fp_radius=args.fp_radius, apply_flags=True,
                 common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask, flag_name=flag_name)
+                common_flag_mask=args.common_flag_mask, flag_name=flag_name,
+                cachedir=args.atm_cache)
 
             atm.exec(data)
             counter.exec(data)

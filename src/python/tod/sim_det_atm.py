@@ -4,16 +4,14 @@
 
 from ..mpi import MPI, MPI_Comm
 
+import os
+
 import numpy as np
-
 from scipy.constants import degree, arcmin
-
 import healpy as hp
 
 from .. import qarray as qa
-
 from .tod import TOD
-
 from ..op import Operator
 
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
@@ -32,20 +30,27 @@ class OpSimAtmosphere(Operator):
     """
     Operator which generates atmosphere timestreams.
 
-    All processes collectively generate the atmospheric realization.  Then
-    each process passes through its local data and observes the atmosphere.
-    This operator is only compatible with TOD objects that can return AZ/EL
-    pointing.
+    All processes collectively generate the atmospheric realization.
+    Then each process passes through its local data and observes the
+    atmosphere.
+
+    This operator is only compatible with TOD objects that can return
+    AZ/EL pointing.
 
     Args:
-        out (str): accumulate data to the cache with name <out>_<detector>.
-            If the named cache objects do not exist, then they are created.
+        out (str): accumulate data to the cache with name
+            <out>_<detector>.  If the named cache objects do not exist,
+            then they are created.
         realization (int): if simulating multiple realizations, the
             realization index.
-        component (int): the component index to use for this noise simulation.
-        lmin_center (float): Kolmogorov turbulence dissipation scale center.
-        lmin_sigma (float): Kolmogorov turbulence dissipation scale sigma.
-        lmax_center (float): Kolmogorov turbulence injection scale center.
+        component (int): the component index to use for this noise
+            simulation.
+        lmin_center (float): Kolmogorov turbulence dissipation scale
+            center.
+        lmin_sigma (float): Kolmogorov turbulence dissipation scale
+            sigma.
+        lmax_center (float): Kolmogorov turbulence injection scale
+             center.
         lmax_sigma (float): Kolmogorov turbulence injection scale sigma.
         gain (float): Scaling applied to the simulated TOD.
         zatm (float): atmosphere extent for temperature profile.
@@ -58,11 +63,14 @@ class OpSimAtmosphere(Operator):
         gangsize (int): size of the gangs that create slices.
         w_center (float):  central value of the wind speed distribution.
         w_sigma (float):  sigma of the wind speed distribution.
-        wdir_center (float):  central value of the wind direction distribution.
+        wdir_center (float):  central value of the wind direction
+            distribution.
         wdir_sigma (float):  sigma of the wind direction distribution.
-        z0_center (float):  central value of the water vapor distribution.
+        z0_center (float):  central value of the water vapor
+             distribution.
         z0_sigma (float):  sigma of the water vapor distribution.
-        T0_center (float):  central value of the temperature distribution.
+        T0_center (float):  central value of the temperature
+             distribution.
         T0_sigma (float):  sigma of the temperature distribution.
         fp_radius (float):  focal plane radius in degrees.
         common_flag_name (str):  Cache name of the output common flags.
@@ -76,11 +84,14 @@ class OpSimAtmosphere(Operator):
             used.  Otherwise flags are read from the tod object.
         flag_mask (byte):  Bitmask to use when flagging data
            based on the detector flags.
-        apply_flags (bool):  When True, flagged samples are not simulated.
+        apply_flags (bool):  When True, flagged samples are not
+             simulated.
         report_timing (bool):  Print out time taken to initialize,
              simulate and observe
         wind_time_min (float):  Minimum time to simulate before
             discarding the volume and creating a new one [seconds].
+        cachedir (str):  Directory to use for loading and saving
+            atmosphere realizations.  Set to None to disable caching.
     """
     def __init__(
             self, out='atm', realization=0, component=123456,
@@ -93,7 +104,7 @@ class OpSimAtmosphere(Operator):
             fp_radius=1, apply_flags=False,
             common_flag_name='common_flags', common_flag_mask=255,
             flag_name='flags', flag_mask=255, report_timing=True,
-            wind_time_min=600):
+            wind_time_min=600, cachedir='.'):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -114,6 +125,7 @@ class OpSimAtmosphere(Operator):
         self._nelem_sim_max = nelem_sim_max
         self._verbosity = verbosity
         self._gangsize = gangsize
+        self._cachedir = cachedir
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -314,6 +326,11 @@ class OpSimAtmosphere(Operator):
                     tmax = tmax_tot
                     istop = times.size
 
+                if comm.rank == 0:
+                    if self._cachedir is not None \
+                       and not os.path.isdir(self._cachedir):
+                        os.makedirs(self._cachedir)
+
                 if comm.rank == 0 and tmax < tmax_tot:
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
                           'of ([{:.2f}, {:.2f}])'.format(
@@ -343,7 +360,7 @@ class OpSimAtmosphere(Operator):
                     self._T0_sigma, self._zatm, self._zmax, self._xstep,
                     self._ystep, self._zstep, self._nelem_sim_max,
                     self._verbosity, comm, self._gangsize,
-                    key1, key2, counter1, counter2)
+                    key1, key2, counter1, counter2, self._cachedir)
 
                 if self._report_timing:
                     comm.Barrier()
@@ -360,7 +377,8 @@ class OpSimAtmosphere(Operator):
                           ''.format(obsname), flush=self._verbosity)
                 comm.Barrier()
 
-                atm_sim_simulate(sim, 0)
+                use_cache = self._cachedir is not None
+                atm_sim_simulate(sim, use_cache)
 
                 if self._report_timing:
                     comm.Barrier()
@@ -392,7 +410,7 @@ class OpSimAtmosphere(Operator):
                     my_snapshots = []
                     vmin = 1e30
                     vmax = -1e30
-                    tstep = 1
+                    tstep = 60
                     for i, t in enumerate(np.arange(tmin, tmax, tstep)):
                         if i % ntask != rank:
                             continue
