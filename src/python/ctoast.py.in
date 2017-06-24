@@ -770,7 +770,8 @@ lib.ctoast_atm_sim_alloc.argtypes = [
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
     ct.c_long, ct.c_int, MPI_Comm, ct.c_int,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong]
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
+    ct.c_char_p]
 
 def atm_sim_alloc(
         azmin, azmax, elmin, elmax, tmin, tmax, lmin_center=0.01,
@@ -779,17 +780,22 @@ def atm_sim_alloc(
         z0_sigma=0.0, T0_center=280.0, T0_sigma=10.0, zatm=40000.0, zmax=2000.0,
         xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0,
         comm=MPI.COMM_WORLD, gangsize=-1,
-        key1=0, key2=0, counter1=0, counter2=0):
+        key1=0, key2=0, counter1=0, counter2=0, cachedir='.'):
 
     comm_ptr = MPI._addressof(comm)
     c_comm = MPI_Comm.from_address(comm_ptr)
+
+    if cachedir:
+        cdir = cachedir.encode()
+    else:
+        cdir = None
 
     return lib.ctoast_atm_sim_alloc(
         azmin, azmax, elmin, elmax, tmin, tmax,
         lmin_center, lmin_sigma, lmax_center, lmax_sigma, w_center, w_sigma,
         wdir_center, wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma,
         zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, c_comm,
-        gangsize, key1, key2, counter1, counter2)
+        gangsize, key1, key2, counter1, counter2, cdir)
 
 lib.ctoast_atm_sim_free.restype = None
 lib.ctoast_atm_sim_free.argtypes = [ ct.POINTER(cATMSim) ]
@@ -801,13 +807,13 @@ def atm_sim_free(sim):
 lib.ctoast_atm_sim_simulate.restype = None
 lib.ctoast_atm_sim_simulate.argtypes = [ ct.POINTER(cATMSim), ct.c_int ]
 
-def atm_sim_simulate(sim, save_covmat):
-    lib.ctoast_atm_sim_simulate(sim, save_covmat)
+def atm_sim_simulate(sim, use_cache):
+    lib.ctoast_atm_sim_simulate(sim, use_cache)
     return
 
 lib.ctoast_atm_sim_observe.restype = None
-lib.ctoast_atm_sim_observe.argtypes = [ ct.POINTER(cATMSim), npf64, npf64,
-    npf64, npf64, ct.c_long, ct.c_double ]
+lib.ctoast_atm_sim_observe.argtypes = [
+    ct.POINTER(cATMSim), npf64, npf64, npf64, npf64, ct.c_long, ct.c_double ]
 
 def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
     lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
