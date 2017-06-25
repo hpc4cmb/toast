@@ -179,6 +179,9 @@ def main():
     parser.add_argument('--outdir',
                         required=False, default='out',
                         help='Output directory')
+    parser.add_argument('--zip',
+                        required=False, default=False, action='store_true',
+                        help='Compress the output fits files')
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
@@ -770,6 +773,8 @@ def main():
 
         if not args.skip_hits:
             fn = '{}/hits.fits'.format(args.outdir)
+            if args.zip:
+                fn += '.gz'
             hits.write_healpix_fits(fn)
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -784,6 +789,8 @@ def main():
         if hits_group is not None:
             if not args.skip_hits:
                 fn = '{}/hits_group_{:04}.fits'.format(args.outdir, comm.group)
+                if args.zip:
+                    fn += '.gz'
                 hits_group.write_healpix_fits(fn)
                 comm.comm_group.barrier()
                 stop = MPI.Wtime()
@@ -795,28 +802,33 @@ def main():
             distobjects.remove(hits_group)
             del hits_group
 
-            if not args.skip_hits:
-                fn = '{}/invnpp.fits'.format(args.outdir)
-                invnpp.write_healpix_fits(fn)
-                comm.comm_world.barrier()
+        if not args.skip_hits:
+            fn = '{}/invnpp.fits'.format(args.outdir)
+            if args.zip:
+                fn += '.gz'
+            invnpp.write_healpix_fits(fn)
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print('Writing N_pp^-1 to {} took {:.3f} s'
+                      ''.format(fn, elapsed), flush=args.flush)
+            start = stop
+
+        if not args.skip_hits:
+            if invnpp_group is not None:
+                fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir,
+                                                         comm.group)
+                if args.zip:
+                    fn += '.gz'
+                invnpp_group.write_healpix_fits(fn)
+                comm.comm_group.barrier()
                 stop = MPI.Wtime()
                 elapsed = stop - start
-                if comm.comm_world.rank == 0:
-                    print('Writing N_pp^-1 to {} took {:.3f} s'
+                if comm.comm_group.rank == 0:
+                    print('Writing group N_pp^-1 to {} took {:.3f} s'
                           ''.format(fn, elapsed), flush=args.flush)
                 start = stop
-
-            if invnpp_group is not None:
-                if not args.skip_hits:
-                    fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir, comm.group)
-                    invnpp_group.write_healpix_fits(fn)
-                    comm.comm_group.barrier()
-                    stop = MPI.Wtime()
-                    elapsed = stop - start
-                    if comm.comm_group.rank == 0:
-                        print('Writing group N_pp^-1 to {} took {:.3f} s'
-                              ''.format(fn, elapsed), flush=args.flush)
-                    start = stop
 
         # invert it
         tm.covariance_invert(invnpp, 1.0e-3)
@@ -831,6 +843,8 @@ def main():
 
         if not args.skip_hits:
             fn = '{}/npp.fits'.format(args.outdir)
+            if args.zip:
+                fn += '.gz'
             invnpp.write_healpix_fits(fn)
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -853,6 +867,8 @@ def main():
 
             if not args.skip_hits:
                 fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
+                if args.zip:
+                    fn += '.gz'
                 invnpp_group.write_healpix_fits(fn)
                 comm.comm_group.barrier()
                 stop = MPI.Wtime()
@@ -1091,6 +1107,8 @@ def main():
                 start = stop
 
                 fn = os.path.join(outpath, 'binned.fits')
+                if args.zip:
+                    fn += '.gz'
                 zmap.write_healpix_fits(fn)
 
                 comm.comm_world.barrier()
@@ -1131,6 +1149,8 @@ def main():
 
                     fn = os.path.join(outpath, 'binned_group_{:04}.fits'
                                       ''.format(comm.group))
+                    if args.zip:
+                        fn += '.gz'
                     zmap_group.write_healpix_fits(fn)
 
                     comm.comm_group.barrier()
@@ -1230,6 +1250,8 @@ def main():
                 start = stop
 
                 fn = os.path.join(outpath, 'filtered.fits')
+                if args.zip:
+                    fn += '.gz'
                 zmap.write_healpix_fits(fn)
 
                 comm.comm_world.barrier()
@@ -1264,12 +1286,15 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Computing group filtered map {:04d} '
-                              'took {:.3f} s'.format(mc, elapsed), flush=args.flush)
+                              'took {:.3f} s'.format(mc, elapsed),
+                              flush=args.flush)
 
                     start = stop
 
                     fn = os.path.join(outpath, 'filtered_group_{:04}.fits'
                                       ''.format(comm.group))
+                    if args.zip:
+                        fn += '.gz'
                     zmap_group.write_healpix_fits(fn)
 
                     comm.comm_group.barrier()
@@ -1277,7 +1302,8 @@ def main():
                     elapsed = stop - start
                     if comm.comm_group.rank == 0:
                         print('  Writing group filtered map {:04d} to {} took '
-                              '{:.3f} s'.format(mc, fn, elapsed), flush=args.flush)
+                              '{:.3f} s'.format(mc, fn, elapsed),
+                              flush=args.flush)
 
                 counter.exec(data)
 
