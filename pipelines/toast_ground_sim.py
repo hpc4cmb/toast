@@ -972,7 +972,7 @@ def main():
                 fp_radius=args.fp_radius, apply_flags=True,
                 common_flag_name=common_flag_name,
                 common_flag_mask=args.common_flag_mask, flag_name=flag_name,
-                cachedir=args.atm_cache)
+                cachedir=args.atm_cache, flush=args.flush)
 
             atm.exec(data)
             counter.exec(data)
