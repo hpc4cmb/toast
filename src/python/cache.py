@@ -88,7 +88,7 @@ class Cache(object):
         if not self._pymem:
             keylist = list(self._refs.keys())
             for k in keylist:
-                gc.collect()
+                #gc.collect()
                 referrers = gc.get_referrers(self._refs[k])
                 #print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
                 #print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
@@ -113,7 +113,7 @@ class Cache(object):
             if not self._pymem:
                 keylist = list(self._refs.keys())
                 for k in keylist:
-                    gc.collect()
+                    #gc.collect()
                     referrers = gc.get_referrers(self._refs[k])
                     #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
                     #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )

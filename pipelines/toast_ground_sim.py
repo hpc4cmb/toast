@@ -1358,7 +1358,7 @@ def main():
     if comm.comm_world.rank == 0:
         print('Total Time:  {:.2f} seconds'.format(elapsed), flush=True)
 
-    raise Exception('Done!')
+    #raise Exception('Done!')
 
 
 if __name__ == '__main__':
