@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from .mpi import MPI, MPI_Comm
@@ -208,7 +208,7 @@ def sf_fast_log(input):
 # RNG
 
 lib.ctoast_rng_dist_uint64.restype = None
-lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong,
     ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npu64 ]
 
 def rng_dist_uint64(n, key1, key2, counter1, counter2):
@@ -217,7 +217,7 @@ def rng_dist_uint64(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_uniform_01.restype = None
-lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong,
     ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
@@ -226,7 +226,7 @@ def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_uniform_11.restype = None
-lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong,
     ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
@@ -235,7 +235,7 @@ def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
     return ret
 
 lib.ctoast_rng_dist_normal.restype = None
-lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong, 
+lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong,
     ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
 
 def rng_dist_normal(n, key1, key2, counter1, counter2):
@@ -246,7 +246,7 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
 # Quaternion array
 
 lib.ctoast_qarray_list_dot.restype = None
-lib.ctoast_qarray_list_dot.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
+lib.ctoast_qarray_list_dot.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
     npf64, npf64, npf64 ]
 
 def qarray_list_dot(n, m, d, a, b):
@@ -266,7 +266,7 @@ def qarray_inv(n, q):
     return q_out
 
 lib.ctoast_qarray_amplitude.restype = None
-lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
+lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
     npf64, npf64 ]
 
 def qarray_amplitude(n, m, d, v):
@@ -276,7 +276,7 @@ def qarray_amplitude(n, m, d, v):
     return amp
 
 lib.ctoast_qarray_normalize.restype = None
-lib.ctoast_qarray_normalize.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong, 
+lib.ctoast_qarray_normalize.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
     npf64, npf64 ]
 
 def qarray_normalize(n, m, d, q_in):
@@ -312,7 +312,7 @@ def qarray_mult(pn, p, nq, q):
     return r
 
 lib.ctoast_qarray_slerp.restype = None
-lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, npf64, 
+lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, npf64,
     npf64, npf64, npf64 ]
 
 def qarray_slerp(n_time, n_targettime, time, targettime, q_in):
@@ -351,7 +351,7 @@ def qarray_pow(n, p, q_in):
     return q_out
 
 lib.ctoast_qarray_from_axisangle.restype = None
-lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, npf64, 
+lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, npf64,
     npf64, npf64 ]
 
 def qarray_from_axisangle(n, axis, angle):
@@ -362,7 +362,7 @@ def qarray_from_axisangle(n, axis, angle):
     return q_out
 
 lib.ctoast_qarray_to_axisangle.restype = None
-lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, npf64, npf64, 
+lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, npf64, npf64,
     npf64 ]
 
 def qarray_to_axisangle(n, q):
@@ -444,11 +444,11 @@ fft_direction = {
 }
 
 lib.ctoast_fft_r1d_alloc.restype = ct.POINTER(cFFTR1D)
-lib.ctoast_fft_r1d_alloc.argtypes = [ ct.c_longlong, ct.c_longlong, ct.c_uint, 
+lib.ctoast_fft_r1d_alloc.argtypes = [ ct.c_longlong, ct.c_longlong, ct.c_uint,
     ct.c_uint, ct.c_double ]
 
 def fft_r1d_alloc(length, n, type, dir, scale):
-    return lib.ctoast_fft_r1d_alloc(length, n, fft_plan_type[type], 
+    return lib.ctoast_fft_r1d_alloc(length, n, fft_plan_type[type],
         fft_direction[dir], scale)
 
 lib.ctoast_fft_r1d_free.restype = None
@@ -579,7 +579,7 @@ def healpix_vec2ang(n, vec):
     return (theta, phi)
 
 lib.ctoast_healpix_vecs2angpa.restype = None
-lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong, npf64, npf64, 
+lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong, npf64, npf64,
     npf64, npf64 ]
 
 def healpix_vecs2angpa(n, vec):
@@ -606,7 +606,7 @@ def healpix_pixels_free(hpix):
     return
 
 lib.ctoast_healpix_pixels_reset.restype = None
-lib.ctoast_healpix_pixels_reset.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_reset.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong ]
 
 def healpix_pixels_reset(hpix, nside):
@@ -614,7 +614,7 @@ def healpix_pixels_reset(hpix, nside):
     return
 
 lib.ctoast_healpix_pixels_vec2zphi.restype = None
-lib.ctoast_healpix_pixels_vec2zphi.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_vec2zphi.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npf64, npi32, npf64, npf64 ]
 
 def healpix_pixels_vec2zphi(hpix, n, vec):
@@ -626,7 +626,7 @@ def healpix_pixels_vec2zphi(hpix, n, vec):
     return (phi, region, z, rtz)
 
 lib.ctoast_healpix_pixels_theta2z.restype = None
-lib.ctoast_healpix_pixels_theta2z.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_theta2z.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npi32, npf64, npf64 ]
 
 def healpix_pixels_theta2z(hpix, n, theta):
@@ -637,7 +637,7 @@ def healpix_pixels_theta2z(hpix, n, theta):
     return (region, z, rtz)
 
 lib.ctoast_healpix_pixels_zphi2nest.restype = None
-lib.ctoast_healpix_pixels_zphi2nest.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_zphi2nest.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
 
 def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz):
@@ -646,7 +646,7 @@ def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz):
     return pix
 
 lib.ctoast_healpix_pixels_zphi2ring.restype = None
-lib.ctoast_healpix_pixels_zphi2ring.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_zphi2ring.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
 
 def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz):
@@ -655,7 +655,7 @@ def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz):
     return pix
 
 lib.ctoast_healpix_pixels_ang2nest.restype = None
-lib.ctoast_healpix_pixels_ang2nest.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_ang2nest.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npf64, npf64, npi64 ]
 
 def healpix_pixels_ang2nest(hpix, n, theta, phi):
@@ -664,7 +664,7 @@ def healpix_pixels_ang2nest(hpix, n, theta, phi):
     return pix
 
 lib.ctoast_healpix_pixels_ang2ring.restype = None
-lib.ctoast_healpix_pixels_ang2ring.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_ang2ring.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npf64, npf64, npi64 ]
 
 def healpix_pixels_ang2ring(hpix, n, theta, phi):
@@ -673,7 +673,7 @@ def healpix_pixels_ang2ring(hpix, n, theta, phi):
     return pix
 
 lib.ctoast_healpix_pixels_vec2nest.restype = None
-lib.ctoast_healpix_pixels_vec2nest.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_vec2nest.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npi64 ]
 
 def healpix_pixels_vec2nest(hpix, n, vec):
@@ -682,7 +682,7 @@ def healpix_pixels_vec2nest(hpix, n, vec):
     return pix
 
 lib.ctoast_healpix_pixels_vec2ring.restype = None
-lib.ctoast_healpix_pixels_vec2ring.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_vec2ring.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npf64, npi64 ]
 
 def healpix_pixels_vec2ring(hpix, n, vec):
@@ -691,7 +691,7 @@ def healpix_pixels_vec2ring(hpix, n, vec):
     return pix
 
 lib.ctoast_healpix_pixels_ring2nest.restype = None
-lib.ctoast_healpix_pixels_ring2nest.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_ring2nest.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npi64, npi64 ]
 
 def healpix_pixels_ring2nest(hpix, n, ringpix):
@@ -700,7 +700,7 @@ def healpix_pixels_ring2nest(hpix, n, ringpix):
     return nestpix
 
 lib.ctoast_healpix_pixels_nest2ring.restype = None
-lib.ctoast_healpix_pixels_nest2ring.argtypes = [ ct.POINTER(cHealpix), 
+lib.ctoast_healpix_pixels_nest2ring.argtypes = [ ct.POINTER(cHealpix),
     ct.c_longlong, npi64, npi64 ]
 
 def healpix_pixels_nest2ring(hpix, n, nestpix):
@@ -824,9 +824,36 @@ def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
 #  TOD sublibrary
 #--------------------------------------
 
+lib.ctoast_filter_polyfilter.restype = None
+lib.ctoast_filter_polyfilter.argtypes = [
+    ct.c_long, ct.POINTER(ct.POINTER(ct.c_double)), npu8,
+    ct.c_size_t, ct.c_size_t, npi64, npi64, ct.c_size_t]
+
+def filter_polyfilter(order, signals, flags, starts, stops):
+
+    nsignal = len(signals)
+    n = len(signals[0])
+    for signal in signals:
+        if not signal.flags['C']:
+            raise RuntimeError('signal must be in C_CONTIGUOUS memory')
+        if len(signal) != n:
+            raise RuntimeError(
+                'filter_polyfilter: all signals must be of same length')
+    csignals = [npc.as_ctypes(x) for x in signals]
+    psignals = (ct.POINTER(ct.c_double) * nsignal)(*csignals)
+
+    nscan = len(starts)
+    if len(stops) != nscan:
+        raise RuntimeError('lengths of starts and stops do not match')
+
+    lib.ctoast_filter_polyfilter(
+        order, psignals, flags, n, nsignal, starts, stops, nscan)
+
+    return
+
 lib.ctoast_pointing_healpix_matrix.restype = None
 lib.ctoast_pointing_healpix_matrix.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_double, ct.c_double, ct.c_char_p, ct.c_ulong, npf64, npf64, npu8, npi64, 
+    ct.c_double, ct.c_double, ct.c_char_p, ct.c_ulong, npf64, npf64, npu8, npi64,
     npf64 ]
 
 def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
@@ -873,8 +900,8 @@ def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
             raise RuntimeError("flags array has wrong length")
         cflags = np.require(flags, requirements=["C"])
 
-    lib.ctoast_pointing_healpix_matrix(hpix, inest, eps, cal, 
-        ct.c_char_p(mode.encode('utf-8')), n, cpdata.reshape(-1), chwpang, 
+    lib.ctoast_pointing_healpix_matrix(hpix, inest, eps, cal,
+        ct.c_char_p(mode.encode('utf-8')), n, cpdata.reshape(-1), chwpang,
         cflags, pixels, weights.reshape(-1))
 
     return
@@ -885,7 +912,7 @@ def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
 #--------------------------------------
 
 lib.ctoast_fod_autosums.restype = None
-lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong, npf64, npi8, 
+lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong, npf64, npi8,
     ct.c_longlong, npf64, npi64 ]
 
 def fod_autosums(x, good, lagmax):
@@ -901,58 +928,58 @@ def fod_autosums(x, good, lagmax):
 #--------------------------------------
 
 lib.ctoast_cov_accumulate_diagonal.restype = None
-lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong, 
-    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, npf64, 
+lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, npf64,
     npf64, npi64, npf64 ]
 
-def cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+def cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
     weights, scale, signal, zdata, hits, invnpp):
-    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, 
-        indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1), 
+    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap,
+        indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1),
         hits.reshape(-1), invnpp.reshape(-1))
     return
 
 lib.ctoast_cov_accumulate_diagonal_hits.restype = None
-lib.ctoast_cov_accumulate_diagonal_hits.argtypes = [ ct.c_longlong, 
+lib.ctoast_cov_accumulate_diagonal_hits.argtypes = [ ct.c_longlong,
     ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npi64 ]
 
-def cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp, indx_submap, 
+def cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp, indx_submap,
     indx_pix, hits):
     lib.ctoast_cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp,
         indx_submap, indx_pix, hits.reshape(-1))
     return
 
 lib.ctoast_cov_accumulate_diagonal_invnpp.restype = None
-lib.ctoast_cov_accumulate_diagonal_invnpp.argtypes = [ ct.c_longlong, 
-    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, 
+lib.ctoast_cov_accumulate_diagonal_invnpp.argtypes = [ ct.c_longlong,
+    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npf64,
     ct.c_double, npi64, npf64 ]
 
-def cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp, indx_submap, 
+def cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp, indx_submap,
     indx_pix, weights, scale, hits, invnpp):
     lib.ctoast_cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp,
-        indx_submap, indx_pix, weights.reshape(-1), scale, hits.reshape(-1), 
+        indx_submap, indx_pix, weights.reshape(-1), scale, hits.reshape(-1),
         invnpp.reshape(-1))
     return
 
 lib.ctoast_cov_accumulate_zmap.restype = None
-lib.ctoast_cov_accumulate_zmap.argtypes = [ ct.c_longlong, ct.c_longlong, 
-    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, 
+lib.ctoast_cov_accumulate_zmap.argtypes = [ ct.c_longlong, ct.c_longlong,
+    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double,
     npf64, npf64 ]
 
-def cov_accumulate_zmap(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, 
+def cov_accumulate_zmap(nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
     weights, scale, signal, zdata):
     lib.ctoast_cov_accumulate_zmap(nsub, subsize, nnz, nsamp,
         indx_submap, indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1))
     return
 
 lib.ctoast_cov_eigendecompose_diagonal.restype = None
-lib.ctoast_cov_eigendecompose_diagonal.argtypes = [ ct.c_longlong, 
-    ct.c_longlong, ct.c_longlong, npf64, npf64, ct.c_double, ct.c_int, 
+lib.ctoast_cov_eigendecompose_diagonal.argtypes = [ ct.c_longlong,
+    ct.c_longlong, ct.c_longlong, npf64, npf64, ct.c_double, ct.c_int,
     ct.c_int ]
 
-def cov_eigendecompose_diagonal(nsub, subsize, nnz, data, cond, threshold, 
+def cov_eigendecompose_diagonal(nsub, subsize, nnz, data, cond, threshold,
     do_invert, do_rcond):
-    lib.ctoast_cov_eigendecompose_diagonal(nsub, subsize, nnz, 
+    lib.ctoast_cov_eigendecompose_diagonal(nsub, subsize, nnz,
         data.reshape(-1), cond.reshape(-1), threshold, do_invert, do_rcond)
     return
 
@@ -961,7 +988,7 @@ lib.ctoast_cov_multiply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
     ct.c_longlong, npf64, npf64 ]
 
 def cov_multiply_diagonal(nsub, subsize, nnz, data1, data2):
-    lib.ctoast_cov_multiply_diagonal(nsub, subsize, nnz, 
+    lib.ctoast_cov_multiply_diagonal(nsub, subsize, nnz,
         data1.reshape(-1), data2.reshape(-1))
     return
 
@@ -970,7 +997,7 @@ lib.ctoast_cov_apply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
     ct.c_longlong, npf64, npf64 ]
 
 def cov_apply_diagonal(nsub, subsize, nnz, mat, vec):
-    lib.ctoast_cov_apply_diagonal(nsub, subsize, nnz, mat.reshape(-1), 
+    lib.ctoast_cov_apply_diagonal(nsub, subsize, nnz, mat.reshape(-1),
         vec.reshape(-1))
     return
 
@@ -990,4 +1017,3 @@ def ctest_runner ():
         argv[i] = ct.create_string_buffer(enc_arg)
     ret = lib.ctoast_test_runner(argc, argv)
     return ret
-

@@ -131,7 +131,7 @@ class OpPolyFilterTest(MPITestCase):
         )
 
         intervals = []
-        interval_len = 100
+        interval_len = 1000
         for istart in range(0, self.totsamp, interval_len):
             istop = min(istart + interval_len, self.totsamp)
             intervals.append(Interval(
@@ -180,16 +180,22 @@ class OpPolyFilterTest(MPITestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
 
-        # Ensure all timestreams are zeroed out by the filter
+        # Ensure all timestreams are zeroed out by the filter.
+        # The polynomial basis used in populating the TOD is different
+        # than the one filter uses and the basis functions are not
+        # strictly orthogonal on a sparse grid so we expect a low level
+        # residual.
 
         for det in tod.local_dets:
             cachename = 'noise_{}'.format(det)
             y = tod.cache.reference(cachename)
             rms = np.std(y)
             old = old_rms[det]
-            if rms / old > 1e-10 and 'apply' in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
+            if rms / old > 1e-6 and 'apply' in det:
+                raise RuntimeError('det {} old rms = {}, new rms = {}'
+                                   ''.format(det, old, rms))
             if rms / old < 1e-1 and 'apply' not in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
+                raise RuntimeError('det {} old rms = {}, new rms = {}'
+                                   ''.format(det, old, rms))
 
         self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))

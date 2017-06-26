@@ -232,6 +232,10 @@ void ctoast_pointing_healpix_matrix ( ctoast_healpix_pixels * hpix, int nest,
     double const * hwpang, uint8_t const * flags, int64_t * pixels,
     double * weights );
 
+void ctoast_filter_polyfilter ( const long order, double **signals,
+    uint8_t *flags, const size_t n, const size_t nsignal, const long *starts,
+    const long *stops, const size_t nscan );
+
 //--------------------------------------
 // FOD sub-library
 //--------------------------------------

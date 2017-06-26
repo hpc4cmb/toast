@@ -1,5 +1,5 @@
 
-SUBDIRS = 
+SUBDIRS =
 
 # Initialize compile and linking flags
 
@@ -13,7 +13,7 @@ AM_CXXFLAGS =
 
 AM_LDFLAGS =
 
-AM_LIBS = 
+AM_LIBS =
 
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
@@ -32,6 +32,5 @@ toast/pointing.hpp
 
 libtoast_tod_la_SOURCES = \
 toast_sim_noise.cpp \
-toast_pointing.cpp
-
-
+toast_pointing.cpp \
+toast_filter.cpp

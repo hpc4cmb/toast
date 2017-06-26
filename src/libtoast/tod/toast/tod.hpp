@@ -18,6 +18,7 @@ namespace toast {
 
 #include <toast/sim_noise.hpp>
 #include <toast/pointing.hpp>
+#include <toast/filter.hpp>
 
 
 #endif

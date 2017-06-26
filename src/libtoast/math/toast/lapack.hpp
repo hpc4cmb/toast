@@ -18,7 +18,11 @@ namespace toast { namespace lapack {
 
     void symv ( char * UPLO, int * N, double * ALPHA, double * A, int * LDA, double * X, int * INCX, double * BETA, double * Y, int * INCY );
 
+    void trmv ( char * UPLO, char * TRANS, char * DIAG, int * N, double * A, int * LDA, double * X, int * INCX );
+
     void symm ( char * SIDE, char * UPLO, int * M, int * N, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC );
+
+    void syrk ( char * UPLO, char * TRANS, int * N, int * K, double * ALPHA, double * A, int * LDA, double * BETA, double * C, int * LDC );
 
     void potrf ( char * UPLO, int * N, double * A, int * LDA, int * INFO );
 

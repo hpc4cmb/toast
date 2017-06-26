@@ -10,6 +10,7 @@ from ..op import Operator
 from ..dist import Comm, Data
 from .tod import TOD
 
+from ..ctoast import filter_polyfilter
 
 class OpPolyFilter(Operator):
     """
@@ -122,6 +123,9 @@ class OpPolyFilter(Operator):
 
                 # Iterate over each interval
 
+                local_starts = []
+                local_stops = []
+
                 for ival in intervals:
                     if ival.last >= tod_first and \
                        ival.first < tod_first + tod_nsamp:
@@ -133,25 +137,19 @@ class OpPolyFilter(Operator):
                             local_start = 0
                         if local_stop > tod_nsamp:
                             local_stop = tod_nsamp
-                        ind = slice(local_start, local_stop)
-                        n = local_stop - local_start
-                        sig = ref[ind]
-                        good = np.logical_and(
-                            common_ref[ind] & self._common_flag_mask == 0,
-                            flag_ref[ind] & self._flag_mask == 0)
-                        # The X-coordinate should be symmetric
-                        x = np.arange(n) * 10 / n - 5
-                        try:
-                            # Subtracting the mean improves the
-                            # condition number
-                            sig -= np.mean(sig[good])
-                            # Fit and subtract the polynomial
-                            p = np.polyfit(x[good], sig[good], self._order)
-                            sig -= np.polyval(p, x)
-                        except:
-                            # Polynomial fitting failed, flag the
-                            # failed region.
-                            flag_ref[ind] |= self._poly_flag_mask
+                        local_starts.append(local_start)
+                        local_stops.append(local_stop)
+
+                local_starts = np.array(local_starts)
+                local_stops = np.array(local_stops)
+
+                flg = common_ref & self._common_flag_mask
+                flg |= flag_ref & self._flag_mask
+
+                filter_polyfilter(
+                    self._order, [ref], flg, local_starts, local_stops)
+
+                flag_ref[flg != 0] |= self._poly_flag_mask
 
                 del ref
                 del flag_ref

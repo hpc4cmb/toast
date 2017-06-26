@@ -47,12 +47,32 @@ void toast::lapack::symv ( char * UPLO, int * N, double * ALPHA, double * A, int
 }
 
 
+#define dtrmv F77_FUNC( dtrmv )
+
+extern "C" void dtrmv ( char * UPLO, char * TRANS, char * DIAG, int * N, double * A, int * LDA, double * X, int * INCX );
+
+void toast::lapack::trmv ( char * UPLO, char * TRANS, char * DIAG, int * N, double * A, int * LDA, double * X, int * INCX ) {
+  dtrmv ( UPLO, TRANS, DIAG, N, A, LDA, X, INCX );
+  return;
+}
+
+
 #define dsymm F77_FUNC( dsymm )
 
 extern "C" void dsymm ( char * SIDE, char * UPLO, int * M, int * N, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC );
 
 void toast::lapack::symm ( char * SIDE, char * UPLO, int * M, int * N, double * ALPHA, double * A, int * LDA, double * B, int * LDB, double * BETA, double * C, int * LDC ) {
   dsymm ( SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC );
+  return;
+}
+
+
+#define dsyrk F77_FUNC( dsyrk )
+
+extern "C" void dsyrk ( char * UPLO, char * TRANS, int * N, int * K, double * ALPHA, double * A, int * LDA, double * BETA, double * C, int * LDC );
+
+void toast::lapack::syrk ( char * UPLO, char * TRANS, int * N, int * K, double * ALPHA, double * A, int * LDA, double * BETA, double * C, int * LDC ) {
+  dsyrk ( UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC );
   return;
 }
 
