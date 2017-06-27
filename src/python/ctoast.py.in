@@ -843,9 +843,6 @@ def sim_map_scan_map(submap, weights, subpix, local_map, tod):
             'length of weights does not match length of tod: {} {}'
             ''.format(weights.shape[0], nsamp))
 
-    print('type(map) = {} shape(map) = {}'.format(
-        local_map.dtype, np.shape(local_map)), flush=True) # DEBUG
-
     if local_map.dtype == np.float32:
         lib.ctoast_sim_map_scan_map32(
             submap, subnpix, weights.reshape(-1), nmap, subpix,
