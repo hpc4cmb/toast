@@ -4,14 +4,12 @@
 
 
 import numpy as np
-
 import healpy as hp
 
 from .. import qarray as qa
-
 from .tod import TOD
-
 from ..op import Operator
+from ..ctoast import sim_map_scan_map
 
 
 class OpSimGradient(Operator):
@@ -31,7 +29,8 @@ class OpSimGradient(Operator):
         nest (bool): whether to use NESTED ordering.
     """
 
-    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False, flag_mask=255, common_flag_mask=255):
+    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False,
+                 flag_mask=255, common_flag_mask=255):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -170,14 +169,16 @@ class OpSimScan(Operator):
                 pixels = tod.cache.reference(pixelsname)
                 weights = tod.cache.reference(weightsname)
 
-                nnz = weights.shape[1]
+                nsamp, nnz = weights.shape
 
                 sm, lpix = self._map.global_to_local(pixels)
 
-                f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
-                     if (lpix[x] >= 0) else 0
-                     for x in range(tod.local_samples[1]))
-                maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
+                #f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
+                #     if (lpix[x] >= 0) else 0
+                #     for x in range(tod.local_samples[1]))
+                #maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
+                maptod = np.zeros(nsamp)
+                sim_map_scan_map(sm, weights, lpix, self._map.data, maptod)
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
