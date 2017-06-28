@@ -16,9 +16,10 @@ from scipy.constants import degree
 import toast.tod as tt
 
 parser = argparse.ArgumentParser(
-    description="Simulate fake hexagonal focalplane." )
+    description="Simulate fake hexagonal focalplane.",
+    fromfile_prefix_chars='@')
 
-parser.add_argument( "--minpix", required=False, type=int, default=100, 
+parser.add_argument( "--minpix", required=False, type=int, default=100,
                      help="minimum number of pixels to use" )
 
 parser.add_argument( "--out", required=False, default="fp_fake",
