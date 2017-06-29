@@ -429,6 +429,23 @@ def main():
     group_firstobs = groupdist[comm.group][0]
     group_numobs = groupdist[comm.group][1]
 
+    # Create the noise model used by all observations
+
+    fmin = {}
+    fknee = {}
+    alpha = {}
+    NET = {}
+    rates = {}
+    for d in detectors:
+        rates[d] = args.samplerate
+        fmin[d] = fp[d]['fmin']
+        fknee[d] = fp[d]['fknee']
+        alpha[d] = fp[d]['alpha']
+        NET[d] = fp[d]['NET']
+
+    noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
+                             fknee=fknee, alpha=alpha, NET=NET)
+
     for ices in range(group_firstobs, group_firstobs + group_numobs):
         ces = all_ces[ices]
 
@@ -463,23 +480,6 @@ def main():
         except RuntimeError as e:
             print('Failed to create the CES scan: {}'.format(e), flush=args.flush)
             return
-
-        # Create the noise model for this observation
-
-        fmin = {}
-        fknee = {}
-        alpha = {}
-        NET = {}
-        rates = {}
-        for d in detectors:
-            rates[d] = args.samplerate
-            fmin[d] = fp[d]['fmin']
-            fknee[d] = fp[d]['fknee']
-            alpha[d] = fp[d]['alpha']
-            NET[d] = fp[d]['NET']
-
-        noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
-                                 fknee=fknee, alpha=alpha, NET=NET)
 
         # Create the (single) observation
 

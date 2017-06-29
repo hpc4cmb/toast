@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -57,28 +57,32 @@ class AnalyticNoise(Noise):
         freqs = {}
         psds = {}
 
+        last_nyquist = None
+
         for d in self._detectors:
             if (self._fknee[d] > 0.0) and (self._fknee[d] < self._fmin[d]):
                 raise RuntimeError("If knee frequency is non-zero, it must be greater than f_min")
 
             nyquist = self._rate[d] / 2.0
+            if nyquist != last_nyquist:
+                tempfreq = []
 
-            tempfreq = []
+                # this starting point corresponds to a high-pass of
+                # 30 years, so should be low enough for any interpolation!
+                cur = 1.0e-9
 
-            # this starting point corresponds to a high-pass of
-            # 30 years, so should be low enough for any interpolation!
-            cur = 1.0e-9
+                # this value seems to provide a good density of points
+                # in log space.
+                while cur < nyquist:
+                    tempfreq.append(cur)
+                    cur *= 1.4
 
-            # this value seems to provide a good density of points
-            # in log space.
-            while cur < nyquist:
-                tempfreq.append(cur)
-                cur *= 1.4
+                # put a final point at Nyquist
+                tempfreq.append(nyquist)
+                tempfreq = np.array(tempfreq, dtype=np.float64)
+                last_nyquist = nyquist
 
-            # put a final point at Nyquist
-            tempfreq.append(nyquist)
-
-            freqs[d] = np.array(tempfreq, dtype=np.float64)
+            freqs[d] = tempfreq
 
             if self._fknee[d] > 0.0:
                 ktemp = np.power(self._fknee[d], self._alpha[d])
@@ -117,4 +121,3 @@ class AnalyticNoise(Noise):
         (float): the NET.
         """
         return self._NET[det]
-
