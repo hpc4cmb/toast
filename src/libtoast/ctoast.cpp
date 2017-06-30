@@ -683,10 +683,28 @@ void ctoast_filter_polyfilter (
     toast::filter::polyfilter ( order, signals, flags, n, nsignal,
                                 starts, stops, nscan );
 
-    return;    
+    return;
 }
 
+void ctoast_sim_map_scan_map32 (
+    long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
+    float *map, double *tod, size_t nsamp ) {
 
+    toast::sim_map::scan_map ( submap, subnpix, weights, nmap, subpix, map,
+                               tod, nsamp );
+
+    return;
+}
+
+void ctoast_sim_map_scan_map64 (
+    long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
+    double *map, double *tod, size_t nsamp ) {
+
+    toast::sim_map::scan_map ( submap, subnpix, weights, nmap, subpix, map,
+                               tod, nsamp );
+
+    return;
+}
 
 //--------------------------------------
 // FOD sub-library

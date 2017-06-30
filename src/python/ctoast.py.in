@@ -42,6 +42,7 @@ def wrapped_ndptr(*args, **kwargs):
 npu8 = wrapped_ndptr(dtype=np.uint8, ndim=1, flags="C_CONTIGUOUS")
 npi8 = wrapped_ndptr(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS")
 npi32 = wrapped_ndptr(dtype=np.int32, ndim=1, flags="C_CONTIGUOUS")
+npf32 = wrapped_ndptr(dtype=np.float32, ndim=1, flags="C_CONTIGUOUS")
 npi64 = wrapped_ndptr(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS")
 npu64 = wrapped_ndptr(dtype=np.uint64, ndim=1, flags="C_CONTIGUOUS")
 npf64 = wrapped_ndptr(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
@@ -823,6 +824,39 @@ def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
 #--------------------------------------
 #  TOD sublibrary
 #--------------------------------------
+
+lib.ctoast_sim_map_scan_map32.restype = None
+lib.ctoast_sim_map_scan_map32.argtypes = [
+    npi64, ct.c_long, npf64, ct.c_size_t, npi64, npf32, npf64, ct.c_size_t]
+
+lib.ctoast_sim_map_scan_map64.restype = None
+lib.ctoast_sim_map_scan_map64.argtypes = [
+    npi64, ct.c_long, npf64, ct.c_size_t, npi64, npf64, npf64, ct.c_size_t]
+
+def sim_map_scan_map(submap, weights, subpix, local_map, tod):
+
+    nsubmap, subnpix, nmap = np.shape(local_map)
+    nsamp = len(tod)
+
+    if weights.shape[0] != nsamp:
+        raise RuntimeError(
+            'length of weights does not match length of tod: {} {}'
+            ''.format(weights.shape[0], nsamp))
+
+    if local_map.dtype == np.float32:
+        lib.ctoast_sim_map_scan_map32(
+            submap, subnpix, weights.reshape(-1), nmap, subpix,
+            local_map.reshape(-1), tod, nsamp)
+    elif local_map.dtype == np.float64:
+        lib.ctoast_sim_map_scan_map64(
+            submap, subnpix, weights.reshape(-1), nmap, subpix,
+            local_map.reshape(-1), tod, nsamp)
+    else:
+        raise RuntimeError(
+            'scan_map: Unsupported map data type: {}'.format(local_map.dtype))
+
+    return
+
 
 lib.ctoast_filter_polyfilter.restype = None
 lib.ctoast_filter_polyfilter.argtypes = [

@@ -236,6 +236,15 @@ void ctoast_filter_polyfilter ( const long order, double **signals,
     uint8_t *flags, const size_t n, const size_t nsignal, const long *starts,
     const long *stops, const size_t nscan );
 
+void ctoast_sim_map_scan_map32 (
+    long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
+    float *map, double *tod, size_t nsamp );
+
+void ctoast_sim_map_scan_map64 (
+    long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
+    double *map, double *tod, size_t nsamp );
+
+
 //--------------------------------------
 // FOD sub-library
 //--------------------------------------
