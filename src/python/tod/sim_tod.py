@@ -1067,11 +1067,11 @@ class TODGround(TOD):
         detquat = self._fp[detector]
         if azel:
             if self._boresight_azel is None:
-                raise runtimeError('Boresight azel pointing was purged.')
+                raise RuntimeError('Boresight azel pointing was purged.')
             return qa.mult(self._boresight_azel[start:start+n], detquat)
         else:
             if self._boresight is None:
-                raise runtimeError('Boresight radec pointing was purged.')
+                raise RuntimeError('Boresight radec pointing was purged.')
             return qa.mult(self._boresight[start:start+n], detquat)
 
     def read_boresight_az(self, local_start=0, n=0):
