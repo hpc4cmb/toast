@@ -144,6 +144,9 @@ class Cache(object):
             shape (tuple): a tuple containing the shape of the buffer.
         """
 
+        if name is None:
+            raise ValueError('Cache name cannot be None')
+
         if self.exists(name):
             raise RuntimeError("Data buffer or alias {} already exists".format(name))
 
@@ -173,6 +176,9 @@ class Cache(object):
             replace (bool): Overwrite any existing keys
         """
 
+        if name is None:
+            raise ValueError('Cache name cannot be None')
+
         if self.exists(name) and replace:
             ref = self.reference(name)
             if data is ref:
@@ -199,6 +205,9 @@ class Cache(object):
             alias (str): alias to create
             name (str): an existing key in the cache
         """
+
+        if alias is None or name is None:
+            raise ValueError('Cache name or alias cannot be None')
 
         if name not in self._refs.keys():
             raise RuntimeError("Data buffer {} does not exist for alias {}".format(name, alias))
