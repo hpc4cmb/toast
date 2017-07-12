@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -79,6 +79,39 @@ class CacheTest(MPITestCase):
         self.print_in_turns("cache create test took {:.3f} s".format(elapsed))
 
 
+    def test_create_none(self):
+        start = MPI.Wtime()
+
+        try:
+            ref = self.cache.create(None, np.float, (1,10))
+            raise RuntimeError('Creating object with None key succeeded')
+        except ValueError:
+            pass
+
+        self.cache.clear()
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns(
+            "cache create none test took {:.3f} s".format(elapsed))
+
+
+    def test_put_none(self):
+        start = MPI.Wtime()
+
+        try:
+            ref = self.cache.put(None, np.float, np.arange(10))
+            raise RuntimeError('Putting an object with None key succeeded')
+        except ValueError:
+            pass
+
+        self.cache.clear()
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("cache put none test took {:.3f} s".format(elapsed))
+
+
     def test_clear(self):
         start = MPI.Wtime()
 
@@ -123,4 +156,3 @@ class CacheTest(MPITestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("cache alias test took {:.3f} s".format(elapsed))
-
