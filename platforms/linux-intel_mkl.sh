@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Pass extra configure options to this script, including
+# things like --prefix, --with-elemental, etc.
+
 OPTS="$@"
 
 export CC=mpiicc
@@ -14,5 +17,4 @@ export LDFLAGS="-lpthread -liomp5"
 
 ./configure ${OPTS} \
     --with-math="-limf" \
-    --with-mkl="${MKLROOT}/lib/intel64" \
-    --with-elemental="${HOME}/software/intel/idpdev"
+    --with-mkl="${MKLROOT}/lib/intel64"

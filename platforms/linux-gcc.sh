@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Pass extra configure options to this script, including
+# things like --prefix, --with-elemental, etc.
+
 OPTS="$@"
 
 export CC=mpicc
@@ -12,6 +15,4 @@ export OPENMP_CFLAGS="-fopenmp"
 export OPENMP_CXXFLAGS="-fopenmp"
 export LDFLAGS="-lpthread"
 
-./configure ${OPTS} \
-    --with-elemental="${HOME}/software/dev"
-
+./configure ${OPTS} 
