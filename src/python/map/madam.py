@@ -473,7 +473,8 @@ class OpMadam(Operator):
                         self._purge_tod or self._name == self._name_out):
                     tod.cache.clear(pattern=cachename)
 
-                del flags
+                if self._apply_flags:
+                    del flags
                 if self._purge_flags and self._flag_name is not None:
                     tod.cache.clear(pattern=cacheflagname)
 
