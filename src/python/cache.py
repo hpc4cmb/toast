@@ -183,6 +183,8 @@ class Cache(object):
             ref = self.reference(name)
             if data is ref:
                 return ref
+            else:
+                del ref
             # Destroy the existing cache object but first make a copy
             # of the supplied data in case it is a view of a subset
             # of the cache data.
