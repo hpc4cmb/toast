@@ -42,24 +42,24 @@ class Noise(object):
     """
 
     def __init__(self, *, detectors, freqs, psds, mixmatrix=None, indices=None):
-        self.detectors = list(sorted(detectors))
+        self._dets = list(sorted(detectors))
         if mixmatrix is None:
             # Default diagonal mixing matrix
-            self.keys = self.detectors
+            self._keys = self._dets
             self._mixmatrix = None
         else:
             # Assemble the list of keys needed for the specified detectors
             keys = set()
             self._mixmatrix = {}
-            for det in self.detectors:
+            for det in self._dets:
                 self._mixmatrix[det] = {}
                 for key, weight in mixmatrix[det].items():
                     keys.add(key)
                     self._mixmatrix[det][key] = weight
-            self.keys = list(sorted(keys))
+            self._keys = list(sorted(keys))
         if indices is None:
             self._indices = {}
-            for i, key in enumerate(self.keys):
+            for i, key in enumerate(self._keys):
                 self._indices[key] = i
         else:
             self._indices = dict(indices)
@@ -67,7 +67,7 @@ class Noise(object):
         self._psds = {}
         self._rates = {}
 
-        for key in self.keys:
+        for key in self._keys:
             if psds[key].shape[0] != freqs[key].shape[0]:
                 raise ValueError(
                     'PSD length must match the number of frequencies')
@@ -75,6 +75,20 @@ class Noise(object):
             self._psds[key] = np.copy(psds[key])
             # last frequency point should be Nyquist
             self._rates[key] = 2.0 * self._freqs[key][-1]
+
+    @property
+    def detectors(self):
+        """
+        (list): list of strings containing the detector names.
+        """
+        return self._dets
+
+    @property
+    def keys(self):
+        """
+        (list): list of strings containing the PSD names.
+        """
+        return self._keys
 
     def multiply_ntt(self, key, data):
         """Filter the data with noise covariance."""
