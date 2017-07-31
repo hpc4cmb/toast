@@ -1,7 +1,9 @@
 # Copyright (c) 2015 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+
+import collections
 
 import numpy as np
 
@@ -9,7 +11,7 @@ from . import ctoast as ctoast
 
 
 def arraylist_dot(a, b):
-    """Dot product of a lists of arrays, returns a column array"""
+    """Dot product of lists of arrays, returns a column array"""
     if not isinstance(a, np.ndarray):
         a = np.array(a, dtype=np.float64)
     if not isinstance(b, np.ndarray):
@@ -32,9 +34,11 @@ def arraylist_dot(a, b):
         mb = b.shape[1]
 
     if ma != mb:
-        raise RuntimeError("vector elements of both arrays must have the same length.")
-    if (na > 1) and (nb > 1) and (na != nb):
-        raise RuntimeError("vector arrays must have length one or matching lengths.")
+        raise RuntimeError("vector elements of both arrays must "
+                           "have the same length.")
+    if na > 1 and nb > 1 and na != nb:
+        raise RuntimeError("vector arrays must have length one or "
+                           "matching lengths.")
     n = np.max([na, nb])
 
     aa = a
@@ -44,7 +48,9 @@ def arraylist_dot(a, b):
     if nb != n:
         bb = np.tile(b, n)
 
-    return ctoast.qarray_list_dot(n, ma, ma, aa.flatten().astype(np.float64, copy=False), bb.flatten().astype(np.float64, copy=False))
+    return ctoast.qarray_list_dot(
+        n, ma, ma, aa.flatten().astype(np.float64, copy=False),
+        bb.flatten().astype(np.float64, copy=False))
 
 
 def inv(q):
@@ -57,10 +63,9 @@ def inv(q):
     else:
         nq = q.shape[0]
     ret = ctoast.qarray_inv(nq, q.flatten().astype(np.float64, copy=False))
-    if nq == 1:
-        return ret
-    else:
-        return ret.reshape(q.shape)
+    if q.ndim != 1:
+        ret = ret.reshape((-1, 4))
+    return ret
 
 
 def amplitude(v):
@@ -75,11 +80,11 @@ def amplitude(v):
     else:
         nv = v.shape[0]
         nm = v.shape[1]
-    ret = ctoast.qarray_amplitude(nv, nm, nm, v.flatten().astype(np.float64, copy=False))
-    if nv == 1:
-        return ret
-    else:
-        return ret.reshape(v.shape)
+    ret = ctoast.qarray_amplitude(
+        nv, nm, nm, v.flatten().astype(np.float64, copy=False))
+    if v.ndim == 1:
+        ret = ret[0]
+    return ret
 
 
 def norm(q):
@@ -91,16 +96,16 @@ def norm(q):
         nq = 1
     else:
         nq = q.shape[0]
-    ret = ctoast.qarray_normalize(nq, 4, 4, q.flatten().astype(np.float64, copy=False))
-    if nq == 1:
-        return ret
-    else:
-        return ret.reshape(q.shape)
+    ret = ctoast.qarray_normalize(
+        nq, 4, 4, q.flatten().astype(np.float64, copy=False))
+    if q.ndim != 1:
+        ret = ret.reshape((-1, 4))
+    return ret
 
 
 def rotate(q, v):
     """
-    Use a quaternion or array of quaternions (q) to rotate a vector or 
+    Use a quaternion or array of quaternions (q) to rotate a vector or
     array of vectors (v).
     """
     if not isinstance(q, np.ndarray):
@@ -118,17 +123,16 @@ def rotate(q, v):
     else:
         nv = v.shape[0]
 
-    if (nq > 1) and (nv > 1) and (nq != nv):
-        raise RuntimeError("quaternion and vector arrays must have length one or matching lengths.")
+    if nq > 1 and nv > 1 and nq != nv:
+        raise RuntimeError("quaternion and vector arrays must have length "
+                           "one or matching lengths.")
 
-    ret = ctoast.qarray_rotate(nq, q.flatten().astype(np.float64, copy=False), nv, v.flatten().astype(np.float64, copy=False))
-    if (nq == 1) and (nv == 1):
-        return ret
-    else:
-        n = nq
-        if nv > n:
-            n = nv
-        return ret.reshape((n, 3))
+    ret = ctoast.qarray_rotate(
+        nq, q.flatten().astype(np.float64, copy=False),
+        nv, v.flatten().astype(np.float64, copy=False))
+    if q.ndim != 1 or v.ndim != 1:
+        ret = ret.reshape((-1, 3))
+    return ret
 
 
 def mult(p, q):
@@ -150,33 +154,41 @@ def mult(p, q):
     else:
         pn = p.shape[0]
 
-    if (nq > 1) and (pn > 1) and (nq != pn):
-        raise RuntimeError("quaternion arrays must have length one or matching lengths.")
+    if nq > 1 and pn > 1 and nq != pn:
+        raise RuntimeError(
+            "quaternion arrays must have length one or matching lengths.")
 
-    ret = ctoast.qarray_mult(pn, p.flatten().astype(np.float64, copy=False), nq, q.flatten().astype(np.float64, copy=False))
-    if (pn == 1) and (nq == 1):
-        return ret
-    else:
-        n = nq
-        if pn > n:
-            n = pn
-        return ret.reshape((n,4))
+    ret = ctoast.qarray_mult(
+        pn, p.flatten().astype(np.float64, copy=False),
+        nq, q.flatten().astype(np.float64, copy=False))
+
+    if p.ndim != 1 or q.ndim != 1:
+        ret = ret.reshape((-1, 4))
+    return ret
 
 
 def slerp(targettime, time, q):
     """Slerp, q quaternion array interpolated from time to targettime"""
-    if not isinstance(targettime, np.ndarray):
-        targettime = np.array(targettime, dtype=np.float64)
+    ttime = targettime
+    if not isinstance(ttime, np.ndarray):
+        ttime = np.array(ttime, dtype=np.float64, ndmin=1)
     if not isinstance(time, np.ndarray):
         time = np.array(time, dtype=np.float64)
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     n_time = len(time)
-    n_targettime = len(targettime)
+    n_targettime = len(ttime)
     nq = len(q.flatten())
     if nq != 4*n_time:
-        raise RuntimeError("input quaternion and time arrays have different numbers of elements")
-    return ctoast.qarray_slerp(n_time, n_targettime, time, targettime, q.flatten().astype(np.float64, copy=False)).reshape((n_targettime, 4))
+        raise RuntimeError("input quaternion and time arrays have different "
+                           "numbers of elements")
+    ret = ctoast.qarray_slerp(
+        n_time, n_targettime, time, ttime,
+        q.flatten().astype(np.float64, copy=False))
+
+    if isinstance(targettime, collections.Iterable):
+        ret = ret.reshape((-1, 4))
+    return ret
 
 
 def exp(q):
@@ -189,10 +201,10 @@ def exp(q):
     else:
         nq = q.shape[0]
     ret = ctoast.qarray_exp(nq, q.flatten().astype(np.float64, copy=False))
-    if nq == 1:
+    if q.ndim == 1:
         return ret
     else:
-        return ret.reshape(q.shape)
+        return ret.reshape((-1, 4))
 
 
 def ln(q):
@@ -205,10 +217,9 @@ def ln(q):
     else:
         nq = q.shape[0]
     ret = ctoast.qarray_ln(nq, q.flatten().astype(np.float64, copy=False))
-    if nq == 1:
-        return ret
-    else:
-        return ret.reshape(q.shape)
+    if q.ndim != 1:
+        ret = ret.reshape((-1, 4))
+    return ret
 
 
 def pow(q, p):
@@ -226,8 +237,9 @@ def pow(q, p):
     else:
         pn = 1
 
-    if (nq > 1) and (pn > 1) and (nq != pn):
-        raise RuntimeError("quaternion array and power must have length one or matching lengths.")
+    if nq > 1 and pn > 1 and nq != pn:
+        raise RuntimeError("quaternion array and power must have length "
+                           "one or matching lengths.")
     n = np.max([nq, pn])
 
     pp = None
@@ -243,13 +255,14 @@ def pow(q, p):
     if nq != n:
         qq = np.tile(q, n)
 
-    ret = ctoast.qarray_pow(n, pp.flatten().astype(np.float64, copy=False), qq.flatten().astype(np.float64, copy=False))
-    if n == 1:
-        return ret
-    else:
-        return ret.reshape((n, 4))
+    ret = ctoast.qarray_pow(n, pp.flatten().astype(np.float64, copy=False),
+                            qq.flatten().astype(np.float64, copy=False))
+    if q.ndim != 1 or isinstance(p, collections.Iterable):
+        ret = ret.reshape((-1, 4))
 
-    
+    return ret
+
+
 def rotation(axis, angle):
     """Rotation quaternions of angles [rad] around axes [already normalized]"""
     if not isinstance(axis, np.ndarray):
@@ -265,8 +278,9 @@ def rotation(axis, angle):
     else:
         nang = 1
 
-    if (nax > 1) and (nang > 1) and (nax != nang):
-        raise RuntimeError("axis and angle arrays must have length one or matching lengths.")
+    if nax > 1 and nang > 1 and nax != nang:
+        raise RuntimeError(
+            "axis and angle arrays must have length one or matching lengths.")
     n = np.max([nax, nang])
 
     ax = axis
@@ -280,13 +294,16 @@ def rotation(axis, angle):
         else:
             ang = angle
     else:
-        ang = np.tile(angle, n) 
+        ang = np.tile(angle, n)
 
-    ret = ctoast.qarray_from_axisangle(n, ax.flatten().astype(np.float64, copy=False), ang.flatten().astype(np.float64, copy=False))
-    if n == 1:
-        return ret
-    else:
-        return ret.reshape((n, 4))
+    ret = ctoast.qarray_from_axisangle(
+        n, ax.flatten().astype(np.float64, copy=False),
+        ang.flatten().astype(np.float64, copy=False))
+
+    if axis.ndim != 1 or isinstance(angle, collections.Iterable):
+        ret = ret.reshape((-1, 4))
+
+    return ret
 
 
 def to_axisangle(q):
@@ -297,24 +314,34 @@ def to_axisangle(q):
         nq = 1
     else:
         nq = q.shape[0]
-    (axis, angle) = ctoast.qarray_to_axisangle(nq, q.flatten().astype(np.float64, copy=False))
-    if nq == 1:
-        return (axis, angle[0])
+    (axis, angle) = ctoast.qarray_to_axisangle(
+        nq, q.flatten().astype(np.float64, copy=False))
+
+    if q.ndim == 1:
+        angle = angle[0]
     else:
-        return (axis.reshape((nq, 3)), angle)
+        axis = axis.reshape((-1, 3))
+
+    return (axis, angle)
 
 
 def to_rotmat(q):
     """Rotation matrix"""
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
-    return ctoast.qarray_to_rotmat(q.flatten().astype(np.float64, copy=False)).reshape((3,3))
-                                
+    if q.ndim != 1:
+        raise ValueError('to_rotmat is not vectorized')
+    return ctoast.qarray_to_rotmat(
+        q.flatten().astype(np.float64, copy=False)).reshape((3, 3))
+
 
 def from_rotmat(rotmat):
     if not isinstance(rotmat, np.ndarray):
         rotmat = np.array(rotmat, dtype=np.float64)
-    return ctoast.qarray_from_rotmat(rotmat.flatten().astype(np.float64, copy=False))
+    if rotmat.ndim != 2:
+        raise ValueError('from_rotmat is not vectorized')
+    return ctoast.qarray_from_rotmat(
+        rotmat.flatten().astype(np.float64, copy=False))
 
 
 def from_vectors(v1, v2):
@@ -322,38 +349,51 @@ def from_vectors(v1, v2):
         v1 = np.array(v1, dtype=np.float64)
     if not isinstance(v2, np.ndarray):
         v2 = np.array(v2, dtype=np.float64)
-    return ctoast.qarray_from_vectors(v1.flatten().astype(np.float64, copy=False), v2.flatten().astype(np.float64, copy=False))
+    if v1.ndim != 1 or v2.ndim != 1:
+        raise ValueError('from_vectors is not vectorized')
+    return ctoast.qarray_from_vectors(
+        v1.flatten().astype(np.float64, copy=False),
+        v2.flatten().astype(np.float64, copy=False))
 
 
 def from_angles(theta, phi, pa, IAU=False):
+    iterable = (isinstance(theta, collections.Iterable) or
+                isinstance(phi, collections.Iterable) or
+                isinstance(pa, collections.Iterable))
+
     if not isinstance(theta, np.ndarray):
-        theta = np.array(theta, dtype=np.float64)
+        theta = np.array(theta, dtype=np.float64, ndmin=1)
     nt = theta.shape[0]
 
     if not isinstance(phi, np.ndarray):
-        phi = np.array(phi, dtype=np.float64)
+        phi = np.array(phi, dtype=np.float64, ndmin=1)
     nph = phi.shape[0]
 
     if not isinstance(pa, np.ndarray):
-        pa = np.array(pa, dtype=np.float64)
+        pa = np.array(pa, dtype=np.float64, ndmin=1)
     npa = pa.shape[0]
 
-    if (nt != nph) or (nt != npa) or (nph != npa):
+    if nt != nph or nt != npa or nph != npa:
         raise RuntimeError("all input angle arrays must have the same length")
 
     q = ctoast.qarray_from_angles(nt, theta, phi, pa, IAU)
 
-    if nt == 1:
-        return q
+    if iterable:
+        q = q.reshape((-1, 4))
     else:
-        return q.reshape((nt, 4))
-
+        q = q.flatten()
+    return q
 
 def to_angles(q, IAU=False):
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
     nq = None
     if q.ndim == 1:
         nq = 1
     else:
         nq = q.shape[0]
-    return ctoast.qarray_to_angles(nq, q.flatten().astype(np.float64, copy=False), IAU)
-
+    theta, phi, psi = ctoast.qarray_to_angles(
+        nq, q.flatten().astype(np.float64, copy=False), IAU)
+    if q.ndim == 1:
+        theta, phi, psi = (theta[0], phi[0], psi[0])
+    return (theta, phi, psi)
