@@ -21,29 +21,17 @@ class AnalyticNoise(Noise):
     minimum frequency, etc.
 
     Args:
-        detectors (list): list of detectors.
-        rate (dict): dictionary of sample rates in Hertz.
-        fmin (dict): dictionary of minimum frequencies for high pass
-        fknee (dict): dictionary of knee frequencies.
-        alpha (dict): dictionary of alpha exponents (positive, not negative!).
-        NET (dict): dictionary of detector NETs.
+        detectors (list): List of detectors.
+        rate (dict): Dictionary of sample rates in Hertz.
+        fmin (dict): Dictionary of minimum frequencies for high pass
+        fknee (dict): Dictionary of knee frequencies.
+        alpha (dict): Dictionary of alpha exponents (positive, not negative!).
+        NET (dict): Dictionary of detector NETs.
+
     """
 
-    def __init__(self, detectors=None, rate=None, fmin=None, fknee=None, alpha=None, NET=None):
-        if detectors is None:
-            raise RuntimeError("you must specify the detector list")
-        if rate is None:
-            raise RuntimeError("you must specify the sample rates")
-        if fmin is None:
-            raise RuntimeError("you must specify the frequencies for high pass")
-        if fknee is None:
-            raise RuntimeError("you must specify the knee frequencies")
-        if alpha is None:
-            raise RuntimeError("you must specify the exponents")
-        if NET is None:
-            raise RuntimeError("you must specify the NET")
+    def __init__(self, *, detectors, rate, fmin, fknee, alpha, NET):
 
-        self._detectors = detectors
         self._rate = rate
         self._fmin = fmin
         self._fknee = fknee
@@ -52,16 +40,18 @@ class AnalyticNoise(Noise):
 
         for d in detectors:
             if self._alpha[d] < 0.0:
-                raise RuntimeError("alpha exponents should be positive in this formalism")
+                raise RuntimeError(
+                    "alpha exponents should be positive in this formalism")
 
         freqs = {}
         psds = {}
 
         last_nyquist = None
 
-        for d in self._detectors:
+        for d in detectors:
             if (self._fknee[d] > 0.0) and (self._fknee[d] < self._fmin[d]):
-                raise RuntimeError("If knee frequency is non-zero, it must be greater than f_min")
+                raise RuntimeError("If knee frequency is non-zero, it must "
+                                   "be greater than f_min")
 
             nyquist = self._rate[d] / 2.0
             if nyquist != last_nyquist:
