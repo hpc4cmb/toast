@@ -10,8 +10,8 @@ FC = ifort
 MPICC = cc
 MPICXX = CC
 MPIFC = ftn
-MPI_CPPFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/include
-MPI_LDFLAGS = /opt/cray/mpt/7.4.1/gni/mpich-intel/15.0/lib
+MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
+MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
 MPI_CXXLIB = mpichcxx
 MPI_LIB = mpich
 MPI_EXTRA_COMP =
@@ -39,7 +39,7 @@ PYVERSION = 3.5
 
 # For BLAS/LAPACK, use MKL
 
-BLAS = -L/opt/intel/compilers_and_libraries_2017.1.132/linux/mkl/lib/intel64 -lmkl_rt -fopenmp -lpthread -lm -ldl
+BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -fopenmp -lpthread -lm -ldl
 LAPACK = 
 
 # Boost toolchain name

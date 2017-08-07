@@ -10,8 +10,8 @@ if [ "x${loadedgnu}" = x ]; then
       module swap PrgEnv-intel PrgEnv-gnu
     fi
 fi
-module swap gcc gcc/6.2.0
-module load intel/17.0.1.132
+module swap gcc gcc/6.3.0
+module load intel/17.0.2.174
 module load git
 module load cmake
 export CRAYPE_LINK_TYPE=dynamic
