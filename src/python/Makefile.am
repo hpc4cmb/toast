@@ -15,6 +15,7 @@ endif
 # Initialize compile and linking flags
 
 AM_CPPFLAGS = \
+-I$(top_srcdir)/src/libtoast/capi \
 -I$(top_srcdir)/src/libtoast \
 $(PYTHON_CPPFLAGS)
 
