@@ -96,6 +96,10 @@ fi
 
 @healpix@
 
+# Install Boost
+
+@boost@
+
 # Install libmadam
 
 @madam@
