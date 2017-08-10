@@ -11,7 +11,8 @@ AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast/map \
 -I$(top_srcdir)/src/libtoast/test \
 -I$(top_srcdir)/src/libtoast/test/gtest \
--I$(top_srcdir)/src/libtoast/capi
+-I$(top_srcdir)/src/libtoast/capi \
+-I$(top_srcdir)/src/libtoast
 
 AM_CFLAGS =
 AM_CXXFLAGS =

@@ -43,15 +43,14 @@ AM_LIBS =
 include $(top_srcdir)/src/build_options.am
 
 
-include_HEADERS = toast.hpp ctoast.h
+include_HEADERS = toast.hpp
 
-noinst_HEADERS = toast_internal.hpp ctoast.hpp
+noinst_HEADERS = toast_internal.hpp
 
 lib_LTLIBRARIES = libtoast.la
 
 libtoast_la_SOURCES = \
-toast.cpp \
-ctoast.cpp
+toast.cpp
 
 libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@
 
@@ -83,7 +82,9 @@ toast_test_SOURCES = \
 toast_test.cpp
 
 toast_test_LDADD = \
-$(top_builddir)/src/libtoast/libtoast.la \
+libtoast.la \
 $(AM_LIBS)
 
+
+bin_PROGRAMS : libtoast.la
 
