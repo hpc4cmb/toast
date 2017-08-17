@@ -16,6 +16,15 @@ AM_LIBS =
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
 
+EXTRA_DIST = \
+gtest.cc \
+gtest-death-test.cc \
+gtest_main.cc \
+gtest-printers.cc \
+gtest-typed-test.cc \
+gtest-filepath.cc \
+gtest-port.cc \
+gtest-test-part.cc
 
 noinst_HEADERS = \
 	gtest-internal-inl.h \
@@ -37,8 +46,8 @@ noinst_HEADERS = \
 	gtest/internal/gtest-param-util-generated.h \
 	gtest/internal/gtest-param-util-generated.h.pump \
 	gtest/internal/gtest-param-util.h \
-	gtest/internal/gtest-port-arch.h \
 	gtest/internal/gtest-port.h \
+	gtest/internal/gtest-port-arch.h \
 	gtest/internal/gtest-string.h \
 	gtest/internal/gtest-tuple.h \
 	gtest/internal/gtest-tuple.h.pump \
@@ -47,7 +56,6 @@ noinst_HEADERS = \
 	gtest/internal/custom/gtest.h \
 	gtest/internal/custom/gtest-port.h \
 	gtest/internal/custom/gtest-printers.h
-
 
 noinst_LTLIBRARIES = libtoast_gtest.la
 

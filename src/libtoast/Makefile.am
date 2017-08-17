@@ -16,6 +16,7 @@ SUBDIRS += tod
 SUBDIRS += fod
 SUBDIRS += map
 SUBDIRS += test
+SUBDIRS += capi
 
 
 # Initialize compile and linking flags
@@ -28,7 +29,8 @@ AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast/fod \
 -I$(top_srcdir)/src/libtoast/map \
 -I$(top_srcdir)/src/libtoast/test \
--I$(top_srcdir)/src/libtoast/test/gtest
+-I$(top_srcdir)/src/libtoast/test/gtest \
+-I$(top_srcdir)/src/libtoast/capi
 
 AM_CFLAGS =
 AM_CXXFLAGS =
@@ -41,19 +43,19 @@ AM_LIBS =
 include $(top_srcdir)/src/build_options.am
 
 
-include_HEADERS = toast.hpp ctoast.h
+include_HEADERS = toast.hpp
 
-noinst_HEADERS = toast_internal.hpp ctoast.hpp
+noinst_HEADERS = toast_internal.hpp
 
 lib_LTLIBRARIES = libtoast.la
 
 libtoast_la_SOURCES = \
-toast.cpp \
-ctoast.cpp
+toast.cpp
 
 libtoast_la_LDFLAGS = -version-info @TOAST_LT_VERSION@
 
 libtoast_la_LIBADD = \
+$(top_builddir)/src/libtoast/capi/libtoast_capi.la \
 $(top_builddir)/src/libtoast/test/libtoast_test.la \
 $(top_builddir)/src/libtoast/map/libtoast_map.la \
 $(top_builddir)/src/libtoast/fod/libtoast_fod.la \
@@ -80,7 +82,9 @@ toast_test_SOURCES = \
 toast_test.cpp
 
 toast_test_LDADD = \
-$(top_builddir)/src/libtoast/libtoast.la \
+libtoast.la \
 $(AM_LIBS)
 
+
+bin_PROGRAMS : libtoast.la
 

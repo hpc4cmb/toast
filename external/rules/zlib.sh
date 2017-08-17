@@ -1,6 +1,5 @@
 curl -SL http://zlib.net/zlib-1.2.11.tar.gz \
-    -o zlib-1.2.11.tar.gz \
-    && tar xzf zlib-1.2.11.tar.gz \
+    | tar xzf - \
     && cd zlib-1.2.11 \
     && CC="gcc" ./configure --shared \
     --prefix="@AUX_PREFIX@" \
