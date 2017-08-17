@@ -32,6 +32,7 @@ from .sim_focalplane import (hex_layout, rhombus_layout,
 
 from .noise import Noise
 
+from ..ctoast import filter_polyfilter
 from .polyfilter import OpPolyFilter
 from .groundfilter import OpGroundFilter
 from .gainscrambler import OpGainScrambler

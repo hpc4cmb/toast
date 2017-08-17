@@ -39,7 +39,7 @@ TEST_F( polyfilterTest, filter ) {
     size_t nsignal = 3;
 
     long starts[] = { 0, n/2 };
-    long stops[] = { n/2, n };
+    long stops[] = { n/2-1, n-1 };
     size_t nscan = 2;
 
     double rms1start = 0, rms2start = 0, rms3start = 0;
@@ -69,8 +69,79 @@ TEST_F( polyfilterTest, filter ) {
     rms2 = sqrt(rms2 / n);
     rms3 = sqrt(rms3 / n);
 
-    EXPECT_LT( std::abs(rms1/rms1start), 1e-6 );
-    EXPECT_LT( std::abs(rms2/rms2start), 1e-6 );
-    EXPECT_LT( std::abs(rms3/rms3start), 1e-6 );
+    EXPECT_LT( std::abs(rms1/rms1start), 1e-10 );
+    EXPECT_LT( std::abs(rms2/rms2start), 1e-10 );
+    EXPECT_LT( std::abs(rms3/rms3start), 1e-10 );
+
+}
+
+
+TEST_F( polyfilterTest, filter_with_flags ) {
+
+    vector<double> signal1(n);
+    vector<double> signal2(n);
+    vector<double> signal3(n);
+    vector<unsigned char> flags(n, 0);
+
+    for ( int i=0; i<n/20; ++i ) {
+      flags[i] = 1;
+      flags[16*n/20+i] = 1;
+    }
+
+    long ngood = 0;
+    for ( int i=0; i<n; ++i ) {
+      if ( flags[i] ) continue;
+      ngood++;
+    }
+
+    double *signals[3];
+
+    signals[0] = signal1.data();
+    signals[1] = signal2.data();
+    signals[2] = signal3.data();
+
+    for ( int i=0; i<n; ++i ) {
+        signal1[i] = 1;
+        signal2[i] = i;
+        signal3[i] = i*i;
+    }
+    size_t nsignal = 3;
+
+    long starts[] = { 0, n/2 };
+    long stops[] = { n/2-1, n-1 };
+    size_t nscan = 2;
+
+    double rms1start = 0, rms2start = 0, rms3start = 0;
+
+    for ( int i=0; i<n; ++i ) {
+        if ( flags[i] ) continue;
+        rms1start += signal1[i]*signal1[i];
+        rms2start += signal2[i]*signal2[i];
+        rms3start += signal3[i]*signal3[i];
+    }
+
+    rms1start = sqrt(rms1start / ngood);
+    rms2start = sqrt(rms2start / ngood);
+    rms3start = sqrt(rms3start / ngood);
+
+    toast::filter::polyfilter( order, signals, flags.data(), n, nsignal,
+                               starts, stops, nscan );
+
+    double rms1 = 0, rms2 = 0, rms3 = 0;
+
+    for ( int i=0; i<n; ++i ) {
+        if ( flags[i] ) continue;
+        rms1 += signal1[i]*signal1[i];
+        rms2 += signal2[i]*signal2[i];
+        rms3 += signal3[i]*signal3[i];
+    }
+
+    rms1 = sqrt(rms1 / ngood);
+    rms2 = sqrt(rms2 / ngood);
+    rms3 = sqrt(rms3 / ngood);
+
+    EXPECT_LT( std::abs(rms1/rms1start), 1e-10 );
+    EXPECT_LT( std::abs(rms2/rms2start), 1e-10 );
+    EXPECT_LT( std::abs(rms3/rms3start), 1e-10 );
 
 }

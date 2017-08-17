@@ -38,9 +38,9 @@ void toast::filter::polyfilter(
         int start = starts[iscan];
         int stop = stops[iscan];
         if ( start < 0 ) start = 0;
-        if ( stop > n ) stop = n;
-        int scanlen = stop - start;
-        if ( scanlen < 1 ) continue;
+        if ( stop > n-1 ) stop = n-1;
+        if ( stop < start ) continue;
+        int scanlen = stop - start + 1;
 
         // Build the template matrix
 
@@ -49,10 +49,10 @@ void toast::filter::polyfilter(
                 scanlen*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
 
         double dx = 2. / scanlen;
-        double xstart = 0.5*dx - 1;        
+        double xstart = 0.5*dx - 1;
         for ( int i=0; i<scanlen; ++i ) {
-            if ( flags[i] ) continue;
-            double x = xstart + i*dx;            
+            if ( flags[start+i] ) continue;
+            double x = xstart + i*dx;
             int offset = i*norder;
             if ( norder > 0 ) templates[offset++] = 1;
             if ( norder > 1 ) templates[offset++] = x;
@@ -85,13 +85,25 @@ void toast::filter::polyfilter(
         if ( info ) {
             // The matrix is singular.  Raise the appropriate quality
             // flags.
-            for ( int i=start; i<stop; ++i ) {
-                flags[i] = 255;
+            for ( int i=0; i<scanlen; ++i ) {
+                flags[start+i] = 255;
             }
             continue;
         }
 
+        // Symmetrize for dgemv later on (workaround for dtrmv issue)
+
+        for ( int row=0; row<norder; ++row ) {
+          for ( int col=row+1; col<norder; ++col ) {
+            cov[row*norder + col] = cov[col*norder + row];
+          }
+        }
+
         // Filter every signal
+
+        double *proj = static_cast< double* >(
+            toast::mem::aligned_alloc (
+                norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
 
         double *coeff = static_cast< double* >(
             toast::mem::aligned_alloc (
@@ -107,12 +119,19 @@ void toast::filter::polyfilter(
             // proj = templates x signal
 
             toast::lapack::gemv( &notrans, &norder, &scanlen, &fone, templates,
-                                 &norder, signal, &one, &fzero, coeff, &one );
+                                 &norder, signal, &one, &fzero, proj, &one );
 
             // coeff = cov x proj
 
-            toast::lapack::trmv( &upper, &trans, &nodiag, &norder, cov,
-                                 &norder, coeff, &one );
+            // For whatever reason, trmv refused to yield the right answer...
+            // Use general matrix vector multiply instead
+
+            //toast::lapack::trmv( &upper, &trans, &nodiag, &norder, cov,
+            //                     &norder, coeff, &one );
+
+            toast::lapack::gemv( &trans, &norder, &norder, &fone,
+                                 cov, &norder, proj, &one,
+                                 &fzero, coeff, &one );
 
             // noise = templates.T x coeff
 
@@ -128,6 +147,7 @@ void toast::filter::polyfilter(
 
         toast::mem::aligned_free( templates );
         toast::mem::aligned_free( cov );
+        toast::mem::aligned_free( proj );
         toast::mem::aligned_free( coeff );
         toast::mem::aligned_free( noise );
 
