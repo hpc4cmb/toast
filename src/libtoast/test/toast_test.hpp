@@ -121,6 +121,8 @@ class fftTest : public ::testing::Test {
         virtual void SetUp() { }
         virtual void TearDown() { }
 
+        void runbatch(int64_t nbatch);
+
         static const int64_t length;
         static const int64_t n;
 
