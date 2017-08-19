@@ -230,20 +230,28 @@ class TODHpixSpiral(TOD):
             distribution.
 
     """
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0, nside=512,
-        detindx=None, detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, 
+        rate=100.0, nside=512, detindx=None, detranks=1, detbreaks=None,
+        sampsizes=None, sampbreaks=None):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
 
+        props = {
+            "nside": nside,
+        }
         super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
             detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
-            sampbreaks=sampbreaks)
+            sampbreaks=sampbreaks, meta=props)
 
         self._firsttime = firsttime
         self._rate = rate
         self._nside = nside
         self._npix = 12 * self._nside * self._nside
+
+
+    def detoffset(self):
+        return { d : np.asarray(self._fp[d]) for d in self._detlist }
 
 
     def _get(self, detector, start, n):
@@ -252,7 +260,7 @@ class TODHpixSpiral(TOD):
 
 
     def _put(self, detector, start, data, flags):
-        raise RuntimeError('cannot write data to simulated data streams')
+        raise RuntimeError("cannot write data to simulated data streams")
         return
 
 
@@ -261,7 +269,7 @@ class TODHpixSpiral(TOD):
 
 
     def _put_det_flags(self, detector, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
 
@@ -270,7 +278,7 @@ class TODHpixSpiral(TOD):
 
 
     def _put_common_flags(self, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
 
@@ -283,15 +291,13 @@ class TODHpixSpiral(TOD):
 
 
     def _put_times(self, start, stamps):
-        raise RuntimeError('cannot write timestamps to simulated data streams')
+        raise RuntimeError("cannot write timestamps to simulated data streams")
         return
 
 
-    def _get_pntg(self, detector, start, n):
+    def _get_boresight(self, start, n):
         # compute the absolute sample offset
         start_abs = self.local_samples[0] + start
-
-        detquat = np.asarray(self._fp[detector])
 
         # pixel offset
         start_pix = int(start_abs % self._npix)
@@ -325,15 +331,23 @@ class TODHpixSpiral(TOD):
         # build the un-normalized quaternion
         boresight = np.concatenate((v, s), axis=1)
 
-        boresight = qa.norm(boresight)
+        return qa.norm(boresight)
 
+
+    def _put_boresight(self, start, data):
+        raise RuntimeError("cannot write boresight to simulated data streams")
+        return
+
+
+    def _get_pntg(self, detector, start, n):
+        detquat = np.asarray(self._fp[detector])
+        boresight = self._get_boresight(start, n)
         data = qa.mult(boresight, detquat)
-
         return data
 
 
     def _put_pntg(self, detector, start, data):
-        raise RuntimeError('cannot write data to simulated pointing')
+        raise RuntimeError("cannot write data to simulated pointing")
         return
 
 
@@ -342,7 +356,7 @@ class TODHpixSpiral(TOD):
 
 
     def _put_position(self, start, pos):
-        raise RuntimeError('cannot write data to simulated position')
+        raise RuntimeError("cannot write data to simulated position")
         return
 
 
@@ -351,7 +365,7 @@ class TODHpixSpiral(TOD):
 
     
     def _put_velocity(self, start, vel):
-        raise RuntimeError('cannot write data to simulated velocity')
+        raise RuntimeError("cannot write data to simulated velocity")
         return
 
 
@@ -397,11 +411,6 @@ class TODSatellite(TOD):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
-        
-        # call base class constructor to distribute data
-        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
-            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
-            sampbreaks=sampbreaks)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -410,6 +419,18 @@ class TODSatellite(TOD):
         self._precperiod = precperiod
         self._precangle = precangle
         self._boresight = None
+
+        props = {
+            "spinperiod": spinperiod,
+            "spinangle": spinangle,
+            "precperiod": precperiod,
+            "precangle": precangle
+        }
+        
+        # call base class constructor to distribute data
+        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
+            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
+            sampbreaks=sampbreaks, meta=props)
 
         self._AU = 149597870.7
         self._radperday = 0.01720209895
@@ -443,13 +464,28 @@ class TODSatellite(TOD):
         self._boresight = satellite_scanning(nsim=self.local_samples[1], firstsamp=self.local_samples[0], qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod, spinangle=self._spinangle, precperiod=self._precperiod, precangle=self._precangle)
 
 
+    def detoffset(self):
+        return { d : np.asarray(self._fp[d]) for d in self._detlist }
+
+
+    def _get_boresight(self, start, n):
+        if self._boresight is None:
+            raise RuntimeError("you must set the precession axis before reading pointing")
+        return self._boresight[start:start+n]
+
+
+    def _put_boresight(self, start, data):
+        raise RuntimeError("cannot write boresight to simulated data streams")
+        return
+
+
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
         return np.zeros(n, dtype=np.float64)
 
 
-    def _put(self, detector, start, data, flags):
-        raise RuntimeError('cannot write data to simulated data streams')
+    def _put(self, detector, start, data):
+        raise RuntimeError("cannot write data to simulated data streams")
         return
 
 
@@ -458,7 +494,7 @@ class TODSatellite(TOD):
 
 
     def _put_det_flags(self, detector, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
 
@@ -467,7 +503,7 @@ class TODSatellite(TOD):
 
 
     def _put_common_flags(self, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
 
@@ -480,20 +516,19 @@ class TODSatellite(TOD):
 
 
     def _put_times(self, start, stamps):
-        raise RuntimeError('cannot write timestamps to simulated data streams')
+        raise RuntimeError("cannot write timestamps to simulated data streams")
         return
 
 
     def _get_pntg(self, detector, start, n):
-        if self._boresight is None:
-            raise RuntimeError("you must set the precession axis before reading detector pointing")
+        boresight = self._get_boresight(start, n)
         detquat = self._fp[detector]
-        data = qa.mult(self._boresight[start:start+n], detquat)
+        data = qa.mult(boresight, detquat)
         return data
 
 
     def _put_pntg(self, detector, start, data):
-        raise RuntimeError('cannot write data to simulated pointing')
+        raise RuntimeError("cannot write data to simulated pointing")
         return
 
 
@@ -511,7 +546,7 @@ class TODSatellite(TOD):
 
 
     def _put_position(self, start, pos):
-        raise RuntimeError('cannot write data to simulated position')
+        raise RuntimeError("cannot write data to simulated position")
         return
 
 
@@ -529,7 +564,7 @@ class TODSatellite(TOD):
 
     
     def _put_velocity(self, start, vel):
-        raise RuntimeError('cannot write data to simulated velocity')
+        raise RuntimeError("cannot write data to simulated velocity")
         return
 
 
@@ -592,28 +627,28 @@ class TODGround(TOD):
                  scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  detindx=None, detranks=1, detbreaks=None,
-                 sampsizes=None, sampbreaks=None, coord='C',
+                 sampsizes=None, sampbreaks=None, coord="C",
                  report_timing=True):
 
         if ephem is None:
-            raise RuntimeError('ERROR: Cannot instantiate a TODGround object '
-                               'without pyephem.')
+            raise RuntimeError("ERROR: Cannot instantiate a TODGround object "
+                               "without pyephem.")
 
         if sampsizes is not None:
-            raise RuntimeError('TODGround will synthesize the sizes to match '
-                               'the subscans.')
+            raise RuntimeError("TODGround will synthesize the sizes to match "
+                               "the subscans.")
 
         if CES_start is None:
             CES_start = firsttime
         elif firsttime < CES_start:
-            raise RuntimeError('TODGround: firsttime < CES_start: {} < {}'
-                               ''.format(firsttime, CES_start))
+            raise RuntimeError("TODGround: firsttime < CES_start: {} < {}"
+                               "".format(firsttime, CES_start))
         lasttime = firsttime + samples / rate
         if CES_stop is None:
             CES_stop = lasttime
         elif lasttime > CES_stop:
-            raise RuntimeError('TODGround: lasttime > CES_stop: {} > {}'
-                               ''.format(lasttime, CES_stop))
+            raise RuntimeError("TODGround: lasttime > CES_stop: {} > {}"
+                               "".format(lasttime, CES_stop))
 
         self._firsttime = firsttime
         self._rate = rate
@@ -624,7 +659,7 @@ class TODGround(TOD):
         self._azmax = azmax * degree
         if el < 1 or el > 89:
             raise RuntimeError(
-                'Impossible CES at {:.2f} degrees'.format(el))
+                "Impossible CES at {:.2f} degrees".format(el))
         self._el = el * degree
         self._scanrate = scanrate * degree
         self._scan_accel = scan_accel * degree
@@ -632,8 +667,8 @@ class TODGround(TOD):
         self._CES_stop = CES_stop
         self._el_min = el_min
         self._sun_angle_min = sun_angle_min
-        if coord not in 'CEG':
-            raise RuntimeError('Unknown coordinate system: {}'.format(coord))
+        if coord not in "CEG":
+            raise RuntimeError("Unknown coordinate system: {}".format(coord))
         self._coord = coord
         self._report_timing = report_timing
 
@@ -641,7 +676,7 @@ class TODGround(TOD):
         self._observer.lon = self._site_lon
         self._observer.lat = self._site_lat
         self._observer.elevation = self._site_alt # In meters
-        self._observer.epoch = '2000'
+        self._observer.epoch = "2000"
         self._observer.temp = 0 # in Celcius
         self._observer.compute_pressure()
 
@@ -667,8 +702,8 @@ class TODGround(TOD):
             mpicomm.Barrier()
             tstop = MPI.Wtime()
             if mpicomm.rank == 0 and tstop-tstart > 1:
-                print('TODGround: Simulated scan in {:.2f} s'
-                      ''.format(tstop - tstart), flush=True)
+                print("TODGround: Simulated scan in {:.2f} s"
+                      "".format(tstop - tstart), flush=True)
             tstart = tstop
 
         # Create a list of subscans that excludes the turnarounds.
@@ -691,24 +726,37 @@ class TODGround(TOD):
             mpicomm.Barrier()
             tstop = MPI.Wtime()
             if mpicomm.rank == 0 and tstop-tstart > 1:
-                print('TODGround: Listed valid intervals in {:.2f} s'
-                      ''.format(tstop - tstart), flush=True)
+                print("TODGround: Listed valid intervals in {:.2f} s"
+                      "".format(tstop - tstart), flush=True)
             tstart = tstop
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
 
         # call base class constructor to distribute data
+
+        props = {
+            "site_lon": site_lon,
+            "site_lat": site_lat,
+            "site_alt": site_alt,
+            "azmin": azmin,
+            "azmax": azmax,
+            "el": el,
+            "scanrate": scanrate,
+            "scan_accel": scan_accel,
+            "el_min": el_min,
+            "sun_angle_min": sun_angle_min
+        }
         super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
             detranks=detranks, detbreaks=detbreaks, sampsizes=sizes, 
-            sampbreaks=sampbreaks)
+            sampbreaks=sampbreaks, meta=props)
 
         if self._report_timing:
             mpicomm.Barrier()
             tstop = MPI.Wtime()
             if mpicomm.rank == 0 and tstop-tstart > 1:
-                print('TODGround: Called parent constructor in {:.2f} s'
-                      ''.format(tstop - tstart), flush=True)
+                print("TODGround: Called parent constructor in {:.2f} s"
+                      "".format(tstop - tstart), flush=True)
             tstart = tstop
 
         self.translate_pointing()
@@ -717,8 +765,8 @@ class TODGround(TOD):
             mpicomm.Barrier()
             tstop = MPI.Wtime()
             if mpicomm.rank == 0 and tstop-tstart > 1:
-                print('TODGround: Translated scan pointing in {:.2f} s'
-                      ''.format(tstop - tstart), flush=True)
+                print("TODGround: Translated scan pointing in {:.2f} s"
+                      "".format(tstop - tstart), flush=True)
 
     def __del__(self):
 
@@ -885,7 +933,7 @@ class TODGround(TOD):
         starts.append(samples)
         sizes = np.diff(starts)
         if np.sum(sizes) != samples:
-            raise RuntimeError('Subscans do not match samples')
+            raise RuntimeError("Subscans do not match samples")
 
         # Store the scan range before discarding samples not assigned
         # to this process
@@ -990,26 +1038,26 @@ class TODGround(TOD):
         offset, n = self.local_samples
         ind = slice(offset, offset+n)
 
-        self._az = self.cache.put('az', self._az[ind])
+        self._az = self.cache.put("az", self._az[ind])
         self._commonflags = self.cache.put(
-            'commonflags', self._commonflags[ind])
+            "commonflags", self._commonflags[ind])
         self._boresight_azel = self.cache.put(
-            'boresight_azel', azelquats[ind])
-        self._boresight = self.cache.put('boresight_radec', quats[ind])
+            "boresight_azel", azelquats[ind])
+        self._boresight = self.cache.put("boresight_radec", quats[ind])
 
         return
 
     def free_azel_quats(self):
         self._boresight_azel = None
         #try:
-        self.cache.destroy('boresight_azel')
+        self.cache.destroy("boresight_azel")
         #except:
         #    pass
 
     def free_radec_quats(self):
         self._boresight = None
         #try:
-        self.cache.destroy('boresight_radec')
+        self.cache.destroy("boresight_radec")
         #except:
         #    pass
 
@@ -1020,38 +1068,41 @@ class TODGround(TOD):
         qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
         q = qa.mult(qR, qa.mult(qD, qP))
 
-        if self._coord != 'C':
+        if self._coord != "C":
             # Add the coordinate system rotation
-            if self._coord == 'G':
+            if self._coord == "G":
                 q = qa.mult(quat_equ2gal, q)
-            elif self._coord == 'E':
+            elif self._coord == "E":
                 q = qa.mult(quat_equ2ecl, q)
             else:
                 raise RuntimeError(
-                    'Unknown coordinate system: {}'.format(self._coord))
+                    "Unknown coordinate system: {}".format(self._coord))
 
         return q
+
+    def detoffset(self):
+        return { d : np.asarray(self._fp[d]) for d in self._detlist }
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
         return np.zeros(n, dtype=np.float64)
 
-    def _put(self, detector, start, data, flags):
-        raise RuntimeError('cannot write data to simulated data streams')
+    def _put(self, detector, start, data):
+        raise RuntimeError("cannot write data to simulated data streams")
         return
 
     def _get_flags(self, detector, start, n):
         return (np.zeros(n, dtype=np.uint8), self._commonflags[start:start+n])
 
     def _put_det_flags(self, detector, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
     def _get_common_flags(self, start, n):
         return self._commonflags[start:start+n]
 
     def _put_common_flags(self, start, flags):
-        raise RuntimeError('cannot write flags to simulated data streams')
+        raise RuntimeError("cannot write flags to simulated data streams")
         return
 
     def _get_times(self, start, n):
@@ -1060,19 +1111,22 @@ class TODGround(TOD):
         return start_time + np.arange(n) / self._rate
 
     def _put_times(self, start, stamps):
-        raise RuntimeError('cannot write timestamps to simulated data streams')
+        raise RuntimeError("cannot write timestamps to simulated data streams")
         return
 
-    def _get_pntg(self, detector, start, n, azel=False):
-        detquat = self._fp[detector]
+    def _get_boresight(self, start, n, azel=False):
         if azel:
             if self._boresight_azel is None:
-                raise RuntimeError('Boresight azel pointing was purged.')
-            return qa.mult(self._boresight_azel[start:start+n], detquat)
+                raise RuntimeError("Boresight azel pointing was purged.")
+            return self._boresight_azel[start:start+n]
         else:
             if self._boresight is None:
-                raise RuntimeError('Boresight radec pointing was purged.')
-            return qa.mult(self._boresight[start:start+n], detquat)
+                raise RuntimeError("Boresight radec pointing was purged.")
+            return self._boresight[start:start+n]
+
+    def _put_boresight(self, start, data):
+        raise RuntimeError("cannot write boresight to simulated data streams")
+        return
 
     def read_boresight_az(self, local_start=0, n=0):
         """
@@ -1089,16 +1143,20 @@ class TODGround(TOD):
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot read boresight azimuth - process has no '
-                               'assigned local samples')
+            raise RuntimeError("cannot read boresight azimuth - process "
+                "has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'.format(
+            raise ValueError("local sample range {} - {} is invalid".format(
                 local_start, local_start+n-1))
-
         return self._az[local_start:local_start+n]
 
+    def _get_pntg(self, detector, start, n, azel=False):
+        boresight = self._get_boresight(start, n, azel=azel)
+        detquat = self._fp[detector]
+        return qa.mult(boresight, detquat)
+
     def _put_pntg(self, detector, start, data):
-        raise RuntimeError('cannot write data to simulated pointing')
+        raise RuntimeError("cannot write data to simulated pointing")
         return
 
     def _get_position(self, start, n):
@@ -1114,7 +1172,7 @@ class TODGround(TOD):
         return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
     def _put_position(self, start, pos):
-        raise RuntimeError('cannot write data to simulated position')
+        raise RuntimeError("cannot write data to simulated position")
         return
 
     def _get_velocity(self, start, n):
@@ -1130,5 +1188,5 @@ class TODGround(TOD):
         return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
     def _put_velocity(self, start, vel):
-        raise RuntimeError('cannot write data to simulated velocity')
+        raise RuntimeError("cannot write data to simulated velocity")
         return

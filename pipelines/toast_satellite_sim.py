@@ -103,8 +103,16 @@ def main():
         "(float, arcmin), \"fknee\" (float, Hz), \"alpha\" (float), and \"NET\" "
         "(float).  For optional plotting, the key \"color\" can specify a "
         "valid matplotlib color string." )
+
+    parser.add_argument('--tidas',
+                        required=False, default=None,
+                        help='Output TIDAS export path')
     
     args = parser.parse_args()
+
+    if args.tidas is not None:
+        if not tt.tidas_available:
+            raise RuntimeError("TIDAS not found- cannot export")
 
     groupsize = args.groupsize
     if groupsize == 0:
@@ -421,6 +429,15 @@ def main():
 
             nse = tt.OpSimNoise(out="noise", realization=mc)
             nse.exec(data)
+
+            if mc == firstmc:
+                # For the first realization, optionally export the 
+                # timestream data to a TIDAS volume.
+                if args.tidas is not None:
+                    from toast.tod.tidas import OpTidasExport
+                    tidas_path = os.path.abspath(args.tidas)
+                    export = OpTidasExport(tidas_path, name="noise")
+                    export.exec(data)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

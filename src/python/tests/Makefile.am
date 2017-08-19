@@ -44,7 +44,8 @@ qarray.py \
 rng.py \
 fft.py \
 runner.py \
-tod.py
+tod.py \
+tidas.py
 
 
 clean-local :

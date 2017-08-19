@@ -22,7 +22,7 @@ class TODTest(MPITestCase):
                 os.mkdir(self.outdir)
             
         # Note: self.comm is set by the test infrastructure
-        self.dets = ['1a', '1b', '2a', '2b']
+        self.dets = ["1a", "1b", "2a", "2b"]
         self.mynsamp = 10
         self.myoff = self.mynsamp * self.comm.rank
         self.totsamp = self.mynsamp * self.comm.size
@@ -54,7 +54,7 @@ class TODTest(MPITestCase):
 
         stop = MPI.Wtime()
         elapsed = stop - start
-        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
 
 
     def test_read(self):
@@ -69,7 +69,7 @@ class TODTest(MPITestCase):
 
         stop = MPI.Wtime()
         elapsed = stop - start
-        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
 
 
     def test_read_pntg(self):

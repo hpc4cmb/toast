@@ -44,3 +44,6 @@ from .tod_math import (calibrate, dipole, sim_noise_timestream,
                        OpCacheCopy, OpCacheClear)
 
 from .conviqt import OpSimConviqt
+
+from .tidas import available as tidas_available
+
