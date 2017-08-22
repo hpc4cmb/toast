@@ -136,7 +136,7 @@ class OpPolyFilterTest(MPITestCase):
             istop = min(istart + interval_len, self.totsamp)
             intervals.append(Interval(
                 start=istart/self.rate, stop=istop/self.rate,
-                first=istart, last=istop))
+                first=istart, last=istop-1))
 
         ob = {}
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
