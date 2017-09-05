@@ -14,8 +14,8 @@ using namespace std;
 using namespace toast;
 
 
-const int64_t fftTest::length = 65536;
-const int64_t fftTest::n = 5;
+const int64_t fftTest::length = 32;
+const int64_t fftTest::n = 3;
 
 void fftTest::runbatch(int64_t nbatch) {
     std::vector < fft::fft_data > compare ( nbatch );
@@ -29,10 +29,14 @@ void fftTest::runbatch(int64_t nbatch) {
 
     for ( int64_t i = 0; i < nbatch; ++i ) {
         rng::dist_normal ( length, 0, 0, 0, i*length, forward->tdata()[i] );
+        compare[i].resize ( length );
         for ( int64_t j = 0; j < length; ++j ) {
-            compare[i].push_back ( forward->tdata()[i][j] );
+            compare[i][j] = forward->tdata()[i][j];
+            //std::cout << forward->tdata()[i][j] << std::endl;
         }
     }
+
+    //std::cout << "---------------" << std::endl;
 
     // Do forward transform
 
@@ -46,10 +50,11 @@ void fftTest::runbatch(int64_t nbatch) {
         double mean = 0.0;
         for ( int64_t j = 0; j < length; ++j ) {
             mean += forward->fdata()[i][j];
-            //std::cout << forward->fdata()[0][j] << std::endl;
+            //std::cerr << forward->fdata()[i][j] << std::endl;
         }
         mean /= (double)length;
         //std::cout << "mean[" << i << "] = " << mean << std::endl;
+        //std::cout << "---------------" << std::endl;
 
         double var = 0.0;
         for ( int64_t j = 0; j < length; ++j ) {
@@ -59,10 +64,10 @@ void fftTest::runbatch(int64_t nbatch) {
 
         double outlier = ::fabs( var - ((double)length / 2.0) );
 
-        //std::cout << "var[" << i << "] = " << var << ", (len / 2) = " << ((double)length / 2.0) << " sigma = " << sigma << " outlier = " << outlier << std::endl;
+        // std::cout << "var[" << i << "] = " << var << ", (len / 2) = " << ((double)length / 2.0) << " sigma = " << sigma << " outlier = " << outlier << std::endl;
+
         ASSERT_TRUE( outlier < 3.0 * sigma );
     }
-
 
     // Copy data to reverse transform
 
@@ -78,6 +83,7 @@ void fftTest::runbatch(int64_t nbatch) {
 
     for ( int64_t i = 0; i < nbatch; ++i ) {
         for ( int64_t j = 0; j < length; ++j ) {
+            //std::cout << reverse->tdata()[i][j] << std::endl;
             EXPECT_FLOAT_EQ( compare[i][j], reverse->tdata()[i][j] );
         }
     }
