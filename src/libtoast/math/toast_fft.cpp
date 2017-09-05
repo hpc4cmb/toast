@@ -20,12 +20,14 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <sstream>
 #include <cstdio>
+#include <cstring>
 
 
 // In all cases, the memory buffer used for these FFTs is allocated as a single
-// block.  The first half of the block is for the real space data and the second
-// half of the buffer is for the complex Fourier space data.  The data in each
-// half is further split into buffers for each of the inputs and outputs.
+// block.  The first half of the block is for the real space data and the 
+// second half of the buffer is for the complex Fourier space data.  The data
+// in each half is further split into buffers for each of the inputs and 
+// outputs.
 
 
 #ifdef HAVE_FFTW
@@ -34,7 +36,9 @@ class r1d_fftw : public toast::fft::r1d {
     
     public :
         
-        r1d_fftw ( int64_t length, int64_t n, toast::fft::plan_type type, toast::fft::direction dir, double scale ) : toast::fft::r1d ( length, n, type, dir, scale ) {
+        r1d_fftw ( int64_t length, int64_t n, toast::fft::plan_type type, 
+            toast::fft::direction dir, double scale ) : 
+            toast::fft::r1d ( length, n, type, dir, scale ) {
 
             int threads = 1;
 
@@ -65,7 +69,7 @@ class r1d_fftw : public toast::fft::r1d {
 
             for ( int64_t i = 0; i < n_; ++i ) {
                 tview_.push_back ( & data_[i * length_] );
-                fview_.push_back ( & data_[(n_ * length_) + i * length_] );
+                fview_.push_back ( & data_[(n_ + i) * length_] );
             }
 
             // create plan
@@ -97,7 +101,8 @@ class r1d_fftw : public toast::fft::r1d {
                 flags = flags | FFTW_ESTIMATE;
             }
 
-            plan_ = fftw_plan_many_r2r ( 1, &ilength, iN, rawin, &ilength, 1, ilength, rawout, &ilength, 1, ilength, &kind, flags);
+            plan_ = fftw_plan_many_r2r ( 1, &ilength, iN, rawin, &ilength, 
+                1, ilength, rawout, &ilength, 1, ilength, &kind, flags);
 
         }
 
@@ -159,13 +164,22 @@ class r1d_mkl : public toast::fft::r1d {
 
     public :
         
-        r1d_mkl ( int64_t length, int64_t n, toast::fft::plan_type type, toast::fft::direction dir, double scale ) : toast::fft::r1d ( length, n, type, dir, scale ) {
+        r1d_mkl ( int64_t length, int64_t n, toast::fft::plan_type type, 
+            toast::fft::direction dir, double scale ) : 
+            toast::fft::r1d ( length, n, type, dir, scale ) {
 
             // Allocate memory.  The extra 2 elements are so that we can do an 
             // in-place real -> complex FFT and store the output N/2 + 1 
             // complex numbers (pair of doubles).
 
-            buflength_ = length_ + 2;
+            // Verify that datatype sizes are as expected.
+            if ( sizeof(MKL_Complex16) != 2 * sizeof(double) ) {
+                std::ostringstream o;
+                o << "MKL_Complex16 is not the size of 2 doubles, check MKL API";
+                TOAST_THROW( o.str().c_str() );
+            }
+
+            buflength_ = 2 * (length_ / 2 + 1);
 
             data_.resize ( 2 * n_ * buflength_ );
 
@@ -182,11 +196,9 @@ class r1d_mkl : public toast::fft::r1d {
                 fview_.push_back ( & data_[(n_ + i) * buflength_] );
             }
 
-            // Create plan.  We do an in-place transform, overwriting the input, and
-            // then repack the data into the user-visible buffer.
-
-            MKL_LONG strides[1];
-            strides[0] = 0;
+            // Create plan.  We do an in-place transform, overwriting 
+            // the input, and then repack the data into the 
+            // user-visible buffer.
 
             MKL_LONG distance = buflength_;
 
@@ -194,48 +206,71 @@ class r1d_mkl : public toast::fft::r1d {
 
             // For 1D transforms, the documentation implies that we just pass
             // the single number, rather than a one-element array.
-            MKL_LONG status = DftiCreateDescriptor ( &descriptor_, DFTI_DOUBLE, 
-                DFTI_REAL, 1, (MKL_LONG) length_ );
+            MKL_LONG status = DftiCreateDescriptor ( &descriptor_, 
+                DFTI_DOUBLE, DFTI_REAL, 1, (MKL_LONG) length_ );
             check_status ( stderr, status );
 
-            status = DftiSetValue ( descriptor_, DFTI_NUMBER_OF_TRANSFORMS, n_ );
-            check_status ( stderr, status );
-
-            status = DftiSetValue ( descriptor_, DFTI_INPUT_DISTANCE, distance );
-            check_status ( stderr, status );
-
-            // status = DftiSetValue ( descriptor_, DFTI_OUTPUT_DISTANCE, distance );
-            // check_status ( stderr, status );
-
-            status = DftiSetValue ( descriptor_, DFTI_INPUT_STRIDES, strides );
-            check_status ( stderr, status );
-
-            // status = DftiSetValue ( descriptor_, DFTI_OUTPUT_STRIDES, strides );
-            // check_status ( stderr, status );
-
-            status = DftiSetValue ( descriptor_, DFTI_PLACEMENT, DFTI_INPLACE );
+            status = DftiSetValue ( descriptor_, DFTI_PLACEMENT, 
+                DFTI_NOT_INPLACE );
             check_status ( stderr, status );
 
             // DFTI_COMPLEX_COMPLEX is not the default packing, but is
             // recommended in the documentation as the best choice.
-            status = DftiSetValue ( descriptor_, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX );
+            status = DftiSetValue ( descriptor_, 
+                DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX );
             check_status ( stderr, status );
 
-            status = DftiSetValue ( descriptor_, DFTI_PACKED_FORMAT, DFTI_CCE_FORMAT );
+            // ---- Not needed for DFTI_COMPLEX_COMPLEX
+            // status = DftiSetValue ( descriptor_, DFTI_PACKED_FORMAT, 
+            //     DFTI_CCE_FORMAT );
+            // check_status ( stderr, status );
+
+            status = DftiSetValue ( descriptor_, DFTI_NUMBER_OF_TRANSFORMS, 
+                n_ );
             check_status ( stderr, status );
 
-            // We set the scaling here to mimic the normalization of FFTW.
+            // From the docs...
+            //
+            // "The configuration parameters DFTI_INPUT_DISTANCE and
+            // DFTI_OUTPUT_DISTANCE define the distance within input and
+            // output data, and not within the forward-domain and 
+            // backward-domain data."
+            //
+            // We also set the scaling here to mimic the normalization of FFTW.
+
             if ( dir_ == toast::fft::direction::forward ) {
-                status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, scale_ );
+
+                status = DftiSetValue ( descriptor_, DFTI_INPUT_DISTANCE, 
+                    distance );
                 check_status ( stderr, status );
 
-                status = DftiSetValue ( descriptor_, DFTI_BACKWARD_SCALE, 1.0 );
+                status = DftiSetValue ( descriptor_, DFTI_OUTPUT_DISTANCE, 
+                    (length_ / 2) + 1 );
                 check_status ( stderr, status );
+
+                status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, 
+                    scale_ );
+                check_status ( stderr, status );
+
+                status = DftiSetValue ( descriptor_, DFTI_BACKWARD_SCALE, 
+                    1.0 );
+                check_status ( stderr, status );
+
             } else {
+
+                status = DftiSetValue ( descriptor_, DFTI_OUTPUT_DISTANCE, 
+                    distance );
+                check_status ( stderr, status );
+
+                status = DftiSetValue ( descriptor_, DFTI_INPUT_DISTANCE, 
+                    (length_ / 2) + 1 );
+                check_status ( stderr, status );
+
                 status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, 1.0 );
                 check_status ( stderr, status );
 
-                status = DftiSetValue ( descriptor_, DFTI_BACKWARD_SCALE, scale_ / (double)length_ );
+                status = DftiSetValue ( descriptor_, DFTI_BACKWARD_SCALE,
+                    scale_ / (double)length_ );
                 check_status ( stderr, status );
             }
 
@@ -244,7 +279,8 @@ class r1d_mkl : public toast::fft::r1d {
 
             if ( status != 0 ) {
                 std::ostringstream o;
-                o << "failed to create mkl FFT plan, status = " << status << std::endl;
+                o << "failed to create mkl FFT plan, status = " << status 
+                    << std::endl;
                 o << "Message: " << DftiErrorMessage ( status ) ;
                 TOAST_THROW( o.str().c_str() );
             }
@@ -259,11 +295,12 @@ class r1d_mkl : public toast::fft::r1d {
             MKL_LONG status = 0;
 
             if ( dir_ == toast::fft::direction::forward ) {
-                status = DftiComputeForward ( descriptor_, traw_ );
+                status = DftiComputeForward ( descriptor_, traw_, 
+                    (MKL_Complex16*)fraw_ );
                 cce2hc();
             } else {
                 hc2cce();
-                status = DftiComputeBackward ( descriptor_, traw_ );
+                status = DftiComputeBackward ( descriptor_, (MKL_Complex16*)fraw_, traw_ );
             }
 
             if ( status != 0 ) {
@@ -287,15 +324,16 @@ class r1d_mkl : public toast::fft::r1d {
 
         void check_status ( FILE * fp, MKL_LONG status ) {
             if ( status != 0 ) {
-                fprintf ( fp, "MKL DFTI error = %s\n", DftiErrorMessage(status) );
+                fprintf ( fp, "MKL DFTI error = %s\n", 
+                    DftiErrorMessage(status) );
             }
             return;
         }
 
         void cce2hc ( ) {
             // CCE packed format is a vector of complex real / imaginary pairs
-            // from 0 to Nyquist (0 to N/2 + 1).  Repack from real space to
-            // Fourier space buffer.
+            // from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
+            // as workspace for the shuffling.
 
             int64_t half = (int64_t)( length_ / 2 );
             bool even = false;
@@ -304,28 +342,31 @@ class r1d_mkl : public toast::fft::r1d {
                 even = true;
             }
 
-            int64_t offset = 0;
             int64_t offcce;
 
             for ( int64_t i = 0; i < n_; ++i ) {
 
-                // copy the real part of the first element.
-                fraw_[offset] = traw_[offset];
+                // copy the first element.
+                tview_[i][0] = fview_[i][0];
                 
                 if ( even ) {
                     // copy in the real part of the last element of the
                     // CCE data, which has N/2+1 complex element pairs.
                     // This element is located at 2 * half == length_.
-                    fraw_[offset + half] = traw_[offset + length_];
+                    tview_[i][half] = fview_[i][length_];
                 }
 
                 for ( int64_t j = 1; j < half; ++j ) {
                     offcce = 2 * j;
-                    fraw_[offset + j] = traw_[offset + offcce];
-                    fraw_[offset + length_ - j] = traw_[offset + offcce + 1];
+                    tview_[i][j] = fview_[i][offcce];
+                    tview_[i][length_ - j] = fview_[i][offcce + 1];
                 }
 
-                offset += buflength_;
+                tview_[i][length_] = 0.0;
+                tview_[i][length_ + 1] = 0.0;
+
+                memcpy ( (void*)fview_[i], (void*)tview_[i], buflength_*sizeof(double) );
+
             }
 
             return;
@@ -333,8 +374,8 @@ class r1d_mkl : public toast::fft::r1d {
 
         void hc2cce ( ) {
             // CCE packed format is a vector of complex real / imaginary pairs
-            // from 0 to Nyquist (0 to N/2 + 1).  Repack from Fourier space to
-            // real space buffer.
+            // from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
+            // as workspace for the shuffling.
 
             int64_t half = (int64_t)( length_ / 2 );
             bool even = false;
@@ -343,25 +384,27 @@ class r1d_mkl : public toast::fft::r1d {
                 even = true;
             }
 
-            int64_t offset = 0;
             int64_t offcce;
 
             for ( int64_t i = 0; i < n_; ++i ) {
 
-                // copy the real part of the first element.
-                traw_[offset] = fraw_[offset];
+                // copy the first element.
+                tview_[i][0] = fview_[i][0];
+                tview_[i][1] = 0.0;
                 
                 if ( even ) {
-                    traw_[offset + length_] = fraw_[offset + half];
+                    tview_[i][length_] = fview_[i][half];
+                    tview_[i][length_ + 1] = 0.0;
                 }
 
                 for ( int64_t j = 1; j < half; ++j ) {
                     offcce = 2 * j;
-                    traw_[offset + offcce] = fraw_[offset + j];
-                    traw_[offset + offcce + 1] = fraw_[offset + length_ - j];
+                    tview_[i][offcce] = fview_[i][j];
+                    tview_[i][offcce + 1] = fview_[i][length_ - j];
                 }
 
-                offset += buflength_;
+                memcpy ( (void*)fview_[i], (void*)tview_[i], buflength_*sizeof(double) );
+
             }
 
             return;
@@ -383,7 +426,8 @@ class r1d_mkl : public toast::fft::r1d {
 
 // Public 1D plan class
 
-toast::fft::r1d::r1d ( int64_t length, int64_t n, plan_type type, direction dir, double scale ) {
+toast::fft::r1d::r1d ( int64_t length, int64_t n, plan_type type, 
+    direction dir, double scale ) {
     type_ = type;
     dir_ = dir;
     length_ = length;
@@ -399,7 +443,8 @@ int64_t toast::fft::r1d::count ( ) {
     return n_;
 }
 
-toast::fft::r1d * toast::fft::r1d::create ( int64_t length, int64_t n, plan_type type, direction dir, double scale ) {
+toast::fft::r1d * toast::fft::r1d::create ( int64_t length, int64_t n, 
+    plan_type type, direction dir, double scale ) {
 
 #ifdef HAVE_MKL
 
@@ -452,19 +497,27 @@ void toast::fft::r1d_plan_store::cache ( int64_t len, int64_t n ) {
 
     for ( int i = 0; i < nthreads; ++i ) {
 
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > & frank_plan = fplans_[ i ];
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > & rrank_plan = rplans_[ i ];
+        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+            & frank_plan = fplans_[ i ];
+        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+            & rrank_plan = rplans_[ i ];
 
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator fit = frank_plan.find ( key );
+        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+            :: iterator fit = frank_plan.find ( key );
         if ( fit == frank_plan.end() ) {
             // allocate plan and add to store
-            frank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::forward, 1.0 ) );
+            frank_plan[ key ] = toast::fft::r1d_p ( 
+                toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
+                toast::fft::direction::forward, 1.0 ) );
         }
 
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator rit = rrank_plan.find ( key );
+        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+            :: iterator rit = rrank_plan.find ( key );
         if ( rit == rrank_plan.end() ) {
             // allocate plan and add to store
-            rrank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::backward, 1.0 ) );
+            rrank_plan[ key ] = toast::fft::r1d_p ( 
+                toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
+                toast::fft::direction::backward, 1.0 ) );
         }
 
     }
@@ -473,7 +526,8 @@ void toast::fft::r1d_plan_store::cache ( int64_t len, int64_t n ) {
 }
 
 
-toast::fft::r1d_p toast::fft::r1d_plan_store::forward ( int64_t len, int64_t n ) {
+toast::fft::r1d_p toast::fft::r1d_plan_store::forward ( int64_t len, 
+    int64_t n ) {
 
     int rank = 0;
 
@@ -483,23 +537,28 @@ toast::fft::r1d_p toast::fft::r1d_plan_store::forward ( int64_t len, int64_t n )
 
     std::pair < int64_t, int64_t > key ( len, n );
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > & rank_plan = fplans_[ rank ];
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        & rank_plan = fplans_[ rank ];
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator it = rank_plan.find ( key );
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        :: iterator it = rank_plan.find ( key );
 
     if ( it == rank_plan.end() ) {
         if ( rank != 0 ) {
             TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
         }
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::forward, 1.0 ) );
+        rank_plan[ key ] = toast::fft::r1d_p ( 
+            toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, 
+            toast::fft::direction::forward, 1.0 ) );
     }
 
     return rank_plan[ key ];
 }
 
 
-toast::fft::r1d_p toast::fft::r1d_plan_store::backward ( int64_t len, int64_t n ) {
+toast::fft::r1d_p toast::fft::r1d_plan_store::backward ( int64_t len, 
+    int64_t n ) {
 
     int rank = 0;
 
@@ -509,16 +568,20 @@ toast::fft::r1d_p toast::fft::r1d_plan_store::backward ( int64_t len, int64_t n 
 
     std::pair < int64_t, int64_t > key ( len, n );
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > & rank_plan = rplans_[ rank ];
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        & rank_plan = rplans_[ rank ];
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > :: iterator it = rank_plan.find ( key );
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        :: iterator it = rank_plan.find ( key );
 
     if ( it == rank_plan.end() ) {
         if ( rank != 0 ) {
             TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
         }
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d_p ( toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, toast::fft::direction::backward, 1.0 ) );
+        rank_plan[ key ] = toast::fft::r1d_p ( 
+            toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, 
+            toast::fft::direction::backward, 1.0 ) );
     }
 
     return rank_plan[ key ];  
