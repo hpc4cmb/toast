@@ -42,26 +42,39 @@ void toast::filter::polyfilter(
         if ( stop < start ) continue;
         int scanlen = stop - start + 1;
 
-        // Build the template matrix
+        // Build the full template matrix used to clean the signal.
+        // We subtract the template value even from flagged samples to
+        // support point source masking etc.
 
-        double *templates = static_cast< double* >(
+        double *full_templates = static_cast< double* >(
             toast::mem::aligned_alloc (
                 scanlen*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
 
         double dx = 2. / scanlen;
         double xstart = 0.5*dx - 1;
         for ( int i=0; i<scanlen; ++i ) {
-            if ( flags[start+i] ) continue;
             double x = xstart + i*dx;
             int offset = i*norder;
-            if ( norder > 0 ) templates[offset++] = 1;
-            if ( norder > 1 ) templates[offset++] = x;
+            if ( norder > 0 ) full_templates[offset++] = 1;
+            if ( norder > 1 ) full_templates[offset++] = x;
             for ( int iorder=1; iorder<norder-1; ++iorder ) {
-                templates[offset] =
-                    ((2*iorder+1)*x*templates[offset-1]
-                     - iorder*templates[offset-2]) / (iorder+1);
+                full_templates[offset] =
+                    ((2*iorder+1)*x*full_templates[offset-1]
+                     - iorder*full_templates[offset-2]) / (iorder+1);
                 ++offset;
             }
+        }
+
+        // Assemble the flagged template matrix used in the linear regression
+
+        double *templates = static_cast< double* >(
+            toast::mem::aligned_alloc (
+                scanlen*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+        for ( int i=0; i<scanlen; ++i ) {
+            if ( flags[start+i] ) continue;
+            for ( int offset=i*norder; offset<(i+1)*norder; ++offset )
+                templates[offset] = full_templates[offset];
         }
 
         double *cov = static_cast< double* >(
@@ -135,8 +148,9 @@ void toast::filter::polyfilter(
 
             // noise = templates.T x coeff
 
-            toast::lapack::gemv( &trans, &norder, &scanlen, &fone, templates,
-                                 &norder, coeff, &one, &fzero, noise, &one );
+            toast::lapack::gemv( &trans, &norder, &scanlen, &fone,
+                                 full_templates, &norder, coeff, &one, &fzero,
+                                 noise, &one );
 
             // Subtract noise
 
@@ -145,6 +159,7 @@ void toast::filter::polyfilter(
 
         // Free workspace
 
+        toast::mem::aligned_free( full_templates );
         toast::mem::aligned_free( templates );
         toast::mem::aligned_free( cov );
         toast::mem::aligned_free( proj );
