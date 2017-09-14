@@ -13,6 +13,8 @@ from .._version import __version__
 
 from .mpi import MPITestRunner
 
+from ..vis import set_backend
+
 from .ctoast import test_ctoast
 
 from . import cbuffer as testcbuffer
@@ -41,6 +43,8 @@ from . import binned as testbinned
 def test(name=None):
     # We run tests with COMM_WORLD
     comm = MPI.COMM_WORLD
+
+    set_backend()
 
     outdir = "toast_test_output"
 

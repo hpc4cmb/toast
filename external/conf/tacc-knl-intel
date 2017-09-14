@@ -35,11 +35,11 @@ CROSS =
 
 INTEL_CONDA = yes
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-PYVERSION = 3.5
+PYVERSION = 3.6
 
 # For BLAS/LAPACK, use MKL
 
-BLAS = -L${TACC_INTEL_DIR}/mkl/lib/intel64 -lmkl_rt -fopenmp -lpthread -lmemkind -lm -ldl
+BLAS = -L${TACC_INTEL_DIR}/mkl/lib/intel64 -lmkl_rt -liomp5 -lpthread -lmemkind -limf -ldl
 LAPACK = 
 
 # Group and permissions to set
