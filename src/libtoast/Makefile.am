@@ -69,7 +69,7 @@ libtoast_la_LIBADD += $(top_builddir)/src/libtoast/math/libtoast_math.la
 
 if HAVE_AM_MPI
 else
-  libtoast_la_LIBADD += $(top_builddir)/src/libtoast/fakempi/libtoast_fakempi.la $(AM_LIBS)
+  libtoast_la_LIBADD += $(top_builddir)/src/libtoast/fakempi/libtoast_fakempi.la
 endif
 
 libtoast_la_LIBADD += $(AM_LIBS)

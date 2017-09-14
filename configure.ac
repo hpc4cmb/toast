@@ -51,6 +51,11 @@ AX_PROG_CXX_MPI([test "$toast_mpi" = yes], [toast_mpi=yes], [
 ])
 AM_CONDITIONAL([HAVE_AM_MPI], [test $toast_mpi = yes])
 
+dnl +------------------------------------------------
+dnl | Check for compiler vendor
+dnl +------------------------------------------------
+AX_COMPILER_VENDOR
+
 dnl +-------------------------
 dnl | Shared library extension
 dnl +-------------------------
@@ -122,7 +127,11 @@ dnl | Check for MKL
 dnl +------------------------------------------------
 AC_LANG_PUSH([C])
 ax_have_mkl=no
-ACX_MKL([ax_have_mkl=yes;AC_DEFINE(HAVE_MKL,1,[Define if using Intel MKL])], [])
+if test x"$ax_cv_c_compiler_vendor" = x"intel"; then
+  ACX_MKL([ax_have_mkl=yes;AC_DEFINE(HAVE_MKL,1,[Define if using Intel MKL])], [])
+else
+  echo "**** Skipping MKL checks since we are not using Intel compilers."
+fi
 AC_LANG_POP([C])
 AM_CONDITIONAL([HAVE_AM_MKL], [test $ax_have_mkl = yes])
 

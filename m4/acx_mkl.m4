@@ -97,7 +97,7 @@ else
    # First, try user-specified location or linked-by-default (for example using
    # a compiler wrapper script)
 
-   MKL="$acx_mkl_ldflags -lmkl_rt -lmemkind -ldl"
+   MKL="$acx_mkl_ldflags -lmkl_rt -lmemkind -liomp5 -ldl"
    CPPFLAGS="$acx_mkl_save_CPPFLAGS $OPENMP_CFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
    LIBS="$acx_mkl_save_LIBS $MKL $OPENMP_CFLAGS $PTHREAD_LIBS $MATH"
 
@@ -109,7 +109,7 @@ else
 
    if test $acx_mkl_ok = no; then
 
-      MKL="$acx_mkl_ldflags -lmkl_rt -ldl"
+      MKL="$acx_mkl_ldflags -lmkl_rt -liomp5 -ldl"
       CPPFLAGS="$acx_mkl_save_CPPFLAGS $OPENMP_CFLAGS $PTHREAD_CFLAGS $MKL_CPPFLAGS"
       LIBS="$acx_mkl_save_LIBS $MKL $OPENMP_CFLAGS $PTHREAD_LIBS $MATH"
 

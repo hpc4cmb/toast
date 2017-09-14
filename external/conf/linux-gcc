@@ -37,9 +37,9 @@ INTEL_CONDA = no
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 PYVERSION = 3.5
 
-# For BLAS/LAPACK, we use the conda-installed MKL
+# For BLAS/LAPACK, we use openblas
 
-BLAS = -L@CONDA_PREFIX@/lib -lmkl_rt -fopenmp -lpthread -lm -ldl
+BLAS = -lopenblas
 LAPACK =
 
 # Boost toolchain name

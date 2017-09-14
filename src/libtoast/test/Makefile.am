@@ -18,8 +18,8 @@ AM_CXXFLAGS =
 
 AM_LDFLAGS =
 
-AM_LIBS = \
-$(top_builddir)/src/libtoast/test/gtest/libtoast_gtest.la
+AM_LIBS =
+
 
 # Add check flags
 
@@ -47,4 +47,6 @@ toast_test_mpi_shmem.cpp \
 toast_test_polyfilter.cpp \
 toast_test_runner.cpp
 
-libtoast_test_la_LIBADD = $(AM_LIBS)
+libtoast_test_la_LIBADD = \
+$(top_builddir)/src/libtoast/test/gtest/libtoast_gtest.la
+

@@ -58,6 +58,7 @@ class r1d_fftw : public toast::fft::r1d {
             // allocate memory
 
             data_.resize ( n_ * 2 * length_ );
+            std::fill ( data_.begin(), data_.end(), 0 );
 
             // create vector views and raw pointers
 
@@ -168,9 +169,7 @@ class r1d_mkl : public toast::fft::r1d {
             toast::fft::direction dir, double scale ) : 
             toast::fft::r1d ( length, n, type, dir, scale ) {
 
-            // Allocate memory.  The extra 2 elements are so that we can do an 
-            // in-place real -> complex FFT and store the output N/2 + 1 
-            // complex numbers (pair of doubles).
+            // Allocate memory.
 
             // Verify that datatype sizes are as expected.
             if ( sizeof(MKL_Complex16) != 2 * sizeof(double) ) {
@@ -196,11 +195,7 @@ class r1d_mkl : public toast::fft::r1d {
                 fview_.push_back ( & data_[(n_ + i) * buflength_] );
             }
 
-            // Create plan.  We do an in-place transform, overwriting 
-            // the input, and then repack the data into the 
-            // user-visible buffer.
-
-            MKL_LONG distance = buflength_;
+            // Create plan.
 
             descriptor_ = 0;
 
@@ -241,11 +236,11 @@ class r1d_mkl : public toast::fft::r1d {
             if ( dir_ == toast::fft::direction::forward ) {
 
                 status = DftiSetValue ( descriptor_, DFTI_INPUT_DISTANCE, 
-                    distance );
+                    (MKL_LONG)buflength_ );
                 check_status ( stderr, status );
 
                 status = DftiSetValue ( descriptor_, DFTI_OUTPUT_DISTANCE, 
-                    (length_ / 2) + 1 );
+                    (MKL_LONG)(buflength_ / 2) );
                 check_status ( stderr, status );
 
                 status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, 
@@ -259,11 +254,11 @@ class r1d_mkl : public toast::fft::r1d {
             } else {
 
                 status = DftiSetValue ( descriptor_, DFTI_OUTPUT_DISTANCE, 
-                    distance );
+                    (MKL_LONG)buflength_ );
                 check_status ( stderr, status );
 
                 status = DftiSetValue ( descriptor_, DFTI_INPUT_DISTANCE, 
-                    (length_ / 2) + 1 );
+                    (MKL_LONG)(buflength_ / 2) );
                 check_status ( stderr, status );
 
                 status = DftiSetValue ( descriptor_, DFTI_FORWARD_SCALE, 1.0 );
@@ -369,6 +364,8 @@ class r1d_mkl : public toast::fft::r1d {
 
             }
 
+            memset ( (void*)traw_, 0, n_ * buflength_ * sizeof(double) );
+
             return;
         }
 
@@ -406,6 +403,8 @@ class r1d_mkl : public toast::fft::r1d {
                 memcpy ( (void*)fview_[i], (void*)tview_[i], buflength_*sizeof(double) );
 
             }
+
+            memset ( (void*)traw_, 0, n_ * buflength_ * sizeof(double) );
 
             return;
         }
@@ -487,39 +486,24 @@ toast::fft::r1d_plan_store & toast::fft::r1d_plan_store::get ( ) {
 
 void toast::fft::r1d_plan_store::cache ( int64_t len, int64_t n ) {
 
-    int nthreads = 1;
-
-    #ifdef _OPENMP  
-    nthreads = omp_get_max_threads();
-    #endif
-
     std::pair < int64_t, int64_t > key ( len, n );
 
-    for ( int i = 0; i < nthreads; ++i ) {
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        :: iterator fit = fplans_.find ( key );
+    if ( fit == fplans_.end() ) {
+        // allocate plan and add to store
+        fplans_[ key ] = toast::fft::r1d_p ( 
+            toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
+            toast::fft::direction::forward, 1.0 ) );
+    }
 
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-            & frank_plan = fplans_[ i ];
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-            & rrank_plan = rplans_[ i ];
-
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-            :: iterator fit = frank_plan.find ( key );
-        if ( fit == frank_plan.end() ) {
-            // allocate plan and add to store
-            frank_plan[ key ] = toast::fft::r1d_p ( 
-                toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
-                toast::fft::direction::forward, 1.0 ) );
-        }
-
-        std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-            :: iterator rit = rrank_plan.find ( key );
-        if ( rit == rrank_plan.end() ) {
-            // allocate plan and add to store
-            rrank_plan[ key ] = toast::fft::r1d_p ( 
-                toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
-                toast::fft::direction::backward, 1.0 ) );
-        }
-
+    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
+        :: iterator rit = rplans_.find ( key );
+    if ( rit == rplans_.end() ) {
+        // allocate plan and add to store
+        rplans_[ key ] = toast::fft::r1d_p ( 
+            toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast,
+            toast::fft::direction::backward, 1.0 ) );
     }
 
     return;
@@ -529,62 +513,38 @@ void toast::fft::r1d_plan_store::cache ( int64_t len, int64_t n ) {
 toast::fft::r1d_p toast::fft::r1d_plan_store::forward ( int64_t len, 
     int64_t n ) {
 
-    int rank = 0;
-
-    #ifdef _OPENMP  
-    rank = omp_get_thread_num();
-    #endif
-
     std::pair < int64_t, int64_t > key ( len, n );
 
     std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-        & rank_plan = fplans_[ rank ];
+        :: iterator it = fplans_.find ( key );
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-        :: iterator it = rank_plan.find ( key );
-
-    if ( it == rank_plan.end() ) {
-        if ( rank != 0 ) {
-            TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
-        }
+    if ( it == fplans_.end() ) {
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d_p ( 
+        fplans_[ key ] = toast::fft::r1d_p ( 
             toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, 
             toast::fft::direction::forward, 1.0 ) );
     }
 
-    return rank_plan[ key ];
+    return fplans_[ key ];
 }
 
 
 toast::fft::r1d_p toast::fft::r1d_plan_store::backward ( int64_t len, 
     int64_t n ) {
 
-    int rank = 0;
-
-    #ifdef _OPENMP  
-    rank = omp_get_thread_num();
-    #endif
-
     std::pair < int64_t, int64_t > key ( len, n );
 
     std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-        & rank_plan = rplans_[ rank ];
+        :: iterator it = rplans_.find ( key );
 
-    std::map < std::pair < int64_t, int64_t >, toast::fft::r1d_p > 
-        :: iterator it = rank_plan.find ( key );
-
-    if ( it == rank_plan.end() ) {
-        if ( rank != 0 ) {
-            TOAST_THROW( "attempting to allocate fft plan within a threaded region!" );
-        }
+    if ( it == rplans_.end() ) {
         // allocate plan and add to store
-        rank_plan[ key ] = toast::fft::r1d_p ( 
+        rplans_[ key ] = toast::fft::r1d_p ( 
             toast::fft::r1d::create ( len, n, toast::fft::plan_type::fast, 
             toast::fft::direction::backward, 1.0 ) );
     }
 
-    return rank_plan[ key ];  
+    return rplans_[ key ];  
 }
 
 
