@@ -10,7 +10,6 @@ export CFLAGS="-O3 -g -fPIC -xMIC-AVX512 -pthread"
 export CXXFLAGS="-O3 -g -fPIC -xMIC-AVX512 -pthread"
 export OPENMP_CFLAGS="-qopenmp"
 export OPENMP_CXXFLAGS="-qopenmp"
-export LDFLAGS="-lpthread -liomp5"
 
 ./configure ${OPTS} \
     --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu \

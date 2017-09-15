@@ -19,4 +19,5 @@ export OPENMP_CFLAGS="-fopenmp"
 export OPENMP_CXXFLAGS="-fopenmp"
 
 ./configure ${OPTS} \
-    --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
+    --without-mkl \
+    --with-blas="-lopenblas"

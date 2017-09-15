@@ -71,8 +71,8 @@ namespace toast { namespace fft {
 
         private:
             r1d_plan_store ( ) { }
-            std::map < int, std::map < std::pair < int64_t, int64_t >, r1d_p > > fplans_;
-            std::map < int, std::map < std::pair < int64_t, int64_t >, r1d_p > > rplans_;
+            std::map < std::pair < int64_t, int64_t >, r1d_p > fplans_;
+            std::map < std::pair < int64_t, int64_t >, r1d_p > rplans_;
 
     };
 

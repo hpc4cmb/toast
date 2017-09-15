@@ -17,13 +17,17 @@ using namespace toast;
 const int64_t fftTest::length = 32;
 const int64_t fftTest::n = 3;
 
-void fftTest::runbatch(int64_t nbatch) {
+
+
+void fftTest::runbatch(int64_t nbatch, fft::r1d_p forward, 
+    fft::r1d_p reverse) {
+    bool debug = false;
+
+    if ( debug ) {
+        std::cout << "------- FFT batch of " << nbatch << " --------" << std::endl;
+    }
+
     std::vector < fft::fft_data > compare ( nbatch );
-
-    // create FFT plans
-
-    fft::r1d_p forward ( fft::r1d::create ( length, nbatch, fft::plan_type::fast, fft::direction::forward, 1.0 ) );
-    fft::r1d_p reverse ( fft::r1d::create ( length, nbatch, fft::plan_type::fast, fft::direction::backward, 1.0 ) );
 
     // First generate some gaussian random noise
 
@@ -32,11 +36,8 @@ void fftTest::runbatch(int64_t nbatch) {
         compare[i].resize ( length );
         for ( int64_t j = 0; j < length; ++j ) {
             compare[i][j] = forward->tdata()[i][j];
-            //std::cout << forward->tdata()[i][j] << std::endl;
         }
     }
-
-    //std::cout << "---------------" << std::endl;
 
     // Do forward transform
 
@@ -50,11 +51,11 @@ void fftTest::runbatch(int64_t nbatch) {
         double mean = 0.0;
         for ( int64_t j = 0; j < length; ++j ) {
             mean += forward->fdata()[i][j];
-            //std::cerr << forward->fdata()[i][j] << std::endl;
         }
         mean /= (double)length;
-        //std::cout << "mean[" << i << "] = " << mean << std::endl;
-        //std::cout << "---------------" << std::endl;
+        if ( debug ) {
+            std::cout << "  fdata[" << i << "] mean = " << mean << std::endl;
+        }
 
         double var = 0.0;
         for ( int64_t j = 0; j < length; ++j ) {
@@ -64,9 +65,16 @@ void fftTest::runbatch(int64_t nbatch) {
 
         double outlier = ::fabs( var - ((double)length / 2.0) );
 
-        // std::cout << "var[" << i << "] = " << var << ", (len / 2) = " << ((double)length / 2.0) << " sigma = " << sigma << " outlier = " << outlier << std::endl;
+        if ( debug ) {
+            std::cout << "  fdata[" << i << "] var = " << var << 
+                ", (len / 2) = " << ((double)length / 2.0) << 
+                " sigma = " << sigma << " outlier = " << outlier 
+                << std::endl;
+        }
 
-        ASSERT_TRUE( outlier < 3.0 * sigma );
+        if ( ! debug ) {
+            ASSERT_TRUE( outlier < 3.0 * sigma );
+        }
     }
 
     // Copy data to reverse transform
@@ -82,9 +90,15 @@ void fftTest::runbatch(int64_t nbatch) {
     // Verify roundtrip values
 
     for ( int64_t i = 0; i < nbatch; ++i ) {
+        if ( debug ) {
+            std::cout << "  fft " << i << ":" << std::endl;
+        }
         for ( int64_t j = 0; j < length; ++j ) {
-            //std::cout << reverse->tdata()[i][j] << std::endl;
-            EXPECT_FLOAT_EQ( compare[i][j], reverse->tdata()[i][j] );
+            if ( debug ) {
+                std::cout << "    (" << j << ")" << compare[i][j] << " " << forward->fdata()[i][j] << " " << reverse->tdata()[i][j] << std::endl;
+            } else {
+                EXPECT_FLOAT_EQ( compare[i][j], reverse->tdata()[i][j] );
+            }
         }
     }
 
@@ -93,10 +107,66 @@ void fftTest::runbatch(int64_t nbatch) {
 
 
 TEST_F( fftTest, roundtrip_single ) {
-    runbatch(1);
+    // create FFT plans
+    fft::r1d_p fplan ( fft::r1d::create ( length, 1, fft::plan_type::fast, 
+        fft::direction::forward, 1.0 ) );
+    fft::r1d_p rplan ( fft::r1d::create ( length, 1, fft::plan_type::fast, 
+        fft::direction::backward, 1.0 ) );
+    // run test
+    runbatch(1, fplan, rplan);
 }
 
 TEST_F( fftTest, roundtrip_multi ) {
-    runbatch(n);
+    // create FFT plans
+    fft::r1d_p fplan ( fft::r1d::create ( length, n, fft::plan_type::fast, 
+        fft::direction::forward, 1.0 ) );
+    fft::r1d_p rplan ( fft::r1d::create ( length, n, fft::plan_type::fast, 
+        fft::direction::backward, 1.0 ) );
+    // run test
+    runbatch(n, fplan, rplan);
+}
+
+TEST_F( fftTest, plancache_single ) {
+    // use the plan store.  test both reuse of plans and
+    // creation after a clear().
+    fft::r1d_plan_store & store = fft::r1d_plan_store::get();
+    store.clear();
+
+    fft::r1d_p fplan = store.forward ( length, 1 );
+    fft::r1d_p rplan = store.backward ( length, 1 );
+    runbatch(1, fplan, rplan);
+
+    fplan = store.forward ( length, 1 );
+    rplan = store.backward ( length, 1 );
+    runbatch(1, fplan, rplan);
+
+    store.clear();
+    fplan = store.forward ( length, 1 );
+    rplan = store.backward ( length, 1 );
+    runbatch(1, fplan, rplan);
+
+}
+
+
+TEST_F( fftTest, plancache_multi ) {
+    // use the plan store.  test both reuse of plans and
+    // creation after a clear().
+    fft::r1d_plan_store & store = fft::r1d_plan_store::get();
+    store.clear();
+
+    fft::r1d_p fplan = store.forward ( length, n );
+    fft::r1d_p rplan = store.backward ( length, n );
+    runbatch(n, fplan, rplan);
+
+    fplan = store.forward ( length, n );
+    rplan = store.backward ( length, n );
+    runbatch(n, fplan, rplan);
+
+    store.clear();
+
+    fplan = store.forward ( length, n );
+    rplan = store.backward ( length, n );
+    runbatch(n, fplan, rplan);
+
 }
 

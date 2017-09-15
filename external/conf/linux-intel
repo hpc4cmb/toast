@@ -7,13 +7,13 @@ FC = ifort
 
 # MPI compilers
 
-MPICC = cc
-MPICXX = CC
-MPIFC = ftn
-MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
-MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
-MPI_CXXLIB = mpichcxx
-MPI_LIB = mpich
+MPICC = mpiicc
+MPICXX = mpiicpc
+MPIFC = mpiifort
+MPI_CPPFLAGS = ${I_MPI_ROOT}/include64
+MPI_LDFLAGS = ${I_MPI_ROOT}/lib64
+MPI_CXXLIB = mpicxx
+MPI_LIB = mpi
 MPI_EXTRA_COMP =
 MPI_EXTRA_LINK =
 
@@ -37,10 +37,10 @@ INTEL_CONDA = yes
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 PYVERSION = 3.6
 
-# For BLAS/LAPACK, use MKL
+# For BLAS/LAPACK, we use MKL
 
 BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -liomp5 -lpthread -limf -ldl
-LAPACK = 
+LAPACK =
 
 # Boost toolchain name
 
@@ -48,6 +48,5 @@ BOOSTCHAIN = intel-linux
 
 # Group and permissions to set
 
-CHGRP = hpcosmo
-CHMOD = a+rX,g-w,o-w
-
+CHGRP =
+CHMOD = 
