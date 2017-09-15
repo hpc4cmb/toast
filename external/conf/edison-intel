@@ -12,8 +12,8 @@ MPICXX = CC
 MPIFC = ftn
 MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
 MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
-MPI_CXXLIB = mpichcxx
-MPI_LIB = mpich
+MPI_CXXLIB = mpichcxx_intel
+MPI_LIB = mpich_intel
 MPI_EXTRA_COMP =
 MPI_EXTRA_LINK =
 
