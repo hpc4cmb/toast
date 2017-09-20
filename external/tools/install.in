@@ -86,7 +86,9 @@ fi
 
 # Install OpenBLAS
 
+if [ "x@INTEL_COMP@" != "xyes"]; then
 @openblas@
+fi
 
 # Install wcslib
 
