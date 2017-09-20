@@ -112,6 +112,14 @@ fi
 
 @elemental@
 
+# Install HDF5
+
+@hdf5@
+
+# Install TIDAS
+
+@tidas@
+
 # Install PyMPIT for environment testing
 
 @pympit@

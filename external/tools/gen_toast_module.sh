@@ -70,8 +70,10 @@ echo '#!/bin/bash' > ${out}
 echo "mkdir -p ${prefix}/modulefiles/toast" >> ${out}
 echo "cp mod_toast-${version} ${prefix}/modulefiles/toast/${version}" >> ${out}
 echo "cp modver_toast-${version} ${prefix}/modulefiles/toast/.version_${version}" >> ${out}
-echo "chmod -R a+rX ${prefix}/toast" >> ${out}
-echo "chmod -R a+rX ${prefix}/modulefiles/toast" >> ${out}
+echo "chgrp -R hpcosmo ${prefix}/toast" >> ${out}
+echo "chgrp -R hpcosmo ${prefix}/modulefiles/toast" >> ${out}
+echo "chmod -R g=rwX,o=rX ${prefix}/toast" >> ${out}
+echo "chmod -R g=rwX,o=rX ${prefix}/modulefiles/toast" >> ${out}
 chmod +x ${out}
 
 echo "run configure with --prefix=${prefix}/toast/${version}"
