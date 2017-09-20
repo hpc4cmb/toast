@@ -5,7 +5,7 @@ curl -SL https://support.hdfgroup.org/ftp/HDF5/current18/src/hdf5-1.8.19.tar.bz2
     CXX="@CXX@" CXXFLAGS="@CXXFLAGS@" \
     ./configure --disable-fortran --disable-fortran2003 \
     --disable-silent-rules \
-    --disable-parallel --disable-threadsafe \
+    --disable-parallel \
     --enable-cxx @CROSS@ \
     --prefix="@AUX_PREFIX@" \
     && make -j 4 && make install \
