@@ -552,9 +552,13 @@ def expand_pointing(args, comm, data, counter):
         hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
 
     pointing.exec(data)
-    for ob in data.obs:
-        tod = ob['tod']
-        tod.free_radec_quats()
+
+    # Only purge the pointing if we are NOT going to export the
+    # data to a TIDAS volume
+    if args.tidas is None:
+        for ob in data.obs:
+            tod = ob['tod']
+            tod.free_radec_quats()
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()

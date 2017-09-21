@@ -23,7 +23,6 @@ from ..tod import tidas_available
 from ..tod import Interval
 
 if tidas_available:
-    import tidas as tds
     from tidas.mpi_volume import MPIVolume
     from ..tod import tidas as tt
 

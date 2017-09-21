@@ -1,5 +1,6 @@
 git clone https://github.com/hpc4cmb/tidas.git \
     && cd tidas \
+    && ./autogen.sh \
     && CC="@CC@" CFLAGS="@CFLAGS@" \
     CXX="@CXX@" CXXFLAGS="@CXXFLAGS@" \
     FC="@FC@" FCFLAGS="@FCFLAGS@" \
