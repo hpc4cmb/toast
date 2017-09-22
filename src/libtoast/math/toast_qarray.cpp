@@ -26,7 +26,10 @@ const static int toast_qarray_ompthresh = 100;
 void toast::qarray::list_dot ( size_t n, size_t m, size_t d, double const * a, 
     double const * b, double * dotprod ) {
 
-    int nt = omp_get_num_threads();
+    int nt = 1;
+    #ifdef _OPENMP
+    nt = omp_get_num_threads();
+    #endif
     
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -87,7 +90,10 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
 
     toast::qarray::amplitude ( n, m, d, q_in, norm );
 
-    int nt = omp_get_num_threads();
+    int nt = 1;
+    #ifdef _OPENMP
+    nt = omp_get_num_threads();
+    #endif
 
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -119,7 +125,10 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
 
     toast::qarray::amplitude ( n, m, d, q, norm );
 
-    int nt = omp_get_num_threads();
+    int nt = 1;
+    #ifdef _OPENMP
+    nt = omp_get_num_threads();
+    #endif
 
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -163,7 +172,10 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
     size_t qf;
     double xw, yw, zw, x2, xy, xz, y2, yz, z2;
 
-    int nt = omp_get_num_threads();
+    int nt = 1;
+    #ifdef _OPENMP
+    nt = omp_get_num_threads();
+    #endif
 
     // this is to avoid branching inside the for loop.
     size_t chv;
@@ -298,7 +310,10 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
 
 void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const * q, double * r ) {
 
-    int nt = omp_get_num_threads();
+    int nt = 1;
+    #ifdef _OPENMP
+    nt = omp_get_num_threads();
+    #endif
 
     size_t n = np;
     if ( nq > n ) {

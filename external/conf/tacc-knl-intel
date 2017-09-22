@@ -1,6 +1,7 @@
 
 # Serial compilers
 
+INTEL_COMP = yes
 CC = icc
 CXX = icpc
 FC = ifort

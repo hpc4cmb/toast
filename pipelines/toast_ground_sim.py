@@ -224,8 +224,15 @@ def parse_arguments(comm):
                         required=False, default=1, type=np.int,
                         help='Number of frequencies with identical focal '
                         'planes')
+    parser.add_argument('--tidas',
+                        required=False, default=None,
+                        help='Output TIDAS export path')
 
     args = parser.parse_args()
+
+    if args.tidas is not None:
+        if not tt.tidas_available:
+            raise RuntimeError("TIDAS not found- cannot export")
 
     if comm.comm_world.rank == 0:
         print('\nAll parameters:')
@@ -545,9 +552,13 @@ def expand_pointing(args, comm, data, counter):
         hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
 
     pointing.exec(data)
-    for ob in data.obs:
-        tod = ob['tod']
-        tod.free_radec_quats()
+
+    # Only purge the pointing if we are NOT going to export the
+    # data to a TIDAS volume
+    if args.tidas is None:
+        for ob in data.obs:
+            tod = ob['tod']
+            tod.free_radec_quats()
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
@@ -1347,6 +1358,17 @@ def main():
                            totalname_freq)
 
             scramble_gains(args, comm, data, mc+mcoffset, counter)
+
+            if (mc == firstmc) and (ifreq == 0):
+                # For the first realization and frequency, optionally 
+                # export the timestream data to a TIDAS volume.
+                if args.tidas is not None:
+                    from toast.tod.tidas import OpTidasExport
+                    tidas_path = os.path.abspath(args.tidas)
+                    export = OpTidasExport(tidas_path, name=totalname, 
+                        common_flag_name=common_flag_name, 
+                        flag_name=flag_name, usedist=True)
+                    export.exec(data)
 
             outpath = setup_output(args, comm, mc+mcoffset)
 

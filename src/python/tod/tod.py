@@ -39,10 +39,11 @@ class TOD(object):
             cannot be split.
         sampbreaks (list):  Optional list of hard breaks in the sample
             distribution.
+        meta (dict):  Optional dictionary of metadata properties.
 
     """
     def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1,
-        detbreaks=None, sampsizes=None, sampbreaks=None):
+        detbreaks=None, sampsizes=None, sampbreaks=None, meta=None):
 
         self._mpicomm = mpicomm
         self._detranks = detranks
@@ -57,11 +58,22 @@ class TOD(object):
         self._rank_det = mpicomm.rank // self._sampranks
         self._rank_samp = mpicomm.rank % self._sampranks
 
+        # Split the main communicator into process row and column 
+        # communicators, since this is useful for gathering data in some
+        # operations.
+
+        self._comm_row = self._mpicomm.Split(self._rank_det, self._rank_samp)
+        self._comm_col = self._mpicomm.Split(self._rank_samp, self._rank_det)
+
         self._dets = detectors
 
         self._nsamp = samples
 
         self._sizes = sampsizes
+
+        self._meta = meta
+        if meta is None:
+            self._meta = {}
 
         if detindx is not None:
             for d in self._dets:
@@ -117,6 +129,29 @@ class TOD(object):
         (list): The total list of detectors.
         """
         return self._dets
+
+    def meta(self):
+        """
+        (dict): Dictionary of metadata properties.
+        """
+        return dict(self._meta)
+
+    def detoffset(self):
+        """
+        Return dictionary of detector quaternions.
+
+        This returns a dictionary with the detector names as the keys and the
+        values are 4-element numpy arrays containing the quaternion offset 
+        from the boresight.
+
+        Args:
+            None
+
+        Returns (dict):
+            the dictionary of quaternions.
+        """
+        raise NotImplementedError("Fell through to TOD base class method")
+        return None
 
     @property
     def detindx(self):
@@ -209,12 +244,38 @@ class TOD(object):
         """
         return (self._rank_det, self._rank_samp)
 
+    @property
+    def grid_comm_row(self):
+        """
+        (mpi4py.MPI.Comm): a communicator across all detectors in the same
+            row of the process grid.
+        """
+        return (self._comm_row)
+
+    @property
+    def grid_comm_col(self):
+        """
+        (mpi4py.MPI.Comm): a communicator across all detectors in the same
+            column of the process grid.
+        """
+        return (self._comm_col)
+
     def _get(self, detector, start, n):
         raise NotImplementedError("Fell through to TOD._get base class method")
         return None
 
     def _put(self, detector, start, data):
         raise NotImplementedError("Fell through to TOD._put base class method")
+        return
+
+    def _get_boresight(self, start, n):
+        raise NotImplementedError("Fell through to TOD._get_boresight base "
+            "class method")
+        return None
+
+    def _put_boresight(self, start, data):
+        raise NotImplementedError("Fell through to TOD._put_boresight base "
+            "class method")
         return
 
     def _get_pntg(self, detector, start, n):
@@ -298,10 +359,10 @@ class TOD(object):
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read times- process has no assigned local samples')
+                "cannot read times- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError('local sample range {} - {} is invalid'
-                             ''.format(local_start, local_start+n-1))
+            raise ValueError("local sample range {} - {} is invalid"
+                             "".format(local_start, local_start+n-1))
         return self._get_times(local_start, n, **kwargs)
 
 
@@ -318,17 +379,71 @@ class TOD(object):
             stamps (array): the array of timestamps to write.
         """
         if stamps is None:
-            raise ValueError('you must specify the vector of time stamps')
+            raise ValueError("you must specify the vector of time stamps")
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot write times- process has no assigned local samples')
+                "cannot write times- process has no assigned local samples")
         if (local_start < 0) \
            or (local_start + stamps.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+stamps.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps, **kwargs)
         return
+
+
+    # Read and write telescope boresight pointing
+
+    def read_boresight(self, local_start=0, n=0, **kwargs):
+        """
+        Read boresight quaternion pointing.
+
+        This returns the pointing of the boresight in quaternions.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            A 2D array of shape (n, 4)
+        """
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot read boresight- process has no local samples")
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
+        return self._get_boresight(local_start, n, **kwargs)
+
+
+    def write_boresight(self, local_start=0, data=None, **kwargs):
+        """
+        Write boresight quaternion pointing.
+
+        This writes the quaternion pointing for the boresight.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): 2D array of quaternions with shape[1] == 4.
+        """
+        if len(data.shape) != 2:
+            raise ValueError("data should be a 2D array")
+        if data.shape[1] != 4:
+            raise ValueError("data should have second dimension of size 4")
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot write boresight- process has no local samples")
+        if (local_start < 0) \
+           or (local_start + data.shape[0] > self.local_samples[1]):
+            raise ValueError("local sample range is invalid")
+        self._put_boresight(local_start, data, **kwargs)
+        return
+
 
     # Read and write detector data
 
@@ -348,19 +463,20 @@ class TOD(object):
             An array containing the data.
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read- process has no assigned local samples')
+                "cannot read- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get(detector, local_start, n, **kwargs)
+
 
     def write(self, detector=None, local_start=0, data=None, **kwargs):
         """
@@ -375,21 +491,22 @@ class TOD(object):
             data (array): the data array.
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if data is None:
-            raise ValueError('data array must be specified')
+            raise ValueError("data array must be specified")
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot write- process has no assigned local samples')
+                "cannot write- process has no assigned local samples")
         if (local_start < 0) \
            or (local_start + data.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+data.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+data.shape[0]-1))
         self._put(detector, local_start, data, **kwargs)
         return
+
 
     # Read and write detector quaternion pointing
 
@@ -409,19 +526,20 @@ class TOD(object):
             A 2D array of shape (n, 4)
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read pntg- process has no assigned local samples')
+                "cannot read pntg- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n, **kwargs)
+
 
     def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
         """
@@ -436,23 +554,24 @@ class TOD(object):
             data (array): 2D array of quaternions with shape[1] == 4.
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if data is None:
-            raise ValueError('data must be specified')
+            raise ValueError("data must be specified")
         if len(data.shape) != 2:
-            raise ValueError('data should be a 2D array')
+            raise ValueError("data should be a 2D array")
         if data.shape[1] != 4:
-            raise ValueError('data should have second dimension of size 4')
+            raise ValueError("data should have second dimension of size 4")
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot write pntg- process has no assigned local samples')
+                "cannot write pntg- process has no assigned local samples")
         if (local_start < 0) \
            or (local_start + data.shape[0] > self.local_samples[1]):
-            raise ValueError('local sample range is invalid')
+            raise ValueError("local sample range is invalid")
         self._put_pntg(detector, local_start, data, **kwargs)
         return
+
 
     # Read and write detector flags
 
@@ -473,19 +592,20 @@ class TOD(object):
                 flags.
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read flags- process has no assigned local samples')
+                "cannot read flags- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get_flags(detector, local_start, n, **kwargs)
+
 
     def read_common_flags(self, local_start=0, n=0, **kwargs):
         """
@@ -503,15 +623,16 @@ class TOD(object):
             (array): a numpy array containing the flags.
         """
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot read common flags- process has no '
-                               'assigned local samples')
+            raise RuntimeError("cannot read common flags- process has no "
+                               "assigned local samples")
         if n == 0:
             n = self.local_samples[1] - local_start
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n, **kwargs)
+
 
     def write_common_flags(self, local_start=0, flags=None, **kwargs):
         """
@@ -526,18 +647,19 @@ class TOD(object):
             flags (array): array containing the flags to write.
         """
         if flags is None:
-            raise ValueError('flags must be specified')
+            raise ValueError("flags must be specified")
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write common flags- process has no '
-                               'assigned local samples')
+            raise RuntimeError("cannot write common flags- process has no "
+                               "assigned local samples")
 
         if (local_start < 0) \
            or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+flags.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+flags.shape[0]-1))
         self._put_common_flags(local_start, flags, **kwargs)
         return
+
 
     def write_det_flags(self, detector=None, local_start=0, flags=None,
                         **kwargs):
@@ -553,21 +675,22 @@ class TOD(object):
             flags (array): the detector flags.
         """
         if detector is None:
-            raise ValueError('you must specify the detector')
+            raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
-            raise ValueError('detector {} not found'.format(detector))
+            raise ValueError("detector {} not found".format(detector))
         if flags is None:
-            raise ValueError('flags must be specified')
+            raise ValueError("flags must be specified")
         if self.local_samples[1] <= 0:
-            raise RuntimeError('cannot write flags- process has no assigned '
-                               'local samples')
+            raise RuntimeError("cannot write flags- process has no assigned "
+                               "local samples")
         if (local_start < 0) \
            or (local_start + flags.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+flags.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+flags.shape[0]-1))
         self._put_det_flags(detector, local_start, flags, **kwargs)
         return
+
 
     # Read and write telescope position
 
@@ -591,12 +714,13 @@ class TOD(object):
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read position- process has no assigned local samples')
+                "cannot read position- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get_position(local_start, n, **kwargs)
+
 
     def write_position(self, local_start=0, pos=None, **kwargs):
         """
@@ -611,17 +735,18 @@ class TOD(object):
             pos (array): the 2D array of x,y,z coordinates at each sample.
         """
         if pos is None:
-            raise ValueError('you must specify the array of coordinates')
+            raise ValueError("you must specify the array of coordinates")
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot write position- process has no assigned local samples')
+                "cannot write position- process has no assigned local samples")
         if (local_start < 0) \
            or (local_start + pos.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+pos.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+pos.shape[0]-1))
         self._put_position(local_start, pos, **kwargs)
         return
+
 
     # Read and write telescope velocity
 
@@ -645,12 +770,13 @@ class TOD(object):
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot read position- process has no assigned local samples')
+                "cannot read position- process has no assigned local samples")
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+n-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
         return self._get_velocity(local_start, n, **kwargs)
+
 
     def write_velocity(self, local_start=0, vel=None, **kwargs):
         """
@@ -666,15 +792,15 @@ class TOD(object):
                 sample.
         """
         if vel is None:
-            raise ValueError('you must specify the array of velocities.')
+            raise ValueError("you must specify the array of velocities.")
         if self.local_samples[1] <= 0:
             raise RuntimeError(
-                'cannot write times- process has no assigned local samples')
+                "cannot write times- process has no assigned local samples")
         if (local_start < 0) \
            or (local_start + vel.shape[0] > self.local_samples[1]):
             raise ValueError(
-                'local sample range {} - {} is invalid'
-                ''.format(local_start, local_start+vel.shape[0]-1))
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+vel.shape[0]-1))
         self._put_velocity(local_start, vel, **kwargs)
         return
 
@@ -704,41 +830,50 @@ class TODCache(TOD):
             distribution.
     """
 
-    def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1,
-        detbreaks=None, sampsizes=None, sampbreaks=None):
+    def __init__(self, mpicomm, detectors, samples, detindx=None, detquats=None, detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
 
         super().__init__(mpicomm, detectors, samples, detindx=detindx,
             detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes,
             sampbreaks=sampbreaks)
 
-        self._pref_detdata = 'toast_tod_detdata_'
-        self._pref_detflags = 'toast_tod_detflags_'
-        self._pref_detpntg = 'toast_tod_detpntg_'
-        self._common = 'toast_tod_common_flags'
-        self._stamps = 'toast_tod_stamps'
-        self._pos = 'toast_tod_pos'
-        self._vel = 'toast_tod_vel'
+        self._detquats = detquats
+        self._pref_detdata = "toast_tod_detdata_"
+        self._pref_detflags = "toast_tod_detflags_"
+        self._pref_detpntg = "toast_tod_detpntg_"
+        self._bore = "toast_boresight"
+        self._common = "toast_tod_common_flags"
+        self._stamps = "toast_tod_stamps"
+        self._pos = "toast_tod_pos"
+        self._vel = "toast_tod_vel"
 
     def __del__(self):
         self.cache.clear()
+
+    def detoffset(self):
+        if self._detquats is None:
+            raise NotImplementedError("TODCache does not contain detector "
+                "quaternions.")
+            return None
+        else:
+            return self._detquats
 
     # This class just use a Cache object to store things.
 
     def _get(self, detector, start, n):
         if detector not in self.local_dets:
             raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
+                "detector {} not assigned to local process".format(detector))
         cachedata = "{}{}".format(self._pref_detdata, detector)
         if not self.cache.exists(cachedata):
             raise ValueError(
-                'detector {} data not yet written'.format(detector))
+                "detector {} data not yet written".format(detector))
         dataref = self.cache.reference(cachedata)[start:start+n]
         return dataref
 
     def _put(self, detector, start, data):
         if detector not in self.local_dets:
             raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
+                "detector {} not assigned to local process".format(detector))
         cachedata = "{}{}".format(self._pref_detdata, detector)
 
         if not self.cache.exists(cachedata):
@@ -750,21 +885,38 @@ class TODCache(TOD):
         refdata[:] = data
         return
 
+    def _get_boresight(self, start, n):
+        if not self.cache.exists(self._bore):
+            raise ValueError("boresight not yet written")
+        ref = self.cache.reference(self._bore)[start:start+n,:]
+        return ref
+
+    def _put_boresight(self, start, data):
+        if not self.cache.exists(self._bore):
+            self.cache.create(self._bore, np.float64, 
+                (self.local_samples[1],4))
+        ref = self.cache.reference(self._bore)
+        ref[start:(start+data.shape[0]),:] = data
+        return
+
     def _get_pntg(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
         cachepntg = "{}{}".format(self._pref_detpntg, detector)
         if not self.cache.exists(cachepntg):
-            raise ValueError(
-                'detector {} pointing data not yet written'.format(detector))
-        pntgref = self.cache.reference(cachepntg)[start:start+n,:]
-        return pntgref
+            # No detector-specific pointing written.  See if we have
+            # boresight pointing and detector quaternions.
+            if self.cache.exists(self._bore) and (self._detquats is not None):
+                return qa.mult()
+            else:
+                raise ValueError(
+                    "detector {}: pointing data not yet written, and boresight"
+                    " and detector quaternions do not exist.".format(detector))
+        else:
+            return self.cache.reference(cachepntg)[start:start+n,:]
 
     def _put_pntg(self, detector, start, data):
         if detector not in self.local_dets:
             raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
+                "detector {} not assigned to local process".format(detector))
         cachepntg = "{}{}".format(self._pref_detpntg, detector)
         if not self.cache.exists(cachepntg):
             self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
@@ -775,13 +927,13 @@ class TODCache(TOD):
     def _get_flags(self, detector, start, n):
         if detector not in self.local_dets:
             raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
+                "detector {} not assigned to local process".format(detector))
         cacheflags = "{}{}".format(self._pref_detflags, detector)
         if not self.cache.exists(cacheflags):
             raise ValueError(
-                'detector {} flags not yet written'.format(detector))
+                "detector {} flags not yet written".format(detector))
         if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
+            raise ValueError("common flags not yet written")
         flagsref = self.cache.reference(cacheflags)[start:start+n]
         comref = self.cache.reference(self._common)[start:start+n]
         return flagsref, comref
@@ -789,7 +941,7 @@ class TODCache(TOD):
     def _put_det_flags(self, detector, start, flags):
         if detector not in self.local_dets:
             raise ValueError(
-                'detector {} not assigned to local process'.format(detector))
+                "detector {} not assigned to local process".format(detector))
         cacheflags = "{}{}".format(self._pref_detflags, detector)
 
         if not self.cache.exists(cacheflags):
@@ -803,7 +955,7 @@ class TODCache(TOD):
 
     def _get_common_flags(self, start, n):
         if not self.cache.exists(self._common):
-            raise ValueError('common flags not yet written')
+            raise ValueError("common flags not yet written")
         comref = self.cache.reference(self._common)[start:start+n]
         return comref
 
@@ -817,7 +969,7 @@ class TODCache(TOD):
 
     def _get_times(self, start, n):
         if not self.cache.exists(self._stamps):
-            raise ValueError('timestamps not yet written')
+            raise ValueError("timestamps not yet written")
         ref = self.cache.reference(self._stamps)[start:start+n]
         return ref
 
@@ -832,7 +984,7 @@ class TODCache(TOD):
 
     def _get_position(self, start, n):
         if not self.cache.exists(self._pos):
-            raise ValueError('telescope position not yet written')
+            raise ValueError("telescope position not yet written")
         ref = self.cache.reference(self._pos)[start:start+n]
         return ref
 
@@ -846,7 +998,7 @@ class TODCache(TOD):
 
     def _get_velocity(self, start, n):
         if not self.cache.exists(self._vel):
-            raise ValueError('telescope velocity not yet written')
+            raise ValueError("telescope velocity not yet written")
         ref = self.cache.reference(self._vel)[start:start+n]
         return ref
 
