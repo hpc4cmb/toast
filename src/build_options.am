@@ -48,6 +48,11 @@ endif
 
 endif
 
+if HAVE_AM_TBB
+  AM_CPPFLAGS += $(TBB_CPPFLAGS)
+  AM_LIBS += $(TBB)
+endif
+
 # Always need the C math and pthreads libraries
 
 AM_LIBS += $(PTHREAD_LIBS) $(MATH)

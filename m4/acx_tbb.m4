@@ -99,8 +99,14 @@ else
 
    AC_CHECK_HEADERS([tbb/tbb.h])
 
-   AC_MSG_CHECKING([for blah])
-   AC_TRY_LINK_FUNC(blah, [acx_tbb_ok=yes;AC_DEFINE(HAVE_TBB,1,[Define if you have the Intel TBB library.])], [])
+   AC_MSG_CHECKING([for parallel_for])
+
+   AC_LINK_IFELSE([AC_LANG_PROGRAM([
+      [#include <tbb/task_scheduler_init.h>]
+   ],[
+      tbb::task_scheduler_init init;
+   ])],[acx_tbb_ok=yes;AC_DEFINE(HAVE_TBB,1,[Define if you have the Thread Building Blocks library.])])
+
    AC_MSG_RESULT($acx_tbb_ok)
 
    if test $acx_tbb_ok = no; then
