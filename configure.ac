@@ -136,6 +136,15 @@ AC_LANG_POP([C])
 AM_CONDITIONAL([HAVE_AM_MKL], [test $ax_have_mkl = yes])
 
 dnl +------------------------------------------------
+dnl | Check for TBB
+dnl +------------------------------------------------
+AC_LANG_PUSH([C++])
+ax_have_tbb=no
+ACX_TBB([ax_have_tbb=yes;AC_DEFINE(HAVE_TBB,1,[Define if we have Thread Building Blocks])], [])
+AC_LANG_POP([C++])
+AM_CONDITIONAL([HAVE_AM_TBB], [test $ax_have_tbb = yes])
+
+dnl +------------------------------------------------
 dnl | Check for FFTW
 dnl +------------------------------------------------
 ax_have_fftw=no
@@ -291,6 +300,11 @@ if test $toast_elemental = yes; then
   AC_MSG_NOTICE([  Elemental link            : $ELEMENTAL])
 else
   AC_MSG_NOTICE([  Elemental                 : Disabled])
+fi
+
+if test $ax_have_tbb = yes; then
+  AC_MSG_NOTICE([  TBB compile               : $TBB_CPPFLAGS])
+  AC_MSG_NOTICE([  TBB link                  : $TBB])
 fi
 
 AC_MSG_NOTICE([                                           ])

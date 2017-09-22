@@ -16,4 +16,5 @@ export OPENMP_CXXFLAGS="-qopenmp"
 
 ./configure ${OPTS} \
     --with-math="-limf" \
-    --with-mkl="${MKLROOT}/lib/intel64"
+    --with-mkl="${MKLROOT}/lib/intel64" \
+    --with-tbb="${TBBROOT}/lib/intel64/gcc4.7"
