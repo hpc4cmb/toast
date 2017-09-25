@@ -1236,6 +1236,26 @@ def clear_signal(args, comm, data, sigclear, counter):
     return
 
 
+def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
+    if args.tidas is None:
+        return
+    from toast.tod.tidas import OpTidasExport
+    comm.comm_world.Barrier()
+    tidas_start = MPI.Wtime()
+    tidas_path = os.path.abspath(args.tidas)
+    export = OpTidasExport(tidas_path, name=totalname, 
+        common_flag_name=common_flag_name, 
+        flag_name=flag_name, usedist=True)
+    export.exec(data)
+    comm.comm_world.Barrier()
+    tidas_stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Wrote simulated TOD to {}:{} in {:.2f} s'
+              ''.format(tidas_path, totalname,
+                        tidas_stop-tidas_start), flush=True)
+    return
+
+
 def apply_madam(args, comm, data, madampars, counter, mc, firstmc, outpath,
                 detweights, totalname_madam, flag_name, common_flag_name):
     if args.madam:
@@ -1362,13 +1382,8 @@ def main():
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally 
                 # export the timestream data to a TIDAS volume.
-                if args.tidas is not None:
-                    from toast.tod.tidas import OpTidasExport
-                    tidas_path = os.path.abspath(args.tidas)
-                    export = OpTidasExport(tidas_path, name=totalname, 
-                        common_flag_name=common_flag_name, 
-                        flag_name=flag_name, usedist=True)
-                    export.exec(data)
+                output_tidas(args, comm, data, totalname, common_flag_name,
+                             flag_name)
 
             outpath = setup_output(args, comm, mc+mcoffset)
 
