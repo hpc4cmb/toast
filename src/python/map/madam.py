@@ -463,19 +463,23 @@ class OpMadam(Operator):
                     madam_pixels[dslice] = pixels[istart:istop]
                     offset += nn
 
-                # Always purge the pixels but restore them from the Madam
-                # buffers when purge_pixels=False
                 del pixels
-                tod.cache.clear(pattern=pixelsname)
-
                 del signal
-                if self._name is not None and (
-                        self._purge_tod or self._name == self._name_out):
-                    tod.cache.clear(pattern=cachename)
-
                 if self._apply_flags:
                     del flags
+
+            # Always purge the pixels but restore them from the Madam
+            # buffers when purge_pixels=False
+            for d in range(ndet):
+                pixelsname = "{}_{}".format(self._pixels, detectors[d])
+                tod.cache.clear(pattern=pixelsname)
+                if self._name is not None and (
+                        self._purge_tod or self._name == self._name_out):
+                    cachename = "{}_{}".format(self._name, detectors[d])
+                    tod.cache.clear(pattern=cachename)
                 if self._purge_flags and self._flag_name is not None:
+                    cacheflagname = "{}_{}".format(
+                        self._flag_name, detectors[d])
                     tod.cache.clear(pattern=cacheflagname)
 
             del commonflags
@@ -506,14 +510,18 @@ class OpMadam(Operator):
                     madam_pixweights[dwslice] \
                         = weights[istart:istop].flatten()[::nnz_stride]
                     offset += nn
-                # Purge the weights but restore them from the Madam
-                # buffers when purge_weights=False.
-                # Handle special case when Madam only stores a subset of
-                # the weights.
                 del weights
-                if not self._purge_weights and (nnz != nnz_full):
-                    pass
-                else:
+            # Purge the weights but restore them from the Madam
+            # buffers when purge_weights=False.
+            # Handle special case when Madam only stores a subset of
+            # the weights.
+            if not self._purge_weights and (nnz != nnz_full):
+                pass
+            else:
+                for d in range(ndet):
+                    # get the pixels and weights for the valid intervals
+                    # from the cache
+                    weightsname = "{}_{}".format(self._weights, detectors[d])
                     tod.cache.clear(pattern=weightsname)
 
             global_offset = offset
