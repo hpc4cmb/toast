@@ -511,11 +511,21 @@ void toast::atm::sim::simulate( bool use_cache ) {
         for ( size_t slice=0; slice < slice_starts.size(); ++slice ) {
             ind_start = slice_starts[slice];
             ind_stop = slice_stops[slice];
+            int nind = ind_stop - ind_start;
             int root_gang = slice % ngang;
             int root = root_gang * gangsize;
-            if ( MPI_Bcast( realization->data()+ind_start, ind_stop-ind_start,
-                            MPI_DOUBLE, root, comm ) )
+            std::vector<double> tempvec(nind);
+            if ( rank == root ) {
+              if ( MPI_Bcast( realization->data()+ind_start, nind, MPI_DOUBLE,
+                              root, comm ) )
                 throw std::runtime_error("Failed to broadcast the realization");
+            } else {
+              if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) )
+                throw std::runtime_error("Failed to broadcast the realization");
+            }
+            if ( realization->rank() == 0 )
+              std::memcpy( tempvec.data(), realization->data()+ind_start,
+                           sizeof(double) * nind );
         }
 
         //smooth();
