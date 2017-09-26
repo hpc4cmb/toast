@@ -1243,6 +1243,9 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     comm.comm_world.Barrier()
     tidas_start = MPI.Wtime()
     tidas_path = os.path.abspath(args.tidas)
+    if comm.comm_world.rank == 0:
+        print('Exporting TOD to a TIDAS volume at {}'.format(tidas_path),
+              flush=True)
     export = OpTidasExport(tidas_path, name=totalname, 
         common_flag_name=common_flag_name, 
         flag_name=flag_name, usedist=True)
