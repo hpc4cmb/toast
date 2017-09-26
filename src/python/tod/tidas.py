@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI, MPILock
@@ -52,7 +52,7 @@ def create_tidas_schema(detlist, typestr, units):
         units (str): the units string assigned to all data fields.
 
     Returns (dict):
-        Schema dictionary containing the data and flag fields. 
+        Schema dictionary containing the data and flag fields.
     """
     schm = {}
     for c in ["X", "Y", "Z", "W"]:
@@ -81,7 +81,7 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
 
     This creates a new block to represent an observation, and then creates
     zero or more groups and intervals inside that block.  When writing to a
-    new TIDAS volume, this function can be used in the pipeline script 
+    new TIDAS volume, this function can be used in the pipeline script
     to set up the "leaf nodes" of the volume, each of which is a single
     observation.
 
@@ -97,11 +97,11 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
             value is a tuple containing the (schema, size, properties) of
             the group.  The objects in the tuple are exactly the arguments
             to the constructor of the tidas.Group object.
-        intervals (dict):  dictionary where the key is the intervals name 
+        intervals (dict):  dictionary where the key is the intervals name
             and the value is a tuple containing the (size, properties) of
             the intervals.  The objects in the tuple are exactly the arguments
             to the constructor of the tidas.Intervals object.
-        detgroup (str):  The name of the TIDAS group containing detector 
+        detgroup (str):  The name of the TIDAS group containing detector
             and other telescope information at the detector sample rate.
             If there is only one data group, then this is optional.
 
@@ -111,13 +111,13 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
     if not available:
         raise RuntimeError("tidas is not available")
         return
-    
+
     # The root block
     root = vol.root()
 
     # Only create these objects on one process
     if vol.comm.rank == 0:
-        
+
         # Descend tree to the parent node
         parentnodes = parent.split("/")
         par = root
@@ -230,7 +230,7 @@ class TODTidas(TOD):
     and intervals must exist prior to reading or writing from them.
 
     Detector pointing offsets from the boresight are given as quaternions,
-    and are expected to be contained in the dictionary of properties 
+    and are expected to be contained in the dictionary of properties
     found in the TIDAS group containing detector timestreams.
 
     Args:
@@ -243,13 +243,13 @@ class TODTidas(TOD):
             by this number.
         detbreaks (list):  Optional list of hard breaks in the detector
             distribution.
-        detgroup (str):  The name of the TIDAS group containing detector 
+        detgroup (str):  The name of the TIDAS group containing detector
             and other telescope information at the detector sample rate.
             If there is only one data group, then this is optional.
         distintervals (str):  Optional name of the TIDAS intervals that
             determines how the data should be distributed along the time
             axis.  Default is to distribute only by detector.
-    
+
     """
 
     # FIXME: currently the data flags are stored in the same group as
@@ -257,7 +257,7 @@ class TODTidas(TOD):
     # compression, we should move the flags to a separate group:
     #   https://github.com/hpc4cmb/tidas/issues/13
 
-    def __init__(self, mpicomm, vol, path, detranks=1, detbreaks=None, 
+    def __init__(self, mpicomm, vol, path, detranks=1, detbreaks=None,
         detgroup=None, distintervals=None):
 
         if not available:
@@ -336,13 +336,13 @@ class TODTidas(TOD):
             self._intervals = vol.comm.bcast(self._intervals, root=0)
             # Compute the contiguous spans of time for data distribution
             # based on the starting points of all intervals.
-            sampsizes = [ (x[1].first - x[0].first) for x in 
+            sampsizes = [ (x[1].first - x[0].first) for x in
                 zip(self._intervals[:-1], self._intervals[1:]) ]
-            sampsizes.append( self._dgrp.size - 
+            sampsizes.append( self._dgrp.size -
                 self._intervals[-1].first )
-        
+
         # call base class constructor to distribute data
-        super().__init__(vol.comm, self._detlist, self._dgrp.size, 
+        super().__init__(vol.comm, self._detlist, self._dgrp.size,
             detindx=self._detindx, detranks=detranks, detbreaks=detbreaks,
             sampsizes=sampsizes, meta=self._dgrp.props)
 
@@ -379,7 +379,7 @@ class TODTidas(TOD):
         Return dictionary of detector quaternions.
 
         This returns a dictionary with the detector names as the keys and the
-        values are 4-element numpy arrays containing the quaternion offset 
+        values are 4-element numpy arrays containing the quaternion offset
         from the boresight.
 
         Args:
@@ -408,7 +408,7 @@ class TODTidas(TOD):
             if usecache:
                 # We cache the whole observation, regardless of what sample
                 # range we will return.
-                data = self.cache.create(prefix, np.float64, 
+                data = self.cache.create(prefix, np.float64,
                     (self.local_samples[1], ncomp))
                 for c in range(ncomp):
                     field = "{}{}".format(prefix, comps[c])
@@ -428,7 +428,7 @@ class TODTidas(TOD):
 
     def _write_helper(self, data, prefix, comps, start):
         """
-        Helper function to write multi-component data.  
+        Helper function to write multi-component data.
         """
         # Number of components we have
         ncomp = len(comps)
@@ -443,13 +443,13 @@ class TODTidas(TOD):
             self._dgrp.write(field, offset, tmpdata)
 
         return
-    
+
 
     def _get_boresight(self, start, n, usecache=True):
         # Cache name
         cachebore = "{}_{}".format(STR_BORE, STR_QUAT)
         # Read and optionally cache the boresight pointing.
-        return self._read_cache_helper(cachebore, ["X", "Y", "Z", "W"], 
+        return self._read_cache_helper(cachebore, ["X", "Y", "Z", "W"],
             start, n, usecache)
 
 
@@ -458,7 +458,7 @@ class TODTidas(TOD):
         borename = "{}_{}".format(STR_BORE, STR_QUAT)
         # Write data
         self._writelock.lock()
-        self._write_helper(data, borename, ["X", "Y", "Z", "W"], 
+        self._write_helper(data, borename, ["X", "Y", "Z", "W"],
             start)
         self._writelock.unlock()
         return
@@ -582,7 +582,7 @@ class TODTidas(TOD):
         # Read and optionally cache the telescope velocity.
         return self._read_cache(STR_VEL, ["X", "Y", "Z"], start, n, usecache)
 
-    
+
     def _put_velocity(self, start, vel):
         self._writelock.lock()
         self._write_helper(vel, STR_VEL, ["X", "Y", "Z"], start)
@@ -596,11 +596,11 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
     Loads an existing TOAST dataset in TIDAS format.
 
     This takes a 2-level TOAST communicator and opens an existing TIDAS
-    volume using the global communicator.  The opened volume handle is stored 
-    in the observation dictionary with the "tidas" key.  Similarly, the 
-    metadata path to the block within the volume is stored in the 
+    volume using the global communicator.  The opened volume handle is stored
+    in the observation dictionary with the "tidas" key.  Similarly, the
+    metadata path to the block within the volume is stored in the
     "tidas_block" key.
-    
+
     The leaf nodes of the hierarchy are assumed to be the "observations".
     the observations are assigned to the process groups in a load-balanced
     way based on the number of samples in each detector group.
@@ -618,7 +618,7 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
             divisible by this number.
         detbreaks (list):  Optional list of hard breaks in the detector
             distribution.
-        detgroup (str):  The name of the TIDAS group containing detector 
+        detgroup (str):  The name of the TIDAS group containing detector
             and other telescope information at the detector sample rate.
             If there is only one data group, then this is optional.
         distintervals (str):  Optional name of the TIDAS intervals that
@@ -639,7 +639,7 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
     # the same rank within their group
     crank = comm.comm_rank
 
-    # Collectively open the volume.  We cannot use a context manager here, 
+    # Collectively open the volume.  We cannot use a context manager here,
     # since we are keeping a handle to the volume around for future use.
     # This means the volume will remain open for the life of the program,
     # or (hopefully) will get closed if the distributed data object is
@@ -701,13 +701,13 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
         obs["name"] = obslist[ob]
         obs["tidas"] = vol
         obs["tidas_block"] = obspath[obslist[ob]]
-        obs["tod"] = TODTidas(cgroup, vol, obspath[obslist[ob]], 
+        obs["tod"] = TODTidas(cgroup, vol, obspath[obslist[ob]],
             detranks=detranks, detgroup=detgroup, distintervals=distintervals)
         if "obs_id" in obs["tod"].group.props:
             obs["id"] = obs["tod"].group.props["obs_id"]
         if "obs_telescope" in obs["tod"].group.props:
             obs["telescope"] = obs["tod"].group.props["obs_telescope"]
-        
+
         obs["intervals"] = None
         if distintervals is not None:
             tilist = []
@@ -721,7 +721,7 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
             obs["intervals"] = tilist
 
         data.obs.append(obs)
-    
+
     vol.meta_sync()
 
     return data
@@ -760,8 +760,8 @@ class OpTidasExport(Operator):
             set of TIDAS intervals.  Otherwise do not write any intervals
             to the output.
     """
-    def __init__(self, path, backend="hdf5", comp="none", backopts=None, 
-        obspath=None, name=None, common_flag_name=None, flag_name=None, 
+    def __init__(self, path, backend="hdf5", comp="none", backopts=None,
+        obspath=None, name=None, common_flag_name=None, flag_name=None,
         units="unknown", usedist=False):
 
         if not available:
@@ -812,17 +812,17 @@ class OpTidasExport(Operator):
             dname = os.path.dirname(self._path)
             if not os.path.isdir(dname):
                 print("Directory for exported TIDAS volume ({}) does not "
-                    "exist".format(dname))
+                      "exist".format(dname), flush=True)
                 cworld.Abort()
             if os.path.exists(self._path):
                 print("Path for exported TIDAS volume ({}) already "
-                    "exists".format(self._path))
+                      "exists".format(self._path), flush=True)
                 cworld.Abort()
         cworld.barrier()
 
         # Collectively open the volume
 
-        with MPIVolume(cworld, self._path, backend=self._backend, 
+        with MPIVolume(cworld, self._path, backend=self._backend,
             comp=self._comp) as vol:
 
             # Groups iterate over their observations
@@ -830,7 +830,8 @@ class OpTidasExport(Operator):
             for obs in data.obs:
                 # Get the name
                 if "name" not in obs:
-                    print("observation does not have a name, cannot export")
+                    print("observation does not have a name, cannot export",
+                          flush=True)
                     cworld.Abort()
                 obsname = obs["name"]
 
@@ -855,33 +856,33 @@ class OpTidasExport(Operator):
                 if "telescope" in obs:
                     metadata["obs_telescope"] = obs["telescope"]
 
-                # Optionally setup intervals for future data distribution 
+                # Optionally setup intervals for future data distribution
                 intervals = None
                 if self._usedist:
-                    # This means that the distribution chunks in the time 
+                    # This means that the distribution chunks in the time
                     # direction were intentional (not just the boundaries of
-                    # some uniform distribution), and we want to write them 
+                    # some uniform distribution), and we want to write them
                     # out to tidas intervals so that we can use them for data
                     # distribution when this volume is read in later.
-                    intervals = {STR_DISTINTR : (len(tod.total_chunks), 
+                    intervals = {STR_DISTINTR : (len(tod.total_chunks),
                         dict())}
 
-                # Get detector quaternions and encode them for use in the 
-                # properties of the tidas group.  Combine this with the 
+                # Get detector quaternions and encode them for use in the
+                # properties of the tidas group.  Combine this with the
                 # existing observation properties into a single dictionary.
 
                 props = encode_tidas_quats(tod.detoffset(), props=metadata)
 
                 # Configure the detector group
 
-                schm = create_tidas_schema(tod.detectors, "float64", 
+                schm = create_tidas_schema(tod.detectors, "float64",
                     self._units)
                 groups = {STR_DETGROUP : (schm, tod.total_samples, props)}
 
                 # Create the block in the volume that corresponds to this
                 # observation.  Get handles to the tidas group and intervals.
 
-                blk = create_tidas_obs(vol, blockpath, obsname, groups=groups, 
+                blk = create_tidas_obs(vol, blockpath, obsname, groups=groups,
                     intervals=intervals)
 
                 intr = None
@@ -904,14 +905,14 @@ class OpTidasExport(Operator):
                 # process row handle that.
 
                 # We are going to gather the timestamps to a single process
-                # since we need them to convert between the existing TOD 
+                # since we need them to convert between the existing TOD
                 # chunks and times for the intervals.  The interval list is
                 # common between all processes.
 
                 if rankdet == 0:
                     # Only the first row of the process grid does this...
                     # First process timestamps
-                    rowdata = tod.grid_comm_row.gather(tod.read_times(), 
+                    rowdata = tod.grid_comm_row.gather(tod.read_times(),
                         root=0)
                     if ranksamp == 0:
                         full = np.concatenate(rowdata)
@@ -920,14 +921,14 @@ class OpTidasExport(Operator):
                             ilist = []
                             off = 0
                             for sz in tod.total_chunks:
-                                ilist.append(tds.Intrvl(start=full[off], 
-                                    stop=full[off+sz-1], first=off, 
+                                ilist.append(tds.Intrvl(start=full[off],
+                                    stop=full[off+sz-1], first=off,
                                     last=(off+sz-1)))
                                 off += sz
                             intr.write(ilist)
                         del full
                     del rowdata
-                    
+
                     # Next the boresight data
                     tidastod.write_boresight(data=tod.read_boresight())
 
@@ -951,7 +952,7 @@ class OpTidasExport(Operator):
                         tidastod.write(detector=det, data=ref)
                         del ref
                     else:
-                        tidastod.write(detector=det, 
+                        tidastod.write(detector=det,
                             data=tod.read(detector=det))
                     if self._cacheflag is not None:
                         ref = tod.cache.reference(
@@ -963,6 +964,3 @@ class OpTidasExport(Operator):
                         tidastod.write_det_flags(detector=det, flags=flg)
 
         return
-
-
-
