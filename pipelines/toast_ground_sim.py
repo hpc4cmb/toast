@@ -1043,7 +1043,7 @@ def simulate_noise(args, comm, data, mc, counter, totalname_freq):
     return
 
 
-def scramble_gains(args, comm, data, mc, counter):
+def scramble_gains(args, comm, data, mc, counter, totalname_freq):
     if args.gain_sigma:
         if comm.comm_world.rank == 0:
             print('Scrambling gains', flush=args.flush)
@@ -1377,7 +1377,8 @@ def main():
             simulate_noise(args, comm, data, mc+mcoffset, counter,
                            totalname_freq)
 
-            scramble_gains(args, comm, data, mc+mcoffset, counter)
+            scramble_gains(args, comm, data, mc+mcoffset, counter,
+                           totalname_freq)
 
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally 
