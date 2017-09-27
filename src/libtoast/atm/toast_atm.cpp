@@ -193,7 +193,8 @@ toast::atm::sim::~sim() {
     if ( compressed_index ) delete compressed_index;
     if ( full_index ) delete full_index;
     if ( realization ) delete realization;
-    if ( comm_gang != MPI_COMM_NULL && comm_gang != MPI_COMM_SELF ) {
+    if ( comm_gang != MPI_COMM_NULL && comm_gang != MPI_COMM_SELF
+         && comm_gang != comm ) {
         if ( MPI_Comm_free( &comm_gang ) )
             throw std::runtime_error( "Failed to free MPI communicator." );
     }
