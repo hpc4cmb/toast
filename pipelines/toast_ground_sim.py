@@ -1240,22 +1240,24 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     if args.tidas is None:
         return
     from toast.tod.tidas import OpTidasExport
-    comm.comm_world.Barrier()
-    tidas_start = MPI.Wtime()
     tidas_path = os.path.abspath(args.tidas)
+    comm.comm_world.Barrier()
     if comm.comm_world.rank == 0:
         print('Exporting TOD to a TIDAS volume at {}'.format(tidas_path),
-              flush=True)
+              flush=args.flush)
+    start = MPI.Wtime()
+
     export = OpTidasExport(tidas_path, name=totalname, 
         common_flag_name=common_flag_name, 
         flag_name=flag_name, usedist=True)
     export.exec(data)
+
     comm.comm_world.Barrier()
-    tidas_stop = MPI.Wtime()
+    stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print('Wrote simulated TOD to {}:{} in {:.2f} s'
               ''.format(tidas_path, totalname,
-                        tidas_stop-tidas_start), flush=True)
+                        stop-start), flush=args.flush)
     return
 
 
