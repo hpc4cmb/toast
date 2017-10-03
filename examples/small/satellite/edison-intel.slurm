@@ -1,13 +1,11 @@
 #!/bin/bash -l
 
 #SBATCH --partition=regular
-#SBATCH --constraint=knl,quad,cache
-#SBATCH --core-spec=4
 #SBATCH --account=mp107
 #SBATCH --nodes=1
 #SBATCH --time=00:20:00
 #SBATCH --job-name=small-satellite
-#SBATCH --output=cori-intel-knl_%j.log
+#SBATCH --output=edison-intel_%j.log
 
 echo Starting slurm script at $(date)
 
@@ -18,11 +16,11 @@ echo Starting slurm script at $(date)
 nodes=1
 
 # How many processes are we running per node?
-node_proc=32
+node_proc=12
 
 # Generate the focalplane file if it does not already exist.
 
-pstr="cori-intel-knl"
+pstr="edison-intel"
 fpfile="fp_${pstr}_37.pkl"
 
 if [ ! -e "${fpfile}" ]; then
@@ -71,10 +69,10 @@ com="${ex} \
 #--- Hardware configuration (no need to change) ----
 
 # Hyperthread CPUs per physical core
-cpu_per_core=4
+cpu_per_core=2
 
 # Physical cores we are using
-node_cores=64
+node_cores=24
 
 node_thread=$(( node_cores / node_proc ))
 node_depth=$(( cpu_per_core * node_thread ))

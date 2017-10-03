@@ -1,13 +1,12 @@
 #!/bin/bash -l
 
 #SBATCH --partition=regular
-#SBATCH --constraint=knl,quad,cache
-#SBATCH --core-spec=4
+#SBATCH --constraint=haswell
 #SBATCH --account=mp107
 #SBATCH --nodes=1
 #SBATCH --time=00:20:00
 #SBATCH --job-name=small-satellite
-#SBATCH --output=cori-intel-knl_%j.log
+#SBATCH --output=cori-intel-haswell_%j.log
 
 echo Starting slurm script at $(date)
 
@@ -22,7 +21,7 @@ node_proc=32
 
 # Generate the focalplane file if it does not already exist.
 
-pstr="cori-intel-knl"
+pstr="cori-intel-haswell"
 fpfile="fp_${pstr}_37.pkl"
 
 if [ ! -e "${fpfile}" ]; then
@@ -71,10 +70,10 @@ com="${ex} \
 #--- Hardware configuration (no need to change) ----
 
 # Hyperthread CPUs per physical core
-cpu_per_core=4
+cpu_per_core=2
 
 # Physical cores we are using
-node_cores=64
+node_cores=32
 
 node_thread=$(( node_cores / node_proc ))
 node_depth=$(( cpu_per_core * node_thread ))
