@@ -1,0 +1,12 @@
+--samplerate
+40.0
+--spinperiod
+10.0
+--spinangle
+30.0
+--precperiod
+50.0
+--precangle
+65.0
+--hwprpm
+20.0
