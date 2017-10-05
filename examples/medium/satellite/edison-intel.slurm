@@ -1,12 +1,11 @@
 #!/bin/bash -l
 
 #SBATCH --partition=regular
-#SBATCH --constraint=haswell
 #SBATCH --account=mp107
-#SBATCH --nodes=1
+#SBATCH --nodes=20
 #SBATCH --time=00:30:00
 #SBATCH --job-name=small-satellite
-#SBATCH --output=cori-intel-haswell_%j.log
+#SBATCH --output=edison-intel_%j.log
 
 echo Starting slurm script at $(date)
 
@@ -14,16 +13,15 @@ echo Starting slurm script at $(date)
 # loaded the toast module for the correct machine / configuration.
 
 # This should be the same as the --nodes option above
-nodes=1
+nodes=20
 
 # How many processes are we running per node?
-node_proc=32
+node_proc=12
 
 # Generate the focalplane file if it does not already exist.
 
-pstr="cori-intel-haswell"
-
-ndet="1"
+pstr="edison-intel"
+ndet="37"
 
 fpfile="fp_${pstr}_${ndet}.pkl"
 if [ ! -e "${fpfile}" ]; then
@@ -51,8 +49,7 @@ nside="512"
 
 # Data distribution parameters
 
-# One process per group, since we have only 2 detectors
-groupsize=1
+groupsize=${node_proc}
 
 outdir="out_${pstr}"
 
@@ -74,7 +71,7 @@ com="${ex} \
 cpu_per_core=2
 
 # Physical cores we are using
-node_cores=32
+node_cores=24
 
 node_thread=$(( node_cores / node_proc ))
 node_depth=$(( cpu_per_core * node_thread ))

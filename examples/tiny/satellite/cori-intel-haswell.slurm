@@ -25,7 +25,7 @@ pstr="cori-intel-haswell"
 fpfile="fp_${pstr}_1.pkl"
 
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix 1 --output "fp_${pstr}"
+    srun -n 1 toast_fake_focalplane.py --minpix 1 --out "fp_${pstr}"
 fi
 
 # The executable script
@@ -41,7 +41,7 @@ parfile="../../params/satellite/sim_noise_hwp.par"
 
 obs_len="24.0"
 obs_gap="4.0"
-nobs="4"
+nobs="26"
 
 # Map making parameters
 
@@ -53,7 +53,6 @@ nside="512"
 groupsize=${node_proc}
 
 outdir="out_${pstr}"
-mkdir -p "${outdir}"
 
 # The commandline
 
@@ -65,6 +64,7 @@ com="${ex} \
 --gap ${obs_gap} \
 --numobs ${nobs} \
 --outdir out_${pstr} \
+@${parfile} \
 "
 
 #--- Hardware configuration (no need to change) ----
@@ -91,6 +91,6 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > "${outdir}.log" 2>&1
 
 echo End slurm script at $(date)

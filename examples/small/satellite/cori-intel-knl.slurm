@@ -5,7 +5,7 @@
 #SBATCH --core-spec=4
 #SBATCH --account=mp107
 #SBATCH --nodes=1
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --job-name=small-satellite
 #SBATCH --output=cori-intel-knl_%j.log
 
@@ -23,10 +23,12 @@ node_proc=32
 # Generate the focalplane file if it does not already exist.
 
 pstr="cori-intel-knl"
-fpfile="fp_${pstr}_37.pkl"
 
+ndet="1"
+
+fpfile="fp_${pstr}_${ndet}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix 32 --output "fp_${pstr}"
+    srun -n 1 toast_fake_focalplane.py --minpix ${ndet} --out "fp_${pstr}"
 fi
 
 # The executable script
@@ -42,7 +44,7 @@ parfile="../../params/satellite/sim_noise_hwp.par"
 
 obs_len="24.0"
 obs_gap="4.0"
-nobs="4"
+nobs="157"
 
 # Map making parameters
 
@@ -50,11 +52,10 @@ nside="512"
 
 # Data distribution parameters
 
-# Just one group for this tiny sim...
-groupsize=${node_proc}
+# One process per group, since we have only 2 detectors
+groupsize=1
 
 outdir="out_${pstr}"
-mkdir -p "${outdir}"
 
 # The commandline
 
@@ -92,6 +93,6 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > "${outdir}.log" 2>&1
 
 echo End slurm script at $(date)

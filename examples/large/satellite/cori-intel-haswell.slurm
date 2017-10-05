@@ -3,7 +3,7 @@
 #SBATCH --partition=regular
 #SBATCH --constraint=haswell
 #SBATCH --account=mp107
-#SBATCH --nodes=1
+#SBATCH --nodes=200
 #SBATCH --time=00:30:00
 #SBATCH --job-name=small-satellite
 #SBATCH --output=cori-intel-haswell_%j.log
@@ -14,7 +14,7 @@ echo Starting slurm script at $(date)
 # loaded the toast module for the correct machine / configuration.
 
 # This should be the same as the --nodes option above
-nodes=1
+nodes=200
 
 # How many processes are we running per node?
 node_proc=32
@@ -23,7 +23,7 @@ node_proc=32
 
 pstr="cori-intel-haswell"
 
-ndet="1"
+ndet="271"
 
 fpfile="fp_${pstr}_${ndet}.pkl"
 if [ ! -e "${fpfile}" ]; then
@@ -51,8 +51,7 @@ nside="512"
 
 # Data distribution parameters
 
-# One process per group, since we have only 2 detectors
-groupsize=1
+groupsize=${node_proc}
 
 outdir="out_${pstr}"
 

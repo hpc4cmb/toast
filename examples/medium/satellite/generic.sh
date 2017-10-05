@@ -9,11 +9,11 @@ echo Starting script at $(date)
 
 pstr="generic"
 
-ndet="1"
+ndet="37"
 
 fpfile="fp_${pstr}_${ndet}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix ${ndet} --out "fp_${pstr}"
+    srun -n 1 toast_fake_focalplane.py --minpix ${ndet} --out "fp_${pstr}"
 fi
 
 # The executable script

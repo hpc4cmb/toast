@@ -11,7 +11,7 @@ pstr="generic"
 fpfile="fp_${pstr}_1.pkl"
 
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix 1 --output "fp_${pstr}"
+    toast_fake_focalplane.py --minpix 1 --out "fp_${pstr}"
 fi
 
 # The executable script
@@ -27,7 +27,7 @@ parfile="../../params/satellite/sim_noise_hwp.par"
 
 obs_len="24.0"
 obs_gap="4.0"
-nobs="4"
+nobs="26"
 
 # Map making parameters
 
@@ -36,12 +36,10 @@ nside="512"
 # Data distribution parameters
 
 outdir="out_${pstr}"
-mkdir -p "${outdir}"
 
 # The commandline
 
 com="${ex} \
---groupsize ${groupsize} \
 --fp ${fpfile} \
 --nside ${nside} \
 --obs ${obs_len} \
@@ -61,7 +59,7 @@ run="mpirun -np ${procs}"
 echo Calling mpirun at $(date)
 
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > "${outdir}.log" 2>&1
 
 echo End script at $(date)
 
