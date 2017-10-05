@@ -1,0 +1,16 @@
+--minpix
+10
+--out
+focalplane_test
+--fwhm
+10.0
+--fov
+2
+--psd_fknee
+0.05
+--psd_NET
+6e-5
+--psd_alpha
+1.0
+--psd_fmin
+1e-5
