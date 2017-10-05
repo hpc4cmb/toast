@@ -49,8 +49,8 @@ args = parser.parse_args()
 # Compute the number of pixels that is at least the number requested.
 
 test = args.minpix - 1
-nrings = 1
-while (test - 6 * nrings) >= 0:
+nrings = 0
+while (test - 6 * nrings) > 0:
     test -= 6 * nrings
     nrings += 1
 

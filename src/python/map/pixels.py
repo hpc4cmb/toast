@@ -562,6 +562,8 @@ class DistPixels(object):
             submap_off += ncomm
 
         if self._comm.rank == 0:
+            if os.path.isfile(path):
+                os.remove(path)
             try:
                 hp.write_map(path, fdata, dtype=self._dtype, fits_IDL=False,
                              nest=self._nest)

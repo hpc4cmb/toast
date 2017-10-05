@@ -31,7 +31,8 @@ def main():
 
     global_start = MPI.Wtime()
 
-    parser = argparse.ArgumentParser( description="Simulate satellite boresight pointing and make a noise map." )
+    parser = argparse.ArgumentParser( description="Simulate satellite "
+        "boresight pointing and make a noise map.", fromfile_prefix_chars="@" )
 
     parser.add_argument( "--groupsize", required=False, type=int, default=0, 
         help="size of processor groups used to distribute observations" )

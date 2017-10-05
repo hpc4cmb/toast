@@ -5,7 +5,7 @@ curl -SL https://support.hdfgroup.org/ftp/HDF5/current18/src/hdf5-1.8.19.tar.bz2
        else echo "-O3"; fi) \
     CXX="@CXX@" CXXFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@CXXFLAGS@"; \
        else echo "-O3"; fi) \
-    ./configure --disable-fortran --disable-fortran2003 \
+    ./configure \
     --disable-silent-rules \
     --disable-parallel \
     --enable-cxx \
