@@ -6,9 +6,13 @@
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
 #SBATCH --job-name=@@size@@-satellite
-#SBATCH --output=@@size@@_satellite_@@machine@@_%j.log
+#SBATCH --output=out_@@size@@_satellite_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
+
+pstr=@@machine@@
+outdir="out_@@size@@_satellite_${pstr}"
+mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
 # loaded the toast module for the correct machine / configuration.
@@ -26,12 +30,11 @@ fi
 
 # Generate the focalplane file if it does not already exist.
 
-pstr=@@machine@@
 ndet=@@ndet@@
 
-fpfile="fp_${pstr}_${ndet}.pkl"
+fpfile="${outdir}/fp_${ndet}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 toast_fake_focalplane.py --minpix ${ndet} --out "fp_${pstr}"
+    srun -n 1 toast_fake_focalplane.py --minpix ${ndet} --out "${outdir}/fp"
 fi
 
 # The executable script
@@ -57,8 +60,6 @@ nside="512"
 
 groupsize=${node_proc}
 
-outdir="out_@@size@@_satellite_${pstr}"
-
 # The commandline
 
 com="${ex} @${parfile} \
@@ -68,7 +69,7 @@ com="${ex} @${parfile} \
 --obs ${obs_len} \
 --gap ${obs_gap} \
 --numobs ${nobs} \
---outdir ${outdir} \
+--outdir ${outdir}/out \
 "
 
 #--- Hardware configuration (no need to change) ----
@@ -95,7 +96,7 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}.log" 2>&1
+eval ${run} ${com} > "${outdir}/log" 2>&1
 
 echo End slurm script at $(date)
 

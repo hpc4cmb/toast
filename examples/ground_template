@@ -6,9 +6,13 @@
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
 #SBATCH --job-name=@@size@@-ground
-#SBATCH --output=@@size@@_ground_@@machine@@_%j.log
+#SBATCH --output=out_@@size@@_ground_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
+
+pstr=@@machine@@
+outdir="out_@@size@@_ground_${pstr}"
+mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
 # loaded the toast module for the correct machine / configuration.
@@ -26,23 +30,22 @@ fi
 
 # Generate the focalplane file if it does not already exist.
 
-pstr=@@machine@@
 ndet=@@ndet@@
 
 # Generate the focalplane file if it does not already exist.
 
-fpfile="fp_${pstr}_${ndet}.pkl"
+fpfile="${outdir}/fp_${ndet}.pkl"
 fpparfile="@@topdir@@/params/ground/focalplane@@fp@@.par"
 
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 toast_fake_focalplane.py @$fpparfile --out "fp_${pstr}"
+    srun -n 1 toast_fake_focalplane.py @$fpparfile --out "${outdir}/fp"
 fi
 
 # Generate the schedule file if it does not already exist.
 
 schparfile="@@topdir@@/params/ground/schedule@@schedule@@.par"
 
-schedulefile="schedule_@@size@@_${pstr}.txt"
+schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     srun -n 1 toast_ground_schedule.py @$schparfile --out "${schedulefile}"
@@ -61,15 +64,13 @@ parfile="@@topdir@@/params/ground/ground_sim@@sim@@.par"
 
 groupsize=${node_proc}
 
-outdir="out_@@size@@_ground_${pstr}"
-
 # The commandline
 
 com="${ex} @${parfile} \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
---out ${outdir} \
+--out ${outdir}/out \
 "
 
 #--- Hardware configuration (no need to change) ----
@@ -96,7 +97,7 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}.log" 2>&1
+eval ${run} ${com} > "${outdir}/log" 2>&1
 
 echo End slurm script at $(date)
 
