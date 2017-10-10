@@ -1,0 +1,7 @@
+queue = debug
+nodes = 1
+time = 00:30:00
+ndet = 19
+fp = _small
+schedule = _small
+sim = _small

@@ -1,0 +1,5 @@
+queue = debug
+nodes = 200
+time = 00:30:00
+ndet = 271
+nobs = 157

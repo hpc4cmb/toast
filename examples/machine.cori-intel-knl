@@ -1,0 +1,4 @@
+constraint = \#SBATCH --constraint=knl,quad,cache\n\#SBATCH --core-spec=4
+nodeprocs = 32
+nodecores = 64
+hyperthread = 4

@@ -1,0 +1,4 @@
+constraint = \#SBATCH --constraint=haswell
+nodeprocs = 16
+nodecores = 32
+hyperthread = 2
