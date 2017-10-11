@@ -23,7 +23,7 @@ if 'mpi4py' in sys.modules:
 #   from toast.mpi import MPI
 # as the first line
 if not 'toast.mpi' in sys.modules:
-    from . import MPI
+    from . import mpi
 
 from .tests import test
 
