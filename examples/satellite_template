@@ -22,7 +22,7 @@ nodes=@@nodes@@
 
 # How many processes are we running per node?  Handle
 # the case of a very small simulation.
-if [ @@nobs@@ -lt 100 ]; then
+if [ @@nobs@@ -lt 50 ]; then
     node_proc=1
 else
     node_proc=@@nodeprocs@@
@@ -56,8 +56,12 @@ nobs=@@nobs@@
 
 nside="512"
 
-# Data distribution parameters
+# Data distribution parameters.  We are distributing by detector,
+# so if our number of processes in a group is larger than the number
+# of detectors this is bad.  In that case, set the group size to 
+# one, so we have many more groups, each assigned
 
+if [ ]
 groupsize=${node_proc}
 
 # The commandline

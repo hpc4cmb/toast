@@ -1,5 +1,5 @@
 queue = debug
-nodes = 1
+nodes = 4
 time = 00:30:00
 ndet = 1
 nobs = 157
