@@ -85,12 +85,7 @@ Use Anaconda.  Download and install Miniconda or the full Anaconda distribution.
 Make sure to install the Python3 version.  If you are starting from Miniconda, 
 install the dependencies that are available through conda::
 
-    %> conda install numpy scipy matplotlib mpi4py
-
-Then install healpy and pyephem with pip::
-
-    %> pip install healpy pyephem
-
+    %> conda install -c conda-forge numpy scipy matplotlib mpi4py healpy pyephem
 
 Using Configure
 -----------------------
