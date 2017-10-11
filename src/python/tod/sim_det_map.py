@@ -193,3 +193,95 @@ class OpSimScan(Operator):
 
         return
 
+
+class OpSimPySM(Operator):
+    """
+    Operator that scans from bandpass-integrated PySM sky signal.
+
+    More info here...
+
+    Args:
+        PySM input paths / parameters:  FIXME.
+        distmap (DistPixels): the distributed map domain data.
+            FIXME: if you don't need local pointing, remove this.
+        pixels (str): the name of the cache object (<pixels>_<detector>)
+            containing the pixel indices to use.
+        weights (str): the name of the cache object (<weights>_<detector>)
+            containing the pointing weights to use.
+        out (str): accumulate data to the cache with name <out>_<detector>.
+            If the named cache objects do not exist, then they are created.
+    """
+    def __init__(self, distmap=None, pixels='pixels', weights='weights',
+                 out='pysm'):
+        # We call the parent class constructor, which currently does nothing
+        super().__init__()
+        self._map = distmap
+        self._pixels = pixels
+        self._weights = weights
+        self._out = out
+
+    def exec(self, data):
+        """
+        Create the timestreams...
+
+        This loops over all observations and detectors and uses the pointing
+        matrix to ...
+
+        Args:
+            data (toast.Data): The distributed data.
+        """
+        comm = data.comm
+        # the global communicator
+        cworld = comm.comm_world
+        # the communicator within the group
+        cgroup = comm.comm_group
+        # the communicator with all processes with
+        # the same rank within their group
+        crank = comm.comm_rank
+
+        for obs in data.obs:
+            tod = obs['tod']
+
+            for det in tod.local_dets:
+
+                # get the pixels and weights from the cache
+
+                pixelsname = "{}_{}".format(self._pixels, det)
+                weightsname = "{}_{}".format(self._weights, det)
+                pixels = tod.cache.reference(pixelsname)
+                weights = tod.cache.reference(weightsname)
+
+                nsamp, nnz = weights.shape
+
+                # Get the pointing in terms of local submaps and
+                # pixels within the submaps.  Remove this if you
+                # don't need that (and also from the constructor).
+
+                sm, lpix = self._map.global_to_local(pixels)
+
+                # Now call PySM and do other stuff to generate the
+                # pixel data and scan it into a TOD.
+
+
+                simtod = np.zeros(nsamp)
+
+
+
+                # Accumulate the output timestream to the cache.
+
+                cachename = "{}_{}".format(self._out, det)
+                if not tod.cache.exists(cachename):
+                    tod.cache.create(cachename, np.float64,
+                                     (tod.local_samples[1],))
+                ref = tod.cache.reference(cachename)
+                ref[:] += simtod
+                
+                del ref
+                del pixels
+                del weights
+                del sm
+                del lpix
+
+        return
+
+
