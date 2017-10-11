@@ -1,0 +1,58 @@
+# We set the language to python, so that we can more easily specify our
+# build matrix.  We simply apt install the compiled dependencies.
+language: python
+
+os:
+    - linux
+
+# These use container-based images (faster boot) and Ubuntu 14.04 LTS
+sudo: false
+dist: trusty
+
+# The apt packages here install our compiled code dependencies.
+addons:
+    apt:
+        packages:
+            - build-essential
+            - g++
+            - gfortran
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+
+# The versions to test
+python:
+    - 3.6
+
+# Set up MPI and mpi4py
+
+before_install:
+    - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    - bash miniconda.sh -b -p $HOME/miniconda
+    - export PATH="$HOME/miniconda/bin:$PATH"
+    - hash -r
+    - conda config --set always_yes yes --set changeps1 no
+    - conda update -q conda
+    # Useful for debugging any issues with conda
+    - conda info -a
+    - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
+    - pip install mpi4py
+
+# Skip this
+
+install:
+    - ./autogen.sh
+    - ./configure --prefix=$HOME/miniconda
+    - make
+    - make install
+
+# Configure, build, and run tests
+
+script:
+    - python -c "import toast; toast.test()"
