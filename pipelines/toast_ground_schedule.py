@@ -21,10 +21,12 @@ def to_JD(t):
     # (days since -4712-01-01 12:00:00 UTC)
     return t / 86400. + 2440587.5
 
+
 def to_MJD(t):
     # Convert Unix time stamp to modified Julian date
     # (days since 1858-11-17 00:00:00 UTC)
     return to_JD(t) - 2400000.5
+
 
 def to_DJD(t):
     # Convert Unix time stamp to Dublin Julian date
@@ -32,20 +34,299 @@ def to_DJD(t):
     # This is the time format used by PyEphem
     return to_JD(t) - 2415020
 
+
+def prioritize(visible, hits):
+    """ Order visible targets by priority and number of scans.
+    """
+    for i in range(len(visible)-1):
+        for j in range(i+1, len(visible)):
+            iname, iweight, icorners = visible[i]
+            ihit = hits[iname]
+            jname, jweight, jcorners = visible[j]
+            jhit = hits[jname]
+            if ihit*jweight < jhit*iweight:
+                visible[i], visible[j] = visible[j], visible[i]
+
+    return
+
+
+def corner_coordinates(observer, corners):
+    """ Return the corner coordinates in horizontal frame.
+    """
+    azs = []
+    els = []
+    for corner in corners:
+        corner.compute(observer)
+        azs.append(corner.az)
+        els.append(corner.alt)
+
+    return np.array(azs), np.array(els)
+
+
+def attempt_scan(
+        args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt):
+    """ Attempt scanning the visible patches in order until success.
+    """
+    success = False
+    for (name, weight, corners) in visible:
+        for rising in [True, False]:
+            observer.date = to_DJD(t)
+            # Then determine an elevation that all corners will cross
+            el = get_constant_elevation(observer, corners, rising, fp_radius,
+                                        el_min, el_max, not_visible, name)
+            if el is None:
+                continue
+            success, azmins, azmaxs, aztimes, tstop = scan_patch(
+                el, corners, t, fp_radius, observer, sun, not_visible,
+                name, tstep, stop_timestamp, sun_el_max, rising)
+            if success:
+                t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
+                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
+                             name, el)
+                break
+        if success:
+            break
+
+    return success, t
+
+
+def get_constant_elevation(observer, corners, rising, fp_radius, el_min, el_max,
+                           not_visible, name):
+    """ Determine the elevation at which to scan.
+    """
+    azs, els = corner_coordinates(observer, corners)
+    el = None
+    if rising:
+        ind = azs <= np.pi
+        if np.sum(ind) == 0:
+            not_visible.append((name, 'No rising corners'))
+        else:
+            el = np.amax(els[ind]) + fp_radius
+    else:
+        ind = azs >= np.pi
+        if np.sum(ind) == 0:
+            not_visible.append((name, 'No setting corners'))
+        else:
+            el = np.amin(els[ind]) - fp_radius
+
+    if el is not None:
+        if el < el_min:
+            not_visible.append((
+                name, 'el < el_min ({:.2f} < {:.2f}) rising = {}'.format(
+                    el/degree, el_min/degree, rising)))
+            el = None
+        elif el > el_max:
+            not_visible.append((
+                name, 'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
+                    el/degree, el_max/degree, rising)))
+            el = None
+
+    return el
+
+
+def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
+               name, tstep, stop_timestamp, sun_el_max, rising):
+    """ Attempt scanning the patch specified by corners at elevation el.
+    """
+    success = False
+    # and now track when all corners are past the elevation
+    tstop = t
+    to_cross = np.ones(len(corners), dtype=np.bool)
+    azmins, azmaxs, aztimes = [], [], []
+    azs, els = corner_coordinates(observer, corners)
+    while True:
+        old_az = azs.copy()
+        old_el = els.copy()
+        tstop += tstep / 10
+        if tstop > stop_timestamp or tstop - t > 86400:
+            not_visible.append((name, 'Ran out of time rising = {}'
+                                ''.format(rising)))
+            break
+        observer.date = to_DJD(tstop)
+        sun.compute(observer)
+        if sun.alt > sun_el_max:
+            not_visible.append((name, 'Sun too high {:.2f} rising = {}'
+                                ''.format(sun.alt/degree, rising)))
+            break
+        azs, els = corner_coordinates(observer, corners)
+        if rising:
+            good = azs <= np.pi
+            to_cross[np.logical_and(els > el+fp_radius, good)] = False
+        else:
+            good = azs >= np.pi
+            to_cross[np.logical_and(els < el-fp_radius, good)] = False
+
+        current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
+                       rising, tstop)
+
+        if not np.any(to_cross):
+            # All corners made it across the CES line.
+            success = True
+            break
+
+    return success, azmins, azmaxs, aztimes, tstop
+
+
+def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
+                   rising, tstop):
+    """ Get the azimuthal extent of the patch along elevation el.
+
+    Find the pairs of corners that are on opposite sides
+    of the CES line.  Record the crossing azimuth of a
+    line between the corners.
+
+    """
+    azs_cross = []
+    for i in range(len(corners)):
+        j = (i + 1) % len(corners)
+        for el0 in [el, el - fp_radius, el - fp_radius]:
+            if (els[i] - el0)*(els[j] - el0) < 0:
+                az1 = azs[i]
+                az2 = azs[j]
+                el1 = els[i] - el0
+                el2 = els[j] - el0
+                if az1 - az2 < -2*np.pi:
+                    az2 += 2*np.pi
+                az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
+                if (rising and az_cross <= np.pi) or \
+                   (not rising and az_cross >= np.pi):
+                    azs_cross.append(az_cross)
+
+    if len(azs_cross) > 0:
+        azs_cross = np.sort(azs_cross)
+        azmins.append(azs_cross[0])
+        azmaxs.append(azs_cross[-1])
+        aztimes.append(tstop)
+
+    return
+
+
+def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
+             observer, sun, moon, fout, fout_fmt, hits, name, el):
+    """ Make an entry for a CES in the schedule file.
+    """
+    ces_time = tstop - t
+    if ces_time > args.ces_max_time:
+        nsub = np.int(np.ceil(ces_time / args.ces_max_time))
+        ces_time /= nsub
+    aztimes = np.array(aztimes)
+    azmins = np.array(azmins)
+    azmaxs = np.array(azmaxs)
+    rising_string = 'R' if rising else 'S'
+    hits[name] += 1
+    t1 = t
+    isub = -1
+    while t1 < tstop:
+        isub += 1
+        t2 = min(t1 + ces_time, tstop)
+        ind = np.logical_and(aztimes >= t1, aztimes <= t2)
+        if np.all(aztimes > t2):
+            ind[0] = True
+        if np.all(aztimes < t1):
+            ind[-1] = True
+        azmin = np.amin(azmins[ind])
+        azmax = np.amax(azmaxs[ind])
+        # Check if we are scanning across the zero meridian
+        if azmax - azmin > np.pi:
+            # we are, scan from the maximum to the minimum
+            azmin = np.amin(azmaxs[ind])
+            azmax = np.amax(azmin[ind])
+        # Add the focal plane radius to the scan width
+        fp_radius_eff = fp_radius / np.cos(el)
+        azmin = (azmin - fp_radius_eff) % (2*np.pi)
+        azmax = (azmax + fp_radius_eff) % (2*np.pi)
+        ces_start = datetime.utcfromtimestamp(t1).strftime(
+            '%Y-%m-%d %H:%M:%S %Z')
+        ces_stop = datetime.utcfromtimestamp(t2).strftime(
+            '%Y-%m-%d %H:%M:%S %Z')
+        # Get the Sun and Moon locations at the beginning and end
+        observer.date = to_DJD(t1)
+        sun.compute(observer)
+        moon.compute(observer)
+        sun_az1, sun_el1 = sun.az/degree, sun.alt/degree
+        moon_az1, moon_el1 = moon.az/degree, moon.alt/degree
+        moon_phase1 = moon.phase
+        observer.date = to_DJD(t2)
+        sun.compute(observer)
+        moon.compute(observer)
+        sun_az2, sun_el2 = sun.az/degree, sun.alt/degree
+        moon_az2, moon_el2 = moon.az/degree, moon.alt/degree
+        moon_phase2 = moon.phase
+        # Create an entry in the schedule
+        fout.write(
+            fout_fmt.format(
+                ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
+                name,
+                azmin/degree, azmax/degree, el/degree,
+                rising_string,
+                sun_el1, sun_az1, sun_el2, sun_az2,
+                moon_el1, moon_az1, moon_el2, moon_az2,
+                0.005*(moon_phase1 + moon_phase2), hits[name], isub))
+        t1 = t2 + args.gap_small
+    # Advance the time
+    t = tstop
+    # Add the gap
+    t += args.gap
+
+    return t
+
+def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
+                sun_avoidance_angle, moon_angle_min):
+    """ Determine which patches are visible.
+    """
+    visible = []
+    not_visible = []
+    for (name, weight, corners) in patches:
+        # Reject all patches that have even one corner too close
+        # to the Sun or the Moon and patches that are completely
+        # below the horizon
+        in_view = False
+        for i, corner in enumerate(corners):
+            corner.compute(observer)
+            if corner.alt > el_min:
+                # At least one corner is visible
+                in_view = True
+            if sun.alt > sun_avoidance_angle:
+                # Sun is high enough to apply sun_angle_min check
+                angle = ephem.separation(sun, corner)
+                if angle < sun_angle_min:
+                    # Patch is too close to the Sun
+                    not_visible.append((
+                        name,
+                        'Too close to Sun {:.2f}'.format(angle / degree)))
+                    in_view = False
+                    break
+            if moon.alt > 0:
+                angle = ephem.separation(moon, corner)
+                if angle < moon_angle_min:
+                    # Patch is too close to the Moon
+                    not_visible.append((
+                        name,
+                        'Too close to Moon {:.2f}'.format(angle / degree)))
+                    in_view = False
+                    break
+            if i == len(corners)-1 and not in_view:
+                not_visible.append((
+                    name, 'Below the horizon.'))
+        if in_view:
+            visible.append((name, weight, corners))
+
+    return visible, not_visible
+
+
 def build_schedule(
-        start_timestamp, stop_timestamp, gap, gap_small, fn,
-        site_name, site_lat, site_lon, site_alt, debug,
+        args, start_timestamp, stop_timestamp,
         sun_el_max, sun_avoidance_angle,
         sun_angle_min, moon_angle_min,
-        el_min, el_max, fp_radius,
-        ces_max_time, patches):
+        el_min, el_max, fp_radius, patches):
 
-    fout = open(fn, 'w')
+    fout = open(args.out, 'w')
 
     fout.write('#{:15} {:15} {:15} {:15}\n'.format(
         'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
     fout.write(' {:15} {:15} {:15} {:15.6f}\n'.format(
-        site_name, site_lat, site_lon, site_alt))
+        args.site_name, args.site_lat, args.site_lon, args.site_alt))
 
     fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
                 '{:15} {:8} {:8} {:8} {:5} ' \
@@ -68,9 +349,9 @@ def build_schedule(
             'Pass', 'Sub'))
 
     observer = ephem.Observer()
-    observer.lon = site_lon
-    observer.lat = site_lat
-    observer.elevation = site_alt # In meters
+    observer.lon = args.site_lon
+    observer.lat = args.site_lat
+    observer.elevation = args.site_alt # In meters
     observer.epoch = '2000'
     observer.temp = 0 # in Celcius
     observer.compute_pressure()
@@ -87,7 +368,7 @@ def build_schedule(
     while t < stop_timestamp:
         # Determine which patches are observable at time t.
 
-        if debug:
+        if args.debug:
             tstring = datetime.utcfromtimestamp(t).strftime(
                 '%Y-%m-%d %H:%M:%S %Z')
             print('t =  {}'.format(tstring), flush=True)
@@ -95,53 +376,19 @@ def build_schedule(
         observer.date = to_DJD(t)
         sun.compute(observer)
         if sun.alt > sun_el_max:
-            if debug:
+            if args.debug:
                 print('Sun elevation is {:.2f} > {:.2f}. Moving on.'.format(
                     sun.alt/degree, sun_el_max/degree), flush=True)
             t += tstep
             continue
         moon.compute(observer)
 
-        visible = []
-        not_visible = []
-        for (name, weight, corners) in patches:
-            # Reject all patches that have even one corner too close
-            # to the Sun or the Moon and patches that are completely
-            # below the horizon
-            in_view = False
-            ncorner = len(corners)
-            for i, corner in enumerate(corners):
-                corner.compute(observer)
-                if corner.alt > el_min:
-                    # At least one corner is visible
-                    in_view = True
-                if sun.alt > sun_avoidance_angle:
-                    # Sun is high enough to apply sun_angle_min check
-                    angle = ephem.separation(sun, corner)
-                    if angle < sun_angle_min:
-                        # Patch is too close to the Sun
-                        not_visible.append((
-                            name,
-                            'Too close to Sun {:.2f}'.format(angle / degree)))
-                        in_view = False
-                        break
-                if moon.alt > 0:
-                    angle = ephem.separation(moon, corner)
-                    if angle < moon_angle_min:
-                        # Patch is too close to the Moon
-                        not_visible.append((
-                            name,
-                            'Too close to Moon {:.2f}'.format(angle / degree)))
-                        in_view = False
-                        break
-                if i == ncorner-1 and not in_view:
-                    not_visible.append((
-                        name, 'Below the horizon.'))
-            if in_view:
-                visible.append((name, weight, corners))
+        visible, not_visible = get_visible(
+            observer, sun, moon, patches, el_min, sun_angle_min,
+            sun_avoidance_angle, moon_angle_min)
 
         if len(visible) == 0:
-            if debug:
+            if args.debug:
                 tstring = datetime.utcfromtimestamp(t).strftime(
                     '%Y-%m-%d %H:%M:%S %Z')
                 print('No patches visible at {}: {}'.format(tstring, not_visible))
@@ -154,194 +401,14 @@ def build_schedule(
         # If the criteria are not met, advance the time by a step
         # and try again
 
-        for i in range(len(visible)-1):
-            for j in range(i+1, len(visible)):
-                iname, iweight, icorners = visible[i]
-                ihit = hits[iname]
-                jname, jweight, jcorners = visible[i]
-                jhit = hits[jname]
-                if ihit*jweight < jhit*iweight:
-                    visible[i], visible[j] = visible[j], visible[i]
+        prioritize(visible, hits)
 
-        success = False
-        for (name, weight, corners) in visible:
-            for rising in [True, False]:
-                observer.date = to_DJD(t)
-                for corner in corners:
-                    corner.compute(observer)
-                # Then determine an elevation that all corners will cross
-                ncorner = len(corners)
-                azs = np.zeros(ncorner)
-                els = np.zeros(ncorner)
-                for i, corner in enumerate(corners):
-                    azs[i] = corner.az
-                    els[i] = corner.alt
-                if rising:
-                    ind = azs <= np.pi
-                    if np.sum(ind) == 0:
-                        not_visible.append((
-                            name, 'No rising corners'))
-                        continue
-                    el = np.amax(els[ind]) + fp_radius
-                else:
-                    ind = azs >= np.pi
-                    if np.sum(ind) == 0:
-                        not_visible.append((
-                            name, 'No setting corners'))
-                        continue
-                    el = np.amin(els[ind]) - fp_radius
-                if el < el_min:
-                    not_visible.append((
-                        name,
-                        'el < el_min ({:.2f} < {:.2f}) rising = {}'.format(
-                            el/degree, el_min/degree, rising)))
-                    continue
-                if el > el_max:
-                    not_visible.append((
-                        name,
-                        'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
-                            el/degree, el_max/degree, rising)))
-                    continue
-                azmin = 1e10
-                azmax = -1e10
-                # and now track when all corners are past the elevation
-                tstop = t
-                to_cross = np.ones(len(corners), dtype=np.bool)
-                old_az = azs.copy()
-                old_el = els.copy()
-                old_to_cross = to_cross.copy()
-                azmins = []
-                azmaxs = []
-                aztimes = []
-                while True:
-                    tstop += tstep / 10
-                    if tstop > stop_timestamp or tstop - t > 86400:
-                        not_visible.append((name, 'Ran out of time rising = {}'
-                                            ''.format(rising)))
-                        break
-                    observer.date = to_DJD(tstop)
-                    sun.compute(observer)
-                    if sun.alt > sun_el_max:
-                        not_visible.append((
-                            name,
-                            'Sun too high {:.2f} rising = {}'
-                            ''.format(sun.alt/degree, rising)))
-                        break
-                    for i, corner in enumerate(corners):
-                        corner.compute(observer)
-                        azs[i] = corner.az
-                        els[i] = corner.alt
-                    if rising:
-                        good = azs <= np.pi
-                        to_cross[np.logical_and(els > el+fp_radius, good)] \
-                            = False
-                    else:
-                        good = azs >= np.pi
-                        to_cross[np.logical_and(els < el-fp_radius, good)] \
-                            = False
-                    # Find the pairs of corners that are on opposite sides
-                    # of the CES line.  Record the crossing azimuth of a
-                    # line between the corners.
-                    azs_cross = []
-                    for i in range(ncorner):
-                        j = (i + 1) % ncorner
-                        for el0 in [el,
-                                    el - fp_radius,
-                                    el - fp_radius]:
-                            if (els[i] - el0)*(els[j] - el0) < 0:
-                                az1 = azs[i]
-                                az2 = azs[j]
-                                el1 = els[i] - el0
-                                el2 = els[j] - el0
-                                if az1 - az2 < -2*np.pi:
-                                    az2 += 2*np.pi
-                                az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
-                                if (rising and az_cross <= np.pi) or \
-                                   (not rising and az_cross >= np.pi):
-                                    azs_cross.append(az_cross)
-                    if len(azs_cross) > 0:
-                        azs_cross = np.sort(azs_cross)
-                        azmins.append(azs_cross[0])
-                        azmaxs.append(azs_cross[-1])
-                        aztimes.append(tstop)
-                    if np.all(np.logical_not(to_cross)):
-                        # All corners made it across the CES line.
-                        success = True
-                        break
-                    old_az = azs.copy()
-                    old_el = els.copy()
-                    old_to_cross = to_cross.copy()
-                if success:
-                    break
-            if not success:
-                # CES failed.  Try observing the next patch.
-                continue
-            ces_time = tstop - t
-            if ces_time > ces_max_time:
-                nsub = np.int(np.ceil(ces_time / ces_max_time))
-                ces_time /= nsub
-            aztimes = np.array(aztimes)
-            azmins = np.array(azmins)
-            azmaxs = np.array(azmaxs)
-            rising_string = 'R' if rising else 'S'
-            hits[name] += 1
-            t1 = t
-            isub = -1
-            while t1 < tstop:
-                isub += 1
-                t2 = min(t1 + ces_time, tstop)
-                ind = np.logical_and(aztimes >= t1, aztimes <= t2)
-                if np.all(aztimes > t2):
-                    ind[0] = True
-                if np.all(aztimes < t1):
-                    ind[-1] = True
-                azmin = np.amin(azmins[ind])
-                azmax = np.amax(azmaxs[ind])
-                # Check if we are scanning across the zero meridian
-                if azmax - azmin > np.pi:
-                    # we are, scan from the maximum to the minimum
-                    azmin = np.amin(azmaxs[ind])
-                    azmax = np.amax(azmin[ind])
-                # Add the focal plane radius to the scan width
-                fp_radius_eff = fp_radius / np.cos(el)
-                azmin = (azmin - fp_radius_eff) % (2*np.pi)
-                azmax = (azmax + fp_radius_eff) % (2*np.pi)
-                ces_start = datetime.utcfromtimestamp(t1).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                ces_stop = datetime.utcfromtimestamp(t2).strftime(
-                    '%Y-%m-%d %H:%M:%S %Z')
-                # Get the Sun and Moon locations at the beginning and end
-                observer.date = to_DJD(t1)
-                sun.compute(observer)
-                moon.compute(observer)
-                sun_az1, sun_el1 = sun.az/degree, sun.alt/degree
-                moon_az1, moon_el1 = moon.az/degree, moon.alt/degree
-                moon_phase1 = moon.phase
-                observer.date = to_DJD(t2)
-                sun.compute(observer)
-                moon.compute(observer)
-                sun_az2, sun_el2 = sun.az/degree, sun.alt/degree
-                moon_az2, moon_el2 = moon.az/degree, moon.alt/degree
-                moon_phase2 = moon.phase
-                # Create an entry in the schedule
-                fout.write(
-                    fout_fmt.format(
-                        ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
-                        name,
-                        azmin/degree, azmax/degree, el/degree,
-                        rising_string,
-                        sun_el1, sun_az1, sun_el2, sun_az2,
-                        moon_el1, moon_az1, moon_el2, moon_az2,
-                        0.005*(moon_phase1 + moon_phase2), hits[name], isub))
-                t1 = t2 + gap_small
-            # Advance the time
-            t = tstop
-            # Add the gap
-            t += gap
-            break
+        success, t = attempt_scan(
+            args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+            tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
 
         if not success:
-            if debug:
+            if args.debug:
                 tstring = datetime.utcfromtimestamp(t).strftime(
                     '%Y-%m-%d %H:%M:%S %Z')
                 print('No patches could be scanned at {}: {}'.format(
@@ -350,8 +417,10 @@ def build_schedule(
 
     fout.close()
 
+    return
 
-def main():
+
+def parse_args():
 
     parser = argparse.ArgumentParser(
         description='Generate ground observation schedule.',
@@ -435,10 +504,176 @@ def main():
     start_timestamp = start_time.timestamp()
     stop_timestamp = stop_time.timestamp()
 
-    if args.debug:
-        import healpy as hp
-        import matplotlib.pyplot as plt
+    return args, start_timestamp, stop_timestamp
 
+
+def parse_patch_explicit(args, parts):
+    """ Parse an explicit patch definition line
+    """
+    corners = []
+    print('Explicit-corners format ', end='')
+    while i < len(parts):
+        print(' ({}, {})'.format(parts[2], parts[3]), end='')
+        try:
+            # Assume coordinates in degrees
+            lon = float(parts[2]) * degree
+            lat = float(parts[3]) * degree
+        except:
+            # Failed simple interpreration, assume pyEphem strings
+            lon = parts[2]
+            lat = parts[3]
+        i += 2
+        if args.patch_coord == 'C':
+            corner = ephem.Equatorial(lon, lat, epoch='2000')
+        elif args.patch_coord == 'E':
+            corner = ephem.Ecliptic(lon, lat, epoch='2000')
+        elif args.patch_coord == 'G':
+            corner = ephem.Galactic(lon, lat, epoch='2000')
+        else:
+            raise RuntimeError('Unknown coordinate system: {}'.format(
+                args.patch_coord))
+        corner = ephem.Equatorial(corner)
+        if corner.dec > 80*degree or corner.dec < -80*degree:
+            raise RuntimeError(
+                '{} has at least one circumpolar corner. '
+                'Circumpolar targeting not yet implemented'.format(name))
+        patch_corner = ephem.FixedBody()
+        patch_corner._ra = corner.ra
+        patch_corner._dec = corner.dec
+        corners.append(patch_corner)
+
+    return corners
+
+
+def parse_patch_rectangular(args, parts):
+    """ Parse a rectangular patch definition line
+    """
+    corners = []
+    print('Rectangular format ', end='')
+    try:
+        # Assume coordinates in degrees
+        lon_min = float(parts[2]) * degree
+        lat_max = float(parts[3]) * degree
+        lon_max = float(parts[4]) * degree
+        lat_min = float(parts[5]) * degree
+    except:
+        # Failed simple interpreration, assume pyEphem strings
+        lon_min = parts[2]
+        lat_max = parts[3]
+        lon_max = parts[4]
+        lat_min = parts[5]
+    if args.patch_coord == 'C':
+        coordconv = ephem.Equatorial
+    elif args.patch_coord == 'E':
+        coordconv = ephem.Ecliptic
+    elif args.patch_coord == 'G':
+        coordconv = ephem.Galactic
+    else:
+        raise RuntimeError('Unknown coordinate system: {}'.format(
+            args.patch_coord))
+
+    nw_corner = coordconv(lon_min, lat_max, epoch='2000')
+    ne_corner = coordconv(lon_max, lat_max, epoch='2000')
+    se_corner = coordconv(lon_max, lat_min, epoch='2000')
+    sw_corner = coordconv(lon_min, lat_min, epoch='2000')
+
+    corners_temp = []
+    add_side(nw_corner, ne_corner, corners_temp, coordconv)
+    add_side(ne_corner, se_corner, corners_temp, coordconv)
+    add_side(se_corner, sw_corner, corners_temp, coordconv)
+    add_side(sw_corner, nw_corner, corners_temp, coordconv)
+
+    for corner in corners_temp:
+        if corner.dec > 80*degree or corner.dec < -80*degree:
+            raise RuntimeError(
+                '{} has at least one circumpolar corner. '
+                'Circumpolar targeting not yet implemented'.format(name))
+        patch_corner = ephem.FixedBody()
+        patch_corner._ra = corner.ra
+        patch_corner._dec = corner.dec
+        corners.append(patch_corner)
+
+    return corners
+
+
+def add_side(corner1, corner2, corners_temp, coordconv):
+    """ Add one side of a rectangle.
+
+    Add one side of a rectangle with enough interpolation points.
+    """
+    step = 5 * degree
+    corners_temp.append(ephem.Equatorial(corner1))
+    lon1 = corner1.ra
+    lon2 = corner2.ra
+    lat1 = corner1.dec
+    lat2 = corner2.dec
+    if lon1 == lon2:
+        lon = lon1
+        ninterp = int(np.abs(lat2 - lat1) // step)
+        if ninterp > 0:
+            interp_step = (lat2 - lat1) / (ninterp + 1)
+            for iinterp in range(ninterp):
+                lat = lat1 + iinterp*interp_step
+                corners_temp.append(
+                    ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
+    elif lat1 == lat2:
+        lat = lat1
+        ninterp = int(np.abs(lon2 - lon1) // step)
+        if ninterp > 0:
+            interp_step = (lon2 - lon1) / (ninterp + 1)
+            for iinterp in range(ninterp):
+                lon = lon1 + iinterp*interp_step
+                corners_temp.append(
+                    ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
+    else:
+        raise RuntimeError('add_side: both latitude and longitude change')
+
+    return
+
+
+def parse_patch_center_and_width(args, parts):
+    """ Parse center-and-width patch definition
+    """
+    corners = []
+    print('Center-and-width format ', end='')
+    try:
+        # Assume coordinates in degrees
+        lon = float(parts[2]) * degree
+        lat = float(parts[3]) * degree
+    except:
+        # Failed simple interpreration, assume pyEphem strings
+        lon = parts[2]
+        lat = parts[3]
+    width = float(parts[4]) * degree
+    if args.patch_coord == 'C':
+        center = ephem.Equatorial(lon, lat, epoch='2000')
+    elif args.patch_coord == 'E':
+        center = ephem.Ecliptic(lon, lat, epoch='2000')
+    elif args.patch_coord == 'G':
+        center = ephem.Galactic(lon, lat, epoch='2000')
+    else:
+        raise RuntimeError('Unknown coordinate system: {}'.format(
+            args.patch_coord))
+    center = ephem.Equatorial(center)
+    # Synthesize 8 corners around the center
+    phi = center.ra
+    theta = center.dec
+    r = width / 2
+    ncorner = 8
+    angstep = 2 * np.pi / ncorner
+    for icorner in range(ncorner):
+        ang = angstep * icorner
+        delta_theta = np.cos(ang) * r
+        delta_phi = np.sin(ang) * r / np.cos(theta + delta_theta)
+        patch_corner = ephem.FixedBody()
+        patch_corner._ra = phi + delta_phi
+        patch_corner._dec = theta + delta_theta
+        corners.append(patch_corner)
+
+    return corners
+
+
+def parse_patches(args):
     # Parse the patch definitions
 
     patches = []
@@ -448,180 +683,23 @@ def main():
         name = parts[0]
         weight = float(parts[1])
         total_weight += weight
-        i = 2
-        corners = []
         print('Adding patch "{}" {} '.format(name, weight), end='')
-        if len(parts[i:]) == 3:
-            print('Center-and-width format ', end='')
-            # Patch center and width format
-            try:
-                # Assume coordinates in degrees
-                lon = float(parts[i]) * degree
-                lat = float(parts[i+1]) * degree
-            except:
-                # Failed simple interpreration, assume pyEphem strings
-                lon = parts[i]
-                lat = parts[i+1]
-            width = float(parts[i+2]) * degree
-            if args.patch_coord == 'C':
-                center = ephem.Equatorial(lon, lat, epoch='2000')
-            elif args.patch_coord == 'E':
-                center = ephem.Ecliptic(lon, lat, epoch='2000')
-            elif args.patch_coord == 'G':
-                center = ephem.Galactic(lon, lat, epoch='2000')
-            else:
-                raise RuntimeError('Unknown coordinate system: {}'.format(
-                    args.patch_coord))
-            center = ephem.Equatorial(center)
-            # Synthesize 8 corners around the center
-            phi = center.ra
-            theta = center.dec
-            r = width / 2
-            ncorner = 8
-            angstep = 2 * np.pi / ncorner
-            for icorner in range(ncorner):
-                ang = angstep * icorner
-                delta_theta = np.cos(ang) * r
-                delta_phi = np.sin(ang) * r / np.cos(theta + delta_theta)
-                patch_corner = ephem.FixedBody()
-                patch_corner._ra = phi + delta_phi
-                patch_corner._dec = theta + delta_theta
-                corners.append(patch_corner)
-        elif len(parts[i:]) == 4:
-            print('Rectangular format ', end='')
-            # Rectangle format
-            try:
-                # Assume coordinates in degrees
-                lon_min = float(parts[i]) * degree
-                lat_max = float(parts[i+1]) * degree
-                lon_max = float(parts[i+2]) * degree
-                lat_min = float(parts[i+3]) * degree
-            except:
-                # Failed simple interpreration, assume pyEphem strings
-                lon_min = parts[i]
-                lat_max = parts[i+1]
-                lon_max = parts[i+2]
-                lat_min = parts[i+3]
-            if args.patch_coord == 'C':
-                fun = ephem.Equatorial
-            elif args.patch_coord == 'E':
-                fun = ephem.Ecliptic
-            elif args.patch_coord == 'G':
-                fun = ephem.Galactic
-            else:
-                raise RuntimeError('Unknown coordinate system: {}'.format(
-                    args.patch_coord))
-            nw_corner = fun(lon_min, lat_max, epoch='2000')
-            ne_corner = fun(lon_max, lat_max, epoch='2000')
-            se_corner = fun(lon_max, lat_min, epoch='2000')
-            sw_corner = fun(lon_min, lat_min, epoch='2000')
-            # If the patch is very large, we add extra control points
-            # between the corners
-            corners_temp = []
-            step = 5 * degree
-            # NW corner
-            corners_temp.append(ephem.Equatorial(nw_corner))
-            lat = nw_corner.dec
-            step_eff = step / np.cos(lat)
-            lon1 = nw_corner.ra
-            lon2 = ne_corner.ra
-            if lon2 > lon1:
-                lon2 -= 2*np.pi
-            ninterp = int((lon1 - lon2) // step_eff)
-            if ninterp > 0:
-                interp_step = (lon1 - lon2) / (ninterp + 1)
-                for iinterp in range(ninterp):
-                    lon = (lon1 - iinterp*interp_step) % (2*np.pi)
-                    corners_temp.append(
-                        ephem.Equatorial(fun(lon, lat, epoch='2000')))
-            # NE corner
-            corners_temp.append(ephem.Equatorial(ne_corner))
-            lon = ne_corner.ra
-            lat1 = se_corner.dec
-            lat2 = ne_corner.dec
-            ninterp = int((lat2 - lat1) // step)
-            if ninterp > 0:
-                interp_step = (lat2 - lat1) / (ninterp + 1)
-                for iinterp in range(ninterp):
-                    lat = lat2 - iinterp*interp_step
-                    corners_temp.append(
-                        ephem.Equatorial(fun(lon, lat, epoch='2000')))
-            # SE corner
-            corners_temp.append(ephem.Equatorial(se_corner))
-            lat = se_corner.dec
-            step_eff = step / np.cos(lat)
-            lon1 = sw_corner.ra
-            lon2 = se_corner.ra
-            if lon1 < lon2:
-                lon2 -= 2*np.pi
-            ninterp = int((lon1 - lon2) // step_eff)
-            if ninterp > 0:
-                interp_step = (lon1 - lon2) / (ninterp + 1)
-                for iinterp in range(ninterp):
-                    lon = (lon2 + iinterp*interp_step) % (2*np.pi)
-                    corners_temp.append(
-                        ephem.Equatorial(fun(lon, lat, epoch='2000')))
-            # NE corner
-            corners_temp.append(ephem.Equatorial(sw_corner))
-            lon = sw_corner.ra
-            lat1 = sw_corner.dec
-            lat2 = nw_corner.dec
-            ninterp = int((lat2 - lat1) // step)
-            if ninterp > 0:
-                interp_step = (lat2 - lat1) / (ninterp + 1)
-                for iinterp in range(ninterp):
-                    lat = lat1 + iinterp*interp_step
-                    corners_temp.append(
-                        ephem.Equatorial(fun(lon, lat, epoch='2000')))
-            for corner in corners_temp:
-                if corner.dec > 80*degree or corner.dec < -80*degree:
-                    raise RuntimeError(
-                        '{} has at least one circumpolar corner. '
-                        'Circumpolar targeting not yet implemented'.format(name))
-                patch_corner = ephem.FixedBody()
-                patch_corner._ra = corner.ra
-                patch_corner._dec = corner.dec
-                corners.append(patch_corner)
+        if len(parts[2:]) == 3:
+            corners = parse_patch_center_and_width(args, parts)
+        elif len(parts[2:]) == 4:
+            corners = parse_patch_rectangular(args, parts)
         else:
-            # Explicit patch corners
-            print('Explicit-corners format ', end='')
-            while i < len(parts):
-                print(' ({}, {})'.format(parts[i], parts[i+1]), end='')
-                try:
-                    # Assume coordinates in degrees
-                    lon = float(parts[i]) * degree
-                    lat = float(parts[i+1]) * degree
-                except:
-                    # Failed simple interpreration, assume pyEphem strings
-                    lon = parts[i]
-                    lat = parts[i+1]
-                i += 2
-                if args.patch_coord == 'C':
-                    corner = ephem.Equatorial(lon, lat, epoch='2000')
-                elif args.patch_coord == 'E':
-                    corner = ephem.Ecliptic(lon, lat, epoch='2000')
-                elif args.patch_coord == 'G':
-                    corner = ephem.Galactic(lon, lat, epoch='2000')
-                else:
-                    raise RuntimeError('Unknown coordinate system: {}'.format(
-                        args.patch_coord))
-                corner = ephem.Equatorial(corner)
-                if corner.dec > 80*degree or corner.dec < -80*degree:
-                    raise RuntimeError(
-                        '{} has at least one circumpolar corner. '
-                        'Circumpolar targeting not yet implemented'.format(name))
-                patch_corner = ephem.FixedBody()
-                patch_corner._ra = corner.ra
-                patch_corner._dec = corner.dec
-                corners.append(patch_corner)
+            corners = parse_patch_explicit(args, parts)
         print('')
         patches.append([name, weight, corners])
 
     if args.debug:
-        plt.figure(figsize=[18,12])
+        import matplotlib.pyplot as plt
+        import healpy as hp
+        plt.figure(figsize=[18, 12])
         for iplot, coord in enumerate('CEG'):
-            hp.mollview(None, coord=coord, title='Patch locations',
-                        sub=[2, 2, 1+iplot])
+            hp.mollview(np.zeros(12), coord=coord, cbar=False,
+                        title='Patch locations', sub=[2, 2, 1+iplot])
             hp.graticule(30)
             for name, weight, corners in patches:
                 lon = [corner._ra/degree for corner in corners]
@@ -634,8 +712,6 @@ def main():
                             lw=2)
                 hp.projtext(lon[0], lat[0], name, lonlat=True, coord='C',
                             fontsize=14)
-
-    if args.debug:
         plt.savefig('patches.png')
         plt.close()
 
@@ -643,13 +719,20 @@ def main():
     for i in range(len(patches)):
         patches[i][1] /= total_weight
 
+    return patches
+
+
+def main():
+
+    args, start_timestamp, stop_timestamp = parse_args()
+
+    patches = parse_patches(args)
+
     build_schedule(
-        start_timestamp, stop_timestamp, args.gap, args.gap_small, args.out,
-        args.site_name, args.site_lat, args.site_lon, args.site_alt, args.debug,
+        args, start_timestamp, stop_timestamp,
         args.sun_el_max*degree, args.sun_avoidance_angle*degree,
         args.sun_angle_min*degree, args.moon_angle_min*degree,
-        args.el_min*degree, args.el_max*degree, args.fp_radius*degree,
-        args.ces_max_time, patches)
+        args.el_min*degree, args.el_max*degree, args.fp_radius*degree, patches)
 
 if __name__ == '__main__':
     main()
