@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
+All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
@@ -13,7 +13,13 @@ a BSD-style license that can be found in the LICENSE file.
 #include <cmath>
 
 
-void toast::fod::autosums ( int64_t n, double const * x, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits ) {
+void toast::fod::autosums ( int64_t n,
+                            double const * x,
+                            uint8_t const * good,
+                            int64_t lagmax,
+                            double * sums,
+                            int64_t * hits )
+{
 
     int64_t i, j;
     int64_t lag;
@@ -21,10 +27,10 @@ void toast::fod::autosums ( int64_t n, double const * x, uint8_t const * good, i
     double lagsum;
     int64_t hitsum;
 
-    double * xgood = static_cast < double * > ( toast::mem::aligned_alloc ( 
+    double * xgood = static_cast < double * > ( toast::mem::aligned_alloc (
         n * sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-    uint8_t * gd = static_cast < uint8_t * > ( toast::mem::aligned_alloc ( 
+    uint8_t * gd = static_cast < uint8_t * > ( toast::mem::aligned_alloc (
         n * sizeof(uint8_t), toast::mem::SIMD_ALIGN ) );
 
     for ( i = 0; i < n; ++i ) {
@@ -38,7 +44,8 @@ void toast::fod::autosums ( int64_t n, double const * x, uint8_t const * good, i
     }
 
     #pragma omp parallel for default(none) private(i, j, lag, lagsum, hitsum) shared(n, gd, lagmax, xgood, sums, hits) schedule(dynamic)
-    for ( lag = 0; lag < lagmax; ++lag ) {
+    for ( lag = 0; lag < lagmax; ++lag )
+    {
         j = lag;
         lagsum = 0.0;
         hitsum = 0.0;

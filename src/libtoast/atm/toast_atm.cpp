@@ -4,7 +4,9 @@
   a BSD-style license that can be found in the LICENSE file.
 */
 
-#define DEBUG
+#if !defined(DEBUG)
+#   define DEBUG
+#endif
 
 #include <toast_atm_internal.hpp>
 
@@ -39,33 +41,34 @@ double mean( std::vector<double> vec ) {
 
 
 toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
-		      double tmin, double tmax,
-		      double lmin_center, double lmin_sigma,
-		      double lmax_center, double lmax_sigma,
-		      double w_center, double w_sigma,
-		      double wdir_center, double wdir_sigma,
-		      double z0_center, double z0_sigma,
-		      double T0_center, double T0_sigma,
-		      double zatm, double zmax,
-		      double xstep, double ystep, double zstep,
-		      long nelem_sim_max,
-		      int verbosity, MPI_Comm comm, int gangsize,
-		      uint64_t key1,uint64_t key2,
-		      uint64_t counter1, uint64_t counter2, char *cachedir
-    ) : azmin(azmin), azmax(azmax),
-        elmin(elmin), elmax(elmax), tmin(tmin), tmax(tmax),
-        lmin_center(lmin_center), lmin_sigma(lmin_sigma),
-        lmax_center(lmax_center), lmax_sigma(lmax_sigma),
-        w_center(w_center), w_sigma(w_sigma),
-        wdir_center(wdir_center), wdir_sigma(wdir_sigma),
-        z0_center(z0_center), z0_sigma(z0_sigma),
-        T0_center(T0_center), T0_sigma(T0_sigma),
-        zatm(zatm), zmax(zmax), xstep(xstep), ystep(ystep),
-        zstep(zstep), nelem_sim_max(nelem_sim_max),
-        verbosity(verbosity),
-        comm(comm), gangsize(gangsize),
-        key1(key1), key2(key2),
-        counter1start(counter1), counter2start(counter2), cachedir(cachedir) {
+              double tmin, double tmax,
+              double lmin_center, double lmin_sigma,
+              double lmax_center, double lmax_sigma,
+              double w_center, double w_sigma,
+              double wdir_center, double wdir_sigma,
+              double z0_center, double z0_sigma,
+              double T0_center, double T0_sigma,
+              double zatm, double zmax,
+              double xstep, double ystep, double zstep,
+              long nelem_sim_max,
+              int verbosity, MPI_Comm comm, int gangsize,
+              uint64_t key1,uint64_t key2,
+              uint64_t counter1, uint64_t counter2, char *cachedir)
+: comm(comm), cachedir(cachedir),
+  gangsize(gangsize), verbosity(verbosity),
+  key1(key1), key2(key2), counter1start(counter1), counter2start(counter2),
+  azmin(azmin), azmax(azmax),
+  elmin(elmin), elmax(elmax), tmin(tmin), tmax(tmax),
+  lmin_center(lmin_center), lmin_sigma(lmin_sigma),
+  lmax_center(lmax_center), lmax_sigma(lmax_sigma),
+  w_center(w_center), w_sigma(w_sigma),
+  wdir_center(wdir_center), wdir_sigma(wdir_sigma),
+  z0_center(z0_center), z0_sigma(z0_sigma),
+  T0_center(T0_center), T0_sigma(T0_sigma),
+  zatm(zatm), zmax(zmax),
+  xstep(xstep), ystep(ystep), zstep(zstep),
+  nelem_sim_max(nelem_sim_max)
+{
 
     counter1 = counter1start;
     counter2 = counter2start;
@@ -1746,7 +1749,7 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance(
 
     // Report memory usage
 
-    double my_mem = cov->AllocatedMemory() * 2 * sizeof(double) / pow(2.0, 20);
+    double my_mem = cov->AllocatedMemory() * 2 * sizeof(double) / pow(2.0, 20.0);
     double tot_mem;
     if ( MPI_Allreduce( &my_mem, &tot_mem, 1, MPI_DOUBLE, MPI_SUM, comm_gang ) )
         throw std::runtime_error(
