@@ -327,11 +327,11 @@ def main():
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6, 
+        invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6, 
             dtype=np.float64, submap=submap, local=localsm)
-        hits = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1, 
+        hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1, 
             dtype=np.int64, submap=submap, local=localsm)
-        zmap = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3, 
+        zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3, 
             dtype=np.float64, submap=submap, local=localsm)
 
         # compute the hits and covariance once, since the pointing and noise

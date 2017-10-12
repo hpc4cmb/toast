@@ -1,5 +1,6 @@
 queue = debug
-nodes = 200
+nodes = 314
 time = 00:30:00
-ndet = 271
+detpix = 217
 nobs = 157
+groupnodes = 2
