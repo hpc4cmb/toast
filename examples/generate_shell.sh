@@ -5,7 +5,7 @@ pushd $(dirname $0) > /dev/null
 topdir=$(pwd -P)
 popd > /dev/null
 
-for type in satellite; do
+for type in satellite ground; do
     for size in tiny; do
         template="${type}_shell_template"
         sizefile="${type}.${size}"
@@ -23,7 +23,7 @@ for type in satellite; do
             if [ "${comment}" != "#" ]; then
 
                 check=$(echo "${line}" | sed -e "s#.*=.*#=#")
-            
+
                 if [ "x${check}" = "x=" ]; then
                     # get the variable and its value
                     var=$(echo ${line} | sed -e "s#\([^=]*\)=.*#\1#" | awk '{print $1}')
@@ -55,9 +55,3 @@ for type in satellite; do
 
     done
 done
-
-
-
-
-
-

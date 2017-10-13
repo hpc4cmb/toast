@@ -1432,6 +1432,8 @@ if __name__ == '__main__':
         main()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
+        if MPI.COMM_WORLD.size == 1:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         print('*** print_tb:')
         traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
