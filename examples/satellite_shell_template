@@ -8,11 +8,11 @@ mkdir -p "${outdir}"
 
 # Generate the focalplane file if it does not already exist.
 
-ndet=@@ndet@@
+detpix=@@detpix@@
 
-fpfile="${outdir}/fp_${ndet}.pkl"
+fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix ${ndet} --out "${outdir}/fp"
+    toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
 fi
 
 # The executable script
