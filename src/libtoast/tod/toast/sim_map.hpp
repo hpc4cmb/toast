@@ -17,17 +17,17 @@ namespace toast { namespace sim_map {
         T *map, double *tod, size_t nsamp ) {
 
         #pragma omp for schedule(static)
-        for ( long i=0; i<nsamp; ++i ) {
+        for ( size_t i=0; i<nsamp; ++i ) {
             tod[i] = 0;
             long offset = (submap[i]*subnpix+subpix[i]) * nmap;
             long woffset = i * nmap;
-            for ( int imap=0; imap<nmap; ++imap ) {
+            for ( size_t imap=0; imap<nmap; ++imap ) {
                 tod[i] += map[offset++] * weights[woffset++];
             }
         }
 
         return;
-    };
+    }
 
 } }
 

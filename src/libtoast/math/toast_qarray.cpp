@@ -18,18 +18,30 @@ a BSD-style license that can be found in the LICENSE file.
 
 
 // Fixed length at which we have enough work to justify using threads.
-const static int toast_qarray_ompthresh = 100;
+const static size_t toast_qarray_ompthresh = 100;
 
+// function to get the number of threads
+static size_t get_num_threads()
+{
+#ifdef _OPENMP
+  return omp_get_num_threads();
+#else
+  return 1;
+#endif
+}
 
 // Dot product of lists of arrays.
 
-void toast::qarray::list_dot ( size_t n, size_t m, size_t d, double const * a, 
-    double const * b, double * dotprod ) {
+void
+toast::qarray::list_dot (size_t n,
+                         size_t m,
+                         size_t d,
+                         const double * a, 
+    const double * b,
+                         double * dotprod)
+{
 
-    int nt = 1;
-    #ifdef _OPENMP
-    nt = omp_get_num_threads();
-    #endif
+    auto nt = get_num_threads();
     
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -66,7 +78,13 @@ void toast::qarray::inv ( size_t n, double * q ) {
 
 // Norm of quaternion array
 
-void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, double * norm ) {
+void
+toast::qarray::amplitude (size_t n,
+                          size_t m,
+                          size_t d,
+                          const double * v,
+                          double * norm)
+{
     
     toast::mem::simd_array<double> temp(n);
 
@@ -80,16 +98,19 @@ void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, 
 
 // Normalize quaternion array.
 
-void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_in, double * q_out ) {
+void
+toast::qarray::normalize (size_t n,
+                          size_t m,
+                          size_t d,
+                          const double * q_in,
+                          double * q_out)
+{
 
     toast::mem::simd_array<double> norm(n);
 
     toast::qarray::amplitude ( n, m, d, q_in, norm );
 
-    int nt = 1;
-    #ifdef _OPENMP
-    nt = omp_get_num_threads();
-    #endif
+    auto nt = get_num_threads();
 
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -118,10 +139,7 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
 
     toast::qarray::amplitude ( n, m, d, q, norm );
 
-    int nt = 1;
-    #ifdef _OPENMP
-    nt = omp_get_num_threads();
-    #endif
+    auto nt = get_num_threads();
 
     if ( n < toast_qarray_ompthresh * nt ) {
         for ( size_t i = 0; i < n; ++i ) {
@@ -144,7 +162,13 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
 
 // Rotate an array of vectors by an array of quaternions.
 
-void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double const * v_in, double * v_out ) {
+void
+toast::qarray::rotate (size_t nq,
+                       const double * q,
+                       size_t nv,
+                       const double * v_in,
+                       double * v_out)
+{
 
     size_t n = nq;
     if ( nv > n ) {
@@ -156,16 +180,13 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
     toast::qarray::normalize ( nq, 4, 4, q, q_unit );
 
     size_t i;
-    size_t vf;
+    //size_t vf;
     size_t vfin;
     size_t vfout;
     size_t qf;
     double xw, yw, zw, x2, xy, xz, y2, yz, z2;
 
-    int nt = 1;
-    #ifdef _OPENMP
-    nt = omp_get_num_threads();
-    #endif
+    auto nt = get_num_threads();
 
     // this is to avoid branching inside the for loop.
     size_t chv;
@@ -296,12 +317,15 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
 
 // Multiply arrays of quaternions.
 
-void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const * q, double * r ) {
+void
+toast::qarray::mult (size_t np,
+                     const double * p,
+                     size_t nq,
+                     const double * q,
+                     double * r)
+{
 
-    int nt = 1;
-    #ifdef _OPENMP
-    nt = omp_get_num_threads();
-    #endif
+    auto nt = get_num_threads();
 
     size_t n = np;
     if ( nq > n ) {
@@ -322,7 +346,6 @@ void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const 
         chq = 1;
     }
 
-    size_t i;
     size_t pf;
     size_t qf;
     size_t f;
@@ -342,6 +365,7 @@ void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const 
                 - p[pf + 2] * q[qf + 2] + p[pf + 3] * q[qf + 3];
         }
     } else {
+        size_t i;
         #pragma omp parallel for default(shared) private(i, f, pf, qf) schedule(static)
         for ( i = 0; i < n; ++i ) {
             f = 4 * i;
@@ -364,15 +388,22 @@ void toast::qarray::mult ( size_t np, double const * p, size_t nq, double const 
 
 // Spherical interpolation of quaternion array from time to targettime.
 
-void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * time, double const * targettime, double const * q_in, double * q_interp ) {
+void
+toast::qarray::slerp (size_t n_time,
+                      size_t n_targettime,
+                      const double * time,
+                      const double * targettime,
+                      const double * q_in,
+                      double * q_interp)
+{
 
     #pragma omp parallel default(shared)
     {
         double diff;
         double frac;
         double costheta;
-        double const * qlow;
-        double const * qhigh;
+        const double * qlow;
+        const double * qhigh;
         double theta;
         double invsintheta;
         double norm;
@@ -427,7 +458,9 @@ void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * t
 
 // Exponential of a quaternion array.
 
-void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
+void
+toast::qarray::exp (size_t n, const double * q_in, double * q_out)
+{
 
     toast::mem::simd_array<double> normv(n);
 
@@ -452,7 +485,9 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
 // Natural logarithm of a quaternion array.
 
-void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
+void
+toast::qarray::ln (size_t n, const double * q_in, double * q_out)
+{
 
     toast::mem::simd_array<double> normq(n);
 
@@ -477,7 +512,12 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
 // Real power of quaternion array
 
-void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
+void
+toast::qarray::pow (size_t n,
+                    const double * p,
+                    const double * q_in,
+                    double * q_out)
+{
     
     toast::mem::simd_array<double> q_tmp(4*n);
 
@@ -498,7 +538,12 @@ void toast::qarray::pow ( size_t n, double const * p, double const * q_in, doubl
 // Creates rotation quaternions of angles (in [rad]) around axes [already normalized]
 // axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 
-void toast::qarray::from_axisangle ( size_t n, double const * axis, double const * angle, double * q_out ) {
+void
+toast::qarray::from_axisangle (size_t n,
+                               const double * axis,
+                               const double * angle,
+                               double * q_out)
+{
 
     if ( n == 1 ) {
 
@@ -539,7 +584,12 @@ void toast::qarray::from_axisangle ( size_t n, double const * axis, double const
 
 // Returns the axis and angle of rotation of a quaternion.
 
-void toast::qarray::to_axisangle ( size_t n, double const * q, double * axis, double * angle ) {
+void
+toast::qarray::to_axisangle (size_t n,
+                             const double * q,
+                             double * axis,
+                             double * angle)
+{
 
     #pragma omp parallel default(shared)
     {
@@ -570,7 +620,9 @@ void toast::qarray::to_axisangle ( size_t n, double const * q, double * axis, do
 
 // Creates the rotation matrix corresponding to a quaternion.
 
-void toast::qarray::to_rotmat ( double const * q, double * rotmat ) {
+void
+toast::qarray::to_rotmat (const double * q, double * rotmat)
+{
     double xx = q[0] * q[0];
     double xy = q[0] * q[1];
     double xz = q[0] * q[2];
@@ -637,7 +689,11 @@ void toast::qarray::from_rotmat ( const double * rotmat, double * q ) {
 
 // Creates the quaternion from two normalized vectors.
 
-void toast::qarray::from_vectors ( double const * vec1, double const * vec2, double * q ) {
+void
+toast::qarray::from_vectors (const double * vec1,
+                             const double * vec2,
+                             double * q)
+{
     double dotprod = vec1[0] * vec2[0] + vec1[1] * vec2[1] + vec1[2] * vec2[2];
     double vec1prod = vec1[0] * vec1[0] + vec1[1] * vec1[1] + vec1[2] * vec1[2];
     double vec2prod = vec2[0] * vec2[0] + vec2[1] * vec2[1] + vec2[2] * vec2[2];
@@ -662,8 +718,14 @@ void toast::qarray::from_vectors ( double const * vec1, double const * vec2, dou
 
 // Create quaternions from latitude, longitude, and position angles
 
-void toast::qarray::from_angles ( size_t n, double const * theta, 
-    double const * phi, double * const pa, double * quat, bool IAU ) {
+void
+toast::qarray::from_angles (size_t n,
+                            const double * theta, 
+    const double * phi,
+                            double * const pa,
+                            double * quat,
+                            bool IAU)
+{
 
     #pragma omp parallel default(shared)
     {
@@ -738,11 +800,16 @@ void toast::qarray::from_angles ( size_t n, double const * theta,
 
 // Convert quaternions to latitude, longitude, and position angle
 
-void toast::qarray::to_angles ( size_t n, double const * quat, double * theta, 
+void
+toast::qarray::to_angles (size_t n,
+                          const double * quat,
+                          double * theta, 
     double * phi, double * pa, bool IAU ) {
 
-    double const xaxis[3] = { 1.0, 0.0, 0.0 };
-    double const zaxis[3] = { 0.0, 0.0, 1.0 };
+    const double xaxis[3] =
+    { 1.0, 0.0, 0.0 };
+    const double zaxis[3] =
+    { 0.0, 0.0, 1.0 };
 
     #pragma omp parallel default(shared)
     {

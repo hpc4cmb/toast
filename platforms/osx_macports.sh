@@ -16,16 +16,20 @@
 #
 
 OPTS="$@"
+WARN_FLAGS="-W -Wall -Wno-deprecated -Wwrite-strings -Wpointer-arith"
+WARN_FLAGS="${WARN_FLAGS} -pedantic -Wshadow -Wextra -Wno-unused-parameter"
+C_WARN_FLAGS="${WARN_FLAGS}"
+CXX_WARN_FLAGS=${WARN_FLAGS} -Woverloaded-virtual"
 
 export PYTHON=python3
 export CC=mpicc
 export CXX=mpicxx
 export MPICC=mpicc
 export MPICXX=mpicxx
-export CFLAGS="-O3 -std=c99"
-export CXXFLAGS="-O3"
+export CFLAGS="-O3 -std=c99 ${C_WARN_FLAGS}"
+export CXXFLAGS="-O3 ${CXX_WARN_FLAGS}"
 export LDFLAGS="-Wl,-twolevel_namespace"
+export PYTHON_EXTRA_LDFLAGS=$(python3-config --ldflags)
 
 ./configure ${OPTS} \
-	    --with-fftw=/opt/local \
-	    LIBS="-L/opt/local/lib"
+	    --with-fftw=/opt/local

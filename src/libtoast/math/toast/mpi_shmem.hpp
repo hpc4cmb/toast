@@ -88,7 +88,7 @@ namespace toast { namespace mpi_shmem {
             }
 
             void set( T val ) {
-                for ( int i=0; i<nlocal_; ++i )
+                for ( size_t i=0; i<nlocal_; ++i )
                     local_[i] = val;
             }
 
@@ -98,7 +98,7 @@ namespace toast { namespace mpi_shmem {
                 // contents.
 
                 size_t n_copy;
-                T *temp;
+                T *temp = nullptr;
 
                 if (n < n_)
                     n_copy = n;
