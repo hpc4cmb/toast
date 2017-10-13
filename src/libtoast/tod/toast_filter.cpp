@@ -21,24 +21,24 @@ void toast::filter::polyfilter(
     // same template matrix.
 
     char upper = 'U';
-    char lower = 'L';
+    //char lower = 'L';
     char notrans = 'N';
     char trans = 'T';
-    char diag = 'U';
-    char nodiag = 'N';
+    //char diag = 'U';
+    //char nodiag = 'N';
     double fzero = 0.0;
     double fone = 1.0;
     int one = 1;
-    int zero = 0;
+    //int zero = 0;
 
     int norder = order + 1;
 
 #pragma omp parallel for schedule(static)
-    for ( int iscan=0; iscan<nscan; ++iscan ) {
-        int start = starts[iscan];
-        int stop = stops[iscan];
+    for ( size_t iscan=0; iscan<nscan; ++iscan ) {
+        long start = starts[iscan];
+        long stop = stops[iscan];
         if ( start < 0 ) start = 0;
-        if ( stop > n-1 ) stop = n-1;
+        if ( (size_t) stop > n-1 ) stop = n-1;
         if ( stop < start ) continue;
         int scanlen = stop - start + 1;
 
@@ -126,7 +126,7 @@ void toast::filter::polyfilter(
             toast::mem::aligned_alloc (
                 scanlen*sizeof(double), toast::mem::SIMD_ALIGN ) );
 
-        for ( int isignal=0; isignal<nsignal; ++isignal ) {
+        for ( size_t isignal=0; isignal<nsignal; ++isignal ) {
             double *signal = signals[isignal] + start;
 
             // proj = templates x signal

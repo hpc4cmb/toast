@@ -13,6 +13,26 @@ a BSD-style license that can be found in the LICENSE file.
 #  include <omp.h>
 #endif
 
+// function to get number of threads
+static int get_num_threads()
+{
+#if defined(_OPENMP)
+    return omp_get_num_threads();
+#else
+    return 1;
+#endif
+}
+
+// function to get thread rank/ID
+static int get_thread_num()
+{
+#if defined(_OPENMP)
+    return omp_get_thread_num();
+#else
+    return 0;
+#endif
+
+}
 
 // void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
 //     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
@@ -71,8 +91,15 @@ a BSD-style license that can be found in the LICENSE file.
 
 
 void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
-    double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
+    const int64_t * indx_submap,
+                                 const int64_t * indx_pix,
+                                 const double * weights, 
+    double scale,
+                                 const double * signal,
+                                 double * zdata,
+                                 int64_t * hits,
+                                 double * invnpp)
+{
 
     #pragma omp parallel default(shared)
     {
@@ -84,13 +111,8 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
         int64_t ipx;
         int64_t off;
 
-        int threads = 1;
-        int trank = 0;
-
-        #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
-        #endif
+        int threads = get_num_threads();
+        int trank = get_thread_num();
 
         int tpix;
 
@@ -148,7 +170,10 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
 
 
 void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
+    const int64_t * indx_submap,
+                                      const int64_t * indx_pix,
+                                      int64_t * hits)
+{
 
     #pragma omp parallel default(shared)
     {
@@ -156,13 +181,8 @@ void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64
         int64_t i, j, k;
         int64_t hpx;
 
-        int threads = 1;
-        int trank = 0;
-
-        #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
-        #endif
+        int threads = get_num_threads();
+        int trank = get_thread_num();
 
         int tpix;
 
@@ -229,7 +249,9 @@ void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64
 
 
 void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
+    const int64_t * indx_submap,
+                                        const int64_t * indx_pix,
+                                        const double * weights, 
     double scale, int64_t * hits, double * invnpp ) {
 
     #pragma omp parallel default(shared)
@@ -241,13 +263,8 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
         int64_t ipx;
         int64_t off;
 
-        int threads = 1;
-        int trank = 0;
-
-        #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
-        #endif
+        int threads = get_num_threads();
+        int trank = get_thread_num();
 
         int tpix;
 
@@ -315,8 +332,13 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
 
 
 void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
-    int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
-    double scale, double const * signal, double * zdata ) {
+    const int64_t * indx_submap,
+                             const int64_t * indx_pix,
+                             const double * weights, 
+    double scale,
+                             const double * signal,
+                             double * zdata)
+{
 
     #pragma omp parallel default(shared)
     {
@@ -324,13 +346,8 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
         int64_t hpx;
         int64_t zpx;
         
-        int threads = 1;
-        int trank = 0;
-
-        #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
-        #endif
+        int threads = get_num_threads();
+        int trank = get_thread_num();
 
         int tpix;
 
@@ -555,7 +572,9 @@ void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_
 
 
 void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
-    double * data1, double const * data2 ) {
+                               double * data1,
+                               const double * data2)
+{
 
     int64_t i, j, k;
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
@@ -653,7 +672,9 @@ void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
 
 
 void toast::cov::apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
-    double const * mat, double * vec ) {
+                            const double * mat,
+                            double * vec)
+{
 
     int64_t i, j, k;
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
