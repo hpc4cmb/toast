@@ -308,7 +308,7 @@ def load_fp(args, comm):
     return fp, detweights
 
 
-def create_observations(args, comm, fp, all_ces, counter, site):
+def create_observations(args, comm, fp, all_ces, site):
     start = MPI.Wtime()
 
     data = toast.Data(comm)
@@ -435,8 +435,6 @@ def create_observations(args, comm, fp, all_ces, counter, site):
         raise RuntimeError('Too many tasks. Every MPI task must '
                            'be assigned to at least one observation.')
 
-    counter.exec(data)
-
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
@@ -449,7 +447,7 @@ def create_observations(args, comm, fp, all_ces, counter, site):
     return data
 
 
-def expand_pointing(args, comm, data, counter):
+def expand_pointing(args, comm, data):
     start = MPI.Wtime()
 
     hwprpm = args.hwprpm
@@ -482,7 +480,6 @@ def expand_pointing(args, comm, data, counter):
         print('Pointing generation took {:.3f} s'.format(stop-start),
               flush=args.flush)
 
-    counter.exec(data)
     return
 
 
@@ -523,7 +520,7 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
-def scan_signal(args, comm, data, counter, localsm, subnpix):
+def scan_signal(args, comm, data, localsm, subnpix):
     signalname = None
 
     if args.input_map:
@@ -540,7 +537,6 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
         distmap = tm.DistPixels(
             comm=comm.comm_world, size=npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
-        counter._objects.append(distmap)
         distmap.read_healpix_fits(args.input_map)
         scansim = tt.OpSimScan(distmap=distmap, out='signal')
         scansim.exec(data)
@@ -551,44 +547,28 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
                   ''.format(stop-start), flush=args.flush)
         signalname = 'signal'
 
-        counter.exec(data)
-
     return signalname
 
 
 def setup_sigcopy(args, comm, signalname):
     # Operator for signal copying, used in each MC iteration
 
-    totalname = 'total'
-    totalname_freq = 'total'
-
     if args.skip_bin:
-        totalname_madam = totalname_freq
+        signalname_madam = signalname
     else:
-        totalname_madam = 'total_madam'
+        signalname_madam = 'signal_madam'
 
-    if signalname is not None:
-        sigcopy = tt.OpCacheCopy(signalname, totalname)
-    else:
-        sigcopy = None
-
-    if totalname != totalname_freq:
-        sigcopy_freq = tt.OpCacheCopy(totalname, totalname_freq, force=True)
-    else:
-        sigcopy_freq = None
-
-    if args.madam and totalname_freq != totalname_madam:
-        sigcopy_madam = tt.OpCacheCopy(totalname_freq, totalname_madam)
-        sigclear = tt.OpCacheClear(totalname_freq)
+    if args.madam:
+        sigcopy_madam = tt.OpCacheCopy(signalname, signalname_madam)
+        sigclear = tt.OpCacheClear(signalname)
     else:
         sigcopy_madam = None
         sigclear = None
 
-    return sigcopy, sigcopy_freq, sigcopy_madam, sigclear, \
-        totalname, totalname_freq, totalname_madam
+    return signalname_madam, sigcopy_madam, sigclear
 
 
-def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
+def build_npp(args, comm, data, localsm, subnpix, detweights,
               flag_name, common_flag_name):
 
     if not args.skip_bin:
@@ -605,17 +585,14 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
 
         invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
                                dtype=np.float64, submap=subnpix, local=localsm)
-        counter._objects.append(invnpp)
         invnpp.data.fill(0.0)
 
         hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
                              dtype=np.int64, submap=subnpix, local=localsm)
-        counter._objects.append(hits)
         hits.data.fill(0)
 
         zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
                              dtype=np.float64, submap=subnpix, local=localsm)
-        counter._objects.append(zmap)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
@@ -631,19 +608,16 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
             invnpp_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
                                          dtype=np.float64, submap=subnpix,
                                          local=localsm)
-            counter._objects.append(invnpp_group)
             invnpp_group.data.fill(0.0)
 
             hits_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1,
                                        dtype=np.int64, submap=subnpix,
                                        local=localsm)
-            counter._objects.append(hits_group)
             hits_group.data.fill(0)
 
             zmap_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3,
                                        dtype=np.float64, submap=subnpix,
                                        local=localsm)
-            counter._objects.append(zmap_group)
 
             comm.comm_group.barrier()
             stop = MPI.Wtime()
@@ -717,7 +691,6 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
                 print(' - Writing hit map to {} took {:.3f} s'
                       ''.format(fn, stop-start), flush=args.flush)
             start = stop
-        counter._objects.remove(hits)
         del hits
 
         if hits_group is not None:
@@ -732,7 +705,6 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
                     print(' - Writing group hit map to {} took {:.3f} s'
                           ''.format(fn, stop-start), flush=args.flush)
                 start = stop
-            counter._objects.remove(hits_group)
             del hits_group
 
         if not args.skip_hits:
@@ -810,8 +782,6 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
             print('Building Npp took {:.3f} s'.format(
                 stop-start0), flush=args.flush)
 
-        counter.exec(data)
-
     return invnpp, zmap, invnpp_group, zmap_group, flag_name, common_flag_name
 
 
@@ -867,16 +837,15 @@ def setup_madam(args, comm):
     return pars
 
 
-def copy_signal(args, comm, data, sigcopy, counter):
+def copy_signal(args, comm, data, sigcopy):
     if sigcopy is not None:
         if comm.comm_world.rank == 0:
             print('Making a copy of the signal TOD', flush=args.flush)
         sigcopy.exec(data)
-        counter.exec(data)
     return
 
 
-def copy_signal_freq(args, comm, data, sigcopy_freq, counter):
+def copy_signal_freq(args, comm, data, sigcopy_freq):
     if sigcopy_freq is not None:
         # Make a copy of the atmosphere so we can scramble the gains
         # repeatedly
@@ -884,7 +853,6 @@ def copy_signal_freq(args, comm, data, sigcopy_freq, counter):
             print('Making a copy of the TOD for multifrequency',
                   flush=args.flush)
         sigcopy_freq.exec(data)
-        counter.exec(data)
     return
 
 
@@ -896,18 +864,17 @@ def setup_output(args, comm):
     return outpath
 
 
-def copy_signal_madam(args, comm, data, sigcopy_madam, counter):
+def copy_signal_madam(args, comm, data, sigcopy_madam):
     if sigcopy_madam is not None:
         # Make a copy of the timeline for Madam
         if comm.comm_world.rank == 0:
             print('Making a copy of the TOD for Madam', flush=args.flush)
         sigcopy_madam.exec(data)
 
-        counter.exec(data)
     return
 
 
-def bin_maps(args, comm, data, rootname, counter,
+def bin_maps(args, comm, data, rootname,
              zmap, invnpp, zmap_group, invnpp_group, detweights, totalname_freq,
              flag_name, common_flag_name, outpath):
     if not args.skip_bin:
@@ -999,12 +966,10 @@ def bin_maps(args, comm, data, rootname, counter,
             print('Mapmaking took {:.3f} s'
                   ''.format(stop-start0), flush=args.flush)
 
-        counter.exec(data)
-
     return
 
 
-def apply_polyfilter(args, comm, data, counter, totalname_freq):
+def apply_polyfilter(args, comm, data, totalname_freq):
     if args.polyorder:
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
@@ -1024,11 +989,10 @@ def apply_polyfilter(args, comm, data, counter, totalname_freq):
             print('Polynomial filtering took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
     return
 
 
-def apply_groundfilter(args, comm, data, counter, totalname_freq):
+def apply_groundfilter(args, comm, data, totalname_freq):
     if args.wbin_ground:
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
@@ -1048,16 +1012,14 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
             print('Ground filtering took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
     return
 
 
-def clear_signal(args, comm, data, sigclear, counter):
+def clear_signal(args, comm, data, sigclear):
     if sigclear is not None:
         if comm.comm_world.rank == 0:
             print('Clearing filtered signal')
         sigclear.exec(data)
-        counter.exec(data)
     return
 
 
@@ -1086,7 +1048,7 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     return
 
 
-def apply_madam(args, comm, data, madampars, counter, outpath,
+def apply_madam(args, comm, data, madampars, outpath,
                 detweights, totalname_madam, flag_name, common_flag_name):
     if args.madam:
         if comm.comm_world.rank == 0:
@@ -1110,7 +1072,6 @@ def apply_madam(args, comm, data, madampars, counter, outpath,
         if comm.comm_world.rank == 0:
             print('Madam took {:.3f} s'.format(stop-start), flush=args.flush)
 
-        counter.exec(data)
     return
 
 
@@ -1139,14 +1100,12 @@ def main():
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
-    counter = tt.OpMemoryCounter()
-
-    data = create_observations(args, comm, fp, all_ces, counter, site)
+    data = create_observations(args, comm, fp, all_ces, site)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
 
-    expand_pointing(args, comm, data, counter)
+    expand_pointing(args, comm, data)
 
     # Prepare auxiliary information for distributed map objects
 
@@ -1154,59 +1113,54 @@ def main():
 
     # Scan input map
 
-    signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
+    signalname = scan_signal(args, comm, data, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
 
-    sigcopy, sigcopy_freq, sigcopy_madam, sigclear, \
-        totalname, totalname_freq, totalname_madam \
+    signalname_madam, sigcopy_madam, sigclear \
         = setup_sigcopy(args, comm, signalname)
 
     common_flag_name = None
     flag_name = None
 
     invnpp, zmap, invnpp_group, zmap_group, flag_name, common_flag_name \
-        = build_npp(args, comm, data, counter, localsm, subnpix, detweights,
+        = build_npp(args, comm, data, localsm, subnpix, detweights,
                     flag_name, common_flag_name)
 
     madampars = setup_madam(args, comm)
 
-    # Copy the signal timestreams to the total ones before
-    # accumulating the noise.
-
-    copy_signal(args, comm, data, sigcopy, counter)
-
-    copy_signal_freq(args, comm, data, sigcopy_freq, counter)
-
-    output_tidas(args, comm, data, totalname, common_flag_name,
-                 flag_name)
+    output_tidas(args, comm, data, signalname, common_flag_name, flag_name)
 
     outpath = setup_output(args, comm)
 
-    copy_signal_madam(args, comm, data, sigcopy_madam, counter)
+    # Make a copy of the signal for Madam
 
-    bin_maps(args, comm, data, 'binned', counter,
-             zmap, invnpp, zmap_group, invnpp_group, detweights,
-             totalname_freq, flag_name, common_flag_name,
-             outpath)
+    copy_signal_madam(args, comm, data, sigcopy_madam)
 
-    apply_polyfilter(args, comm, data, counter, totalname_freq)
+    # Bin unprocessed signal for reference
 
-    apply_groundfilter(args, comm, data, counter, totalname_freq)
+    bin_maps(args, comm, data, 'binned', zmap, invnpp, zmap_group, invnpp_group,
+             detweights, signalname, flag_name, common_flag_name, outpath)
+
+    # Filter signal
+
+    apply_polyfilter(args, comm, data, signalname)
+
+    apply_groundfilter(args, comm, data, signalname)
+
+    # Bin the filtered signal
 
     if args.polyorder or args.wbin_ground:
-        bin_maps(args, comm, data, 'filtered', counter,
-                 zmap, invnpp, zmap_group, invnpp_group, detweights,
-                 totalname_freq, flag_name, common_flag_name,
-                 outpath)
+        bin_maps(args, comm, data, 'filtered', zmap, invnpp, zmap_group,
+                 invnpp_group, detweights, signalname, flag_name,
+                 common_flag_name, outpath)
 
-    clear_signal(args, comm, data, sigclear, counter)
+    clear_signal(args, comm, data, sigclear)
 
-    apply_madam(args, comm, data, madampars, counter,
-                outpath, detweights,
-                totalname_madam, flag_name, common_flag_name)
+    # Now run Madam on the unprocessed copy of the signal
 
-    counter.exec(data)
+    apply_madam(args, comm, data, madampars, outpath, detweights,
+                signalname_madam, flag_name, common_flag_name)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
