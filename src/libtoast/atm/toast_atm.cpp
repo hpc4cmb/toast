@@ -520,16 +520,16 @@ void toast::atm::sim::simulate( bool use_cache ) {
             int root = root_gang * gangsize;
             std::vector<double> tempvec(nind);
             if ( rank == root ) {
-              if ( MPI_Bcast( realization->data()+ind_start, nind, MPI_DOUBLE,
-                              root, comm ) )
-                throw std::runtime_error("Failed to broadcast the realization");
-            } else {
-              if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) )
+                std::memcpy( realization->data()+ind_start, tempvec.data(),
+                             sizeof(double) * nind );
+            }
+            if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) ) {
                 throw std::runtime_error("Failed to broadcast the realization");
             }
-            if ( realization->rank() == 0 )
-              std::memcpy( tempvec.data(), realization->data()+ind_start,
-                           sizeof(double) * nind );
+            if ( realization->rank() == 0 ) {
+                std::memcpy( tempvec.data(), realization->data()+ind_start,
+                             sizeof(double) * nind );
+            }
         }
 
         //smooth();
