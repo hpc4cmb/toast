@@ -1,7 +1,8 @@
 queue = debug
 nodes = 200
 time = 00:30:00
-ndet = 19
-fp = 
-schedule = 
-sim = 
+detpix = 19
+fp = _large
+schedule = _large
+sim = _large
+tiny = no
