@@ -11,20 +11,23 @@ mkdir -p "${outdir}"
 detpix=@@detpix@@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
-fpparfile="@@topdir@@/params/ground/focalplane@@fp@@.par"
+fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py @$fpparfile --out "${outdir}/fp"
+    toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp" --minpix $detpix
 fi
 
 # Generate the schedule file if it does not already exist.
 
-schparfile="@@topdir@@/params/ground/schedule@@schedule@@.par"
+schparfile="@@topdir@@/params/ground/schedule.par"
 
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
-    toast_ground_schedule.py @$schparfile --out "${schedulefile}"
+    toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile}" --patch @@patch@@ \
+         --stop @@schedule_stop@@
 fi
 
 # The executable script
@@ -34,7 +37,7 @@ echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim@@sim@@.par"
+parfile="@@topdir@@/params/ground/ground_sim.par"
 
 # Data distribution parameters
 
