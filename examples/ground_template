@@ -75,6 +75,10 @@ com="${ex} @${parfile} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+--atm_cache ${outdir}/out/atm_cache \
+--atm_xstep @@cellsize@@ \
+--atm_ystep @@cellsize@@ \
+--atm_zstep @@cellsize@@ \
 "
 
 #--- Hardware configuration (no need to change) ----
