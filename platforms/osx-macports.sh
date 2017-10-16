@@ -15,11 +15,12 @@
 #    --prefix=$HOME/software
 #
 
+set -o errexit
+
 OPTS="$@"
-WARN_FLAGS="-W -Wall -Wno-deprecated -Wwrite-strings -Wpointer-arith"
-WARN_FLAGS="${WARN_FLAGS} -pedantic -Wshadow -Wextra -Wno-unused-parameter"
-C_WARN_FLAGS="${WARN_FLAGS}"
-CXX_WARN_FLAGS=${WARN_FLAGS} -Woverloaded-virtual"
+
+# get flags from flags/gcc.sh
+. $(dirname ${BASH_SOURCE[0]})/flags/gcc.sh
 
 export PYTHON=python3
 export CC=mpicc
