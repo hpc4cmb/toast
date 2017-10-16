@@ -6,8 +6,6 @@
 5200
 --site_name
 ACT
---patch
-wide_01h_s,1,30,-30,-20,-40
 --patch_coord
 C
 --el_min
@@ -24,8 +22,6 @@ C
 10
 --start
 2016-06-01 00:00:00
---stop
-2016-06-01 12:00:00
 --gap
 600
 --gap_small

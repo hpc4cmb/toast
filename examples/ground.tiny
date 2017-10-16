@@ -1,8 +1,7 @@
 queue = debug
 nodes = 1
 time = 00:30:00
-ndet = 19
-fp = _small
-schedule = _small
-sim = _small
+detpix = 19
 tiny = yes
+patch = wide_01h_s,1,4,-26,-4,-34
+schedule_stop = "2016-06-01 12:00:00"

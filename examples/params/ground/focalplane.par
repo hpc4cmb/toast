@@ -1,7 +1,3 @@
---minpix
-10
---out
-focalplane_test
 --fwhm
 10.0
 --fov

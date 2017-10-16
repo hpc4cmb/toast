@@ -5,7 +5,7 @@ pushd $(dirname $0) > /dev/null
 topdir=$(pwd -P)
 popd > /dev/null
 
-for type in satellite ground; do
+for type in satellite ground ground_simple; do
     for size in tiny; do
         template="${type}_shell_template"
         sizefile="${type}.${size}"

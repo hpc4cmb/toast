@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 
 #SBATCH --partition=@@queue@@
 @@constraint@@
@@ -9,6 +9,9 @@
 #SBATCH --output=out_@@size@@_ground_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
+
+export PYTHONNOUSERSITE=1
+export HOME=${SCRATCH}
 
 pstr=@@machine@@
 outdir="out_@@size@@_ground_${pstr}"
@@ -30,25 +33,26 @@ fi
 
 # Generate the focalplane file if it does not already exist.
 
-ndet=@@ndet@@
+detpix=@@detpix@@
 
-# Generate the focalplane file if it does not already exist.
-
-fpfile="${outdir}/fp_${ndet}.pkl"
-fpparfile="@@topdir@@/params/ground/focalplane@@fp@@.par"
+fpfile="${outdir}/fp_${detpix}.pkl"
+fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 toast_fake_focalplane.py @$fpparfile --out "${outdir}/fp"
+    srun -n 1 toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp" --minpix $detpix
 fi
 
 # Generate the schedule file if it does not already exist.
 
-schparfile="@@topdir@@/params/ground/schedule@@schedule@@.par"
+schparfile="@@topdir@@/params/ground/schedule.par"
 
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
-    srun -n 1 toast_ground_schedule.py @$schparfile --out "${schedulefile}"
+    srun -n 1 toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile}" --patch @@patch@@ \
+         --stop @@schedule_stop@@
 fi
 
 # The executable script
@@ -58,7 +62,7 @@ echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim@@sim@@.par"
+parfile="@@topdir@@/params/ground/ground_sim.par"
 
 # Data distribution parameters
 
