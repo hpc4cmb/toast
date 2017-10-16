@@ -1,8 +1,8 @@
 queue = debug
-nodes = 1
+nodes = 20
 nodes_per_group = 1
 time = 00:30:00
 detpix = 61
-tiny = yes
+tiny = no
 patch = 8x8deg,1,4,-26,-4,-34
-schedule_stop = "2016-06-01 12:00:00"
+schedule_stop = "2016-06-21 00:00:00"
