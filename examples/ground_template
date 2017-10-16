@@ -39,7 +39,7 @@ fpfile="${outdir}/fp_${detpix}.pkl"
 fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 toast_fake_focalplane.py @$fpparfile \
+    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
          --out "${outdir}/fp" --minpix $detpix
 fi
 
@@ -50,7 +50,7 @@ schparfile="@@topdir@@/params/ground/schedule.par"
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
-    srun -n 1 toast_ground_schedule.py @$schparfile \
+    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
          --out "${schedulefile}" --patch @@patch@@ \
          --stop @@schedule_stop@@
 fi
@@ -66,7 +66,7 @@ parfile="@@topdir@@/params/ground/ground_sim.par"
 
 # Data distribution parameters
 
-groupsize=${node_proc}
+groupsize=$(( @@nodes_per_group@@ * node_proc ))
 
 # The commandline
 
@@ -104,4 +104,3 @@ echo "${run} ${com}"
 eval ${run} ${com} > "${outdir}/log" 2>&1
 
 echo End slurm script at $(date)
-

@@ -1,7 +1,8 @@
 queue = debug
 nodes = 20
+nodes_per_group = 10
 time = 00:30:00
 detpix = 1027
 tiny = no
 patch = wide_01h_s,1,16,-26,-16,-34
-schedule_stop = "2016-06-21 00:00:00"
+schedule_stop = "2016-06-03 00:00:00"
