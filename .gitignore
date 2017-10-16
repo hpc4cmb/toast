@@ -56,3 +56,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Files from Eclipse IDE
+/.cproject
+/.settings
+/.project
+
+# generated files
+/py-compile
+/src/libtoast/toast_test
