@@ -11,7 +11,7 @@ OPTS="$@"
 WARN_FLAGS="-W -Wall -Wno-deprecated -Wwrite-strings -Wpointer-arith"
 WARN_FLAGS="${WARN_FLAGS} -pedantic -Wshadow -Wextra -Wno-unused-parameter"
 C_WARN_FLAGS="${WARN_FLAGS}"
-CXX_WARN_FLAGS=${WARN_FLAGS} -Woverloaded-virtual"
+CXX_WARN_FLAGS="${WARN_FLAGS} -Woverloaded-virtual"
 
 export CC=cc
 export CXX=CC
