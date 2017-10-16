@@ -14,7 +14,7 @@ export PYTHONNOUSERSITE=1
 export HOME=${SCRATCH}
 
 pstr=@@machine@@
-outdir="out_@@size@@_ground_${pstr}"
+outdir="out_@@size@@_ground_simple_${pstr}"
 mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
@@ -57,7 +57,7 @@ fi
 
 # The executable script
 
-ex=$(which toast_ground_sim.py)
+ex=$(which toast_ground_sim_simple.py)
 echo "Using ${ex}"
 
 # Scan strategy parameters from a file

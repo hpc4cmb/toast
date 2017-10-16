@@ -244,7 +244,10 @@ def parse_arguments(comm):
 
     if comm.comm_world.rank == 0:
         if not os.path.isdir(args.outdir):
-            os.makedirs(args.outdir)
+            try:
+                os.makedirs(args.outdir)
+            except FileExistsError:
+                pass
 
     return args, comm
 
@@ -970,7 +973,10 @@ def simulate_atmosphere(args, comm, data, mc, counter,
         if comm.comm_world.rank == 0:
             print('Simulating atmosphere', flush=args.flush)
             if args.atm_cache and not os.path.isdir(args.atm_cache):
-                os.makedirs(args.atm_cache)
+                try:
+                    os.makedirs(args.atm_cache)
+                except FileExistsError:
+                    pass
         start = MPI.Wtime()
 
         if common_flag_name is None:
@@ -1067,7 +1073,10 @@ def setup_output(args, comm, mc):
     outpath = '{}/{:08d}'.format(args.outdir, mc)
     if comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
-            os.makedirs(outpath)
+            try:
+                os.makedirs(outpath)
+            except FileExistsError:
+                pass
     return outpath
 
 
@@ -1247,8 +1256,8 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname, 
-        common_flag_name=common_flag_name, 
+    export = OpTidasExport(tidas_path, name=totalname,
+        common_flag_name=common_flag_name,
         flag_name=flag_name, usedist=True)
     export.exec(data)
 
@@ -1386,7 +1395,7 @@ def main():
                            totalname_freq)
 
             if (mc == firstmc) and (ifreq == 0):
-                # For the first realization and frequency, optionally 
+                # For the first realization and frequency, optionally
                 # export the timestream data to a TIDAS volume.
                 output_tidas(args, comm, data, totalname, common_flag_name,
                              flag_name)

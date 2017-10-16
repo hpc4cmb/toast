@@ -161,7 +161,10 @@ def parse_arguments(comm):
 
     if comm.comm_world.rank == 0:
         if not os.path.isdir(args.outdir):
-            os.makedirs(args.outdir)
+            try:
+                os.makedirs(args.outdir)
+            except FileExistsError:
+                pass
 
     return args, comm
 
@@ -860,7 +863,10 @@ def setup_output(args, comm):
     outpath = '{}'.format(args.outdir)
     if comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
-            os.makedirs(outpath)
+            try:
+                os.makedirs(outpath)
+            except FileExistsError:
+                pass
     return outpath
 
 

@@ -23,3 +23,5 @@
 --input_map
 data/ffp10_lensed_scl_100_nside0512.fits
 --madam
+--madam_baseline_order
+3
