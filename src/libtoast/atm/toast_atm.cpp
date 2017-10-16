@@ -69,7 +69,6 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
   xstep(xstep), ystep(ystep), zstep(zstep),
   nelem_sim_max(nelem_sim_max)
 {
-
     counter1 = counter1start;
     counter2 = counter2start;
 
@@ -520,14 +519,14 @@ void toast::atm::sim::simulate( bool use_cache ) {
             int root = root_gang * gangsize;
             std::vector<double> tempvec(nind);
             if ( rank == root ) {
-                std::memcpy( realization->data()+ind_start, tempvec.data(),
+                std::memcpy( tempvec.data(), realization->data()+ind_start,
                              sizeof(double) * nind );
             }
             if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) ) {
                 throw std::runtime_error("Failed to broadcast the realization");
             }
             if ( realization->rank() == 0 ) {
-                std::memcpy( tempvec.data(), realization->data()+ind_start,
+                std::memcpy( realization->data()+ind_start, tempvec.data(),
                              sizeof(double) * nind );
             }
         }
