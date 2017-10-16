@@ -220,6 +220,9 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     while t1 < tstop:
         isub += 1
         t2 = min(t1 + ces_time, tstop)
+        if tstop - t2 < ces_time / 10:
+            # Append leftover scan to the last full subscan
+            t2 = tstop
         ind = np.logical_and(aztimes >= t1, aztimes <= t2)
         if np.all(aztimes > t2):
             ind[0] = True
