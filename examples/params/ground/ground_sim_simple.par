@@ -9,5 +9,5 @@
 --zip
 --flush
 --input_map
-data/ffp10_fg_100_map_nside512.fits
+data/ffp10_lensed_scl_100_nside0512.fits
 --madam
