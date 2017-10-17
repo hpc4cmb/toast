@@ -312,6 +312,13 @@ def load_fp(args, comm):
 
 
 def create_observations(args, comm, fp, all_ces, site):
+    """ Simulate constant elevation scans.
+
+    Simulate constant elevation scans at "site" matching entries in
+    "all_ces".  Each operational day is assigned to a different
+    process group to allow making day maps.
+
+    """
     start = MPI.Wtime()
 
     data = toast.Data(comm)
@@ -443,9 +450,6 @@ def create_observations(args, comm, fp, all_ces, site):
     if comm.comm_world.rank == 0:
         print('Simulated scans in {:.2f} seconds'
               ''.format(stop-start), flush=args.flush)
-
-    # Report the memory allocated for the TOAST caches.
-
 
     return data
 
