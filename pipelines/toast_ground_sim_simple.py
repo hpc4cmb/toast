@@ -455,6 +455,9 @@ def create_observations(args, comm, fp, all_ces, site):
 
 
 def expand_pointing(args, comm, data):
+    """ Expand the bore sight pointing to every detector.
+
+    """
     start = MPI.Wtime()
 
     hwprpm = args.hwprpm
@@ -491,6 +494,9 @@ def expand_pointing(args, comm, data):
 
 
 def get_submaps(args, comm, data):
+    """ Determine submap distribution
+
+    """
     if not args.skip_bin or args.input_map:
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
@@ -528,6 +534,9 @@ def get_submaps(args, comm, data):
 
 
 def scan_signal(args, comm, data, localsm, subnpix):
+    """ Scan time-ordered signal from a map.
+
+    """
     signalname = None
 
     if args.input_map:
@@ -558,8 +567,9 @@ def scan_signal(args, comm, data, localsm, subnpix):
 
 
 def setup_sigcopy(args, comm, signalname):
-    # Operator for signal copying, used in each MC iteration
+    """ Setup for copying the signal so we can run filter+bin and Madam.
 
+    """
     if args.skip_bin:
         signalname_madam = signalname
     else:
@@ -577,7 +587,9 @@ def setup_sigcopy(args, comm, signalname):
 
 def build_npp(args, comm, data, localsm, subnpix, detweights,
               flag_name, common_flag_name):
+    """ Build pixel-pixel noise covariance matrices.
 
+    """
     if not args.skip_bin:
 
         if comm.comm_world.rank == 0:
@@ -793,7 +805,9 @@ def build_npp(args, comm, data, localsm, subnpix, detweights,
 
 
 def setup_madam(args, comm):
+    """ Prepare to run Madam on the stored TOD.
 
+    """
     pars = None
 
     if args.madam:
@@ -844,25 +858,6 @@ def setup_madam(args, comm):
     return pars
 
 
-def copy_signal(args, comm, data, sigcopy):
-    if sigcopy is not None:
-        if comm.comm_world.rank == 0:
-            print('Making a copy of the signal TOD', flush=args.flush)
-        sigcopy.exec(data)
-    return
-
-
-def copy_signal_freq(args, comm, data, sigcopy_freq):
-    if sigcopy_freq is not None:
-        # Make a copy of the atmosphere so we can scramble the gains
-        # repeatedly
-        if comm.comm_world.rank == 0:
-            print('Making a copy of the TOD for multifrequency',
-                  flush=args.flush)
-        sigcopy_freq.exec(data)
-    return
-
-
 def setup_output(args, comm):
     outpath = '{}'.format(args.outdir)
     if comm.comm_world.rank == 0:
@@ -875,8 +870,10 @@ def setup_output(args, comm):
 
 
 def copy_signal_madam(args, comm, data, sigcopy_madam):
+    """ Make a copy of the TOD for Madam.
+
+    """
     if sigcopy_madam is not None:
-        # Make a copy of the timeline for Madam
         if comm.comm_world.rank == 0:
             print('Making a copy of the TOD for Madam', flush=args.flush)
         sigcopy_madam.exec(data)
@@ -887,6 +884,9 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
 def bin_maps(args, comm, data, rootname,
              zmap, invnpp, zmap_group, invnpp_group, detweights, totalname_freq,
              flag_name, common_flag_name, outpath):
+    """ Use TOAST facilities to bin stored signal.
+
+    """
     if not args.skip_bin:
         if comm.comm_world.rank == 0:
             print('Binning unfiltered maps', flush=args.flush)
