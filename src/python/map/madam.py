@@ -308,6 +308,12 @@ class OpMadam(Operator):
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
 
+        # Discard intervals that are too short to fit a baseline
+        if 'basis_order' in self._params:
+            norder = int(self._params['basis_order']) + 1
+        else:
+            norder = 1
+
         for obs in data.obs:
             tod = obs['tod']
             nlocal = tod.local_samples[1]
@@ -332,6 +338,8 @@ class OpMadam(Operator):
                         local_start = 0
                     if local_stop > local_nsamp - 1:
                         local_stop = local_nsamp - 1
+                    if local_stop - local_start + 1 < norder:
+                        continue
                     period_lengths.append(local_stop - local_start + 1)
                     period_ranges.append((local_start, local_stop + 1))
             obs_period_ranges.append(period_ranges)

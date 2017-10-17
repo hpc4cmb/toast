@@ -1071,7 +1071,7 @@ void toast::atm::sim::initialize_kolmogorov() {
 
     rmin = 0;
     double diag = sqrt( delta_x*delta_x + delta_y*delta_y);
-    rmax = sqrt( diag*diag + delta_z*delta_z );
+    rmax = sqrt( diag*diag + delta_z*delta_z ) * 1.01;
     nr = 1000; // Size of the interpolation grid
 
 #ifdef DEBUG
