@@ -1,20 +1,23 @@
-#!/bin/bash
+#!/bin/bash -l
 
 #SBATCH --partition=@@queue@@
 @@constraint@@
 #SBATCH --account=mp107
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
-#SBATCH --job-name=@@size@@-ground
-#SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
+#SBATCH --job-name=@@size@@-satellite
+#SBATCH --output=out_@@size@@_satellite_vtune_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
 
-export PYTHONNOUSERSITE=1
-export HOME=${SCRATCH}
+module load vtune
+
+export AMPLXE_EXPERIMENTAL=python-hotspots
+
+ulimit -s unlimited
 
 pstr=@@machine@@
-outdir="out_@@size@@_ground_simple_${pstr}"
+outdir="out_@@size@@_satellite_vtune_${pstr}"
 mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
@@ -25,7 +28,7 @@ nodes=@@nodes@@
 
 # How many processes are we running per node?  Handle
 # the case of a very small simulation.
-if [ "x@@tiny@@" = "xyes" ]; then
+if [ @@nobs@@ -lt 50 ]; then
     node_proc=1
 else
     node_proc=@@nodeprocs@@
@@ -36,48 +39,46 @@ fi
 detpix=@@detpix@@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
-fpparfile="@@topdir@@/params/ground/focalplane.par"
-
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp" --minpix $detpix
-fi
-
-# Generate the schedule file if it does not already exist.
-
-schparfile="@@topdir@@/params/ground/schedule.par"
-
-schedulefile="${outdir}/schedule.txt"
-
-if [ ! -e "${schedulefile}" ]; then
-    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --out "${schedulefile}" --patch @@patch@@ \
-         --stop @@schedule_stop@@
+    srun -n 1 -N 1 toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
 fi
 
 # The executable script
 
-ex=$(which toast_ground_sim_simple.py)
+ex=$(which toast_satellite_sim.py)
 echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim_simple.par"
+parfile="@@topdir@@/params/satellite/sim_noise_hwp.par"
 
-# Data distribution parameters
+# Observations
 
-groupsize=$(( @@nodes_per_group@@ * node_proc ))
+nobs=@@nobs@@
+
+groupnodes=@@groupnodes@@
+
+# Data distribution parameters.  We are distributing by detector,
+# so if our number of processes in a group is larger than the number
+# of detectors this is bad.  In that case, set the group size to 
+# one, so we have many more groups, each assigned
+
+if [ ${node_proc} -gt ${detpix} ]; then
+    groupsize=1
+else
+    groupsize=$(( node_proc * groupnodes ))
+fi
 
 # The commandline
 
 com="${ex} @${parfile} \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
---schedule ${schedulefile} \
---out ${outdir}/out \
+--numobs ${nobs} \
+--outdir ${outdir}/out \
 "
 
-#--- Hardware configuration (no need to change) ----
+#--- Hardware configuration ----
 
 # Hyperthread CPUs per physical core
 cpu_per_core=@@hyperthread@@
@@ -96,11 +97,23 @@ export OMP_PROC_BIND=spread
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm
 
-run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth} \
+amplxe-cl \
+-collect pyhotspots \
+-knob sampling-interval=500 \
+-run-pass-thru=--no-altstack \
+-r ${outdir}/vtune \
+-finalization-mode=deferred \
+-trace-mpi -- \
+"
 
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
 eval ${run} ${com} > "${outdir}/log" 2>&1
 
+echo "Finalizing vtune result"
+amplxe-cl -finalize -r ${outdir}/vtune
+
 echo End slurm script at $(date)
+

@@ -6,15 +6,21 @@
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
 #SBATCH --job-name=@@size@@-ground
-#SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
+#SBATCH --output=out_@@size@@_ground_simple_vtune_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
+
+module load vtune
+
+export AMPLXE_EXPERIMENTAL=python-hotspots
+
+ulimit -s unlimited
 
 export PYTHONNOUSERSITE=1
 export HOME=${SCRATCH}
 
 pstr=@@machine@@
-outdir="out_@@size@@_ground_simple_${pstr}"
+outdir="out_@@size@@_ground_simple_vtune_${pstr}"
 mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
@@ -96,11 +102,22 @@ export OMP_PROC_BIND=spread
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm
 
-run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth} \
+amplxe-cl \
+-collect pyhotspots \
+-knob sampling-interval=500 \
+-run-pass-thru=--no-altstack \
+-r ${outdir}/vtune \
+-finalization-mode=deferred \
+-trace-mpi -- \
+"
 
 echo Calling srun at $(date)
 
 echo "${run} ${com}"
 eval ${run} ${com} > "${outdir}/log" 2>&1
+
+echo "Finalizing vtune result"
+amplxe-cl -finalize -r ${outdir}/vtune
 
 echo End slurm script at $(date)
