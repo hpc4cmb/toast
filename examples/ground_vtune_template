@@ -118,7 +118,7 @@ echo Calling srun at $(date)
 echo "${run} ${vrun} -r ${outdir}/vtune -- ${com}"
 eval ${run} ${vrun} -r ${outdir}/vtune -- ${com} > "${outdir}/log" 2>&1
 
-if [ ! -z "$(echo ${vrun} | grep -vi '-finalization-mode=full')" ]; then
+if [ ! -z "$(echo ${vrun} | grep -vi 'finalization-mode=full')" ]; then
     if eval command -v vfinal &> /dev/null ; then
         echo "Run \"vfinal <vtune-output-dir>\" to finalize results"
     else
