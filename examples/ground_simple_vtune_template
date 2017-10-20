@@ -7,12 +7,11 @@
 #SBATCH --time=@@time@@
 #SBATCH --job-name=@@size@@-ground
 #SBATCH --output=out_@@size@@_ground_simple_vtune_@@machine@@_%j.log
+#SBATCH --perf=vtune/2018.0
+
+set -o errexit
 
 echo Starting slurm script at $(date)
-
-module load vtune
-
-export AMPLXE_EXPERIMENTAL=python-hotspots
 
 ulimit -s unlimited
 
@@ -102,22 +101,26 @@ export OMP_PROC_BIND=spread
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm
 
-run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth} \
-amplxe-cl \
--collect pyhotspots \
--knob sampling-interval=500 \
--run-pass-thru=--no-altstack \
--r ${outdir}/vtune \
--finalization-mode=deferred \
--trace-mpi -- \
-"
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+
+# only set "vrun" if not defined in environment (see vtune_params/ directory)
+: ${vrun:="amplxe-cl -collect hotspots -knob sampling-interval=500 \
+    -run-pass-thru=--no-altstack -r ${outdir}/vtune \
+    -finalization-mode=deferred -trace-mpi"}
+export vrun
 
 echo Calling srun at $(date)
 
-echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+echo "${run} ${vrun} -r ${outdir}/vtune -- ${com}"
+eval ${run} ${vrun} -r ${outdir}/vtune -- ${com} > "${outdir}/log" 2>&1
 
-echo "Finalizing vtune result"
-amplxe-cl -finalize -r ${outdir}/vtune
+if [ ! -z "$(echo ${vrun} | grep -vi '-finalization-mode=full')" ]; then
+    if eval command -v vfinal &> /dev/null ; then
+        echo "Run \"vfinal <vtune-output-dir>\" to finalize results"
+    else
+        echo "No alias \"vfinal\" defined. Remember to finalize results"
+    fi
+fi
 
 echo End slurm script at $(date)
+
