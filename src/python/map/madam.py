@@ -366,13 +366,18 @@ class OpMadam(Operator):
         # Separate from the rest to reduce the memory high water mark
         # When the user has set purge=True
 
-        for iread in range(100):
-            # Moving data between toast and Madam buffers has an overhead.
-            # We perform the operation in a staggered fashion to have the
-            # overhead only once per node.
+        # Moving data between toast and Madam buffers has an overhead.
+        # We perform the operation in a staggered fashion to have the
+        # overhead only once per node.
+
+        nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        nread = nodecomm.size
+        nread = comm.allreduce(nread, MPI.MAX)
+
+        for iread in range(nread):
 
             comm.Barrier()
-            if comm.rank % 100 != iread:
+            if nodecomm.rank % nread != iread:
                 continue
 
             madam_timestamps = self._cache.create(
@@ -545,6 +550,8 @@ class OpMadam(Operator):
                         tod.cache.clear(pattern=weightsname)
 
                 global_offset = offset
+
+        del nodecomm
 
         if self._cached:
             # destripe
