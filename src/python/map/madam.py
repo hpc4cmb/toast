@@ -366,173 +366,192 @@ class OpMadam(Operator):
         # Separate from the rest to reduce the memory high water mark
         # When the user has set purge=True
 
-        madam_timestamps = self._cache.create('timestamps',
-                                              np.float64, (nsamp,))
-        madam_signal = self._cache.create('signal', np.float64, (nsamp*ndet,))
-        madam_pixels = self._cache.create('pixels', np.int64, (nsamp*ndet,))
+        # Moving data between toast and Madam buffers has an overhead.
+        # We perform the operation in a staggered fashion to have the
+        # overhead only once per node.
 
-        global_offset = 0
-        for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
-            nlocal = tod.local_samples[1]
-            period_ranges = obs_period_ranges[iobs]
+        nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        nread = nodecomm.size
+        nread = comm.allreduce(nread, MPI.MAX)
 
-            # Collect the timestamps for the valid intervals
-            if self._timestamps_name is not None:
-                timestamps = tod.cache.reference(self._timestamps_name)
-            else:
-                timestamps = tod.read_times()
+        for iread in range(nread):
 
-            offset = global_offset
-            for istart, istop in period_ranges:
-                nn = istop - istart
-                ind = slice(offset, offset+nn)
-                madam_timestamps[ind] = timestamps[istart:istop]
-                offset += nn
+            comm.Barrier()
+            if nodecomm.rank % nread != iread:
+                continue
 
-            # get the noise object for this observation and create new
-            # entries in the dictionary when the PSD actually changes
-            if self._noisekey in obs.keys():
-                nse = obs[self._noisekey]
-                if nse is not None:
-                    if psdfreqs is None:
-                        psdfreqs = nse.freq(detectors[0]).astype(
-                            np.float64).copy()
-                        npsdbin = len(psdfreqs)
-                    for d in range(ndet):
-                        det = detectors[d]
-                        check_psdfreqs = nse.freq(det)
-                        if not np.allclose(psdfreqs, check_psdfreqs):
-                            raise RuntimeError(
-                                'All PSDs passed to Madam must have'
-                                ' the same frequency binning.')
-                        psd = nse.psd(det)
-                        if det not in psds:
-                            psds[det] = [(0, psd)]
-                        else:
-                            if not np.allclose(psds[det][-1][1], psd):
-                                psds[det] += [(timestamps[0], psd)]
+            madam_timestamps = self._cache.create(
+                'timestamps', np.float64, (nsamp, ))
+            madam_signal = self._cache.create(
+                'signal', np.float64, (nsamp*ndet, ))
+            madam_pixels = self._cache.create(
+                'pixels', np.int64, (nsamp*ndet, ))
 
-            commonflags = None
-            for d in range(ndet):
-                # Get the signal.
-                cachename = None
-                if self._name is not None:
-                    cachename = "{}_{}".format(self._name, detectors[d])
-                    signal = tod.cache.reference(cachename)
+            global_offset = 0
+            for iobs, obs in enumerate(data.obs):
+                tod = obs['tod']
+                nlocal = tod.local_samples[1]
+                period_ranges = obs_period_ranges[iobs]
+
+                # Collect the timestamps for the valid intervals
+                if self._timestamps_name is not None:
+                    timestamps = tod.cache.reference(self._timestamps_name)
                 else:
-                    signal = tod.read(detector=detectors[d])
+                    timestamps = tod.read_times()
 
-                # Optionally get the flags, otherwise they are assumed to
-                # have been applied to the pixel numbers.
+                offset = global_offset
+                for istart, istop in period_ranges:
+                    nn = istop - istart
+                    ind = slice(offset, offset+nn)
+                    madam_timestamps[ind] = timestamps[istart:istop]
+                    offset += nn
 
-                if self._flag_name is not None:
-                    cacheflagname = "{}_{}".format(
-                        self._flag_name, detectors[d])
+                # get the noise object for this observation and create new
+                # entries in the dictionary when the PSD actually changes
+                if self._noisekey in obs.keys():
+                    nse = obs[self._noisekey]
+                    if nse is not None:
+                        if psdfreqs is None:
+                            psdfreqs = nse.freq(detectors[0]).astype(
+                                np.float64).copy()
+                            npsdbin = len(psdfreqs)
+                        for d in range(ndet):
+                            det = detectors[d]
+                            check_psdfreqs = nse.freq(det)
+                            if not np.allclose(psdfreqs, check_psdfreqs):
+                                raise RuntimeError(
+                                    'All PSDs passed to Madam must have'
+                                    ' the same frequency binning.')
+                            psd = nse.psd(det)
+                            if det not in psds:
+                                psds[det] = [(0, psd)]
+                            else:
+                                if not np.allclose(psds[det][-1][1], psd):
+                                    psds[det] += [(timestamps[0], psd)]
 
-                if self._apply_flags:
-                    if self._flag_name is not None:
-                        detflags = tod.cache.reference(cacheflagname)
-                        flags = (detflags & self._flag_mask) != 0
-                        if self._common_flag_name is not None:
-                            commonflags = tod.cache.reference(
-                                self._common_flag_name)
-                            flags[(commonflags & self._common_flag_mask)
-                                  != 0] = True
+                commonflags = None
+                for d in range(ndet):
+                    # Get the signal.
+                    cachename = None
+                    if self._name is not None:
+                        cachename = "{}_{}".format(self._name, detectors[d])
+                        signal = tod.cache.reference(cachename)
                     else:
-                        detflags, commonflags = tod.read_flags(
-                            detector=detectors[d])
-                        flags = np.logical_or(
-                            (detflags & self._flag_mask) != 0,
-                            (commonflags & self._common_flag_mask) != 0)
+                        signal = tod.read(detector=detectors[d])
 
-                # get the pixels for the valid intervals from the cache
+                    # Optionally get the flags, otherwise they are
+                    # assumed to have been applied to the pixel numbers.
 
-                pixelsname = "{}_{}".format(self._pixels, detectors[d])
-                pixels = tod.cache.reference(pixelsname)
-                pixels_dtype = pixels.dtype
+                    if self._flag_name is not None:
+                        cacheflagname = "{}_{}".format(
+                            self._flag_name, detectors[d])
 
-                if not self._pixels_nested:
-                    # Madam expects the pixels to be in nested ordering
-                    pixels = pixels.copy()
-                    good = pixels >= 0
-                    pixels[good] = hp.ring2nest(nside, pixels[good])
+                    if self._apply_flags:
+                        if self._flag_name is not None:
+                            detflags = tod.cache.reference(cacheflagname)
+                            flags = (detflags & self._flag_mask) != 0
+                            if self._common_flag_name is not None:
+                                commonflags = tod.cache.reference(
+                                    self._common_flag_name)
+                                flags[(commonflags & self._common_flag_mask)
+                                      != 0] = True
+                        else:
+                            detflags, commonflags = tod.read_flags(
+                                detector=detectors[d])
+                            flags = np.logical_or(
+                                (detflags & self._flag_mask) != 0,
+                                (commonflags & self._common_flag_mask) != 0)
 
-                if self._apply_flags:
-                    pixels = pixels.copy()
-                    pixels[flags] = -1
+                    # get the pixels for the valid intervals from the cache
 
-                offset = global_offset
-                for istart, istop in period_ranges:
-                    nn = istop - istart
-                    dslice = slice(d*nsamp + offset,
-                                   d*nsamp + offset + nn)
-                    madam_signal[dslice] = signal[istart:istop]
-                    madam_pixels[dslice] = pixels[istart:istop]
-                    offset += nn
+                    pixelsname = "{}_{}".format(self._pixels, detectors[d])
+                    pixels = tod.cache.reference(pixelsname)
+                    pixels_dtype = pixels.dtype
 
-                del pixels
-                del signal
-                if self._apply_flags:
-                    del flags
+                    if not self._pixels_nested:
+                        # Madam expects the pixels to be in nested ordering
+                        pixels = pixels.copy()
+                        good = pixels >= 0
+                        pixels[good] = hp.ring2nest(nside, pixels[good])
 
-            # Always purge the pixels but restore them from the Madam
-            # buffers when purge_pixels=False
-            for d in range(ndet):
-                pixelsname = "{}_{}".format(self._pixels, detectors[d])
-                tod.cache.clear(pattern=pixelsname)
-                if self._name is not None and (
-                        self._purge_tod or self._name == self._name_out):
-                    cachename = "{}_{}".format(self._name, detectors[d])
-                    tod.cache.clear(pattern=cachename)
-                if self._purge_flags and self._flag_name is not None:
-                    cacheflagname = "{}_{}".format(
-                        self._flag_name, detectors[d])
-                    tod.cache.clear(pattern=cacheflagname)
+                    if self._apply_flags:
+                        pixels = pixels.copy()
+                        pixels[flags] = -1
 
-            del commonflags
-            if self._purge_flags and self._common_flag_name is not None:
-                tod.cache.clear(pattern=self._common_flag_name)
-            global_offset = offset
+                    offset = global_offset
+                    for istart, istop in period_ranges:
+                        nn = istop - istart
+                        dslice = slice(d*nsamp + offset,
+                                       d*nsamp + offset + nn)
+                        madam_signal[dslice] = signal[istart:istop]
+                        madam_pixels[dslice] = pixels[istart:istop]
+                        offset += nn
 
-        # Now collect the pixel weights
+                    del pixels
+                    del signal
+                    if self._apply_flags:
+                        del flags
 
-        madam_pixweights = self._cache.create('pixweights', np.float64,
-                                              (nsamp*ndet*nnz,))
-        global_offset = 0
-        for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
-            nlocal = tod.local_samples[1]
-            period_ranges = obs_period_ranges[iobs]
-            for d in range(ndet):
-                # get the pixels and weights for the valid intervals
-                # from the cache
-                weightsname = "{}_{}".format(self._weights, detectors[d])
-                weights = tod.cache.reference(weightsname)
-                weight_dtype = weights.dtype
-                offset = global_offset
-                for istart, istop in period_ranges:
-                    nn = istop - istart
-                    dwslice = slice((d*nsamp+offset) * nnz,
-                                    (d*nsamp+offset+nn) * nnz)
-                    madam_pixweights[dwslice] \
-                        = weights[istart:istop].flatten()[::nnz_stride]
-                    offset += nn
-                del weights
-            # Purge the weights but restore them from the Madam
-            # buffers when purge_weights=False.
-            # Handle special case when Madam only stores a subset of
-            # the weights.
-            if not self._purge_weights and (nnz != nnz_full):
-                pass
-            else:
+                # Always purge the pixels but restore them from the Madam
+                # buffers when purge_pixels=False
+                for d in range(ndet):
+                    pixelsname = "{}_{}".format(self._pixels, detectors[d])
+                    tod.cache.clear(pattern=pixelsname)
+                    if self._name is not None and (
+                            self._purge_tod or self._name == self._name_out):
+                        cachename = "{}_{}".format(self._name, detectors[d])
+                        tod.cache.clear(pattern=cachename)
+                    if self._purge_flags and self._flag_name is not None:
+                        cacheflagname = "{}_{}".format(
+                            self._flag_name, detectors[d])
+                        tod.cache.clear(pattern=cacheflagname)
+
+                del commonflags
+                if self._purge_flags and self._common_flag_name is not None:
+                    tod.cache.clear(pattern=self._common_flag_name)
+                global_offset = offset
+
+            # Now collect the pixel weights
+
+            madam_pixweights = self._cache.create('pixweights', np.float64,
+                                                  (nsamp*ndet*nnz,))
+            global_offset = 0
+            for iobs, obs in enumerate(data.obs):
+                tod = obs['tod']
+                nlocal = tod.local_samples[1]
+                period_ranges = obs_period_ranges[iobs]
                 for d in range(ndet):
                     # get the pixels and weights for the valid intervals
                     # from the cache
                     weightsname = "{}_{}".format(self._weights, detectors[d])
-                    tod.cache.clear(pattern=weightsname)
+                    weights = tod.cache.reference(weightsname)
+                    weight_dtype = weights.dtype
+                    offset = global_offset
+                    for istart, istop in period_ranges:
+                        nn = istop - istart
+                        dwslice = slice((d*nsamp+offset) * nnz,
+                                        (d*nsamp+offset+nn) * nnz)
+                        madam_pixweights[dwslice] \
+                            = weights[istart:istop].flatten()[::nnz_stride]
+                        offset += nn
+                    del weights
+                # Purge the weights but restore them from the Madam
+                # buffers when purge_weights=False.
+                # Handle special case when Madam only stores a subset of
+                # the weights.
+                if not self._purge_weights and (nnz != nnz_full):
+                    pass
+                else:
+                    for d in range(ndet):
+                        # get the pixels and weights for the valid intervals
+                        # from the cache
+                        weightsname = "{}_{}".format(self._weights,
+                                                     detectors[d])
+                        tod.cache.clear(pattern=weightsname)
 
-            global_offset = offset
+                global_offset = offset
+
+        del nodecomm
 
         if self._cached:
             # destripe
