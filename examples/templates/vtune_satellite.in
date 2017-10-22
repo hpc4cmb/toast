@@ -53,8 +53,7 @@ fi
 # The executable script
 
 ex=$(which toast_satellite_sim.py)
-py3=$(which python3)
-echo "Using ${py3} ${ex}"
+echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
@@ -79,7 +78,7 @@ fi
 
 # The commandline
 
-com="${py3} ${ex} @${parfile} \
+com="${ex} @${parfile} \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \
@@ -119,7 +118,7 @@ export vtune_collect
 echo Calling srun at $(date)
 
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com}"
-eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > "${outdir}/log" 2>&1
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
 
 if eval command -v vfinal &> /dev/null ; then
     echo "Run \"vfinal <vtune-output-dir>\" to finalize results"

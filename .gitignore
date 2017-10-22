@@ -57,3 +57,5 @@ __pycache__/
 *.so
 
 /examples/*.slurm
+/examples/out_*
+/examples/data/

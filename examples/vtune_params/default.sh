@@ -6,7 +6,7 @@ export VTUNE_DATA_LIMIT
 export DEFAULT_PYTHON_VTUNE_FLAGS="-mrte-mode=mixed -run-pass-thru=--no-altstack -trace-mpi \
     -finalization-mode=deferred -data-limit=${VTUNE_DATA_LIMIT}"
 
-export DEFAULT_NATIVE_VTUNE_FLAGS="-mrte-mode=native -trace-mpi \
+export DEFAULT_NATIVE_VTUNE_FLAGS="-mrte-mode=native -run-pass-thru=--no-altstack -trace-mpi \
     -finalization-mode=deferred -data-limit=${VTUNE_DATA_LIMIT}"
 
 toupper()
