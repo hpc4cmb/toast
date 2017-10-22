@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#set -o errexit
-
 : ${TOAST_SOURCE_DIR:="$(readlink -f $(realpath $(dirname ${BASH_SOURCE[0]})/../..))"}
 export TOAST_SOURCE_DIR
 

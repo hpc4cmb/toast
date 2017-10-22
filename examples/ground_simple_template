@@ -13,6 +13,14 @@ echo Starting slurm script at $(date)
 export PYTHONNOUSERSITE=1
 export HOME=${SCRATCH}
 
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
 pstr=@@machine@@
 outdir="out_@@size@@_ground_simple_${pstr}"
 mkdir -p "${outdir}"

@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 
 #SBATCH --partition=@@queue@@
 @@constraint@@
@@ -9,6 +9,14 @@
 #SBATCH --output=out_@@size@@_satellite_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
+
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
 
 pstr=@@machine@@
 outdir="out_@@size@@_satellite_${pstr}"

@@ -56,3 +56,4 @@ __pycache__/
 # C extensions
 *.so
 
+/examples/*.slurm
