@@ -288,21 +288,20 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
     azs_cross = []
     for i in range(len(corners)):
         j = (i + 1) % len(corners)
-        if (els[i] - el)*(els[j] - el) < 0:
-            az1 = azs[i]
-            az2 = azs[j]
-            el1 = els[i] - el
-            el2 = els[j] - el
-            if az2 - az1 > np.pi:
-                az1 += 2*np.pi
-            if az1 - az2 > np.pi:
-                az2 += 2*np.pi
-            az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
-            if (rising and az_cross <= np.pi) or \
-               (not rising and az_cross >= np.pi):
+        for el0 in [el-fp_radius, el, el+fp_radius]:
+            if (els[i] - el0)*(els[j] - el0) < 0:
+                az1 = azs[i]
+                az2 = azs[j]
+                el1 = els[i] - el0
+                el2 = els[j] - el0
+                if az2 - az1 > np.pi:
+                    az1 += 2*np.pi
+                if az1 - az2 > np.pi:
+                    az2 += 2*np.pi
+                az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
                 azs_cross.append(az_cross)
 
-    if len(azs_cross) > 0:
+    if len(azs_cross) > 1:
         azs_cross = np.sort(azs_cross)
         azmin = azs_cross[0]
         azmax = azs_cross[-1]
