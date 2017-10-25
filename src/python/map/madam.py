@@ -370,7 +370,7 @@ class OpMadam(Operator):
         # We perform the operation in a staggered fashion to have the
         # overhead only once per node.
 
-        nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
         nread = nodecomm.size
         nread = comm.allreduce(nread, MPI.MAX)
 
