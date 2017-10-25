@@ -455,12 +455,14 @@ class OpMadam(Operator):
                                     self._common_flag_name)
                                 flags[(commonflags & self._common_flag_mask)
                                       != 0] = True
+                            del detflags
                         else:
                             detflags, commonflags = tod.read_flags(
                                 detector=detectors[d])
                             flags = np.logical_or(
                                 (detflags & self._flag_mask) != 0,
                                 (commonflags & self._common_flag_mask) != 0)
+                            del detflags
 
                     # get the pixels for the valid intervals from the cache
 
