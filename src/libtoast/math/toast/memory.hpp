@@ -140,12 +140,12 @@ namespace toast { namespace mem {
 
         // conversion function to const _Tp*
         operator const _Tp*() const
-        __attribute__((assume_aligned(toast::mem::SIMD_ALIGN)))
+        __attribute__((assume_aligned(64)))
         { return m_data; }
 
         // conversion function to _Tp*
         operator _Tp*()
-        __attribute__((assume_aligned(toast::mem::SIMD_ALIGN)))
+        __attribute__((assume_aligned(64)))
         { return m_data; }
 
         _Tp& operator [](const size_type& i) { return m_data[i]; }
