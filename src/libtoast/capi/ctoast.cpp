@@ -145,6 +145,43 @@ void ctoast_rng_dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t c
     return;
 }
 
+void ctoast_rng_dist_uint64_mt ( size_t blocks,      size_t n,
+                                 uint64_t* key1,     uint64_t* key2,
+                                 uint64_t* counter1, uint64_t* counter2,
+                                 uint64_t* data ) {
+    toast::rng::mt::dist_uint64 ( blocks, n, key1, key2,
+                                  counter1, counter2, data );
+    return;
+}
+
+void ctoast_rng_dist_uniform_01_mt ( size_t blocks,      size_t n,
+                                     uint64_t* key1,     uint64_t* key2,
+                                     uint64_t* counter1, uint64_t* counter2,
+                                     double* data ) {
+    toast::rng::mt::dist_uniform_01 ( blocks, n, key1, key2,
+                                      counter1, counter2, data );
+    return;
+}
+
+void ctoast_rng_dist_uniform_11_mt ( size_t blocks,      size_t n,
+                                     uint64_t* key1,     uint64_t* key2,
+                                     uint64_t* counter1, uint64_t* counter2,
+                                     double* data ) {
+    toast::rng::mt::dist_uniform_11 ( blocks, n, key1, key2,
+                                      counter1, counter2, data );
+    return;
+}
+
+void ctoast_rng_dist_normal_mt ( size_t blocks,      size_t n,
+                                 uint64_t* key1,     uint64_t* key2,
+                                 uint64_t* counter1, uint64_t* counter2,
+                                 double* data ) {
+    toast::rng::mt::dist_normal ( blocks, n, key1, key2,
+                                  counter1, counter2, data );
+    return;
+}
+
+
 // Quaternion array
 
 void ctoast_qarray_list_dot ( size_t n, size_t m, size_t d, double const * a, double const * b, double * dotprod ) {
