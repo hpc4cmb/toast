@@ -7,14 +7,19 @@
 #    --prefix=$SCRATCH/software/toast-gcc
 #
 
+set -o errexit
+
 OPTS="$@"
+
+# get flags from flags/gcc.sh
+. $(dirname ${BASH_SOURCE[0]})/flags/gcc.sh
 
 export CC=cc
 export CXX=CC
 export MPICC=cc
 export MPICXX=CC
-export CFLAGS="-O3 -g -fPIC"
-export CXXFLAGS="-O3 -g -fPIC"
+export CFLAGS="-O3 -g ${C_WARN_FLAGS} -fPIC"
+export CXXFLAGS="-O3 -g ${CXX_WARN_FLAGS} -fPIC"
 export OPENMP_CFLAGS="-fopenmp"
 export OPENMP_CXXFLAGS="-fopenmp"
 
