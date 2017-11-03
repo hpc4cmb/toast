@@ -63,6 +63,31 @@ void ctoast_rng_dist_uniform_11 ( size_t n, uint64_t key1, uint64_t key2, uint64
 
 void ctoast_rng_dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t counter1, uint64_t counter2, double * data );
 
+void ctoast_rng_dist_normal ( size_t n,
+                              uint64_t key1,     uint64_t key2,
+                              uint64_t counter1, uint64_t counter2,
+                              double * data );
+
+void ctoast_rng_dist_uint64_mt ( size_t blocks,      size_t n,
+                                 uint64_t* key1,     uint64_t* key2,
+                                 uint64_t* counter1, uint64_t* counter2,
+                                 uint64_t* data );
+
+void ctoast_rng_dist_uniform_01_mt ( size_t blocks,      size_t n,
+                                     uint64_t* key1,     uint64_t* key2,
+                                     uint64_t* counter1, uint64_t* counter2,
+                                     double* data );
+
+void ctoast_rng_dist_uniform_11_mt ( size_t blocks,      size_t n,
+                                     uint64_t* key1,     uint64_t* key2,
+                                     uint64_t* counter1, uint64_t* counter2,
+                                     double* data );
+
+void ctoast_rng_dist_normal_mt ( size_t blocks,      size_t n,
+                                 uint64_t* key1,     uint64_t* key2,
+                                 uint64_t* counter1, uint64_t* counter2,
+                                 double* data );
+
 // Quaternion array
 
 void ctoast_qarray_list_dot ( size_t n, size_t m, size_t d, double const * a, double const * b, double * dotprod );
