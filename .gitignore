@@ -20,6 +20,7 @@ Makefile.in
 /config.log
 /config.status
 /config.sub
+/py-compile
 
 # libtool files
 
@@ -48,6 +49,9 @@ Makefile.in
 /src/tests/test-suite.log
 /src/tests/toast_test.log
 /src/tests/toast_test.trs
+/src/python/mpi.py
+/src/python/_version.py
+/src/python/ctoast.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
