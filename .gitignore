@@ -62,4 +62,21 @@ __pycache__/
 
 # Build directories when using ./cmake/platforms/...
 /build-*
+
+# QtCreator project file
 /CMakeLists.txt.user
+
+/.cproject
+/.project
+/.pydevproject
+/*.nja
+
+*_test_output
+
+# generated files
+/py-compile
+/src/libtoast/toast_test
+/src/python/_version.py
+/src/python/ctoast.py
+/src/python/mpi.py
+

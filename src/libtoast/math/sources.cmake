@@ -14,10 +14,10 @@ if(CMAKE_CXX_COMPILER_IS_INTEL)
     set(FLAGS "-qopt-report -qopt-report-phase=vec -diag-enable=vec")
 endif()
 
-add_compile_flags(SOURCES
-    #toast_qarray.cpp
-    toast_rng.cpp
-    COMPILE_FLAGS "${FLAGS}")
+#add_compile_flags(SOURCES
+#    toast_qarray.cpp
+#    toast_rng.cpp
+#    COMPILE_FLAGS "${FLAGS}")
                         
 DEFINE_MODULE(NAME libtoast.math
     HEADERS     ${TOAST_HEADERS}
