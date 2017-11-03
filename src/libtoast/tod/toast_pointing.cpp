@@ -34,8 +34,7 @@ void toast::pointing::healpix_matrix ( toast::healpix::pixels const & hpix,
     
     } else {
 
-        pin = static_cast < double * > ( toast::mem::aligned_alloc ( 
-            4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        pin = toast::mem::simd_alloc<double>(4*n);
 
         size_t off;
         for ( size_t i = 0; i < n; ++i ) {

@@ -20,6 +20,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
   # Now version selection, focus on version 15 and above as that is the
   # baseline - means that this isn't comprehensive for lower versions
 
+  # c++98 should be supported for all(?) versions we may encounter, and
+  # make it the default as required for compilers that recognise standards
+  set(CMAKE_CXX_STANDARD_DEFAULT "11")
+
   if(NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15.0))
 
     set(CMAKE_CXX11_STANDARD_COMPILE_OPTION "-std=c++11")
