@@ -23,6 +23,7 @@ if [ ! -e lib64 ]; then
 fi
 popd > /dev/null
 
+export TOAST_AUX_ROOT=@AUX_PREFIX@
 export PATH=@AUX_PREFIX@/bin:@CONDA_PREFIX@/bin:${PATH}
 export CPATH=@AUX_PREFIX@/include:${CPATH}
 export LIBRARY_PATH=@AUX_PREFIX@/lib:${LIBRARY_PATH}
