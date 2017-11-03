@@ -52,6 +52,7 @@ do
     RET="$?"
     if [ "${RET}" -eq 0 ]; then
         add-search-dir ${i}
+        add-source-search-dir ${i}
     fi
 done
 
@@ -65,7 +66,7 @@ done
 
 #------------------------------------------------------------------------------#
 # add TOAST_SOURCE_DIR
-for i in $(find ${TOAST_SOURCE_DIR}/src -type d | egrep -v '\.libs|\.deps|/gtest')
+for i in $(find ${TOAST_SOURCE_DIR}/src/libtoast -type d | egrep -v '\.libs|\.deps|/gtest')
 do
     DIR=$(readlink -f $(realpath ${i}))
     if [ -d "${DIR}" ]; then
@@ -73,6 +74,31 @@ do
     else
         echo -e "Directory \"${DIR}\" does not exist"
     fi
+done
+
+#------------------------------------------------------------------------------#
+# add TOAST python
+for i in $(echo ${PYTHONPATH} | sed 's/:/ /g' | grep -i 'toast')
+do
+    _within()
+    {
+        local _DIRS=""
+        for j in $(find ${1} -type f | grep '\.py$' | egrep -v 'test|\.egg|/_')
+        do
+            _DIRS="${_DIRS} $(dirname ${j})"
+        done
+        _DIRS="$(echo ${_DIRS} | sed 's/ /\n/g' | sort -u)"
+        echo "${_DIRS}"
+    }
+
+    for j in $(_within ${i})
+    do
+        if [ -d "${j}" ]; then
+            add-source-search-dir ${j}
+        else
+            echo -e "Directory \"${j}\" does not exist"
+        fi
+    done
 done
 
 export _VTUNE_SEARCH_DIRS="${SEARCH_DIRS}"

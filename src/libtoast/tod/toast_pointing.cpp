@@ -22,8 +22,7 @@ void toast::pointing::healpix_matrix ( toast::healpix::pixels const & hpix,
 
     double eta = (1.0 - eps) / (1.0 + eps);
 
-    double * dir = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        3 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> dir(3*n);
 
     double * pin;
 
@@ -78,14 +77,9 @@ void toast::pointing::healpix_matrix ( toast::healpix::pixels const & hpix,
 
     } else if ( mode == "IQU" ) {
 
-        double * orient = static_cast < double * > ( toast::mem::aligned_alloc ( 
-            3 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-        double * buf1 = static_cast < double * > ( toast::mem::aligned_alloc ( 
-            n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-        double * buf2 = static_cast < double * > ( toast::mem::aligned_alloc ( 
-            n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> orient(3*n);
+        toast::mem::simd_array<double> buf1(n);
+        toast::mem::simd_array<double> buf2(n);
 
         toast::qarray::rotate ( n, pin, 1, xaxis, orient );
 
@@ -102,10 +96,7 @@ void toast::pointing::healpix_matrix ( toast::healpix::pixels const & hpix,
                 dir[off + 1] * dir[off + 1] );
         }
 
-        toast::mem::aligned_free ( orient );
-
-        double * detang = static_cast < double * > ( toast::mem::aligned_alloc ( 
-            n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> detang(n);
 
         toast::sf::fast_atan2 ( n, by, bx, detang );
 
@@ -128,17 +119,11 @@ void toast::pointing::healpix_matrix ( toast::healpix::pixels const & hpix,
             weights[off + 2] = sinout[i] * eta * cal;
         }
 
-        toast::mem::aligned_free ( buf1 );
-        toast::mem::aligned_free ( buf2 );
-        toast::mem::aligned_free ( detang );
-
     } else {
         std::ostringstream o;
         o << "unknown healpix pointing matrix mode \"" << mode << "\"";
         TOAST_THROW( o.str().c_str() );
     }
-
-    toast::mem::aligned_free ( dir );
 
     if ( flags != NULL ) {
         toast::mem::aligned_free ( pin );

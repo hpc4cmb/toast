@@ -1,6 +1,8 @@
 
-MESSAGE(STATUS "Including machine file: \"${MACHFILE}\"...")
-INCLUDE("${MACHFILE}")
+IF(NOT "${MACHFILE}" STREQUAL "")
+    MESSAGE(STATUS "Including machine file: \"${MACHFILE}\"...")
+    INCLUDE("${MACHFILE}")
+ENDIF(NOT "${MACHFILE}" STREQUAL "")
 
 MESSAGE(STATUS "Including parameter file: \"${SIZEFILE}\"...")
 INCLUDE("${SIZEFILE}")

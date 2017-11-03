@@ -82,20 +82,20 @@ class sfTest : public ::testing::Test {
         virtual void TearDown();
 
         static const int size;
-        double * angin;
-        double * sinout;
-        double * cosout;
-        double * xin;
-        double * yin;
-        double * atanout;
-        double * sqin;
-        double * sqout;
-        double * rsqin;
-        double * rsqout;
-        double * expin;
-        double * expout;
-        double * login;
-        double * logout;
+        toast::mem::simd_array<double> angin;
+        toast::mem::simd_array<double> sinout;
+        toast::mem::simd_array<double> cosout;
+        toast::mem::simd_array<double> xin;
+        toast::mem::simd_array<double> yin;
+        toast::mem::simd_array<double> atanout;
+        toast::mem::simd_array<double> sqin;
+        toast::mem::simd_array<double> sqout;
+        toast::mem::simd_array<double> rsqin;
+        toast::mem::simd_array<double> rsqout;
+        toast::mem::simd_array<double> expin;
+        toast::mem::simd_array<double> expout;
+        toast::mem::simd_array<double> login;
+        toast::mem::simd_array<double> logout;
 
 };
 

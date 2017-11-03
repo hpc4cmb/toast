@@ -46,9 +46,7 @@ void toast::filter::polyfilter(
         // We subtract the template value even from flagged samples to
         // support point source masking etc.
 
-        double *full_templates = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                scanlen*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> full_templates(scanlen*norder);
 
         double dx = 2. / scanlen;
         double xstart = 0.5*dx - 1;
@@ -67,9 +65,7 @@ void toast::filter::polyfilter(
 
         // Assemble the flagged template matrix used in the linear regression
 
-        double *templates = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                scanlen*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> templates(scanlen*norder);
 
         for ( int i=0; i<scanlen; ++i ) {
             if ( flags[start+i] ) continue;
@@ -77,9 +73,7 @@ void toast::filter::polyfilter(
                 templates[offset] = full_templates[offset];
         }
 
-        double *cov = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                norder*norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> cov(norder*norder);
 
         // invcov = templates x templates.T
 
@@ -114,17 +108,9 @@ void toast::filter::polyfilter(
 
         // Filter every signal
 
-        double *proj = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-        double *coeff = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                norder*sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-        double *noise = static_cast< double* >(
-            toast::mem::aligned_alloc (
-                scanlen*sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> proj(norder);
+        toast::mem::simd_array<double> coeff(norder);
+        toast::mem::simd_array<double> noise(scanlen);
 
         for ( int isignal=0; isignal<nsignal; ++isignal ) {
             double *signal = signals[isignal] + start;
@@ -156,15 +142,6 @@ void toast::filter::polyfilter(
 
             for ( int i=0; i<scanlen; ++i ) signal[i] -= noise[i];
         }
-
-        // Free workspace
-
-        toast::mem::aligned_free( full_templates );
-        toast::mem::aligned_free( templates );
-        toast::mem::aligned_free( cov );
-        toast::mem::aligned_free( proj );
-        toast::mem::aligned_free( coeff );
-        toast::mem::aligned_free( noise );
 
     }
 

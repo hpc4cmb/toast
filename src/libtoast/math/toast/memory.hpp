@@ -96,6 +96,80 @@ namespace toast { namespace mem {
         return false;
     }
 
+    //========================================================================//
+    // cleaner version of:
+    //     double* var = static_cast<double*>(toast::mem::aligned_alloc(
+    //              n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+
+    template <typename _Tp>
+    _Tp* simd_alloc(size_t n)
+    {
+        return static_cast<_Tp*>(toast::mem::aligned_alloc(n * sizeof(_Tp),
+                                                           toast::mem::SIMD_ALIGN));
+    }
+
+    //========================================================================//
+    // template class for memory-aligned c-style array with internal
+    // allocation and deallocation
+    template <typename _Tp>
+    class simd_array
+    {
+    public:
+        typedef std::size_t size_type;
+
+    public:
+        simd_array()
+        : m_data(nullptr)
+        { }
+
+        simd_array(size_type _n)
+        : m_data(toast::mem::simd_alloc<_Tp>(_n))
+        { }
+
+        simd_array(size_type _n, const _Tp& _init)
+        : m_data(toast::mem::simd_alloc<_Tp>(_n))
+        {
+            for(size_type i = 0; i < _n; ++i)
+                m_data[i] = _init;
+        }
+
+        ~simd_array()
+        {
+            toast::mem::aligned_free(m_data);
+        }
+
+        // conversion function to const _Tp*
+        operator const _Tp*() const
+        __attribute__((assume_aligned(64)))
+        { return m_data; }
+
+        // conversion function to _Tp*
+        operator _Tp*()
+        __attribute__((assume_aligned(64)))
+        { return m_data; }
+
+        _Tp& operator [](const size_type& i) { return m_data[i]; }
+        const _Tp& operator [](const size_type& i) const { return m_data[i]; }
+
+        simd_array& operator=(const simd_array& rhs)
+        {
+            if(this != &rhs)
+            {
+                if(m_data)
+                    toast::mem::aligned_free(m_data);
+                m_data = static_cast<_Tp*>(rhs.m_data);
+                // otherwise will be deleted
+                const_cast<simd_array&>(rhs).m_data = nullptr;
+            }
+            return *this;
+        }
+
+    private:
+        _Tp* m_data __attribute__((bnd_variable_size));
+
+    } __attribute__((aligned (64)));
+
+    //========================================================================//
 
 } }
 

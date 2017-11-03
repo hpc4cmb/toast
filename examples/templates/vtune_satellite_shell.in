@@ -1,0 +1,73 @@
+#!/bin/bash
+
+outdir="out_@SIZE@_satellite"
+mkdir -p "${outdir}"
+
+# This script assumes that you have toast and all dependencies
+# installed and loaded in your environment.
+
+# Generate the focalplane file if it does not already exist.
+
+detpix=@DETPIX@
+
+fpfile="${outdir}/fp_${detpix}.pkl"
+if [ ! -e "${fpfile}" ]; then
+    toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
+fi
+
+# The executable script
+
+ex=$(which toast_satellite_sim.py)
+echo "Using ${ex}"
+
+# Scan strategy parameters from a file
+
+parfile="@TOPDIR@/params/satellite/sim_noise_hwp.par"
+
+# Observations
+
+obs_len="24.0"
+obs_gap="4.0"
+nobs=@NOBS@
+
+# Map making parameters
+
+nside="512"
+
+# Data distribution parameters.  Group size is one process.
+
+groupsize=1
+
+# The commandline
+
+com="${ex} @${parfile} \
+--groupsize ${groupsize} \
+--fp ${fpfile} \
+--nside ${nside} \
+--obs ${obs_len} \
+--gap ${obs_gap} \
+--numobs ${nobs} \
+--outdir ${outdir}/out \
+"
+
+# Use 2 processes, each with 2 threads
+
+procs=2
+threads=2
+
+export OMP_NUM_THREADS=${threads}
+
+run="mpirun -np ${procs}"
+
+# only set "vrun" if not defined in environment (see vtune_params/ directory)
+: ${vrun:="amplxe-cl -collect hotspots -knob sampling-interval=25 -mrte-mode=mixed \
+    -run-pass-thru=--no-altstack -r ${outdir}/vtune \
+    -finalization-mode=deferred -trace-mpi"}
+: ${vtune_collect:="pyhotspots"}
+
+export vrun
+export vtune_collect
+
+echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+

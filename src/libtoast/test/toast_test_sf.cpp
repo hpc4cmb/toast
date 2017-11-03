@@ -19,21 +19,21 @@ const int sfTest::size = 1000;
 
 void sfTest::SetUp () {
 
-    angin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    sinout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    cosout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    xin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    yin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    atanout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    sqin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    sqout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    rsqin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    rsqout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    expin = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    expout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    login = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    logout = (double*) mem::aligned_alloc ( size * sizeof(double), mem::SIMD_ALIGN );
-    
+    angin = toast::mem::simd_array<double>(size);
+    sinout = toast::mem::simd_array<double>(size);
+    cosout = toast::mem::simd_array<double>(size);
+    xin = toast::mem::simd_array<double>(size);
+    yin = toast::mem::simd_array<double>(size);
+    atanout = toast::mem::simd_array<double>(size);
+    sqin = toast::mem::simd_array<double>(size);
+    sqout = toast::mem::simd_array<double>(size);
+    rsqin = toast::mem::simd_array<double>(size);
+    rsqout = toast::mem::simd_array<double>(size);
+    expin = toast::mem::simd_array<double>(size);
+    expout = toast::mem::simd_array<double>(size);
+    login = toast::mem::simd_array<double>(size);
+    logout = toast::mem::simd_array<double>(size);
+        
     for ( int i = 0; i < size; ++i ) {
         angin[i] = (double)(i + 1) * ( 2.0 * PI / (double)(size + 1) );
         sinout[i] = ::sin(angin[i]);
@@ -58,21 +58,6 @@ void sfTest::SetUp () {
 
 
 void sfTest::TearDown () {
-
-    mem::aligned_free ( (void*) angin );
-    mem::aligned_free ( (void*) sinout );
-    mem::aligned_free ( (void*) cosout );
-    mem::aligned_free ( (void*) xin );
-    mem::aligned_free ( (void*) yin );
-    mem::aligned_free ( (void*) atanout );
-    mem::aligned_free ( (void*) sqin );
-    mem::aligned_free ( (void*) sqout );
-    mem::aligned_free ( (void*) rsqin );
-    mem::aligned_free ( (void*) rsqout );
-    mem::aligned_free ( (void*) expin );
-    mem::aligned_free ( (void*) expout );
-    mem::aligned_free ( (void*) login );
-    mem::aligned_free ( (void*) logout );
 
     return;
 }

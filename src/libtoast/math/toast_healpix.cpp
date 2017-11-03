@@ -191,13 +191,9 @@ void toast::healpix::pixels::vec2zphi ( int64_t n, double const * vec, double * 
     double za;
     int itemp;
     int64_t offset;
-    double * work1;
-    double * work2;
-    double * work3;
-
-    work1 = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    work2 = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    work3 = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> work1(n);
+    toast::mem::simd_array<double> work2(n);
+    toast::mem::simd_array<double> work3(n);
 
     #pragma omp parallel for default(none) private(i, za, itemp, offset) shared(n, vec, phi, region, z, rtz, work1, work2, work3) schedule(static)
     for ( i = 0; i < n; ++i ) {
@@ -220,13 +216,7 @@ void toast::healpix::pixels::vec2zphi ( int64_t n, double const * vec, double * 
     }
 
     toast::sf::fast_sqrt ( n, work1, rtz ); 
-
-    toast::mem::aligned_free ( work1 );
-
     toast::sf::fast_atan2 ( n, work3, work2, phi );
-
-    toast::mem::aligned_free ( work2 );
-    toast::mem::aligned_free ( work3 );
 
     return;
 }
@@ -242,9 +232,7 @@ void toast::healpix::pixels::theta2z ( int64_t n, double const * theta, int * re
     double za;
     int itemp;
 
-    double * work1;
-
-    work1 = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> work1(n);
 
     toast::sf::fast_cos ( static_cast < int > ( n ), theta, z );
 
@@ -264,8 +252,6 @@ void toast::healpix::pixels::theta2z ( int64_t n, double const * theta, int * re
     }
 
     toast::sf::fast_sqrt ( n, work1, rtz ); 
-
-    toast::mem::aligned_free ( work1 );
 
     return;
 }
@@ -414,17 +400,13 @@ void toast::healpix::pixels::ang2nest ( int64_t n, double const * theta, double 
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    double * z = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * rtz = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    int * region = static_cast < int * > ( toast::mem::aligned_alloc ( n * sizeof(int), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> z(n);
+    toast::mem::simd_array<double> rtz(n);
+    toast::mem::simd_array<int> region(n);
 
     theta2z ( n, theta, region, z, rtz );
 
     zphi2nest ( n, phi, region, z, rtz, pix );
-
-    toast::mem::aligned_free ( region );
-    toast::mem::aligned_free ( rtz );
-    toast::mem::aligned_free ( z );
 
     return;
 }
@@ -436,17 +418,13 @@ void toast::healpix::pixels::ang2ring ( int64_t n, double const * theta, double 
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    double * z = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * rtz = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    int * region = static_cast < int * > ( toast::mem::aligned_alloc ( n * sizeof(int), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> z(n);
+    toast::mem::simd_array<double> rtz(n);
+    toast::mem::simd_array<int> region(n);
 
     theta2z ( n, theta, region, z, rtz );
 
     zphi2ring ( n, phi, region, z, rtz, pix );
-
-    toast::mem::aligned_free ( region );
-    toast::mem::aligned_free ( rtz );
-    toast::mem::aligned_free ( z );
 
     return;
 }
@@ -458,19 +436,14 @@ void toast::healpix::pixels::vec2nest ( int64_t n, double const * vec, int64_t *
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    double * z = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * rtz = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * phi = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    int * region = static_cast < int * > ( toast::mem::aligned_alloc ( n * sizeof(int), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> z(n);
+    toast::mem::simd_array<double> rtz(n);
+    toast::mem::simd_array<double> phi(n);
+    toast::mem::simd_array<int> region(n);
 
     vec2zphi ( n, vec, phi, region, z, rtz );
 
     zphi2nest ( n, phi, region, z, rtz, pix );
-
-    toast::mem::aligned_free ( region );
-    toast::mem::aligned_free ( rtz );
-    toast::mem::aligned_free ( phi );
-    toast::mem::aligned_free ( z );
 
     return;
 }
@@ -482,19 +455,14 @@ void toast::healpix::pixels::vec2ring ( int64_t n, double const * vec, int64_t *
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    double * z = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * rtz = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * phi = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    int * region = static_cast < int * > ( toast::mem::aligned_alloc ( n * sizeof(int), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> z(n);
+    toast::mem::simd_array<double> rtz(n);
+    toast::mem::simd_array<double> phi(n);
+    toast::mem::simd_array<int> region(n);
 
     vec2zphi ( n, vec, phi, region, z, rtz );
 
     zphi2ring ( n, phi, region, z, rtz, pix );
-
-    toast::mem::aligned_free ( region );
-    toast::mem::aligned_free ( rtz );
-    toast::mem::aligned_free ( phi );
-    toast::mem::aligned_free ( z );
 
     return;
 }
@@ -666,17 +634,14 @@ void toast::healpix::pixels::degrade_ring ( int factor, int64_t n, int64_t const
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    int64_t * temp_nest = static_cast < int64_t * > ( toast::mem::aligned_alloc ( n * sizeof(int64_t), toast::mem::SIMD_ALIGN ) );
-    int64_t * temp = static_cast < int64_t * > ( toast::mem::aligned_alloc ( n * sizeof(int64_t), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<int64_t> temp_nest(n);
+    toast::mem::simd_array<int64_t> temp(n);
 
     ring2nest ( n, inpix, temp_nest );
 
     degrade_nest ( factor, n, temp_nest, temp );
 
     nest2ring ( n, temp, outpix );
-
-    toast::mem::aligned_free ( temp_nest );
-    toast::mem::aligned_free ( temp );
 
     return;
 }
@@ -704,17 +669,14 @@ void toast::healpix::pixels::upgrade_ring ( int factor, int64_t n, int64_t const
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    int64_t * temp_nest = static_cast < int64_t * > ( toast::mem::aligned_alloc ( n * sizeof(int64_t), toast::mem::SIMD_ALIGN ) );
-    int64_t * temp = static_cast < int64_t * > ( toast::mem::aligned_alloc ( n * sizeof(int64_t), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<int64_t> temp_nest(n);
+    toast::mem::simd_array<int64_t> temp(n);
 
     ring2nest ( n, inpix, temp_nest );
 
     upgrade_nest ( factor, n, temp_nest, temp );
 
     nest2ring ( n, temp, outpix );
-
-    toast::mem::aligned_free ( temp_nest );
-    toast::mem::aligned_free ( temp );
 
     return;
 }

@@ -2,7 +2,6 @@
 
 TWD="$(dirname ${BASH_SOURCE[0]})"
 
-. ${TWD}/finalize.sh
 . ${TWD}/default.sh
 
 exort vtune_collect="hotspots"
