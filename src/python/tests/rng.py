@@ -6,6 +6,7 @@ from ..mpi import MPI
 from .mpi import MPITestCase
 
 from ..rng import random
+from ..rng import random_mt
 
 import numpy as np
 
@@ -84,3 +85,56 @@ class RNGTest(MPITestCase):
         self.assertTrue(type(result[0]) == np.uint64)
         np.testing.assert_array_equal(result, self.array00_uint64)
 
+    # MT testing
+    def test_rng_gaussian_mt(self):
+        # Test reproducibility
+        nb = 4
+        result1 = random_mt(nb, 20, counter=[[0,0],[0,0]], key=[[0,0],[1,1]])
+        result2 = random_mt(nb, 20, counter=[[0,5],[0,5]], key=[[0,0],[1,1]])
+        for i in np.arange(nb):
+            np.testing.assert_array_almost_equal(result1[i][5:], result2[i][:-5])
+
+    def test_rng_m11_mt(self):
+        # Testing with any counter and any key
+        nb = 4
+        result = random_mt(nb, self.size, counter=[self.counter], sampler="uniform_m11", key=[self.key])
+        for i in np.arange(nb):
+            self.assertTrue((result[i] > -1).all() and (result[i] < 1).all())
+            np.testing.assert_array_almost_equal(result[i], self.array_m11)
+
+        # Testing with counter=[0,0] and key=[0,0]
+        result = random_mt(nb, self.size, counter=[self.counter00], sampler="uniform_m11", key=[self.key00])
+        for i in np.arange(nb):
+            self.assertTrue((result[i] > -1).all() and (result[i] < 1).all())
+            np.testing.assert_array_almost_equal(result[i], self.array00_m11)
+
+    
+    def test_rng_01_mt(self):
+        # Testing with any counter and any key
+        nb = 4
+        result = random_mt(nb, self.size, counter=[self.counter], sampler="uniform_01", key=[self.key])
+        for i in np.arange(nb):
+            self.assertTrue((result[i] > 0).all() and (result[i] < 1).all())
+            np.testing.assert_array_almost_equal(result[i], self.array_01)
+
+        # Testing with counter=[0,0] and key=[0,0]
+        result = random_mt(nb, self.size, counter=[self.counter00], sampler="uniform_01", key=[self.key00])
+        for i in np.arange(nb):
+            self.assertTrue((result[i] > 0).all() and (result[i] < 1).all())
+            np.testing.assert_array_almost_equal(result[i], self.array00_01)
+
+    
+    def test_rng_uint64_mt(self):
+        # Testing with any counter and any key
+        nb = 4
+        result = random_mt(nb, self.size, counter=[self.counter], sampler="uniform_uint64", key=[self.key])
+        for i in np.arange(nb):
+            self.assertTrue(type(result[0][i]) == np.uint64)
+            np.testing.assert_array_equal(result[i], self.array_uint64)
+
+        # Testing with counter=[0,0] and key=[0,0]
+        result = random_mt(nb, self.size, counter=[self.counter00], sampler="uniform_uint64", key=[self.key00])
+        for i in np.arange(nb):
+            self.assertTrue(type(result[0][i]) == np.uint64)
+            np.testing.assert_array_equal(result[i], self.array00_uint64)
+    

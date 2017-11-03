@@ -244,6 +244,52 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
     lib.ctoast_rng_dist_normal(n, key1, key2, counter1, counter2, ret)
     return ret
 
+################################################################################
+#     RNG (MT)
+################################################################################
+def u64(var):
+    return np.uint64(var)
+
+lib.ctoast_rng_dist_uint64_mt.restype = None
+lib.ctoast_rng_dist_uint64_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
+    npu64, npu64, npu64, npu64, npu64 ]
+
+def rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2):
+    _nr = u64(nr) ; _nc = u64(nc)
+    ret = np.zeros(_nr * _nc, dtype=np.uint64)
+    lib.ctoast_rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2, ret)
+    return ret.reshape(_nr, _nc)
+    
+lib.ctoast_rng_dist_uniform_01_mt.restype = None
+lib.ctoast_rng_dist_uniform_01_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
+    npu64, npu64, npu64, npu64, npf64 ]
+
+def rng_dist_uniform_01_mt(nr, nc, key1, key2, counter1, counter2):
+    _nr = u64(nr) ; _nc = u64(nc)
+    ret = np.zeros(_nr * _nc, dtype=np.float64)
+    lib.ctoast_rng_dist_uniform_01_mt(nr, nc, key1, key2, counter1, counter2, ret)
+    return ret.reshape(_nr, _nc)
+
+lib.ctoast_rng_dist_uniform_11_mt.restype = None
+lib.ctoast_rng_dist_uniform_11_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
+    npu64, npu64, npu64, npu64, npf64 ]
+
+def rng_dist_uniform_11_mt(nr, nc, key1, key2, counter1, counter2):
+    _nr = u64(nr) ; _nc = u64(nc)
+    ret = np.zeros(_nr * _nc, dtype=np.float64)
+    lib.ctoast_rng_dist_uniform_11_mt(nr, nc, key1, key2, counter1, counter2, ret)
+    return ret.reshape(_nr, _nc)
+
+lib.ctoast_rng_dist_normal_mt.restype = None
+lib.ctoast_rng_dist_normal_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
+    npu64, npu64, npu64, npu64, npf64 ]
+
+def rng_dist_normal_mt(nr, nc, key1, key2, counter1, counter2):
+    _nr = u64(nr) ; _nc = u64(nc)
+    ret = np.zeros(_nr * _nc, dtype=np.float64)
+    lib.ctoast_rng_dist_normal_mt(nr, nc, key1, key2, counter1, counter2, ret)
+    return ret.reshape(_nr, _nc)
+
 # Quaternion array
 
 lib.ctoast_qarray_list_dot.restype = None
