@@ -15,8 +15,13 @@
 #    -DCMAKE_PREFIX_PATH=$HOME/software
 #
 
-ROOT=${PWD}
-DIR=${PWD}/build-toast/osx-macports/release
+if eval command -v realpath > /dev/null ; then
+    ROOT=$(grealpath $(dirname $(dirname $(dirname ${BASH_SOURCE[0]}))))
+else
+    ROOT=$(cd $(dirname $(dirname $(dirname ${BASH_SOURCE[0]}))) > /dev/null; pwd)
+fi
+
+DIR=${ROOT}/build-toast/osx-macports/release
 OPTS="$@"
 
 export CC=$(which gcc)
@@ -29,6 +34,7 @@ export MPICXX=$(which g++)
 mkdir -p ${DIR} 
 cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
-    -DUSE_MKL=OFF -DUSE_TBB=OFF -DFFTW_ROOT=/opt/local \
-    ${OPTS} ${ROOT}
+      -DUSE_MKL=OFF -DUSE_TBB=OFF \
+      -DUSE_FFTW=ON -DFFTW_ROOT=/opt/local \
+      ${OPTS} ${ROOT}
 

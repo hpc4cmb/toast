@@ -5,7 +5,6 @@ include(MacroLibraryTargets)
 set(LIBTOAST_COMPONENTS
     sources.cmake
     atm/sources.cmake
-    fakempi/sources.cmake
     fod/sources.cmake
     map/sources.cmake
     math/sources.cmake
@@ -17,10 +16,6 @@ set(LIBTOAST_COMPONENTS
     test/sources.cmake
     test/gtest/sources.cmake
 )
-
-if(NOT USE_MPI)
-    list(APPEND LIBTOAST_COMPONENTS fakempi/sources.cmake)
-endif()
 
 GLOBAL_OBJECT_TARGET(NAME libtoast-object
     COMPONENTS ${LIBTOAST_COMPONENTS})

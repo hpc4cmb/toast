@@ -59,3 +59,6 @@ __pycache__/
 /examples/*.slurm
 /examples/out_*
 /examples/data/
+
+# Build directories when using ./cmake/platforms/...
+/build-*
