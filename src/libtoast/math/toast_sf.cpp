@@ -559,9 +559,8 @@ void toast::sf::fast_erfinv ( int n, double const * in, double * out ) {
     nt = omp_get_num_threads();
     #endif
 
-    double * arg = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-    double * lg = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> arg(n);
+    toast::mem::simd_array<double> lg(n);
 
     int i;
     double ab;
@@ -722,9 +721,6 @@ void toast::sf::fast_erfinv ( int n, double const * in, double * out ) {
 
         out[i] = p * in[i];
     }
-
-    toast::mem::aligned_free ( arg );
-    toast::mem::aligned_free ( lg );
 
     return;
 }

@@ -107,7 +107,7 @@ void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
 
     // first compute uniform randoms on [0.0, 1.0)
 
-    double * uni = static_cast < double * > ( toast::mem::aligned_alloc ( n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> uni(n);
 
     toast::rng::dist_uniform_01 ( n, key1, key2, counter1, counter2, uni );
     for ( size_t i = 0; i < n; ++i ) {
@@ -117,8 +117,6 @@ void toast::rng::dist_normal ( size_t n, uint64_t key1, uint64_t key2, uint64_t 
     // now use the inverse error function
 
     toast::sf::fast_erfinv ( n, uni, data );
-
-    toast::mem::aligned_free ( uni );
 
     double rttwo = ::sqrt(2.0);
     for ( size_t i = 0; i < n; ++i ) {

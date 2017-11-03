@@ -5,9 +5,13 @@ pushd $(dirname $0) > /dev/null
 topdir=$(pwd -P)
 popd > /dev/null
 
-for type in satellite ground ground_simple; do
-    for size in tiny small medium large; do
-        for machine in cori-intel-knl cori-intel-haswell edison-intel; do
+: ${TYPES:="satellite ground ground_simple"}
+: ${SIZES:="tiny small medium large"}
+: ${MACHINES:="cori-intel-knl cori-intel-haswell edison-intel"}
+
+for type in ${TYPES}; do
+    for size in ${SIZES}; do
+        for machine in ${MACHINES}; do
             template="${type}_template"
             sizefile="${type}.${size}"
             machfile="machine.${machine}"

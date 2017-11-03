@@ -27,11 +27,9 @@ void toast::fod::autosums ( int64_t n,
     double lagsum;
     int64_t hitsum;
 
-    double * xgood = static_cast < double * > ( toast::mem::aligned_alloc (
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> xgood(n);
+    toast::mem::simd_array<uint8_t> gd(n);
 
-    uint8_t * gd = static_cast < uint8_t * > ( toast::mem::aligned_alloc (
-        n * sizeof(uint8_t), toast::mem::SIMD_ALIGN ) );
 
     for ( i = 0; i < n; ++i ) {
         if ( good[i] != 0 ) {
@@ -57,9 +55,6 @@ void toast::fod::autosums ( int64_t n,
         sums[lag] = lagsum;
         hits[lag] = hitsum;
     }
-
-    toast::mem::aligned_free ( xgood );
-    toast::mem::aligned_free ( gd );
 
     return;
 }

@@ -1,0 +1,72 @@
+#!/bin/bash
+
+outdir="out_@SIZE@_ground_simple"
+mkdir -p "${outdir}"
+
+# This script assumes that you have toast and all dependencies
+# installed and loaded in your environment.
+
+# Generate the focalplane file if it does not already exist.
+
+detpix=@DETPIX@
+
+fpfile="${outdir}/fp_${detpix}.pkl"
+fpparfile="@TOPDIR@/params/ground/focalplane.par"
+
+if [ ! -e "${fpfile}" ]; then
+    toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp" --minpix $detpix
+fi
+
+# Generate the schedule file if it does not already exist.
+
+schparfile="@TOPDIR@/params/ground/schedule.par"
+
+schedulefile="${outdir}/schedule.txt"
+
+if [ ! -e "${schedulefile}" ]; then
+    toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
+fi
+
+# The executable script
+
+ex=$(which toast_ground_sim_simple.py)
+echo "Using ${ex}"
+
+# Scan strategy parameters from a file
+
+parfile="@TOPDIR@/params/ground/ground_sim_simple.par"
+
+# Data distribution parameters
+
+# The commandline
+
+com="${ex} @${parfile} \
+--fp ${fpfile} \
+--schedule ${schedulefile} \
+--out ${outdir}/out \
+"
+
+# Use 2 processes, each with 2 threads
+
+procs=2
+threads=2
+
+export OMP_NUM_THREADS=${threads}
+
+run="mpirun -np ${procs}"
+
+# only set "vrun" if not defined in environment (see vtune_params/ directory)
+: ${vrun:="amplxe-cl -collect hotspots -knob sampling-interval=25 -mrte-mode=mixed \
+    -run-pass-thru=--no-altstack -r ${outdir}/vtune \
+    -finalization-mode=deferred -trace-mpi"}
+: ${vtune_collect:="pyhotspots"}
+
+export vrun
+export vtune_collect
+
+echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+

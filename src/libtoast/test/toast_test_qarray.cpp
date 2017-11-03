@@ -343,22 +343,15 @@ TEST_F( qarrayTest, thetaphipa ) {
     double xaxis[3] = { 1.0, 0.0, 0.0 };
     double zaxis[3] = { 0.0, 0.0, 1.0 };
 
-    double * theta = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * phi = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * pa = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> theta(n);
+    toast::mem::simd_array<double> phi(n);
+    toast::mem::simd_array<double> pa(n);
 
-    double * check_theta = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * check_phi = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-    double * check_pa = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> check_theta(n);
+    toast::mem::simd_array<double> check_phi(n);
+    toast::mem::simd_array<double> check_pa(n);
 
-    double * quat = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> quat(4*n);
 
     // First run tests in Healpix convention...
 
@@ -513,14 +506,6 @@ TEST_F( qarrayTest, thetaphipa ) {
 
         ASSERT_NEAR( pa[i], check_pa[i], 1.0e-6 );
     }
-
-    toast::mem::aligned_free ( theta );
-    toast::mem::aligned_free ( phi );
-    toast::mem::aligned_free ( pa );
-    toast::mem::aligned_free ( quat );
-    toast::mem::aligned_free ( check_theta );
-    toast::mem::aligned_free ( check_phi );
-    toast::mem::aligned_free ( check_pa );
 }
 
 

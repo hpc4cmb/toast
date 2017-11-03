@@ -68,14 +68,11 @@ void toast::qarray::inv ( size_t n, double * q ) {
 
 void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, double * norm ) {
     
-    double * temp = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> temp(n);
 
     toast::qarray::list_dot ( n, m, d, v, v, temp );
 
     toast::sf::sqrt ( n, temp, norm );
-
-    toast::mem::aligned_free ( temp );
 
     return;
 }
@@ -85,8 +82,7 @@ void toast::qarray::amplitude ( size_t n, size_t m, size_t d, double const * v, 
 
 void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_in, double * q_out ) {
 
-    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> norm(n);
 
     toast::qarray::amplitude ( n, m, d, q_in, norm );
 
@@ -110,8 +106,6 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
         }
     }
 
-    toast::mem::aligned_free ( norm );
-
     return;
 }
 
@@ -120,8 +114,7 @@ void toast::qarray::normalize ( size_t n, size_t m, size_t d, double const * q_i
 
 void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q ) {
 
-    double * norm = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> norm(n);
 
     toast::qarray::amplitude ( n, m, d, q, norm );
 
@@ -145,8 +138,6 @@ void toast::qarray::normalize_inplace ( size_t n, size_t m, size_t d, double * q
         }
     }
 
-    toast::mem::aligned_free ( norm );
-
     return;
 }
 
@@ -160,8 +151,7 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
         n = nv;
     }
 
-    double * q_unit = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        4 * nq * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> q_unit(4*nq);
 
     toast::qarray::normalize ( nq, 4, 4, q, q_unit );
 
@@ -299,8 +289,6 @@ void toast::qarray::rotate ( size_t nq, double const * q, size_t nv, double cons
             }
         }
     }
-
-    toast::mem::aligned_free ( q_unit );
 
     return;
 }
@@ -441,8 +429,7 @@ void toast::qarray::slerp ( size_t n_time, size_t n_targettime, double const * t
 
 void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normv = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> normv(n);
 
     toast::qarray::amplitude ( n, 4, 3, q_in, normv );
     
@@ -459,8 +446,6 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
         }
     }
 
-    toast::mem::aligned_free ( normv );
-
     return;
 }
 
@@ -469,8 +454,7 @@ void toast::qarray::exp ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
-    double * normq = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> normq(n);
 
     toast::qarray::amplitude ( n, 4, 4, q_in, normq );
 
@@ -487,8 +471,6 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
         }
     }
 
-    toast::mem::aligned_free ( normq );
-
     return;
 }
 
@@ -497,8 +479,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 
 void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
     
-    double * q_tmp = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        4 * n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+    toast::mem::simd_array<double> q_tmp(4*n);
 
     toast::qarray::ln ( n, q_in, q_tmp );
 
@@ -509,8 +490,6 @@ void toast::qarray::pow ( size_t n, double const * p, double const * q_in, doubl
     }
 
     toast::qarray::exp ( n, q_tmp, q_out );
-
-    toast::mem::aligned_free ( q_tmp );
 
     return;
 }
@@ -535,18 +514,14 @@ void toast::qarray::from_axisangle ( size_t n, double const * axis, double const
 
     } else {
 
-        double * a = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> a(n);
 
         for ( size_t i = 0; i < n; ++i ) {
             a[i] = 0.5 * angle[i];
         }
 
-        double * sin_a = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-        double * cos_a = static_cast < double * > ( toast::mem::aligned_alloc ( 
-        n * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> sin_a(n);
+        toast::mem::simd_array<double> cos_a(n);
 
         toast::sf::sincos ( n, a, sin_a, cos_a );
     
@@ -555,11 +530,7 @@ void toast::qarray::from_axisangle ( size_t n, double const * axis, double const
                 q_out[4*i + j] = axis[3*i + j] * sin_a[i];
             }
             q_out[4*i + 3] = cos_a[i];
-        }
-    
-        toast::mem::aligned_free ( a );
-        toast::mem::aligned_free ( sin_a );
-        toast::mem::aligned_free ( cos_a );
+        }    
     }
 
     return;

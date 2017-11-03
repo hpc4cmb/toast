@@ -435,20 +435,11 @@ void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_
         
             int info;
 
-            double * fdata = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-            
-            double * ftemp = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-            
-            double * finv = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-            
-            double * evals = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-            
-            double * work = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                lwork * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            toast::mem::simd_array<double> fdata(nnz*nnz);
+            toast::mem::simd_array<double> ftemp(nnz*nnz);
+            toast::mem::simd_array<double> finv(nnz*nnz);
+            toast::mem::simd_array<double> evals(nnz);
+            toast::mem::simd_array<double> work(lwork);
 
             // Here we "unroll" the loop over submaps and pixels within each submap.
             // This allows us to distribute the total pixels across all threads.
@@ -539,13 +530,6 @@ void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_
                 }
 
             }
-
-            toast::mem::aligned_free ( fdata );
-            toast::mem::aligned_free ( ftemp );
-            toast::mem::aligned_free ( finv );
-            toast::mem::aligned_free ( evals );
-            toast::mem::aligned_free ( work );
-
         }
 
     }
@@ -592,14 +576,9 @@ void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
             int64_t m;
             int64_t off;
 
-            double * fdata1 = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-            double * fdata2 = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
-
-            double * fdata3 = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+            toast::mem::simd_array<double> fdata1(nnz*nnz);
+            toast::mem::simd_array<double> fdata2(nnz*nnz);
+            toast::mem::simd_array<double> fdata3(nnz*nnz);
 
             // Here we "unroll" the loop over submaps and pixels within each submap.
             // This allows us to distribute the total pixels across all threads.
@@ -639,11 +618,6 @@ void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
                 }
 
             }
-
-            toast::mem::aligned_free ( fdata1 );
-            toast::mem::aligned_free ( fdata2 );
-            toast::mem::aligned_free ( fdata3 );
-
         }
 
     }
@@ -680,8 +654,7 @@ void toast::cov::apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
         int64_t m;
         int64_t off;
 
-        double * temp = static_cast < double * > ( toast::mem::aligned_alloc ( 
-                nnz * sizeof(double), toast::mem::SIMD_ALIGN ) );
+        toast::mem::simd_array<double> temp(nnz);
 
         for ( i = 0; i < nsub; ++i ) {
             for ( j = 0; j < subsize; ++j ) {
@@ -706,9 +679,6 @@ void toast::cov::apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
                 }
             }
         }
-
-        toast::mem::aligned_free ( temp );
-
     }
 
     return;
