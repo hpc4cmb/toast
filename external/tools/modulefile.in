@@ -28,7 +28,7 @@ prepend-path PATH "@CONDA_PREFIX@/bin"
 setenv PYTHONPATH "@CONDA_PREFIX@/lib/python@PYVERSION@/site-packages"
 
 # This is the location of the extra compiled software
-setenv TOAST_AUX_ROOT "@AUX_PREFIX"
+setenv TOAST_AUX_ROOT "@AUX_PREFIX@"
 prepend-path PATH "@AUX_PREFIX@/bin"
 prepend-path CPATH "@AUX_PREFIX@/include"
 prepend-path LD_LIBRARY_PATH "@AUX_PREFIX@/lib"
