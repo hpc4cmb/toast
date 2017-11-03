@@ -1,5 +1,5 @@
 --samplerate
-50
+100
 --scanrate
 6
 --scan_accel
@@ -19,13 +19,9 @@
 --atm_w_center
 5
 --atm_w_sigma
-1
---atm_xstep
-60
---atm_ystep
-30
---atm_zstep
-30
+0
 --input_map
-data/ffp10_fg_100_map_nside512.fits
+data/ffp10_lensed_scl_100_nside0512.fits
 --madam
+--madam_baseline_order
+3

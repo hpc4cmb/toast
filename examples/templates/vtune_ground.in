@@ -1,0 +1,139 @@
+#!/bin/bash
+
+#SBATCH --partition=@QUEUE@
+@CONSTRAINT@
+#SBATCH --account=@ACCOUNT@
+#SBATCH --nodes=@NODES@
+#SBATCH --time=@TIME@
+#SBATCH --job-name=@SIZE@-ground
+#SBATCH --output=out_vtune_@SIZE@_ground_@MACHINE@_%j.log
+#SBATCH --perf=@VTUNE@
+
+set -o errexit
+
+echo Starting slurm script at $(date)
+
+ulimit -s unlimited
+
+export PYTHONNOUSERSITE=1
+export HOME=${SCRATCH}
+
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
+pstr=@MACHINE@
+outdir="out_vtune_@SIZE@_ground_${pstr}"
+mkdir -p "${outdir}"
+
+# This script assumes that you are running at NERSC and have already
+# loaded the toast module for the correct machine / configuration.
+
+# This should be the same as the --nodes option above
+nodes=@NODES@
+
+# How many processes are we running per node?  Handle
+# the case of a very small simulation.
+if [ "x@TINY@" = "xyes" ]; then
+    node_proc=1
+else
+    node_proc=@NODEPROCS@
+fi
+
+# Generate the focalplane file if it does not already exist.
+
+detpix=@DETPIX@
+
+fpfile="${outdir}/fp_${detpix}.pkl"
+fpparfile="@TOPDIR@/params/ground/focalplane.par"
+
+if [ ! -e "${fpfile}" ]; then
+    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp" --minpix $detpix
+fi
+
+# Generate the schedule file if it does not already exist.
+
+schparfile="@TOPDIR@/params/ground/schedule.par"
+
+schedulefile="${outdir}/schedule.txt"
+
+if [ ! -e "${schedulefile}" ]; then
+    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
+fi
+
+# The executable script
+
+ex=$(which toast_ground_sim.py)
+echo "Using ${ex}"
+
+# Scan strategy parameters from a file
+
+parfile="@TOPDIR@/params/ground/ground_sim.par"
+
+# Data distribution parameters
+
+groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
+
+# The commandline
+
+com="${ex} @${parfile} \
+--groupsize ${groupsize} \
+--fp ${fpfile} \
+--schedule ${schedulefile} \
+--out ${outdir}/out \
+--atm_cache ${outdir}/atm_cache \
+--atm_xstep @CELLSIZE@ \
+--atm_ystep @CELLSIZE@ \
+--atm_zstep @CELLSIZE@ \
+"
+
+#--- Hardware configuration (no need to change) ----
+
+# Hyperthread CPUs per physical core
+cpu_per_core=@HYPERTHREAD@
+
+# Physical cores we are using
+node_cores=@NODECORES@
+
+node_thread=$(( node_cores / node_proc ))
+node_depth=$(( cpu_per_core * node_thread ))
+procs=$(( nodes * node_proc ))
+
+export OMP_NUM_THREADS=${node_thread}
+export OMP_PLACES=threads
+export OMP_PROC_BIND=spread
+
+# Set TMPDIR to be on the ramdisk
+export TMPDIR=/dev/shm
+
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+
+# only set "vrun" if not defined in environment (see vtune_params/ directory)
+: ${vrun:="amplxe-cl -collect hotspots -knob sampling-interval=50 \
+    -run-pass-thru=--no-altstack -r ${outdir}/vtune \
+    -finalization-mode=deferred -trace-mpi"}
+: ${vtune_collect:="pyhotspots"}
+
+export vrun
+export vtune_collect
+
+echo Calling srun at $(date)
+
+echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+
+if eval command -v vfinal &> /dev/null ; then
+    echo "Run \"vfinal <vtune-output-dir>\" to finalize results"
+else
+    echo "No alias \"vfinal\" defined. Remember to finalize results"
+fi
+
+echo End slurm script at $(date)
+

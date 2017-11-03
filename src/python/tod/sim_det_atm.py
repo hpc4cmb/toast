@@ -331,7 +331,10 @@ class OpSimAtmosphere(Operator):
                 if comm.rank == 0:
                     if self._cachedir is not None \
                        and not os.path.isdir(self._cachedir):
-                        os.makedirs(self._cachedir)
+                        try:
+                            os.makedirs(self._cachedir)
+                        except FileExistsError:
+                            pass
 
                 if comm.rank == 0 and tmax < tmax_tot:
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '

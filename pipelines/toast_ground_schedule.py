@@ -72,19 +72,46 @@ def attempt_scan(
     for (name, weight, corners) in visible:
         for rising in [True, False]:
             observer.date = to_DJD(t)
-            # Then determine an elevation that all corners will cross
-            el = get_constant_elevation(observer, corners, rising, fp_radius,
+            if args.pole_mode:
+                radius = 0
+            else:
+                radius = fp_radius
+            el = get_constant_elevation(observer, corners, rising, radius,
                                         el_min, el_max, not_visible, name)
             if el is None:
                 continue
-            success, azmins, azmaxs, aztimes, tstop = scan_patch(
-                el, corners, t, fp_radius, observer, sun, not_visible,
-                name, tstep, stop_timestamp, sun_el_max, rising)
-            if success:
-                t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
-                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                             name, el)
-                break
+            if args.pole_mode:
+                pole_success = True
+                while pole_success:
+                    pole_success, azmins, azmaxs, aztimes, tstop \
+                        = scan_patch_pole(
+                            args, el, corners, t, fp_radius, observer, sun,
+                            not_visible, name, tstep, stop_timestamp,
+                            sun_el_max, rising)
+                    if pole_success:
+                        if success:
+                            # Still the same scan
+                            hits[name] -= 1
+                        t = add_scan(
+                            args, t, tstop, aztimes, azmins, azmaxs, rising,
+                            fp_radius, observer, sun, moon, fout, fout_fmt, hits,
+                            name, el)
+                        if rising:
+                            el -= np.radians(args.pole_el_step)
+                        else:
+                            el += np.radians(args.pole_el_step)
+                        success = True
+                if success:
+                    break
+            else:
+                success, azmins, azmaxs, aztimes, tstop = scan_patch(
+                    el, corners, t, fp_radius, observer, sun, not_visible,
+                    name, tstep, stop_timestamp, sun_el_max, rising)
+                if success:
+                    t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
+                                 fp_radius, observer, sun, moon, fout, fout_fmt, hits,
+                                 name, el)
+                    break
         if success:
             break
 
@@ -136,8 +163,6 @@ def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
     azmins, azmaxs, aztimes = [], [], []
     azs, els = corner_coordinates(observer, corners)
     while True:
-        old_az = azs.copy()
-        old_el = els.copy()
         tstop += tstep / 10
         if tstop > stop_timestamp or tstop - t > 86400:
             not_visible.append((name, 'Ran out of time rising = {}'
@@ -168,6 +193,89 @@ def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
     return success, azmins, azmaxs, aztimes, tstop
 
 
+def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
+               name, tstep, stop_timestamp, sun_el_max, rising):
+    """ Attempt scanning the patch specified by corners at elevation el.
+
+    The pole scheduling mode will not wait for the patch to drift across.
+    """
+    success = False
+    # and now track when all corners are past the elevation
+    tstop = t
+    azmins, azmaxs, aztimes = [], [], []
+    azs, els = corner_coordinates(observer, corners)
+    while True:
+        tstop += tstep / 10
+        if tstop - t > args.pole_ces_time:
+            # Succesfully scanned the maximum time
+            if len(azmins) > 0:
+                success = True
+            break
+        if tstop > stop_timestamp or tstop - t > 86400:
+            not_visible.append((name, 'Ran out of time rising = {}'
+                                ''.format(rising)))
+            break
+        observer.date = to_DJD(tstop)
+        sun.compute(observer)
+        if sun.alt > sun_el_max:
+            not_visible.append((name, 'Sun too high {:.2f} rising = {}'
+                                ''.format(sun.alt/degree, rising)))
+            break
+        azs, els = corner_coordinates(observer, corners)
+        if fp_radius == 0:
+            radius = np.radians(1)
+        else:
+            radius = fp_radius
+        current_extent_pole(
+            azmins, azmaxs, aztimes, corners, radius, el, azs, els, tstop)
+
+    return success, azmins, azmaxs, aztimes, tstop
+
+
+def current_extent_pole(
+        azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, tstop):
+    """ Get the azimuthal extent of the patch along elevation el.
+
+    Pole scheduling does not care if the patch is "rising" or "setting".
+    """
+    azs_cross = []
+    for i in range(len(corners)):
+        if np.abs(els[i]-el) < fp_radius:
+            azs_cross.append(azs[i])
+        j = (i + 1) % len(corners)
+        if np.abs(els[j]-el) < fp_radius:
+            azs_cross.append(azs[j])
+        if np.abs(els[i]-el) < fp_radius \
+           or np.abs(els[j]-el) < fp_radius:
+            continue
+        elif (els[i] - el)*(els[j] - el) < 0:
+            # Record the location where a line between the corners
+            # crosses el.
+            az1 = azs[i]
+            az2 = azs[j]
+            el1 = els[i] - el
+            el2 = els[j] - el
+            if az2 - az1 > np.pi:
+                az1 += 2*np.pi
+            if az1 - az2 > np.pi:
+                az2 += 2*np.pi
+            az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
+            azs_cross.append(az_cross)
+
+    if len(azs_cross) > 0:
+        azs_cross = np.sort(azs_cross)
+        azmin = azs_cross[0]
+        azmax = azs_cross[-1]
+        if azmax - azmin > np.pi:
+            # Patch crosses the zero meridian
+            azmin, azmax = azmax, azmin
+        azmins.append(azmin)
+        azmaxs.append(azmax)
+        aztimes.append(tstop)
+
+    return
+
+
 def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
                    rising, tstop):
     """ Get the azimuthal extent of the patch along elevation el.
@@ -180,23 +288,28 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
     azs_cross = []
     for i in range(len(corners)):
         j = (i + 1) % len(corners)
-        for el0 in [el, el - fp_radius, el - fp_radius]:
+        for el0 in [el-fp_radius, el, el+fp_radius]:
             if (els[i] - el0)*(els[j] - el0) < 0:
                 az1 = azs[i]
                 az2 = azs[j]
                 el1 = els[i] - el0
                 el2 = els[j] - el0
-                if az1 - az2 < -2*np.pi:
+                if az2 - az1 > np.pi:
+                    az1 += 2*np.pi
+                if az1 - az2 > np.pi:
                     az2 += 2*np.pi
-                az_cross = az1 + el1*(az2 - az1)/(el1 - el2)
-                if (rising and az_cross <= np.pi) or \
-                   (not rising and az_cross >= np.pi):
-                    azs_cross.append(az_cross)
+                az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
+                azs_cross.append(az_cross)
 
-    if len(azs_cross) > 0:
+    if len(azs_cross) > 1:
         azs_cross = np.sort(azs_cross)
-        azmins.append(azs_cross[0])
-        azmaxs.append(azs_cross[-1])
+        azmin = azs_cross[0]
+        azmax = azs_cross[-1]
+        if azmax - azmin > np.pi:
+            # Patch crosses the zero meridian
+            azmin, azmax = azmax, azmin
+        azmins.append(azmin)
+        azmaxs.append(azmax)
         aztimes.append(tstop)
 
     return
@@ -213,6 +326,11 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
     azmaxs = np.array(azmaxs)
+    for i in range(azmins.size-1):
+        if azmins[i+1] - azmins[i] > np.pi:
+            azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
+        if azmins[i+1] - azmins[i] < np.pi:
+            azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     hits[name] += 1
     t1 = t
@@ -220,18 +338,21 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     while t1 < tstop:
         isub += 1
         t2 = min(t1 + ces_time, tstop)
+        if tstop - t2 < ces_time / 10:
+            # Append leftover scan to the last full subscan
+            t2 = tstop
         ind = np.logical_and(aztimes >= t1, aztimes <= t2)
         if np.all(aztimes > t2):
             ind[0] = True
         if np.all(aztimes < t1):
             ind[-1] = True
-        azmin = np.amin(azmins[ind])
-        azmax = np.amax(azmaxs[ind])
-        # Check if we are scanning across the zero meridian
-        if azmax - azmin > np.pi:
+        if azmins[ind][0] < azmaxs[ind][0]:
+            azmin = np.amin(azmins[ind])
+            azmax = np.amax(azmaxs[ind])
+        else:
             # we are, scan from the maximum to the minimum
-            azmin = np.amin(azmaxs[ind])
-            azmax = np.amax(azmin[ind])
+            azmin = np.amax(azmins[ind])
+            azmax = np.amin(azmaxs[ind])
         # Add the focal plane radius to the scan width
         fp_radius_eff = fp_radius / np.cos(el)
         azmin = (azmin - fp_radius_eff) % (2*np.pi)
@@ -488,6 +609,15 @@ def parse_args():
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
                         help='Write diagnostics')
+    parser.add_argument('--pole_mode',
+                        required=False, default=False, action='store_true',
+                        help='Pole scheduling mode (no drift scan)')
+    parser.add_argument('--pole_el_step',
+                        required=False, default=0.25, type=np.float,
+                        help='Elevation step in pole scheduling mode [deg]')
+    parser.add_argument('--pole_ces_time',
+                        required=False, default=3000, type=np.float,
+                        help='Time to scan at constant elevation in pole mode')
     parser.add_argument('--out',
                         required=False, default='schedule.txt',
                         help='Output filename')

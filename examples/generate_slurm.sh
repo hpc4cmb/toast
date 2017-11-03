@@ -5,7 +5,7 @@ pushd $(dirname $0) > /dev/null
 topdir=$(pwd -P)
 popd > /dev/null
 
-for type in satellite ground; do
+for type in satellite ground ground_simple; do
     for size in tiny small medium large; do
         for machine in cori-intel-knl cori-intel-haswell edison-intel; do
             template="${type}_template"

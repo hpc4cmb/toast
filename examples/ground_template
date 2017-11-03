@@ -13,6 +13,14 @@ echo Starting slurm script at $(date)
 export PYTHONNOUSERSITE=1
 export HOME=${SCRATCH}
 
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
 pstr=@@machine@@
 outdir="out_@@size@@_ground_${pstr}"
 mkdir -p "${outdir}"
@@ -39,7 +47,7 @@ fpfile="${outdir}/fp_${detpix}.pkl"
 fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 toast_fake_focalplane.py @$fpparfile \
+    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
          --out "${outdir}/fp" --minpix $detpix
 fi
 
@@ -50,7 +58,7 @@ schparfile="@@topdir@@/params/ground/schedule.par"
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
-    srun -n 1 toast_ground_schedule.py @$schparfile \
+    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
          --out "${schedulefile}" --patch @@patch@@ \
          --stop @@schedule_stop@@
 fi
@@ -66,7 +74,7 @@ parfile="@@topdir@@/params/ground/ground_sim.par"
 
 # Data distribution parameters
 
-groupsize=${node_proc}
+groupsize=$(( @@nodes_per_group@@ * node_proc ))
 
 # The commandline
 
@@ -75,6 +83,10 @@ com="${ex} @${parfile} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+--atm_cache ${outdir}/atm_cache \
+--atm_xstep @@cellsize@@ \
+--atm_ystep @@cellsize@@ \
+--atm_zstep @@cellsize@@ \
 "
 
 #--- Hardware configuration (no need to change) ----
@@ -104,4 +116,3 @@ echo "${run} ${com}"
 eval ${run} ${com} > "${outdir}/log" 2>&1
 
 echo End slurm script at $(date)
-

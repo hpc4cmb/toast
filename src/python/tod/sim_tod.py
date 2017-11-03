@@ -630,8 +630,13 @@ class TODGround(TOD):
                  sampsizes=None, sampbreaks=None, coord="C",
                  report_timing=True):
 
+        if samples < 1:
+            raise RuntimeError(
+                "TODGround must be instantiated with a positive number of "
+                "samples, not samples == {}".format(samples))
+
         if ephem is None:
-            raise RuntimeError("ERROR: Cannot instantiate a TODGround object "
+            raise RuntimeError("Cannot instantiate a TODGround object "
                                "without pyephem.")
 
         if sampsizes is not None:

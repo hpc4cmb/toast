@@ -1,0 +1,114 @@
+#!/bin/bash
+
+#SBATCH --partition=@@queue@@
+@@constraint@@
+#SBATCH --account=mp107
+#SBATCH --nodes=@@nodes@@
+#SBATCH --time=@@time@@
+#SBATCH --job-name=@@size@@-ground
+#SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
+
+echo Starting slurm script at $(date)
+
+export PYTHONNOUSERSITE=1
+export HOME=${SCRATCH}
+
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
+pstr=@@machine@@
+outdir="out_@@size@@_ground_simple_${pstr}"
+mkdir -p "${outdir}"
+
+# This script assumes that you are running at NERSC and have already
+# loaded the toast module for the correct machine / configuration.
+
+# This should be the same as the --nodes option above
+nodes=@@nodes@@
+
+# How many processes are we running per node?  Handle
+# the case of a very small simulation.
+if [ "x@@tiny@@" = "xyes" ]; then
+    node_proc=1
+else
+    node_proc=@@nodeprocs@@
+fi
+
+# Generate the focalplane file if it does not already exist.
+
+detpix=@@detpix@@
+
+fpfile="${outdir}/fp_${detpix}.pkl"
+fpparfile="@@topdir@@/params/ground/focalplane.par"
+
+if [ ! -e "${fpfile}" ]; then
+    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp" --minpix $detpix
+fi
+
+# Generate the schedule file if it does not already exist.
+
+schparfile="@@topdir@@/params/ground/schedule.par"
+
+schedulefile="${outdir}/schedule.txt"
+
+if [ ! -e "${schedulefile}" ]; then
+    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile}" --patch @@patch@@ \
+         --stop @@schedule_stop@@
+fi
+
+# The executable script
+
+ex=$(which toast_ground_sim_simple.py)
+echo "Using ${ex}"
+
+# Scan strategy parameters from a file
+
+parfile="@@topdir@@/params/ground/ground_sim_simple.par"
+
+# Data distribution parameters
+
+groupsize=$(( @@nodes_per_group@@ * node_proc ))
+
+# The commandline
+
+com="${ex} @${parfile} \
+--groupsize ${groupsize} \
+--fp ${fpfile} \
+--schedule ${schedulefile} \
+--out ${outdir}/out \
+"
+
+#--- Hardware configuration (no need to change) ----
+
+# Hyperthread CPUs per physical core
+cpu_per_core=@@hyperthread@@
+
+# Physical cores we are using
+node_cores=@@nodecores@@
+
+node_thread=$(( node_cores / node_proc ))
+node_depth=$(( cpu_per_core * node_thread ))
+procs=$(( nodes * node_proc ))
+
+export OMP_NUM_THREADS=${node_thread}
+export OMP_PLACES=threads
+export OMP_PROC_BIND=spread
+
+# Set TMPDIR to be on the ramdisk
+export TMPDIR=/dev/shm
+
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+
+echo Calling srun at $(date)
+
+echo "${run} ${com}"
+eval ${run} ${com} > "${outdir}/log" 2>&1
+
+echo End slurm script at $(date)

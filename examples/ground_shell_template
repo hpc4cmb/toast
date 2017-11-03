@@ -47,6 +47,10 @@ com="${ex} @${parfile} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+--atm_cache ${outdir}/atm_cache \
+--atm_xstep @@cellsize@@ \
+--atm_ystep @@cellsize@@ \
+--atm_zstep @@cellsize@@ \
 "
 
 # Use 2 processes, each with 2 threads

@@ -9,9 +9,9 @@ ACT
 --patch_coord
 C
 --el_min
-40
+30
 --el_max
-50
+80
 --sun_el_max
 90
 --sun_avoidance_angle

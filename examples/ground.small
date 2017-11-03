@@ -1,7 +1,9 @@
 queue = debug
 nodes = 1
+nodes_per_group = 1
 time = 00:30:00
-detpix = 127
+detpix = 61
 tiny = no
-patch = wide_01h_s,1,8,-26,-8,-34
+patch = 8x8deg,1,4,-26,-4,-34
 schedule_stop = "2016-06-02 00:00:00"
+cellsize = 30
