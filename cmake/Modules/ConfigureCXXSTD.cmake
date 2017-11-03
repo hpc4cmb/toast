@@ -20,16 +20,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
   # Now version selection, focus on version 15 and above as that is the
   # baseline - means that this isn't comprehensive for lower versions
 
-  # c++98 should be supported for all(?) versions we may encounter, and
-  # make it the default as required for compilers that recognise standards
-  set(CMAKE_CXX_STANDARD_DEFAULT "11")
-
-  set(CMAKE_CXX98_STANDARD_COMPILE_OPTION "-std=c++98")
-  set(CMAKE_CXX98_EXTENSION_COMPILE_OPTION "-std=gnu++98")
-
-  set(CMAKE_CXX0X_STANDARD_COMPILE_OPTION "-std=c++0x")
-  set(CMAKE_CXX0X_EXTENSION_COMPILE_OPTION "-std=gnu++0x")
-
   if(NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15.0))
 
     set(CMAKE_CXX11_STANDARD_COMPILE_OPTION "-std=c++11")
@@ -119,12 +109,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
     endif()
   endif()
 
-  # always available?
-  set(CMAKE_CXX98_COMPILE_FEATURES cxx_template_template_parameters)
-
   set(CMAKE_CXX_COMPILE_FEATURES
-    ${CMAKE_CXX98_COMPILE_FEATURES}
-    ${CMAKE_CXX0X_COMPILE_FEATURES}
     ${CMAKE_CXX11_COMPILE_FEATURES}
     ${CMAKE_CXX14_COMPILE_FEATURES}
     )
@@ -134,7 +119,7 @@ endif()
 #-----------------------------------------------------------------------
 # Configure/Select C++ Standard
 # Require at least C++11 with no extensions and the following features
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 set(${PROJECT_NAME}_TARGET_COMPILE_FEATURES
   cxx_alias_templates
