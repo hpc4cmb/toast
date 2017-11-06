@@ -273,6 +273,7 @@ set(EXTERNAL_LIBRARIES ${CMAKE_THREAD_LIBS_INIT}
 REMOVE_DUPLICATES(EXTERNAL_INCLUDE_DIRS)
 REMOVE_DUPLICATES(EXTERNAL_LIBRARIES)
 
+
 ################################################################################
 #
 #        SSE
@@ -298,6 +299,7 @@ else(USE_SSE)
     endforeach()
 
 endif(USE_SSE)
+
 
 ################################################################################
 #
