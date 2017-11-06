@@ -6,6 +6,7 @@ else
   SUBDIRS += fakempi
 endif
 
+SUBDIRS += util
 SUBDIRS += math
 
 if HAVE_AM_ELEMENTAL
@@ -59,7 +60,8 @@ $(top_builddir)/src/libtoast/capi/libtoast_capi.la \
 $(top_builddir)/src/libtoast/test/libtoast_test.la \
 $(top_builddir)/src/libtoast/map/libtoast_map.la \
 $(top_builddir)/src/libtoast/fod/libtoast_fod.la \
-$(top_builddir)/src/libtoast/tod/libtoast_tod.la
+$(top_builddir)/src/libtoast/tod/libtoast_tod.la \
+$(top_builddir)/src/libtoast/util/libtoast_util.la
 
 if HAVE_AM_ELEMENTAL
   libtoast_la_LIBADD += $(top_builddir)/src/libtoast/atm/libtoast_atm.la
