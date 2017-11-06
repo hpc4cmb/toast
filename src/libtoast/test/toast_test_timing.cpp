@@ -40,7 +40,7 @@ using namespace std;
 using namespace toast;
 using namespace toast::util;
 
-typedef toast::util::timer          timer_t;
+typedef toast::util::timer          toast_timer_t;
 typedef toast::util::timing_manager timing_manager_t;
 
 typedef std::chrono::duration<int64_t>                      seconds_type;
