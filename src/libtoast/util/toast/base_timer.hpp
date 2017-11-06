@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 //
+=======
+//  
+>>>>>>> Preliminary implementation of timing mechanism (working with CMake, not implemented with autotools)
 //  Time Ordered Astrophysics Scalable Tools (TOAST)
 //  
 //  Copyright (c) 2015-2017, The Regents of the University of California
