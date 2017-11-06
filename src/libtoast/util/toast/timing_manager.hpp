@@ -49,14 +49,14 @@ public:
     template <typename _Key, typename _Mapped>
     using uomap = std::unordered_map<_Key, _Mapped>;
 
-    typedef toast::util::timer              timer_t;
-    typedef timer_t::string_t               string_t;
-    typedef std::pair<string_t, timer_t&>   timer_pair_t;
+    typedef toast::util::timer              toast_timer_t;
+    typedef toast_timer_t::string_t               string_t;
+    typedef std::pair<string_t, toast_timer_t&>   timer_pair_t;
     typedef std::deque<timer_pair_t>        timer_list_t;
     typedef timer_list_t::iterator          iterator;
     typedef timer_list_t::const_iterator    const_iterator;
     typedef timer_list_t::size_type         size_type;
-    typedef uomap<string_t, timer_t>        timer_map_t;
+    typedef uomap<string_t, toast_timer_t>        timer_map_t;
 
 public:
 	// Constructor and Destructors
@@ -72,7 +72,7 @@ public:
     size_type size() const { return m_timer_list.size(); }
     void clear() { m_timer_list.clear(); m_timer_map.clear(); }
 
-    timer_t& timer(const string_t& key);
+    toast_timer_t& timer(const string_t& key);
 
     template <typename _Ret, typename _Func>
     _Ret time_function(const string_t& key, _Func);
@@ -109,7 +109,7 @@ template <typename _Ret, typename _Func>
 inline
 _Ret timing_manager::time_function(const string_t& key, _Func func)
 {
-    timer_t& _t = this->instance()->timer(key);
+    toast_timer_t& _t = this->instance()->timer(key);
     _t.resume();
     _t.lap();
     _Ret _ret = func();
@@ -121,7 +121,7 @@ template <typename _Ret, typename _Func, typename... _Args>
 inline
 _Ret timing_manager::time_function(const string_t& key, _Func func, _Args... args)
 {
-    timer_t& _t = this->instance()->timer(key);
+    toast_timer_t& _t = this->instance()->timer(key);
     _t.resume();
     _t.lap();
     _Ret _ret = func(args...);
@@ -133,7 +133,7 @@ template <typename _Func>
 inline
 void timing_manager::time_function(const string_t& key, _Func func)
 {
-    timer_t& _t = this->instance()->timer(key);
+    toast_timer_t& _t = this->instance()->timer(key);
     _t.resume();
     _t.lap();
     func();
@@ -144,7 +144,7 @@ template <typename _Func, typename... _Args>
 inline
 void timing_manager::time_function(const string_t& key, _Func func, _Args... args)
 {
-    timer_t& _t = this->instance()->timer(key);
+    toast_timer_t& _t = this->instance()->timer(key);
     _t.resume();
     _t.lap();
     func(args...);
