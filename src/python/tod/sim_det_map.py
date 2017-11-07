@@ -202,8 +202,6 @@ class OpSimPySM(Operator):
 
     Args:
         PySM input paths / parameters:  FIXME.
-        distmap (DistPixels): the distributed map domain data.
-            FIXME: if you don't need local pointing, remove this.
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
@@ -211,14 +209,14 @@ class OpSimPySM(Operator):
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
     """
-    def __init__(self, distmap=None, pixels='pixels',
-                 out='pysm', pysm_sky_config=None, init_sky=True):
+    def __init__(self, pixels='pixels',
+                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
-        self._map = distmap
-        self._nside = hp.npix2nside(self._map._size)
+        self._nside = nside
         self._pixels = pixels
         self._out = out
+        self._local_pixels = local_pixels
 
         self.pysm_sky_config = pysm_sky_config
         self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
@@ -228,7 +226,7 @@ class OpSimPySM(Operator):
         initialized_sky_config = {}
         for name, model_id in pysm_sky_config.items():
             initialized_sky_config[name] = \
-                pysm.nominal.models(model_id, self._nside, self._pixels)
+                pysm.nominal.models(model_id, self._nside, self._local_pixels)
         return pysm.Sky(initialized_sky_config)
 
     def exec(self, data):
@@ -241,57 +239,12 @@ class OpSimPySM(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
-        for obs in data.obs:
-            tod = obs['tod']
-
-            for det in tod.local_dets:
-
-                # get the pixels and weights from the cache
-
-                pixelsname = "{}_{}".format(self._pixels, det)
-                weightsname = "{}_{}".format(self._weights, det)
-                pixels = tod.cache.reference(pixelsname)
-                weights = tod.cache.reference(weightsname)
-
-                nsamp, nnz = weights.shape
-
-                # Get the pointing in terms of local submaps and
-                # pixels within the submaps.  Remove this if you
-                # don't need that (and also from the constructor).
-
-                sm, lpix = self._map.global_to_local(pixels)
-
-                # Now call PySM and do other stuff to generate the
-                # pixel data and scan it into a TOD.
-
-
-                simtod = np.zeros(nsamp)
+        if self.sky is None:
+            self.init_sky(self.pysm_sky_config)
 
 
 
-                # Accumulate the output timestream to the cache.
-
-                cachename = "{}_{}".format(self._out, det)
-                if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64,
-                                     (tod.local_samples[1],))
-                ref = tod.cache.reference(cachename)
-                ref[:] += simtod
-                
-                del ref
-                del pixels
-                del weights
-                del sm
-                del lpix
 
         return
 

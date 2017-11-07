@@ -7,6 +7,7 @@ from .mpi import MPITestCase
 
 import sys
 import os
+import numpy as np
 
 from ..tod.tod import *
 from ..tod.pointing import *
@@ -99,20 +100,24 @@ class OpSimPySMTest(MPITestCase):
         # https://github.com/hpc4cmb/toast/issues/97
         #
         npix = 12 * self.nside * self.nside
-        hits = DistPixels(comm=self.toastcomm.comm_world, size=npix, nnz=1, dtype=np.int32, submap=submapsize, local=localsm)
+
+        npix_local = int(np.ceil(npix / float(self.toastcomm.comm_world.size)))
+        local_pixels = np.arange(
+            self.toastcomm.comm_world.rank * npix_local,
+            min(self.toastcomm.comm_world.rank * npix_local + npix_local, npix)
+            )
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
         pysm_sky_config = {
-            'synchrotron' : "s1",
-            'dust' : "d8",
-            'freefree' : "f1",
-            'cmb' : "c1",
-            'ame' : "a1",
+            'synchrotron': "s1",
+            'dust': "d8",
+            'freefree': "f1",
+            'cmb': "c1",
+            'ame': "a1",
         }
-        op = OpSimPySM(distmap=hits,
-                       pysm_sky_config=pysm_sky_config,
-        )
+        op = OpSimPySM(local_pixels=local_pixels, nside=self.nside,
+                       pysm_sky_config=pysm_sky_config)
         op.exec(self.data)
 
         # Now we have timestreams in the cache.  We could compare the 
