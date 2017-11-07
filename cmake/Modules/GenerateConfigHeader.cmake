@@ -411,6 +411,14 @@ SET_MACRO_FIELDS(${HAS}
 
 #==============================================================================#
 
+GET_DEFINED_FLAG(HAS USE_TBB)
+SET_MACRO_FIELDS(${HAS}
+    LABEL   "HAVE_TBB"
+    ENTRY   "1"
+    MSG     "if you are using TBB")
+
+#==============================================================================#
+
 GET_DEFINED_FLAG(HAS Threads_FOUND)
 SET_MACRO_FIELDS(${HAS}
     LABEL   "HAVE_PTHREAD"
