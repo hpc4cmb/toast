@@ -223,7 +223,7 @@ TEST_F( rngTest, uint64 ) {
 //============================================================================//
 
 TEST_F( rngTest, uint64_mt ) {
-    const size_t nthread = num_threads;
+    const size_t nthread = 1;
     uint64_t result[nthread*size];
 
     {
