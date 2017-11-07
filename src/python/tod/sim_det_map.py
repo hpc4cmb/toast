@@ -211,14 +211,25 @@ class OpSimPySM(Operator):
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
     """
-    def __init__(self, distmap=None, pixels='pixels', weights='weights',
-                 out='pysm'):
+    def __init__(self, distmap=None, pixels='pixels',
+                 out='pysm', pysm_sky_config=None, init_sky=True):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap
+        self._nside = hp.npix2nside(self._map._size)
         self._pixels = pixels
-        self._weights = weights
         self._out = out
+
+        self.pysm_sky_config = pysm_sky_config
+        self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
+
+    def init_sky(self, pysm_sky_config):
+        import pysm
+        initialized_sky_config = {}
+        for name, model_id in pysm_sky_config.items():
+            initialized_sky_config[name] = \
+                pysm.nominal.models(model_id, self._nside, self._pixels)
+        return pysm.Sky(initialized_sky_config)
 
     def exec(self, data):
         """

@@ -102,7 +102,17 @@ class OpSimPySMTest(MPITestCase):
         hits = DistPixels(comm=self.toastcomm.comm_world, size=npix, nnz=1, dtype=np.int32, submap=submapsize, local=localsm)
 
         # construct the PySM operator.  Pass in information needed by PySM...
-        op = OpSimPySM(distmap=hits)
+
+        pysm_sky_config = {
+            'synchrotron' : "s1",
+            'dust' : "d8",
+            'freefree' : "f1",
+            'cmb' : "c1",
+            'ame' : "a1",
+        }
+        op = OpSimPySM(distmap=hits,
+                       pysm_sky_config=pysm_sky_config,
+        )
         op.exec(self.data)
 
         # Now we have timestreams in the cache.  We could compare the 
