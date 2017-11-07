@@ -210,7 +210,7 @@ class OpSimPySM(Operator):
             If the named cache objects do not exist, then they are created.
     """
     def __init__(self, pixels='pixels',
-                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None):
+                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None, bandpasses=None):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -220,6 +220,7 @@ class OpSimPySM(Operator):
 
         self.pysm_sky_config = pysm_sky_config
         self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
+        self.bandpasses = bandpasses
 
     def init_sky(self, pysm_sky_config):
         import pysm
@@ -240,12 +241,29 @@ class OpSimPySM(Operator):
             data (toast.Data): The distributed data.
         """
 
+        import pysm
+
         if self.sky is None:
-            self.init_sky(self.pysm_sky_config)
+            self.sky = self.init_sky(self.pysm_sky_config)
 
+        pysm_instrument_config = {
+            'beams': None,
+            'nside': self._nside,
+            'use_bandpass': True,
+            'channels': None,
+            'channel_names': ['channel_1'],
+            'add_noise': False,
+            'output_units': 'uK_RJ',
+            'use_smoothing': False,
+            'pixel_indices': self._local_pixels
+        }
 
+        local_map = {}
+        for ch_name, bandpass in self.bandpasses.items():
+            pysm_instrument_config["channels"] = [bandpass]
+            instrument = pysm.Instrument(pysm_instrument_config)
+            local_map[ch_name], _ = instrument.observe(self.sky, write_outputs=False)
 
-
-        return
+        return local_map
 
 

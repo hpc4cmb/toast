@@ -101,18 +101,26 @@ class OpSimPySMTest(MPITestCase):
             'cmb': "c1",
             'ame': "a1",
         }
+        bandpasses = {
+                "1a": (np.linspace(20, 25, 10), np.ones(10)),
+                "1b": (np.linspace(21, 26, 10), np.ones(10)),
+                "2a": (np.linspace(18, 23, 10), np.ones(10)),
+                "2b": (np.linspace(19, 24, 10), np.ones(10)),
+        }
         op = OpSimPySM(local_pixels=local_pixels, nside=self.nside,
-                       pysm_sky_config=pysm_sky_config)
-        op.exec(self.data)
+                       pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
+        local_map = op.exec(self.data)
 
         # Now we have timestreams in the cache.  We could compare the 
         # timestream values or we could make a binned map and look at those
         # values.
 
+        np.testing.assert_almost_equal(local_map["1a"][0, 0, :3],
+            np.array([121.40114346, 79.86737489, 77.23336053]))
 
+        np.testing.assert_almost_equal(local_map["1b"][0, 2, -3:],
+            np.array([1.57564944, -0.22345616, -3.55604102]))
 
-        #self.assertTrue(False)
-        
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
