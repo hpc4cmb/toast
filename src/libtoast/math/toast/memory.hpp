@@ -148,8 +148,8 @@ namespace toast { namespace mem {
         __attribute__((assume_aligned(64)))
         { return m_data; }
 
-        _Tp& operator [](const size_type& i) { return m_data[i]; }
-        const _Tp& operator [](const size_type& i) const { return m_data[i]; }
+        //_Tp& operator [](const size_type& i) { return m_data[i]; }
+        //const _Tp& operator [](const size_type& i) const { return m_data[i]; }
 
         simd_array& operator=(const simd_array& rhs)
         {
