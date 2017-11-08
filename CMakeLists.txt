@@ -63,7 +63,6 @@ add_feature(CMAKE_CXX_FLAGS_${UPPER_BUILD_TYPE} "CXX flags for ${CMAKE_BUILD_TYP
 foreach(_INCLUDE_DIR ${EXTERNAL_INCLUDE_DIRS})
     include_directories(SYSTEM ${_INCLUDE_DIR})
 endforeach()
-include_directories(${PROJECT_SOURCE_DIR})
 
 #-----------------------------------------------------------------------
 # BUILD_CXXSTD

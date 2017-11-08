@@ -1,4 +1,4 @@
-//  
+//
 //  Time Ordered Astrophysics Scalable Tools (TOAST)
 //  
 //  Copyright (c) 2015-2017, The Regents of the University of California
@@ -33,19 +33,8 @@
 
 //----------------------------------------------------------------------------//
 
-#include <unistd.h>
-#include <sys/times.h>
+#include "base_clock.hpp"
 
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <stdexcept>
-#include <vector>
-#include <mutex>
-#include <unordered_map>
-
-//----------------------------------------------------------------------------//
-// essentially an implementation of boost::auto_cpu_timer
 //----------------------------------------------------------------------------//
 
 namespace toast
@@ -55,19 +44,28 @@ namespace util
 namespace details
 {
 
+//----------------------------------------------------------------------------//
+
 class base_timer
 {
 public:
     template <typename _Key, typename _Mapped>
     using uomap = std::unordered_map<_Key, _Mapped>;
 
-    typedef std::string                 string_t;
-    typedef string_t::size_type         size_type;
-    typedef std::recursive_mutex        mutex_t;
-    typedef std::ostream                ostream_t;
-    typedef uomap<ostream_t*, mutex_t>  mutex_map_t;
-    typedef std::lock_guard<mutex_t>    auto_lock_t;
-    typedef tms                         tms_t;
+    typedef std::string                                     string_t;
+    typedef string_t::size_type                             size_type;
+    typedef std::recursive_mutex                            mutex_t;
+    typedef std::ostream                                    ostream_t;
+    typedef uomap<ostream_t*, mutex_t>                      mutex_map_t;
+    typedef std::lock_guard<mutex_t>                        auto_lock_t;
+    typedef tms                                             tms_t;
+    typedef std::micro                                      ratio_t;
+    typedef toast::util::time_units<ratio_t>                time_units_t;
+    typedef toast::util::base_clock<ratio_t>                base_clock_t;
+    typedef base_clock_t::time_point                        time_point_t;
+    typedef std::pair<time_point_t, time_point_t>           time_pair_t;
+    typedef std::vector<time_pair_t>                        time_pair_list_t;
+    typedef std::chrono::duration<base_clock_t, std::micro> duration_t;
 
 public:
     base_timer(uint16_t = 3, const string_t& =
@@ -85,8 +83,7 @@ public:
     inline const char* clock_time() const;
     inline void pause();
     inline void resume();
-    inline void lap();
-    inline size_type laps() const;
+    inline size_type laps() const { return t_main_list.size(); }
 
 public:
     void report(ostream_t&, bool endline = true, bool avg = false) const;
@@ -102,16 +99,14 @@ protected:
     typedef std::vector<clockstr_t>             str_list_t;
     typedef std::vector<clockpos_t>             pos_list_t;
 
-protected:
     struct timing
     {
-        clock_t     m_start_real_time;
-        clock_t     m_end_real_time;
-        tms_t       m_start_times;
-        tms_t       m_end_times;
+        clock_t         m_start_real_time;
+        clock_t         m_end_real_time;
+        tms_t           m_start_times;
+        tms_t           m_end_times;
     };
 
-protected:
     typedef std::vector<timing>                 timing_list_t;
 
 protected:
@@ -121,19 +116,14 @@ protected:
     mutable bool        m_valid_times;
     mutable bool        m_running;
     uint16_t            m_places;
-    size_type           m_laps;
     string_t            m_format_string;
     string_t            m_output_format;
-    // structures
-    timing              m_main;
-    timing              m_wait;
     // lists
     pos_list_t          m_format_positions;
-    double              m_wait_history_stime;
-    double              m_wait_history_utime;
-    timing_list_t       m_wait_history;
-    timing_list_t       m_lap_history;
     ostream_t*          m_os;
+    time_pair_t         t_main;
+    mutable
+    time_pair_list_t    t_main_list;
 
 private:
     // world mutex map, thread-safe ostreams
@@ -156,104 +146,113 @@ std::ostream& operator<<(std::ostream& os, const base_timer& t)
     return os;
 }
 //----------------------------------------------------------------------------//
-inline
+inline                                                          // Wall time
 double base_timer::real_elapsed() const
 {
-    if (!m_valid_times)
+    if (!m_valid_times || m_running)
     {
         throw std::runtime_error("base_timer::real_elapsed() - InvalidCondition"
                                  " base_timer not stopped or times not recorded"
                                  "!");
     }
-    double diff = m_main.m_end_real_time - m_main.m_start_real_time;
-    return diff/sysconf(_SC_CLK_TCK);
+
+    double diff = 0.0;
+    for(unsigned i = 0; i < t_main_list.size(); ++i)
+    {
+        auto _ts = std::get<2>(t_main_list[i].first.time_since_epoch().count().data);
+        auto _te = std::get<2>(t_main_list[i].second.time_since_epoch().count().data);
+        diff += (_te - _ts);
+    }
+
+    return diff / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
-inline
+inline                                                          // System time
 double base_timer::system_elapsed() const
 {
-    if (!m_valid_times)
+    if (!m_valid_times || m_running)
     {
         throw std::runtime_error("base_timer::system_elapsed() - "
                                  "InvalidCondition: base_timer not stopped or "
                                  "times not recorded!");
     }
-    double diff = m_main.m_end_times.tms_stime - m_main.m_start_times.tms_stime;
-    diff -= m_wait_history_stime;
-    return diff/sysconf(_SC_CLK_TCK);
+
+    double diff = 0.0;
+    for(unsigned i = 0; i < t_main_list.size(); ++i)
+    {
+        auto _ts = std::get<1>(t_main_list[i].first.time_since_epoch().count().data);
+        auto _te = std::get<1>(t_main_list[i].second.time_since_epoch().count().data);
+        diff += (_te - _ts);
+    }
+
+    return diff / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
-inline
+inline                                                          // CPU time
 double base_timer::user_elapsed() const
 {
-    if (!m_valid_times)
+    if (!m_valid_times || m_running)
     {
         throw std::runtime_error("base_timer::user_elapsed() - InvalidCondition"
                                  ": base_timer not stopped or times not "
                                  "recorded!");
     }
-    double diff = m_main.m_end_times.tms_utime - m_main.m_start_times.tms_utime;
-    diff -= m_wait_history_utime;
-    return diff/sysconf(_SC_CLK_TCK);
+
+    double diff = 0.0;
+    for(unsigned i = 0; i < t_main_list.size(); ++i)
+    {
+        auto _ts = std::get<0>(t_main_list[i].first.time_since_epoch().count().data);
+        auto _te = std::get<0>(t_main_list[i].second.time_since_epoch().count().data);
+        diff += (_te - _ts);
+    }
+
+    return diff / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
 inline
 void base_timer::start()
 {
-    if(m_running)
-        return;
-    m_valid_times = false;
-    m_running = true;
-    m_laps = 0;
-    m_main.m_start_real_time = times(&m_main.m_start_times);
-    m_wait.m_start_real_time = times(&m_wait.m_start_times);
-}
-//----------------------------------------------------------------------------//
-inline
-void base_timer::stop()
-{
     if(!m_running)
-        return;
-    m_main.m_end_real_time = times(&m_main.m_end_times);
-    m_valid_times = true;
-    m_running = false;
-}
-//----------------------------------------------------------------------------//
-inline
-void base_timer::pause()
-{
-    m_valid_times = false;
-    m_wait.m_start_real_time = times(&m_wait.m_start_times);
+    {
+        m_valid_times = false;
+        m_running = true;
+        t_main.first = base_clock_t::now();
+    }
 }
 //----------------------------------------------------------------------------//
 inline
 void base_timer::resume()
 {
     if(!m_running)
-    {
         start();
-        return;
+    else
+    {
+        m_valid_times = false;
+        t_main.first = base_clock_t::now();
     }
-    m_wait.m_end_real_time = times(&m_wait.m_end_times);
-    m_wait_history_stime +=
-            m_wait.m_end_times.tms_stime - m_wait.m_start_times.tms_stime;
-    m_wait_history_utime +=
-            m_wait.m_end_times.tms_utime - m_wait.m_start_times.tms_utime;
-    m_wait.m_end_real_time = m_wait.m_start_real_time;
-    m_valid_times = true;
 }
 //----------------------------------------------------------------------------//
 inline
-void base_timer::lap()
+void base_timer::stop()
 {
-    ++m_laps;
-    m_valid_times = true;
+    if(m_running)
+    {
+        t_main.second = base_clock_t::now();
+        t_main_list.push_back(t_main);
+        m_valid_times = true;
+        m_running = false;
+    }
 }
 //----------------------------------------------------------------------------//
 inline
-base_timer::size_type base_timer::laps() const
+void base_timer::pause()
 {
-    return m_laps;
+    if(m_running)
+    {
+        t_main.second = base_clock_t::now();
+        t_main_list.push_back(t_main);
+        m_valid_times = true;
+    }
 }
 //----------------------------------------------------------------------------//
 inline

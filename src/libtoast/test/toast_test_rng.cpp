@@ -67,23 +67,6 @@ void deconstruct(uint64_t** data)
 
 //============================================================================//
 
-// TEST_F( rngTest, gaussian ) {
-//     double result[size];
-
-//     rng::dist_normal ( size, key[0], key[1], counter[0], counter[1], result );
-
-//     for ( size_t i = 0; i < size; ++i ) {
-//         ASSERT_NEAR( array_gaussian[i], result[i], 1.0e-4 );
-//     }
-
-//     rng::dist_normal ( size, key00[0], key00[1], counter00[0], counter00[1], result );
-
-//     for ( size_t i = 0; i < size; ++i ) {
-//         ASSERT_NEAR( array00_gaussian[i], result[i], 1.0e-4 );
-//     }
-// }
-
-
 TEST_F( rngTest, reprod ) {
     double result1[size];
     double result2[size];
@@ -95,6 +78,8 @@ TEST_F( rngTest, reprod ) {
         ASSERT_NEAR( result1[i+5], result2[i], 1.0e-4 );
     }
 }
+
+//============================================================================//
 
 TEST_F( rngTest, reprod_mt ) {
     const size_t nthread = num_threads;
@@ -119,6 +104,7 @@ TEST_F( rngTest, reprod_mt ) {
     }
 }
 
+//============================================================================//
 
 TEST_F( rngTest, uniform11 ) {
     double result[size];
@@ -136,6 +122,7 @@ TEST_F( rngTest, uniform11 ) {
     }
 }
 
+//============================================================================//
 
 TEST_F( rngTest, uniform11_mt ) {
     const size_t nthread = num_threads;
@@ -166,6 +153,7 @@ TEST_F( rngTest, uniform11_mt ) {
     }
 }
 
+//============================================================================//
 
 TEST_F( rngTest, uniform01 ) {
     double result[size];
@@ -182,6 +170,8 @@ TEST_F( rngTest, uniform01 ) {
         ASSERT_NEAR( array00_01[i], result[i], 1.0e-4 );
     }
 }
+
+//============================================================================//
 
 TEST_F( rngTest, uniform10_mt ) {
     const size_t nthread = num_threads;
@@ -212,6 +202,7 @@ TEST_F( rngTest, uniform10_mt ) {
     }
 }
 
+//============================================================================//
 
 TEST_F( rngTest, uint64 ) {
     uint64_t result[size];
@@ -229,8 +220,10 @@ TEST_F( rngTest, uint64 ) {
     }
 }
 
+//============================================================================//
+
 TEST_F( rngTest, uint64_mt ) {
-    const size_t nthread = num_threads;
+    const size_t nthread = 1;
     uint64_t result[nthread*size];
 
     {
@@ -240,8 +233,9 @@ TEST_F( rngTest, uint64_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
+    {
+        size_t offset = j*nthread*size;
+        for ( size_t i = 0; i < size; ++i )
             EXPECT_EQ( array_uint64[i + offset], result[i + offset] );
     }
 
@@ -252,8 +246,11 @@ TEST_F( rngTest, uint64_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
+    {
+        size_t offset = j*nthread*size;
+        for ( size_t i = 0; i < size; ++i )
             EXPECT_EQ( array00_uint64[i + offset], result[i + offset] );
     }
 }
+
+//============================================================================//

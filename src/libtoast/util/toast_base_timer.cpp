@@ -49,14 +49,9 @@ base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
 : m_valid_times(false),
   m_running(false),
   m_places(prec),
-  m_laps(0),
   m_format_string(fmt),
   m_output_format(""),
-  m_main(timing()),
-  m_wait(timing()),
   m_format_positions(pos_list_t()),
-  m_wait_history_stime(0.0),
-  m_wait_history_utime(0.0),
   m_os(os)
 {
     this->start();
