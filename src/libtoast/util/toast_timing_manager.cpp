@@ -72,7 +72,9 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key)
     if(m_timer_map.find(key) != m_timer_map.end())
         return m_timer_map.find(key)->second;
 
-    m_timer_map[key] = toast_timer_t(3, string_t("> ") + key + string_t(" : "));
+    m_timer_map[key] = toast_timer_t(3,
+                                     string_t("> ") + key + string_t(" : "),
+                                     string_t(""));
     timer_pair_t _pair(key, m_timer_map[key]);
     m_timer_list.push_back(_pair);
 

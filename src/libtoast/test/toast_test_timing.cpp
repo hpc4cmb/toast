@@ -109,10 +109,9 @@ void report(std::ostream& os_tot = std::cout,
     timing_manager_t* tman = timing_manager_t::instance();
     for(const auto& itr : *tman)
     {
-        itr.second.pause();
+        itr.second.stop();
         itr.second.report_average(os_avg);
         itr.second.report(os_tot);
-        itr.second.resume();
     }
 }
 //----------------------------------------------------------------------------//
@@ -125,7 +124,10 @@ TEST_F( timingTest, manager )
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
 
-    for(auto itr : { 35, 39, 43, 39 })
+    toast_timer_t& t = tman->timer("test");
+    t.resume();
+
+    for(auto itr : { 39, 35, 43, 39 })
     {
         time_fibonacci_v(itr-2);
         time_fibonacci_l(itr-1);
@@ -144,7 +146,7 @@ TEST_F( timingTest, manager )
     out_tot.close();
     out_avg.close();
 
-    EXPECT_EQ(timing_manager::instance()->size(), 12);
+    EXPECT_EQ(timing_manager::instance()->size(), 13);
 
 }
 

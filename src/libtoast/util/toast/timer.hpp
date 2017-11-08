@@ -31,6 +31,8 @@
 #ifndef timer_hpp_
 #define timer_hpp_
 
+//----------------------------------------------------------------------------//
+
 #include "base_timer.hpp"
 
 namespace toast
