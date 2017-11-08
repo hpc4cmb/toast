@@ -156,11 +156,11 @@ namespace toast { namespace mem {
         ~simd_array() { toast::mem::aligned_free(m_data); }
 
         // conversion function to const _Tp*
-        operator const _Tptr() const
-        { return m_data; }
+        //operator const _Tptr() const attrib_assume_aligned
+        //{ return m_data; }
 
         // conversion function to _Tp*
-        operator _Tptr()
+        operator _Tptr() attrib_assume_aligned
         { return m_data; }
 
         simd_array& operator=(const simd_array& rhs)
