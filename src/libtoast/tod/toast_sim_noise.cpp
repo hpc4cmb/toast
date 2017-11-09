@@ -56,25 +56,28 @@ void toast::sim_noise::sim_noise_timestream(
     */
 
     uint64_t fftlen = 2;
-    while (fftlen <= (oversample * samples)) {
-        fftlen *= 2;
-    }
+    while (fftlen <= (oversample * samples)) fftlen *= 2;
     uint64_t npsd = fftlen/2 + 1;
     double norm = rate * float(npsd - 1);
 
     // Python implementation is missing "-1"
     double increment = rate / (fftlen - 1);
 
-    for (uint64_t i=0; i<psdlen; ++i) {
-        if (psd[i] < 0) {
-            throw std::runtime_error("input PSD values should be >= zero");
-        }
-    }
-
     if (freq[0] > increment) {
         throw std::runtime_error(
             "input PSD does not go to low enough frequency to "
             "allow for interpolation");
+    }
+
+    double psdmin = 1e30;
+    for (uint64_t i=0; i<psdlen; ++i) {
+        if (psd[i] != 0) {
+            if (psd[i] < psdmin) psdmin = psd[i];
+        }
+    }
+
+    if (psdmin < 0) {
+        throw std::runtime_error("input PSD values should be >= zero");
     }
 
     double nyquist = rate / 2;
@@ -92,13 +95,6 @@ void toast::sim_noise::sim_noise_timestream(
     // values, we shift the PSD by a fixed amount in frequency and
     // amplitude.
 
-    double psdmin = 1e30;
-    for (uint64_t i=0; i<psdlen; ++i) {
-        if (psd[i] != 0) {
-            if (psd[i] < psdmin) psdmin = psd[i];
-        }
-    }
-
     double psdshift = 0.01 * psdmin;
     double freqshift = increment;
 
@@ -109,61 +105,79 @@ void toast::sim_noise::sim_noise_timestream(
         logpsd[i] = log10(psd[i] + psdshift);
     }
 
-    uint64_t ibin = 0;
     std::vector<double> interp_psd(npsd);
     for (uint64_t i=0; i<npsd; ++i) {
-        double loginterp_freq = log10(i*increment + freqshift);
-        while (ibin < psdlen-1 && logfreq[ibin+1] < loginterp_freq) ++ibin;
-        double r = (loginterp_freq-logfreq[ibin])
-            / (logfreq[ibin+1]-logfreq[ibin]);
-        double loginterp_psd = (1-r)*logpsd[ibin] + r*logfreq[ibin+1];
-        interp_psd[i] = pow(10, loginterp_psd) - psdshift;
-        //std::cerr<<"interp_psd[" << i << "] = " << interp_psd[i] << std::endl; // DEBUG
+        interp_psd[i] = log10(i*increment + freqshift);
     }
 
-    //scale = np.sqrt(interp_psd * norm)
+    std::vector<double> stepinv(psdlen);
+    for (uint64_t ibin=0; ibin<psdlen-1; ++ibin) {
+        stepinv[ibin] = 1 / (logfreq[ibin+1]-logfreq[ibin]);
+    }
+
+    uint64_t ibin = 0;
+    for (uint64_t i=0; i<npsd; ++i) {
+        double loginterp_freq = interp_psd[i];
+
+        while (ibin < psdlen-2 && logfreq[ibin+1] < loginterp_freq) ++ibin;
+
+        double r = (loginterp_freq-logfreq[ibin]) * stepinv[ibin];
+        interp_psd[i] = (1-r)*logpsd[ibin] + r*logpsd[ibin+1];
+    }
+
+    logfreq.clear();
+    logpsd.clear();
+    stepinv.clear();
+
+    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] = pow(10, interp_psd[i]);
+
+    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] -= psdshift;
+
+    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] *= norm;
+
+    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] = sqrt(interp_psd[i]);
 
     // Zero out DC value
 
     interp_psd[0] = 0;
 
-    // gaussian Re/Im randoms, packed into a complex valued array
+    // gaussian Re/Im randoms, packed into a half-complex array
 
     uint64_t key1 = realization*4294967296 + telescope*65536 + component;
     uint64_t key2 = obsindx*4294967296 + detindx;
     uint64_t counter1 = 0;
     uint64_t counter2 = firstsamp * oversample;
-    std::vector<double> rngdata(2*npsd);
+    std::vector<double> rngdata(fftlen);
 
-    rng::dist_normal(2*npsd, key1, key2, counter1, counter2, rngdata.data());
+    rng::dist_normal(fftlen, key1, key2, counter1, counter2, rngdata.data());
 
     fft::r1d_p plan(fft::r1d::create(fftlen, 1, fft::plan_type::fast,
                                      fft::direction::backward, 1));
 
-    for (uint64_t i=0; i<npsd; ++i) plan->fdata()[0][i] = rngdata[i];
-    for (uint64_t i=0; i<npsd; ++i) plan->fdata()[0][fftlen-1-i] = rngdata[npsd+i];
+    double *pdata = plan->fdata()[0];
 
-    plan->fdata()[0][0] = 0;
-    for (uint64_t i=1; i<=fftlen/2; ++i) {
-        double psdval = interp_psd[i] * norm;
-        plan->fdata()[0][i] *= psdval;
-        plan->fdata()[0][fftlen-i] *= psdval;
+    memcpy(pdata, rngdata.data(), sizeof(double)*fftlen);
+
+    pdata[0] *= interp_psd[0];
+    for (uint64_t i=1; i<fftlen/2; ++i) {
+        double psdval = interp_psd[i];
+        pdata[i] *= psdval;
+        pdata[fftlen-i] *= psdval;
     }
+    pdata[fftlen/2] *= interp_psd[npsd-1];
 
     plan->exec();
 
     uint64_t offset = (fftlen - samples) / 2;
-
-    for (long i=0; i<samples; ++i) {
-        noise[i] = plan->tdata()[0][offset+i];
-    }
+    pdata = plan->tdata()[0] + offset;
+    memcpy(noise, pdata, sizeof(double)*samples);
 
     // subtract the DC level
 
     double DC = 0;
-    for (long i=0; i<samples; ++i) DC += noise[i];
+    for (uint64_t i=0; i<samples; ++i) DC += noise[i];
     DC /= samples;
-    for (long i=0; i<samples; ++i) noise[i] -= DC;
+    for (uint64_t i=0; i<samples; ++i) noise[i] -= DC;
 
     return;
 
