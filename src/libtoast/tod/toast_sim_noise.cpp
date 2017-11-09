@@ -55,6 +55,8 @@ void toast::sim_noise::sim_noise_timestream(
             the interpolated PSD values.
     */
 
+    //double t0 = MPI_Wtime(); // DEBUG
+
     uint64_t fftlen = 2;
     while (fftlen <= (oversample * samples)) fftlen *= 2;
     uint64_t npsd = fftlen/2 + 1;
@@ -102,7 +104,7 @@ void toast::sim_noise::sim_noise_timestream(
     std::vector<double> logpsd(psdlen);
     for (uint64_t i=0; i<psdlen; ++i) {
         logfreq[i] = log10(freq[i] + freqshift);
-        logpsd[i] = log10(psd[i] + psdshift);
+        logpsd[i] = log10(sqrt(psd[i]*norm) + psdshift);
     }
 
     std::vector<double> interp_psd(npsd);
@@ -115,6 +117,10 @@ void toast::sim_noise::sim_noise_timestream(
         stepinv[ibin] = 1 / (logfreq[ibin+1]-logfreq[ibin]);
     }
 
+    //double t1 = MPI_Wtime(); // DEBUG
+    //std::cerr << std::endl
+    //          << "noise sim init took     " << t1 - t0 << " s" << std::endl; // DEBUG
+
     uint64_t ibin = 0;
     for (uint64_t i=0; i<npsd; ++i) {
         double loginterp_freq = interp_psd[i];
@@ -122,7 +128,7 @@ void toast::sim_noise::sim_noise_timestream(
         while (ibin < psdlen-2 && logfreq[ibin+1] < loginterp_freq) ++ibin;
 
         double r = (loginterp_freq-logfreq[ibin]) * stepinv[ibin];
-        interp_psd[i] = (1-r)*logpsd[ibin] + r*logpsd[ibin+1];
+        interp_psd[i] = logpsd[ibin] + r*(logpsd[ibin+1]-logpsd[ibin]);
     }
 
     logfreq.clear();
@@ -133,9 +139,8 @@ void toast::sim_noise::sim_noise_timestream(
 
     for (uint64_t i=0; i<npsd; ++i) interp_psd[i] -= psdshift;
 
-    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] *= norm;
-
-    for (uint64_t i=0; i<npsd; ++i) interp_psd[i] = sqrt(interp_psd[i]);
+    //double t2 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim interp took   " << t2 - t1 << " s" << std::endl; // DEBUG
 
     // Zero out DC value
 
@@ -151,8 +156,16 @@ void toast::sim_noise::sim_noise_timestream(
 
     rng::dist_normal(fftlen, key1, key2, counter1, counter2, rngdata.data());
 
-    fft::r1d_p plan(fft::r1d::create(fftlen, 1, fft::plan_type::fast,
-                                     fft::direction::backward, 1));
+    //double t3 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim rng took      " << t3 - t2 << " s" << std::endl; // DEBUG
+
+    //fft::r1d_p plan(fft::r1d::create(fftlen, 1, fft::plan_type::fast,
+    //                                 fft::direction::backward, 1));
+    fft::r1d_plan_store store = fft::r1d_plan_store::get();
+    fft::r1d_p plan = store.backward(fftlen, 1);
+
+    //double t3p1 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim fft plan took " << t3p1 - t3 << " s" << std::endl; // DEBUG
 
     double *pdata = plan->fdata()[0];
 
@@ -166,7 +179,13 @@ void toast::sim_noise::sim_noise_timestream(
     }
     pdata[fftlen/2] *= interp_psd[npsd-1];
 
+    //double t4 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim FFT prep took " << t4 - t3p1 << " s" << std::endl; // DEBUG
+
     plan->exec();
+
+    //double t5 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim FFT took      " << t5 - t4 << " s" << std::endl; // DEBUG
 
     uint64_t offset = (fftlen - samples) / 2;
     pdata = plan->tdata()[0] + offset;
@@ -178,6 +197,10 @@ void toast::sim_noise::sim_noise_timestream(
     for (uint64_t i=0; i<samples; ++i) DC += noise[i];
     DC /= samples;
     for (uint64_t i=0; i<samples; ++i) noise[i] -= DC;
+
+    //double t6 = MPI_Wtime(); // DEBUG
+    //std::cerr << "noise sim finalize took " << t6 - t5 << " s" << std::endl; // DEBUG
+    //exit(-1); // DEBUG
 
     return;
 
