@@ -723,6 +723,20 @@ void ctoast_filter_polyfilter (
     return;
 }
 
+void ctoast_sim_noise_sim_noise_timestream (
+    const uint64_t realization, const uint64_t telescope,
+    const uint64_t component, const uint64_t obsindx, const uint64_t detindx,
+    const double rate, const uint64_t firstsamp, const uint64_t samples,
+    const uint64_t oversample, const double *freq, const double *psd,
+    const uint64_t psdlen, double *noise ) {
+
+    toast::sim_noise::sim_noise_timestream(
+        realization, telescope, component, obsindx, detindx, rate, firstsamp,
+        samples, oversample, freq, psd, psdlen, noise);
+}
+
+
+
 void ctoast_sim_map_scan_map32 (
     long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
     float *map, double *tod, size_t nsamp ) {

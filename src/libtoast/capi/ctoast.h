@@ -269,6 +269,13 @@ void ctoast_sim_map_scan_map64 (
     long *submap, long subnpix, double *weights, size_t nmap, long *subpix,
     double *map, double *tod, size_t nsamp );
 
+void ctoast_sim_noise_sim_noise_timestream (
+    const uint64_t realization, const uint64_t telescope,
+    const uint64_t component, const uint64_t obsindx, const uint64_t detindx,
+    const double rate, const uint64_t firstsamp, const uint64_t samples,
+    const uint64_t oversample, const double *freq, const double *psd,
+    const uint64_t psdlen, double *noise );
+
 
 //--------------------------------------
 // FOD sub-library
