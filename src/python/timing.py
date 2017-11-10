@@ -54,3 +54,6 @@ class timing_manager(object):
 
     def at(self, i):
         return timer(None, _obj=ctoast.timer_at(i))
+
+    def clear(self):
+        ctoast.timing_manager_clear()
