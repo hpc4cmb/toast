@@ -102,19 +102,6 @@ void time_fibonacci_lv(int32_t n)
     tman->time_function(ss.str(), _fib);
 }
 //----------------------------------------------------------------------------//
-// test iteration over timing manager
-void report(std::ostream& os_tot = std::cout,
-            std::ostream& os_avg = std::cout)
-{
-    timing_manager_t* tman = timing_manager_t::instance();
-    for(const auto& itr : *tman)
-    {
-        itr.second.stop();
-        itr.second.report_average(os_avg);
-        itr.second.report(os_tot);
-    }
-}
-//----------------------------------------------------------------------------//
 
 
 //============================================================================//
@@ -124,8 +111,8 @@ TEST_F( timingTest, manager )
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
 
-    toast_timer_t& t = tman->timer("test");
-    t.resume();
+    toast_timer_t& t = tman->timer("tmanager test");
+    t.start();
 
     for(auto itr : { 39, 35, 43, 39 })
     {
@@ -135,18 +122,16 @@ TEST_F( timingTest, manager )
         time_fibonacci_lv(itr+1);
     }
 
-    std::ofstream out_tot("timing_report_tot.out");
-    std::ofstream out_avg("timing_report_avg.out");
-
-    if(out_tot && out_avg)
-        report(out_tot, out_avg);
-    else
-        report(); // report to std::cout
-
-    out_tot.close();
-    out_avg.close();
+    tman->set_output_streams("timing_report_tot.out", "timing_report_avg.out");
+    tman->report();
 
     EXPECT_EQ(timing_manager::instance()->size(), 13);
+
+    for(const auto& itr : *tman)
+    {
+        ASSERT_FALSE(itr.second.real_elapsed() < 0.0);
+        ASSERT_FALSE(itr.second.user_elapsed() < 0.0);
+    }
 
 }
 

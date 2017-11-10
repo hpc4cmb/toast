@@ -39,7 +39,7 @@ from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
 from . import binned as testbinned
 from . import tidas as testtidas
-
+from . import timing as testtiming
 
 def test(name=None):
     # We run tests with COMM_WORLD
@@ -90,6 +90,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
+        suite.addTest( loader.loadTestsFromModule(testtiming) )
     elif name != "ctoast":
         modname = "toast.tests.{}".format(name)
         suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )

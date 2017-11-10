@@ -48,6 +48,8 @@ toast::util::timing_manager* toast::util::timing_manager::instance()
 //============================================================================//
 
 toast::util::timing_manager::timing_manager()
+: m_report_tot(&std::cout),
+  m_report_avg(&std::cout)
 {
 	if(!fgInstance) { fgInstance = this; }
     else
@@ -62,6 +64,17 @@ toast::util::timing_manager::timing_manager()
 
 toast::util::timing_manager::~timing_manager()
 {
+    auto close_ostream = [&] (ostream_t*& m_os)
+    {
+        ofstream_t* m_fos = get_ofstream(m_os);
+        if(!m_fos)
+            return;
+        m_fos->close();
+    };
+
+    close_ostream(m_report_tot);
+    close_ostream(m_report_avg);
+
     fgInstance = nullptr;
 }
 
