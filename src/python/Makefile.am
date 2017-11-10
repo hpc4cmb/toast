@@ -45,7 +45,8 @@ fft.py \
 qarray.py \
 op.py \
 healpix.py \
-vis.py
+vis.py \
+timing.py
 
 
 toast_LTLIBRARIES = cbuffer.la
