@@ -5,10 +5,14 @@ curl -SL https://support.hdfgroup.org/ftp/HDF5/current18/src/hdf5-1.8.19.tar.bz2
        else echo "-O3"; fi) \
     CXX="@CXX@" CXXFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@CXXFLAGS@"; \
        else echo "-O3"; fi) \
+    FC="@FC@" CXXFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@FCFLAGS@"; \
+       else echo "-O3"; fi) \
     ./configure \
     --disable-silent-rules \
     --disable-parallel \
     --enable-cxx \
+    --enable-fortran \
+    --enable-fortran2003 \
     --prefix="@AUX_PREFIX@" \
     && make -j 4 && make install \
     && cd .. \

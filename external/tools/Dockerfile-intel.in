@@ -37,7 +37,13 @@ ENV PYTHONSTARTUP ""
 ENV PYTHONNOUSERSITE "1"
 ENV PYTHONUSERBASE "/tmp"
 
+# Install conda root environment
+
+ENV ACCEPT_INTEL_PYTHON_EULA yes
+
 @conda_root@
+
+@conda_intel@
 
 # Install conda packages.
 

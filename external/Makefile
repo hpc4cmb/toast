@@ -42,8 +42,13 @@ TOOLS := $(wildcard ./tools/*)
 # or an install script?
 
 DOCKERCHECK := $(findstring docker,$(CONFIG))
+INTELCHECK := $(findstring intel,$(CONFIG))
 ifeq "$(DOCKERCHECK)" "docker"
+ifeq "$(INTELCHECK)" "intel"
+  SCRIPT := Dockerfile-intel_$(CONFIG)
+else
   SCRIPT := Dockerfile_$(CONFIG)
+endif
 else
   SCRIPT := install_$(CONFIG).sh
   ifndef PREFIX
@@ -80,6 +85,9 @@ script : $(CONFIG_FILE) $(TOOLS) $(SCRIPT)
 Dockerfile_$(CONFIG) : $(CONFIG_FILE) $(TOOLS) Dockerfile.template
 	@./tools/apply_conf.sh Dockerfile.template "Dockerfile_$(CONFIG)" "$(CONFIG_FILE)" "$(PREFIX)" "$(VERSION)" "$(MODULEDIR)" yes
 
+Dockerfile-intel_$(CONFIG) : $(CONFIG_FILE) $(TOOLS) Dockerfile-intel.template
+	@./tools/apply_conf.sh Dockerfile-intel.template "Dockerfile-intel_$(CONFIG)" "$(CONFIG_FILE)" "$(PREFIX)" "$(VERSION)" "$(MODULEDIR)" yes
+
 
 install_$(CONFIG).sh : $(CONFIG_FILE) $(TOOLS) install.template
 	@./tools/apply_conf.sh install.template "install_$(CONFIG).sh" "$(CONFIG_FILE)" "$(PREFIX)" "$(VERSION)" "$(MODULEDIR)" no \
@@ -92,11 +100,14 @@ install_$(CONFIG).sh : $(CONFIG_FILE) $(TOOLS) install.template
 Dockerfile.template : tools/Dockerfile.in $(rules_full) $(TOOLS)
 	@./tools/gen_template.sh tools/Dockerfile.in Dockerfile.template "$(rules)" RUN
 
+Dockerfile-intel.template : tools/Dockerfile-intel.in $(rules_full) $(TOOLS)
+	@./tools/gen_template.sh tools/Dockerfile-intel.in Dockerfile-intel.template "$(rules)" RUN
+
 
 install.template : tools/install.in $(rules_full) $(TOOLS)
 	@./tools/gen_template.sh tools/install.in install.template "$(rules)"
 
 
 clean :
-	@rm -f Dockerfile_* Dockerfile.template install_* install.template
+	@rm -f Dockerfile* install*
 

@@ -1,6 +1,6 @@
-curl -SL http://www.fftw.org/fftw-3.3.5.tar.gz \
+curl -SL http://www.fftw.org/fftw-3.3.7.tar.gz \
     | tar xzf - \
-    && cd fftw-3.3.5 \
+    && cd fftw-3.3.7 \
     && CC="@CC@" CFLAGS="@CFLAGS@" ./configure --enable-threads @CROSS@ --prefix="@AUX_PREFIX@" \
     && make -j 4 && make install \
     && cd .. \

@@ -1,0 +1,43 @@
+
+INTEL_COMP = yes
+CC = icc
+CXX = icpc
+FC = ifort
+
+MPICC = mpicc
+MPICXX = mpicxx
+MPIFC = mpifort
+MPI_CPPFLAGS = /usr/include
+MPI_LDFLAGS = /usr/lib
+MPI_CXXLIB = mpichcxx
+MPI_LIB = mpich
+MPI_EXTRA_COMP =
+MPI_EXTRA_LINK =
+
+# Compile flags
+
+CFLAGS = -O3 -g -fPIC -xmic-avx512 -pthread
+CXXFLAGS = -O3 -g -fPIC -xmic-avx512 -pthread
+FCFLAGS = -O3 -g -fPIC -xmic-avx512 -fexceptions -pthread
+
+OPENMP_CFLAGS = -qopenmp
+OPENMP_CXXFLAGS = -qopenmp
+LDFLAGS = -lpthread -liomp5
+
+# Are we doing a cross-compile?
+
+CROSS = --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu
+
+INTEL_CONDA = yes
+MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+PYVERSION = 3.6
+
+# For BLAS/LAPACK, use MKL
+
+BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -liomp5 -lpthread -lmemkind -limf -ldl
+LAPACK = 
+
+# Boost toolchain name
+
+BOOSTCHAIN = intel-linux
+

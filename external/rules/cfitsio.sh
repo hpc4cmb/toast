@@ -1,4 +1,4 @@
-curl -SL http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio3410.tar.gz \
+curl -SL http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio3420.tar.gz \
     | tar xzf - \
     && cd cfitsio \
     && CC="@CC@" CFLAGS="@CFLAGS@" ./configure @CROSS@ \
