@@ -7,6 +7,13 @@ a BSD-style license that can be found in the LICENSE file.
 #ifndef TOAST_MEMORY_HPP
 #define TOAST_MEMORY_HPP
 
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
+#   define attrib_aligned __attribute__((aligned (64)))
+#   define attrib_assume_aligned __attribute__((assume_aligned(64)))
+#else
+#   define attrib_aligned
+#   define attrib_assume_aligned
+#endif
 
 namespace toast { namespace mem {
 
@@ -133,23 +140,17 @@ namespace toast { namespace mem {
                 m_data[i] = _init;
         }
 
-        ~simd_array()
-        {
-            toast::mem::aligned_free(m_data);
-        }
+        ~simd_array() { toast::mem::aligned_free(m_data); }
 
         // conversion function to const _Tp*
         operator const _Tp*() const
-        __attribute__((assume_aligned(64)))
+        attrib_assume_aligned
         { return m_data; }
 
         // conversion function to _Tp*
         operator _Tp*()
-        __attribute__((assume_aligned(64)))
+        attrib_assume_aligned
         { return m_data; }
-
-        _Tp& operator [](const size_type& i) { return m_data[i]; }
-        const _Tp& operator [](const size_type& i) const { return m_data[i]; }
 
         simd_array& operator=(const simd_array& rhs)
         {
@@ -165,9 +166,9 @@ namespace toast { namespace mem {
         }
 
     private:
-        _Tp* m_data __attribute__((bnd_variable_size));
+        _Tp* m_data;
 
-    } __attribute__((aligned (64)));
+    } attrib_aligned;
 
     //========================================================================//
 

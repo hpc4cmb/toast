@@ -34,6 +34,7 @@
 //----------------------------------------------------------------------------//
 
 #include "base_clock.hpp"
+#include <fstream>
 
 //----------------------------------------------------------------------------//
 
@@ -56,6 +57,7 @@ public:
     typedef string_t::size_type                             size_type;
     typedef std::recursive_mutex                            mutex_t;
     typedef std::ostream                                    ostream_t;
+    typedef std::ofstream                                   ofstream_t;
     typedef uomap<ostream_t*, mutex_t>                      mutex_map_t;
     typedef std::lock_guard<mutex_t>                        auto_lock_t;
     typedef tms                                             tms_t;
@@ -65,7 +67,7 @@ public:
     typedef base_clock_t::time_point                        time_point_t;
     typedef std::pair<time_point_t, time_point_t>           time_pair_t;
     typedef std::vector<time_pair_t>                        time_pair_list_t;
-    typedef std::chrono::duration<base_clock_t, std::micro> duration_t;
+    typedef std::chrono::duration<base_clock_t, ratio_t>    duration_t;
 
 public:
     base_timer(uint16_t = 3, const string_t& =
@@ -99,31 +101,24 @@ protected:
     typedef std::vector<clockstr_t>             str_list_t;
     typedef std::vector<clockpos_t>             pos_list_t;
 
-    struct timing
-    {
-        clock_t         m_start_real_time;
-        clock_t         m_end_real_time;
-        tms_t           m_start_times;
-        tms_t           m_end_times;
-    };
-
-    typedef std::vector<timing>                 timing_list_t;
-
 protected:
     void parse_format();
 
 protected:
-    mutable bool        m_valid_times;
-    mutable bool        m_running;
-    uint16_t            m_places;
-    string_t            m_format_string;
-    string_t            m_output_format;
+    // PODs
+    mutable bool                m_valid_times;
+    mutable bool                m_running;
+    uint16_t                    m_precision;
+    // structures
+    time_pair_t                 t_main;
+    // pointers
+    ostream_t*                  m_os;
     // lists
-    pos_list_t          m_format_positions;
-    ostream_t*          m_os;
-    time_pair_t         t_main;
-    mutable
-    time_pair_list_t    t_main_list;
+    pos_list_t                  m_format_positions;
+    mutable time_pair_list_t    t_main_list;
+    // strings
+    string_t                    m_format_string;
+    string_t                    m_output_format;
 
 private:
     // world mutex map, thread-safe ostreams
