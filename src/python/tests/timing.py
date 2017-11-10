@@ -28,7 +28,6 @@ class TimingTest(MPITestCase):
         def time_fibonacci(n):
             key = ('fibonacci(%i)' % n)
             timer = timing.timer(key)
-            print (type(timer))
             timer.start()
             val = fibonacci(n)
 
