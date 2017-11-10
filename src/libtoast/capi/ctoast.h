@@ -25,6 +25,29 @@ void ctoast_init ( int argc, char *argv[] );
 void ctoast_finalize ( );
 
 //--------------------------------------
+// Util sub-library
+//--------------------------------------
+struct ctoast_timer_;
+typedef struct ctoast_timer_ ctoast_timer;
+
+struct ctoast_timing_manager_;
+typedef struct ctoast_timing_manger_ ctoast_timing_manager;
+
+ctoast_timer* ctoast_get_timer(char* ckey);
+void ctoast_timer_start(ctoast_timer*);
+void ctoast_timer_stop(ctoast_timer*);
+
+ctoast_timing_manager* ctoast_get_timing_manager();
+void ctoast_set_timing_output_files(char* tot_fname, char* avg_fname);
+void ctoast_report_timing();
+
+size_t ctoast_timing_manager_size();
+double ctoast_timer_real_elapsed(ctoast_timer*);
+double ctoast_timer_system_elapsed(ctoast_timer*);
+double ctoast_timer_user_elapsed(ctoast_timer*);
+ctoast_timer* ctoast_timer_at(size_t);
+
+//--------------------------------------
 // Math sub-library
 //--------------------------------------
 

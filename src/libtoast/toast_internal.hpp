@@ -15,6 +15,7 @@ namespace toast {
 
 }
 
+#include <toast_util_internal.hpp>
 #include <toast_math_internal.hpp>
 #include <toast_atm_internal.hpp>
 #include <toast_tod_internal.hpp>

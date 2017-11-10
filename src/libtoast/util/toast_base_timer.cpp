@@ -48,11 +48,11 @@ base_timer::mutex_map_t base_timer::w_mutex_map;
 base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
 : m_valid_times(false),
   m_running(false),
-  m_places(prec),
-  m_format_string(fmt),
-  m_output_format(""),
+  m_precision(prec),
+  m_os(os),
   m_format_positions(pos_list_t()),
-  m_os(os)
+  m_format_string(fmt),
+  m_output_format("")
 {
     this->start();
     this->parse_format();
@@ -107,6 +107,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     if(!m_valid_times)
         const_cast<base_timer*>(this)->stop();
 
+    // for average reporting
     double div = 1.0;
     if(avg && this->laps() > 0)
         div = 1.0 / static_cast<double>(this->laps());
@@ -115,7 +116,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     // ostream
     std::stringstream ss;
     // set precision
-    ss.precision(m_places);
+    ss.precision(m_precision);
     // output fixed
     ss << std::fixed;
     size_type pos = 0;
@@ -134,22 +135,27 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
         switch (m_format_positions.at(i).second)
         {
             case WALL:
-                ss << std::setw(3+m_places)
+                // the real elapsed time
+                ss << std::setw(3+m_precision)
                    << (real_elapsed() * div);
                 break;
             case USER:
-                ss << std::setw(3+m_places)
+                // CPU time of non-system calls
+                ss << std::setw(3+m_precision)
                    << (user_elapsed() * div);
                 break;
             case SYSTEM:
-                ss << std::setw(3+m_places)
+                // thread specific CPU time, e.g. thread creation overhead
+                ss << std::setw(3+m_precision)
                    << (system_elapsed() * div);
                 break;
             case CPU:
-                ss << std::setw(3+m_places)
+                // total CPU time
+                ss << std::setw(3+m_precision)
                    << ((user_elapsed() + system_elapsed()) * div);
                 break;
             case PERCENT:
+                // percent CPU utilization
                 ss.precision(1);
                 ss << ((user_elapsed()+system_elapsed())/real_elapsed())*100.0;
                 break;
