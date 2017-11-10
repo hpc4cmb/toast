@@ -14,7 +14,8 @@ a BSD-style license that can be found in the LICENSE file.
 #define do_pragma(x) _Pragma(#x)
 #endif
 
-#if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64)) && \
+    !defined(__INTEL_COMPILER)
 #   define attrib_aligned __attribute__((aligned (64)))
 #   define attrib_assume_aligned __attribute__((assume_aligned(64)))
 #else
