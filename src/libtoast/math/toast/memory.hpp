@@ -10,11 +10,15 @@ a BSD-style license that can be found in the LICENSE file.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"
 
+#if !defined(do_pragma)
+#define do_pragma(x) _Pragma(#x)
+#endif
+
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
 #   define attrib_aligned __attribute__((aligned (64)))
 #   define attrib_assume_aligned __attribute__((assume_aligned(64)))
 #else
-#   define attrib_aligned
+#   define attrib_aligned __attribute__((aligned (64)))
 #   define attrib_assume_aligned
 #endif
 
@@ -127,6 +131,12 @@ namespace toast { namespace mem {
     public:
         typedef std::size_t size_type;
 
+#if defined(__INTEL_COMPILER) && (defined(__x86_64__) || defined(__x86_64))
+        typedef _Tp* __attribute__((align_value(64))) _Tptr;
+#else
+        typedef _Tp* _Tptr;
+#endif
+
     public:
         simd_array()
         : m_data(nullptr)
@@ -146,13 +156,11 @@ namespace toast { namespace mem {
         ~simd_array() { toast::mem::aligned_free(m_data); }
 
         // conversion function to const _Tp*
-        operator const _Tp*() const
-        attrib_assume_aligned
-        { return m_data; }
+        //operator const _Tptr() const attrib_assume_aligned
+        //{ return m_data; }
 
         // conversion function to _Tp*
-        operator _Tp*()
-        attrib_assume_aligned
+        operator _Tptr() attrib_assume_aligned
         { return m_data; }
 
         simd_array& operator=(const simd_array& rhs)

@@ -13,10 +13,12 @@ class TimingTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "toast_test_output"
-        self.tm = timing.timing_manager()
-        self.tm.set_output_files("timing_report_tot.out", "timing_report_avg.out", self.outdir)
 
     def test_timing(self):
+
+        tman = timing.timing_manager()
+        tman.set_output_files("timing_report_tot.out", "timing_report_avg.out",
+                              self.outdir)
 
         def fibonacci(n):
             if n < 2:
@@ -26,11 +28,10 @@ class TimingTest(MPITestCase):
         def time_fibonacci(n):
             key = ('fibonacci(%i)' % n)
             timer = timing.timer(key)
-            print (type(timer))
             timer.start()
             val = fibonacci(n)
-            timer.stop()
 
+        tman.clear()
         t = timing.timer("tmanager test");
         t.start()
 
@@ -43,12 +44,12 @@ class TimingTest(MPITestCase):
             time_fibonacci(n)
             time_fibonacci(n+1)
 
-        self.tm.report()
+        tman.report()
 
-        self.assertEqual(self.tm.size(), 13)
+        self.assertEqual(tman.size(), 13)
 
-        for i in range(0, self.tm.size()):
-            t = self.tm.at(i)
+        for i in range(0, tman.size()):
+            t = tman.at(i)
             print (type(t))
             self.assertFalse(t.real_elapsed() < 0.0)
             self.assertFalse(t.user_elapsed() < 0.0)

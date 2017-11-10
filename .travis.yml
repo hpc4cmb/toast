@@ -49,6 +49,7 @@ before_install:
 install:
     - ./autogen.sh
     - export CFLAGS="-O3 -g -fPIC -pthread -std=c99"
+    - export CXXFLAGS="-O3 -g -fPIC -pthread"
     - ./configure --prefix=$HOME/miniconda
     - make
     - make install

@@ -84,8 +84,8 @@ TEST_F( rngTest, reprod ) {
 TEST_F( rngTest, reprod_mt ) {
     const size_t nthread = num_threads;
 
-    double result1[nthread*size];
-    double result2[nthread*size];
+    toast::mem::simd_array<double> result1(nthread*size);
+    toast::mem::simd_array<double> result2(nthread*size);
 
     uint64_t counter5[] = { counter[0], (uint64_t) counter[1]+5 };
     uint64_t** d1 = construct(nthread, key, counter);
@@ -98,9 +98,10 @@ TEST_F( rngTest, reprod_mt ) {
     deconstruct(d2);
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size-5; ++i ) {
-            size_t offset = j*nthread*size;
-            ASSERT_NEAR( result1[offset + i+5], result2[offset + i], 1.0e-4 );
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size-5; ++i )
+            ASSERT_NEAR( result1[offset + (i+5)], result2[offset + i], 1.0e-4 );
     }
 }
 
@@ -126,7 +127,7 @@ TEST_F( rngTest, uniform11 ) {
 
 TEST_F( rngTest, uniform11_mt ) {
     const size_t nthread = num_threads;
-    double result[nthread*size];
+    toast::mem::simd_array<double> result(nthread*size);
 
     {
         uint64_t** d = construct(nthread, key, counter);
@@ -135,9 +136,10 @@ TEST_F( rngTest, uniform11_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
-            ASSERT_NEAR( array_m11[i + offset], result[i + offset], 1.0e-4 );
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR( array_m11[i], result[i + offset], 1.0e-4 );
     }
 
     {
@@ -147,9 +149,10 @@ TEST_F( rngTest, uniform11_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
-            ASSERT_NEAR( array00_m11[i + offset], result[i + offset], 1.0e-4 );
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR( array00_m11[i], result[i + offset], 1.0e-4 );
     }
 }
 
@@ -175,7 +178,7 @@ TEST_F( rngTest, uniform01 ) {
 
 TEST_F( rngTest, uniform10_mt ) {
     const size_t nthread = num_threads;
-    double result[nthread*size];
+    toast::mem::simd_array<double> result(nthread*size);
 
     {
         uint64_t** d = construct(nthread, key, counter);
@@ -184,9 +187,10 @@ TEST_F( rngTest, uniform10_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
-            ASSERT_NEAR(array_01[i + offset], result[i + offset], 1.0e-4 );
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR(array_01[i], result[i + offset], 1.0e-4 );
     }
 
     {
@@ -196,9 +200,10 @@ TEST_F( rngTest, uniform10_mt ) {
     }
 
     for ( size_t j = 0; j < nthread; ++j)
-        for ( size_t i = 0; i < size; ++i ) {
-            size_t offset = j*nthread*size;
-            ASSERT_NEAR(array00_01[i + offset], result[i + offset], 1.0e-4 );
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR(array00_01[i], result[i + offset], 1.0e-4 );
     }
 }
 
@@ -223,8 +228,8 @@ TEST_F( rngTest, uint64 ) {
 //============================================================================//
 
 TEST_F( rngTest, uint64_mt ) {
-    const size_t nthread = 1;
-    uint64_t result[nthread*size];
+    const size_t nthread = num_threads;
+    toast::mem::simd_array<uint64_t> result(nthread*size);
 
     {
         uint64_t** d = construct(nthread, key, counter);
@@ -234,9 +239,9 @@ TEST_F( rngTest, uint64_mt ) {
 
     for ( size_t j = 0; j < nthread; ++j)
     {
-        size_t offset = j*nthread*size;
+        size_t offset = j*size;
         for ( size_t i = 0; i < size; ++i )
-            EXPECT_EQ( array_uint64[i + offset], result[i + offset] );
+            EXPECT_EQ( array_uint64[i], result[i + offset] );
     }
 
     {
@@ -247,9 +252,9 @@ TEST_F( rngTest, uint64_mt ) {
 
     for ( size_t j = 0; j < nthread; ++j)
     {
-        size_t offset = j*nthread*size;
+        size_t offset = j*size;
         for ( size_t i = 0; i < size; ++i )
-            EXPECT_EQ( array00_uint64[i + offset], result[i + offset] );
+            EXPECT_EQ( array00_uint64[i], result[i + offset] );
     }
 }
 
