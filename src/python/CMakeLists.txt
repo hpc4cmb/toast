@@ -3,7 +3,7 @@
 #
 #------------------------------------------------------------------------------#
 #
-include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
 
 set_source_files_properties(cbuffer.c PROPERTIES LANGUAGE C)
 
