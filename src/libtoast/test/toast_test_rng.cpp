@@ -67,23 +67,6 @@ void deconstruct(uint64_t** data)
 
 //============================================================================//
 
-// TEST_F( rngTest, gaussian ) {
-//     double result[size];
-
-//     rng::dist_normal ( size, key[0], key[1], counter[0], counter[1], result );
-
-//     for ( size_t i = 0; i < size; ++i ) {
-//         ASSERT_NEAR( array_gaussian[i], result[i], 1.0e-4 );
-//     }
-
-//     rng::dist_normal ( size, key00[0], key00[1], counter00[0], counter00[1], result );
-
-//     for ( size_t i = 0; i < size; ++i ) {
-//         ASSERT_NEAR( array00_gaussian[i], result[i], 1.0e-4 );
-//     }
-// }
-
-
 TEST_F( rngTest, reprod ) {
     double result1[size];
     double result2[size];
@@ -96,29 +79,33 @@ TEST_F( rngTest, reprod ) {
     }
 }
 
-// TEST_F( rngTest, reprod_mt ) {
-//     const size_t nthread = num_threads;
+//============================================================================//
 
-//     double result1[nthread*size];
-//     double result2[nthread*size];
+TEST_F( rngTest, reprod_mt ) {
+    const size_t nthread = num_threads;
 
-//     uint64_t counter5[] = { counter[0], (uint64_t) counter[1]+5 };
-//     uint64_t** d1 = construct(nthread, key, counter);
-//     uint64_t** d2 = construct(nthread, key, counter5);
+    toast::mem::simd_array<double> result1(nthread*size);
+    toast::mem::simd_array<double> result2(nthread*size);
 
-//     rng::mt::dist_normal (nthread, size, d1[0], d1[1], d1[2], d1[3], result1 );
-//     rng::mt::dist_normal (nthread, size, d2[0], d2[1], d2[2], d2[3], result2 );
+    uint64_t counter5[] = { counter[0], (uint64_t) counter[1]+5 };
+    uint64_t** d1 = construct(nthread, key, counter);
+    uint64_t** d2 = construct(nthread, key, counter5);
 
-//     deconstruct(d1);
-//     deconstruct(d2);
+    rng::mt::dist_normal (nthread, size, d1[0], d1[1], d1[2], d1[3], result1 );
+    rng::mt::dist_normal (nthread, size, d2[0], d2[1], d2[2], d2[3], result2 );
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size-5; ++i ) {
-//             size_t offset = j*nthread*size;
-//             ASSERT_NEAR( result1[offset + i+5], result2[offset + i], 1.0e-4 );
-//     }
-// }
+    deconstruct(d1);
+    deconstruct(d2);
 
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size-5; ++i )
+            ASSERT_NEAR( result1[offset + (i+5)], result2[offset + i], 1.0e-4 );
+    }
+}
+
+//============================================================================//
 
 TEST_F( rngTest, uniform11 ) {
     double result[size];
@@ -136,36 +123,40 @@ TEST_F( rngTest, uniform11 ) {
     }
 }
 
+//============================================================================//
 
-// TEST_F( rngTest, uniform11_mt ) {
-//     const size_t nthread = num_threads;
-//     double result[nthread*size];
+TEST_F( rngTest, uniform11_mt ) {
+    const size_t nthread = num_threads;
+    toast::mem::simd_array<double> result(nthread*size);
 
-//     {
-//         uint64_t** d = construct(nthread, key, counter);
-//         rng::mt::dist_uniform_11 (nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+    {
+        uint64_t** d = construct(nthread, key, counter);
+        rng::mt::dist_uniform_11 (nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             ASSERT_NEAR( array_m11[i + offset], result[i + offset], 1.0e-4 );
-//     }
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR( array_m11[i], result[i + offset], 1.0e-4 );
+    }
 
-//     {
-//         uint64_t** d = construct(nthread, key00, counter00);
-//         rng::mt::dist_uniform_11 (nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+    {
+        uint64_t** d = construct(nthread, key00, counter00);
+        rng::mt::dist_uniform_11 (nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             ASSERT_NEAR( array00_m11[i + offset], result[i + offset], 1.0e-4 );
-//     }
-// }
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR( array00_m11[i], result[i + offset], 1.0e-4 );
+    }
+}
 
+//============================================================================//
 
 TEST_F( rngTest, uniform01 ) {
     double result[size];
@@ -183,35 +174,40 @@ TEST_F( rngTest, uniform01 ) {
     }
 }
 
-// TEST_F( rngTest, uniform10_mt ) {
-//     const size_t nthread = num_threads;
-//     double result[nthread*size];
+//============================================================================//
 
-//     {
-//         uint64_t** d = construct(nthread, key, counter);
-//         rng::mt::dist_uniform_01(nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+TEST_F( rngTest, uniform10_mt ) {
+    const size_t nthread = num_threads;
+    toast::mem::simd_array<double> result(nthread*size);
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             ASSERT_NEAR(array_01[i + offset], result[i + offset], 1.0e-4 );
-//     }
+    {
+        uint64_t** d = construct(nthread, key, counter);
+        rng::mt::dist_uniform_01(nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
 
-//     {
-//         uint64_t** d = construct(nthread, key00, counter00);
-//         rng::mt::dist_uniform_01(nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR(array_01[i], result[i + offset], 1.0e-4 );
+    }
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             ASSERT_NEAR(array00_01[i + offset], result[i + offset], 1.0e-4 );
-//     }
-// }
+    {
+        uint64_t** d = construct(nthread, key00, counter00);
+        rng::mt::dist_uniform_01(nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
 
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            ASSERT_NEAR(array00_01[i], result[i + offset], 1.0e-4 );
+    }
+}
+
+//============================================================================//
 
 TEST_F( rngTest, uint64 ) {
     uint64_t result[size];
@@ -229,31 +225,37 @@ TEST_F( rngTest, uint64 ) {
     }
 }
 
-// TEST_F( rngTest, uint64_mt ) {
-//     const size_t nthread = num_threads;
-//     uint64_t result[nthread*size];
+//============================================================================//
 
-//     {
-//         uint64_t** d = construct(nthread, key, counter);
-//         rng::mt::dist_uint64(nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+TEST_F( rngTest, uint64_mt ) {
+    const size_t nthread = num_threads;
+    toast::mem::simd_array<uint64_t> result(nthread*size);
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             EXPECT_EQ( array_uint64[i + offset], result[i + offset] );
-//     }
+    {
+        uint64_t** d = construct(nthread, key, counter);
+        rng::mt::dist_uint64(nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
 
-//     {
-//         uint64_t** d = construct(nthread, key00, counter00);
-//         rng::mt::dist_uint64(nthread, size, d[0], d[1], d[2], d[3], result);
-//         deconstruct(d);
-//     }
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            EXPECT_EQ( array_uint64[i], result[i + offset] );
+    }
 
-//     for ( size_t j = 0; j < nthread; ++j)
-//         for ( size_t i = 0; i < size; ++i ) {
-//             size_t offset = j*nthread*size;
-//             EXPECT_EQ( array00_uint64[i + offset], result[i + offset] );
-//     }
-// }
+    {
+        uint64_t** d = construct(nthread, key00, counter00);
+        rng::mt::dist_uint64(nthread, size, d[0], d[1], d[2], d[3], result);
+        deconstruct(d);
+    }
+
+    for ( size_t j = 0; j < nthread; ++j)
+    {
+        size_t offset = j*size;
+        for ( size_t i = 0; i < size; ++i )
+            EXPECT_EQ( array00_uint64[i], result[i + offset] );
+    }
+}
+
+//============================================================================//

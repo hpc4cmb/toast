@@ -36,11 +36,14 @@ add_option(USE_FFTW "Use FFTW" OFF)
 add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
 
-if(APPLE AND CMAKE_CXX_COMPILER_IS_GNU)
-    add_option(USE_CLANG_ASSEMBLER
-        "SSE/AVX GNU compiler errors (no such instruction) on macOS might be fixed by turning this on"
-        OFF)
-endif(APPLE AND CMAKE_CXX_COMPILER_IS_GNU)
+
+################################################################################
+#
+#        Threading
+#
+################################################################################
+set(CMAKE_THREAD_PREFER_PTHREADS ON)
+find_package(Threads)
 
 
 ################################################################################
@@ -313,3 +316,4 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
     add(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
 
 endif()
+

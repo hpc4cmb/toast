@@ -165,16 +165,14 @@ add_feature(BUILD_CXXSTD "Compiling against C++ Standard '${BUILD_CXXSTD}'")
 # If a standard higher than 11 has been selected, check that compiler has
 # at least one feature from that standard and append these to the required
 # feature list
-if(BUILD_CXXSTD GREATER 11)
-    if(CMAKE_CXX${BUILD_CXXSTD}_COMPILE_FEATURES)
-        list(APPEND ${PROJECT_NAME}_TARGET_COMPILE_FEATURES ${CMAKE_CXX${BUILD_CXXSTD}_COMPILE_FEATURES})
-    else()
-        message(FATAL_ERROR "${PROJECT_NAME} requested to be compiled against C++ standard '${BUILD_CXXSTD}'\nbut detected compiler '${CMAKE_CXX_COMPILER_ID}', version '${CMAKE_CXX_COMPILER_VERSION}'\ndoes not support any features of that standard")
-    endif()
+if(CMAKE_CXX${BUILD_CXXSTD}_COMPILE_FEATURES)
+    list(APPEND ${PROJECT_NAME}_TARGET_COMPILE_FEATURES ${CMAKE_CXX${BUILD_CXXSTD}_COMPILE_FEATURES})
+else()
+    message(FATAL_ERROR "${PROJECT_NAME} requested to be compiled against C++ standard '${BUILD_CXXSTD}'\nbut detected compiler '${CMAKE_CXX_COMPILER_ID}', version '${CMAKE_CXX_COMPILER_VERSION}'\ndoes not support any features of that standard")
 endif()
 
 set(BUILD_CXXSTD "c++${BUILD_CXXSTD}")
 
-if(APPLE AND CMAKE_C_COMPILER_IS_GNU)
+if(CMAKE_C_COMPILER_IS_GNU)
     add(CMAKE_C_FLAGS_EXTRA "-std=c99")
-endif(APPLE AND CMAKE_C_COMPILER_IS_GNU)
+endif(CMAKE_C_COMPILER_IS_GNU)

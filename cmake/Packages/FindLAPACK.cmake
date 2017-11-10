@@ -11,7 +11,8 @@ FIND_LIBRARY(LAPACK_LIBRARY
     HINTS
     ${LAPACK_ROOT}
     $ENV{LAPACK_ROOT}
-    
+    /usr
+
     PATH_SUFFIXES
     ${CMAKE_INSTALL_LIBDIR_DEFAULT}/atlas
     lib64/atlas

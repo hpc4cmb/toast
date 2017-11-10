@@ -7,7 +7,12 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 
 set_source_files_properties(cbuffer.c PROPERTIES LANGUAGE C)
 
-add_library(cbuffer-lib MODULE cbuffer.c)
+# Python files to add to cbuffer-lib target so they are listed in an
+# IDE (e.g. QtCreator), won't get compiled
+file(GLOB_RECURSE PYTHON_MODULE_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
+    ${CMAKE_CURRENT_LIST_DIR}/*.py.in)
+
+add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES})
 
 if(CMAKE_C_COMPILER_IS_GNU AND NOT APPLE)
     set(_LINK_FLAGS "-Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions")

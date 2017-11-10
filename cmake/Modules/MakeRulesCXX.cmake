@@ -102,47 +102,53 @@ endmacro()
 #
 if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 
-    set(_def_cxx     "-Wno-deprecated $ENV{CXX_FLAGS}")
-    add(_def_cxx     "-Wno-unused-parameter -Wno-sign-compare")
-    set(_verb_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
-    add(_verb_flags  "-pedantic")
-    set(_loud_flags  "-Wshadow -Wextra")
+    set(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
+    set(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
+    add(_loud_flags  "-Wshadow -Wextra -pedantic")
     set(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
+    add(_quiet_flags "-Wno-attributes -Wno-expansion-to-defined")
+    add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
+    add(_quiet_flags "-Wno-attributes -Wno-expansion-to-defined")
+    add(_quiet_flags "-Wno-maybe-uninitialized")
+
     if(CMAKE_CXX_COMPILER_IS_GNU)
-        add(_def_cxx      "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
-        add(_fast_flags   "-ftree-vectorize -ftree-loop-vectorize")
+        add(_quiet_flags  "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
+        add(_fast_flags   "-ftree-vectorize -ftree-loop-vectorize")        
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "7")
+            add(_std_flags "-faligned-new")
+        endif()
     else()
-        add(_def_cxx "-Qunused-arguments")
+        add(_std_flags    "-Qunused-arguments")
         INCLUDE_DIRECTORIES("/usr/include/libcxxabi")
     endif()
 
     option(ENABLE_GCOV "Enable compilation flags for GNU coverage tool (gcov)" OFF)
     mark_as_advanced(ENABLE_GCOV)
     if(ENABLE_GCOV)
-        add(_def_cxx "-fprofile-arcs -ftest-coverage")
+        add(_std_flags "-fprofile-arcs -ftest-coverage")
     endif(ENABLE_GCOV)
 
-    set(CMAKE_CXX_FLAGS_INIT                "-W -Wall ${_def_cxx}")
+    set(CMAKE_CXX_FLAGS_INIT                "-W -Wall ${_std_flags}")
     set(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -DDEBUG ${_loud_flags}")
     set(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG ${_quiet_flags}")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-g -O2 ${_fast_flags}")
     set(CMAKE_CXX_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG ${_fast_flags} ${_quiet_flags}")
-    set(CMAKE_CXX_FLAGS_VERBOSEDEBUG_INIT   "-g3 -DDEBUG ${_verb_flags} ${_loud_flags}")
 
 #------------------------------------------------------------------------------#
 # Intel C++ Compilers
 #
 elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 
-    set(_def_cxx "-Wno-unknown-pragmas -Wno-deprecated")
-    set(_extra_cxx_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    set(_std_flags "-Wno-unknown-pragmas -Wno-deprecated")
+    set(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    set(_par_flags "-parallel-source-info=2")
 
     get_intel_intrinsic_include_dir()
 
-    set(CMAKE_CXX_FLAGS_INIT                "${_def_cxx} $ENV{CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set(CMAKE_CXX_FLAGS_INIT                "${_std_flags} ${_extra_flags} $ENV{CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG_INIT          "-debug -DDEBUG ${_par_flags}")
     set(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
     set(CMAKE_CXX_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG")
 
 #-----------------------------------------------------------------------

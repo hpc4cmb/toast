@@ -127,15 +127,16 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 #
 elseif(CMAKE_C_COMPILER_IS_INTEL)
 
-    set(_def_cxx "-Wno-unknown-pragmas -Wno-deprecated")
-    set(_extra_cxx_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    set(_std_flags "-Wno-unknown-pragmas -Wno-deprecated")
+    set(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    set(_par_flags "-parallel-source-info=2")
 
     get_intel_intrinsic_include_dir()
 
-    set(CMAKE_C_FLAGS_INIT                "${_def_cxx} $ENV{C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set(CMAKE_C_FLAGS_INIT                "${_std_flags} ${_extra_flags} $ENV{C_FLAGS}")
+    set(CMAKE_C_FLAGS_DEBUG_INIT          "-debug -DDEBUG ${_par_flags}")
     set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
     set(CMAKE_C_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG")
 
 #-----------------------------------------------------------------------
