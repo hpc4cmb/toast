@@ -7,6 +7,9 @@ a BSD-style license that can be found in the LICENSE file.
 #ifndef TOAST_MEMORY_HPP
 #define TOAST_MEMORY_HPP
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
 #   define attrib_aligned __attribute__((aligned (64)))
 #   define attrib_assume_aligned __attribute__((assume_aligned(64)))
@@ -173,6 +176,8 @@ namespace toast { namespace mem {
     //========================================================================//
 
 } }
+
+#pragma GCC diagnostic pop
 
 #endif
 
