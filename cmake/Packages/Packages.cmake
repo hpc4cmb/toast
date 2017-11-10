@@ -316,3 +316,4 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
     add(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
 
 endif()
+

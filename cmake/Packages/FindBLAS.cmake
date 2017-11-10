@@ -11,7 +11,8 @@ FIND_LIBRARY(BLAS_LIBRARY
     HINTS
     ${BLAS_ROOT}
     $ENV{BLAS_ROOT}
-    
+    /usr
+
     PATH_SUFFIXES
     ${CMAKE_INSTALL_LIBDIR_DEFAULT}/atlas
     lib64/atlas

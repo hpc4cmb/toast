@@ -49,7 +49,7 @@ void toast::rng::dist_uint64 ( size_t n,
     RNG::ukey_type uk = {{ key1, key2 }};
 
     const size_t end = beg + n;
-//#   pragma omp simd
+#   pragma omp simd
     for ( size_t i = beg; i < end; ++i ) {
         data[i] = rng(RNG::ctr_type({{ counter1, counter2 + (i-beg) }}),
                       RNG::key_type(uk))[0];

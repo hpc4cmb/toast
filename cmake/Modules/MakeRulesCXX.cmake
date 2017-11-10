@@ -102,7 +102,7 @@ endmacro()
 #
 if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 
-    set(_std_flags   "-Wno-deprecated -faligned-new $ENV{CXX_FLAGS}")
+    set(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
     set(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     set(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
@@ -113,7 +113,10 @@ if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 
     if(CMAKE_CXX_COMPILER_IS_GNU)
         add(_quiet_flags  "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
-        add(_fast_flags   "-ftree-vectorize -ftree-loop-vectorize")
+        add(_fast_flags   "-ftree-vectorize -ftree-loop-vectorize")        
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "7")
+            add(_std_flags "-faligned-new")
+        endif()
     else()
         add(_std_flags    "-Qunused-arguments")
         INCLUDE_DIRECTORIES("/usr/include/libcxxabi")
@@ -138,13 +141,14 @@ elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 
     set(_std_flags "-Wno-unknown-pragmas -Wno-deprecated")
     set(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    set(_par_flags "-parallel-source-info=2")
 
     get_intel_intrinsic_include_dir()
 
     set(CMAKE_CXX_FLAGS_INIT                "${_std_flags} ${_extra_flags} $ENV{CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG_INIT          "-debug -DDEBUG ${_par_flags}")
     set(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
     set(CMAKE_CXX_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG")
 
 #-----------------------------------------------------------------------

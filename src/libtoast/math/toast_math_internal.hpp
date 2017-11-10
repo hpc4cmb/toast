@@ -44,7 +44,9 @@ void execute_omp(Func_t func,
     InputIterator_t itr;
 #   pragma omp parallel for schedule(static)
     for(itr = _beg; itr < _end; itr += _incr)
+    {
         func(itr, itr+_incr);
+    }
 }
 
 //----------------------------------------------------------------------------//
@@ -78,7 +80,7 @@ void execute_tbb(Func_t func,
 //  Generic function call interface for MT method
 //----------------------------------------------------------------------------//
 
-#if defined(USE_TBB_MT) && defined(HAVE_TBB)
+#if defined(USE_TBB) && defined(HAVE_TBB)
 
 template <typename InputIterator_t, typename Func_t>
 inline void execute_mt(Func_t f,
