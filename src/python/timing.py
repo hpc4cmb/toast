@@ -12,8 +12,11 @@ def ensure_directory_exists(file_path):
 
 class timer(object):
 
-    def __init__(self, key):
-        self.ctimer = ctoast.get_timer(key)
+    def __init__(self, key, _obj = None):
+        if _obj is not None:
+            self.ctimer = _obj
+        else:
+            self.ctimer = ctoast.get_timer(key)
 
     def start(self):
         ctoast.timer_start(self.ctimer)
@@ -22,13 +25,13 @@ class timer(object):
         ctoast.timer_stop(self.ctimer)
 
     def real_elapsed(self):
-        ctoast.timer_real_elapsed(self.ctimer)
+        return ctoast.timer_real_elapsed(self.ctimer)
 
     def system_elapsed(self):
-        ctoast.timer_system_elapsed(self.ctimer)
+        return ctoast.timer_system_elapsed(self.ctimer)
 
     def user_elapsed(self):
-        ctoast.timer_user_elapsed(self.ctimer)
+        return ctoast.timer_user_elapsed(self.ctimer)
 
 class timing_manager(object):
 
@@ -50,4 +53,4 @@ class timing_manager(object):
         return ctoast.timing_manager_size()
 
     def at(self, i):
-        return ctoast.timer_at(i)
+        return timer(None, _obj=ctoast.timer_at(i))

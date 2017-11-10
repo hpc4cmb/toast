@@ -26,6 +26,7 @@ class TimingTest(MPITestCase):
         def time_fibonacci(n):
             key = ('fibonacci(%i)' % n)
             timer = timing.timer(key)
+            print (type(timer))
             timer.start()
             val = fibonacci(n)
             timer.stop()
@@ -43,3 +44,11 @@ class TimingTest(MPITestCase):
             time_fibonacci(n+1)
 
         self.tm.report()
+
+        self.assertEqual(self.tm.size(), 13)
+
+        for i in range(0, self.tm.size()):
+            t = self.tm.at(i)
+            print (type(t))
+            self.assertFalse(t.real_elapsed() < 0.0)
+            self.assertFalse(t.user_elapsed() < 0.0)
