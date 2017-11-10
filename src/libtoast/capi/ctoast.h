@@ -42,6 +42,7 @@ void ctoast_set_timing_output_files(char* tot_fname, char* avg_fname);
 void ctoast_report_timing();
 
 size_t ctoast_timing_manager_size();
+void ctoast_timing_manager_clear();
 double ctoast_timer_real_elapsed(ctoast_timer*);
 double ctoast_timer_system_elapsed(ctoast_timer*);
 double ctoast_timer_user_elapsed(ctoast_timer*);

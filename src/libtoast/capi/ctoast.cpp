@@ -95,6 +95,14 @@ size_t ctoast_timing_manager_size()
 
 //----------------------------------------------------------------------------//
 
+void ctoast_timing_manager_clear()
+{
+    using namespace toast::util;
+    timing_manager::instance()->clear();
+}
+
+//----------------------------------------------------------------------------//
+
 double ctoast_timer_real_elapsed(ctoast_timer* _ct)
 {
     using namespace toast::util;

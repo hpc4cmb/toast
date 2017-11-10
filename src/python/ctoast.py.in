@@ -108,6 +108,12 @@ lib.ctoast_timing_manager_size.argtypes = []
 def timing_manager_size():
     return lib.ctoast_timing_manager_size()
 
+lib.ctoast_timing_manager_clear.restype = None
+lib.ctoast_timing_manager_clear.argtypes = []
+
+def timing_manager_clear():
+    return lib.ctoast_timing_manager_clear()
+
 lib.ctoast_timer_real_elapsed.restype = ct.c_double
 lib.ctoast_timer_real_elapsed.argtypes = [ ct.POINTER(cTimer) ]
 
@@ -341,7 +347,7 @@ def rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2):
     ret = np.zeros(_nr * _nc, dtype=np.uint64)
     lib.ctoast_rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
-
+    
 lib.ctoast_rng_dist_uniform_01_mt.restype = None
 lib.ctoast_rng_dist_uniform_01_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
     npu64, npu64, npu64, npu64, npf64 ]
