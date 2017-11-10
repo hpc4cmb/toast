@@ -139,19 +139,7 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
             for intrvl, args in intervals.items():
                 intr = tds.Intervals(size=args[0], props=args[1])
                 intr = obs.intervals_add(intrvl, intr)
-
-    # Sync metadata
-    vol.meta_sync()
-
-    # Get fresh handle to the observation block on all processes
-    parentnodes = parent.split("/")
-    par = root
-    for pn in parentnodes:
-        if pn != "":
-            par = par.block_get(pn)
-    obs = par.block_get(name)
-
-    return obs
+    return
 
 
 def decode_tidas_quats(props):
@@ -820,12 +808,13 @@ class OpTidasExport(Operator):
                 cworld.Abort()
         cworld.barrier()
 
-        # Collectively open the volume
+        # Collectively create the volume
 
         with MPIVolume(cworld, self._path, backend=self._backend,
             comp=self._comp) as vol:
 
-            # Groups iterate over their observations
+            # First, we go through and add all observations and then sync
+            # so that all processes have the full metadata.
 
             for obs in data.obs:
                 # Get the name
@@ -880,24 +869,39 @@ class OpTidasExport(Operator):
                 groups = {STR_DETGROUP : (schm, tod.total_samples, props)}
 
                 # Create the block in the volume that corresponds to this
-                # observation.  Get handles to the tidas group and intervals.
+                # observation.
 
-                blk = create_tidas_obs(vol, blockpath, obsname, groups=groups,
+                create_tidas_obs(vol, blockpath, obsname, groups=groups,
                     intervals=intervals)
 
-                intr = None
-                if self._usedist:
-                    intr = blk.intervals_get(STR_DISTINTR)
-                grp = blk.group_get(STR_DETGROUP)
+            # Sync metadata so all processes have all metadata.
+            vol.meta_sync()
 
-                # Instantiate a TIDAS TOD to wrap this block
+            # Now every process group goes through its observations and
+            # actually writes the data.
 
+            for obs in data.obs:
+                # Get the name
+                obsname = obs["name"]
+
+                # Get the metadata path
+                blockpath = obsname
+                if self._obspath is not None:
+                    blockpath = "{}/{}".format(self._obspath[obsname], obsname)
+
+                # The existing TOD
+                tod = obs["tod"]
+                detranks, sampranks = tod.grid_size
+                rankdet, ranksamp = tod.grid_ranks
+
+                # The new TIDAS TOD
                 distintervals = None
                 if self._usedist:
                     distintervals = STR_DISTINTR
-                tidastod = TODTidas(tod.mpicomm, vol, "{}/{}".format(blockpath,
-                    obsname), detranks=detranks, detgroup=STR_DETGROUP,
+                tidastod = TODTidas(tod.mpicomm, vol, blockpath, 
+                    detranks=detranks, detgroup=STR_DETGROUP,
                     distintervals=distintervals)
+                blk = tidastod.block
 
                 # Some data is common across all processes that share the same
                 # time span (timestamps, boresight pointing, common flags).
@@ -910,6 +914,7 @@ class OpTidasExport(Operator):
                 # common between all processes.
 
                 if rankdet == 0:
+                    grp = blk.group_get(STR_DETGROUP)
                     # Only the first row of the process grid does this...
                     # First process timestamps
                     rowdata = tod.grid_comm_row.gather(tod.read_times(),
@@ -925,42 +930,56 @@ class OpTidasExport(Operator):
                                     stop=full[off+sz-1], first=off,
                                     last=(off+sz-1)))
                                 off += sz
+                            intr = blk.intervals_get(STR_DISTINTR)
                             intr.write(ilist)
                         del full
                     del rowdata
 
-                    # Next the boresight data
-                    tidastod.write_boresight(data=tod.read_boresight())
+                    # Next the boresight data. Serialize the writing
+                    for rs in range(sampranks):
+                        if ranksamp == rs:
+                            tidastod.write_boresight(data=tod.read_boresight())
+                        tod.grid_comm_row.barrier()
 
-                    # Common flags
+                    # Same with the common flags
+                    ref = None
                     if self._cachecomm is not None:
                         ref = tod.cache.reference(self._cachecomm)
-                        tidastod.write_common_flags(flags=ref)
-                        del ref
                     else:
-                        tidastod.write_common_flags(
-                            flags=tod.read_common_flags())
+                        ref = tod.read_common_flags()
+                    for rs in range(sampranks):
+                        if ranksamp == rs:
+                            tidastod.write_common_flags(flags=ref)
+                        tod.grid_comm_row.barrier()
+                    del ref
 
                 tod.mpicomm.barrier()
 
-                # Now each process can write their unique data slice
+                # Now each process can write their unique data slice.
 
-                for det in tod.local_dets:
-                    if self._cachename is not None:
-                        ref = tod.cache.reference(
-                            "{}_{}".format(self._cachename, det))
-                        tidastod.write(detector=det, data=ref)
-                        del ref
-                    else:
-                        tidastod.write(detector=det,
-                            data=tod.read(detector=det))
-                    if self._cacheflag is not None:
-                        ref = tod.cache.reference(
-                            "{}_{}".format(self._cacheflag, det))
-                        tidastod.write_det_flags(detector=det, flags=ref)
-                        del ref
-                    else:
-                        flg, cflg = tod.read_flags(detector=det)
-                        tidastod.write_det_flags(detector=det, flags=flg)
+                # FIXME:  Although every write should be guarded by a mutex
+                # lock, this does not seem to work in practice.  Instead, we
+                # will serialize writes over the process grid.
+
+                for p in range(tod.mpicomm.size):
+                    if tod.mpicomm.rank == p:
+                        for det in tod.local_dets:
+                            ref = None
+                            if self._cachename is not None:
+                                ref = tod.cache.reference("{}_{}"\
+                                    .format(self._cachename, det))
+                            else:
+                                ref = tod.read(detector=det)
+                            tidastod.write(detector=det, data=ref)
+                            del ref
+                            ref = None
+                            if self._cacheflag is not None:
+                                ref = tod.cache.reference(
+                                    "{}_{}".format(self._cacheflag, det))
+                            else:
+                                ref, cflg = tod.read_flags(detector=det)
+                            tidastod.write_det_flags(detector=det, flags=ref)
+                            del ref
+                    tod.mpicomm.barrier()
 
         return

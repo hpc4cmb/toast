@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
