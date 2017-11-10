@@ -10,10 +10,6 @@ a BSD-style license that can be found in the LICENSE file.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wattributes"
 
-#if !defined(do_pragma)
-#define do_pragma(x) _Pragma(#x)
-#endif
-
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
 #   define attrib_aligned __attribute__((aligned (64)))
 #   define attrib_assume_aligned __attribute__((assume_aligned(64)))
