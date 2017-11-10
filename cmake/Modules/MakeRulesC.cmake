@@ -96,7 +96,7 @@ endmacro()
 #
 if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 
-    set(_def_cxx     "-Wno-deprecated $ENV{C_FLAGS}")
+    set(_def_cxx     "-Wno-deprecated $ENV{C_FLAGS} -Wno-missing-field-initializers")
     add(_def_cxx     "-Wno-unused-parameter -Wno-sign-compare")
     set(_verb_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_verb_flags  "-pedantic")
