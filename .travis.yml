@@ -25,7 +25,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="CC=$(which gcc) && CXX=$(which g++) && FC=$(which gfortran) && MPICH_CC=${CC} && MPICH_CXX=${CXX} && MPICH_FC=${FC}"
+        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++) && export FC=$(which gfortran)"
     # GCC 4.9
     - os: linux
       dist: trusty
@@ -49,7 +49,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="CC=$(which gcc-4.9) && CXX=$(which g++-4.9) && FC=$(which gfortran-4.9) && MPICH_CC=${CC} && MPICH_CXX=${CXX} && MPICH_FC=${FC}"
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9)"
     # GCC 5
     - os: linux
       dist: trusty
@@ -73,7 +73,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="CC=$(which gcc-5) && CXX=$(which g++-5) && FC=$(which gfortran-5) && MPICH_CC=${CC} && MPICH_CXX=${CXX} && MPICH_FC=${FC}"
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5)"
     # GCC 6
     - os: linux
       dist: trusty
@@ -97,7 +97,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="CC=$(which gcc-6) && CXX=$(which g++-6) && FC=$(which gfortran-6) && MPICH_CC=${CC} && MPICH_CXX=${CXX} && MPICH_FC=${FC}"
+        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6) && export FC=$(which gfortran-6)"
     # GCC 7
     - os: linux
       dist: trusty
@@ -121,7 +121,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="CC=$(which gcc-7) && CXX=$(which g++-7) && FC=$(which gfortran-7) && MPICH_CC=${CC} && MPICH_CXX=${CXX} && MPICH_FC=${FC}"
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7)"
 
 # The versions to test
 python:
@@ -140,14 +140,19 @@ before_install:
     - conda info -a
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
     - pip install mpi4py
+    # set the C, C++, and Fortran compilers
     - eval "${MATRIX_EVAL}"
+    # set the MPICH underlying compilers
+    - export MPICH_CC=${CC}
+    - export MPICH_CXX=${CXX}
+    - export MPICH_FC=${FC}
     # Information about compilers
-    - ${CC} -dumpversion
-    - ${CXX} -dumpversion
-    - ${FC} -dumpversion
-    - if [ ! -z "$(which mpicc)" ]; then mpicc --version ; else echo "No mpicc" ; fi
-    - if [ ! -z "$(which mpic++)" ]; then mpic++ --version ; else echo "No mpic++" ; fi
-    - if [ ! -z "$(which mpicxx)" ]; then mpicxx --version ; else echo "No mpicxx" ; fi
+    - echo "CC = ${CC} $(${CC} -dumpversion)"
+    - echo "CXX = ${CXX} $(${CXX} -dumpversion)"
+    - echo "CC = ${FC} $(${FC} -dumpversion)"
+    - if [ ! -z "$(which mpicc)" ]; then mpicc -v ; else echo "No mpicc" ; fi
+    - if [ ! -z "$(which mpic++)" ]; then mpic++ -v ; else echo "No mpic++" ; fi
+    - if [ ! -z "$(which mpicxx)" ]; then mpicxx -v ; else echo "No mpicxx" ; fi
 
 # Skip this
 
