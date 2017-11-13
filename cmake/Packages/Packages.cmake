@@ -64,7 +64,6 @@ find_package(MPI REQUIRED)
 add(CMAKE_C_FLAGS_EXTRA    "${MPI_C_COMPILE_FLAGS}")
 add(CMAKE_CXX_FLAGS_EXTRA  "${MPI_CXX_COMPILE_FLAGS}")
 add(CMAKE_EXE_LINKER_FLAGS "${MPI_CXX_LINK_FLAGS}")
-add_definitions(-DUSE_MPI)
 # mpi.py.in uses HAVE_MPI to decide whether to use
 # (1) mpi4py or (2) fakempi, the latter of which is broken
 set(HAVE_MPI True)
