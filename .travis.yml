@@ -140,6 +140,7 @@ before_install:
     - conda info -a
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
     - pip install mpi4py
+    - eval "${MATRIX_EVAL}"
 
 # Skip this
 
