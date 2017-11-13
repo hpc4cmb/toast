@@ -2,18 +2,17 @@
 # build matrix.  We simply apt install the compiled dependencies.
 language: python
 
-os:
-    - linux
-
-# These use container-based images (faster boot) and Ubuntu 14.04 LTS
-sudo: false
-dist: trusty
-
-# The apt packages here install our compiled code dependencies.
-addons:
-    apt:
-        packages:
+matrix:
+  include:
+    # GCC 4.8
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          packages:
             - build-essential
+            - gcc
             - g++
             - gfortran
             - autoconf
@@ -25,6 +24,104 @@ addons:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++)"
+    # GCC 4.9
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-4.9
+            - g++-4.9
+            - gfortran-4.9
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9)"
+    # GCC 5
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-5
+            - g++-5
+            - gfortran-5
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5)"
+    # GCC 6
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-6
+            - g++-6
+            - gfortran-6
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6)"
+    # GCC 7
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-7
+            - g++-7
+            - gfortran-7
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7)"
 
 # The versions to test
 python:
@@ -33,6 +130,27 @@ python:
 # Set up MPI and mpi4py
 
 before_install:
+    # set the C and C++ compilers
+    - eval "${MATRIX_EVAL}"
+    # Information about C and C++ compilers
+    - echo "CC = ${CC} $(${CC} -dumpversion)"
+    - echo "CXX = ${CXX} $(${CXX} -dumpversion)"
+    # set the MPICH underlying compilers
+    - export MPICC=$(which mpicc)
+    - export MPICXX=$(which mpicxx)
+    - export MPICH_CC=${CC}
+    - export MPICH_CXX=${CXX}
+    # explicitly set the C and C++ compilers to MPICH compilers for autotools
+    - export CC=$(which mpicc)
+    - export CXX=$(which mpicxx)
+    # information about the MPI compilers
+    - echo "MPICC = ${MPICC}"
+    - echo "MPICXX = ${MPICXX}"
+    - echo "[MPI] CC = ${CC} $(${CC} -dumpversion)"
+    - echo "[MPI] CXX = ${CXX} $(${CXX} -dumpversion)"
+    - ${MPICC} -v
+    - ${MPICXX} -v
+    # miniconda install
     - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH="$HOME/miniconda/bin:$PATH"
@@ -47,6 +165,7 @@ before_install:
 # Skip this
 
 install:
+    # build
     - ./autogen.sh
     - export CFLAGS="-O3 -g -fPIC -pthread -std=c99"
     - export CXXFLAGS="-O3 -g -fPIC -pthread"
