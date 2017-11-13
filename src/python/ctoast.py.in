@@ -51,6 +51,94 @@ p_c_char = ct.POINTER(ct.c_char)
 pp_c_char = ct.POINTER(p_c_char)
 
 #--------------------------------------
+# Util sub-library
+#--------------------------------------
+
+class cTimer(ct.Structure):
+    pass
+
+class cTimingManager(ct.Structure):
+    pass
+
+def convert_to_p_c_char(s):
+    enc_s = s.encode('utf-8')
+    c_str = ct.create_string_buffer(enc_s)
+    return c_str
+
+lib.ctoast_get_timer.restype = ct.POINTER(cTimer)
+lib.ctoast_get_timer.argtypes = [ p_c_char ]
+
+def get_timer(key):
+    return lib.ctoast_get_timer(convert_to_p_c_char(key))
+
+lib.ctoast_timer_start.restype = None
+lib.ctoast_timer_start.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_start(timer):
+    lib.ctoast_timer_start(timer)
+
+lib.ctoast_timer_stop.restype = None
+lib.ctoast_timer_stop.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_stop(timer):
+    lib.ctoast_timer_stop(timer)
+
+lib.ctoast_get_timing_manager.restype = ct.POINTER(cTimingManager)
+lib.ctoast_get_timing_manager.argtypes = []
+
+def get_timing_manager():
+    return lib.ctoast_get_timing_manager()
+
+lib.ctoast_set_timing_output_files.restype = None
+lib.ctoast_set_timing_output_files.argtypes = [ p_c_char, p_c_char ]
+
+def set_timing_output_files(tot_fname, avg_fname):
+    lib.ctoast_set_timing_output_files(convert_to_p_c_char(tot_fname),
+                                       convert_to_p_c_char(avg_fname))
+
+lib.ctoast_report_timing.restype = None
+lib.ctoast_report_timing.argtypes = []
+
+def report_timing():
+    lib.ctoast_report_timing()
+
+lib.ctoast_timing_manager_size.restype = ct.c_int
+lib.ctoast_timing_manager_size.argtypes = []
+
+def timing_manager_size():
+    return lib.ctoast_timing_manager_size()
+
+lib.ctoast_timing_manager_clear.restype = None
+lib.ctoast_timing_manager_clear.argtypes = []
+
+def timing_manager_clear():
+    return lib.ctoast_timing_manager_clear()
+
+lib.ctoast_timer_real_elapsed.restype = ct.c_double
+lib.ctoast_timer_real_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_real_elapsed(timer):
+    return lib.ctoast_timer_real_elapsed(timer)
+
+lib.ctoast_timer_system_elapsed.restype = ct.c_double
+lib.ctoast_timer_system_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_system_elapsed(timer):
+    return lib.ctoast_timer_system_elapsed(timer)
+
+lib.ctoast_timer_user_elapsed.restype = ct.c_double
+lib.ctoast_timer_user_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_user_elapsed(timer):
+    return lib.ctoast_timer_user_elapsed(timer)
+
+lib.ctoast_timer_at.restype = ct.POINTER(cTimer)
+lib.ctoast_timer_at.argtypes = [ ct.c_int ]
+
+def timer_at(i):
+    return lib.ctoast_timer_at(i)
+
+#--------------------------------------
 # Math sub-library
 #--------------------------------------
 

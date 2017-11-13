@@ -3,7 +3,7 @@
 #
 #------------------------------------------------------------------------------#
 #
-include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
 
 set_source_files_properties(cbuffer.c PROPERTIES LANGUAGE C)
 
@@ -67,11 +67,7 @@ set(VERSION "${GIT_LAST_TAG}.dev${GIT_DEV_NUMBER}")
 
 set(TOAST_LIB "${CMAKE_SHARED_LIBRARY_PREFIX}toast${CMAKE_SHARED_LIBRARY_SUFFIX}")
 set(LIBTOAST_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/${TOAST_LIB})
-if(USE_MPI)
-    set(HAVE_MPI True)
-else()
-    set(HAVE_MPI False)
-endif()
+set(HAVE_MPI True)
 
 # =============================================================================#
 #   configuration files
@@ -88,12 +84,7 @@ foreach(PYCONFIG ${PYTHON_CONFIG_FILES})
     list(APPEND PYTHON_FILES ${CMAKE_BINARY_DIR}/InstallTreeFiles/${PYCONFIG_NAME}.py)
 endforeach()
 
-install(FILES ${PYTHON_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}
-    #PERMISSIONS
-    #OWNER_READ    GROUP_READ    WORLD_READ
-    #OWNER_WRITE
-    #OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
-)
+install(FILES ${PYTHON_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
 
 # install the python sub-directories
 install(DIRECTORY

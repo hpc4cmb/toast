@@ -4,6 +4,7 @@ SUBDIRS =
 # Initialize compile and linking flags
 
 AM_CPPFLAGS = \
+-I$(top_srcdir)/src/libtoast/util \
 -I$(top_srcdir)/src/libtoast/math \
 -I$(top_srcdir)/src/libtoast/atm 
 

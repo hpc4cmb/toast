@@ -19,11 +19,8 @@ include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123/conventional)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123/features)
+include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/util)
 include_directories(${PROJECT_BINARY_DIR}/config)
-
-if(NOT USE_MPI)
-    include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/fakempi)
-endif(NOT USE_MPI)
 
 add_subdirectory(libtoast)
 
@@ -110,9 +107,6 @@ foreach(_DIR capi fod atm map tod math math/Random123
         math/Random123/conventional math/Random123/features)
     list(APPEND PROJECT_INCLUDE_DIRS_BUILD_TREE ${PROJECT_SOURCE_DIR}/src/libtoast/${_DIR})
 endforeach()
-if(NOT USE_MPI)
-    list(APPEND PROJECT_INCLUDE_DIRS_BUILD_TREE ${PROJECT_SOURCE_DIR}/src/libtoast/fakempi)
-endif(NOT USE_MPI)
 file(RELATIVE_PATH CMAKE_INSTALL_REL_INCLUDEDIR
     ${CMAKE_INSTALL_FULL_CMAKEDIR}
     ${CMAKE_INSTALL_FULL_INCLUDEDIR})

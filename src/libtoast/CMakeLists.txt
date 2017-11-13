@@ -15,6 +15,7 @@ set(LIBTOAST_COMPONENTS
     math/Random123/features/sources.cmake
     test/sources.cmake
     test/gtest/sources.cmake
+    util/sources.cmake
 )
 
 GLOBAL_OBJECT_TARGET(NAME libtoast-object

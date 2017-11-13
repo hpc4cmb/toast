@@ -17,7 +17,7 @@ export MPICC=$(which cc)
 export MPICXX=$(which CC)
 
 # ${OPTS} at end because last -D overrides any previous -D with same name
-# on command line (e.g. -DUSE_MPI=OFF -DUSE_MPI=OFF --> USE_MPI == OFF)
+# on command line (e.g. -DUSE_MKL=ON -DUSE_MKL=OFF --> USE_MKL == OFF)
 mkdir -p ${DIR} 
 cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENMP=ON \

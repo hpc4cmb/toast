@@ -19,6 +19,15 @@ namespace toast { namespace test {
     int runner ( int argc, char *argv[] );
 }}
 
+class timingTest : public ::testing::Test
+{
+public:
+    timingTest () { }
+    ~timingTest () { }
+    virtual void SetUp() { }
+    virtual void TearDown() { }
+};
+
 
 class qarrayTest : public ::testing::Test {
 

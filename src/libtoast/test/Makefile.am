@@ -5,6 +5,7 @@ SUBDIRS = gtest
 
 AM_CPPFLAGS = \
 -I$(top_srcdir)/src/libtoast \
+-I$(top_srcdir)/src/libtoast/util \
 -I$(top_srcdir)/src/libtoast/math \
 -I$(top_srcdir)/src/libtoast/atm \
 -I$(top_srcdir)/src/libtoast/tod \
@@ -37,6 +38,7 @@ noinst_HEADERS = toast_test.hpp
 noinst_LTLIBRARIES = libtoast_test.la
 
 libtoast_test_la_SOURCES = \
+toast_test_timing.cpp \
 toast_test_qarray.cpp \
 toast_test_rng.cpp \
 toast_test_sf.cpp \

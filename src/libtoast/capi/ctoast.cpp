@@ -10,9 +10,9 @@ a BSD-style license that can be found in the LICENSE file.
 #include <cstring>
 
 
-//--------------------------------------
+//============================================================================//
 // Global library initialize / finalize
-//--------------------------------------
+//============================================================================//
 
 void ctoast_init ( int argc, char *argv[] ) {
     toast::init ( argc, argv );
@@ -24,9 +24,133 @@ void ctoast_finalize ( ) {
     return;
 }
 
-//--------------------------------------
+//============================================================================//
+// Util sub-library
+//============================================================================//
+
+ctoast_timer* ctoast_get_timer(char* ckey)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t& _t = timing_manager::instance()->timer(ckey);
+    return reinterpret_cast<ctoast_timer*>(&_t);
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_timer_start(ctoast_timer* _ct)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    _t->start();
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_timer_stop(ctoast_timer* _ct)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    _t->stop();
+}
+
+//----------------------------------------------------------------------------//
+
+ctoast_timing_manager* ctoast_get_timing_manager()
+{
+    using namespace toast::util;
+    return reinterpret_cast<ctoast_timing_manager*>(timing_manager::instance());
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_set_timing_output_files(char* ctot_fname, char* cavg_fname)
+{
+    using namespace toast::util;
+    std::string tot_fname = std::string(const_cast<const char*>(ctot_fname));
+    std::string avg_fname = std::string(const_cast<const char*>(cavg_fname));
+    timing_manager::instance()->set_output_streams(tot_fname, avg_fname);
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_report_timing()
+{
+    using namespace toast::util;
+    timing_manager::instance()->report();
+}
+
+//----------------------------------------------------------------------------//
+
+size_t ctoast_timing_manager_size()
+{
+    using namespace toast::util;
+    return timing_manager::instance()->size();
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_timing_manager_clear()
+{
+    using namespace toast::util;
+    timing_manager::instance()->clear();
+}
+
+//----------------------------------------------------------------------------//
+
+double ctoast_timer_real_elapsed(ctoast_timer* _ct)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    _t->stop();
+    return _t->real_elapsed();
+}
+
+//----------------------------------------------------------------------------//
+
+double ctoast_timer_system_elapsed(ctoast_timer* _ct)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    _t->stop();
+    return _t->system_elapsed();
+}
+
+//----------------------------------------------------------------------------//
+
+double ctoast_timer_user_elapsed(ctoast_timer* _ct)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    _t->stop();
+    return _t->user_elapsed();
+}
+
+//----------------------------------------------------------------------------//
+
+ctoast_timer* ctoast_timer_at(size_t i)
+{
+    using namespace toast::util;
+    typedef timing_manager::toast_timer_t toast_timer_t;
+
+    toast_timer_t& _t = timing_manager::instance()->at(i);
+    return reinterpret_cast<ctoast_timer*>(&_t);
+}
+
+//============================================================================//
 // Math sub-library
-//--------------------------------------
+//============================================================================//
 
 // aligned memory
 

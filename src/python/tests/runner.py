@@ -19,6 +19,7 @@ from .ctoast import test_ctoast
 
 from . import cbuffer as testcbuffer
 from . import cache as testcache
+from . import timing as testtiming
 from . import rng as testrng
 from . import fft as testfft
 from . import dist as testdist
@@ -70,6 +71,7 @@ def test(name=None):
     if name is None:
         suite.addTest( loader.loadTestsFromModule(testcbuffer) )
         suite.addTest( loader.loadTestsFromModule(testcache) )
+        suite.addTest( loader.loadTestsFromModule(testtiming) )
         suite.addTest( loader.loadTestsFromModule(testrng) )
         suite.addTest( loader.loadTestsFromModule(testfft) )
         suite.addTest( loader.loadTestsFromModule(testdist) )

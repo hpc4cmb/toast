@@ -24,24 +24,29 @@ endif()
 add_option(USE_SSE "Use SSE/AVX optimization flags" OFF)
 add_option(USE_OPENMP "Use OpenMP" ON)
 
-add_option(USE_MKL "Enable Intel Math Kernel Library (MKL)" ${CMAKE_CXX_COMPILER_IS_INTEL})
 add_option(USE_TBB "Enable Intel Thread Building Blocks (TBB)" OFF)
-add_option(USE_MATH "Enable Intel IMF Math library" ${CMAKE_CXX_COMPILER_IS_INTEL})
+add_dependent_option(USE_MKL "Enable Intel Math Kernel Library (MKL)" ON
+    "CMAKE_CXX_COMPILER_IS_INTEL" OFF)
+add_dependent_option(USE_MATH "Enable Intel IMF Math library" ON
+    "CMAKE_CXX_COMPILER_IS_INTEL" OFF)
 
 add_option(USE_BLAS "Use BLAS" ON)
 add_option(USE_LAPACK "Use LAPACK" ON)
-#add_option(USE_OPENBLAS "Use OpenBLAS" OFF)
 
-add_option(USE_FFTW "Use FFTW" OFF)
+# FFTW is needed if MKL is not used
+add_dependent_option(USE_FFTW "Use FFTW" OFF "USE_MKL" ON)
 add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
 
+# used as a definition in autotools compilation
+add_definitions(-DHAVE_CONFIG_H)
 
 ################################################################################
 #
 #        Threading
 #
 ################################################################################
+
 set(CMAKE_THREAD_PREFER_PTHREADS ON)
 find_package(Threads)
 
@@ -59,8 +64,9 @@ find_package(MPI REQUIRED)
 add(CMAKE_C_FLAGS_EXTRA    "${MPI_C_COMPILE_FLAGS}")
 add(CMAKE_CXX_FLAGS_EXTRA  "${MPI_CXX_COMPILE_FLAGS}")
 add(CMAKE_EXE_LINKER_FLAGS "${MPI_CXX_LINK_FLAGS}")
-add_definitions(-DUSE_MPI)
-add_definitions(-DHAVE_CONFIG_H)
+# mpi.py.in uses HAVE_MPI to decide whether to use
+# (1) mpi4py or (2) fakempi, the latter of which is broken
+set(HAVE_MPI True)
 
 set(MPI_LIBRARIES )
 foreach(_TYPE C_LIBRARIES CXX_LIBRARIES EXTRA_LIBRARY)
@@ -90,12 +96,8 @@ find_package_handle_standard_args(Python3 DEFAULT_MSG
 #        OpenMP
 #
 ################################################################################
-if(USE_OPENMP)
 
-    if(CMAKE_CXX_COMPILER_IS_CLANG AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        message(AUTHOR_WARNING
-            "Clang on Darwin (as of OS X Mavericks) does not have OpenMP Support")
-    endif()
+if(USE_OPENMP)
 
     find_package(OpenMP REQUIRED)
     # Add the OpenMP-specific compiler and linker flags
@@ -111,6 +113,7 @@ endif(USE_OPENMP)
 #        MKL - Intel Math Kernel Library
 #
 ################################################################################
+
 if(USE_MKL)
 
     ConfigureRootSearchPath(MKL)
@@ -139,6 +142,7 @@ endif()
 #        TBB - Intel Thread Building Blocks
 #
 ################################################################################
+
 if(USE_TBB)
 
     ConfigureRootSearchPath(TBB)
@@ -157,6 +161,7 @@ endif()
 #        Math - Intel IMF library
 #
 ################################################################################
+
 if(USE_MATH)
 
     ConfigureRootSearchPath(IMF)
@@ -172,6 +177,7 @@ endif()
 #        BLAS, LAPACK, and OpenBLAS
 #
 ################################################################################
+
 foreach(_LIB BLAS LAPACK OpenBLAS)
 
     string(TOUPPER "${_LIB}" _UPPER_LIB)
@@ -196,7 +202,8 @@ endforeach()
 #        FFTW
 #
 ################################################################################
-if(USE_FFTW)
+
+if(USE_FFTW AND NOT USE_MKL)
 
     ConfigureRootSearchPath(FFTW3)
     find_package(FFTW3 REQUIRED)
@@ -208,7 +215,7 @@ if(USE_FFTW)
 
     add_definitions(-DUSE_FFTW)
 
-endif(USE_FFTW)
+endif(USE_FFTW AND NOT USE_MKL)
 
 
 ################################################################################
@@ -216,6 +223,7 @@ endif(USE_FFTW)
 #        wcslib
 #
 ################################################################################
+
 if(USE_WCSLIB)
 
     ConfigureRootSearchPath(wcslib)
@@ -231,6 +239,7 @@ endif(USE_WCSLIB)
 #        Elemental
 #
 ################################################################################
+
 if(USE_ELEMENTAL)
 
     ConfigureRootSearchPath(Elemental)
@@ -273,6 +282,7 @@ set(EXTERNAL_LIBRARIES ${CMAKE_THREAD_LIBS_INIT}
 REMOVE_DUPLICATES(EXTERNAL_INCLUDE_DIRS)
 REMOVE_DUPLICATES(EXTERNAL_LIBRARIES)
 
+
 ################################################################################
 #
 #        SSE
@@ -299,6 +309,7 @@ else(USE_SSE)
 
 endif(USE_SSE)
 
+
 ################################################################################
 #
 #        Architecture Flags
@@ -309,7 +320,8 @@ include(Architecture)
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
    "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo" OR
-   DEFINED TARGET_ARCHITECTURE)
+   (DEFINED TARGET_ARCHITECTURE AND
+       NOT "${TARGET_ARCHITECTURE}" STREQUAL "auto"))
 
     ArchitectureFlags(ARCH_FLAGS)
     add(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")

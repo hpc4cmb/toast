@@ -45,7 +45,8 @@ rng.py \
 fft.py \
 runner.py \
 tod.py \
-tidas.py
+tidas.py \
+timing.py
 
 
 clean-local :

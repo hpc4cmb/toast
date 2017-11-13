@@ -8,6 +8,10 @@
 
 include(MacroUtilities)
 
+
+################################################################################
+# Add option + feature
+################################################################################
 MACRO(ADD_OPTION_AND_FEATURE _NAME _MESSAGE _DEFAULT _FEATURE)
     OPTION(${_NAME} "${_MESSAGE}" ${_DEFAULT})
     IF(NOT "${_FEATURE}" STREQUAL "NO_FEATURE")
