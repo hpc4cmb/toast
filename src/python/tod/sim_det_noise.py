@@ -12,7 +12,7 @@ import numpy as np
 from ..op import Operator
 
 #from .tod_math import sim_noise_timestream
-from ..ctoast import sim_noise_sim_noise_timestream
+from ..ctoast import sim_noise_sim_noise_timestream as sim_noise_timestream
 
 
 class OpSimNoise(Operator):
@@ -158,7 +158,7 @@ class OpSimNoise(Operator):
             #    self._oversample, nse.freq(key), nse.psd(key),
             #    self._altfft)[0]
 
-            nsedata = sim_noise_sim_noise_timestream(
+            nsedata = sim_noise_timestream(
                 self._realization, telescope, self._component, obsindx,
                 nse.index(key), rate, chunk_first+global_offset, chunk_samp,
                 self._oversample, nse.freq(key), nse.psd(key))
