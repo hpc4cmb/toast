@@ -2,18 +2,17 @@
 # build matrix.  We simply apt install the compiled dependencies.
 language: python
 
-os:
-    - linux
-
-# These use container-based images (faster boot) and Ubuntu 14.04 LTS
-sudo: false
-dist: trusty
-
-# The apt packages here install our compiled code dependencies.
-addons:
-    apt:
-        packages:
+matrix:
+  include:
+    # GCC 4.8
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          packages:
             - build-essential
+            - gcc
             - g++
             - gfortran
             - autoconf
@@ -25,6 +24,104 @@ addons:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+      env:
+        - MATRIX_EVAL="CC=$(which gcc) && CXX=$(which g++) && FC=$(which gfortran)"
+    # GCC 4.9
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-4.9
+            - g++-4.9
+            - gfortran-4.9
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="CC=$(which gcc-4.9) && CXX=$(which g++-4.9) && FC=$(which gfortran-4.9)"
+    # GCC 5
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-5
+            - g++-5
+            - gfortran-5
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="CC=$(which gcc-5) && CXX=$(which g++-5) && FC=$(which gfortran-5)"
+    # GCC 6
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-6
+            - g++-6
+            - gfortran-6
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="CC=$(which gcc-6) && CXX=$(which g++-6) && FC=$(which gfortran-6)"
+    # GCC 7
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - gcc-7
+            - g++-7
+            - gfortran-7
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - libhdf5-dev
+            - libmpich-dev
+            - fftw3-dev
+            - libatlas-base-dev
+            - pkg-config
+      env:
+        - MATRIX_EVAL="CC=$(which gcc-7) && CXX=$(which g++-7) && FC=$(which gfortran-7)"
 
 # The versions to test
 python:
