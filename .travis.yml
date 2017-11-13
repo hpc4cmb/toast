@@ -130,6 +130,25 @@ python:
 # Set up MPI and mpi4py
 
 before_install:
+    # set the C, C++, and Fortran compilers
+    - eval "${MATRIX_EVAL}"
+    # set the MPICH underlying compilers
+    - export MPICH_CC=${CC}
+    - export MPICH_CXX=${CXX}
+    - export MPICH_FC=${FC}
+    # Information about compilers
+    - echo "CC = ${CC} $(${CC} -dumpversion)"
+    - echo "CXX = ${CXX} $(${CXX} -dumpversion)"
+    - echo "FC = ${FC} $(${FC} -dumpversion)"
+    - if [ ! -z "$(which mpicc)" ]; then mpicc -v ; else echo "No mpicc" ; fi
+    - if [ ! -z "$(which mpic++)" ]; then mpic++ -v ; else echo "No mpic++" ; fi
+    - if [ ! -z "$(which mpicxx)" ]; then mpicxx -v ; else echo "No mpicxx" ; fi
+    - if [ ! -z "$(which mpifort)" ]; then mpifort -v ; else echo "No mpifort" ; fi
+    - export MPICC=$(which mpicc)
+    - export MPICXX=$(which mpicxx)
+    - echo "MPICC = ${MPICC}"
+    - echo "MPICXX = ${MPICXX}"
+    # miniconda install
     - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH="$HOME/miniconda/bin:$PATH"
@@ -140,19 +159,6 @@ before_install:
     - conda info -a
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
     - pip install mpi4py
-    # set the C, C++, and Fortran compilers
-    - eval "${MATRIX_EVAL}"
-    # set the MPICH underlying compilers
-    - export MPICH_CC=${CC}
-    - export MPICH_CXX=${CXX}
-    - export MPICH_FC=${FC}
-    # Information about compilers
-    - echo "CC = ${CC} $(${CC} -dumpversion)"
-    - echo "CXX = ${CXX} $(${CXX} -dumpversion)"
-    - echo "CC = ${FC} $(${FC} -dumpversion)"
-    - if [ ! -z "$(which mpicc)" ]; then mpicc -v ; else echo "No mpicc" ; fi
-    - if [ ! -z "$(which mpic++)" ]; then mpic++ -v ; else echo "No mpic++" ; fi
-    - if [ ! -z "$(which mpicxx)" ]; then mpicxx -v ; else echo "No mpicxx" ; fi
 
 # Skip this
 
