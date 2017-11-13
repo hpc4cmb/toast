@@ -194,7 +194,8 @@ class PSDTest(MPITestCase):
 
             df = nse.rate(det) / float(fftlen)
 
-            (temp, freqs[det], psds[det]) = sim_noise_timestream(0, 0, 0, 0, idet, nse.rate(det), 0, self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
+            #(temp, freqs[det], psds[det]) = sim_noise_timestream(0, 0, 0, 0, idet, nse.rate(det), 0, self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
+            temp = sim_noise_timestream(0, 0, 0, 0, idet, nse.rate(det), 0, self.chunksize, self.oversample, nse.freq(det), nse.psd(det))
 
             if False:
                 psdfreq = freqs[det]

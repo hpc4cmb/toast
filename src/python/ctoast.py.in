@@ -931,6 +931,30 @@ def filter_polyfilter(order, signals, flags, starts, stops):
 
     return
 
+lib.ctoast_sim_noise_sim_noise_timestream.restype = None
+lib.ctoast_sim_noise_sim_noise_timestream.argtypes = [
+    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
+    ct.c_ulonglong, ct.c_double, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
+    npf64, npf64, ct.c_ulonglong, npf64]
+
+def sim_noise_sim_noise_timestream(
+        realization, telescope, component, obsindx, detindx,
+        rate, firstsamp, samples, oversample, freq, psd):
+
+    if freq.size != psd.size:
+        raise RuntimeError(
+            'freq and psd must be same size')
+
+    noise = np.zeros(samples, dtype=np.float64)
+
+    lib.ctoast_sim_noise_sim_noise_timestream(
+        realization, telescope, component,
+        obsindx, detindx, rate,
+        firstsamp, samples, oversample,
+        freq, psd, psd.size, noise)
+
+    return noise
+
 lib.ctoast_pointing_healpix_matrix.restype = None
 lib.ctoast_pointing_healpix_matrix.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
     ct.c_double, ct.c_double, ct.c_char_p, ct.c_ulong, npf64, npf64, npu8, npi64,

@@ -753,8 +753,8 @@ class TODGround(TOD):
             "sun_angle_min": sun_angle_min
         }
         super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
-            detranks=detranks, detbreaks=detbreaks, sampsizes=sizes, 
-            sampbreaks=sampbreaks, meta=props)
+                         detranks=detranks, detbreaks=detbreaks,
+                         sampsizes=[samples], sampbreaks=sampbreaks, meta=props)
 
         if self._report_timing:
             mpicomm.Barrier()

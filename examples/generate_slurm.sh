@@ -6,7 +6,7 @@ topdir=$(pwd -P)
 popd > /dev/null
 
 : ${TYPES:="satellite ground ground_simple"}
-: ${SIZES:="tiny small medium large"}
+: ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-intel-knl cori-intel-haswell edison-intel"}
 
 for type in ${TYPES}; do
