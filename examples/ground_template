@@ -87,6 +87,7 @@ com="${ex} @${parfile} \
 --atm_xstep @@cellsize@@ \
 --atm_ystep @@cellsize@@ \
 --atm_zstep @@cellsize@@ \
+--madam_iter_max @@itermax@@ \
 "
 
 #--- Hardware configuration (no need to change) ----

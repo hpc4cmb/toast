@@ -1,9 +1,10 @@
 queue = debug
-nodes = 128
-nodes_per_group = 128
+nodes = 64
+nodes_per_group = 64
 time = 00:30:00
-detpix = 3571
+detpix = 7651
 tiny = no
 patch = 8x8deg,1,4,-26,-4,-34
-schedule_stop = "2016-06-01 08:00:00"
-cellsize = 5
+schedule_stop = "2016-06-02 00:00:00"
+cellsize = 10
+itermax = 10
