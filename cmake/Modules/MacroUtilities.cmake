@@ -46,6 +46,8 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.1)
     cmake_policy(SET CMP0054 NEW)
 endif()
 
+include(CMakeDependentOption)
+
 #-----------------------------------------------------------------------
 # CMAKE EXTENSIONS
 #-----------------------------------------------------------------------
@@ -491,7 +493,25 @@ MACRO(ADD_OPTION _NAME _MESSAGE _DEFAULT)
     ELSE()
         MARK_AS_ADVANCED(${_NAME})
     ENDIF()
-ENDMACRO()
+ENDMACRO(ADD_OPTION _NAME _MESSAGE _DEFAULT)
+
+
+#------------------------------------------------------------------------------#
+# function add_dependent_option(<OPTION_NAME> <DOCSRING>
+#                               <CONDITION_TRUE_SETTING> <CONDITION>
+#                               <DEFAULT_SETTING> [NO_FEATURE])
+#          Add an option and add as a feature if NO_FEATURE is not provided
+#
+MACRO(ADD_DEPENDENT_OPTION _NAME _MESSAGE _COND_SETTING _COND _DEFAULT)
+    SET(_FEATURE ${ARGN})
+    CMAKE_DEPENDENT_OPTION(${_NAME} "${_MESSAGE}" ${_COND_SETTING}
+        "${_COND}" ${_DEFAULT})
+    IF(NOT "${_FEATURE}" STREQUAL "NO_FEATURE")
+        ADD_FEATURE(${_NAME} "${_MESSAGE}")
+    ELSE()
+        MARK_AS_ADVANCED(${_NAME})
+    ENDIF()
+ENDMACRO(ADD_DEPENDENT_OPTION _NAME _MESSAGE _DEFAULT _COND _COND_SETTING)
 
 
 #------------------------------------------------------------------------------#

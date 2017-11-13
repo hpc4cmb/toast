@@ -129,4 +129,29 @@ function(define_version_00 PREFIX POSTFIX)
 
 endfunction()
 
+
+################################################################################
+#   remove a file from a list of files
+################################################################################
+macro(REMOVE_FILE _LIST _NAME)
+
+    # loop over the list
+    foreach(_FILE ${${_LIST}})
+        # get the base filename
+        get_filename_component(_BASE ${_FILE} NAME)
+        # check if full filename or base filename is exact match for
+        # name provided
+        if("${_BASE}" STREQUAL "${_NAME}" OR
+           "${_FILE}" STREQUAL "${_NAME}")
+            # remove from list
+            list(REMOVE_ITEM ${_LIST} ${_FILE})
+
+        endif("${_BASE}" STREQUAL "${_NAME}" OR
+              "${_FILE}" STREQUAL "${_NAME}")
+
+    endforeach(_FILE ${${_LIST}})
+
+endmacro(REMOVE_FILE _LIST _NAME)
+
+
 cmake_policy(POP)
