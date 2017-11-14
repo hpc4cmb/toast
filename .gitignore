@@ -61,6 +61,7 @@ __pycache__/
 *.so
 
 /examples/*.slurm
+/examples/tiny_*_shell.sh
 /examples/out_*
 /examples/data/
 
