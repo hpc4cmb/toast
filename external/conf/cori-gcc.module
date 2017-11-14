@@ -14,7 +14,7 @@ if [ module-info mode load ] {
   if [ is-loaded cmake ] {
     module swap cmake cmake/3.8.2
   } else {
-      module load cmake/3.8.2
+    module load cmake/3.8.2
   }
   setenv CRAYPE_LINK_TYPE dynamic
 }
