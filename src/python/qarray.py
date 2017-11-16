@@ -8,10 +8,12 @@ import collections
 import numpy as np
 
 from . import ctoast as ctoast
+from . import timing as timing
 
 
 def arraylist_dot(a, b):
     """Dot product of lists of arrays, returns a column array"""
+    autotimer = timing.auto_timer()
     if not isinstance(a, np.ndarray):
         a = np.array(a, dtype=np.float64)
     if not isinstance(b, np.ndarray):
@@ -55,6 +57,7 @@ def arraylist_dot(a, b):
 
 def inv(q):
     """Inverse of quaternion array q"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -70,6 +73,7 @@ def inv(q):
 
 def amplitude(v):
     """Amplitude of a vector array"""
+    autotimer = timing.auto_timer()
     if not isinstance(v, np.ndarray):
         v = np.array(v, dtype=np.float64)
     nv = None
@@ -89,6 +93,7 @@ def amplitude(v):
 
 def norm(q):
     """Normalize quaternion array to unit quaternions"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -108,6 +113,7 @@ def rotate(q, v):
     Use a quaternion or array of quaternions (q) to rotate a vector or
     array of vectors (v).
     """
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     if not isinstance(v, np.ndarray):
@@ -139,6 +145,7 @@ def mult(p, q):
     """Multiply arrays of quaternions, see:
     http://en.wikipedia.org/wiki/Quaternions#Quaternions_and_the_geometry_of_R3
     """
+    autotimer = timing.auto_timer()
     if not isinstance(p, np.ndarray):
         p = np.array(p, dtype=np.float64)
     if not isinstance(q, np.ndarray):
@@ -169,6 +176,7 @@ def mult(p, q):
 
 def slerp(targettime, time, q):
     """Slerp, q quaternion array interpolated from time to targettime"""
+    autotimer = timing.auto_timer()
     ttime = targettime
     if not isinstance(ttime, np.ndarray):
         ttime = np.array(ttime, dtype=np.float64, ndmin=1)
@@ -193,6 +201,7 @@ def slerp(targettime, time, q):
 
 def exp(q):
     """Exponential of a quaternion array"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -209,6 +218,7 @@ def exp(q):
 
 def ln(q):
     """Natural logarithm of a quaternion array"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -224,6 +234,7 @@ def ln(q):
 
 def pow(q, p):
     """Real power of a quaternion array"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -265,6 +276,7 @@ def pow(q, p):
 
 def rotation(axis, angle):
     """Rotation quaternions of angles [rad] around axes [already normalized]"""
+    autotimer = timing.auto_timer()
     if not isinstance(axis, np.ndarray):
         axis = np.array(axis, dtype=np.float64)
     nax = None
@@ -307,6 +319,8 @@ def rotation(axis, angle):
 
 
 def to_axisangle(q):
+    """To Axis Angle"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None
@@ -327,6 +341,7 @@ def to_axisangle(q):
 
 def to_rotmat(q):
     """Rotation matrix"""
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     if q.ndim != 1:
@@ -336,6 +351,7 @@ def to_rotmat(q):
 
 
 def from_rotmat(rotmat):
+    autotimer = timing.auto_timer()
     if not isinstance(rotmat, np.ndarray):
         rotmat = np.array(rotmat, dtype=np.float64)
     if rotmat.ndim != 2:
@@ -345,6 +361,7 @@ def from_rotmat(rotmat):
 
 
 def from_vectors(v1, v2):
+    autotimer = timing.auto_timer()
     if not isinstance(v1, np.ndarray):
         v1 = np.array(v1, dtype=np.float64)
     if not isinstance(v2, np.ndarray):
@@ -357,6 +374,7 @@ def from_vectors(v1, v2):
 
 
 def from_angles(theta, phi, pa, IAU=False):
+    autotimer = timing.auto_timer()
     iterable = (isinstance(theta, collections.Iterable) or
                 isinstance(phi, collections.Iterable) or
                 isinstance(pa, collections.Iterable))
@@ -385,6 +403,7 @@ def from_angles(theta, phi, pa, IAU=False):
     return q
 
 def to_angles(q, IAU=False):
+    autotimer = timing.auto_timer()
     if not isinstance(q, np.ndarray):
         q = np.array(q, dtype=np.float64)
     nq = None

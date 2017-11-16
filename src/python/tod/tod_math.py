@@ -13,6 +13,7 @@ import scipy.sparse as sp
 from .. import rng as rng
 from .. import qarray as qa
 from .. import fft as fft
+from .. import timing as timing
 
 from ..op import Operator
 
@@ -35,7 +36,7 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     Returns:
         calibrated timestream.
     """
-
+    autotimer = timing.auto_timer()
     if len(gaintimes) == 1:
         g = gains
     else:
@@ -101,7 +102,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
         the timestream array, the interpolated PSD frequencies, and
             the interpolated PSD values.
     """
-
+    autotimer = timing.auto_timer()
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
@@ -231,7 +232,7 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     Returns:
         (array):  detector dipole timestream.
     """
-
+    autotimer = timing.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nsamp = pntg.shape[0]
 
@@ -321,6 +322,7 @@ class OpCacheCopy(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:
@@ -381,6 +383,7 @@ class OpCacheClear(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:

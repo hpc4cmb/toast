@@ -15,6 +15,7 @@ import numpy as np
 import ephem
 from scipy.constants import degree
 
+import toast.timing as timing
 
 def to_JD(t):
     # Unix time stamp to Julian date
@@ -622,7 +623,7 @@ def parse_args():
                         required=False, default='schedule.txt',
                         help='Output filename')
 
-    args = parser.parse_args()
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     try:
         start_time = dateutil.parser.parse(args.start + ' +0000')
@@ -857,6 +858,7 @@ def main():
     args, start_timestamp, stop_timestamp = parse_args()
 
     patches = parse_patches(args)
+    autotimer = timing.auto_timer(timing.FILE())
 
     build_schedule(
         args, start_timestamp, stop_timestamp,
@@ -864,5 +866,8 @@ def main():
         args.sun_angle_min*degree, args.moon_angle_min*degree,
         args.el_min*degree, args.el_max*degree, args.fp_radius*degree, patches)
 
+
 if __name__ == '__main__':
     main()
+    tman = timing.timing_manager()
+    tman.report()

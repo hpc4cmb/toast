@@ -16,6 +16,7 @@ from ..tod import TOD
 
 from ..cache import Cache
 
+from .. import timing as timing
 
 class OpLocalPixels(Operator):
     """
@@ -57,6 +58,7 @@ class OpLocalPixels(Operator):
         # the communicator with all processes with
         # the same rank within their group
         crank = comm.comm_rank
+        autotimer = timing.auto_timer(type(self).__name__)
 
         # initialize the local pixel set
         local = None
@@ -377,6 +379,7 @@ class DistPixels(object):
         if comm_bytes is None:
             comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
+        autotimer = timing.auto_timer(type(self).__name__)
 
         # we make the assumption that FITS binary tables are still stored in
         # blocks of 2880 bytes just like always...
@@ -487,6 +490,8 @@ class DistPixels(object):
         """
         if comm_bytes is None:
             comm_bytes = self._commsize
+
+        autotimer = timing.auto_timer(type(self).__name__)
         # We will reduce some number of whole submaps at a time.
         # Find the number of submaps that fit into the requested
         # communication size.

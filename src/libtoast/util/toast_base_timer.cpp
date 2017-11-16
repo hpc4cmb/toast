@@ -54,11 +54,11 @@ void base_timer::parse_format()
     size_type npos = std::string::npos;
 
     str_list_t fmts;
-    fmts.push_back(clockstr_t("%w", WALL   ));
-    fmts.push_back(clockstr_t("%u", USER   ));
-    fmts.push_back(clockstr_t("%s", SYSTEM ));
-    fmts.push_back(clockstr_t("%t", CPU    ));
-    fmts.push_back(clockstr_t("%p", PERCENT));
+    fmts.push_back(clockstr_t("%w", clock_type::wall    ));
+    fmts.push_back(clockstr_t("%u", clock_type::user    ));
+    fmts.push_back(clockstr_t("%s", clock_type::system  ));
+    fmts.push_back(clockstr_t("%t", clock_type::cpu     ));
+    fmts.push_back(clockstr_t("%p", clock_type::percent ));
 
     for(str_list_t::iterator itr = fmts.begin(); itr != fmts.end(); ++itr)
     {
@@ -89,6 +89,23 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     if(avg && this->laps() > 0)
         div = 1.0 / static_cast<double>(this->laps());
 
+    double _real = real_elapsed();
+    double _user = user_elapsed();
+    double _system = system_elapsed();
+    double _cpu = _user + _system;
+    double _perc = (_cpu / _real) * 100.0;
+
+    double tmin = 1.0 / (pow( (uint32_t) 10, (uint32_t) m_precision));
+    // skip if it will be reported as all zeros
+    // e.g. tmin = ( 1. / 10^3 ) = 0.001;
+    if(_real < tmin || _cpu < tmin || _perc < 0.1)
+        return;
+
+    // timing spacing
+    static uint16_t noff = 3;
+    if(_cpu > 10.0)
+        noff = std::max(noff, (uint16_t) ( log10(_cpu) + 2 ));
+
     // use stringstream so precision and fixed don't directly affect
     // ostream
     std::stringstream ss;
@@ -111,30 +128,30 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
         // print the appropriate timing mechanism
         switch (m_format_positions.at(i).second)
         {
-            case WALL:
+            case clock_type::wall:
                 // the real elapsed time
-                ss << std::setw(3+m_precision)
-                   << (real_elapsed() * div);
+                ss << std::setw(noff+m_precision)
+                   << (_real * div);
                 break;
-            case USER:
+            case clock_type::user:
                 // CPU time of non-system calls
-                ss << std::setw(3+m_precision)
-                   << (user_elapsed() * div);
+                ss << std::setw(noff+m_precision)
+                   << (_user * div);
                 break;
-            case SYSTEM:
+            case clock_type::system:
                 // thread specific CPU time, e.g. thread creation overhead
-                ss << std::setw(3+m_precision)
-                   << (system_elapsed() * div);
+                ss << std::setw(noff+m_precision)
+                   << (_system * div);
                 break;
-            case CPU:
+            case clock_type::cpu:
                 // total CPU time
-                ss << std::setw(3+m_precision)
-                   << ((user_elapsed() + system_elapsed()) * div);
+                ss << std::setw(noff+m_precision)
+                   << (_cpu * div);
                 break;
-            case PERCENT:
+            case clock_type::percent:
                 // percent CPU utilization
                 ss.precision(1);
-                ss << ((user_elapsed()+system_elapsed())/real_elapsed())*100.0;
+                ss << std::setw(5) << (_perc);
                 break;
         }
         // skip over %{w,u,s,t,p} field
@@ -147,6 +164,9 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     ss << substr;
     if(avg)
         ss << " (average of " << this->laps() << " laps)";
+    else if(this->laps() > 1)
+        ss << " (total # of laps: " << this->laps() << ")";
+
     if(endline)
         ss << std::endl;
 

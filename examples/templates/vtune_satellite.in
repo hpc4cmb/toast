@@ -47,7 +47,9 @@ detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 -N 1 toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
+    srun -n 1 -N 1 toast_fake_focalplane.py \
+	--toast-output-dir ${outdir} --toast-timing-fname "timing_report_fp" \
+	--minpix ${detpix} --out "${outdir}/fp"
 fi
 
 # The executable script
@@ -79,6 +81,7 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \

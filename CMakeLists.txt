@@ -84,6 +84,8 @@ install(FILES ${PYTHON_EXAMPLES} DESTINATION ${CMAKE_INSTALL_BINDIR}
     OWNER_WRITE
     OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE)
 
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/examples ${CMAKE_BINARY_DIR}/examples)
 #------------------------------------------------------------------------------#
 
 include(Documentation)

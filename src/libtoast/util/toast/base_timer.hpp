@@ -11,11 +11,22 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include "base_clock.hpp"
 #include <fstream>
+#include <string>
 
 //----------------------------------------------------------------------------//
 
 namespace toast
 {
+
+enum class clock_type
+{
+    wall,
+    user,
+    system,
+    cpu,
+    percent
+};
+
 namespace util
 {
 namespace details
@@ -70,10 +81,8 @@ public:
     inline void report_average(ostream_t& os, bool endline = true) const;
 
 protected:
-    enum CLOCK_TYPE { WALL, USER, SYSTEM, CPU, PERCENT };
-
-    typedef std::pair<size_type, CLOCK_TYPE>    clockpos_t;
-    typedef std::pair<string_t,  CLOCK_TYPE>    clockstr_t;
+    typedef std::pair<size_type, clock_type>    clockpos_t;
+    typedef std::pair<string_t,  clock_type>    clockstr_t;
     typedef std::vector<clockstr_t>             str_list_t;
     typedef std::vector<clockpos_t>             pos_list_t;
 

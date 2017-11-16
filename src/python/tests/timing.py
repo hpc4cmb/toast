@@ -26,10 +26,12 @@ class TimingTest(MPITestCase):
             return fibonacci(n-1) + fibonacci(n-2);
 
         def time_fibonacci(n):
+            atimer = timing.auto_timer('(%i)@%s' % (n, timing.FILE(use_dirname=True)))
             key = ('fibonacci(%i)' % n)
             timer = timing.timer(key)
             timer.start()
             val = fibonacci(n)
+            timer.stop()
 
         tman.clear()
         t = timing.timer("tmanager test");
@@ -46,7 +48,7 @@ class TimingTest(MPITestCase):
 
         tman.report()
 
-        self.assertEqual(tman.size(), 13)
+        self.assertEqual(tman.size(), 25)
 
         for i in range(0, tman.size()):
             t = tman.at(i)

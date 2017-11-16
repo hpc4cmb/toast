@@ -14,6 +14,7 @@ import numpy as np
 from scipy.constants import degree
 
 import toast.tod as tt
+import toast.timing as timing
 
 parser = argparse.ArgumentParser(
     description="Simulate fake hexagonal focalplane.",
@@ -43,7 +44,7 @@ parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0,
 parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
                      help="Detector noise model f_min" )
 
-args = parser.parse_args()
+args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
 # Make one big hexagon layout at the center of the focalplane.
 # Compute the number of pixels that is at least the number requested.
@@ -86,3 +87,6 @@ tt.plot_focalplane(dets, args.fov, args.fov, "{}.png".format(outfile))
 
 with open("{}.pkl".format(outfile), "wb") as p:
     pickle.dump(dets, p)
+
+tman = timing.timing_manager()
+tman.report()

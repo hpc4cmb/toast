@@ -15,7 +15,8 @@ fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp" --minpix $detpix
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+	--out "${outdir}/fp" --minpix $detpix
 fi
 
 # Generate the schedule file if it does not already exist.
@@ -26,6 +27,7 @@ schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     toast_ground_schedule.py @$schparfile \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile}" --patch @@patch@@ \
          --stop @@schedule_stop@@
 fi
@@ -44,6 +46,7 @@ parfile="@@topdir@@/params/ground/ground_sim.par"
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \

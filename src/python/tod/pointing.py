@@ -14,6 +14,7 @@ from ..dist import Comm, Data
 from .tod import TOD
 
 from .. import ctoast as ct
+from .. import timing as timing
 
 
 
@@ -101,7 +102,11 @@ class OpPointingHpix(Operator):
             with the common_flag_mask, and then flag the pointing matrix.
     """
 
-    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False, mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None, hwpsteptime=None, common_flag_name=None, common_flag_mask=255, apply_flags=False):
+    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False,
+                 mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None,
+                 hwpsteptime=None, common_flag_name=None, common_flag_mask=255,
+                 apply_flags=False):
+        autotimer = timing.auto_timer(type(self).__name__)
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -179,6 +184,7 @@ class OpPointingHpix(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

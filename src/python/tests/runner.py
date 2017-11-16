@@ -101,4 +101,9 @@ def test(name=None):
         warnings.simplefilter("always", UserWarning)
         mpirunner.run(suite)
 
+    tman = timing.timing_manager()
+    tman.set_output_files("test_timing_report_tot.out",
+                          "test_timing_report_avg.out",
+                          "toast_test_output")
+    tman.report()
     return

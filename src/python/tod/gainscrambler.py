@@ -10,6 +10,7 @@ from ..op import Operator
 from ..dist import Comm, Data
 from .tod import TOD
 from .. import rng as rng
+from .. import timing as timing
 
 
 class OpGainScrambler(Operator):
@@ -51,6 +52,7 @@ class OpGainScrambler(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

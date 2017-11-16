@@ -22,7 +22,7 @@ import toast
 import toast.tod as tt
 import toast.map as tm
 import toast.qarray as qa
-
+import toast.timing as timing
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -228,7 +228,7 @@ def parse_arguments(comm):
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = parser.parse_args()
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -254,6 +254,7 @@ def parse_arguments(comm):
 
 def load_schedule(args, comm):
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
     if comm.comm_world.rank == 0:
         fn = args.schedule
         if not os.path.isfile(fn):
@@ -314,6 +315,7 @@ def load_schedule(args, comm):
 
 def load_fp(args, comm):
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     fp = None
 
@@ -396,6 +398,7 @@ def load_fp(args, comm):
 
 def create_observations(args, comm, fp, all_ces, counter, site):
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     data = toast.Data(comm)
 
@@ -538,6 +541,7 @@ def create_observations(args, comm, fp, all_ces, counter, site):
 
 def expand_pointing(args, comm, data, counter):
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     hwprpm = args.hwprpm
     hwpstep = None
@@ -575,6 +579,7 @@ def expand_pointing(args, comm, data, counter):
 
 def get_submaps(args, comm, data):
     if not args.skip_bin or args.input_map:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
         start = MPI.Wtime()
@@ -614,6 +619,7 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
     signalname = None
 
     if args.input_map:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning input map', flush=args.flush)
         start = MPI.Wtime()
@@ -645,6 +651,7 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
 
 def setup_sigcopy(args, comm, signalname):
     # Operator for signal copying, used in each MC iteration
+    autotimer = timing.auto_timer()
 
     if args.nfreq == 1:
         totalname = 'total'
@@ -683,6 +690,7 @@ def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
               flag_name, common_flag_name):
 
     if not args.skip_bin:
+        autotimer = timing.auto_timer()
 
         if comm.comm_world.rank == 0:
             print('Preparing distributed map', flush=args.flush)
@@ -911,6 +919,7 @@ def setup_madam(args, comm):
     pars = None
 
     if args.madam:
+        autotimer = timing.auto_timer()
 
         # Set up MADAM map making.
 
@@ -960,6 +969,7 @@ def setup_madam(args, comm):
 
 def copy_signal(args, comm, data, sigcopy, counter):
     if sigcopy is not None:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Making a copy of the signal TOD', flush=args.flush)
         sigcopy.exec(data)
@@ -970,6 +980,7 @@ def copy_signal(args, comm, data, sigcopy, counter):
 def simulate_atmosphere(args, comm, data, mc, counter,
                         flag_name, common_flag_name, totalname):
     if not args.skip_atmosphere:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating atmosphere', flush=args.flush)
             if args.atm_cache and not os.path.isdir(args.atm_cache):
@@ -1020,6 +1031,7 @@ def simulate_atmosphere(args, comm, data, mc, counter,
 
 def copy_signal_freq(args, comm, data, sigcopy_freq, counter):
     if sigcopy_freq is not None:
+        autotimer = timing.auto_timer()
         # Make a copy of the atmosphere so we can scramble the gains
         # repeatedly
         if comm.comm_world.rank == 0:
@@ -1032,6 +1044,7 @@ def copy_signal_freq(args, comm, data, sigcopy_freq, counter):
 
 def simulate_noise(args, comm, data, mc, counter, totalname_freq):
     if not args.skip_noise:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating noise', flush=args.flush)
         start = MPI.Wtime()
@@ -1051,6 +1064,7 @@ def simulate_noise(args, comm, data, mc, counter, totalname_freq):
 
 def scramble_gains(args, comm, data, mc, counter, totalname_freq):
     if args.gain_sigma:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scrambling gains', flush=args.flush)
         start = MPI.Wtime()
@@ -1070,6 +1084,7 @@ def scramble_gains(args, comm, data, mc, counter, totalname_freq):
 
 
 def setup_output(args, comm, mc):
+    autotimer = timing.auto_timer()
     outpath = '{}/{:08d}'.format(args.outdir, mc)
     if comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
@@ -1082,6 +1097,7 @@ def setup_output(args, comm, mc):
 
 def copy_signal_madam(args, comm, data, sigcopy_madam, counter):
     if sigcopy_madam is not None:
+        autotimer = timing.auto_timer()
         # Make a copy of the timeline for Madam
         if comm.comm_world.rank == 0:
             print('Making a copy of the TOD for Madam', flush=args.flush)
@@ -1095,6 +1111,7 @@ def bin_maps(args, comm, data, rootname, counter,
              zmap, invnpp, zmap_group, invnpp_group, detweights, totalname_freq,
              flag_name, common_flag_name, mc, outpath):
     if not args.skip_bin:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Binning unfiltered maps', flush=args.flush)
         start0 = MPI.Wtime()
@@ -1190,6 +1207,7 @@ def bin_maps(args, comm, data, rootname, counter,
 
 def apply_polyfilter(args, comm, data, counter, totalname_freq):
     if args.polyorder:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1214,6 +1232,7 @@ def apply_polyfilter(args, comm, data, counter, totalname_freq):
 
 def apply_groundfilter(args, comm, data, counter, totalname_freq):
     if args.wbin_ground:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1238,6 +1257,7 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
 
 def clear_signal(args, comm, data, sigclear, counter):
     if sigclear is not None:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Clearing filtered signal')
         sigclear.exec(data)
@@ -1248,6 +1268,7 @@ def clear_signal(args, comm, data, sigclear, counter):
 def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     if args.tidas is None:
         return
+    autotimer = timing.auto_timer()
     from toast.tod.tidas import OpTidasExport
     tidas_path = os.path.abspath(args.tidas)
     comm.comm_world.Barrier()
@@ -1273,6 +1294,7 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
 def apply_madam(args, comm, data, madampars, counter, mc, firstmc, outpath,
                 detweights, totalname_madam, flag_name, common_flag_name):
     if args.madam:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Destriping signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1313,6 +1335,7 @@ def main():
             comm.comm_world.size, str(datetime.now())), flush=True)
 
     global_start = MPI.Wtime()
+    autotimer = timing.auto_timer("@%s" % timing.FILE())
 
     args, comm = parse_arguments(comm)
 
@@ -1433,12 +1456,12 @@ def main():
     if comm.comm_world.rank == 0:
         print('Total Time:  {:.2f} seconds'.format(elapsed), flush=True)
 
-    #raise Exception('Done!')
-
 
 if __name__ == '__main__':
     try:
         main()
+        tman = timing.timing_manager()
+        tman.report()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
         if MPI.COMM_WORLD.size == 1:

@@ -83,6 +83,12 @@ lib.ctoast_timer_stop.argtypes = [ ct.POINTER(cTimer) ]
 def timer_stop(timer):
     lib.ctoast_timer_stop(timer)
 
+lib.ctoast_timer_report.restype = None
+lib.ctoast_timer_report.argtypes = [ ct.POINTER(cTimer) ]
+
+def timer_report(timer):
+    lib.ctoast_timer_report(timer)
+
 lib.ctoast_get_timing_manager.restype = ct.POINTER(cTimingManager)
 lib.ctoast_get_timing_manager.argtypes = []
 
@@ -96,11 +102,11 @@ def set_timing_output_files(tot_fname, avg_fname):
     lib.ctoast_set_timing_output_files(convert_to_p_c_char(tot_fname),
                                        convert_to_p_c_char(avg_fname))
 
-lib.ctoast_report_timing.restype = None
-lib.ctoast_report_timing.argtypes = []
+lib.ctoast_timing_manager_report.restype = None
+lib.ctoast_timing_manager_report.argtypes = []
 
 def report_timing():
-    lib.ctoast_report_timing()
+    lib.ctoast_timing_manager_report()
 
 lib.ctoast_timing_manager_size.restype = ct.c_int
 lib.ctoast_timing_manager_size.argtypes = []

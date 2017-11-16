@@ -11,7 +11,7 @@ from ..op import Operator
 from .pixels import DistPixels
 
 from .. import ctoast as ctoast
-
+from .. import timing as timing
 
 class OpAccumDiag(Operator):
     """
@@ -68,7 +68,9 @@ class OpAccumDiag(Operator):
     def __init__(self, zmap=None, hits=None, invnpp=None, detweights=None, name=None, flag_name=None, 
                 flag_mask=255, common_flag_name=None, common_flag_mask=255, pixels='pixels', 
                 weights='weights', apply_flags=True):
-        
+
+        autotimer = timing.auto_timer(type(self).__name__)
+
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._common_flag_name = common_flag_name
@@ -161,6 +163,7 @@ class OpAccumDiag(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator
@@ -285,6 +288,7 @@ def covariance_invert(npp, threshold, rcond=None):
         threshold (float): The condition number threshold to apply.
         rcond (DistPixels): (Optional) The distributed inverse condition number map to fill.
     """
+    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     if rcond is not None:
@@ -318,6 +322,7 @@ def covariance_multiply(npp1, npp2):
         npp1 (3D array): The first distributed covariance.
         npp2 (3D array): The second distributed covariance.
     """
+    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp1.nnz) - 1) / 2 ) + 0.5 )
 
     if npp1.size != npp2.size:
@@ -343,6 +348,7 @@ def covariance_apply(npp, m):
         npp (DistPixels): The distributed covariance.
         m (DistPixels): The distributed map.
     """
+    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     if m.size != npp.size:
@@ -369,6 +375,7 @@ def covariance_rcond(npp):
     Returns:
         rcond (DistPixels): The distributed inverse condition number map.
     """
+    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     rcond = DistPixels(comm=npp.comm, size=npp.size, nnz=1, dtype=np.float64, 

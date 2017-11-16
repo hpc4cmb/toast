@@ -9,6 +9,7 @@ a BSD-style license that can be found in the LICENSE file.
 #include "toast_math_internal.hpp"
 
 #include <sstream>
+#include <algorithm>
 
 //============================================================================//
 
@@ -62,14 +63,41 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key)
     if(m_timer_map.find(key) != m_timer_map.end())
         return m_timer_map.find(key)->second;
 
-    m_timer_map[key] = toast_timer_t(3,
-                                     string_t("> ") + key + string_t(" : "),
-                                     string_t(""));
+    std::stringstream ss;
+    ss << "> " << std::setw(45) << std::left << key << std::right << " : ";
+    m_timer_map[key] = toast_timer_t(3, ss.str(), string_t(""));
+
     timer_pair_t _pair(key, m_timer_map[key]);
     m_timer_list.push_back(_pair);
 
     return m_timer_map[key];
 }
+
 //============================================================================//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

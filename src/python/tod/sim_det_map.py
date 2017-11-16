@@ -7,6 +7,7 @@ import numpy as np
 import healpy as hp
 
 from .. import qarray as qa
+from .. import timing as timing
 from .tod import TOD
 from ..op import Operator
 from ..ctoast import sim_map_scan_map
@@ -31,6 +32,7 @@ class OpSimGradient(Operator):
 
     def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False,
                  flag_mask=255, common_flag_mask=255):
+        autotimer = timing.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -52,6 +54,7 @@ class OpSimGradient(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         zaxis = np.array([0,0,1], dtype=np.float64)
@@ -103,6 +106,7 @@ class OpSimGradient(Operator):
         """
         (array): Return the underlying signal map (full map on all processes).
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         range = self._max - self._min
         pix = np.arange(0, 12*self._nside*self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
@@ -131,6 +135,7 @@ class OpSimScan(Operator):
     """
     def __init__(self, distmap=None, pixels='pixels', weights='weights',
                  out='scan'):
+        autotimer = timing.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap
@@ -148,6 +153,7 @@ class OpSimScan(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world

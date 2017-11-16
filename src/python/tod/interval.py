@@ -6,6 +6,7 @@
 import numpy as np
 
 from ..op import Operator
+from .. import timing as timing
 
 
 class Interval(object):
@@ -132,6 +133,7 @@ class OpFlagGaps(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

@@ -11,6 +11,7 @@ from ..dist import Comm, Data
 from .tod import TOD
 
 from ..ctoast import filter_polyfilter
+from .. import timing as timing
 
 class OpPolyFilter(Operator):
     """
@@ -42,7 +43,7 @@ class OpPolyFilter(Operator):
     def __init__(self, order=1, pattern=r'.*', name='signal',
                  common_flag_name='common_flags', common_flag_mask=255,
                  flag_name='flags', flag_mask=255, poly_flag_mask=1):
-
+        autotimer = timing.auto_timer(type(self).__name__)
         self._order = order
         self._pattern = pattern
         self._name = name
@@ -62,6 +63,7 @@ class OpPolyFilter(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

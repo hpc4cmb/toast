@@ -39,6 +39,7 @@ public:
     typedef uomap<string_t, toast_timer_t>      timer_map_t;
     typedef toast_timer_t::ostream_t            ostream_t;
     typedef toast_timer_t::ofstream_t           ofstream_t;
+    typedef toast::clock_type                   clock_type;
 
 public:
 	// Constructor and Destructors
@@ -58,19 +59,19 @@ public:
 
     // time a function with a return type and no arguments
     template <typename _Ret, typename _Func>
-    _Ret time_function(const string_t& key, _Func);
+    _Ret time(const string_t& key, _Func);
 
     // time a function with a return type and arguments
     template <typename _Ret, typename _Func, typename... _Args>
-    _Ret time_function(const string_t& key, _Func, _Args...);
+    _Ret time(const string_t& key, _Func, _Args...);
 
     // time a function with no return type and no arguments
     template <typename _Func>
-    void time_function(const string_t& key, _Func);
+    void time(const string_t& key, _Func);
 
     // time a function with no return type and arguments
     template <typename _Func, typename... _Args>
-    void time_function(const string_t& key, _Func, _Args...);
+    void time(const string_t& key, _Func, _Args...);
 
     // iteration of timers
     iterator        begin()         { return m_timer_list.begin(); }
@@ -107,7 +108,7 @@ private:
 //----------------------------------------------------------------------------//
 template <typename _Ret, typename _Func>
 inline _Ret
-timing_manager::time_function(const string_t& key, _Func func)
+timing_manager::time(const string_t& key, _Func func)
 {
     toast_timer_t& _t = this->instance()->timer(key);
     _t.start();
@@ -118,7 +119,7 @@ timing_manager::time_function(const string_t& key, _Func func)
 //----------------------------------------------------------------------------//
 template <typename _Ret, typename _Func, typename... _Args>
 inline _Ret
-timing_manager::time_function(const string_t& key, _Func func, _Args... args)
+timing_manager::time(const string_t& key, _Func func, _Args... args)
 {
     toast_timer_t& _t = this->instance()->timer(key);
     _t.start();
@@ -129,7 +130,7 @@ timing_manager::time_function(const string_t& key, _Func func, _Args... args)
 //----------------------------------------------------------------------------//
 template <typename _Func>
 inline void
-timing_manager::time_function(const string_t& key, _Func func)
+timing_manager::time(const string_t& key, _Func func)
 {
     toast_timer_t& _t = this->instance()->timer(key);
     _t.start();
@@ -139,7 +140,7 @@ timing_manager::time_function(const string_t& key, _Func func)
 //----------------------------------------------------------------------------//
 template <typename _Func, typename... _Args>
 inline void
-timing_manager::time_function(const string_t& key, _Func func, _Args... args)
+timing_manager::time(const string_t& key, _Func func, _Args... args)
 {
     toast_timer_t& _t = this->instance()->timer(key);
     _t.start();
@@ -170,11 +171,13 @@ timing_manager::report() const
     check_stream(os_tot, "total timing report");
 
     for(const auto& itr : *this)
-    {
         itr.second.stop();
-        itr.second.report_average(*os_avg);
+
+    for(const auto& itr : *this)
         itr.second.report(*os_tot);
-    }
+
+    for(const auto& itr : *this)
+        itr.second.report_average(*os_avg);
 
     os_avg->flush();
     os_tot->flush();

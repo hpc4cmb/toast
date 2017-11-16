@@ -12,6 +12,7 @@ a BSD-style license that can be found in the LICENSE file.
 #include <fstream>
 
 #include <toast/timing_manager.hpp>
+#include <toast/auto_timer.hpp>
 
 using namespace std;
 using namespace toast;
@@ -23,6 +24,13 @@ typedef toast::util::timing_manager timing_manager_t;
 typedef std::chrono::duration<int64_t>                      seconds_type;
 typedef std::chrono::duration<int64_t, std::milli>          milliseconds_type;
 typedef std::chrono::duration<int64_t, std::ratio<60*60>>   hours_type;
+
+typedef toast::util::auto_timer                     auto_timer_t;
+typedef std::string                                 string_t;
+
+#define TOAST_FUNCTION_TIME(num) \
+    auto_timer_t macro_auto_timer(string_t("[cxx] ") + \
+        string_t(__FUNCTION__) + num);
 
 // ASSERT_NEAR
 // EXPECT_EQ
@@ -43,8 +51,9 @@ int64_t time_fibonacci_b(int32_t n)
 {
     timing_manager_t* tman = timing_manager_t::instance();
     std::stringstream ss;
-    ss << "fibonacci(" << n << ")";
-    return tman->time_function<int64_t>(ss.str(), fibonacci, n);
+    ss << "(" << n << ")";
+    TOAST_FUNCTION_TIME(ss.str());
+    return tman->time<int64_t>("[cxx] fibonacci" + ss.str(), fibonacci, n);
 }
 //----------------------------------------------------------------------------//
 // time fibonacci with return type and no arguments
@@ -53,9 +62,10 @@ int64_t time_fibonacci_l(int32_t n)
 {
     timing_manager_t* tman = timing_manager_t::instance();
     std::stringstream ss;
-    ss << "fibonacci(" << n << ")";
+    ss << "(" << n << ")";
+    TOAST_FUNCTION_TIME(ss.str());
     auto _fib = [=] () -> int64_t { return fibonacci(n); };
-    return tman->time_function<int64_t>(ss.str(), _fib);
+    return tman->time<int64_t>("[cxx] fibonacci" + ss.str(), _fib);
 }
 //----------------------------------------------------------------------------//
 // time fibonacci with no return type and arguments
@@ -64,8 +74,9 @@ void time_fibonacci_v(int32_t n)
 {
     timing_manager_t* tman = timing_manager_t::instance();
     std::stringstream ss;
-    ss << "fibonacci(" << n << ")";
-    tman->time_function(ss.str(), fibonacci, n);
+    ss << "(" << n << ")";
+    TOAST_FUNCTION_TIME(ss.str());
+    tman->time("[cxx] fibonacci" + ss.str(), fibonacci, n);
 }
 //----------------------------------------------------------------------------//
 // time fibonacci with no return type and no arguments
@@ -74,9 +85,10 @@ void time_fibonacci_lv(int32_t n)
 {
     timing_manager_t* tman = timing_manager_t::instance();
     std::stringstream ss;
-    ss << "fibonacci(" << n << ")";
+    ss << "(" << n << ")";
+    TOAST_FUNCTION_TIME(ss.str());
     auto _fib = [=] () { fibonacci(n); };
-    tman->time_function(ss.str(), _fib);
+    tman->time("[cxx] fibonacci" + ss.str(), _fib);
 }
 //----------------------------------------------------------------------------//
 
@@ -88,10 +100,10 @@ TEST_F( timingTest, manager )
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
 
-    toast_timer_t& t = tman->timer("tmanager test");
+    toast_timer_t& t = tman->timer("[cxx] tmanager test");
     t.start();
 
-    for(auto itr : { 39, 35, 43, 39 })
+    for(auto itr : { 35, 39, 43, 39, 35 })
     {
         time_fibonacci_v(itr-2);
         time_fibonacci_l(itr-1);
@@ -102,7 +114,7 @@ TEST_F( timingTest, manager )
     tman->set_output_streams("timing_report_tot.out", "timing_report_avg.out");
     tman->report();
 
-    EXPECT_EQ(timing_manager::instance()->size(), 13);
+    EXPECT_EQ(timing_manager::instance()->size(), 25);
 
     for(const auto& itr : *tman)
     {

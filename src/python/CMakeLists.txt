@@ -10,7 +10,8 @@ set_source_files_properties(cbuffer.c PROPERTIES LANGUAGE C)
 # Python files to add to cbuffer-lib target so they are listed in an
 # IDE (e.g. QtCreator), won't get compiled
 file(GLOB_RECURSE PYTHON_MODULE_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
-    ${CMAKE_CURRENT_LIST_DIR}/*.py.in)
+    ${CMAKE_CURRENT_LIST_DIR}/*.py.in
+    ${CMAKE_SOURCE_DIR}/pipelines/*.py)
 
 add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES})
 

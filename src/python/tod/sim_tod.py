@@ -17,6 +17,7 @@ except:
     ephem = None
 
 from .. import qarray as qa
+from .. import timing as timing
 
 from .tod import TOD
 from .interval import Interval
@@ -49,6 +50,7 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
         Array of quaternions stored as an ndarray of
         shape (nsim, 4).
     """
+    autotimer = timing.auto_timer()
     # this is the increment in radians per sample
     angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
 
@@ -112,7 +114,7 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
         Array of quaternions stored as an ndarray of
         shape (nsim, 4).
     """
-
+    autotimer = timing.auto_timer()
     if spinperiod > 0.0:
         spinrate = 1.0 / (60.0 * spinperiod)
     else:
@@ -233,7 +235,7 @@ class TODHpixSpiral(TOD):
     def __init__(self, mpicomm, detectors, samples, firsttime=0.0, 
         rate=100.0, nside=512, detindx=None, detranks=1, detbreaks=None,
         sampsizes=None, sampbreaks=None):
-
+        autotimer = timing.auto_timer()
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
 
@@ -296,6 +298,7 @@ class TODHpixSpiral(TOD):
 
 
     def _get_boresight(self, start, n):
+        autotimer = timing.auto_timer(type(self).__name__)
         # compute the absolute sample offset
         start_abs = self.local_samples[0] + start
 
@@ -340,6 +343,7 @@ class TODHpixSpiral(TOD):
 
 
     def _get_pntg(self, detector, start, n):
+        autotimer = timing.auto_timer(type(self).__name__)
         detquat = np.asarray(self._fp[detector])
         boresight = self._get_boresight(start, n)
         data = qa.mult(boresight, detquat)

@@ -13,6 +13,7 @@ import healpy as hp
 from .. import qarray as qa
 from .tod import TOD
 from ..op import Operator
+from .. import timing as timing
 
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
     atm_sim_simulate, atm_sim_observe)
@@ -106,7 +107,7 @@ class OpSimAtmosphere(Operator):
             common_flag_name='common_flags', common_flag_mask=255,
             flag_name='flags', flag_mask=255, report_timing=True,
             wind_time_min=600, cachedir='.', flush=False):
-
+        autotimer = timing.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
@@ -160,7 +161,7 @@ class OpSimAtmosphere(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-
+        autotimer = timing.auto_timer(type(self).__name__)
         for obs in data.obs:
             try:
                 obsname = obs['name']
