@@ -818,6 +818,10 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                     throw std::runtime_error( o.str().c_str() );
                 }
 
+                // Add dissipation due to distance
+
+                step_val /= r*r;
+
                 val += step_val;
 
                 // Prepare for the next step
