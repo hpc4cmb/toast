@@ -45,7 +45,8 @@
 # SOFTWARE.
 
 INCLUDE (FindPackageHandleStandardArgs)
-set(Elemental_CMAKE_CONFIG ON CACHE BOOL "Use CMake configuration if found")
+# set to OFF. Elemental is a very bad CMake installation
+set(Elemental_CMAKE_CONFIG OFF CACHE BOOL "Use CMake configuration if found")
 mark_as_advanced(Elemental_CMAKE_CONFIG)
 
 #----- Elemental installation root
