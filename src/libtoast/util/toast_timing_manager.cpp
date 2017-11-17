@@ -58,19 +58,45 @@ toast::util::timing_manager::~timing_manager()
 
 //============================================================================//
 
-toast::util::timer& toast::util::timing_manager::timer(const string_t& key)
+toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
+                                                       const string_t& tag,
+                                                       int32_t ncount)
 {
-    if(m_timer_map.find(key) != m_timer_map.end())
-        return m_timer_map.find(key)->second;
+    // special case of auto_timer as the first timer
+    if(ncount == 1 && m_timer_list.size() == 0)
+    {
+        toast::util::details::base_timer::get_instance_count()--;
+        ncount = 0;
+    }
+
+    string_t ref = tag + string_t("_") + key;
+
+    if(ncount > 0)
+    {
+        std::stringstream _ss; _ss << "_" << ncount;
+        ref += _ss.str();
+    }
+
+    // if already exists, return it
+    if(m_timer_map.find(ref) != m_timer_map.end())
+        return m_timer_map.find(ref)->second;
 
     std::stringstream ss;
-    ss << "> " << std::setw(45) << std::left << key << std::right << " : ";
-    m_timer_map[key] = toast_timer_t(3, ss.str(), string_t(""));
+    ss << "> " << "[" << tag << "] "; // designated as [cxx], [pyc], etc.
 
-    timer_pair_t _pair(key, m_timer_map[key]);
+    // indent
+    for(int64_t i = 0; i < ncount; ++i)
+        ss << "  ";
+
+    ss << std::left << key;
+    toast::util::timer::propose_output_width(ss.str().length());
+
+    m_timer_map[ref] = toast_timer_t(3, ss.str(), string_t(""));
+
+    timer_pair_t _pair(ref, m_timer_map[ref]);
     m_timer_list.push_back(_pair);
 
-    return m_timer_map[key];
+    return m_timer_map[ref];
 }
 
 //============================================================================//

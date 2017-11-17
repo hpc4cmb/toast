@@ -13,7 +13,6 @@ a BSD-style license that can be found in the LICENSE file.
 #include <unordered_map>
 #include <deque>
 #include <string>
-
 #include "timer.hpp"
 
 namespace toast
@@ -53,9 +52,11 @@ public:
     static timing_manager* instance();
 
     size_type size() const { return m_timer_list.size(); }
-    void clear() { m_timer_list.clear(); m_timer_map.clear(); }
+    void clear();
 
-    toast_timer_t& timer(const string_t& key);
+    toast_timer_t& timer(const string_t& key,
+                         const string_t& tag = "cxx",
+                         int32_t ncount = -1);
 
     // time a function with a return type and no arguments
     template <typename _Ret, typename _Func>
@@ -75,19 +76,19 @@ public:
 
     // iteration of timers
     iterator        begin()         { return m_timer_list.begin(); }
-    const_iterator  begin() const   { return m_timer_list.begin(); }
-    const_iterator  cbegin() const  { return m_timer_list.begin(); }
+    const_iterator  begin() const   { return m_timer_list.cbegin(); }
+    const_iterator  cbegin() const  { return m_timer_list.cbegin(); }
 
     iterator        end()           { return m_timer_list.end(); }
-    const_iterator  end() const     { return m_timer_list.end(); }
-    const_iterator  cend() const    { return m_timer_list.end(); }
+    const_iterator  end() const     { return m_timer_list.cend(); }
+    const_iterator  cend() const    { return m_timer_list.cend(); }
 
     void report() const;
     void set_output_streams(ostream_t&, ostream_t&);
     void set_output_streams(const string_t&, const string_t&);
 
     toast_timer_t& at(size_type i) { return m_timer_list.at(i).second; }
-    toast_timer_t& at(string_t i);
+    toast_timer_t& at(string_t key, const string_t& tag = "cxx");
 
 protected:
     ofstream_t* get_ofstream(ostream_t* m_os) const;
@@ -105,6 +106,14 @@ private:
     ostream_t*              m_report_avg;
 };
 
+//----------------------------------------------------------------------------//
+inline void
+timing_manager::clear()
+{
+    m_timer_list.clear();
+    m_timer_map.clear();
+    details::base_timer::get_instance_count() = 0;
+}
 //----------------------------------------------------------------------------//
 template <typename _Ret, typename _Func>
 inline _Ret
@@ -151,6 +160,7 @@ timing_manager::time(const string_t& key, _Func func, _Args... args)
 inline void
 timing_manager::report() const
 {
+
     ostream_t* os_avg = m_report_avg;
     ostream_t* os_tot = m_report_tot;
 
@@ -215,11 +225,12 @@ timing_manager::set_output_streams(const string_t& totf, const string_t& avgf)
 }
 //----------------------------------------------------------------------------//
 inline timing_manager::toast_timer_t&
-timing_manager::at(string_t i)
+timing_manager::at(string_t key, const string_t& tag)
 {
-    if(m_timer_map.find(i) == m_timer_map.end())
-        return this->timer(i);
-    return m_timer_map[i];
+    string_t ref = tag + string_t("_") + key;
+    if(m_timer_map.find(ref) == m_timer_map.end())
+        return this->timer(ref);
+    return this->timer(key, tag);
 }
 //----------------------------------------------------------------------------//
 inline timing_manager::ofstream_t*

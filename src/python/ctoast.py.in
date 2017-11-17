@@ -89,6 +89,18 @@ lib.ctoast_timer_report.argtypes = [ ct.POINTER(cTimer) ]
 def timer_report(timer):
     lib.ctoast_timer_report(timer)
 
+lib.ctoast_get_timer_instance_count.restype = np.uint64
+lib.ctoast_get_timer_instance_count.argtypes = []
+
+def get_timer_instance_count():
+    return lib.ctoast_get_timer_instance_count()
+
+lib.ctoast_op_timer_instance_count.restype = None
+lib.ctoast_op_timer_instance_count.argtypes = [ ct.c_int ]
+
+def op_timer_instance_count(ncount):
+    lib.ctoast_op_timer_instance_count(ncount)
+
 lib.ctoast_get_timing_manager.restype = ct.POINTER(cTimingManager)
 lib.ctoast_get_timing_manager.argtypes = []
 

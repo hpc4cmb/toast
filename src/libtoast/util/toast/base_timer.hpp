@@ -62,6 +62,8 @@ public:
                ostream_t* = &std::cout);
     virtual ~base_timer();
 
+    static uint64_t& get_instance_count() { return f_instance_count; }
+
 public:
     inline void start();
     inline void stop();
@@ -88,6 +90,7 @@ protected:
 
 protected:
     void parse_format();
+    virtual void compose() = 0;
 
 protected:
     // PODs
@@ -107,6 +110,7 @@ protected:
 
 private:
     // world mutex map, thread-safe ostreams
+    static thread_local uint64_t f_instance_count;
     static mutex_map_t  w_mutex_map;
 
 };

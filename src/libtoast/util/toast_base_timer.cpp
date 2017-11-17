@@ -18,6 +18,10 @@ namespace details
 
 //============================================================================//
 
+thread_local uint64_t base_timer::f_instance_count = 0;
+
+//============================================================================//
+
 base_timer::mutex_map_t base_timer::w_mutex_map;
 
 //============================================================================//
@@ -31,8 +35,7 @@ base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
   m_format_string(fmt),
   m_output_format("")
 {
-    this->start();
-    this->parse_format();
+    //this->start();
 }
 
 //============================================================================//
@@ -51,6 +54,10 @@ base_timer::~base_timer()
 
 void base_timer::parse_format()
 {
+    m_format_positions.clear();
+
+    this->compose();
+
     size_type npos = std::string::npos;
 
     str_list_t fmts;
@@ -74,12 +81,15 @@ void base_timer::parse_format()
     std::sort(m_format_positions.begin(), m_format_positions.end(),
               [] (const clockpos_t& lhs, const clockpos_t& rhs)
               { return lhs.first < rhs.first; });
+
 }
 
 //============================================================================//
 
 void base_timer::report(std::ostream& os, bool endline, bool avg) const
 {
+    const_cast<base_timer*>(this)->parse_format();
+
     // stop, if not already stopped
     if(!m_valid_times)
         const_cast<base_timer*>(this)->stop();

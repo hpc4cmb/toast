@@ -61,6 +61,7 @@ public:
 public:
     static std::string default_format;
     static uint16_t default_precision;
+    static void propose_output_width(uint64_t);
 
 public:
     timer& stop_and_return() { this->stop(); return *this; }
@@ -68,8 +69,15 @@ public:
     str_t close() const { return m_close; }
 
 protected:
+    virtual void compose() final;
+
+protected:
     str_t m_begin;
     str_t m_close;
+
+private:
+    static thread_local uint64_t f_output_width;
+
 };
 
 //----------------------------------------------------------------------------//

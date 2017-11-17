@@ -11,12 +11,13 @@ a BSD-style license that can be found in the LICENSE file.
 
 typedef toast::util::timing_manager                 timing_manager;
 typedef toast::util::timing_manager::toast_timer_t  toast_timer_t;
+typedef toast::util::details::base_timer            base_timer_t;
 typedef toast::util::auto_timer                     auto_timer_t;
 typedef std::string                                 string_t;
 
 #define TOAST_TIME auto_timer_t
 #define TOAST_FUNCTION_TIME \
-    auto_timer_t macro_auto_timer(string_t("[cxx] ") + string_t(__FUNCTION__));
+    auto_timer_t macro_auto_timer(string_t(__FUNCTION__));
 
 //============================================================================//
 // Global library initialize / finalize
@@ -40,7 +41,8 @@ void ctoast_finalize ( )
 
 ctoast_timer* ctoast_get_timer(char* ckey)
 {
-    toast_timer_t& _t = timing_manager::instance()->timer(ckey);
+    toast_timer_t& _t = timing_manager::instance()
+                        ->timer(ckey, "pyc", base_timer_t::get_instance_count());
     return reinterpret_cast<ctoast_timer*>(&_t);
 }
 
@@ -68,6 +70,22 @@ void ctoast_timer_report(ctoast_timer* _ct)
     _t->report();
     if(_t->laps() > 1)
         _t->report_average();
+}
+
+//----------------------------------------------------------------------------//
+
+uint64_t ctoast_get_timer_instance_count()
+{
+    return toast::util::details::base_timer::get_instance_count();
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_op_timer_instance_count(int32_t op)
+{
+    int64_t _new = op + toast::util::details::base_timer::get_instance_count();
+    if(!(_new < 0))
+        toast::util::details::base_timer::get_instance_count() += op;
 }
 
 //----------------------------------------------------------------------------//
@@ -548,11 +566,13 @@ void ctoast_fft_r1d_free ( ctoast_fft_r1d * frd ) {
 }
 
 int64_t ctoast_fft_r1d_length ( ctoast_fft_r1d * frd ) {
+    TOAST_FUNCTION_TIME;
     toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
     return rd->length();
 }
 
 int64_t ctoast_fft_r1d_count ( ctoast_fft_r1d * frd ) {
+    TOAST_FUNCTION_TIME;
     toast::fft::r1d * rd = reinterpret_cast < toast::fft::r1d * > ( frd );
     return rd->count();
 }

@@ -13,6 +13,9 @@ a BSD-style license that can be found in the LICENSE file.
 #  include <omp.h>
 #endif
 
+#ifndef FASTER
+#define FASTER
+#endif
 
 // void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
 //     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 

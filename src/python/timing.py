@@ -15,6 +15,7 @@ from os.path import basename
 from os.path import join
 
 rank = MPI.COMM_WORLD.Get_rank()
+nprocs = MPI.COMM_WORLD.Get_size()
 
 #------------------------------------------------------------------------------#
 
@@ -63,7 +64,7 @@ class timer(object):
         if _obj is not None:
             self.ctimer = _obj
         else:
-            self.ctimer = ctoast.get_timer(("[pyc] %s" % key))
+            self.ctimer = ctoast.get_timer(key)
 
     def start(self):
         ctoast.timer_start(self.ctimer)
@@ -100,8 +101,7 @@ class timing_manager(object):
         ctoast.set_timing_output_files(tot_fname, avg_fname)
 
     def report(self):
-        if rank == 0:
-            ctoast.report_timing()
+        ctoast.report_timing()
 
     def size(self):
         return ctoast.timing_manager_size()
@@ -121,11 +121,13 @@ class auto_timer(object):
         keyfunc = FUNC(2)
         if key != "" and key[0] != '@':
             key = ("@%s" % (key))
+        ctoast.op_timer_instance_count(1)
         self.t = timer('%s%s' % (keyfunc, key))
         self.t.start()
 
     def __del__(self):
         self.t.stop()
+        ctoast.op_timer_instance_count(-1)
 
 #------------------------------------------------------------------------------#
 
@@ -152,11 +154,13 @@ def add_arguments(parser, fname = None):
 
 def parse_args(args):
     """Function to handle the output arguments"""
-    if rank == 0:
-        tot_fname = ("%s_tot.out" % args.toast_timing_fname)
-        avg_fname = ("%s_avg.out" % args.toast_timing_fname)
-        tman = timing_manager()
-        tman.set_output_files(tot_fname, avg_fname, args.toast_output_dir)
+    extension = ".out"
+    if nprocs > 0:
+        extension = (("_%i%s") % (rank, extension))
+    tot_fname = ("%s_tot%s" % (args.toast_timing_fname, extension))
+    avg_fname = ("%s_avg%s" % (args.toast_timing_fname, extension))
+    tman = timing_manager()
+    tman.set_output_files(tot_fname, avg_fname, args.toast_output_dir)
 
 #------------------------------------------------------------------------------#
 

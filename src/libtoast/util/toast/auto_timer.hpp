@@ -7,6 +7,7 @@
 
 #include "timing_manager.hpp"
 #include <string>
+#include <cstdint>
 
 namespace toast
 {
@@ -24,12 +25,17 @@ public:
     virtual ~auto_timer();
 
 private:
+    static uint64_t& ncount()
+    { return details::base_timer::get_instance_count(); }
+
+private:
     toast_timer_t& m_timer;
 };
 
 //----------------------------------------------------------------------------//
 inline auto_timer::auto_timer(const std::string& timer_tag)
-: m_timer(toast::util::timing_manager::instance()->timer(timer_tag))
+: m_timer(timing_manager::instance()->timer(timer_tag, "cxx",
+                                            ++auto_timer::ncount()))
 {
     m_timer.start();
 }
@@ -37,6 +43,8 @@ inline auto_timer::auto_timer(const std::string& timer_tag)
 inline auto_timer::~auto_timer()
 {
     m_timer.stop();
+    if(auto_timer::ncount() > 0)
+        auto_timer::ncount()--;
 }
 //----------------------------------------------------------------------------//
 

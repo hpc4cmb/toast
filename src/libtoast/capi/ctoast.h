@@ -37,6 +37,8 @@ ctoast_timer* ctoast_get_timer(char* ckey);
 void ctoast_timer_start(ctoast_timer*);
 void ctoast_timer_stop(ctoast_timer*);
 void ctoast_timer_report(ctoast_timer*);
+uint64_t ctoast_get_timer_instance_count();
+void ctoast_op_timer_instance_count(int32_t op);
 
 ctoast_timing_manager* ctoast_get_timing_manager();
 void ctoast_set_timing_output_files(char* tot_fname, char* avg_fname);
