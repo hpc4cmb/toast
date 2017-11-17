@@ -13,9 +13,9 @@ a BSD-style license that can be found in the LICENSE file.
 #  include <omp.h>
 #endif
 
-#ifndef FASTER
-#define FASTER
-#endif
+//#ifndef FASTER
+//#define FASTER
+//#endif
 
 // void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
 //     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
@@ -322,7 +322,7 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata ) {
 
-    toast::util::auto_timer auto_timer("[cxx] accumulate_zmap_direct");
+    toast::util::auto_timer auto_timer("accumulate_zmap_direct");
 
 #if defined(FASTER)
     // > [cxx] accumulate_zmap_direct
