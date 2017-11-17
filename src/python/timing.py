@@ -8,11 +8,13 @@ import sys
 import os
 import argparse
 
-from toast.mpi import MPI
+from .mpi import MPI
 
 from os.path import dirname
 from os.path import basename
 from os.path import join
+
+rank = MPI.COMM_WORLD.Get_rank()
 
 #------------------------------------------------------------------------------#
 
@@ -20,6 +22,7 @@ def FUNC(back = 1):
     """Function that emulates __FUNCTION__ macro"""
     ret = ("%s" % (sys._getframe(back).f_code.co_name))
     return ret
+
 #------------------------------------------------------------------------------#
 
 def FILE(back = 2, only_basename = True, use_dirname = False, noquotes = False):
@@ -97,7 +100,8 @@ class timing_manager(object):
         ctoast.set_timing_output_files(tot_fname, avg_fname)
 
     def report(self):
-        ctoast.report_timing()
+        if rank == 0:
+            ctoast.report_timing()
 
     def size(self):
         return ctoast.timing_manager_size()
