@@ -152,10 +152,11 @@ def add_arguments(parser, fname = None):
 
 def parse_args(args):
     """Function to handle the output arguments"""
-    tot_fname = ("%s_tot.out" % args.toast_timing_fname)
-    avg_fname = ("%s_avg.out" % args.toast_timing_fname)
-    tman = timing_manager()
-    tman.set_output_files(tot_fname, avg_fname, args.toast_output_dir)
+    if rank == 0:
+        tot_fname = ("%s_tot.out" % args.toast_timing_fname)
+        avg_fname = ("%s_avg.out" % args.toast_timing_fname)
+        tman = timing_manager()
+        tman.set_output_files(tot_fname, avg_fname, args.toast_output_dir)
 
 #------------------------------------------------------------------------------#
 
