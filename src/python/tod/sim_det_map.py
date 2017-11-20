@@ -194,9 +194,9 @@ class OpSimScan(Operator):
         return
 
 
-class OpSimPySM(Operator):
+class OpSmooth(Operator):
     """
-    Operator that scans from bandpass-integrated PySM sky signal.
+    Operator that smooths a distributed map
 
     More info here...
 
@@ -212,7 +212,7 @@ class OpSimPySM(Operator):
             If the named cache objects do not exist, then they are created.
     """
     def __init__(self, distmap=None, pixels='pixels', weights='weights',
-                 out='pysm'):
+                 out='smoothed'):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap

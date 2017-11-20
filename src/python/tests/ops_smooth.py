@@ -15,7 +15,7 @@ from ..tod.sim_det_map import *
 from ..map.pixels import *
 
 
-class OpSimPySMTest(MPITestCase):
+class OpSmoothTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "toast_test_output"
@@ -80,7 +80,7 @@ class OpSimPySMTest(MPITestCase):
         del self.data
 
 
-    def test_pysm(self):
+    def test_smooth(self):
         start = MPI.Wtime()
 
         # expand the pointing into a low-res pointing matrix
@@ -102,7 +102,7 @@ class OpSimPySMTest(MPITestCase):
         hits = DistPixels(comm=self.toastcomm.comm_world, size=npix, nnz=1, dtype=np.int32, submap=submapsize, local=localsm)
 
         # construct the PySM operator.  Pass in information needed by PySM...
-        op = OpSimPySM(distmap=hits)
+        op = OpSmooth(distmap=hits)
         op.exec(self.data)
 
         # Now we have timestreams in the cache.  We could compare the 
@@ -115,5 +115,5 @@ class OpSimPySMTest(MPITestCase):
         
         stop = MPI.Wtime()
         elapsed = stop - start
-        self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
+        self.print_in_turns("test_opsmooth took {:.3f} s".format(elapsed))
 
