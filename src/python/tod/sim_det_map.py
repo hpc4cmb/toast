@@ -5,6 +5,7 @@
 
 import numpy as np
 import healpy as hp
+import libsharp
 
 from .. import qarray as qa
 from .tod import TOD
@@ -196,29 +197,56 @@ class OpSimScan(Operator):
 
 class OpSmooth(Operator):
     """
-    Operator that smooths a distributed map
+    Operator that smooths a distributed map with a beam
 
-    More info here...
+    Apply a beam window function to a distributed map, it transforms
+    a I or IQU distributed map to a_lm with libsharp, multiplies by beam(ell)
+    and transforms back to pixel space.
 
-    Args:
-        PySM input paths / parameters:  FIXME.
-        distmap (DistPixels): the distributed map domain data.
-            FIXME: if you don't need local pointing, remove this.
-        pixels (str): the name of the cache object (<pixels>_<detector>)
-            containing the pixel indices to use.
-        weights (str): the name of the cache object (<weights>_<detector>)
-            containing the pointing weights to use.
-        out (str): accumulate data to the cache with name <out>_<detector>.
-            If the named cache objects do not exist, then they are created.
+    The beam can be specified either as a Full Width at Half Maximum of a gaussian beam
+    in degrees or with a custom beam factor as a function of ell to be multiplied to the a_lm
+
+    Parameters
+    ----------
+        comm: mpi4py communicator
+            MPI communicator object
+        signal_map : str
+            the name of the cache object (<signal_map>_<detector>) containing the input map.
+        lmax : int
+            maximum ell value of the spherical harmonics transform
+        grid : libsharp healpix_grid
+            libsharp healpix grid object
+        fwhm_deg : float
+            Full Width Half Max in degrees of the gaussian beam
+        beam : 2D np.ndarray
+            1 column (I only) or 3 columns (different beam for polarization)
+            beam as a function of ell
     """
-    def __init__(self, distmap=None, pixels='pixels', weights='weights',
-                 out='smoothed'):
+    def __init__(self, comm=None, signal_map="signal_map",
+                lmax=None, grid=None, fwhm_deg=None, beam=None, out="smoothed_signal_map"):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
-        self._map = distmap
-        self._pixels = pixels
-        self._weights = weights
-        self._out = out
+        self.comm = comm
+        self.signal_map = signal_map
+        self.lmax = lmax
+        self.out = out
+        self.grid = grid
+
+        # distribute alms
+        local_m_indices = np.arange(self.comm.rank, lmax + 1, self.comm.size, dtype=np.int32)
+
+        self.order = libsharp.packed_real_order(lmax, ms=local_m_indices)
+
+        if (fwhm_deg is not None) and (beam is not None):
+            raise Exception("OpSmooth error, specify either fwhm_deg or beam, not both")
+
+        if (fwhm_deg is None) and (beam is None):
+            raise Exception("OpSmooth error, specify fwhm_deg or beam")
+
+        if fwhm_deg is not None:
+            self.beam = hp.gauss_beam(fwhm=np.radians(fwhm_deg), lmax=lmax, pol=True)
+        else:
+            self.beam = beam
 
     def exec(self, data):
         """
@@ -230,58 +258,24 @@ class OpSmooth(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
-        for obs in data.obs:
-            tod = obs['tod']
+        has_pol = len(data[self.signal_map]) > 1
 
-            for det in tod.local_dets:
+        alm_sharp_I = libsharp.analysis(self.grid, self.order,
+                                        np.ascontiguousarray(data[self.signal_map][0].reshape((1, 1, -1))),
+                                        spin=0, comm=self.comm)
+        self.order.almxfl(alm_sharp_I, np.ascontiguousarray(self.beam[:, 0:1]))
+        data[self.out] = libsharp.synthesis(self.grid, self.order, alm_sharp_I, spin=0, comm=self.comm)[0]
+        print(data[self.out].shape)
 
-                # get the pixels and weights from the cache
+        if has_pol:
+            alm_sharp_P = libsharp.analysis(self.grid, self.order,
+                                            np.ascontiguousarray(data[self.signal_map][1:3].reshape((1, 2, -1))),
+                                            spin=2, comm=self.comm)
 
-                pixelsname = "{}_{}".format(self._pixels, det)
-                weightsname = "{}_{}".format(self._weights, det)
-                pixels = tod.cache.reference(pixelsname)
-                weights = tod.cache.reference(weightsname)
+            self.order.almxfl(alm_sharp_P, np.ascontiguousarray(self.beam[:, (1, 2)]))
 
-                nsamp, nnz = weights.shape
-
-                # Get the pointing in terms of local submaps and
-                # pixels within the submaps.  Remove this if you
-                # don't need that (and also from the constructor).
-
-                sm, lpix = self._map.global_to_local(pixels)
-
-                # Now call PySM and do other stuff to generate the
-                # pixel data and scan it into a TOD.
-
-
-                simtod = np.zeros(nsamp)
-
-
-
-                # Accumulate the output timestream to the cache.
-
-                cachename = "{}_{}".format(self._out, det)
-                if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64,
-                                     (tod.local_samples[1],))
-                ref = tod.cache.reference(cachename)
-                ref[:] += simtod
-                
-                del ref
-                del pixels
-                del weights
-                del sm
-                del lpix
-
-        return
-
-
+            signal_map_P = libsharp.synthesis(self.grid, self.order, alm_sharp_P, spin=2, comm=self.comm)[0]
+            data[self.out] = np.vstack((
+                        data[self.out],
+                        signal_map_P))
