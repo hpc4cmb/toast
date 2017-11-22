@@ -82,6 +82,7 @@ def attempt_scan(
                 continue
             if args.pole_mode:
                 pole_success = True
+                subscan = -1
                 while pole_success:
                     pole_success, azmins, azmaxs, aztimes, tstop \
                         = scan_patch_pole(
@@ -92,10 +93,11 @@ def attempt_scan(
                         if success:
                             # Still the same scan
                             hits[name] -= 1
+                            subscan += 1
                         t = add_scan(
                             args, t, tstop, aztimes, azmins, azmaxs, rising,
                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                            name, el)
+                            name, el, subscan=subscan)
                         if rising:
                             el -= np.radians(args.pole_el_step)
                         else:
@@ -316,7 +318,7 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
 
 
 def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
-             observer, sun, moon, fout, fout_fmt, hits, name, el):
+             observer, sun, moon, fout, fout_fmt, hits, name, el, subscan=-1):
     """ Make an entry for a CES in the schedule file.
     """
     ces_time = tstop - t
@@ -334,9 +336,8 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     rising_string = 'R' if rising else 'S'
     hits[name] += 1
     t1 = t
-    isub = -1
     while t1 < tstop:
-        isub += 1
+        subscan += 1
         t2 = min(t1 + ces_time, tstop)
         if tstop - t2 < ces_time / 10:
             # Append leftover scan to the last full subscan
@@ -383,7 +384,7 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
                 rising_string,
                 sun_el1, sun_az1, sun_el2, sun_az2,
                 moon_el1, moon_az1, moon_el2, moon_az2,
-                0.005*(moon_phase1 + moon_phase2), hits[name], isub))
+                0.005*(moon_phase1 + moon_phase2), hits[name], subscan))
         t1 = t2 + args.gap_small
     # Advance the time
     t = tstop
@@ -444,10 +445,12 @@ def build_schedule(
 
     fout = open(args.out, 'w')
 
-    fout.write('#{:15} {:15} {:15} {:15}\n'.format(
-        'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
-    fout.write(' {:15} {:15} {:15} {:15.6f}\n'.format(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt))
+    fout.write('#{:15} {:15} {:15} {:15} {:15}\n'.format(
+        'Site', 'Telescope',
+        'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
+    fout.write(' {:15} {:15} {:15} {:15} {:15.6f}\n'.format(
+        args.site_name, args.telescope,
+        args.site_lat, args.site_lon, args.site_alt))
 
     fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
                 '{:15} {:8} {:8} {:8} {:5} ' \
@@ -550,6 +553,9 @@ def parse_args():
     parser.add_argument('--site_name',
                         required=False, default='LBL',
                         help='Observing site name')
+    parser.add_argument('--telescope',
+                        required=False, default='Telescope',
+                        help='Observing telescope name')
     parser.add_argument('--site_lon',
                         required=False, default='-122.247',
                         help='Observing site longitude [PyEphem string]')

@@ -252,6 +252,13 @@ def parse_arguments(comm):
     return args, comm
 
 
+def name2id(name, maxval=2**16):
+    value = 0
+    for c in name:
+        value += ord(c)
+    return value % maxval
+
+
 def load_schedule(args, comm):
     start = MPI.Wtime()
     schedules = []
@@ -265,9 +272,10 @@ def load_schedule(args, comm):
                     line = f.readline()
                     if line.startswith('#'):
                         continue
-                    site_name, site_lat, site_lon, site_alt = line.split()
+                    (site_name, telescope, site_lat, site_lon,
+                     site_alt) = line.split()
                     site_alt = float(site_alt)
-                    site = (site_name, site_lat, site_lon, site_alt)
+                    site = (site_name, telescope, site_lat, site_lon, site_alt)
                     break
                 all_ces = []
                 for line in f:
@@ -361,8 +369,6 @@ def create_observations(args, comm, schedules, counter):
         if nces_tot != 0:
             breaks.append(nces_tot)
 
-        site_name, site_lat, site_lon, site_alt = site
-
         # Focalplane information for this schedule
         detectors = sorted(fp.keys())
         detquats = {}
@@ -425,8 +431,10 @@ def create_observations(args, comm, schedules, counter):
     for ices in range(group_firstobs, group_firstobs + group_numobs):
         ces, site, fp, detquats = all_ces_tot[ices]
 
-        (CES_start, CES_stop, name, mjdstart, scan, subscan,
+        (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
          azmin, azmax, el) = ces
+
+        site_name, telescope, site_lat, site_lon, site_alt = site
 
         totsamples = int((CES_stop - CES_start) * args.samplerate)
 
@@ -448,8 +456,14 @@ def create_observations(args, comm, schedules, counter):
 
         # Create the (single) observation
 
+        site_name = site[0]
+        telescope_name = site[1]
+        site_id = name2id(site_name)
+        telescope_id = name2id(telescope_name)
+
         ob = {}
-        ob['name'] = 'CES-{}-{}-{}-{}'.format(site, name, scan, subscan)
+        ob['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
+                                                 CES_name, scan, subscan)
         ob['tod'] = tod
         if len(tod.subscans) > 0:
             ob['intervals'] = tod.subscans
@@ -458,6 +472,10 @@ def create_observations(args, comm, schedules, counter):
         ob['baselines'] = None
         ob['noise'] = noise
         ob['id'] = int(mjdstart * 10000)
+        # Site is not yet recognized as an RNG index
+        #ob['site'] = site_id
+        #ob['telescope'] = telescope_id
+        ob['telescope'] = (site_id + telescope_id) % 2**16
 
         data.obs.append(ob)
 
