@@ -6,7 +6,6 @@ conda install --copy --yes \
     matplotlib \
     pyyaml \
     astropy \
-    h5py \
     psutil \
     ephem \
     virtualenv \

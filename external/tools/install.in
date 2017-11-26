@@ -123,6 +123,10 @@ fi
 
 @hdf5@
 
+# Install h5py
+
+@h5py@
+
 # Install TIDAS
 
 @tidas@

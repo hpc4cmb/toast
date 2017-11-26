@@ -19,6 +19,6 @@ export OPENMP_CFLAGS="-qopenmp"
 export OPENMP_CXXFLAGS="-qopenmp"
 
 ./configure ${OPTS} \
-    --with-math="-limf" \
+    --with-math="-limf -lsvml" \
     --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
 

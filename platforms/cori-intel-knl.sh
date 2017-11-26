@@ -20,6 +20,6 @@ export OPENMP_CXXFLAGS="-qopenmp"
 
 ./configure ${OPTS} \
     --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu \
-    --with-math="-limf" \
+    --with-math="-limf -lsvml" \
     --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
 
