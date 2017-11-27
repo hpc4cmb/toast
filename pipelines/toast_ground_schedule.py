@@ -195,6 +195,19 @@ def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
     return success, azmins, azmaxs, aztimes, tstop
 
 
+def unwind_angle(alpha, beta):
+    """ Minimize absolute difference between alpha and beta.
+
+    Minimize the absolute difference by adding a multiple of
+    2*pi to beta to match alpha.
+    """
+    while np.abs(alpha-beta-2*np.pi) < np.abs(alpha-beta):
+        beta += 2*np.pi
+    while np.abs(alpha-beta+2*np.pi) < np.abs(alpha-beta):
+        beta -= 2*np.pi
+    return beta
+
+
 def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
                name, tstep, stop_timestamp, sun_el_max, rising):
     """ Attempt scanning the patch specified by corners at elevation el.
@@ -208,7 +221,7 @@ def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
     azs, els = corner_coordinates(observer, corners)
     while True:
         tstop += tstep / 10
-        if tstop - t > args.pole_ces_time:
+        if tstop - t >= args.pole_ces_time:
             # Succesfully scanned the maximum time
             if len(azmins) > 0:
                 success = True
@@ -264,13 +277,30 @@ def current_extent_pole(
             az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
             azs_cross.append(az_cross)
 
+    # Translate the azimuths at multiples of 2pi so they are in a
+    # compact cluster
+
+    for i in range(1, len(azs_cross)):
+        azs_cross[i] = unwind_angle(azs_cross[0], azs_cross[i])
+
     if len(azs_cross) > 0:
+        # DEBUG begin
+        if np.ptp(np.array(azs_cross)) > np.pi or \
+           np.ptp(np.array(azs_cross)) < np.radians(50):
+            import pdb
+            pdb.set_trace()
+        # DEBUG end
+
         azs_cross = np.sort(azs_cross)
         azmin = azs_cross[0]
         azmax = azs_cross[-1]
+        azmax = unwind_angle(azmin, azmax)
         if azmax - azmin > np.pi:
             # Patch crosses the zero meridian
             azmin, azmax = azmax, azmin
+        if len(azmins) > 0:
+            azmin = unwind_angle(azmins[-1], azmin)
+            azmax = unwind_angle(azmaxs[-1], azmax)
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
@@ -328,11 +358,14 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
     azmaxs = np.array(azmaxs)
-    for i in range(azmins.size-1):
-        if azmins[i+1] - azmins[i] > np.pi:
-            azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
-        if azmins[i+1] - azmins[i] < np.pi:
-            azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
+    for i in range(1, azmins.size):
+        azmins[i] = unwind_angle(azmins[0], azmins[i])
+        azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
+    #for i in range(azmins.size-1):
+    #    if azmins[i+1] - azmins[i] > np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
+    #    if azmins[i+1] - azmins[i] < np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     hits[name] += 1
     t1 = t
@@ -358,6 +391,11 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
         fp_radius_eff = fp_radius / np.cos(el)
         azmin = (azmin - fp_radius_eff) % (2*np.pi)
         azmax = (azmax + fp_radius_eff) % (2*np.pi)
+        # DEBUG begin
+        #if np.abs(azmin-2*np.pi) < .1:
+        #    import pdb
+        #    pdb.set_trace()
+        # DEBUG end
         ces_start = datetime.utcfromtimestamp(t1).strftime(
             '%Y-%m-%d %H:%M:%S %Z')
         ces_stop = datetime.utcfromtimestamp(t2).strftime(
