@@ -13,6 +13,11 @@ a BSD-style license that can be found in the LICENSE file.
 
 //============================================================================//
 
+CEREAL_CLASS_VERSION(toast::util::timer_tuple, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(toast::util::timing_manager, TOAST_TIMER_VERSION)
+
+//============================================================================//
+
 toast::util::timing_manager* toast::util::timing_manager::fgInstance = nullptr;
 
 //============================================================================//

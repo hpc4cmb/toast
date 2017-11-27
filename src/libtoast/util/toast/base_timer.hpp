@@ -317,14 +317,6 @@ typedef std::chrono::time_point<base_clock_t, base_duration_t>  base_time_point_
 typedef std::tuple<base_time_point_t, base_time_point_t> base_time_pair_t;
 }
 
-CEREAL_CLASS_VERSION(toast::util::details::base_timer_data, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(toast::util::details::base_timer, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(internal::base_clock_t, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(internal::base_clock_data_t, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(internal::base_duration_t, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(internal::base_time_point_t, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(internal::base_time_pair_t, TOAST_TIMER_VERSION)
-
 //----------------------------------------------------------------------------//
 
 #endif // base_timer_hpp_

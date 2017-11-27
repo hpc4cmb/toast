@@ -259,7 +259,4 @@ timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 
 } // namespace toast
 
-CEREAL_CLASS_VERSION(toast::util::timer_tuple, TOAST_TIMER_VERSION)
-CEREAL_CLASS_VERSION(toast::util::timing_manager, TOAST_TIMER_VERSION)
-
 #endif // timing_manager_hpp_

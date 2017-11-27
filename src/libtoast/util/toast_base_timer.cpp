@@ -9,6 +9,18 @@ a BSD-style license that can be found in the LICENSE file.
 #include <cassert>
 #include <algorithm>
 
+//============================================================================//
+
+CEREAL_CLASS_VERSION(toast::util::details::base_timer_data, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(toast::util::details::base_timer, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(internal::base_clock_t, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(internal::base_clock_data_t, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(internal::base_duration_t, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(internal::base_time_point_t, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(internal::base_time_pair_t, TOAST_TIMER_VERSION)
+
+//============================================================================//
+
 namespace toast
 {
 namespace util
