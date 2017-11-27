@@ -187,8 +187,7 @@ class OpSimAtmosphere(Operator):
             counter1 = currently unused (0)
             counter2 = sample in stream (incremented internally in the atm code)
             """
-            key1 = self._realization * 2**32 + telescope * 2**16 \
-                   + self._component
+            key1 = self._realization*2**32 + telescope*2**16 + self._component
             key2 = obsindx
             counter1 = 0
             counter2 = 0

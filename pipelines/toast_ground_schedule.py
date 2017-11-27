@@ -83,6 +83,7 @@ def attempt_scan(
                 continue
             if args.pole_mode:
                 pole_success = True
+                subscan = -1
                 while pole_success:
                     pole_success, azmins, azmaxs, aztimes, tstop \
                         = scan_patch_pole(
@@ -93,10 +94,11 @@ def attempt_scan(
                         if success:
                             # Still the same scan
                             hits[name] -= 1
+                            subscan += 1
                         t = add_scan(
                             args, t, tstop, aztimes, azmins, azmaxs, rising,
                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                            name, el)
+                            name, el, subscan=subscan)
                         if rising:
                             el -= np.radians(args.pole_el_step)
                         else:
@@ -194,6 +196,19 @@ def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
     return success, azmins, azmaxs, aztimes, tstop
 
 
+def unwind_angle(alpha, beta):
+    """ Minimize absolute difference between alpha and beta.
+
+    Minimize the absolute difference by adding a multiple of
+    2*pi to beta to match alpha.
+    """
+    while np.abs(alpha-beta-2*np.pi) < np.abs(alpha-beta):
+        beta += 2*np.pi
+    while np.abs(alpha-beta+2*np.pi) < np.abs(alpha-beta):
+        beta -= 2*np.pi
+    return beta
+
+
 def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
                name, tstep, stop_timestamp, sun_el_max, rising):
     """ Attempt scanning the patch specified by corners at elevation el.
@@ -207,7 +222,7 @@ def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
     azs, els = corner_coordinates(observer, corners)
     while True:
         tstop += tstep / 10
-        if tstop - t > args.pole_ces_time:
+        if tstop - t >= args.pole_ces_time:
             # Succesfully scanned the maximum time
             if len(azmins) > 0:
                 success = True
@@ -263,13 +278,30 @@ def current_extent_pole(
             az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
             azs_cross.append(az_cross)
 
+    # Translate the azimuths at multiples of 2pi so they are in a
+    # compact cluster
+
+    for i in range(1, len(azs_cross)):
+        azs_cross[i] = unwind_angle(azs_cross[0], azs_cross[i])
+
     if len(azs_cross) > 0:
+        # DEBUG begin
+        if np.ptp(np.array(azs_cross)) > np.pi or \
+           np.ptp(np.array(azs_cross)) < np.radians(50):
+            import pdb
+            pdb.set_trace()
+        # DEBUG end
+
         azs_cross = np.sort(azs_cross)
         azmin = azs_cross[0]
         azmax = azs_cross[-1]
+        azmax = unwind_angle(azmin, azmax)
         if azmax - azmin > np.pi:
             # Patch crosses the zero meridian
             azmin, azmax = azmax, azmin
+        if len(azmins) > 0:
+            azmin = unwind_angle(azmins[-1], azmin)
+            azmax = unwind_angle(azmaxs[-1], azmax)
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
@@ -317,7 +349,7 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
 
 
 def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
-             observer, sun, moon, fout, fout_fmt, hits, name, el):
+             observer, sun, moon, fout, fout_fmt, hits, name, el, subscan=-1):
     """ Make an entry for a CES in the schedule file.
     """
     ces_time = tstop - t
@@ -327,17 +359,19 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
     azmaxs = np.array(azmaxs)
-    for i in range(azmins.size-1):
-        if azmins[i+1] - azmins[i] > np.pi:
-            azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
-        if azmins[i+1] - azmins[i] < np.pi:
-            azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
+    for i in range(1, azmins.size):
+        azmins[i] = unwind_angle(azmins[0], azmins[i])
+        azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
+    #for i in range(azmins.size-1):
+    #    if azmins[i+1] - azmins[i] > np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
+    #    if azmins[i+1] - azmins[i] < np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     hits[name] += 1
     t1 = t
-    isub = -1
     while t1 < tstop:
-        isub += 1
+        subscan += 1
         t2 = min(t1 + ces_time, tstop)
         if tstop - t2 < ces_time / 10:
             # Append leftover scan to the last full subscan
@@ -358,6 +392,11 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
         fp_radius_eff = fp_radius / np.cos(el)
         azmin = (azmin - fp_radius_eff) % (2*np.pi)
         azmax = (azmax + fp_radius_eff) % (2*np.pi)
+        # DEBUG begin
+        #if np.abs(azmin-2*np.pi) < .1:
+        #    import pdb
+        #    pdb.set_trace()
+        # DEBUG end
         ces_start = datetime.utcfromtimestamp(t1).strftime(
             '%Y-%m-%d %H:%M:%S %Z')
         ces_stop = datetime.utcfromtimestamp(t2).strftime(
@@ -384,7 +423,7 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
                 rising_string,
                 sun_el1, sun_az1, sun_el2, sun_az2,
                 moon_el1, moon_az1, moon_el2, moon_az2,
-                0.005*(moon_phase1 + moon_phase2), hits[name], isub))
+                0.005*(moon_phase1 + moon_phase2), hits[name], subscan))
         t1 = t2 + args.gap_small
     # Advance the time
     t = tstop
@@ -445,10 +484,12 @@ def build_schedule(
 
     fout = open(args.out, 'w')
 
-    fout.write('#{:15} {:15} {:15} {:15}\n'.format(
-        'Site', 'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
-    fout.write(' {:15} {:15} {:15} {:15.6f}\n'.format(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt))
+    fout.write('#{:15} {:15} {:15} {:15} {:15}\n'.format(
+        'Site', 'Telescope',
+        'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
+    fout.write(' {:15} {:15} {:15} {:15} {:15.6f}\n'.format(
+        args.site_name, args.telescope,
+        args.site_lat, args.site_lon, args.site_alt))
 
     fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
                 '{:15} {:8} {:8} {:8} {:5} ' \
@@ -551,6 +592,9 @@ def parse_args():
     parser.add_argument('--site_name',
                         required=False, default='LBL',
                         help='Observing site name')
+    parser.add_argument('--telescope',
+                        required=False, default='Telescope',
+                        help='Observing telescope name')
     parser.add_argument('--site_lon',
                         required=False, default='-122.247',
                         help='Observing site longitude [PyEphem string]')

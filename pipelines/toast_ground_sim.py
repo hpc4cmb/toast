@@ -252,187 +252,174 @@ def parse_arguments(comm):
     return args, comm
 
 
+def name2id(name, maxval=2**16):
+    value = 0
+    for c in name:
+        value += ord(c)
+    return value % maxval
+
+
 def load_schedule(args, comm):
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
+    schedules = []
     if comm.comm_world.rank == 0:
-        fn = args.schedule
-        if not os.path.isfile(fn):
-            raise RuntimeError('No such schedule file: {}'.format(fn))
-        start = MPI.Wtime()
-        f = open(fn, 'r')
-        while True:
-            line = f.readline()
-            if line.startswith('#'):
-                continue
-            site_name, site_lat, site_lon, site_alt = line.split()
-            site_alt = float(site_alt)
-            site = [site_name, site_lat, site_lon, site_alt]
-            break
-        all_ces = []
-        for line in f:
-            if line.startswith('#'):
-                continue
-            start_date, start_time, stop_date, stop_time, mjdstart, mjdstop, \
-                name, azmin, azmax, el, rs, \
-                sun_el1, sun_az1, sun_el2, sun_az2, \
-                moon_el1, moon_az1, moon_el2, moon_az2, moon_phase, \
-                scan, subscan = line.split()
-            start_time = start_date + ' ' + start_time
-            stop_time = stop_date + ' ' + stop_time
-            try:
-                start_time = dateutil.parser.parse(start_time + ' +0000')
-                stop_time = dateutil.parser.parse(stop_time + ' +0000')
-            except:
-                start_time = dateutil.parser.parse(start_time)
-                stop_time = dateutil.parser.parse(stop_time)
+        for fn in args.schedule.split(','):
+            if not os.path.isfile(fn):
+                raise RuntimeError('No such schedule file: {}'.format(fn))
+            start = MPI.Wtime()
+            with open(fn, 'r') as f:
+                while True:
+                    line = f.readline()
+                    if line.startswith('#'):
+                        continue
+                    (site_name, telescope, site_lat, site_lon,
+                     site_alt) = line.split()
+                    site_alt = float(site_alt)
+                    site = (site_name, telescope, site_lat, site_lon, site_alt)
+                    break
+                all_ces = []
+                for line in f:
+                    if line.startswith('#'):
+                        continue
+                    (start_date, start_time, stop_date, stop_time, mjdstart,
+                     mjdstop, name, azmin, azmax, el, rs, sun_el1, sun_az1,
+                     sun_el2, sun_az2, moon_el1, moon_az1, moon_el2, moon_az2,
+                     moon_phase, scan, subscan) = line.split()
+                    start_time = start_date + ' ' + start_time
+                    stop_time = stop_date + ' ' + stop_time
+                    try:
+                        start_time = dateutil.parser.parse(start_time+' +0000')
+                        stop_time = dateutil.parser.parse(stop_time+' +0000')
+                    except:
+                        start_time = dateutil.parser.parse(start_time)
+                        stop_time = dateutil.parser.parse(stop_time)
+                    start_timestamp = start_time.timestamp()
+                    stop_timestamp = stop_time.timestamp()
+                    all_ces.append([
+                        start_timestamp, stop_timestamp, name, float(mjdstart),
+                        int(scan), int(subscan), float(azmin), float(azmax),
+                        float(el)])
+            schedules.append([site, all_ces])
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            print('Load {}: {:.2f} seconds'.format(fn, stop-start),
+                  flush=args.flush)
 
-            start_timestamp = start_time.timestamp()
-            stop_timestamp = stop_time.timestamp()
-
-            all_ces.append([
-                start_timestamp, stop_timestamp, name, float(mjdstart),
-                int(scan), int(subscan), float(azmin), float(azmax), float(el)])
-        f.close()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        print('Load schedule:  {:.2f} seconds'.format(stop-start),
-              flush=args.flush)
-    else:
-        site = None
-        all_ces = None
-
-    site = comm.comm_world.bcast(site)
-    all_ces = comm.comm_world.bcast(all_ces)
+    schedules = comm.comm_world.bcast(schedules)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print('Loading schedule {:.3f} s'.format(stop-start), flush=args.flush)
 
-    return site, all_ces
+    return schedules
 
 
-def load_fp(args, comm):
+def load_fp(args, comm, schedules):
+    """ Attach a focalplane to each of the schedules.
+    """
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
 
-    fp = None
-
     # Load focalplane information
 
-    nullquat = np.array([0,0,0,1], dtype=np.float64)
-
+    focalplanes = []
     if comm.comm_world.rank == 0:
-        if args.fp is None:
-            # in this case, create a fake detector at the boresight
-            # with a pure white noise spectrum.
-            fake = {}
-            fake['quat'] = nullquat
-            fake['fwhm'] = 30.0
-            fake['fknee'] = 0.0
-            fake['fmin'] = 1e-9
-            fake['alpha'] = 1.0
-            fake['NET'] = 1.0
-            fake['color'] = 'r'
-            fp = {}
-            # Second detector at 22.5 degree polarization angle
-            fp['bore1'] = fake
-            fake2 = {}
-            zrot = qa.rotation(ZAXIS, 22.5*degree)
-            fake2['quat'] = qa.mult(fake['quat'], zrot)
-            fake2['fwhm'] = 30.0
-            fake2['fknee'] = 0.0
-            fake2['fmin'] = 1e-9
-            fake2['alpha'] = 1.0
-            fake2['NET'] = 1.0
-            fake2['color'] = 'r'
-            fp['bore2'] = fake2
-            # Third detector at 45 degree polarization angle
-            fake3 = {}
-            zrot = qa.rotation(ZAXIS, 45*degree)
-            fake3['quat'] = qa.mult(fake['quat'], zrot)
-            fake3['fwhm'] = 30.0
-            fake3['fknee'] = 0.0
-            fake3['fmin'] = 1e-9
-            fake3['alpha'] = 1.0
-            fake3['NET'] = 1.0
-            fake3['color'] = 'r'
-            fp['bore3'] = fake3
-            # Fourth detector at 67.5 degree polarization angle
-            fake4 = {}
-            zrot = qa.rotation(ZAXIS, 67.5*degree)
-            fake4['quat'] = qa.mult(fake['quat'], zrot)
-            fake4['fwhm'] = 30.0
-            fake4['fknee'] = 0.0
-            fake4['fmin'] = 1e-9
-            fake4['alpha'] = 1.0
-            fake4['NET'] = 1.0
-            fake4['color'] = 'r'
-            fp['bore4'] = fake4
-        else:
-            with open(args.fp, 'rb') as p:
+        for fpfile in args.fp.split(','):
+            with open(fpfile, 'rb') as p:
                 fp = pickle.load(p)
-    fp = comm.comm_world.bcast(fp, root=0)
+                focalplanes.append(fp)
+        if len(focalplanes) == 1 and len(schedules) > 1:
+            focalplanes *= len(schedules)
+        if len(focalplanes) != len(schedules):
+            raise RuntimeError(
+                'Number of focalplanes must equal number of schedules or be 1.')
+    focalplanes = comm.comm_world.bcast(focalplanes)
 
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print('Create focalplane:  {:.2f} seconds'.format(stop-start),
+        print('Load focalplane:  {:.2f} seconds'.format(stop-start),
               flush=args.flush)
     start = stop
 
-    if args.debug:
-        if comm.comm_world.rank == 0:
-            outfile = '{}/focalplane.png'.format(args.outdir)
-            tt.plot_focalplane(fp, 6, 6, outfile)
-
-    detectors = sorted(fp.keys())
     detweights = {}
-    for d in detectors:
-        net = fp[d]['NET']
-        detweights[d] = 1.0 / (args.samplerate * net * net)
+    for ifp, fp in enumerate(focalplanes):
+        schedules[ifp].append(fp)
+        for detname, det in fp.items():
+            net = det['NET']
+            detweight = 1.0 / (args.samplerate * net * net)
+            if detname in detweights and detweights[detname] != detweight:
+                raise RuntimeError(
+                    'Detector weight for {} changes'.format(detname))
+            detweights[detname] = detweight
 
-    return fp, detweights
+    return detweights
 
 
-def create_observations(args, comm, fp, all_ces, counter, site):
+def create_observations(args, comm, schedules, counter):
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
 
     data = toast.Data(comm)
 
-    site_name, site_lat, site_lon, site_alt = site
-
-    detectors = sorted(fp.keys())
-    detquats = {}
-    for d in detectors:
-        detquats[d] = fp[d]['quat']
-
-    nces = len(all_ces)
-
+    nces_tot = 0
     breaks = []
-    do_break = False
-    for i in range(nces-1):
-        # If current and next CES are on different days, insert a break
-        tz = args.timezone / 24.
-        start1 = all_ces[i][3] # MJD start
-        start2 = all_ces[i+1][3] # MJD start
-        scan1 = all_ces[i][4]
-        scan2 = all_ces[i+1][4]
-        if scan1 != scan2 and do_break:
-            breaks.append(i + 1)
-            do_break = False
-            continue
-        day1 = int(start1 + tz)
-        day2 = int(start2 + tz)
-        if day1 != day2:
-            if scan1 == scan2:
-                # We want an entire CES, even if it crosses the day bound.
-                # Wait until the scan number changes.
-                do_break = True
-            else:
-                breaks.append(i + 1)
+    all_ces_tot = []
+
+    for (site, all_ces, fp) in schedules:
+        if nces_tot != 0:
+            breaks.append(nces_tot)
+
+        # Focalplane information for this schedule
+        detectors = sorted(fp.keys())
+        detquats = {}
+        for d in detectors:
+            detquats[d] = fp[d]['quat']
+
+        # Noise model for this schedule
+        fmin = {}
+        fknee = {}
+        alpha = {}
+        NET = {}
+        rates = {}
+        for d in detectors:
+            rates[d] = args.samplerate
+            fmin[d] = fp[d]['fmin']
+            fknee[d] = fp[d]['fknee']
+            alpha[d] = fp[d]['alpha']
+            NET[d] = fp[d]['NET']
+        noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
+                                 fknee=fknee, alpha=alpha, NET=NET)
+
+        nces = len(all_ces)
+        for ces in all_ces:
+            all_ces_tot.append((ces, site, fp, detquats))
+
+        do_break = False
+        for i in range(nces-1):
+            # If current and next CES are on different days, insert a break
+            tz = args.timezone / 24
+            start1 = all_ces[i][3] # MJD start
+            start2 = all_ces[i+1][3] # MJD start
+            scan1 = all_ces[i][4]
+            scan2 = all_ces[i+1][4]
+            if scan1 != scan2 and do_break:
+                breaks.append(nces_tot + i + 1)
+                do_break = False
+                continue
+            day1 = int(start1 + tz)
+            day2 = int(start2 + tz)
+            if day1 != day2:
+                if scan1 == scan2:
+                    # We want an entire CES, even if it crosses the day bound.
+                    # Wait until the scan number changes.
+                    do_break = True
+                else:
+                    breaks.append(nces_tot + i + 1)
+
+        nces_tot += nces
 
     nbreak = len(breaks)
     if nbreak != comm.ngroups-1:
@@ -440,32 +427,17 @@ def create_observations(args, comm, fp, all_ces, counter, site):
             'Number of observing days ({}) does not match number of process '
             'groups ({}).'.format(nbreak+1, comm.ngroups))
 
-    groupdist = toast.distribute_uniform(nces, comm.ngroups, breaks=breaks)
+    groupdist = toast.distribute_uniform(nces_tot, comm.ngroups, breaks=breaks)
     group_firstobs = groupdist[comm.group][0]
     group_numobs = groupdist[comm.group][1]
 
-    # Create the noise model used by all observations
-
-    fmin = {}
-    fknee = {}
-    alpha = {}
-    NET = {}
-    rates = {}
-    for d in detectors:
-        rates[d] = args.samplerate
-        fmin[d] = fp[d]['fmin']
-        fknee[d] = fp[d]['fknee']
-        alpha[d] = fp[d]['alpha']
-        NET[d] = fp[d]['NET']
-
-    noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
-                             fknee=fknee, alpha=alpha, NET=NET)
-
     for ices in range(group_firstobs, group_firstobs + group_numobs):
-        ces = all_ces[ices]
+        ces, site, fp, detquats = all_ces_tot[ices]
 
-        CES_start, CES_stop, name, mjdstart, scan, subscan, azmin, azmax, \
-            el = ces
+        (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
+         azmin, azmax, el) = ces
+
+        site_name, telescope, site_lat, site_lon, site_alt = site
 
         totsamples = int((CES_stop - CES_start) * args.samplerate)
 
@@ -473,34 +445,28 @@ def create_observations(args, comm, fp, all_ces, counter, site):
 
         try:
             tod = tt.TODGround(
-                comm.comm_group,
-                detquats,
-                totsamples,
-                detranks=comm.comm_group.size,
-                firsttime=CES_start,
-                rate=args.samplerate,
-                site_lon=site_lon,
-                site_lat=site_lat,
-                site_alt=site_alt,
-                azmin=azmin,
-                azmax=azmax,
-                el=el,
-                scanrate=args.scanrate,
-                scan_accel=args.scan_accel,
-                CES_start=None,
-                CES_stop=None,
-                sun_angle_min=args.sun_angle_min,
-                coord=args.coord,
-                sampsizes=None)
+                comm.comm_group, detquats, totsamples,
+                detranks=comm.comm_group.size, firsttime=CES_start,
+                rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
+                site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
+                scanrate=args.scanrate, scan_accel=args.scan_accel,
+                CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
+                coord=args.coord, sampsizes=None)
         except RuntimeError as e:
             print('Failed to create the CES scan: {}'.format(e),
                   flush=args.flush)
-            return
+            continue
 
         # Create the (single) observation
 
+        site_name = site[0]
+        telescope_name = site[1]
+        site_id = name2id(site_name)
+        telescope_id = name2id(telescope_name)
+
         ob = {}
-        ob['name'] = 'CES-{}-{}-{}'.format(name, scan, subscan)
+        ob['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
+                                                 CES_name, scan, subscan)
         ob['tod'] = tod
         if len(tod.subscans) > 0:
             ob['intervals'] = tod.subscans
@@ -509,6 +475,10 @@ def create_observations(args, comm, fp, all_ces, counter, site):
         ob['baselines'] = None
         ob['noise'] = noise
         ob['id'] = int(mjdstart * 10000)
+        # Site is not yet recognized as an RNG index
+        #ob['site'] = site_id
+        #ob['telescope'] = telescope_id
+        ob['telescope'] = (site_id + telescope_id) % 2**16
 
         data.obs.append(ob)
 
@@ -1341,18 +1311,18 @@ def main():
 
     # Load and broadcast the schedule file
 
-    site, all_ces = load_schedule(args, comm)
+    schedules = load_schedule(args, comm)
 
     # load or simulate the focalplane
 
-    fp, detweights = load_fp(args, comm)
+    detweights = load_fp(args, comm, schedules)
 
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
     counter = tt.OpMemoryCounter()
 
-    data = create_observations(args, comm, fp, all_ces, counter, site)
+    data = create_observations(args, comm, schedules, counter)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers

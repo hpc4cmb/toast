@@ -40,7 +40,7 @@ PYVERSION = 3.6
 
 # For BLAS/LAPACK, use MKL
 
-BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -liomp5 -lpthread -lmemkind -limf -ldl
+BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -liomp5 -lpthread -lmemkind -limf -lsvml -ldl
 LAPACK = 
 
 # Boost toolchain name

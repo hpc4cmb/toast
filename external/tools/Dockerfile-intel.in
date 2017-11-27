@@ -107,6 +107,10 @@ ENV PYTHONPATH /usr/lib/python3.5/site-packages
 
 @hdf5@
 
+# Install h5py
+
+@h5py@
+
 # Install TIDAS
 
 @tidas@

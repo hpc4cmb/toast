@@ -12,6 +12,6 @@ if [ "x${loadedgnu}" = x ]; then
 fi
 module swap gcc gcc/6.3.0
 module load git
-module load cmake
+module load cmake/3.8.2
 export CRAYPE_LINK_TYPE=dynamic
 
