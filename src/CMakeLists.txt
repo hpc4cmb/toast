@@ -6,6 +6,16 @@ endif()
 
 include(MacroLibraryTargets)
 
+# cereal options
+add_option(WITH_WERROR "Compile with '-Werror' C++ compiler flag" OFF NO_FEATURE)
+add_option(THREAD_SAFE "Compile Cereal with THREAD_SAFE option" ON NO_FEATURE)
+add_option(JUST_INSTALL_CEREAL "Skip testing of Cereal" ON NO_FEATURE)
+add_option(SKIP_PORTABILITY_TEST "Skip Cereal portability test" ON NO_FEATURE)
+
+# add cereal
+add_subdirectory(cereal)
+
+include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/src/cereal/include)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/capi)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/fod)
@@ -33,7 +43,7 @@ set(PROJECT_LIBRARIES ${EXTERNAL_LIBRARIES})
 # =============================================================================#
 set(PROJECT_LINK_TARGETS )
 
-# =============================================================================#
+#------------------------------------------------------------------------------#
 
 if(BUILD_STATIC_LIBS)
 
@@ -55,7 +65,7 @@ if(BUILD_STATIC_LIBS)
 
 endif()
 
-# =============================================================================#
+#------------------------------------------------------------------------------#
 
 if(BUILD_SHARED_LIBS)
 

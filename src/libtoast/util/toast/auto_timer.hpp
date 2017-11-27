@@ -21,21 +21,28 @@ public:
 
 public:
     // Constructor and Destructors
-    auto_timer(const std::string&);
+    auto_timer(const std::string&, const int32_t& lineno);
     virtual ~auto_timer();
 
 private:
     static uint64_t& ncount()
     { return details::base_timer::get_instance_count(); }
 
+    static uint64_t& nhash()
+    { return details::base_timer::get_instance_hash(); }
+
 private:
+    uint64_t m_hash;
     toast_timer_t& m_timer;
 };
 
 //----------------------------------------------------------------------------//
-inline auto_timer::auto_timer(const std::string& timer_tag)
-: m_timer(timing_manager::instance()->timer(timer_tag, "cxx",
-                                            ++auto_timer::ncount()))
+inline auto_timer::auto_timer(const std::string& timer_tag,
+                              const int32_t& lineno)
+: m_hash(lineno),
+  m_timer(timing_manager::instance()->timer(timer_tag, "cxx",
+                                            ++auto_timer::ncount(),
+                                            auto_timer::nhash() += m_hash))
 {
     m_timer.start();
 }
@@ -45,6 +52,8 @@ inline auto_timer::~auto_timer()
     m_timer.stop();
     if(auto_timer::ncount() > 0)
         auto_timer::ncount()--;
+
+    auto_timer::nhash() -= m_hash;
 }
 //----------------------------------------------------------------------------//
 

@@ -1335,7 +1335,7 @@ def main():
             comm.comm_world.size, str(datetime.now())), flush=True)
 
     global_start = MPI.Wtime()
-    autotimer = timing.auto_timer("@%s" % timing.FILE())
+    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     args, comm = parse_arguments(comm)
 

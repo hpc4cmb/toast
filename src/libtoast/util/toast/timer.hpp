@@ -35,6 +35,8 @@
 
 #include "base_timer.hpp"
 
+#include <cereal/types/polymorphic.hpp>
+
 namespace toast
 {
 namespace util
@@ -78,6 +80,13 @@ protected:
 private:
     static thread_local uint64_t f_output_width;
 
+public:
+    template <typename Archive> void
+    serialize(Archive& ar, const unsigned int version)
+    {
+        details::base_timer::serialize(ar, version);
+    }
+
 };
 
 //----------------------------------------------------------------------------//
@@ -85,6 +94,10 @@ private:
 } // namespace util
 
 } // namespace toast
+
+//----------------------------------------------------------------------------//
+
+CEREAL_CLASS_VERSION(toast::util::timer, TOAST_TIMER_VERSION)
 
 //----------------------------------------------------------------------------//
 

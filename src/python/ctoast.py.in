@@ -96,10 +96,10 @@ def get_timer_instance_count():
     return lib.ctoast_get_timer_instance_count()
 
 lib.ctoast_op_timer_instance_count.restype = None
-lib.ctoast_op_timer_instance_count.argtypes = [ ct.c_int ]
+lib.ctoast_op_timer_instance_count.argtypes = [ ct.c_int, ct.c_int ]
 
-def op_timer_instance_count(ncount):
-    lib.ctoast_op_timer_instance_count(ncount)
+def op_timer_instance_count(ncount, nhash):
+    lib.ctoast_op_timer_instance_count(ncount, nhash)
 
 lib.ctoast_get_timing_manager.restype = ct.POINTER(cTimingManager)
 lib.ctoast_get_timing_manager.argtypes = []
@@ -107,12 +107,17 @@ lib.ctoast_get_timing_manager.argtypes = []
 def get_timing_manager():
     return lib.ctoast_get_timing_manager()
 
-lib.ctoast_set_timing_output_files.restype = None
-lib.ctoast_set_timing_output_files.argtypes = [ p_c_char, p_c_char ]
+lib.ctoast_set_timing_output_file.restype = None
+lib.ctoast_set_timing_output_file.argtypes = [ p_c_char ]
 
-def set_timing_output_files(tot_fname, avg_fname):
-    lib.ctoast_set_timing_output_files(convert_to_p_c_char(tot_fname),
-                                       convert_to_p_c_char(avg_fname))
+def set_timing_output_file(fname):
+    lib.ctoast_set_timing_output_file(convert_to_p_c_char(fname))
+
+lib.ctoast_serialize_timing_manager.restype = None
+lib.ctoast_serialize_timing_manager.argtypes = [ p_c_char ]
+
+def serialize_timing_manager(fname):
+    lib.ctoast_serialize_timing_manager(convert_to_p_c_char(fname))
 
 lib.ctoast_timing_manager_report.restype = None
 lib.ctoast_timing_manager_report.argtypes = []

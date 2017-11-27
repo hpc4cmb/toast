@@ -22,13 +22,16 @@ thread_local uint64_t base_timer::f_instance_count = 0;
 
 //============================================================================//
 
+thread_local uint64_t base_timer::f_instance_hash = 0;
+
+//============================================================================//
+
 base_timer::mutex_map_t base_timer::w_mutex_map;
 
 //============================================================================//
 
 base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
-: m_valid_times(false),
-  m_running(false),
+: m_running(false),
   m_precision(prec),
   m_os(os),
   m_format_positions(pos_list_t()),
@@ -42,7 +45,7 @@ base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
 
 base_timer::~base_timer()
 {
-    if(!m_valid_times)
+    if(m_running)
     {
         this->stop();
         if(m_os != &std::cout && *m_os)
@@ -91,7 +94,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     const_cast<base_timer*>(this)->parse_format();
 
     // stop, if not already stopped
-    if(!m_valid_times)
+    if(m_running)
         const_cast<base_timer*>(this)->stop();
 
     // for average reporting

@@ -17,7 +17,7 @@ class TimingTest(MPITestCase):
     def test_timing(self):
 
         tman = timing.timing_manager()
-        tman.set_output_files("timing_report_tot.out", "timing_report_avg.out",
+        tman.set_output_file("timing_report.out",
                               self.outdir)
 
         def fibonacci(n):
@@ -34,7 +34,7 @@ class TimingTest(MPITestCase):
             timer.stop()
 
         tman.clear()
-        t = timing.timer("tmanager test");
+        t = timing.timer("tmanager_test");
         t.start()
 
         for i in [ 39, 35, 43, 39 ]:

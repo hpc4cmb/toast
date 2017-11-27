@@ -30,7 +30,7 @@ typedef std::string                                 string_t;
 
 #define TOAST_FUNCTION_TIME(num) \
     auto_timer_t macro_auto_timer(string_t("") + \
-        string_t(__FUNCTION__) + num);
+        string_t(__FUNCTION__) + num, __LINE__);
 
 // ASSERT_NEAR
 // EXPECT_EQ
@@ -100,7 +100,7 @@ TEST_F( timingTest, manager )
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
 
-    toast_timer_t& t = tman->timer("tmanager test");
+    toast_timer_t& t = tman->timer("tmanager_test");
     t.start();
 
     for(auto itr : { 35, 39, 43, 39, 35 })
@@ -111,15 +111,18 @@ TEST_F( timingTest, manager )
         time_fibonacci_lv(itr+1);
     }
 
-    tman->set_output_streams("timing_report_tot.out", "timing_report_avg.out");
+    t.stop();
+
+    tman->set_output_stream("timing_report.out");
     tman->report();
+    tman->write_json("timing_report.json");
 
     EXPECT_EQ(timing_manager::instance()->size(), 25);
 
     for(const auto& itr : *tman)
     {
-        ASSERT_FALSE(itr.second.real_elapsed() < 0.0);
-        ASSERT_FALSE(itr.second.user_elapsed() < 0.0);
+        ASSERT_FALSE(itr.timer().real_elapsed() < 0.0);
+        ASSERT_FALSE(itr.timer().user_elapsed() < 0.0);
     }
 
 }

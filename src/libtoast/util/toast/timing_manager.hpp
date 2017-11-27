@@ -15,10 +15,94 @@ a BSD-style license that can be found in the LICENSE file.
 #include <string>
 #include "timer.hpp"
 
+#include <mpi.h>
+
+#include <cereal/cereal.hpp>
+#include <cereal/types/deque.hpp>
+#include <cereal/access.hpp>
+#include <cereal/types/unordered_map.hpp>
+#include <cereal/types/chrono.hpp>
+#include <cereal/archives/adapters.hpp>
+#include <cereal/archives/binary.hpp>
+#include <cereal/archives/json.hpp>
+#include <cereal/archives/portable_binary.hpp>
+#include <cereal/archives/xml.hpp>
+
 namespace toast
 {
 namespace util
 {
+
+//----------------------------------------------------------------------------//
+
+inline bool mpi_is_initialized()
+{
+    int32_t _init = 0;
+    MPI_Initialized(&_init);
+    return (_init != 0) ? true : false;
+}
+
+//----------------------------------------------------------------------------//
+
+inline int32_t mpi_rank()
+{
+    int32_t _rank = 0;
+    if(mpi_is_initialized())
+        MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+    return std::max(_rank, (int32_t) 0);
+}
+
+//----------------------------------------------------------------------------//
+
+inline int32_t mpi_size()
+{
+    int32_t _size = 1;
+    if(mpi_is_initialized())
+        MPI_Comm_size(MPI_COMM_WORLD, &_size);
+    return std::max(_size, (int32_t) 1);
+}
+
+//----------------------------------------------------------------------------//
+
+struct timer_tuple : public std::tuple<std::string, std::string, toast::util::timer&>
+{
+    typedef std::string                                     string_t;
+    typedef toast::util::timer                              toast_timer_t;
+    typedef std::tuple<string_t, string_t, toast_timer_t&>  base_type;
+    typedef string_t                                        first_type;
+    typedef string_t                                        second_type;
+    typedef toast_timer_t&                                  third_type;
+
+    timer_tuple(const base_type& _data) : base_type(_data) { }
+    timer_tuple(first_type _f, second_type _s, third_type _t)
+    : base_type(_f, _s, _t) { }
+
+    timer_tuple& operator=(const base_type& rhs)
+    {
+        if(this == &rhs)
+            return *this;
+        base_type::operator =(rhs);
+        return *this;
+    }
+
+    first_type key() { return std::get<0>(*this); }
+    const first_type key() const { return std::get<0>(*this); }
+
+    second_type tag() { return std::get<1>(*this); }
+    const second_type tag() const { return std::get<1>(*this); }
+
+    third_type timer() { return std::get<2>(*this); }
+    const third_type timer() const { return std::get<2>(*this); }
+
+    // serialization function
+    template <typename Archive> void
+    serialize(Archive& ar, const unsigned int /*version*/)
+    {
+        ar(cereal::make_nvp("timer.key", std::get<0>(*this)),
+           cereal::make_nvp("timer.tag", std::get<1>(*this)),
+           cereal::make_nvp("timer.ref", std::get<2>(*this)));
+    }
+};
 
 //----------------------------------------------------------------------------//
 
@@ -30,8 +114,8 @@ public:
 
     typedef toast::util::timer                  toast_timer_t;
     typedef toast_timer_t::string_t             string_t;
-    typedef std::pair<string_t, toast_timer_t&> timer_pair_t;
-    typedef std::deque<timer_pair_t>            timer_list_t;
+    typedef timer_tuple                         timer_tuple_t;
+    typedef std::deque<timer_tuple_t>           timer_list_t;
     typedef timer_list_t::iterator              iterator;
     typedef timer_list_t::const_iterator        const_iterator;
     typedef timer_list_t::size_type             size_type;
@@ -43,20 +127,22 @@ public:
 public:
 	// Constructor and Destructors
     timing_manager();
-	// Virtual destructors are required by abstract classes 
-	// so add it by default, just in case
     virtual ~timing_manager();
 
 public:
-    // Public functions
+    // Public static functions
     static timing_manager* instance();
+    static void write_json(const string_t& _fname);
 
+public:
+    // Public member functions
     size_type size() const { return m_timer_list.size(); }
     void clear();
 
     toast_timer_t& timer(const string_t& key,
                          const string_t& tag = "cxx",
-                         int32_t ncount = -1);
+                         int32_t ncount = -1,
+                         int32_t nhash = 0);
 
     // time a function with a return type and no arguments
     template <typename _Ret, typename _Func>
@@ -74,6 +160,10 @@ public:
     template <typename _Func, typename... _Args>
     void time(const string_t& key, _Func, _Args...);
 
+    // serialization function
+    template <typename Archive> void
+    serialize(Archive& ar, const unsigned int /*version*/);
+
     // iteration of timers
     iterator        begin()         { return m_timer_list.begin(); }
     const_iterator  begin() const   { return m_timer_list.cbegin(); }
@@ -84,14 +174,16 @@ public:
     const_iterator  cend() const    { return m_timer_list.cend(); }
 
     void report() const;
-    void set_output_streams(ostream_t&, ostream_t&);
-    void set_output_streams(const string_t&, const string_t&);
+    void set_output_stream(ostream_t&);
+    void set_output_stream(const string_t&);
 
-    toast_timer_t& at(size_type i) { return m_timer_list.at(i).second; }
+    toast_timer_t& at(size_type i) { return m_timer_list.at(i).timer(); }
     toast_timer_t& at(string_t key, const string_t& tag = "cxx");
 
-protected:
+private:
+    // Private functions
     ofstream_t* get_ofstream(ostream_t* m_os) const;
+    void report(ostream_t*) const;
 
 private:
 	// Private variables
@@ -101,9 +193,7 @@ private:
     // ordered list for output (outputs in order of timer instantiation)
     timer_list_t            m_timer_list;
     // output stream for total timing report
-    ostream_t*              m_report_tot;
-    // output stream for average timing report
-    ostream_t*              m_report_avg;
+    ostream_t*              m_report;
 };
 
 //----------------------------------------------------------------------------//
@@ -157,91 +247,19 @@ timing_manager::time(const string_t& key, _Func func, _Args... args)
     _t.stop();
 }
 //----------------------------------------------------------------------------//
+template <typename Archive>
 inline void
-timing_manager::report() const
+timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 {
-
-    ostream_t* os_avg = m_report_avg;
-    ostream_t* os_tot = m_report_tot;
-
-    auto check_stream = [&] (ostream_t*& os, const string_t& id)
-    {
-        if(os == &std::cout)
-            return;
-        ofstream_t* fos = get_ofstream(os);
-        if(!(*fos && fos->is_open()))
-        {
-            std::cerr << "Output stream for " << id << " is not open/valid"
-                      << ". Redirecting to stdout..." << std::endl;
-            os = &std::cout;
-        }
-    };
-
-    check_stream(os_avg, "average timing report");
-    check_stream(os_tot, "total timing report");
-
-    for(const auto& itr : *this)
-        itr.second.stop();
-
-    for(const auto& itr : *this)
-        itr.second.report(*os_tot);
-
-    for(const auto& itr : *this)
-        itr.second.report_average(*os_avg);
-
-    os_avg->flush();
-    os_tot->flush();
-}
-//----------------------------------------------------------------------------//
-inline void
-timing_manager::set_output_streams(ostream_t& _tot_os, ostream_t& _avg_os)
-{
-    m_report_tot = &_tot_os;
-    m_report_avg = &_avg_os;
-}
-//----------------------------------------------------------------------------//
-inline void
-timing_manager::set_output_streams(const string_t& totf, const string_t& avgf)
-{
-    auto ostreamop = [&] (ostream_t*& m_os, const string_t& _fname)
-    {
-        if(m_os != &std::cout)
-            delete m_os;
-
-        auto* _tos = new ofstream_t;
-        _tos->open(_fname);
-        if(*_tos)
-            m_os = _tos;
-        else
-        {
-            std::cerr << "Warning! Unable to open file " << _fname
-                      << ". Redirecting to stdout..." << std::endl;
-            m_os = &std::cout;
-        }
-    };
-
-    ostreamop(m_report_tot, totf);
-    ostreamop(m_report_avg, avgf);
-}
-//----------------------------------------------------------------------------//
-inline timing_manager::toast_timer_t&
-timing_manager::at(string_t key, const string_t& tag)
-{
-    string_t ref = tag + string_t("_") + key;
-    if(m_timer_map.find(ref) == m_timer_map.end())
-        return this->timer(ref);
-    return this->timer(key, tag);
-}
-//----------------------------------------------------------------------------//
-inline timing_manager::ofstream_t*
-timing_manager::get_ofstream(ostream_t* m_os) const
-{
-    return dynamic_cast<ofstream_t*>(m_os);
+    ar(cereal::make_nvp("timers", m_timer_list));
 }
 //----------------------------------------------------------------------------//
 
 } // namespace util
 
 } // namespace toast
+
+CEREAL_CLASS_VERSION(toast::util::timer_tuple, TOAST_TIMER_VERSION)
+CEREAL_CLASS_VERSION(toast::util::timing_manager, TOAST_TIMER_VERSION)
 
 #endif // timing_manager_hpp_

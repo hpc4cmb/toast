@@ -19,9 +19,15 @@ nprocs = MPI.COMM_WORLD.Get_size()
 
 #------------------------------------------------------------------------------#
 
+def LINE(back = 1):
+    """Function that emulates __LINE__ macro"""
+    return int(sys._getframe(back).f_lineno)
+
+#------------------------------------------------------------------------------#
+
 def FUNC(back = 1):
     """Function that emulates __FUNCTION__ macro"""
-    ret = ("%s" % (sys._getframe(back).f_code.co_name))
+    ret = ("{}".format(sys._getframe(back).f_code.co_name))
     return ret
 
 #------------------------------------------------------------------------------#
@@ -34,15 +40,15 @@ def FILE(back = 2, only_basename = True, use_dirname = False, noquotes = False):
 
     if only_basename:
         if use_dirname:
-            ret = ("%s" % (join(basename(dirname(get_fcode().co_filename)),
-                             basename(get_fcode().co_filename))))
+            ret = ("{}".format(join(basename(dirname(get_fcode().co_filename)),
+              basename(get_fcode().co_filename))))
         else:
-            ret = ("%s" % (basename(get_fcode().co_filename)))
+            ret = ("{}".format(basename(get_fcode().co_filename)))
     else:
-        ret = ("%s" % (get_fcode().co_filename))
+        ret = ("{}".format(get_fcode().co_filename))
 
     if noquotes is False:
-        ret = ("'%s'" % (ret))
+        ret = ("'{}'".format(ret))
 
     return ret
 
@@ -52,7 +58,7 @@ def ensure_directory_exists(file_path):
     """Function to make a directory if it doesn't exist"""
 
     directory = os.path.dirname(file_path)
-    if not os.path.exists(directory):
+    if not os.path.exists(directory) and directory != '':
         os.makedirs(directory)
 
 #------------------------------------------------------------------------------#
@@ -91,17 +97,23 @@ class timing_manager(object):
 
     def __init__(self):
         self.ctiming_manager = ctoast.get_timing_manager()
+        self.timing_fname = "timing_report.out"
+        self.timing_output_dir = "./"
+        self.serialize_fname = "timing_report.json"
 
-    def set_output_files(self, tot_fname, avg_fname, odir = None):
+    def set_output_file(self, fname, odir = None):
+        self.timing_fname = fname
+        self.timing_output_dir = odir
         if odir is not None:
-            tot_fname = '/'.join([ odir, tot_fname ])
-            avg_fname = '/'.join([ odir, avg_fname ])
-        ensure_directory_exists(tot_fname)
-        ensure_directory_exists(avg_fname)
-        ctoast.set_timing_output_files(tot_fname, avg_fname)
+            fname = os.path.join(odir, fname)
+        ensure_directory_exists(fname)
+        ctoast.set_timing_output_file(fname)
 
     def report(self):
+        self.set_output_file(self.timing_fname, self.timing_output_dir)
         ctoast.report_timing()
+        self.serialize(os.path.join(self.timing_output_dir,
+                                    self.serialize_fname))
 
     def size(self):
         return ctoast.timing_manager_size()
@@ -112,6 +124,10 @@ class timing_manager(object):
     def clear(self):
         ctoast.timing_manager_clear()
 
+    def serialize(self, fname):
+        ensure_directory_exists(fname)
+        ctoast.serialize_timing_manager(fname)
+
 #------------------------------------------------------------------------------#
 
 class auto_timer(object):
@@ -120,21 +136,22 @@ class auto_timer(object):
     def __init__(self, key = ""):
         keyfunc = FUNC(2)
         if key != "" and key[0] != '@':
-            key = ("@%s" % (key))
-        ctoast.op_timer_instance_count(1)
-        self.t = timer('%s%s' % (keyfunc, key))
+            key = ("@{}".format(key))
+        self.op_line = LINE(2)
+        ctoast.op_timer_instance_count(1, self.op_line)
+        self.t = timer('{}{}'.format(keyfunc, key))
         self.t.start()
 
     def __del__(self):
         self.t.stop()
-        ctoast.op_timer_instance_count(-1)
+        ctoast.op_timer_instance_count(-1, -self.op_line)
 
 #------------------------------------------------------------------------------#
 
 def get_file_tag(fname):
     _l = basename(fname).split('.')
     _l.pop()
-    return ("%s" % ('_'.join(_l)))
+    return ("{}".format('_'.join(_l)))
 
 #------------------------------------------------------------------------------#
 
@@ -155,12 +172,11 @@ def add_arguments(parser, fname = None):
 def parse_args(args):
     """Function to handle the output arguments"""
     extension = ".out"
-    if nprocs > 0:
-        extension = (("_%i%s") % (rank, extension))
-    tot_fname = ("%s_tot%s" % (args.toast_timing_fname, extension))
-    avg_fname = ("%s_avg%s" % (args.toast_timing_fname, extension))
+    fname = "{}{}".format(args.toast_timing_fname, extension)
     tman = timing_manager()
-    tman.set_output_files(tot_fname, avg_fname, args.toast_output_dir)
+    tman.timing_output_dir = args.toast_output_dir
+    tman.timing_fname = fname
+    tman.serialize_fname = "{}.{}".format(args.toast_timing_fname, "json")
 
 #------------------------------------------------------------------------------#
 

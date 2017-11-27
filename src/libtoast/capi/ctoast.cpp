@@ -17,7 +17,7 @@ typedef std::string                                 string_t;
 
 #define TOAST_TIME auto_timer_t
 #define TOAST_FUNCTION_TIME \
-    auto_timer_t macro_auto_timer(string_t(__FUNCTION__));
+    auto_timer_t macro_auto_timer(string_t(__FUNCTION__), __LINE__);
 
 //============================================================================//
 // Global library initialize / finalize
@@ -42,7 +42,8 @@ void ctoast_finalize ( )
 ctoast_timer* ctoast_get_timer(char* ckey)
 {
     toast_timer_t& _t = timing_manager::instance()
-                        ->timer(ckey, "pyc", base_timer_t::get_instance_count());
+                        ->timer(ckey, "pyc", base_timer_t::get_instance_count(),
+                                base_timer_t::get_instance_hash());
     return reinterpret_cast<ctoast_timer*>(&_t);
 }
 
@@ -81,11 +82,13 @@ uint64_t ctoast_get_timer_instance_count()
 
 //----------------------------------------------------------------------------//
 
-void ctoast_op_timer_instance_count(int32_t op)
+void ctoast_op_timer_instance_count(int32_t op, int32_t nhash)
 {
     int64_t _new = op + toast::util::details::base_timer::get_instance_count();
     if(!(_new < 0))
         toast::util::details::base_timer::get_instance_count() += op;
+
+    toast::util::details::base_timer::get_instance_hash() += nhash;
 }
 
 //----------------------------------------------------------------------------//
@@ -97,11 +100,18 @@ ctoast_timing_manager* ctoast_get_timing_manager()
 
 //----------------------------------------------------------------------------//
 
-void ctoast_set_timing_output_files(char* ctot_fname, char* cavg_fname)
+void ctoast_set_timing_output_file(char* cfname)
 {
-    std::string tot_fname = std::string(const_cast<const char*>(ctot_fname));
-    std::string avg_fname = std::string(const_cast<const char*>(cavg_fname));
-    timing_manager::instance()->set_output_streams(tot_fname, avg_fname);
+    std::string fname = std::string(const_cast<const char*>(cfname));
+    timing_manager::instance()->set_output_stream(fname);
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_serialize_timing_manager(char* cfname)
+{
+    std::string fname = std::string(const_cast<const char*>(cfname));
+    timing_manager::instance()->write_json(fname);
 }
 
 //----------------------------------------------------------------------------//

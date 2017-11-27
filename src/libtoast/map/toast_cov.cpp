@@ -322,12 +322,6 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata ) {
 
-    toast::util::auto_timer auto_timer("accumulate_zmap_direct");
-
-#if defined(FASTER)
-    // > [cxx] accumulate_zmap_direct
-    // :   1.474 wall,   2.930 user +   0.020 system =   2.950 CPU [seconds] (200.1%)
-    // (total # of laps: 32)
     #pragma omp parallel default(shared)
     {
         int threads = 1;
@@ -338,61 +332,21 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
         trank = omp_get_thread_num();
     #endif
 
-        for (int64_t i = 0; i < nsamp; ++i )
-        {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) )
-            {
+        for(int64_t i = 0; i < nsamp; ++i) {
+            if((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
                 int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
                 int64_t tpix = hpx % threads;
-                if ( tpix == trank )
-                {
+                if(tpix == trank) {
                     int64_t zpx = (indx_submap[i] * subsize * nnz)
                                   + (indx_pix[i] * nnz);
 
-                    for (int64_t j = 0; j < nnz; ++j )
-                    {
-                        if(zpx + j > subsize*nnz*nsub)
-                            zdata[zpx + j] += scale * signal[i] * weights[i * nnz + j];
-                    }
-                }
-            }
-        }
-    }
-#else
-    // > [cxx] ctoast_cov_accumulate_zmap
-    // : 118.837 wall,   4.820 user +   4.650 system =   9.470 CPU [seconds] (  8.0%)
-    // (total # of laps: 32)
-    #pragma omp parallel default(shared)
-    {
-        int64_t i, j, k;
-        int64_t hpx;
-        int64_t zpx;
-
-        int threads = 1;
-        int trank = 0;
-
-        #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
-        #endif
-
-        int tpix;
-
-        for ( i = 0; i < nsamp; ++i ) {
-            if ( ( indx_submap[i] >= 0 ) && ( indx_pix[i] >= 0 ) ) {
-                hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                tpix = hpx % threads;
-                if ( tpix == trank ) {
-                    zpx = (indx_submap[i] * subsize * nnz) + (indx_pix[i] * nnz);
-
-                    for ( j = 0; j < nnz; ++j ) {
+                    for(int64_t j = 0; j < nnz; ++j) {
                         zdata[zpx + j] += scale * signal[i] * weights[i * nnz + j];
                     }
                 }
             }
         }
     }
-#endif
 
     return;
 }
