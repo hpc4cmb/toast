@@ -38,9 +38,9 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     // ensure json write final block during destruction before the file
     // is closed
     {
-        auto _space = cereal::JSONOutputArchive::Options::IndentChar::space;
+        auto spacing = cereal::JSONOutputArchive::Options::IndentChar::tab;
         // precision, spacing, indent size
-        cereal::JSONOutputArchive::Options opts(12, _space, 2);
+        cereal::JSONOutputArchive::Options opts(12, spacing, 1);
         cereal::JSONOutputArchive oa(fss, opts);
 
         oa(cereal::make_nvp("timing_manager", *timing_manager::instance()));
@@ -50,7 +50,18 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     if(mpi_rank()+1 < mpi_size())
         fss << ",";
 
-    int fss_len = fss.str().length();
+    string_t fss_str = fss.str();
+    // compact the string
+    for(auto citr : { "\n", "\t", "  " })
+    {
+        string_t itr(citr);
+        string_t::size_type fpos = 0;
+        while((fpos = fss_str.find(itr, fpos)) != string_t::npos)
+            fss_str.replace(fpos, itr.length(), " ");
+    }
+
+    // now we need to gather the lengths of each serialization string
+    int fss_len = fss_str.length();
     const int mpi_root = 0;
     int* recvcounts = nullptr;
 
@@ -91,7 +102,7 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     // Now we have the receive buffer, counts, and displacements, and
     // can gather the strings
 
-    char* cfss = (char*) fss.str().c_str();
+    char* cfss = (char*) fss_str.c_str();
     MPI_Gatherv(cfss, fss_len, MPI_CHAR,
                 totalstring, recvcounts, fss_tot, MPI_CHAR,
                 mpi_root, MPI_COMM_WORLD);
