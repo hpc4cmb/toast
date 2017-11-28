@@ -32,47 +32,83 @@ toast::util::timing_manager* toast::util::timing_manager::instance()
 // static function
 void toast::util::timing_manager::write_json(const string_t& _fname)
 {
-    for(int32_t i = 0; i < mpi_size(); ++i)
+    // output stream
+    std::stringstream fss;
+
+    // ensure json write final block during destruction before the file
+    // is closed
     {
-        // blocking
-        if(mpi_is_initialized())
-            MPI_Barrier(MPI_COMM_WORLD);
-        // only 1 at a time
-        if( i != mpi_rank() )
-            continue;
+        auto _space = cereal::JSONOutputArchive::Options::IndentChar::space;
+        // precision, spacing, indent size
+        cereal::JSONOutputArchive::Options opts(12, _space, 2);
+        cereal::JSONOutputArchive oa(fss, opts);
 
-        // output stream
-        std::ofstream ofs;
-
-        // clobber vs. append
-        if(mpi_rank() == 0)
-            ofs.open(_fname);
-        else
-            ofs.open(_fname, std::ios_base::app | std::ios_base::out);
-
-        // make sure opened
-        if(!ofs.good())
-        {
-            std::stringstream ss;
-            ss << "Error! Unable to open " << _fname;
-            throw std::runtime_error(ss.str());
-        }
-
-        // ensure json write final block during destruction before the file
-        // is closed
-        {
-            auto _space = cereal::JSONOutputArchive::Options::IndentChar::space;
-            // precision, spacing, indent size
-            cereal::JSONOutputArchive::Options opts(12, _space, 2);
-            cereal::JSONOutputArchive oa(ofs, opts);
-            std::stringstream ss;
-            ss << "rank_" << mpi_rank();
-            oa(cereal::make_nvp(ss.str().c_str(), *timing_manager::instance()));
-        }
-
-        ofs.flush();
-        ofs.close();
+        oa(cereal::make_nvp("timing_manager", *timing_manager::instance()));
     }
+
+    // if another entry follows
+    if(mpi_rank()+1 < mpi_size())
+        fss << ",";
+
+    int fss_len = fss.str().length();
+    const int mpi_root = 0;
+    int* recvcounts = nullptr;
+
+    // Only root has the received data
+    if (mpi_rank() == mpi_root)
+        recvcounts = (int*) malloc( mpi_size() * sizeof(int)) ;
+
+    MPI_Gather(&fss_len, 1, MPI_INT,
+               recvcounts, 1, MPI_INT,
+               mpi_root, MPI_COMM_WORLD);
+
+    // Figure out the total length of string, and displacements for each rank
+    int fss_tot_len = 0;
+    int* fss_tot = nullptr;
+    char* totalstring = nullptr;
+
+    if (mpi_rank() == mpi_root)
+    {
+        fss_tot = (int*) malloc( mpi_size() * sizeof(int) );
+
+        fss_tot[0] = 0;
+        fss_tot_len += recvcounts[0]+1;
+
+        for(int32_t i = 1; i < mpi_size(); ++i)
+        {
+            // plus one for space or \0 after words
+            fss_tot_len += recvcounts[i]+1;
+            fss_tot[i] = fss_tot[i-1] + recvcounts[i-1] + 1;
+        }
+
+        // allocate string, pre-fill with spaces and null terminator
+        totalstring = (char*) malloc(fss_tot_len * sizeof(char));
+        for(int32_t i = 0; i < fss_tot_len-1; ++i)
+            totalstring[i] = ' ';
+        totalstring[fss_tot_len-1] = '\0';
+    }
+
+    // Now we have the receive buffer, counts, and displacements, and
+    // can gather the strings
+
+    char* cfss = (char*) fss.str().c_str();
+    MPI_Gatherv(cfss, fss_len, MPI_CHAR,
+                totalstring, recvcounts, fss_tot, MPI_CHAR,
+                mpi_root, MPI_COMM_WORLD);
+
+
+    if (mpi_rank() == mpi_root)
+    {
+        ofstream_t ofs;
+        ofs.open(_fname);
+        ofs << "{\n\"ranks\": [" << std::endl;
+        ofs << totalstring << std::endl;
+        ofs << "]" << "\n}" << std::endl;
+        free(totalstring);
+        free(fss_tot);
+        free(recvcounts);
+    }
+
 }
 
 //============================================================================//
