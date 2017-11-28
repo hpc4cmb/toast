@@ -77,11 +77,13 @@ public:
 
     typedef std::string                         string_t;
     typedef string_t::size_type                 size_type;
-    typedef std::recursive_mutex                mutex_t;
+    typedef std::mutex                          mutex_t;
+    typedef std::recursive_mutex                rmutex_t;
     typedef std::ostream                        ostream_t;
     typedef std::ofstream                       ofstream_t;
-    typedef uomap<ostream_t*, mutex_t>          mutex_map_t;
+    typedef uomap<ostream_t*, rmutex_t>         mutex_map_t;
     typedef std::lock_guard<mutex_t>            auto_lock_t;
+    typedef std::lock_guard<rmutex_t>           recursive_lock_t;
     typedef tms                                 tms_t;
     typedef base_timer_data                     data_t;
     typedef data_t::ratio_t                     ratio_t;
@@ -89,6 +91,8 @@ public:
     typedef data_t::time_point_t                time_point_t;
     typedef std::vector<data_t>                 data_list_t;
     typedef data_t::duration_t                  duration_t;
+    typedef base_timer                          this_type;
+    typedef uomap<const base_timer*, data_t>    data_map_t;
 
 public:
     base_timer(uint16_t = 3, const string_t& =
@@ -126,13 +130,12 @@ protected:
 protected:
     void parse_format();
     virtual void compose() = 0;
+    data_t& m_timer() const;
 
 protected:
     // PODs
     mutable bool            m_running;
     uint16_t                m_precision;
-    // structures
-    data_t                  t_main;
     // pointers
     ostream_t*              m_os;
     // lists
@@ -144,9 +147,10 @@ protected:
 
 private:
     // world mutex map, thread-safe ostreams
-    static thread_local uint64_t f_instance_count;
-    static thread_local uint64_t f_instance_hash;
-    static mutex_map_t  w_mutex_map;
+    static thread_local uint64_t    f_instance_count;
+    static thread_local uint64_t    f_instance_hash;
+    static thread_local data_map_t* f_data_map;
+    static mutex_map_t              w_mutex_map;
 
 public:
     template <typename Archive> void
@@ -249,7 +253,7 @@ void base_timer::start()
     if(!m_running)
     {
         m_running = true;
-        t_main.start() = base_clock_t::now();
+        m_timer().start() = base_clock_t::now();
     }
 }
 //----------------------------------------------------------------------------//
@@ -258,8 +262,10 @@ void base_timer::stop()
 {
     if(m_running)
     {
-        t_main.stop() = base_clock_t::now();
-        t_main_list.push_back(t_main);
+        m_timer().stop() = base_clock_t::now();
+        static mutex_t _mutex;
+        auto_lock_t l(_mutex);
+        t_main_list.push_back(m_timer());
         m_running = false;
     }
 }
@@ -296,6 +302,16 @@ inline
 void base_timer::report_average(ostream_t& os, bool endline) const
 {
     this->report(os, endline, true);
+}
+//----------------------------------------------------------------------------//
+inline
+base_timer::data_t& base_timer::m_timer() const
+{
+    if(!f_data_map)
+        f_data_map = new data_map_t();
+    if(f_data_map->find(this) == f_data_map->end())
+        f_data_map->insert(std::make_pair(this, data_t()));
+    return f_data_map->find(this)->second;
 }
 //----------------------------------------------------------------------------//
 

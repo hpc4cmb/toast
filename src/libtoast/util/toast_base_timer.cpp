@@ -38,6 +38,10 @@ thread_local uint64_t base_timer::f_instance_hash = 0;
 
 //============================================================================//
 
+thread_local base_timer::data_map_t* base_timer::f_data_map = nullptr;
+
+//============================================================================//
+
 base_timer::mutex_map_t base_timer::w_mutex_map;
 
 //============================================================================//
@@ -196,7 +200,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
         ss << std::endl;
 
     // ensure thread-safety
-    auto_lock_t lock(w_mutex_map[&os]);
+    recursive_lock_t lock(w_mutex_map[&os]);
     // output to ostream
     os << ss.str();
 }

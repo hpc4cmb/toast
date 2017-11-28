@@ -19,6 +19,11 @@ nprocs = MPI.COMM_WORLD.Get_size()
 
 #------------------------------------------------------------------------------#
 
+def enabled():
+    return ctoast.timers_enabled()
+
+#------------------------------------------------------------------------------#
+
 def LINE(back = 1):
     """Function that emulates __LINE__ macro"""
     return int(sys._getframe(back).f_lineno)
@@ -66,6 +71,10 @@ def ensure_directory_exists(file_path):
 class timer(object):
     """Class that provides interface to C++ toast::util::timer"""
 
+    @staticmethod
+    def enabled():
+        return ctoast.timers_enabled()
+
     def __init__(self, key, _obj = None):
         if _obj is not None:
             self.ctimer = _obj
@@ -98,6 +107,10 @@ class timing_manager(object):
     report_fname = "timing_report.out"
     output_dir = "./"
     serial_fname = "timing_report.json"
+
+    @staticmethod
+    def enabled():
+        return ctoast.timers_enabled()
 
     def __init__(self):
         self.ctiming_manager = ctoast.get_timing_manager()
@@ -133,6 +146,10 @@ class timing_manager(object):
 
 class auto_timer(object):
     """Class that provides same utilities as toast::util::auto_timer"""
+
+    @staticmethod
+    def enabled():
+        return ctoast.timers_enabled()
 
     def __init__(self, key = ""):
         keyfunc = FUNC(2)

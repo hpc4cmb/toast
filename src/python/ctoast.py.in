@@ -65,6 +65,13 @@ def convert_to_p_c_char(s):
     c_str = ct.create_string_buffer(enc_s)
     return c_str
 
+lib.ctoast_timers_enabled.restype = ct.c_int
+lib.ctoast_timers_enabled.argtypes = []
+
+def timers_enabled():
+    val = lib.ctoast_timers_enabled()
+    return True if val > 0 else False
+
 lib.ctoast_get_timer.restype = ct.POINTER(cTimer)
 lib.ctoast_get_timer.argtypes = [ p_c_char ]
 

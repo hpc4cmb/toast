@@ -40,8 +40,21 @@ add_dependent_option(USE_FFTW "Use FFTW" OFF "USE_MKL" ON)
 add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
 
+add_option(USE_TIMERS "Enable internal timers" ON)
+
+
+################################################################################
+#
+#        Definitions
+#
+################################################################################
 # used as a definition in autotools compilation
 add_definitions(-DHAVE_CONFIG_H)
+
+if(NOT USE_TIMERS)
+    add_definitions(-DDISABLE_TIMERS)
+endif(NOT USE_TIMERS)
+
 
 ################################################################################
 #

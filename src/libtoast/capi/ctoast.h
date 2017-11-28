@@ -33,6 +33,7 @@ typedef struct ctoast_timer_ ctoast_timer;
 struct ctoast_timing_manager_;
 typedef struct ctoast_timing_manger_ ctoast_timing_manager;
 
+int ctoast_timers_enabled();
 ctoast_timer* ctoast_get_timer(char* ckey);
 void ctoast_timer_start(ctoast_timer*);
 void ctoast_timer_stop(ctoast_timer*);

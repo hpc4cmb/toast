@@ -16,6 +16,9 @@ class TimingTest(MPITestCase):
 
     def test_timing(self):
 
+        if timing.enabled() == False:
+            return
+
         tman = timing.timing_manager()
         tman.set_output_file("timing_report.out",
                               self.outdir)

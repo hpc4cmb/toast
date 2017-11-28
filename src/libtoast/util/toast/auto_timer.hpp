@@ -61,5 +61,17 @@ inline auto_timer::~auto_timer()
 
 } // namespace toast
 
+//----------------------------------------------------------------------------//
+
+typedef toast::util::auto_timer                     auto_timer_t;
+#if defined(DISABLE_TIMERS)
+#   define TOAST_AUTO_TIMER(str)
+#else
+#   define TOAST_AUTO_TIMER(str) \
+        auto_timer_t macro_auto_timer(std::string(__FUNCTION__) + std::string(str), __LINE__)
+#endif
+
+//----------------------------------------------------------------------------//
+
 #endif
 
