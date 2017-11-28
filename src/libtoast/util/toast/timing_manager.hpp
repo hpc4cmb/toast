@@ -64,18 +64,21 @@ inline int32_t mpi_size()
 
 //----------------------------------------------------------------------------//
 
-struct timer_tuple : public std::tuple<uint64_t, std::string, toast::util::timer&>
+struct timer_tuple : public std::tuple<uint64_t, uint64_t, std::string,
+                                       toast::util::timer&>
 {
     typedef std::string                                     string_t;
     typedef toast::util::timer                              toast_timer_t;
-    typedef std::tuple<uint64_t, string_t, toast_timer_t&>  base_type;
     typedef uint64_t                                        first_type;
-    typedef string_t                                        second_type;
-    typedef toast_timer_t&                                  third_type;
+    typedef uint64_t                                        second_type;
+    typedef string_t                                        third_type;
+    typedef toast_timer_t&                                  fourth_type;
+    typedef std::tuple<uint64_t, uint64_t, string_t,
+                       toast_timer_t&>                      base_type;
 
     timer_tuple(const base_type& _data) : base_type(_data) { }
-    timer_tuple(first_type _f, second_type _s, third_type _t)
-    : base_type(_f, _s, _t) { }
+    timer_tuple(first_type _b, second_type _s, third_type _t, fourth_type _f)
+    : base_type(_b, _s, _t, _f) { }
 
     timer_tuple& operator=(const base_type& rhs)
     {
@@ -88,19 +91,23 @@ struct timer_tuple : public std::tuple<uint64_t, std::string, toast::util::timer
     first_type& key() { return std::get<0>(*this); }
     const first_type& key() const { return std::get<0>(*this); }
 
-    second_type tag() { return std::get<1>(*this); }
-    const second_type tag() const { return std::get<1>(*this); }
+    second_type& level() { return std::get<1>(*this); }
+    const second_type& level() const { return std::get<1>(*this); }
 
-    third_type timer() { return std::get<2>(*this); }
-    const third_type timer() const { return std::get<2>(*this); }
+    third_type tag() { return std::get<2>(*this); }
+    const third_type tag() const { return std::get<2>(*this); }
+
+    fourth_type timer() { return std::get<3>(*this); }
+    const fourth_type timer() const { return std::get<3>(*this); }
 
     // serialization function
     template <typename Archive> void
     serialize(Archive& ar, const unsigned int /*version*/)
     {
         ar(cereal::make_nvp("timer.key", std::get<0>(*this)),
-           cereal::make_nvp("timer.tag", std::get<1>(*this)),
-           cereal::make_nvp("timer.ref", std::get<2>(*this)));
+           cereal::make_nvp("timer.level", std::get<1>(*this)),
+           cereal::make_nvp("timer.tag", std::get<2>(*this)),
+           cereal::make_nvp("timer.ref", std::get<3>(*this)));
     }
 };
 

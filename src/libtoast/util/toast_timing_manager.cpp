@@ -202,7 +202,7 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
 
     std::stringstream tag_ss;
     tag_ss << tag << "_" << std::left << key;
-    timer_tuple_t _tuple(ref, tag_ss.str(), m_timer_map[ref]);
+    timer_tuple_t _tuple(ref, ncount, tag_ss.str(), m_timer_map[ref]);
     m_timer_list.push_back(_tuple);
 
     return m_timer_map[ref];
