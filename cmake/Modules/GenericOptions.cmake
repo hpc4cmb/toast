@@ -1,13 +1,12 @@
 
 
 # - Include guard
-#if(__genericcmakeoptions_isloaded)
-#  return()
-#endif()
-#set(__genericcmakeoptions_isloaded YES)
+if(__genericoptions_isloaded)
+  return()
+endif()
+set(__genericoptions_isloaded YES)
 
 include(MacroUtilities)
-
 
 ################################################################################
 # Add option + feature

@@ -1,4 +1,9 @@
 
+# - Include guard
+if(__genericfunctions_isloaded)
+  return()
+endif()
+set(__genericfunctions_isloaded YES)
 
 include(CMakeParseArguments)
 
@@ -152,6 +157,7 @@ macro(REMOVE_FILE _LIST _NAME)
     endforeach(_FILE ${${_LIST}})
 
 endmacro(REMOVE_FILE _LIST _NAME)
+
 
 
 cmake_policy(POP)

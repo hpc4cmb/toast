@@ -20,7 +20,150 @@ if(__compilers_is_loaded)
 endif()
 set(__compilers_is_loaded ON)
 
-#   languages
+include(CheckCCompilerFlag)
+include(CheckCSourceCompiles)
+include(CheckCSourceRuns)
+
+include(CheckCXXCompilerFlag)
+include(CheckCXXSourceCompiles)
+include(CheckCXXSourceRuns)
+
+macro(generate_test_project)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/Templates/compile-test.cc.in)
+        set(HEADER_FILE "stdlib.h")
+        configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/compile-test.cc.in
+            ${CMAKE_BINARY_DIR}/compile-testing/compile-test.cc @ONLY)
+    endif()
+endmacro()
+################################################################################
+# macro converting string to list
+################################################################################
+macro(to_list _VAR _STR)
+    STRING(REPLACE "  " " " ${_VAR} "${_STR}")
+    STRING(REPLACE " " ";" ${_VAR} "${_STR}")
+endmacro(to_list _VAR _STR)
+
+
+################################################################################
+# macro converting string to list
+################################################################################
+macro(to_string _VAR _STR)
+    STRING(REPLACE ";" " " ${_VAR} "${_STR}")
+endmacro(to_string _VAR _STR)
+
+
+################################################################################
+#   Macro to add to string
+################################################################################
+macro(add _VAR _FLAG)
+    if(NOT "${_FLAG}" STREQUAL "")
+        if("${${_VAR}}" STREQUAL "")
+            set(${_VAR} "${_FLAG}")
+        else()
+            set(${_VAR} "${${_VAR}} ${_FLAG}")
+        endif()
+    endif()
+endmacro()
+
+
+################################################################################
+# macro to remove duplicates from string
+################################################################################
+macro(set_no_duplicates _VAR)
+    if(NOT "${ARGN}" STREQUAL "")
+        set(${_VAR} "${ARGN}")
+    endif()
+    # remove the duplicates
+    if(NOT "${${_VAR}}" STREQUAL "")
+        # create list of flags
+        to_list(_VAR_LIST "${${_VAR}}")
+        list(REMOVE_DUPLICATES _VAR_LIST)
+        to_string(${_VAR} "${_VAR_LIST}")
+    endif(NOT "${${_VAR}}" STREQUAL "")
+endmacro(set_no_duplicates _VAR)
+
+
+################################################################################
+# function for test compiling with flags
+################################################################################
+function(test_compile _LANG _VAR _FLAG)
+    # recursion requires this
+    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/cmake/Templates/CMakeLists.txt.in)
+        return()
+    endif()
+    # generate test file
+    generate_test_project()
+    set(LANG "${_LANG}")
+    set(COMPILE_FLAGS ${_FLAG})
+    set(COMPILE "${CMAKE_${LANG}_COMPILER}")
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CMakeLists.txt.in
+        ${CMAKE_BINARY_DIR}/compile-testing/CMakeLists.txt @ONLY)
+    # try compiling with flag
+    try_compile(RET
+        ${CMAKE_BINARY_DIR}/compile-testing
+        ${CMAKE_BINARY_DIR}/compile-testing
+        CompileTest
+        OUTPUT_VARIABLE RET_OUT)
+    # add flag if successful
+    set(${_VAR} ${RET} PARENT_SCOPE)
+endfunction(test_compile _LANG _VAR _FLAGS)
+
+
+################################################################################
+# macro for adding C/C++ compiler flags to variable
+################################################################################
+macro(add_flags _LANG _VAR _FLAGS)
+    if("${${_VAR}}" STREQUAL "${_FLAGS}")
+        set(_VAR_GOOD)
+    else("${${_VAR}}" STREQUAL "${_FLAGS}")
+        set(_VAR_GOOD "${${_VAR}}")
+    endif("${${_VAR}}" STREQUAL "${_FLAGS}")
+
+    # test whole string
+    test_compile(${_LANG} COMPILE_SUCCESS "${_FLAGS}")
+    if(COMPILE_SUCCESS)
+        # add whole string if worked
+        add(_VAR_GOOD "${_FLAGS}")
+    else(COMPILE_SUCCESS)
+        # test individually
+        to_list(_LANGFLAGS "${_FLAGS}")
+        foreach(_FLAG ${_LANGFLAGS})
+            # check individual flag
+            test_compile(${_LANG} COMPILE_SUCCESS "${_FLAG}")
+            if(COMPILE_SUCCESS)
+                # add individual flag
+                add(_VAR_GOOD "${_FLAG}")
+            endif(COMPILE_SUCCESS)
+        endforeach(_FLAG ${_LANGFLAGS})
+    endif(COMPILE_SUCCESS)
+
+    # set the variable to the working flags
+    set(${_VAR} "${_VAR_GOOD}")
+    # remove the duplicates
+    set_no_duplicates(${_VAR})
+
+endmacro(add_flags _LANG _VAR _FLAGS)
+
+
+################################################################################
+# macro for adding C compiler flags to variable
+################################################################################
+macro(add_c_flags _VAR _FLAGS)
+    add_flags(C "${_VAR}" "${_FLAGS}")
+endmacro(add_c_flags _VAR _FLAGS)
+
+
+################################################################################
+# macro for adding C++ compiler flags to variable
+################################################################################
+macro(add_cxx_flags _VAR _FLAGS)
+    add_flags(CXX "${_VAR}" "${_FLAGS}")
+endmacro(add_cxx_flags _VAR _FLAGS)
+
+
+################################################################################
+# determine compiler types for each language
+################################################################################
 foreach(LANG C CXX)
 
     macro(SET_COMPILER_VAR VAR _BOOL)

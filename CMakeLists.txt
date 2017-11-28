@@ -28,12 +28,15 @@ set(CMAKE_MODULE_PATH
     ${PROJECT_SOURCE_DIR}/cmake/Packages
     ${CMAKE_MODULE_PATH})
 
+set(CMAKE_USER_MAKE_RULES_OVERRIDE_C
+    ${CMAKE_SOURCE_DIR}/cmake/Modules/MakeRulesC.cmake)
+
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX
     ${CMAKE_SOURCE_DIR}/cmake/Modules/MakeRulesCXX.cmake)
 
 include(MakeRulesC)
 include(MakeRulesCXX)
-include(GenericCMakeFunctions)
+include(GenericFunctions)
 set_project_version("2" "2" "0" "Time Ordered Astrophysics Scalable Tools")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_MESSAGE LAZY)
@@ -48,7 +51,7 @@ if(NOT "${CMAKE_ARGS}" MATCHES "CMAKE_PREFIX_PATH")
     unset(CMAKE_PREFIX_PATH CACHE)
 endif()
 
-include(GenericCMakeOptions)
+include(GenericOptions)
 include(Packages)
 include(LibraryBuildOptions)
 include(InstallDirs)

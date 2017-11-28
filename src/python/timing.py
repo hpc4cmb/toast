@@ -95,25 +95,26 @@ class timer(object):
 class timing_manager(object):
     """Class that provides interface to C++ toast::util::timing_manager"""
 
+    report_fname = "timing_report.out"
+    output_dir = "./"
+    serial_fname = "timing_report.json"
+
     def __init__(self):
         self.ctiming_manager = ctoast.get_timing_manager()
-        self.timing_fname = "timing_report.out"
-        self.timing_output_dir = "./"
-        self.serialize_fname = "timing_report.json"
 
     def set_output_file(self, fname, odir = None):
-        self.timing_fname = fname
-        self.timing_output_dir = odir
+        timing_manager.report_fname = fname
+        timing_manager.output_dir = odir
         if odir is not None:
             fname = os.path.join(odir, fname)
         ensure_directory_exists(fname)
         ctoast.set_timing_output_file(fname)
 
     def report(self):
-        self.set_output_file(self.timing_fname, self.timing_output_dir)
+        self.set_output_file(timing_manager.report_fname, timing_manager.output_dir)
         ctoast.report_timing()
-        self.serialize(os.path.join(self.timing_output_dir,
-                                    self.serialize_fname))
+        self.serialize(os.path.join(timing_manager.output_dir,
+                                    timing_manager.serial_fname))
 
     def size(self):
         return ctoast.timing_manager_size()
@@ -171,12 +172,12 @@ def add_arguments(parser, fname = None):
 
 def parse_args(args):
     """Function to handle the output arguments"""
-    extension = ".out"
-    fname = "{}{}".format(args.toast_timing_fname, extension)
+    txt_ext = "out"
+    json_ext = "json"
     tman = timing_manager()
-    tman.timing_output_dir = args.toast_output_dir
-    tman.timing_fname = fname
-    tman.serialize_fname = "{}.{}".format(args.toast_timing_fname, "json")
+    timing_manager.report_fname = "{}.{}".format(args.toast_timing_fname, "out")
+    timing_manager.serial_fname = "{}.{}".format(args.toast_timing_fname, "json")
+    timing_manager.output_dir = args.toast_output_dir
 
 #------------------------------------------------------------------------------#
 

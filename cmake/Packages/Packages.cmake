@@ -1,8 +1,8 @@
 # find packages for TOAST
 
 include(MacroUtilities)
-include(GenericCMakeOptions)
-include(GenericCMakeFunctions)
+include(GenericOptions)
+include(GenericFunctions)
 include(Compilers)
 
 if(NOT CMAKE_VERSION VERSION_LESS 2.6.3)
@@ -21,7 +21,9 @@ endif()
 # - wcslib
 # - Elemental
 
-add_option(USE_SSE "Use SSE/AVX optimization flags" OFF)
+add_option(USE_SSE "Enable SSE/AVX optimization flags" OFF)
+add_dependent_option(USE_ARCH "Enable architecture optimization flags" ON
+    "USE_SSE" OFF)
 add_option(USE_OPENMP "Use OpenMP" ON)
 
 add_option(USE_TBB "Enable Intel Thread Building Blocks (TBB)" OFF)
@@ -299,7 +301,8 @@ if(USE_SSE)
     endforeach()
     unset(SSE_DEFINITIONS)
 
-    add(CMAKE_CXX_FLAGS_EXTRA "${SSE_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_EXTRA "${SSE_FLAGS}")
+    add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${SSE_FLAGS}")
 
 else(USE_SSE)
 
@@ -316,16 +319,11 @@ endif(USE_SSE)
 #
 ################################################################################
 
-include(Architecture)
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
-   "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo" OR
-   (DEFINED TARGET_ARCHITECTURE AND
-       NOT "${TARGET_ARCHITECTURE}" STREQUAL "auto"))
+if(USE_ARCH OR USE_SSE)
+    include(Architecture)
 
     ArchitectureFlags(ARCH_FLAGS)
-    add(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")
-    add(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")
+    add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
 
-endif()
-
+endif(USE_ARCH OR USE_SSE)
