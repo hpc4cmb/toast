@@ -182,7 +182,7 @@ def load_schedule(args, comm):
             line = f.readline()
             if line.startswith('#'):
                 continue
-            site_name, site_lat, site_lon, site_alt = line.split()
+            (site_name, telescope, site_lat, site_lon, site_alt) = line.split()
             site_alt = float(site_alt)
             site = [site_name, site_lat, site_lon, site_alt]
             break
