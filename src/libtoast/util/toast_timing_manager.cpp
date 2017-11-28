@@ -122,24 +122,24 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
     }
 #endif
 
+    uint64_t sum = 0;
+    for(size_t i = 0; i < key.length(); ++i)
+        sum += (int64_t) key[i];
+    for(size_t i = 0; i < tag.length(); ++i)
+        sum += (int64_t) tag[i];
+
+    uint64_t ref = (string_hash(key) + string_hash(tag)) * (ncount+1) * nhash;
+
+    // if already exists, return it
+    if(m_timer_map.find(ref) != m_timer_map.end())
+        return m_timer_map.find(ref)->second;
+
     // special case of auto_timer as the first timer
     if(ncount == 1 && m_timer_list.size() == 0)
     {
         toast::util::details::base_timer::get_instance_count()--;
         ncount = 0;
     }
-
-    string_t ref = tag + string_t("_") + key;
-
-    if(ncount > 0)
-    {
-        std::stringstream _ss; _ss << "_" << ncount << "_" << nhash;
-        ref += _ss.str();
-    }
-
-    // if already exists, return it
-    if(m_timer_map.find(ref) != m_timer_map.end())
-        return m_timer_map.find(ref)->second;
 
     std::stringstream ss;
     ss << "> " << "[" << tag << "] "; // designated as [cxx], [pyc], etc.
@@ -251,17 +251,6 @@ void toast::util::timing_manager::set_output_stream(const string_t& fname)
 
     ostreamop(m_report, fname);
 
-}
-
-//============================================================================//
-
-toast::util::timing_manager::toast_timer_t&
-toast::util::timing_manager::at(string_t key, const string_t& tag)
-{
-    string_t ref = tag + string_t("_") + key;
-    if(m_timer_map.find(ref) == m_timer_map.end())
-        return this->timer(ref);
-    return this->timer(key, tag);
 }
 
 //============================================================================//

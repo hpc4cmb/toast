@@ -64,12 +64,12 @@ inline int32_t mpi_size()
 
 //----------------------------------------------------------------------------//
 
-struct timer_tuple : public std::tuple<std::string, std::string, toast::util::timer&>
+struct timer_tuple : public std::tuple<uint64_t, std::string, toast::util::timer&>
 {
     typedef std::string                                     string_t;
     typedef toast::util::timer                              toast_timer_t;
-    typedef std::tuple<string_t, string_t, toast_timer_t&>  base_type;
-    typedef string_t                                        first_type;
+    typedef std::tuple<uint64_t, string_t, toast_timer_t&>  base_type;
+    typedef uint64_t                                        first_type;
     typedef string_t                                        second_type;
     typedef toast_timer_t&                                  third_type;
 
@@ -85,8 +85,8 @@ struct timer_tuple : public std::tuple<std::string, std::string, toast::util::ti
         return *this;
     }
 
-    first_type key() { return std::get<0>(*this); }
-    const first_type key() const { return std::get<0>(*this); }
+    first_type& key() { return std::get<0>(*this); }
+    const first_type& key() const { return std::get<0>(*this); }
 
     second_type tag() { return std::get<1>(*this); }
     const second_type tag() const { return std::get<1>(*this); }
@@ -119,7 +119,7 @@ public:
     typedef timer_list_t::iterator              iterator;
     typedef timer_list_t::const_iterator        const_iterator;
     typedef timer_list_t::size_type             size_type;
-    typedef uomap<string_t, toast_timer_t>      timer_map_t;
+    typedef uomap<uint64_t, toast_timer_t>      timer_map_t;
     typedef toast_timer_t::ostream_t            ostream_t;
     typedef toast_timer_t::ofstream_t           ofstream_t;
     typedef toast::clock_type                   clock_type;
@@ -177,8 +177,8 @@ public:
     void set_output_stream(ostream_t&);
     void set_output_stream(const string_t&);
 
-    toast_timer_t& at(size_type i) { return m_timer_list.at(i).timer(); }
-    toast_timer_t& at(string_t key, const string_t& tag = "cxx");
+protected:
+    inline uint64_t string_hash(const string_t&) const;
 
 private:
     // Private functions
@@ -252,6 +252,15 @@ inline void
 timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 {
     ar(cereal::make_nvp("timers", m_timer_list));
+}
+//----------------------------------------------------------------------------//
+inline uint64_t
+timing_manager::string_hash(const string_t& str) const
+{
+    uint64_t sum = 0;
+    for(const auto& itr : str)
+        sum += (int64_t) itr;
+    return sum;
 }
 //----------------------------------------------------------------------------//
 

@@ -162,12 +162,6 @@ lib.ctoast_timer_user_elapsed.argtypes = [ ct.POINTER(cTimer) ]
 def timer_user_elapsed(timer):
     return lib.ctoast_timer_user_elapsed(timer)
 
-lib.ctoast_timer_at.restype = ct.POINTER(cTimer)
-lib.ctoast_timer_at.argtypes = [ ct.c_int ]
-
-def timer_at(i):
-    return lib.ctoast_timer_at(i)
-
 #--------------------------------------
 # Math sub-library
 #--------------------------------------

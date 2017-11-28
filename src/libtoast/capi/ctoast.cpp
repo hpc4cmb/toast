@@ -225,18 +225,6 @@ double ctoast_timer_user_elapsed(ctoast_timer* _ct)
     return _t->user_elapsed();
 }
 
-//----------------------------------------------------------------------------//
-
-ctoast_timer* ctoast_timer_at(size_t i)
-{
-#if defined(DISABLE_TIMERS)
-    return nullptr;
-#endif
-
-    toast_timer_t& _t = timing_manager::instance()->at(i);
-    return reinterpret_cast<ctoast_timer*>(&_t);
-}
-
 //============================================================================//
 // Math sub-library
 //============================================================================//

@@ -51,7 +51,6 @@ size_t ctoast_timing_manager_size();
 double ctoast_timer_real_elapsed(ctoast_timer*);
 double ctoast_timer_system_elapsed(ctoast_timer*);
 double ctoast_timer_user_elapsed(ctoast_timer*);
-ctoast_timer* ctoast_timer_at(size_t);
 
 //--------------------------------------
 // Math sub-library

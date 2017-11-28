@@ -132,9 +132,6 @@ class timing_manager(object):
     def size(self):
         return ctoast.timing_manager_size()
 
-    def at(self, i):
-        return timer(None, _obj=ctoast.timer_at(i))
-
     def clear(self):
         ctoast.timing_manager_clear()
 
