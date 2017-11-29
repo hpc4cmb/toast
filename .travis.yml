@@ -177,3 +177,9 @@ install:
 
 script:
     - python -c "import toast; toast.test()"
+
+# Slack integration
+
+notifications:
+    slack: c3cmb:7RR5xHHVvMAuw6g20ZuPhRD3
+
