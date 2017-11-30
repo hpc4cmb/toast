@@ -53,10 +53,11 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
               long nelem_sim_max,
               int verbosity, MPI_Comm comm, int gangsize,
               uint64_t key1,uint64_t key2,
-              uint64_t counter1, uint64_t counter2, char *cachedir)
+              uint64_t counterval1, uint64_t counterval2, char *cachedir)
 : comm(comm), cachedir(cachedir),
   gangsize(gangsize), verbosity(verbosity),
-  key1(key1), key2(key2), counter1start(counter1), counter2start(counter2),
+  key1(key1), key2(key2),
+  counter1start(counterval1), counter2start(counterval2),
   azmin(azmin), azmax(azmax),
   elmin(elmin), elmax(elmax), tmin(tmin), tmax(tmax),
   lmin_center(lmin_center), lmin_sigma(lmin_sigma),
@@ -201,6 +202,54 @@ toast::atm::sim::~sim() {
             throw std::runtime_error( "Failed to free MPI communicator." );
     }
 }
+
+
+void toast::atm::sim::print() {
+    for (int i=0; i<ntask; ++i) {
+        MPI_Barrier(comm);
+        if (rank != i) continue;
+        std::cerr << rank << " : comm = " << comm
+                  << ", comm_gang = " << comm_gang << std::endl;
+        std::cerr << rank << " : cachedir " << cachedir << std::endl;
+        std::cerr << rank << " : ntask = " << ntask
+                  << ", rank_gang = " << rank_gang
+                  << ", ntask_gang = " << ntask_gang
+                  << ", nthread = " << nthread
+                  << ", gangsize = " << gangsize
+                  << ", gang = " << gang
+                  << ", ngang = " << ngang << std::endl;
+        std::cerr << rank << " : verbosity = " << verbosity
+                  << ", key1 = " << key1
+                  << ", key2 = " << key2
+                  << ", counter1 = " << counter1
+                  << ", counter2 = " << counter2
+                  << ", counter1start = " << counter1start
+                  << ", counter2start = " << counter2start << std::endl;
+        std::cerr << rank << " : azmin = " << azmin
+                  << ", axmax = " << azmax
+                  << ", elmin = " << elmin
+                  << ", elmax = " << elmax
+                  << ", tmin = " << tmin
+                  << ", tmax = " << tmax
+                  << ", sinel0 = " <<sinel0
+                  << ", cosel0 = " << cosel0
+                  << ", tanmin = " << tanmin
+                  << ", tanmax = " << tanmax << std::endl;
+        std::cerr << rank << " : lmin_center = " << lmin_center
+                  << ", lmax_center = " << lmax_center
+                  << ", w_center = " << w_center
+                  << ", w_sigma = " << w_sigma
+                  << ", wdir_center = " << wdir_center
+                  << ", wdir_sigma = " << wdir_sigma
+                  << ", z0_center = " << z0_center
+                  << ", z0_sigma = " << z0_sigma
+                  << ", T0_center = " << T0_center
+                  << ", T0_sigma = " << T0_sigma
+                  << ", z0inv = " << z0inv << std::endl;
+    }
+    MPI_Barrier(comm);
+}
+
 
 void toast::atm::sim::load_realization() {
 
@@ -458,7 +507,6 @@ void toast::atm::sim::simulate( bool use_cache ) {
     if ( cached ) return;
 
     try {
-
         draw();
 
         get_volume();
@@ -860,7 +908,8 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 
 void toast::atm::sim::draw() {
 
-    // Draw 100 gaussian variates to use in drawing the simulation parameters
+    // Draw 100 gaussian variates to use in drawing the simulation
+    // parameters
 
     const size_t nrand = 10000;
     double randn[nrand];
@@ -870,6 +919,12 @@ void toast::atm::sim::draw() {
     long irand=0;
 
     if ( rank == 0 ) {
+        std::cerr << "atm::sim::draw(): key1 = " << key1 << ", key2 = " << key2
+                  << ", counter1 = " << counter1
+                  << ", counter2 = " << counter2 - nrand
+                  << std::endl;
+        for (int i=0; i<10; ++i) std::cerr << i << " : " << prand[i] << std::endl;
+
         lmin = 0;
         lmax = 0;
         w = -1;

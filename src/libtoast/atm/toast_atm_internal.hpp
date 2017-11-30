@@ -52,7 +52,7 @@ public :
          int verbosity=0, MPI_Comm comm=MPI_COMM_WORLD,
          int gangsize=-1, // Size of the gangs that create slices
          uint64_t key1=0, uint64_t key2=0, // RNG keys
-         uint64_t counter1=0, uint64_t counter2=0, // RNG counters
+         uint64_t counterval1=0, uint64_t counterval2=0, // RNG counters
          char *cachedir=NULL );
 
     ~sim();
@@ -65,6 +65,8 @@ public :
     // compatible arguments.
     void observe( double *t, double *az, double *el, double *tod,
                   long nsamp, double fixed_r=-1 );
+
+    void print();
 
 private :
 
