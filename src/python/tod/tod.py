@@ -45,7 +45,6 @@ class TOD(object):
     """
     def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1,
         detbreaks=None, sampsizes=None, sampbreaks=None, meta=None):
-        autotimer = timing.auto_timer(type(self).__name__)
 
         self._mpicomm = mpicomm
         self._detranks = detranks

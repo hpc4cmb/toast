@@ -43,7 +43,7 @@ class OpPolyFilter(Operator):
     def __init__(self, order=1, pattern=r'.*', name='signal',
                  common_flag_name='common_flags', common_flag_mask=255,
                  flag_name='flags', flag_mask=255, poly_flag_mask=1):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         self._order = order
         self._pattern = pattern
         self._name = name

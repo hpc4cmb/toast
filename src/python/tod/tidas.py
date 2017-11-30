@@ -255,8 +255,6 @@ class TODTidas(TOD):
         if not available:
             raise RuntimeError("tidas is not available")
 
-        autotimer = timing.auto_timer(type(self).__name__)
-
         # The root block
         root = vol.root()
 

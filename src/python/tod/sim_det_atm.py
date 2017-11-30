@@ -107,7 +107,7 @@ class OpSimAtmosphere(Operator):
             common_flag_name='common_flags', common_flag_mask=255,
             flag_name='flags', flag_mask=255, report_timing=True,
             wind_time_min=600, cachedir='.', flush=False):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 

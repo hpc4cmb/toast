@@ -46,6 +46,8 @@ parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
 
 args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
+autotimer = timing.auto_timer(timing.FILE())
+
 # Make one big hexagon layout at the center of the focalplane.
 # Compute the number of pixels that is at least the number requested.
 
@@ -90,3 +92,5 @@ with open("{}.pkl".format(outfile), "wb") as p:
 
 tman = timing.timing_manager()
 tman.report()
+
+tman.clear()

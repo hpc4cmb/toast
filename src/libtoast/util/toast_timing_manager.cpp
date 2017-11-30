@@ -50,14 +50,25 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     if(mpi_rank()+1 < mpi_size())
         fss << ",";
 
+    // the JSON output as a string
     string_t fss_str = fss.str();
-    // compact the string
+    // limit the iteration loop. Occasionally it seems that this will create
+    // an infinite loop even though it shouldn't...
+    const uint64_t itr_limit = fss_str.length();
+    // compact the JSON
     for(auto citr : { "\n", "\t", "  " })
     {
         string_t itr(citr);
         string_t::size_type fpos = 0;
-        while((fpos = fss_str.find(itr, fpos)) != string_t::npos)
-            fss_str.replace(fpos, itr.length(), " ");
+        uint64_t nitr = 0;
+        do
+        {
+            fpos = fss_str.find(itr, fpos);
+            if(fpos != string_t::npos)
+                fss_str.replace(fpos, itr.length(), " ");
+            ++nitr;
+        }
+        while(nitr < itr_limit && fpos != string_t::npos);
     }
 
     // now we need to gather the lengths of each serialization string

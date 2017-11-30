@@ -192,6 +192,7 @@ def parse_args(args):
     timing_manager.report_fname = "{}.{}".format(args.toast_timing_fname, "out")
     timing_manager.serial_fname = "{}.{}".format(args.toast_timing_fname, "json")
     timing_manager.output_dir = args.toast_output_dir
+    tman.clear()
 
 #------------------------------------------------------------------------------#
 

@@ -69,8 +69,6 @@ class OpAccumDiag(Operator):
                 flag_mask=255, common_flag_name=None, common_flag_mask=255, pixels='pixels', 
                 weights='weights', apply_flags=True):
 
-        autotimer = timing.auto_timer(type(self).__name__)
-
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._common_flag_name = common_flag_name

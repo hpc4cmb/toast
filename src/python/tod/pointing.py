@@ -106,7 +106,7 @@ class OpPointingHpix(Operator):
                  mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None,
                  hwpsteptime=None, common_flag_name=None, common_flag_mask=255,
                  apply_flags=False):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         self._pixels = pixels
         self._weights = weights
         self._nside = nside

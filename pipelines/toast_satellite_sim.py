@@ -30,7 +30,6 @@ def main():
         print("Running with {} processes".format(MPI.COMM_WORLD.size))
 
     global_start = MPI.Wtime()
-    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     parser = argparse.ArgumentParser( description="Simulate satellite "
         "boresight pointing and make a noise map.", fromfile_prefix_chars="@" )
@@ -111,6 +110,8 @@ def main():
                         help='Output TIDAS export path')
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+
+    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     if args.tidas is not None:
         if not tt.tidas_available:

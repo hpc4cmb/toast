@@ -57,7 +57,7 @@ class OpSimDipole(Operator):
     def __init__(self, mode='total', coord='C', subtract=False, out='dipole', 
         cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26, solar_gal_lon=263.99,
         freq=0):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         self._mode = mode
         self._coord = coord
         self._subtract = subtract

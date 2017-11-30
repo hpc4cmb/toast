@@ -17,6 +17,10 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <mpi.h>
 
+#ifdef _OPENMP
+#   include <omp.h>
+#endif
+
 #include <cereal/cereal.hpp>
 #include <cereal/types/deque.hpp>
 #include <cereal/access.hpp>
@@ -60,6 +64,17 @@ inline int32_t mpi_size()
     if(mpi_is_initialized())
         MPI_Comm_size(MPI_COMM_WORLD, &_size);
     return std::max(_size, (int32_t) 1);
+}
+
+//----------------------------------------------------------------------------//
+
+inline int32_t get_max_threads()
+{
+#ifdef _OPENMP
+    return omp_get_max_threads();
+#else
+    return 1;
+#endif
 }
 
 //----------------------------------------------------------------------------//
@@ -210,6 +225,7 @@ timing_manager::clear()
     m_timer_list.clear();
     m_timer_map.clear();
     details::base_timer::get_instance_count() = 0;
+    details::base_timer::get_instance_hash() = 0;
 }
 //----------------------------------------------------------------------------//
 template <typename _Ret, typename _Func>
@@ -258,6 +274,8 @@ template <typename Archive>
 inline void
 timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 {
+    uint32_t omp_nthreads = get_max_threads();
+    ar(cereal::make_nvp("omp_concurrency", omp_nthreads));
     ar(cereal::make_nvp("timers", m_timer_list));
 }
 //----------------------------------------------------------------------------//

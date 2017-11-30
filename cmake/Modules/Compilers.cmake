@@ -28,6 +28,10 @@ include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 include(CheckCXXSourceRuns)
 
+
+################################################################################
+# macro generate a test compile file
+################################################################################
 macro(generate_test_project)
     if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/Templates/compile-test.cc.in)
         set(HEADER_FILE "stdlib.h")
@@ -35,6 +39,8 @@ macro(generate_test_project)
             ${CMAKE_BINARY_DIR}/compile-testing/compile-test.cc @ONLY)
     endif()
 endmacro()
+
+
 ################################################################################
 # macro converting string to list
 ################################################################################
@@ -94,7 +100,7 @@ function(test_compile _LANG _VAR _FLAG)
     # generate test file
     generate_test_project()
     set(LANG "${_LANG}")
-    set(COMPILE_FLAGS ${_FLAG})
+    set(COMPILE_FLAGS "${_FLAG}")
     set(COMPILE "${CMAKE_${LANG}_COMPILER}")
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CMakeLists.txt.in
         ${CMAKE_BINARY_DIR}/compile-testing/CMakeLists.txt @ONLY)
@@ -119,8 +125,14 @@ macro(add_flags _LANG _VAR _FLAGS)
         set(_VAR_GOOD "${${_VAR}}")
     endif("${${_VAR}}" STREQUAL "${_FLAGS}")
 
+    test_compile(${_LANG} HAS_WERROR "-Werror")
+    set(WARNING_AS_ERROR "")
+    if(HAS_WERROR)
+        set(WARNING_AS_ERROR "-Werror")
+    endif(HAS_WERROR)
+
     # test whole string
-    test_compile(${_LANG} COMPILE_SUCCESS "${_FLAGS}")
+    test_compile(${_LANG} COMPILE_SUCCESS "${WARNING_AS_ERROR} ${_FLAGS}")
     if(COMPILE_SUCCESS)
         # add whole string if worked
         add(_VAR_GOOD "${_FLAGS}")
@@ -129,7 +141,7 @@ macro(add_flags _LANG _VAR _FLAGS)
         to_list(_LANGFLAGS "${_FLAGS}")
         foreach(_FLAG ${_LANGFLAGS})
             # check individual flag
-            test_compile(${_LANG} COMPILE_SUCCESS "${_FLAG}")
+            test_compile(${_LANG} COMPILE_SUCCESS "${WARNING_AS_ERROR} ${_FLAG}")
             if(COMPILE_SUCCESS)
                 # add individual flag
                 add(_VAR_GOOD "${_FLAG}")

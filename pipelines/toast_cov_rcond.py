@@ -29,13 +29,14 @@ def main():
         print("Running with {} processes".format(comm.size))
 
     global_start = MPI.Wtime()
-    autotimer = timing.auto_timer(timing.FILE())
 
     parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
     
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+
+    autotimer = timing.auto_timer(timing.FILE())
 
     # get options
 

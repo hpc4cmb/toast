@@ -901,8 +901,9 @@ def main():
 
     args, start_timestamp, stop_timestamp = parse_args()
 
-    patches = parse_patches(args)
     autotimer = timing.auto_timer(timing.FILE())
+
+    patches = parse_patches(args)
 
     build_schedule(
         args, start_timestamp, stop_timestamp,

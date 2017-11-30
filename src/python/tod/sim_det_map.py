@@ -32,7 +32,7 @@ class OpSimGradient(Operator):
 
     def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False,
                  flag_mask=255, common_flag_mask=255):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -135,7 +135,7 @@ class OpSimScan(Operator):
     """
     def __init__(self, distmap=None, pixels='pixels', weights='weights',
                  out='scan'):
-        autotimer = timing.auto_timer(type(self).__name__)
+
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap

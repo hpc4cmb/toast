@@ -134,7 +134,6 @@ class OpMadam(Operator):
                  purge_tod=False, purge_pixels=False, purge_weights=False,
                  purge_flags=False, noise='noise'):
 
-        auto_timer = timing.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
