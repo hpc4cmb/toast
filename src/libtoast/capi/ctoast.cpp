@@ -42,6 +42,8 @@ int ctoast_timers_enabled()
 #endif
 }
 
+//----------------------------------------------------------------------------//
+
 ctoast_timer* ctoast_get_timer(char* ckey)
 {
 #if defined(DISABLE_TIMERS)
@@ -51,6 +53,18 @@ ctoast_timer* ctoast_get_timer(char* ckey)
     toast_timer_t& _t = timing_manager::instance()
                         ->timer(ckey, "pyc", base_timer_t::get_instance_count(),
                                 base_timer_t::get_instance_hash());
+    return reinterpret_cast<ctoast_timer*>(&_t);
+}
+
+//----------------------------------------------------------------------------//
+
+ctoast_timer* ctoast_get_timer_at(int32_t i)
+{
+#if defined(DISABLE_TIMERS)
+    return nullptr;
+#endif
+
+    toast_timer_t& _t = timing_manager::instance()->at(i);
     return reinterpret_cast<ctoast_timer*>(&_t);
 }
 

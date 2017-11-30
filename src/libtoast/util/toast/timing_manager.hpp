@@ -163,8 +163,10 @@ public:
 
     toast_timer_t& timer(const string_t& key,
                          const string_t& tag = "cxx",
-                         int32_t ncount = -1,
+                         int32_t ncount = 0,
                          int32_t nhash = 0);
+
+    toast_timer_t& at(size_t i) { return m_timer_list.at(i).timer(); }
 
     // time a function with a return type and no arguments
     template <typename _Ret, typename _Func>
@@ -282,10 +284,14 @@ timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 inline uint64_t
 timing_manager::string_hash(const string_t& str) const
 {
-    uint64_t sum = 0;
+    //return std::hash<string_t>()(str);
+    // computes the hash of an employee using a variant
+    // of the Fowler-Noll-Vo hash function
+    uint64_t result = 2166136261;
+
     for(const auto& itr : str)
-        sum += (int64_t) itr;
-    return sum;
+        result = (result * 16777619) ^ itr;
+    return result ^ str.length();
 }
 //----------------------------------------------------------------------------//
 

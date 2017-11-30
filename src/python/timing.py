@@ -75,9 +75,9 @@ class timer(object):
     def enabled():
         return ctoast.timers_enabled()
 
-    def __init__(self, key, _obj = None):
-        if _obj is not None:
-            self.ctimer = _obj
+    def __init__(self, key, obj = None):
+        if obj is not None:
+            self.ctimer = obj
         else:
             self.ctimer = ctoast.get_timer(key)
 
@@ -131,6 +131,9 @@ class timing_manager(object):
 
     def size(self):
         return ctoast.timing_manager_size()
+
+    def at(self, i):
+        return timer(None, obj=ctoast.get_timer_at(i))
 
     def clear(self):
         ctoast.timing_manager_clear()

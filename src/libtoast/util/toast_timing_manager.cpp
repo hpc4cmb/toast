@@ -180,13 +180,7 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
     }
 #endif
 
-    uint64_t sum = 0;
-    for(size_t i = 0; i < key.length(); ++i)
-        sum += (int64_t) key[i];
-    for(size_t i = 0; i < tag.length(); ++i)
-        sum += (int64_t) tag[i];
-
-    uint64_t ref = (string_hash(key) + string_hash(tag)) * (ncount+1) * nhash;
+    uint64_t ref = (string_hash(key) + string_hash(tag)) * (ncount+1) * (nhash+1);
 
     // if already exists, return it
     if(m_timer_map.find(ref) != m_timer_map.end())

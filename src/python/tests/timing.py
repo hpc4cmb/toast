@@ -55,6 +55,5 @@ class TimingTest(MPITestCase):
 
         for i in range(0, tman.size()):
             t = tman.at(i)
-            print (type(t))
             self.assertFalse(t.real_elapsed() < 0.0)
             self.assertFalse(t.user_elapsed() < 0.0)

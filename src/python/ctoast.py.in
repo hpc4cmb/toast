@@ -78,6 +78,12 @@ lib.ctoast_get_timer.argtypes = [ p_c_char ]
 def get_timer(key):
     return lib.ctoast_get_timer(convert_to_p_c_char(key))
 
+lib.ctoast_get_timer_at.restype = ct.POINTER(cTimer)
+lib.ctoast_get_timer_at.argtypes = [ ct.c_int ]
+
+def get_timer_at(key):
+    return lib.ctoast_get_timer_at(key)
+
 lib.ctoast_timer_start.restype = None
 lib.ctoast_timer_start.argtypes = [ ct.POINTER(cTimer) ]
 
