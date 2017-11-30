@@ -33,26 +33,35 @@ private:
 
 private:
     uint64_t m_hash;
-    toast_timer_t& m_timer;
+    toast_timer_t* m_timer;
 };
 
 //----------------------------------------------------------------------------//
 inline auto_timer::auto_timer(const std::string& timer_tag,
                               const int32_t& lineno)
 : m_hash(lineno),
-  m_timer(timing_manager::instance()->timer(timer_tag, "cxx",
-                                            ++auto_timer::ncount(),
-                                            auto_timer::nhash() += m_hash))
+  m_timer(nullptr)
 {
-    m_timer.start();
+    // for consistency, always increment hash keys
+    ++auto_timer::ncount();
+    auto_timer::nhash() += m_hash;
+
+    if(timing_manager::is_enabled())
+        m_timer = &timing_manager::instance()->timer(timer_tag, "cxx",
+                                                     auto_timer::ncount(),
+                                                     auto_timer::nhash());
+    if(m_timer)
+        m_timer->start();
 }
 //----------------------------------------------------------------------------//
 inline auto_timer::~auto_timer()
 {
-    m_timer.stop();
-    if(auto_timer::ncount() > 0)
-        auto_timer::ncount()--;
+    if(m_timer)
+        m_timer->stop();
 
+    // for consistency, always decrement hash keys
+    if(auto_timer::ncount() > 0)
+        --auto_timer::ncount();
     auto_timer::nhash() -= m_hash;
 }
 //----------------------------------------------------------------------------//
@@ -67,8 +76,10 @@ typedef toast::util::auto_timer                     auto_timer_t;
 #if defined(DISABLE_TIMERS)
 #   define TOAST_AUTO_TIMER(str)
 #else
+#   define AUTO_TIMER_NAME_COMBINE(X, Y) X##Y
+#   define AUTO_TIMER_NAME(Y) AUTO_TIMER_NAME_COMBINE(macro_auto_timer, Y)
 #   define TOAST_AUTO_TIMER(str) \
-        auto_timer_t macro_auto_timer(std::string(__FUNCTION__) + std::string(str), __LINE__)
+        auto_timer_t AUTO_TIMER_NAME(__LINE__)(std::string(__FUNCTION__) + std::string(str), __LINE__)
 #endif
 
 //----------------------------------------------------------------------------//

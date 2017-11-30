@@ -17,26 +17,36 @@ from os.path import join
 rank = MPI.COMM_WORLD.Get_rank()
 nprocs = MPI.COMM_WORLD.Get_size()
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 def enabled():
     return ctoast.timers_enabled()
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
+def toggle(on_or_off = None):
+    if on_or_off is None:
+        if enabled():
+            on_or_off = False
+        else:
+            on_or_off = True
+    return ctoast.timers_toggle(on_or_off)
+
+
+#------------------------------------------------------------------------------#
 def LINE(back = 1):
     """Function that emulates __LINE__ macro"""
     return int(sys._getframe(back).f_lineno)
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 def FUNC(back = 1):
     """Function that emulates __FUNCTION__ macro"""
     ret = ("{}".format(sys._getframe(back).f_code.co_name))
     return ret
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 def FILE(back = 2, only_basename = True, use_dirname = False, noquotes = False):
     """Function that emulates __FILE__ macro"""
     ret = None
@@ -57,8 +67,8 @@ def FILE(back = 2, only_basename = True, use_dirname = False, noquotes = False):
 
     return ret
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 def ensure_directory_exists(file_path):
     """Function to make a directory if it doesn't exist"""
 
@@ -66,8 +76,8 @@ def ensure_directory_exists(file_path):
     if not os.path.exists(directory) and directory != '':
         os.makedirs(directory)
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 class timer(object):
     """Class that provides interface to C++ toast::util::timer"""
 
@@ -79,34 +89,47 @@ class timer(object):
         if obj is not None:
             self.ctimer = obj
         else:
-            self.ctimer = ctoast.get_timer(key)
+            if enabled():
+                self.ctimer = ctoast.get_timer(key)
+            else:
+                self.ctimer = None
 
     def start(self):
-        ctoast.timer_start(self.ctimer)
+        if self.ctimer is not None:
+            ctoast.timer_start(self.ctimer)
 
     def stop(self):
-        ctoast.timer_stop(self.ctimer)
+        if self.ctimer is not None:
+            ctoast.timer_stop(self.ctimer)
 
     def report(self):
-        ctoast.timer_report(self.ctimer)
+        if self.ctimer is not None:
+            ctoast.timer_report(self.ctimer)
 
     def real_elapsed(self):
-        return ctoast.timer_real_elapsed(self.ctimer)
+        if self.ctimer is not None:
+            return ctoast.timer_real_elapsed(self.ctimer)
+        return 0.0
 
     def system_elapsed(self):
-        return ctoast.timer_system_elapsed(self.ctimer)
+        if self.ctimer is not None:
+            return ctoast.timer_system_elapsed(self.ctimer)
+        return 0.0
 
     def user_elapsed(self):
-        return ctoast.timer_user_elapsed(self.ctimer)
+        if self.ctimer is not None:
+            return ctoast.timer_user_elapsed(self.ctimer)
+        return 0.0
+
 
 #------------------------------------------------------------------------------#
-
 class timing_manager(object):
     """Class that provides interface to C++ toast::util::timing_manager"""
 
     report_fname = "timing_report.out"
     output_dir = "./"
     serial_fname = "timing_report.json"
+    serial_report = True
 
     @staticmethod
     def enabled():
@@ -115,19 +138,24 @@ class timing_manager(object):
     def __init__(self):
         self.ctiming_manager = ctoast.get_timing_manager()
 
-    def set_output_file(self, fname, odir = None):
+    def set_output_file(self, fname, odir = None, serial = None):
         timing_manager.report_fname = fname
         timing_manager.output_dir = odir
         if odir is not None:
             fname = os.path.join(odir, fname)
         ensure_directory_exists(fname)
-        ctoast.set_timing_output_file(fname)
+        if self.size() > 0:
+            ctoast.set_timing_output_file(fname)
+        if serial is not None:
+            timing_manager.serial_fname = serial
 
     def report(self):
-        self.set_output_file(timing_manager.report_fname, timing_manager.output_dir)
-        ctoast.report_timing()
-        self.serialize(os.path.join(timing_manager.output_dir,
-                                    timing_manager.serial_fname))
+        if self.size() > 0:
+            self.set_output_file(timing_manager.report_fname, timing_manager.output_dir)
+            ctoast.report_timing()
+            if timing_manager.serial_report:
+                self.serialize(os.path.join(timing_manager.output_dir,
+                                            timing_manager.serial_fname))
 
     def size(self):
         return ctoast.timing_manager_size()
@@ -142,8 +170,8 @@ class timing_manager(object):
         ensure_directory_exists(fname)
         ctoast.serialize_timing_manager(fname)
 
-#------------------------------------------------------------------------------#
 
+#------------------------------------------------------------------------------#
 class auto_timer(object):
     """Class that provides same utilities as toast::util::auto_timer"""
 
@@ -184,6 +212,19 @@ def add_arguments(parser, fname = None):
     parser.add_argument('--toast-timing-fname', required=False,
                         default=def_fname, type=str,
                         help="Filename for timing reports without directory and without suffix")
+    parser.add_argument('--disable-timers', required=False, action='store_false',
+                        dest='use_timers', help="Disable timers for script")
+    parser.add_argument('--enable-timers', required=False, action='store_true',
+                        dest='use_timers', help="Enable timers for script")
+    parser.set_defaults(use_timers=True)
+    parser.add_argument('--disable-timer-serialization',
+                        required=False, action='store_false',
+                        dest='serial_report', help="Disable serialization for timers")
+    parser.add_argument('--enable-timer-serialization',
+                        required=False, action='store_true',
+                        dest='serial_report', help="Enable serialization for timers")
+    parser.set_defaults(use_timers=True)
+    parser.set_defaults(serial_report=True)
 
 #------------------------------------------------------------------------------#
 
@@ -196,6 +237,8 @@ def parse_args(args):
     timing_manager.serial_fname = "{}.{}".format(args.toast_timing_fname, "json")
     timing_manager.output_dir = args.toast_output_dir
     tman.clear()
+    toggle(args.use_timers)
+    timing_manager.serial_report = args.serial_report
 
 #------------------------------------------------------------------------------#
 

@@ -25,7 +25,25 @@ toast::util::timing_manager* toast::util::timing_manager::fgInstance = nullptr;
 toast::util::timing_manager* toast::util::timing_manager::instance()
 {
     if(!fgInstance) new toast::util::timing_manager();
-	return fgInstance;
+    return fgInstance;
+}
+
+//============================================================================//
+
+#if defined(DISABLE_TIMERS)
+bool toast::util::timing_manager::fgEnabled = false;
+#else
+bool toast::util::timing_manager::fgEnabled = true;
+#endif
+
+//============================================================================//
+// static function
+void toast::util::timing_manager::enable(bool val)
+{
+#if defined(DISABLE_TIMERS)
+    val = false;
+#endif
+    fgEnabled = val;
 }
 
 //============================================================================//

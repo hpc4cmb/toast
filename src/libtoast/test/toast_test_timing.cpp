@@ -91,7 +91,11 @@ void time_fibonacci_lv(int32_t n)
 TEST_F( timingTest, manager )
 {
 #if defined(DISABLE_TIMERS)
-    return;
+
+    timing_manager_t* tman = timing_manager_t::instance();
+    TOAST_AUTO_TIMER("disabled");
+    EXPECT_EQ(timing_manager::instance()->size(), 0);
+
 #else
 
     timing_manager_t* tman = timing_manager_t::instance();
@@ -121,6 +125,49 @@ TEST_F( timingTest, manager )
         ASSERT_FALSE(itr.timer().real_elapsed() < 0.0);
         ASSERT_FALSE(itr.timer().user_elapsed() < 0.0);
     }
+
+#endif
+}
+
+//============================================================================//
+
+TEST_F( timingTest, toggle )
+{
+#if defined(DISABLE_TIMERS)
+
+    timing_manager_t* tman = timing_manager_t::instance();
+    TOAST_AUTO_TIMER("disabled");
+    EXPECT_EQ(timing_manager::instance()->size(), 0);
+
+#else
+
+    timing_manager_t* tman = timing_manager_t::instance();
+    tman->clear();
+
+    tman->enable(true);
+    {
+        TOAST_AUTO_TIMER("toggle_on");
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    EXPECT_EQ(timing_manager::instance()->size(), 1);
+
+    tman->clear();
+    tman->enable(false);
+    {
+        TOAST_AUTO_TIMER("toggle_off");
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    EXPECT_EQ(timing_manager::instance()->size(), 0);
+
+    tman->clear();
+    tman->enable(true);
+    {
+        TOAST_AUTO_TIMER("toggle_on");
+        tman->enable(false);
+        TOAST_AUTO_TIMER("toggle_off");
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    EXPECT_EQ(timing_manager::instance()->size(), 1);
 
 #endif
 }

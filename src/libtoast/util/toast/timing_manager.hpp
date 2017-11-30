@@ -154,6 +154,8 @@ public:
 public:
     // Public static functions
     static timing_manager* instance();
+    static bool is_enabled() { return fgEnabled; }
+    static void enable(bool val = true);
     static void write_json(const string_t& _fname);
 
 public:
@@ -211,7 +213,9 @@ private:
 
 private:
 	// Private variables
-    static timing_manager*   fgInstance;
+    static timing_manager*  fgInstance;
+    // for temporary enabling/disabling
+    static bool             fgEnabled;
     // hashed string map for fast lookup
     timer_map_t             m_timer_map;
     // ordered list for output (outputs in order of timer instantiation)

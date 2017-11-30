@@ -4,24 +4,25 @@
 
 import sys
 import os
+import time
+
 from ..mpi import MPI
 from .mpi import MPITestCase
-
 from .. import timing as timing
+
 
 class TimingTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "toast_test_output"
 
+    # Test if the timers are working if not disabled at compilation
     def test_timing(self):
-
         if timing.enabled() == False:
             return
 
         tman = timing.timing_manager()
-        tman.set_output_file("timing_report.out",
-                              self.outdir)
+        tman.set_output_file("timing_report.out", self.outdir)
 
         def fibonacci(n):
             if n < 2:
@@ -57,3 +58,38 @@ class TimingTest(MPITestCase):
             t = tman.at(i)
             self.assertFalse(t.real_elapsed() < 0.0)
             self.assertFalse(t.user_elapsed() < 0.0)
+
+    # Test the timing on/off toggle functionalities
+    def test_toggle(self):
+        # if compiled with DISABLE_TIMERS
+        if timing.enabled() == False:
+            return
+
+        tman = timing.timing_manager()
+        tman.clear()
+
+        timing.toggle(True)
+        if True:
+            autotimer = timing.auto_timer("on")
+            time.sleep(1)
+        self.assertEqual(tman.size(), 1)
+
+        tman.clear()
+        timing.toggle(False)
+        if True:
+            autotimer = timing.auto_timer("off")
+            time.sleep(1)
+        self.assertEqual(tman.size(), 0)
+
+        tman.clear()
+        timing.toggle(True)
+        if True:
+            autotimer_on = timing.auto_timer("on")
+            timing.toggle(False)
+            autotimer_off = timing.auto_timer("off")
+            time.sleep(1)
+        self.assertEqual(tman.size(), 1)
+
+        tman.set_output_file("timing_toggle.out", self.outdir,
+                             "timing_toggle.json")
+        tman.report()

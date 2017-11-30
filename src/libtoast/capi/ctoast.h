@@ -34,6 +34,7 @@ struct ctoast_timing_manager_;
 typedef struct ctoast_timing_manger_ ctoast_timing_manager;
 
 int ctoast_timers_enabled();
+void ctoast_timers_toggle(int32_t val);
 ctoast_timer* ctoast_get_timer(char* ckey);
 ctoast_timer* ctoast_get_timer_at(int32_t i);
 void ctoast_timer_start(ctoast_timer*);

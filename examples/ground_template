@@ -47,8 +47,10 @@ fpfile="${outdir}/fp_${detpix}.pkl"
 fpparfile="@@topdir@@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
+    echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-	 --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
          --out "${outdir}/fp" --minpix $detpix
 fi
 
@@ -59,8 +61,10 @@ schparfile="@@topdir@@/params/ground/schedule.par"
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
+    echo "Running toast_ground_schedule.py..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-	 --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile}" --patch @@patch@@ \
          --stop @@schedule_stop@@
 fi

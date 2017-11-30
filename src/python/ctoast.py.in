@@ -72,6 +72,12 @@ def timers_enabled():
     val = lib.ctoast_timers_enabled()
     return True if val > 0 else False
 
+lib.ctoast_timers_toggle.restype = None
+lib.ctoast_timers_toggle.argtypes = [ ct.c_int ]
+
+def timers_toggle(on_or_off):
+    lib.ctoast_timers_toggle(on_or_off)
+
 lib.ctoast_get_timer.restype = ct.POINTER(cTimer)
 lib.ctoast_get_timer.argtypes = [ p_c_char ]
 

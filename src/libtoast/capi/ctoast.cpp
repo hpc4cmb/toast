@@ -38,8 +38,15 @@ int ctoast_timers_enabled()
 #if defined(DISABLE_TIMERS)
     return 0;
 #else
-    return 1;
+    return timing_manager::is_enabled();
 #endif
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_timers_toggle(int32_t val)
+{
+    timing_manager::instance()->enable(val);
 }
 
 //----------------------------------------------------------------------------//
