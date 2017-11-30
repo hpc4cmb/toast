@@ -84,3 +84,4 @@ __pycache__/
 /src/python/ctoast.py
 /src/python/mpi.py
 
+*.json
