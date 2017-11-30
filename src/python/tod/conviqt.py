@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI, MPI_Comm
@@ -259,7 +259,7 @@ class OpSimConviqt(Operator):
                         'ERROR: conviqt object not initialized to convolve '
                         'detector {}. Available detectors are {}'.format(
                             det, self._detectordata.keys()))
-                    
+
                 sky = libconviqt.conviqt_sky_new()
                 err = libconviqt.conviqt_sky_read(
                     sky, self._lmax, self._pol, skyfile.encode(), self._fwhm,
@@ -282,27 +282,14 @@ class OpSimConviqt(Operator):
 
                 detector = libconviqt.conviqt_detector_new_with_id(det.encode())
                 libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
-                
+
                 # We need the three pointing angles to describe the
                 # pointing. read_pntg returns the attitude quaternions.
-                if self._quat_name is not None:
-                    cachename = '{}_{}'.format(self._quat_name, det)
-                    pdata = tod.cache.reference(cachename).copy()
-                else:
-                    pdata = tod.read_pntg(detector=det).copy()
+                pdata = tod.local_pointing(det, self._quat_name).copy()
 
                 if self._apply_flags:
-                    common, flags = None, None
-                    if self._common_flag_name is not None:
-                        common = tod.cache.reference(self._common_flag_name)
-                    if self._flag_name is not None:
-                        cachename = '{}_{}'.format(self._flag_name, det)
-                        flags = tod.cache.reference(cachename)
-                    else:
-                        flags, common_temp = tod.read_flags(detector=det)
-                        if common is None: common = common_temp
-                    if common is None:
-                        common = tod.read_common_flags()
+                    common = tod.local_common_flags(self._common_flag_name)
+                    flags = tod.local_flags(det, self._flag_name)
                     common = (common & self._common_flag_mask)
                     flags = (flags & self._flag_mask)
                     totflags = np.copy(flags)
@@ -310,7 +297,7 @@ class OpSimConviqt(Operator):
                     pdata[totflags != 0] = nullquat
 
                 theta, phi, psi = quat2angle(pdata)
-                
+
                 # Is the psi angle in Pxx or Dxx? Pxx will include the
                 # detector polarization angle, Dxx will not.
 
@@ -319,14 +306,16 @@ class OpSimConviqt(Operator):
 
                 pnt = libconviqt.conviqt_pointing_new()
 
-                err = libconviqt.conviqt_pointing_alloc(pnt,
-                                                        tod.local_samples[1]*5)
+                offset, nsamp = tod.local_samples
+
+                err = libconviqt.conviqt_pointing_alloc(pnt, nsamp*5)
+
                 if err != 0:
                     raise Exception('Failed to allocate pointing array')
 
                 ppnt = libconviqt.conviqt_pointing_data(pnt)
 
-                for row in range(tod.local_samples[1]):
+                for row in range(nsamp):
                     ppnt[row*5 + 0] = phi[row]
                     ppnt[row*5 + 1] = theta[row]
                     ppnt[row*5 + 2] = psi[row]
@@ -352,16 +341,15 @@ class OpSimConviqt(Operator):
 
                 ppnt = libconviqt.conviqt_pointing_data(pnt)
 
-                convolved_data = np.zeros(tod.local_samples[1])
-                for row in range(tod.local_samples[1]):
+                convolved_data = np.zeros(nsamp)
+                for row in range(nsamp):
                     convolved_data[row] = ppnt[row*5 + 3]
 
                 libconviqt.conviqt_convolver_del(convolver)
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64,
-                                     (tod.local_samples[1],))
+                    tod.cache.create(cachename, np.float64, (nsamp, ))
                 ref = tod.cache.reference(cachename)
                 if ref.size != convolved_data.size:
                     raise RuntimeError(

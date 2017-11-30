@@ -125,7 +125,6 @@ class CovarianceTest(MPITestCase):
             ob['name'] = 'test'
             ob['id'] = 0
             ob['tod'] = tod
-            ob['intervals'] = None
             ob['baselines'] = None
             ob['noise'] = nse
 

@@ -161,7 +161,6 @@ class OpSimNoiseTest(MPITestCase):
             'name':'noisetest-{}'.format(self.toastcomm.group),
             'id':0,
             'tod':self.tod,
-            'intervals':None,
             'baselines':None,
             'noise':self.nse}
         self.data.obs.append(obs)
@@ -170,7 +169,6 @@ class OpSimNoiseTest(MPITestCase):
             'name':'noisetest-{}'.format(self.toastcomm.group),
             'id':0,
             'tod':self.tod,
-            'intervals':None,
             'baselines':None,
             'noise':self.nse2}
         self.data2.obs.append(obs2)

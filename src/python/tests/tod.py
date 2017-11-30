@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -20,7 +20,7 @@ class TODTest(MPITestCase):
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
-            
+
         # Note: self.comm is set by the test infrastructure
         self.dets = ["1a", "1b", "2a", "2b"]
         self.mynsamp = 10
@@ -33,6 +33,7 @@ class TODTest(MPITestCase):
 
         self.datavec = np.random.normal(loc=0.0, scale=self.rms, size=self.mynsamp)
         self.flagvec = np.random.uniform(low=0, high=1, size=self.mynsamp).astype(np.uint8, copy=True)
+        self.tod.write_times(stamps=np.arange(self.mynsamp))
         for d in self.dets:
             self.tod.write_common_flags(local_start=0, flags=self.pflagvec)
             self.tod.write_det_flags(detector=d, local_start=0, flags=self.flagvec)
@@ -45,7 +46,7 @@ class TODTest(MPITestCase):
 
     def test_props(self):
         start = MPI.Wtime()
-        
+
         self.assertEqual(sorted(self.tod.detectors), sorted(self.dets))
         self.assertEqual(sorted(self.tod.local_dets), sorted(self.dets))
         self.assertEqual(self.tod.total_samples, self.totsamp)
@@ -82,3 +83,23 @@ class TODTest(MPITestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
 
+
+    def test_local_intervals(self):
+        start = MPI.Wtime()
+
+        local_intervals = self.tod.local_intervals
+        self.assertEqual(self.mynsamp,
+                         local_intervals[0].last - local_intervals[0].first + 1)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+
+    def test_local_signal(self):
+        start = MPI.Wtime()
+
+        for d in self.dets:
+            data = self.tod.local_signal(d)
+            np.testing.assert_almost_equal(data, self.datavec)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start

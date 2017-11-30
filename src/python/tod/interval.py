@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -25,7 +25,8 @@ class Interval(object):
         self._last = last
 
     def __repr__(self):
-        return '<Interval {} - {} ({} - {})>'.format(self._start, self._stop, self._first, self._last)
+        return '<Interval {} - {} ({} - {})>'.format(
+            self._start, self._stop, self._first, self._last)
 
     @property
     def start(self):
@@ -104,16 +105,16 @@ class Interval(object):
         b = self.first
         e = self.last
         return (e - b + 1)
-    
+
 
 class OpFlagGaps(Operator):
     """
     Operator which applies common flags to gaps between valid intervals.
 
     Args:
-        common_flag_name (str): the name of the cache object 
+        common_flag_name (str): the name of the cache object
             to use for the common flags.  If None, use the TOD.
-        common_flag_value (int): the integer bit mask (0-255) 
+        common_flag_value (int): the integer bit mask (0-255)
             that should be bitwise ORed with the existing flags.
     """
 
@@ -144,43 +145,19 @@ class OpFlagGaps(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
-            intrvls = obs['intervals']
-
-            if intrvls is None:
-                continue
-
-            local_offset = tod.local_samples[0]
-            local_nsamp = tod.local_samples[1]
 
             # first, flag all samples
-            gapflags = np.zeros(local_nsamp, dtype=np.uint8)
+            offset, nsamp = tod.local_samples
+            gapflags = np.zeros(nsamp, dtype=np.uint8)
             gapflags.fill(self._common_flag_value)
 
             # now un-flag samples in valid intervals
-            for ival in intrvls:
-                if (ival.last >= local_offset
-                    and ival.first < (local_offset + local_nsamp)):
-                    local_start = ival.first - local_offset
-                    local_stop = ival.last - local_offset
-                    if local_start < 0:
-                        local_start = 0
-                    if local_stop > local_nsamp - 1:
-                        local_stop = local_nsamp - 1
-                    gapflags[local_start:local_stop+1] = 0
+            for ival in tod.local_intervals:
+                local_start = ival.first
+                local_stop = ival.last
+                gapflags[local_start:local_stop+1] = 0
 
-            if self._common_flag_name is None:
-                # set TOD common flags
-                flags = tod.read_common_flags(local_start=0, n=local_nsamp)
-                flags |= gapflags
-                tod.write_common_flags(local_start=0, flags=flags)
-            else:
-                # use the cache
-                if not tod.cache.exists(self._common_flag_name):
-                    tod.cache.create(self._common_flag_name, np.uint8, (local_nsamp,))
-                comref = tod.cache.reference(self._common_flag_name)
-                comref[:] |= gapflags
+            commonflags = tod.local_common_flags(self._common_flag_name)
+            commonflags[:] |= gapflags
 
         return
-
-
-

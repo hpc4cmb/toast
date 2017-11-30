@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -94,14 +94,14 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
             precession axis will be fixed along the
             X axis.  If a 1D array of size 4 is given,
             This will be the fixed quaternion used
-            to rotate the Z coordinate axis to the 
+            to rotate the Z coordinate axis to the
             precession axis.  If a 2D array of shape
             (nsim, 4) is given, this is the time-varying
             rotation of the Z axis to the precession axis.
         samplerate (float): The sampling rate in Hz.
         spinperiod (float): The period (in minutes) of the
             rotation about the spin axis.
-        spinangle (float): The opening angle (in degrees) 
+        spinangle (float): The opening angle (in degrees)
             of the boresight from the spin axis.
         precperiod (float): The period (in minutes) of the
             rotation about the precession axis.
@@ -143,7 +143,7 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
     else:
         raise RuntimeError("qprec has wrong dimensions")
 
-    # Time-varying rotation about precession axis.  
+    # Time-varying rotation about precession axis.
     # Increment per sample is
     # (2pi radians) X (precrate) / (samplerate)
     # Construct quaternion from axis / angle form.
@@ -160,7 +160,7 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
 
     precaxis = np.multiply(sang.reshape(-1,1), np.tile(zaxis, nsim).reshape(-1,3))
     #print("precaxis = ", precaxis[-1])
-    
+
     precrot = np.concatenate((precaxis, cang.reshape(-1,1)), axis=1)
     #print("precrot = ", precrot[-1])
 
@@ -169,7 +169,7 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
     precopen = qa.rotation(np.array([1.0, 0.0, 0.0]), precangle)
     #print("precopen = ", precopen)
 
-    # Time-varying rotation about spin axis.  Increment 
+    # Time-varying rotation about spin axis.  Increment
     # per sample is
     # (2pi radians) X (spinrate) / (samplerate)
     # Construct quaternion from axis / angle form.
@@ -182,10 +182,11 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
     cang = np.cos(0.5 * spinang)
     sang = np.sin(0.5 * spinang)
 
-    spinaxis = np.multiply(sang.reshape(-1,1), np.tile(zaxis, nsim).reshape(-1,3))
+    spinaxis = np.multiply(sang.reshape(-1, 1),
+                           np.tile(zaxis, nsim).reshape(-1, 3))
     #print("spinaxis = ", spinaxis[-1])
-    
-    spinrot = np.concatenate((spinaxis, cang.reshape(-1,1)), axis=1)
+
+    spinrot = np.concatenate((spinaxis, cang.reshape(-1, 1)), axis=1)
     #print("spinrot = ", spinrot[-1])
 
     # Rotation which performs the spin axis opening angle
@@ -195,7 +196,10 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
 
     # compose final rotation
 
-    boresight = qa.mult(satrot, qa.mult(precrot, qa.mult(precopen, qa.mult(spinrot, spinopen))))
+    boresight = qa.mult(satrot,
+                        qa.mult(precrot,
+                                qa.mult(precopen,
+                                        qa.mult(spinrot, spinopen))))
     #print("boresight = ", boresight[-1])
 
     return boresight
@@ -206,33 +210,23 @@ class TODHpixSpiral(TOD):
     Provide a simple generator of fake detector pointing.
 
     Detector focalplane offsets are specified as a dictionary of 4-element
-    ndarrays.  The boresight pointing is a simple looping over HealPix 
+    ndarrays.  The boresight pointing is a simple looping over HealPix
     ring ordered pixel centers.
 
     Args:
-        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
+            data are distributed.
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
         samples (int):  The total number of samples.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         nside (int): sky NSIDE to use.
-        detindx (dict): the detector indices for use in simulations.  Default is 
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        detranks (int):  The dimension of the process grid in the detector
-            direction.  The MPI communicator size must be evenly divisible
-            by this number.
-        detbreaks (list):  Optional list of hard breaks in the detector
-            distribution.
-        sampsizes (list):  Optional list of sample chunk sizes which 
-            cannot be split.    
-        sampbreaks (list):  Optional list of hard breaks in the sample 
-            distribution.
+        Other keyword arguments are passed to the parent class constructor.
 
     """
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, 
-        rate=100.0, nside=512, detindx=None, detranks=1, detbreaks=None,
-        sampsizes=None, sampbreaks=None):
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0,
+                 rate=100.0, nside=512, **kwargs):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -240,9 +234,7 @@ class TODHpixSpiral(TOD):
         props = {
             "nside": nside,
         }
-        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
-            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
-            sampbreaks=sampbreaks, meta=props)
+        super().__init__(mpicomm, self._detlist, samples, meta=props, **kwargs)
 
         self._firsttime = firsttime
         self._rate = rate
@@ -266,6 +258,10 @@ class TODHpixSpiral(TOD):
 
     def _get_flags(self, detector, start, n):
         return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+
+
+    def _get_det_flags(self, detector, start, n):
+        return np.zeros(n, dtype=np.uint8)
 
 
     def _put_det_flags(self, detector, start, flags):
@@ -363,7 +359,7 @@ class TODHpixSpiral(TOD):
     def _get_velocity(self, start, n):
         return np.zeros((n,3), dtype=np.float64)
 
-    
+
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")
         return
@@ -377,7 +373,8 @@ class TODSatellite(TOD):
     ndarrays.  The boresight pointing is a generic 2-angle model.
 
     Args:
-        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the data is distributed.
+        mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
+            data are distributed.
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
         samples (int):  The total number of samples.
@@ -385,29 +382,18 @@ class TODSatellite(TOD):
         rate (float): sample rate in Hz.
         spinperiod (float): The period (in minutes) of the
             rotation about the spin axis.
-        spinangle (float): The opening angle (in degrees) 
+        spinangle (float): The opening angle (in degrees)
             of the boresight from the spin axis.
         precperiod (float): The period (in minutes) of the
             rotation about the precession axis.
         precangle (float): The opening angle (in degrees)
             of the spin axis from the precession axis.
-        detindx (dict): the detector indices for use in simulations.  Default is 
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        detranks (int):  The dimension of the process grid in the detector
-            direction.  The MPI communicator size must be evenly divisible
-            by this number.
-        detbreaks (list):  Optional list of hard breaks in the detector
-            distribution.
-        sampsizes (list):  Optional list of sample chunk sizes which 
-            cannot be split.    
-        sampbreaks (list):  Optional list of hard breaks in the sample 
-            distribution.
-    
+        All other keyword arguments are passed to the parent constructor.
+
     """
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0, 
-        spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0, 
-        detindx=None, detranks=1, detbreaks=None, sampsizes=None, 
-        sampbreaks=None):
+    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0,
+                 spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0,
+                 **kwargs):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -426,11 +412,9 @@ class TODSatellite(TOD):
             "precperiod": precperiod,
             "precangle": precangle
         }
-        
+
         # call base class constructor to distribute data
-        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
-            detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes, 
-            sampbreaks=sampbreaks, meta=props)
+        super().__init__(mpicomm, self._detlist, samples, meta=props, **kwargs)
 
         self._AU = 149597870.7
         self._radperday = 0.01720209895
@@ -451,7 +435,7 @@ class TODSatellite(TOD):
                 precession axis will be fixed along the
                 X axis.  If a 1D array of size 4 is given,
                 This will be the fixed quaternion used
-                to rotate the Z coordinate axis to the 
+                to rotate the Z coordinate axis to the
                 precession axis.  If a 2D array of shape
                 (local samples, 4) is given, this is the time-varying
                 rotation of the Z axis to the precession axis.
@@ -470,7 +454,8 @@ class TODSatellite(TOD):
 
     def _get_boresight(self, start, n):
         if self._boresight is None:
-            raise RuntimeError("you must set the precession axis before reading pointing")
+            raise RuntimeError("you must set the precession axis before "
+                               "reading pointing")
         return self._boresight[start:start+n]
 
 
@@ -491,6 +476,10 @@ class TODSatellite(TOD):
 
     def _get_flags(self, detector, start, n):
         return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+
+
+    def _get_det_flags(self, detector, start, n):
+        return np.zeros(n, dtype=np.uint8)
 
 
     def _put_det_flags(self, detector, start, flags):
@@ -535,7 +524,7 @@ class TODSatellite(TOD):
     def _get_position(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
-        # mean values for distance and angular speed.  Classes for 
+        # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
         rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
@@ -553,7 +542,7 @@ class TODSatellite(TOD):
     def _get_velocity(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
-        # mean values for distance and angular speed.  Classes for 
+        # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
         rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
@@ -562,7 +551,7 @@ class TODSatellite(TOD):
         z = np.zeros_like(x)
         return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
 
-    
+
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")
         return
@@ -596,14 +585,6 @@ class TODGround(TOD):
         CES_stop (float): Stop time of the constant elevation scan
         sun_angle_min (float): Minimum angular distance for the scan and
             the Sun [degrees].
-        detindx (dict): the detector indices for use in simulations.
-            Default is
-            { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
-        detranks (int):  The dimension of the process grid in the detector
-            direction.  The MPI communicator size must be evenly divisible
-            by this number.
-        detbreaks (list):  Optional list of hard breaks in the detector
-            distribution.
         sampsizes (list):  Optional list of sample chunk sizes which
             cannot be split.
         sampbreaks (list):  Optional list of hard breaks in the sample
@@ -612,6 +593,7 @@ class TODGround(TOD):
             C (Equatorial), E (Ecliptic) or G (Galactic)
         report_timing (bool):  Report the time spent simulating the scan
             and translating the pointing.
+        All other keyword arguments are passed to the parent constructor.
     """
 
     TURNAROUND = 1
@@ -626,9 +608,8 @@ class TODGround(TOD):
                  site_lon=0, site_lat=0, site_alt=0, azmin=0, azmax=0, el=0,
                  scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
-                 detindx=None, detranks=1, detbreaks=None,
                  sampsizes=None, sampbreaks=None, coord="C",
-                 report_timing=True):
+                 report_timing=True, **kwargs):
 
         if samples < 1:
             raise RuntimeError(
@@ -639,7 +620,7 @@ class TODGround(TOD):
             raise RuntimeError("Cannot instantiate a TODGround object "
                                "without pyephem.")
 
-        if sampsizes is not None:
+        if sampsizes is not None or sampbreaks is not None:
             raise RuntimeError("TODGround will synthesize the sizes to match "
                                "the subscans.")
 
@@ -714,7 +695,7 @@ class TODGround(TOD):
         # Create a list of subscans that excludes the turnarounds.
         # All processes in the group still have all samples.
 
-        self._subscans = []
+        self._intervals = []
         self._subscan_min_length = 10 # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
             if istop-istart < self._subscan_min_length:
@@ -722,7 +703,7 @@ class TODGround(TOD):
                 continue
             start = self._firsttime + istart / self._rate
             stop = self._firsttime + istop / self._rate
-            self._subscans.append(
+            self._intervals.append(
                 Interval(start=start, stop=stop, first=istart, last=istop-1))
 
         self._commonflags[istop:] |= self.TURNAROUND
@@ -752,9 +733,8 @@ class TODGround(TOD):
             "el_min": el_min,
             "sun_angle_min": sun_angle_min
         }
-        super().__init__(mpicomm, self._detlist, samples, detindx=detindx, 
-                         detranks=detranks, detbreaks=detbreaks,
-                         sampsizes=[samples], sampbreaks=sampbreaks, meta=props)
+        super().__init__(mpicomm, self._detlist, samples, sampsizes=[samples],
+                         sampbreaks=None, meta=props, **kwargs)
 
         if self._report_timing:
             mpicomm.Barrier()
@@ -816,12 +796,12 @@ class TODGround(TOD):
             including turnarounds.  The list can be used as toast
             observation intervals.
         """
-        return self._subscans
+        return self._intervals
 
     @property
     def scan_range(self):
         """
-        (tuple):  The extent of the boresight pointing as (min_az, max_az, 
+        (tuple):  The extent of the boresight pointing as (min_az, max_az,
             min_el, max_el) in radians.  Includes turnarounds.
         """
 
@@ -1098,6 +1078,9 @@ class TODGround(TOD):
 
     def _get_flags(self, detector, start, n):
         return (np.zeros(n, dtype=np.uint8), self._commonflags[start:start+n])
+
+    def _get_det_flags(self, detector, start, n):
+        return np.zeros(n, dtype=np.uint8)
 
     def _put_det_flags(self, detector, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")

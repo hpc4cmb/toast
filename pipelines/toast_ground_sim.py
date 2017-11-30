@@ -465,10 +465,6 @@ def create_observations(args, comm, schedules, counter):
         ob['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
                                                  CES_name, scan, subscan)
         ob['tod'] = tod
-        if len(tod.subscans) > 0:
-            ob['intervals'] = tod.subscans
-        else:
-            raise RuntimeError('{} has no valid intervals'.format(ob['name']))
         ob['baselines'] = None
         ob['noise'] = noise
         ob['id'] = int(mjdstart * 10000)

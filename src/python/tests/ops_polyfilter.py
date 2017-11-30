@@ -110,6 +110,14 @@ class OpPolyFilterTest(MPITestCase):
 
         # Construct an empty TOD (no pointing needed)
 
+        intervals = []
+        interval_len = 1000
+        for istart in range(0, self.totsamp, interval_len):
+            istop = min(istart + interval_len, self.totsamp)
+            intervals.append(Interval(
+                start=istart/self.rate, stop=istop/self.rate,
+                first=istart, last=istop-1))
+
         self.tod = TODHpixSpiral(
             self.toastcomm.comm_group,
             self.fp,
@@ -117,7 +125,7 @@ class OpPolyFilterTest(MPITestCase):
             firsttime=0.0,
             rate=self.rate,
             nside=512,
-            sampsizes=chunks)
+            sampsizes=chunks, intervals=intervals)
 
         # construct an analytic noise model
 
@@ -130,19 +138,10 @@ class OpPolyFilterTest(MPITestCase):
             NET=self.NET
         )
 
-        intervals = []
-        interval_len = 1000
-        for istart in range(0, self.totsamp, interval_len):
-            istop = min(istart + interval_len, self.totsamp)
-            intervals.append(Interval(
-                start=istart/self.rate, stop=istop/self.rate,
-                first=istart, last=istop-1))
-
         ob = {}
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
-        ob['intervals'] = intervals
         ob['baselines'] = None
         ob['noise'] = self.nse
 
@@ -171,6 +170,7 @@ class OpPolyFilterTest(MPITestCase):
             p = np.polyfit(x, y, self.order)
             y[:] = np.polyval(p, x)
             old_rms[det] = np.std(y)
+            del y
 
         # Filter timestreams
 
@@ -197,5 +197,6 @@ class OpPolyFilterTest(MPITestCase):
             if rms / old < 1e-1 and 'apply' not in det:
                 raise RuntimeError('det {} old rms = {}, new rms = {}'
                                    ''.format(det, old, rms))
+            del y
 
         self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))

@@ -135,7 +135,6 @@ class PSDTest(MPITestCase):
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
-        ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = self.nse
 

@@ -132,7 +132,6 @@ class OpMemoryCounterTest(MPITestCase):
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
-        ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = self.nse
 
@@ -144,6 +143,9 @@ class OpMemoryCounterTest(MPITestCase):
         ob = self.data.obs[0]
         tod = ob['tod']
         nse = ob['noise']
+
+        # Ensure timestamps are cached before simulating noise
+        tod.local_times()
 
         counter = OpMemoryCounter()
 
