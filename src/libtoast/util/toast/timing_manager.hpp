@@ -284,14 +284,7 @@ timing_manager::serialize(Archive& ar, const unsigned int /*version*/)
 inline uint64_t
 timing_manager::string_hash(const string_t& str) const
 {
-    //return std::hash<string_t>()(str);
-    // computes the hash of an employee using a variant
-    // of the Fowler-Noll-Vo hash function
-    uint64_t result = 2166136261;
-
-    for(const auto& itr : str)
-        result = (result * 16777619) ^ itr;
-    return result ^ str.length();
+    return std::hash<string_t>()(str);
 }
 //----------------------------------------------------------------------------//
 
