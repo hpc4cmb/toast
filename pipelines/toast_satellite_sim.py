@@ -258,6 +258,7 @@ def main():
         obs = {}
         obs["name"] = "science_{:05d}".format(ob)
         obs["tod"] = tod
+        obs["intervals"] = None
         obs["baselines"] = None
         obs["noise"] = noise
         obs["id"] = ob
