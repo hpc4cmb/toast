@@ -54,24 +54,70 @@ class timing_function():
 
     def __init__(self):
         self.data = timing_data()
+        self.laps = 0
 
-    def process(self, denom, start, stop):
-        _wall = float(int(stop['wall']) - int(start['wall'])) / denom
-        _user = float(int(stop['user']) - int(start['user'])) / denom
-        _sys = float(int(stop['sys']) - int(start['sys'])) / denom
-        _cpu = _user + _sys
-        if _wall > 0.0:
-            _perc = (_cpu / _wall) * 100.0
-        else:
-            _perc = 100.0
+    def process(self, denom, obj, nlap):
+        _wall = obj['wall_elapsed'] / denom
+        _user = obj['user_elapsed'] / denom
+        _sys = obj['system_elapsed'] / denom
+        _cpu = obj['cpu_elapsed'] / denom
+        _perc = (_cpu / _wall) * 100.0 if _wall > 0.0 else 100.0
         if _wall > min_time:
             self.data.append([_wall, _sys, _user, _cpu, _perc])
+        self.laps += nlap
 
     def __getitem__(self, key):
         return self.data[key]
 
     def length(self):
         return len(self.data['cpu'])
+
+
+#=============================================================================#
+def read(filename):
+
+    print('Opening {}...'.format(filename))
+    f = open(filename, "r")
+    data_0 = json.load(f)
+    global concurrency
+    global mpi_size
+
+    max_level = 0
+    concurrency_sum = 0
+    mpi_size = len(data_0['ranks'])
+    for i in range(0, len(data_0['ranks'])):
+        data_1 = data_0['ranks'][i]
+        concurrency_sum += int(data_1['timing_manager']['omp_concurrency'])
+        for j in range(0, len(data_1['timing_manager']['timers'])):
+            data_2 = data_1['timing_manager']['timers'][j]
+            nlaps = int(data_2['timer.ref']['laps'])
+            indent = ""
+            nlevel = int(data_2['timer.level'])
+            max_level = max([max_level, nlevel])
+
+    concurrency = concurrency_sum / mpi_size
+    timing_functions = nested_dict()
+    for i in range(0, len(data_0['ranks'])):
+        data_1 = data_0['ranks'][i]
+        for j in range(0, len(data_1['timing_manager']['timers'])):
+            data_2 = data_1['timing_manager']['timers'][j]
+            nlaps = int(data_2['timer.ref']['laps'])
+            indent = ""
+            nlevel = int(data_2['timer.level'])
+            for n in range(0, nlevel):
+                indent = ' {}'.format(indent)
+            tag = '{} {}'.format(indent, data_2['timer.tag'])
+
+            if not tag in timing_functions:
+                timing_functions[tag] = timing_function()
+            timing_func = timing_functions[tag]
+            data_3 = data_2['timer.ref']
+            timing_func.process(data_3['to_seconds_ratio_den'], data_3, nlaps)
+
+            if timing_func.length() == 0:
+                del timing_functions[tag]
+
+    return timing_functions
 
 
 #=============================================================================#
@@ -92,7 +138,7 @@ def plot(filename, title, timing_data_dict):
         stds[key] = []
 
     for func, obj in timing_data_dict.items():
-        ytics.append(func)
+        ytics.append('{} x [ {} counts ]'.format(func, obj.laps))
         for key in types:
             data = obj[key]
             avgs[key].append(np.mean(data))
@@ -137,58 +183,6 @@ def plot(filename, title, timing_data_dict):
     plt.setp(ax.get_yticklabels(), fontsize='smaller')
     plt.legend(plots, iter_order)
     plt.show()
-
-
-#=============================================================================#
-def read(filename):
-
-    print('Opening {}...'.format(filename))
-    f = open(filename, "r")
-    data_0 = json.load(f)
-    global concurrency
-    global mpi_size
-
-    max_level = 0
-    concurrency_sum = 0
-    mpi_size = len(data_0['ranks'])
-    for i in range(0, len(data_0['ranks'])):
-        data_1 = data_0['ranks'][i]
-        concurrency_sum += int(data_1['timing_manager']['omp_concurrency'])
-        for j in range(0, len(data_1['timing_manager']['timers'])):
-            data_2 = data_1['timing_manager']['timers'][j]
-            nlaps = int(data_2['timer.ref']['laps'])
-            indent = ""
-            nlevel = int(data_2['timer.level'])
-            max_level = max([max_level, nlevel])
-
-    concurrency = concurrency_sum / mpi_size
-    timing_functions = nested_dict()
-    for i in range(0, len(data_0['ranks'])):
-        data_1 = data_0['ranks'][i]
-        for j in range(0, len(data_1['timing_manager']['timers'])):
-            data_2 = data_1['timing_manager']['timers'][j]
-            nlaps = int(data_2['timer.ref']['laps'])
-            indent = ""
-            nlevel = int(data_2['timer.level'])
-            for n in range(0, nlevel):
-                indent = ' {}'.format(indent)
-            tag = '{} {} x {}'.format(indent, data_2['timer.tag'], nlaps)
-
-            if not tag in timing_functions:
-                timing_functions[tag] = timing_function()
-            timing_func = timing_functions[tag]
-            data_3 = data_2['timer.ref']
-
-            for k in range(0, nlaps):
-                data_4 = data_3['raw_history'][k]
-                start = data_4['start']['time_since_epoch']['count']
-                stop = data_4['stop']['time_since_epoch']['count']
-                timing_func.process(data_3['to_seconds_ratio_den'], start, stop)
-
-            if timing_func.length() == 0:
-                del timing_functions[tag]
-
-    return timing_functions
 
 
 #=============================================================================#
