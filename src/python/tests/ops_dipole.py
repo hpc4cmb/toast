@@ -70,6 +70,7 @@ class OpSimDipoleTest(MPITestCase):
         ob['name'] = 'test'
         ob['id'] = 0
         ob['tod'] = self.tod
+        ob['intervals'] = None
         ob['baselines'] = None
         ob['noise'] = None
 
