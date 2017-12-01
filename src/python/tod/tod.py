@@ -45,8 +45,7 @@ class TOD(object):
 
     """
     def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1,
-                 detbreaks=None, sampsizes=None, sampbreaks=None, meta=None,
-                 intervals=None):
+                 detbreaks=None, sampsizes=None, sampbreaks=None, meta=None):
 
         self._mpicomm = mpicomm
         self._detranks = detranks
@@ -73,8 +72,6 @@ class TOD(object):
         self._nsamp = samples
 
         self._sizes = sampsizes
-
-        self._intervals = intervals
 
         self._meta = meta
         if meta is None:
@@ -121,7 +118,6 @@ class TOD(object):
                     "in TOD.".format(r))
 
         self.cache = Cache()
-        self._local_intervals = None
 
     def __del__(self):
         self.cache.clear()
@@ -313,14 +309,14 @@ class TOD(object):
         Returns:
             A cache reference to a flag vector.  If 'name' is None
             a default name 'flags' is used and the vector may be
-            constructed and cached using the 'read_det_flags' method.
+            constructed and cached using the 'read_flags' method.
             If 'name' is given, then the flags must already be cached.
 
         """
         if name is None:
             cachename = 'flags_{}'.format(det)
             if not self.cache.exists(cachename):
-                flags = self.read_det_flags(detector=det)
+                flags = self.read_flags(detector=det)
                 self.cache.put(cachename, flags)
         else:
             cachename = '{}_{}'.format(name, det)
@@ -347,35 +343,26 @@ class TOD(object):
             cachename = name
         return self.cache.reference(cachename)
 
-    @property
-    def intervals(self):
-        """ List of valid interval objects for the entire observation.
+    def local_intervals(self, intervals):
+        """ Translate observation-wide intervals into local sample indices.
         """
-        if self._intervals is None:
-            self._intervals = [
-                Interval(start=0, stop=0, first=0, last=self.total_samples-1)]
-        return self._intervals
-
-    @property
-    def local_intervals(self):
-        """
-        """
-        tod_first, tod_nsamp = self.local_samples
-        if self._local_intervals is None:
-            times = self.local_times()
-            self._local_intervals = []
-            for ival in self.intervals:
-                if (ival.last >= tod_first and
-                    ival.first < tod_first + tod_nsamp):
-                    # This interval overlaps with this tod.
-                    local_first = max(0, ival.first-tod_first)
-                    local_last = min(tod_nsamp-1, ival.last-tod_first)
-                    local_start = times[local_first]
-                    local_stop = times[local_last]
-                    self._local_intervals.append(
-                        Interval(start=local_start, stop=local_stop,
-                                 first=local_first, last=local_last))
-        return self._local_intervals
+        if intervals is None:
+            intervals = [Interval(start=0, stop=0,
+                                  first=0, last=self.total_samples-1)]
+        offset, nsamp = self.local_samples
+        local_intervals = []
+        times = self.local_times()
+        for ival in intervals:
+            if (ival.last >= offset and
+                ival.first < offset + nsamp):
+                local_first = max(0, ival.first-offset)
+                local_last = min(nsamp-1, ival.last-offset)
+                local_start = times[local_first]
+                local_stop = times[local_last]
+                local_intervals.append(
+                    Interval(start=local_start, stop=local_stop,
+                             first=local_first, last=local_last))
+        return local_intervals
 
     @property
     def total_samples(self):
@@ -476,14 +463,9 @@ class TOD(object):
             "Fell through to TOD._get_flags base class method")
         return None
 
-    def _get_det_flags(self, detector, start, n):
+    def _put_flags(self, detector, start, flags):
         raise NotImplementedError(
-            "Fell through to TOD._get_det_flags base class method")
-        return None
-
-    def _put_det_flags(self, detector, start, flags):
-        raise NotImplementedError(
-            "Fell through to TOD._put_det_flags base class method")
+            "Fell through to TOD._put_flags base class method")
         return
 
     def _get_common_flags(self, start, n):
@@ -553,7 +535,6 @@ class TOD(object):
                              "".format(local_start, local_start+n-1))
         return self._get_times(local_start, n, **kwargs)
 
-
     def write_times(self, local_start=0, stamps=None, **kwargs):
         """
         Write timestamps.
@@ -578,7 +559,6 @@ class TOD(object):
                 "".format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps, **kwargs)
         return
-
 
     # Read and write telescope boresight pointing
 
@@ -607,7 +587,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_boresight(local_start, n, **kwargs)
 
-
     def write_boresight(self, local_start=0, data=None, **kwargs):
         """
         Write boresight quaternion pointing.
@@ -631,7 +610,6 @@ class TOD(object):
             raise ValueError("local sample range is invalid")
         self._put_boresight(local_start, data, **kwargs)
         return
-
 
     # Read and write detector data
 
@@ -665,7 +643,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get(detector, local_start, n, **kwargs)
 
-
     def write(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector data.
@@ -694,7 +671,6 @@ class TOD(object):
                 "".format(local_start, local_start+data.shape[0]-1))
         self._put(detector, local_start, data, **kwargs)
         return
-
 
     # Read and write detector quaternion pointing
 
@@ -728,7 +704,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n, **kwargs)
 
-
     def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector quaternion pointing.
@@ -760,42 +735,9 @@ class TOD(object):
         self._put_pntg(detector, local_start, data, **kwargs)
         return
 
-
     # Read and write detector flags
 
     def read_flags(self, detector=None, local_start=0, n=0, **kwargs):
-        """
-        Read detector flags.
-
-        This returns the detector-specific flags and the common flags.
-
-        Args:
-            detector (str): the name of the detector.
-            local_start (int): the sample offset relative to the first locally
-                assigned sample.
-            n (int): the number of samples to read.  If zero, read to end.
-
-        Returns:
-            A 2-tuple of arrays, containing the detector flags and the common
-                flags.
-        """
-        if detector is None:
-            raise ValueError("you must specify the detector")
-        if detector not in self.local_dets:
-            raise ValueError("detector {} not found".format(detector))
-        if n == 0:
-            n = self.local_samples[1] - local_start
-        if self.local_samples[1] <= 0:
-            raise RuntimeError(
-                "cannot read flags- process has no assigned local samples")
-        if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError(
-                "local sample range {} - {} is invalid"
-                "".format(local_start, local_start+n-1))
-        return self._get_flags(detector, local_start, n, **kwargs)
-
-
-    def read_det_flags(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector flags.
 
@@ -823,7 +765,7 @@ class TOD(object):
             raise ValueError(
                 "local sample range {} - {} is invalid"
                 "".format(local_start, local_start+n-1))
-        return self._get_det_flags(detector, local_start, n, **kwargs)
+        return self._get_flags(detector, local_start, n, **kwargs)
 
 
     def read_common_flags(self, local_start=0, n=0, **kwargs):
@@ -852,7 +794,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n, **kwargs)
 
-
     def write_common_flags(self, local_start=0, flags=None, **kwargs):
         """
         Write common flags.
@@ -879,8 +820,7 @@ class TOD(object):
         self._put_common_flags(local_start, flags, **kwargs)
         return
 
-
-    def write_det_flags(self, detector=None, local_start=0, flags=None,
+    def write_flags(self, detector=None, local_start=0, flags=None,
                         **kwargs):
         """
         Write detector flags.
@@ -907,9 +847,8 @@ class TOD(object):
             raise ValueError(
                 "local sample range {} - {} is invalid"
                 "".format(local_start, local_start+flags.shape[0]-1))
-        self._put_det_flags(detector, local_start, flags, **kwargs)
+        self._put_flags(detector, local_start, flags, **kwargs)
         return
-
 
     # Read and write telescope position
 
@@ -940,7 +879,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_position(local_start, n, **kwargs)
 
-
     def write_position(self, local_start=0, pos=None, **kwargs):
         """
         Write telescope position.
@@ -965,7 +903,6 @@ class TOD(object):
                 "".format(local_start, local_start+pos.shape[0]-1))
         self._put_position(local_start, pos, **kwargs)
         return
-
 
     # Read and write telescope velocity
 
@@ -995,7 +932,6 @@ class TOD(object):
                 "local sample range {} - {} is invalid"
                 "".format(local_start, local_start+n-1))
         return self._get_velocity(local_start, n, **kwargs)
-
 
     def write_velocity(self, local_start=0, vel=None, **kwargs):
         """
@@ -1152,24 +1088,10 @@ class TODCache(TOD):
         if not self.cache.exists(cacheflags):
             raise ValueError(
                 "detector {} flags not yet written".format(detector))
-        if not self.cache.exists(self._common):
-            raise ValueError("common flags not yet written")
-        flagsref = self.cache.reference(cacheflags)[start:start+n]
-        comref = self.cache.reference(self._common)[start:start+n]
-        return flagsref, comref
-
-    def _get_det_flags(self, detector, start, n):
-        if detector not in self.local_dets:
-            raise ValueError(
-                "detector {} not assigned to local process".format(detector))
-        cacheflags = "{}{}".format(self._pref_detflags, detector)
-        if not self.cache.exists(cacheflags):
-            raise ValueError(
-                "detector {} flags not yet written".format(detector))
         flagsref = self.cache.reference(cacheflags)[start:start+n]
         return flagsref
 
-    def _put_det_flags(self, detector, start, flags):
+    def _put_flags(self, detector, start, flags):
         if detector not in self.local_dets:
             raise ValueError(
                 "detector {} not assigned to local process".format(detector))
@@ -1223,8 +1145,8 @@ class TODCache(TOD):
         if not self.cache.exists(self._pos):
             self.cache.create(self._pos, np.float64, (self.local_samples[1], 3))
         n = pos.shape[0]
-        ref = self.cache.reference(self._pos)[start:start+n,:]
-        ref[:,:] = pos
+        ref = self.cache.reference(self._pos)[start:start+n, :]
+        ref[:, :] = pos
         return
 
     def _get_velocity(self, start, n):
@@ -1237,6 +1159,6 @@ class TODCache(TOD):
         if not self.cache.exists(self._vel):
             self.cache.create(self._vel, np.float64, (self.local_samples[1], 3))
         n = vel.shape[0]
-        ref = self.cache.reference(self._vel)[start:start+n,:]
-        ref[:,:] = vel
+        ref = self.cache.reference(self._vel)[start:start+n, :]
+        ref[:, :] = vel
         return

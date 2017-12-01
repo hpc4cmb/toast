@@ -110,14 +110,6 @@ class OpPolyFilterTest(MPITestCase):
 
         # Construct an empty TOD (no pointing needed)
 
-        intervals = []
-        interval_len = 1000
-        for istart in range(0, self.totsamp, interval_len):
-            istop = min(istart + interval_len, self.totsamp)
-            intervals.append(Interval(
-                start=istart/self.rate, stop=istop/self.rate,
-                first=istart, last=istop-1))
-
         self.tod = TODHpixSpiral(
             self.toastcomm.comm_group,
             self.fp,
@@ -125,7 +117,7 @@ class OpPolyFilterTest(MPITestCase):
             firsttime=0.0,
             rate=self.rate,
             nside=512,
-            sampsizes=chunks, intervals=intervals)
+            sampsizes=chunks)
 
         # construct an analytic noise model
 
@@ -138,10 +130,19 @@ class OpPolyFilterTest(MPITestCase):
             NET=self.NET
         )
 
+        intervals = []
+        interval_len = 1000
+        for istart in range(0, self.totsamp, interval_len):
+            istop = min(istart + interval_len, self.totsamp)
+            intervals.append(Interval(
+                start=istart/self.rate, stop=istop/self.rate,
+                first=istart, last=istop-1))
+
         ob = {}
         ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
         ob['id'] = 0
         ob['tod'] = self.tod
+        ob['intervals'] = intervals
         ob['baselines'] = None
         ob['noise'] = self.nse
 

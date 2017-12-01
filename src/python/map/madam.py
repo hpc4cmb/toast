@@ -129,7 +129,7 @@ class OpMadam(Operator):
                  common_flag_name=None, common_flag_mask=255,
                  apply_flags=True, purge=False, dets=None, mcmode=False,
                  purge_tod=False, purge_pixels=False, purge_weights=False,
-                 purge_flags=False, noise='noise'):
+                 purge_flags=False, noise='noise', intervals='intervals'):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -174,6 +174,7 @@ class OpMadam(Operator):
             self._params['write_tod'] = False
         self._cached = False
         self._noisekey = noise
+        self._intervals = intervals
         self._cache = Cache()
 
     def __del__(self):
@@ -317,10 +318,15 @@ class OpMadam(Operator):
             tod = obs['tod']
             nlocal = tod.local_samples[1]
             period_ranges = []
+            if self._intervals in obs:
+                intervals = obs[self._intervals]
+            else:
+                intervals = None
+            local_intervals = tod.local_intervals(intervals)
 
             local_offset = tod.local_samples[0]
             local_nsamp = tod.local_samples[1]
-            for ival in tod.local_intervals:
+            for ival in local_intervals:
                 local_start = ival.first
                 local_stop = ival.last
                 if local_stop - local_start + 1 < norder:

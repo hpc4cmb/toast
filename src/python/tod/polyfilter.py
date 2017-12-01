@@ -37,11 +37,13 @@ class OpPolyFilter(Operator):
            based on the detector flags.
         poly_flag_mask (byte):  Bitmask to use when adding flags based
            on polynomial filter failures.
+        intervals (str):  Name of the valid intervals in observation.
     """
 
     def __init__(self, order=1, pattern=r'.*', name=None,
                  common_flag_name=None, common_flag_mask=255,
-                 flag_name=None, flag_mask=255, poly_flag_mask=1):
+                 flag_name=None, flag_mask=255, poly_flag_mask=1,
+                 intervals='intervals'):
 
         self._order = order
         self._pattern = pattern
@@ -51,6 +53,7 @@ class OpPolyFilter(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._poly_flag_mask = poly_flag_mask
+        self._intervals = intervals
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -74,10 +77,11 @@ class OpPolyFilter(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
-            tod_first = tod.local_samples[0]
-            tod_nsamp = tod.local_samples[1]
-
-            # Cache the output common flags
+            if self._intervals in obs:
+                intervals = obs[self._intervals]
+            else:
+                intervals = None
+            local_intervals = tod.local_intervals(intervals)
             common_ref = tod.local_common_flags(self._common_flag_name)
 
             pat = re.compile(self._pattern)
@@ -95,8 +99,7 @@ class OpPolyFilter(Operator):
 
                 local_starts = []
                 local_stops = []
-
-                for ival in tod.local_intervals:
+                for ival in local_intervals:
                     local_starts.append(ival.first)
                     local_stops.append(ival.last)
 

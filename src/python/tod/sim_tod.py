@@ -65,7 +65,8 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     sang = np.sin(satang)
 
     # this is the time-varying rotation axis
-    sataxis = np.concatenate((cang.reshape(-1,1), sang.reshape(-1,1), np.zeros((nsim, 1))), axis=1)
+    sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
+                              np.zeros((nsim, 1))), axis=1)
 
     # the rotation about the axis is always pi/2
     csatrot = np.cos(0.25 * np.pi)
@@ -74,12 +75,15 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     # now construct the axis-angle quaternions for the precession
     # axis
     sataxis = np.multiply(np.repeat(ssatrot, nsim).reshape(-1,1), sataxis)
-    satquat = np.concatenate((sataxis, np.repeat(csatrot, nsim).reshape(-1,1)), axis=1)
+    satquat = np.concatenate((sataxis, np.repeat(csatrot, nsim).reshape(-1,1)),
+                             axis=1)
 
     return satquat
 
 
-def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0):
+def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
+                       spinperiod=1.0, spinangle=85.0, precperiod=0.0,
+                       precangle=0.0):
     """
     Generate boresight quaternions for a generic satellite.
 
@@ -133,7 +137,9 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
     if qprec is None:
         # in this case, we just have a fixed precession axis, pointing
         # along the ecliptic X axis.
-        satrot = np.tile(qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi/2), nsim).reshape(-1,4)
+        satrot = np.tile(
+            qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi/2),
+            nsim).reshape(-1, 4)
     elif qprec.flatten().shape[0] == 4:
         # we have a fixed precession axis.
         satrot = np.tile(qprec, nsim).reshape(-1,4)
@@ -158,10 +164,11 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None, spi
     cang = np.cos(0.5 * precang)
     sang = np.sin(0.5 * precang)
 
-    precaxis = np.multiply(sang.reshape(-1,1), np.tile(zaxis, nsim).reshape(-1,3))
+    precaxis = np.multiply(sang.reshape(-1, 1),
+                           np.tile(zaxis, nsim).reshape(-1, 3))
     #print("precaxis = ", precaxis[-1])
 
-    precrot = np.concatenate((precaxis, cang.reshape(-1,1)), axis=1)
+    precrot = np.concatenate((precaxis, cang.reshape(-1, 1)), axis=1)
     #print("precrot = ", precrot[-1])
 
     # Rotation which performs the precession opening angle
@@ -241,55 +248,42 @@ class TODHpixSpiral(TOD):
         self._nside = nside
         self._npix = 12 * self._nside * self._nside
 
-
     def detoffset(self):
         return { d : np.asarray(self._fp[d]) for d in self._detlist }
-
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
         return np.zeros(n, dtype=np.float64)
 
-
     def _put(self, detector, start, data, flags):
         raise RuntimeError("cannot write data to simulated data streams")
         return
 
-
     def _get_flags(self, detector, start, n):
-        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
-
-
-    def _get_det_flags(self, detector, start, n):
         return np.zeros(n, dtype=np.uint8)
 
-
-    def _put_det_flags(self, detector, start, flags):
+    def _put_flags(self, detector, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
-
     def _get_common_flags(self, start, n):
         return np.zeros(n, dtype=np.uint8)
-
 
     def _put_common_flags(self, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
-
     def _get_times(self, start, n):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
+        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False,
+                             dtype=np.float64)
         return stamps
-
 
     def _put_times(self, start, stamps):
         raise RuntimeError("cannot write timestamps to simulated data streams")
         return
-
 
     def _get_boresight(self, start, n):
         # compute the absolute sample offset
@@ -298,24 +292,25 @@ class TODHpixSpiral(TOD):
         # pixel offset
         start_pix = int(start_abs % self._npix)
         pixels = np.linspace(start_pix, start_pix + n, num=n, endpoint=False)
-        pixels = np.mod(pixels, self._npix*np.ones(n, dtype=np.int64)).astype(np.int64)
+        pixels = np.mod(pixels,
+                        self._npix*np.ones(n, dtype=np.int64)).astype(np.int64)
 
         # the result of this is normalized
         x, y, z = hp.pix2vec(self._nside, pixels, nest=False)
 
         # z axis is obviously normalized
-        zaxis = np.array([0,0,1], dtype=np.float64)
-        ztiled = np.tile(zaxis, x.shape[0]).reshape((-1,3))
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        ztiled = np.tile(zaxis, x.shape[0]).reshape((-1, 3))
 
         # ... so dir is already normalized
-        dir = np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
+        dir = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
         # get the rotation axis
         v = np.cross(ztiled, dir)
-        v = v / np.sqrt(np.sum(v * v, axis=1)).reshape((-1,1))
+        v = v / np.sqrt(np.sum(v * v, axis=1)).reshape((-1, 1))
 
         # this is the vector-wise dot product
-        zdot = np.sum(ztiled * dir, axis=1).reshape((-1,1))
+        zdot = np.sum(ztiled * dir, axis=1).reshape((-1, 1))
         ang = 0.5 * np.arccos(zdot)
 
         # angle element
@@ -329,11 +324,9 @@ class TODHpixSpiral(TOD):
 
         return qa.norm(boresight)
 
-
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
-
 
     def _get_pntg(self, detector, start, n):
         detquat = np.asarray(self._fp[detector])
@@ -341,24 +334,19 @@ class TODHpixSpiral(TOD):
         data = qa.mult(boresight, detquat)
         return data
 
-
     def _put_pntg(self, detector, start, data):
         raise RuntimeError("cannot write data to simulated pointing")
         return
 
-
     def _get_position(self, start, n):
-        return np.zeros((n,3), dtype=np.float64)
-
+        return np.zeros((n, 3), dtype=np.float64)
 
     def _put_position(self, start, pos):
         raise RuntimeError("cannot write data to simulated position")
         return
 
-
     def _get_velocity(self, start, n):
-        return np.zeros((n,3), dtype=np.float64)
-
+        return np.zeros((n, 3), dtype=np.float64)
 
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")
@@ -422,7 +410,6 @@ class TODSatellite(TOD):
         self._radinc = self._radpersec / self._rate
         self._earthspeed = self._radpersec * self._AU
 
-
     def set_prec_axis(self, qprec=None):
         """
         Set the fixed or time-varying precession axis.
@@ -441,16 +428,20 @@ class TODSatellite(TOD):
                 rotation of the Z axis to the precession axis.
         """
         if qprec is not None:
-            if (qprec.shape != (4,)) and (qprec.shape != (self.local_samples[1], 4)):
-                raise RuntimeError("precession quaternion has incorrect dimensions")
+            if (qprec.shape != (4,)) and \
+               (qprec.shape != (self.local_samples[1], 4)):
+                raise RuntimeError(
+                    "precession quaternion has incorrect dimensions")
 
         # generate and cache the boresight pointing
-        self._boresight = satellite_scanning(nsim=self.local_samples[1], firstsamp=self.local_samples[0], qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod, spinangle=self._spinangle, precperiod=self._precperiod, precangle=self._precangle)
-
+        self._boresight = satellite_scanning(
+            nsim=self.local_samples[1], firstsamp=self.local_samples[0],
+            qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod,
+            spinangle=self._spinangle, precperiod=self._precperiod,
+            precangle=self._precangle)
 
     def detoffset(self):
-        return { d : np.asarray(self._fp[d]) for d in self._detlist }
-
+        return {d : np.asarray(self._fp[d]) for d in self._detlist}
 
     def _get_boresight(self, start, n):
         if self._boresight is None:
@@ -458,56 +449,43 @@ class TODSatellite(TOD):
                                "reading pointing")
         return self._boresight[start:start+n]
 
-
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
-
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
         return np.zeros(n, dtype=np.float64)
 
-
     def _put(self, detector, start, data):
         raise RuntimeError("cannot write data to simulated data streams")
         return
 
-
     def _get_flags(self, detector, start, n):
-        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
-
-
-    def _get_det_flags(self, detector, start, n):
         return np.zeros(n, dtype=np.uint8)
-
 
     def _put_det_flags(self, detector, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
-
     def _get_common_flags(self, start, n):
         return np.zeros(n, dtype=np.uint8)
-
 
     def _put_common_flags(self, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
-
     def _get_times(self, start, n):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
+        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False,
+                             dtype=np.float64)
         return stamps
-
 
     def _put_times(self, start, stamps):
         raise RuntimeError("cannot write timestamps to simulated data streams")
         return
-
 
     def _get_pntg(self, detector, start, n):
         boresight = self._get_boresight(start, n)
@@ -515,42 +493,37 @@ class TODSatellite(TOD):
         data = qa.mult(boresight, detquat)
         return data
 
-
     def _put_pntg(self, detector, start, data):
         raise RuntimeError("cannot write data to simulated pointing")
         return
-
 
     def _get_position(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
         y = self._AU * np.sin(ang)
         z = np.zeros_like(x)
-        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
-
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
     def _put_position(self, start, pos):
         raise RuntimeError("cannot write data to simulated position")
         return
-
 
     def _get_velocity(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
         x = self._earthspeed * np.cos(ang)
         y = self._earthspeed * np.sin(ang)
         z = np.zeros_like(x)
-        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
-
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")
@@ -695,7 +668,7 @@ class TODGround(TOD):
         # Create a list of subscans that excludes the turnarounds.
         # All processes in the group still have all samples.
 
-        self._intervals = []
+        self.subscans = []
         self._subscan_min_length = 10 # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
             if istop-istart < self._subscan_min_length:
@@ -703,7 +676,7 @@ class TODGround(TOD):
                 continue
             start = self._firsttime + istart / self._rate
             stop = self._firsttime + istop / self._rate
-            self._intervals.append(
+            self.subscans.append(
                 Interval(start=start, stop=stop, first=istart, last=istop-1))
 
         self._commonflags[istop:] |= self.TURNAROUND
@@ -734,8 +707,7 @@ class TODGround(TOD):
             "sun_angle_min": sun_angle_min
         }
         super().__init__(mpicomm, self._detlist, samples, sampsizes=[samples],
-                         sampbreaks=None, meta=props, intervals=self.intervals,
-                         **kwargs)
+                         sampbreaks=None, meta=props, **kwargs)
 
         if self._report_timing:
             mpicomm.Barrier()
@@ -789,15 +761,6 @@ class TODGround(TOD):
         by pyEphem.
         """
         return self.to_JD(t) - 2415020
-
-    @property
-    def subscans(self):
-        """
-        (list):  Toast Interval objects that match the subscans,
-            including turnarounds.  The list can be used as toast
-            observation intervals.
-        """
-        return self._intervals
 
     @property
     def scan_range(self):
@@ -1078,12 +1041,9 @@ class TODGround(TOD):
         return
 
     def _get_flags(self, detector, start, n):
-        return (np.zeros(n, dtype=np.uint8), self._commonflags[start:start+n])
-
-    def _get_det_flags(self, detector, start, n):
         return np.zeros(n, dtype=np.uint8)
 
-    def _put_det_flags(self, detector, start, flags):
+    def _put_flags(self, detector, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
@@ -1153,12 +1113,12 @@ class TODGround(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
         y = self._AU * np.sin(ang)
         z = np.zeros_like(x)
-        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
     def _put_position(self, start, pos):
         raise RuntimeError("cannot write data to simulated position")
@@ -1169,12 +1129,12 @@ class TODGround(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        rad = np.fmod( (start - self._firsttime) * self._radpersec, 2.0 * np.pi )
+        rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
         x = self._earthspeed * np.cos(ang)
         y = self._earthspeed * np.sin(ang)
         z = np.zeros_like(x)
-        return np.ravel(np.column_stack((x, y, z))).reshape((-1,3))
+        return np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")

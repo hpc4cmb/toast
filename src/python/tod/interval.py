@@ -116,11 +116,14 @@ class OpFlagGaps(Operator):
             to use for the common flags.  If None, use the TOD.
         common_flag_value (int): the integer bit mask (0-255)
             that should be bitwise ORed with the existing flags.
+        intervals (str):  Name of the valid intervals in observation.
     """
 
-    def __init__(self, common_flag_name=None, common_flag_value=1):
+    def __init__(self, common_flag_name=None, common_flag_value=1,
+                 intervals='intervals'):
         self._common_flag_name = common_flag_name
         self._common_flag_value = common_flag_value
+        self._intervals = intervals
         super().__init__()
 
     def exec(self, data):
@@ -145,6 +148,11 @@ class OpFlagGaps(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
+            if self._intervals:
+                intervals = obs[self._intervals]
+            else:
+                intervals = None
+            local_intervals = tod.local_intervals(intervals)
 
             # first, flag all samples
             offset, nsamp = tod.local_samples
@@ -152,7 +160,7 @@ class OpFlagGaps(Operator):
             gapflags.fill(self._common_flag_value)
 
             # now un-flag samples in valid intervals
-            for ival in tod.local_intervals:
+            for ival in local_intervals:
                 local_start = ival.first
                 local_stop = ival.last
                 gapflags[local_start:local_stop+1] = 0

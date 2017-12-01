@@ -104,18 +104,6 @@ class BinnedTest(MPITestCase):
         # define some valid data intervals so that we can test flag handling
         # in the gaps
 
-        nint = 4
-        intsamp = self.totsamp // nint
-        inttime = (intsamp - 1) / self.rate
-        durtime = inttime * 0.85
-        gaptime = inttime - durtime
-        intrvls = regular_intervals(nint, 0, 0, self.rate, durtime, gaptime)
-        self.validsamp = 0
-        for it in intrvls:
-            print(it.first, " ", it.last, " ", it.start, " ", it.stop)
-            self.validsamp += it.last - it.first + 1
-        print(self.validsamp, " good samples")
-
         for i in range(nobs):
             # create the TOD for this observation
 
@@ -129,7 +117,7 @@ class BinnedTest(MPITestCase):
                 spinangle=self.spinangle,
                 precperiod=self.precperiod, 
                 precangle=self.precangle, 
-                sampsizes=chunks, intervals=intrvls)
+                sampsizes=chunks)
 
             tod.set_prec_axis()
 
@@ -143,12 +131,25 @@ class BinnedTest(MPITestCase):
                 alpha=self.alpha,
                 NET=self.netd)
 
+            nint = 4
+            intsamp = self.totsamp // nint
+            inttime = (intsamp - 1) / self.rate
+            durtime = inttime * 0.85
+            gaptime = inttime - durtime
+            intrvls = regular_intervals(nint, 0, 0, self.rate, durtime, gaptime)
+            self.validsamp = 0
+            for it in intrvls:
+                print(it.first, " ", it.last, " ", it.start, " ", it.stop)
+                self.validsamp += it.last - it.first + 1
+            print(self.validsamp, " good samples")
+
             ob = {}
             ob['name'] = 'test'
             ob['id'] = 0
             ob['tod'] = tod
             ob['baselines'] = None
             ob['noise'] = nse
+            ob['intervals'] = intrvls
 
             self.data.obs.append(ob)
 

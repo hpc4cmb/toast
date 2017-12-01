@@ -395,7 +395,8 @@ class Data(object):
         return
 
 
-    def info(self, handle, flag_mask=255, common_flag_mask=255):
+    def info(self, handle, flag_mask=255, common_flag_mask=255,
+             intervals='intervals'):
         """
         Print information about the distributed data to the
         specified file handle.  Only the rank 0 process writes.
@@ -419,7 +420,7 @@ class Data(object):
             tod = ob['tod']
             base = ob['baselines']
             nse = ob['noise']
-            intrvl = tod.intervals
+            intrvl = ob[intervals]
 
             if gcomm.rank == 0:
                 groupstr = "observation {}:\n".format(id)
