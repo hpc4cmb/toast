@@ -474,7 +474,7 @@ def create_observations(args, comm, schedules, counter):
         #obs['telescope'] = telescope_id
         obs['telescope'] = (site_id + telescope_id) % 2**16
 
-        data.obs.append(ob)
+        data.obs.append(obs)
 
     if args.skip_atmosphere:
         for ob in data.obs:
