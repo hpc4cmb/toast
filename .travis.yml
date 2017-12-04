@@ -161,6 +161,16 @@ before_install:
     - conda info -a
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
     - pip install mpi4py
+    # Install libsharp C
+    - git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1
+    - cd libsharp; autoconf
+    - ./configure
+    - make
+    - export LIBSHARP="$HOME/miniconda"
+    - cp -r auto/* $LIBSHARP
+    # Install libsharp Python
+    - cd python
+    - CC="mpicc -g" LDSHARED="mpicc -g -shared" python setup.py install
 
 # Skip this
 
