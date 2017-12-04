@@ -39,6 +39,13 @@ foreach(_OPTION BLAS FFTW LAPACK MKL MPI OPENMP PYTHON SSE TBB WCSLIB CLANG_ASSE
     endif(NOT "${${_OPTION}_ROOT}" STREQUAL "")
 endforeach()
 
+execute_process(COMMAND git branch --contains
+    OUTPUT_VARIABLE CMAKE_SOURCE_BRANCH
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REPLACE "*" "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
+string(REPLACE " " "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
+
 ## -- CTest Config
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestConfig.cmake.in
     ${CMAKE_BINARY_DIR}/CTestConfig.cmake @ONLY)
