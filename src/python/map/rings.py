@@ -95,10 +95,12 @@ class DistRings(object):
     """
     def __init__(self, comm=MPI.COMM_WORLD, nnz=1, dtype=np.float64,
                  nside=16):
+        self.data = None
         self._comm = comm
         self._nnz = nnz
         self._dtype = dtype
         self._nest = False
+        self._nside = nside
 
         self._cache = Cache()
 
