@@ -26,17 +26,26 @@ endfunction()
 # ------------------------------------------------------------------------ #
 # -- Configure CTest
 # ------------------------------------------------------------------------ #
+add_option(USE_LOCAL_FOR_CTEST "Use the local source tree for CTest/CDash" OFF)
+if(USE_LOCAL_FOR_CTEST)
+    set(CMAKE_LOCAL_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif(USE_LOCAL_FOR_TEST)
 
 GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
 
 ## -- USE_<PROJECT> and <PROJECT>_ROOT
 set(CMAKE_CONFIGURE_OPTIONS )
-foreach(_OPTION BLAS FFTW LAPACK MKL MPI OPENMP PYTHON SSE TBB WCSLIB CLANG_ASSEMBLER
-        ELEMENTAL MATH)
+foreach(_OPTION ARCH BLAS ELEMENTAL LAPACK OPENMP 
+    PYTHON_INCLUDE_DIR SSE TBB TIMERS WCSLIB FFTW MATH MKL)
     add(CMAKE_CONFIGURE_OPTIONS "-DUSE_${_OPTION}=${USE_${_OPTION}}")
     if(NOT "${${_OPTION}_ROOT}" STREQUAL "")
         add(CMAKE_CONFIGURE_OPTIONS "-D${_OPTION}_ROOT=${${_OPTION}_ROOT}")
     endif(NOT "${${_OPTION}_ROOT}" STREQUAL "")
+    # for Elemental, e.g. USE_ELEMENTAL --> Elemental_ROOT
+    capitalize("${_OPTION}" C_OPTION)
+    if(NOT "${${C_OPTION}_ROOT}" STREQUAL "")
+        add(CMAKE_CONFIGURE_OPTIONS "-D${C_OPTION}_ROOT=${${C_OPTION}_ROOT}")
+    endif(NOT "${${C_OPTION}_ROOT}" STREQUAL "")
 endforeach()
 
 execute_process(COMMAND git branch --contains
