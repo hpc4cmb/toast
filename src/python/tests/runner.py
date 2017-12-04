@@ -37,7 +37,7 @@ from . import ops_gainscrambler as testopsgainscrambler
 from . import ops_memorycounter as testopsmemorycounter
 from . import ops_madam as testopsmadam
 from . import ops_sim_pysm as testopspysm
-from . import ops_smooth as testopssmooth
+from . import smooth as testsmooth
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
 from . import binned as testbinned
@@ -92,7 +92,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
         suite.addTest( loader.loadTestsFromModule(testopsmadam) )
         suite.addTest( loader.loadTestsFromModule(testopspysm) )
-        suite.addTest( loader.loadTestsFromModule(testopssmooth) )
+        suite.addTest( loader.loadTestsFromModule(testsmooth) )
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
