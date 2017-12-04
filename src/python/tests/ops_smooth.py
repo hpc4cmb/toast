@@ -17,76 +17,7 @@ from ..tod.pointing import *
 from ..tod.sim_tod import *
 from ..tod.sim_det_map import *
 from ..map.pixels import *
-
-
-def expand_pix(startpix, ringpix, local_npix):
-    """Turn first pixel index and number of pixel in full array of pixels
-
-    to be optimized with cython or numba
-    """
-    local_pix = np.empty(local_npix, dtype=np.int64)
-    i = 0
-    for start, num in zip(startpix, ringpix):
-        local_pix[i:i+num] = np.arange(start, start+num)
-        i += num
-    return local_pix
-
-def distribute_rings(nside, rank, n_mpi_processes):
-    """Create a libsharp map distribution based on rings
-
-    Build a libsharp grid object to distribute a HEALPix map
-    balancing North and South distribution of rings to achieve
-    the best performance on Harmonic Transforms
-
-    Returns the grid object and the pixel indices array in RING ordering
-
-    Parameters
-    ---------
-
-    nside : int
-        HEALPix NSIDE parameter of the distributed map
-    rank, n_mpi_processes, ints
-        rank of the current MPI process and total number of processes
-
-    Returns
-    -------
-    grid : libsharp.healpix_grid
-        libsharp object that includes metadata about HEALPix distributed rings
-    local_pix : np.ndarray
-        integer array of local pixel indices in the current MPI process in RING
-        ordering
-    """
-    nrings = 4 * nside - 1  # four missing pixels
-
-    # ring indices are 1-based
-    ring_indices_emisphere = np.arange(2*nside, dtype=np.int32) + 1
-
-    local_ring_indices = ring_indices_emisphere[rank::n_mpi_processes]
-
-    # to improve performance, simmetric rings north/south need to be in the same rank
-    # therefore we use symmetry to create the full ring indexing
-
-    if local_ring_indices[-1] == 2 * nside:
-        # has equator ring
-        local_ring_indices = np.concatenate(
-          [local_ring_indices[:-1],
-           nrings - local_ring_indices[::-1] + 1]
-        )
-    else:
-        # does not have equator ring
-        local_ring_indices = np.concatenate(
-          [local_ring_indices,
-           nrings - local_ring_indices[::-1] + 1]
-        )
-
-    grid = libsharp.healpix_grid(nside, rings=local_ring_indices)
-
-    # returns start index of the ring and number of pixels
-    startpix, ringpix, _, _, _ = hp.ringinfo(nside, local_ring_indices.astype(np.int64))
-
-    local_npix = grid.local_size()
-    local_pix = expand_pix(startpix, ringpix, local_npix)
-    return grid, local_pix
+from ..map.rings import DistRings
 
 class OpSmoothTest(MPITestCase):
 
@@ -119,8 +50,10 @@ class OpSmoothTest(MPITestCase):
         # this will be performed by a dedicated operator before
         # calling the OpSmooth operator
 
-        self.grid, local_pix = distribute_rings(self.nside, self.comm.rank, self.worldsize)
-        self.data["signal_map"] = self.input_map[:, local_pix]
+        self.dist_rings = DistRings(self.toastcomm.comm_world,
+                            nside = self.nside,
+                            nnz = 3)
+        self.data["signal_map"] = self.input_map[:, self.dist_rings.local_pixels]
 
     def tearDown(self):
         del self.data
@@ -129,10 +62,10 @@ class OpSmoothTest(MPITestCase):
     def test_smooth(self):
         start = MPI.Wtime()
 
-
         # construct the PySM operator.  Pass in information needed by PySM...
         op = OpSmooth(comm=self.comm, signal_map="signal_map",
-                lmax=self.lmax, grid=self.grid, fwhm_deg=self.fwhm_deg, beam=None)
+                lmax=self.lmax, grid=self.dist_rings.libsharp_grid,
+                fwhm_deg=self.fwhm_deg, beam=None)
         op.exec(self.data)
 
         stop = MPI.Wtime()
