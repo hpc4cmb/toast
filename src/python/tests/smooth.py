@@ -18,8 +18,9 @@ from ..tod.sim_tod import *
 from ..tod.sim_det_map import *
 from ..map.pixels import *
 from ..map.rings import DistRings
+from ..map.smooth import LibSharpSmooth
 
-class OpSmoothTest(MPITestCase):
+class LibSharpSmoothTest(MPITestCase):
 
     def setUp(self):
         self.outdir = "toast_test_output"
@@ -63,7 +64,7 @@ class OpSmoothTest(MPITestCase):
         start = MPI.Wtime()
 
         # construct the PySM operator.  Pass in information needed by PySM...
-        op = OpSmooth(comm=self.comm, signal_map="signal_map",
+        op = LibSharpSmooth(comm=self.comm, signal_map="signal_map",
                 lmax=self.lmax, grid=self.dist_rings.libsharp_grid,
                 fwhm_deg=self.fwhm_deg, beam=None)
         op.exec(self.data)
