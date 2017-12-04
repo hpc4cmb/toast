@@ -14,6 +14,8 @@ from ..tod.pointing import *
 from ..tod.sim_tod import *
 from ..tod.sim_det_map import *
 from ..map.pixels import *
+from ..map.rings import DistRings
+from ..map.pysm import PySMSky
 
 
 class OpSimPySMTest(MPITestCase):
@@ -81,7 +83,7 @@ class OpSimPySMTest(MPITestCase):
         del self.data
 
 
-    def test_pysm(self):
+    def test_pysm_local_pix(self):
         start = MPI.Wtime()
 
         npix = 12 * self.nside * self.nside
@@ -107,13 +109,49 @@ class OpSimPySMTest(MPITestCase):
                 "2a": (np.linspace(18, 23, 10), np.ones(10)),
                 "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
-        op = OpSimPySM(local_pixels=local_pixels, nside=self.nside,
+        op = PySMSky(local_pixels=local_pixels, nside=self.nside,
                        pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
         local_map = op.exec(self.data)
 
         # Now we have timestreams in the cache.  We could compare the 
         # timestream values or we could make a binned map and look at those
         # values.
+
+        np.testing.assert_almost_equal(local_map["1a"][0, 0, :3],
+            np.array([121.40114346, 79.86737489, 77.23336053]))
+
+        np.testing.assert_almost_equal(local_map["1b"][0, 2, -3:],
+            np.array([1.57564944, -0.22345616, -3.55604102]))
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
+
+    def test_pysm_distrings(self):
+        start = MPI.Wtime()
+
+        dist_rings = DistRings(self.toastcomm.comm_world,
+                            nside = self.nside,
+                            nnz = 3)
+
+        # construct the PySM operator.  Pass in information needed by PySM...
+
+        pysm_sky_config = {
+            'synchrotron': "s1",
+            'dust': "d8",
+            'freefree': "f1",
+            'cmb': "c1",
+            'ame': "a1",
+        }
+        bandpasses = {
+                "1a": (np.linspace(20, 25, 10), np.ones(10)),
+                "1b": (np.linspace(21, 26, 10), np.ones(10)),
+                "2a": (np.linspace(18, 23, 10), np.ones(10)),
+                "2b": (np.linspace(19, 24, 10), np.ones(10)),
+        }
+        op = PySMSky(local_pixels=dist_rings.local_pixels, nside=self.nside,
+                       pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
+        local_map = op.exec(self.data)
 
         np.testing.assert_almost_equal(local_map["1a"][0, 0, :3],
             np.array([121.40114346, 79.86737489, 77.23336053]))
