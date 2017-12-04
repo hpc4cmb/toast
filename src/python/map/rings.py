@@ -158,3 +158,10 @@ class DistRings(object):
         (numpy.ndarray int64): Array of local pixel indices in RING ordering
         """
         return self._local_pixels
+
+    @property
+    def libsharp_grid(self):
+        """
+        (libsharp grid): Libsharp grid distribution object
+        """
+        return self._libsharp_grid
