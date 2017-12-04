@@ -23,7 +23,8 @@ toastmap_PYTHON = \
 __init__.py \
 pixels.py \
 noise.py \
-rings.py
+rings.py \
+pysm.py
 
 if HAVE_AM_MPI
   toastmap_PYTHON += madam.py
