@@ -149,3 +149,10 @@ class DistRings(object):
         (bool): If True, data is HEALPix NESTED ordering.
         """
         return self._nest
+
+    @property
+    def local_pixels(self):
+        """
+        (numpy.ndarray int64): Array of local pixel indices in RING ordering
+        """
+        return self._local_pixels
