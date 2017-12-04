@@ -127,7 +127,9 @@ TEST_F( sfTest, sqrtlog ) {
 
     sf::rsqrt ( size, rsqin, comp );
     for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( rsqout[i], comp[i] );
+        if(std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
+            EXPECT_DOUBLE_EQ( rsqout[i], comp[i] );
+        }
     }
 
     sf::exp ( size, expin, comp );
@@ -152,7 +154,9 @@ TEST_F( sfTest, fast_sqrtlog ) {
 
     sf::fast_rsqrt ( size, rsqin, comp );
     for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( rsqout[i], comp[i] );
+        if(std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
+            EXPECT_FLOAT_EQ( rsqout[i], comp[i] );
+        }
     }
 
     sf::fast_exp ( size, expin, comp );

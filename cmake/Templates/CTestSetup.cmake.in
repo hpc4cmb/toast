@@ -30,6 +30,7 @@ set(MODEL Continuous)
 set(CTEST_BUILD_NAME            "${CTEST_BRANCH}-${osname}-${cpu}-${osrel}-${CTEST_COMPILER}-${CTEST_COMPILER_VERSION}-${MODEL}")
 set(CTEST_SOURCE_DIRECTORY      "${CTEST_DASHBOARD_ROOT}/toast")
 set(CTEST_BINARY_DIRECTORY      "${CTEST_DASHBOARD_ROOT}/build-${CTEST_BUILD_NAME}")
+set(CTEST_INSTALL_DIRECTORY     "${CTEST_DASHBOARD_ROOT}/install-${CTEST_BUILD_NAME}")
 set(OPTION_BUILD                "-j${CTEST_PROCESSOR_COUNT}")
 
 if(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
@@ -38,9 +39,9 @@ else(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
     set(CTEST_CHECKOUT_COMMAND      "${CTEST_GIT_COMMAND} clone -b ${CTEST_BRANCH} --recurse-submodules https://github.com/hpc4cmb/toast ${CTEST_SOURCE_DIRECTORY}")
 endif(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
 set(CTEST_UPDATE_COMMAND        "${CTEST_GIT_COMMAND}")
-set(CTEST_CONFIGURATION_TYPE    "Release")
-set(CTEST_CONFIGURE_COMMAND     "${CTEST_CMAKE_COMMAND} ${CTEST_CONFIG_OPTIONS} -DBUILD_TESTING=OFF ${CTEST_SOURCE_DIRECTORY} -G ${CTEST_GENERATOR}")
-set(CTEST_BUILD_COMMAND         "${CTEST_MAKE_COMMAND} ${OPTION_BUILD}")
+set(CTEST_CONFIGURATION_TYPE    "@CMAKE_BUILD_TYPE@")
+set(CTEST_CONFIGURE_COMMAND     "${CTEST_CMAKE_COMMAND} ${CTEST_CONFIG_OPTIONS} -DBUILD_TESTING=ON -DDASHBOARD_MODE=ON -DCMAKE_INSTALL_PREFIX=${CTEST_INSTALL_DIRECTORY} ${CTEST_SOURCE_DIRECTORY} -Wno-dev -G ${CTEST_GENERATOR}")
+set(CTEST_BUILD_COMMAND         "${CTEST_MAKE_COMMAND} ${OPTION_BUILD} install")
 
 # ---------------------------------------------------------------------------- #
 # -- Settings
@@ -50,7 +51,17 @@ set(CTEST_BUILD_COMMAND         "${CTEST_MAKE_COMMAND} ${OPTION_BUILD}")
 set(CTEST_TIMEOUT           "7200")
 
 ## -- Set output to english
-set( $ENV{LC_MESSAGES}      "en_EN" )
+set(ENV{LC_MESSAGES}      "en_EN" )
+
+# set environment paths
+set(ENV{PATH} "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_BINDIR@:$ENV{PATH}")
+if(APPLE)
+    set(ENV{DYLD_LIBRARY_PATH} "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_LIBDIR@:$ENV{DYLD_LIBRARY_PATH}")
+else(APPLE)
+    set(ENV{LD_LIBRARY_PATH} "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_LIBDIR@:$ENV{LD_LIBRARY_PATH}")
+endif(APPLE)
+get_filename_component(PYDIR "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_PYTHONDIR@" PATH)
+set(ENV{PYTHONPATH} "${PYDIR}:$ENV{PYTHONPATH}")
 
 # ---------------------------------------------------------------------------- #
 # -- Configure file
@@ -63,7 +74,7 @@ configure_file(CTestConfig.cmake    ${CTEST_BINARY_DIRECTORY}/CTestConfig.cmake)
 configure_file(CTestCustom.cmake    ${CTEST_BINARY_DIRECTORY}/CTestCustom.cmake)
 
 ## -- CTest Custom
-configure_file(CTestTestfile.cmake  ${CTEST_BINARY_DIRECTORY}/CTestTestfile.cmake)
+#configure_file(CTestTestfile.cmake  ${CTEST_BINARY_DIRECTORY}/CTestTestfile.cmake)
 
 # ---------------------------------------------------------------------------- #
 # -- CTest Start
