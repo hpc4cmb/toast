@@ -1,6 +1,6 @@
 #!/bin/bash
 
-outdir="out_@@size@@_ground_simple"
+outdir="out_@SIZE@_ground"
 mkdir -p "${outdir}"
 
 # This script assumes that you have toast and all dependencies
@@ -8,38 +8,38 @@ mkdir -p "${outdir}"
 
 # Generate the focalplane file if it does not already exist.
 
-detpix=@@detpix@@
+detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
-fpparfile="@@topdir@@/params/ground/focalplane.par"
+fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     toast_fake_focalplane.py @$fpparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-	--out "${outdir}/fp" --minpix $detpix
+        --out "${outdir}/fp" --minpix $detpix
 fi
 
 # Generate the schedule file if it does not already exist.
 
-schparfile="@@topdir@@/params/ground/schedule.par"
+schparfile="@TOPDIR@/params/ground/schedule.par"
 
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     toast_ground_schedule.py @$schparfile \
-	 --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
-         --out "${schedulefile}" --patch @@patch@@ \
-         --stop @@schedule_stop@@
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
+         --out "${schedulefile}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
 fi
 
 # The executable script
 
-ex=$(which toast_ground_sim_simple.py)
+ex=$(which toast_ground_sim.py)
 echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim_simple.par"
+parfile="@TOPDIR@/params/ground/ground_sim.par"
 
 # Data distribution parameters
 
@@ -50,6 +50,10 @@ com="${ex} @${parfile} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+--atm_cache ${outdir}/atm_cache \
+--atm_xstep @CELLSIZE@ \
+--atm_ystep @CELLSIZE@ \
+--atm_zstep @CELLSIZE@ \
 "
 
 # Use 2 processes, each with 2 threads

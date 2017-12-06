@@ -1,57 +1,34 @@
 #!/bin/bash
 
-# get the absolute path to the directory with this script
-pushd $(dirname $0) > /dev/null
-topdir=$(pwd -P)
-popd > /dev/null
+set -o errexit
 
-for type in satellite ground ground_simple; do
-    for size in tiny; do
-        template="${type}_shell_template"
-        sizefile="${type}.${size}"
-        outfile="${size}_${type}_shell.sh"
+# get the absolute path to the directory with this script
+topdir=$(realpath $(dirname ${BASH_SOURCE[0]}))
+echo "Running in top directory: ${topdir}..."
+
+if ! eval command -v cmake &> /dev/null ; then
+    module load cmake
+fi
+
+: ${TYPES:="satellite ground ground_simple"}
+# don't allow customization
+SIZES="tiny"
+
+for type in ${TYPES}; do
+    for size in ${SIZES}; do
+        template="${topdir}/templates/${type}_shell.in"
+        sizefile="${topdir}/templates/params/${type}.${size}"
+        outfile="${topdir}/${size}_${type}_shell.sh"
 
         echo "Generating ${outfile}"
 
-        # Create list of substitutions
-
-        confsub=""
-
-        while IFS='' read -r line || [[ -n "${line}" ]]; do
-            # is this line commented?
-            comment=$(echo "${line}" | cut -c 1)
-            if [ "${comment}" != "#" ]; then
-
-                check=$(echo "${line}" | sed -e "s#.*=.*#=#")
-
-                if [ "x${check}" = "x=" ]; then
-                    # get the variable and its value
-                    var=$(echo ${line} | sed -e "s#\([^=]*\)=.*#\1#" | awk '{print $1}')
-                    val=$(echo ${line} | sed -e "s#[^=]*= *\(.*\)#\1#")
-                    # add to list of substitutions
-                    confsub="${confsub} -e 's#@@${var}@@#${val}#g'"
-                fi
-            fi
-
-        done < "${sizefile}"
-
-        # We add these predefined matches at the end- so that the config
-        # files can also use these.
-
-        confsub="${confsub} -e 's#@@size@@#${size}#g'"
-        confsub="${confsub} -e 's#@@topdir@@#${topdir}#g'"
-
-        #echo "${confsub}"
-
-        # Process the template
-
-        rm -f "${outfile}"
-
-        while IFS='' read -r line || [[ -n "${line}" ]]; do
-            echo "${line}" | eval sed ${confsub} >> "${outfile}"
-        done < "${template}"
-
-        chmod +x "${outfile}"
-
+        cmake -DINFILE=${template} -DOUTFILE=${outfile} \
+            -DSIZEFILE=${sizefile} \
+            -DTOPDIR="${topdir}" -DTYPE=${type} \
+            -DSIZE=${size} $@ \
+            -P ${topdir}/templates/config.cmake
+            
+        chmod 755 ${outfile}
     done
 done
+

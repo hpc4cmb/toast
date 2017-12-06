@@ -1,12 +1,14 @@
 #!/bin/bash
 
-#SBATCH --partition=@@queue@@
-@@constraint@@
-#SBATCH --account=mp107
-#SBATCH --nodes=@@nodes@@
-#SBATCH --time=@@time@@
-#SBATCH --job-name=@@size@@-ground
-#SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
+#SBATCH --partition=@QUEUE@
+@CONSTRAINT@
+#SBATCH --account=@ACCOUNT@
+#SBATCH --nodes=@NODES@
+#SBATCH --time=@TIME@
+#SBATCH --job-name=@SIZE@-ground
+#SBATCH --output=out_@SIZE@_ground_simple_@MACHINE@_%j.log
+
+set -o errexit
 
 echo Starting slurm script at $(date)
 
@@ -21,30 +23,30 @@ echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
 echo ""
 
-pstr=@@machine@@
-outdir="out_@@size@@_ground_simple_${pstr}"
+pstr=@MACHINE@
+outdir="out_@SIZE@_ground_simple_${pstr}"
 mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
 # loaded the toast module for the correct machine / configuration.
 
 # This should be the same as the --nodes option above
-nodes=@@nodes@@
+nodes=@NODES@
 
 # How many processes are we running per node?  Handle
 # the case of a very small simulation.
-if [ "x@@tiny@@" = "xyes" ]; then
+if [ "x@TINY@" = "xyes" ]; then
     node_proc=1
 else
-    node_proc=@@nodeprocs@@
+    node_proc=@NODEPROCS@
 fi
 
 # Generate the focalplane file if it does not already exist.
 
-detpix=@@detpix@@
+detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
-fpparfile="@@topdir@@/params/ground/focalplane.par"
+fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
@@ -56,7 +58,7 @@ fi
 
 # Generate the schedule file if it does not already exist.
 
-schparfile="@@topdir@@/params/ground/schedule.par"
+schparfile="@TOPDIR@/params/ground/schedule.par"
 
 schedulefile="${outdir}/schedule.txt"
 
@@ -65,8 +67,8 @@ if [ ! -e "${schedulefile}" ]; then
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
-         --out "${schedulefile}" --patch @@patch@@ \
-         --stop @@schedule_stop@@
+         --out "${schedulefile}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
 fi
 
 # The executable script
@@ -76,11 +78,11 @@ echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim_simple.par"
+parfile="@TOPDIR@/params/ground/ground_sim_simple.par"
 
 # Data distribution parameters
 
-groupsize=$(( @@nodes_per_group@@ * node_proc ))
+groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 
 # The commandline
 
@@ -95,10 +97,10 @@ com="${ex} @${parfile} \
 #--- Hardware configuration (no need to change) ----
 
 # Hyperthread CPUs per physical core
-cpu_per_core=@@hyperthread@@
+cpu_per_core=@HYPERTHREAD@
 
 # Physical cores we are using
-node_cores=@@nodecores@@
+node_cores=@NODECORES@
 
 node_thread=$(( node_cores / node_proc ))
 node_depth=$(( cpu_per_core * node_thread ))
@@ -119,3 +121,4 @@ echo "${run} ${com}"
 eval ${run} ${com} > "${outdir}/log" 2>&1
 
 echo End slurm script at $(date)
+

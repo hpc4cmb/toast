@@ -1,6 +1,0 @@
-queue = debug
-nodes = 20
-time = 00:30:00
-detpix = 19
-nobs = 157
-groupnodes = 1
