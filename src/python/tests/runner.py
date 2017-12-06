@@ -39,7 +39,10 @@ from . import ops_madam as testopsmadam
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
 from . import binned as testbinned
-from . import tidas as testtidas
+
+from ..tod import tidas_available
+if tidas_available:
+    from . import tidas as testtidas
 
 
 def test(name=None):
@@ -80,7 +83,6 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testpsdmath) )
         suite.addTest( loader.loadTestsFromModule(testintervals) )
         suite.addTest( loader.loadTestsFromModule(testopspmat) )
-        suite.addTest( loader.loadTestsFromModule(testtidas) )
         suite.addTest( loader.loadTestsFromModule(testcov) )
         suite.addTest( loader.loadTestsFromModule(testopsdipole) )
         suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
@@ -92,9 +94,15 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
+        if tidas_available:
+            suite.addTest( loader.loadTestsFromModule(testtidas) )
     elif name != "ctoast":
-        modname = "toast.tests.{}".format(name)
-        suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
+        if (name == "tidas") and (not tidas_available):
+            print("Cannot run TIDAS tests- package not available")
+            return
+        else:
+            modname = "toast.tests.{}".format(name)
+            suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
 
     with warnings.catch_warnings(record=True) as w:
         # Cause all toast warnings to be shown.

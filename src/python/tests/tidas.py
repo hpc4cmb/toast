@@ -19,12 +19,11 @@ from ..dist import *
 
 from .. import qarray as qa
 
-from ..tod import tidas_available
 from ..tod import Interval
 
-if tidas_available:
-    from tidas.mpi_volume import MPIVolume
-    from ..tod import tidas as tt
+# This file will only be imported if TIDAS is already available
+from tidas.mpi_volume import MPIVolume
+from ..tod import tidas as tt
 
 
 class TidasTest(MPITestCase):
@@ -71,10 +70,6 @@ class TidasTest(MPITestCase):
         self.detquats = {}
         for d in self.dets:
             self.detquats[d] = np.array([0,0,0,1], dtype=np.float64)
-
-        # Skip the rest of the setup if we don't have tidas.
-        if not tidas_available:
-            return
 
         # Group schema
         self.schm = tt.create_tidas_schema(self.dets, "float64", "volts")
@@ -367,7 +362,6 @@ class TidasTest(MPITestCase):
         return
 
 
-    @unittest.skipIf(not tidas_available, "TIDAS not found")
     def test_io(self):
         start = MPI.Wtime()
 
@@ -379,7 +373,6 @@ class TidasTest(MPITestCase):
         #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
 
 
-    @unittest.skipIf(not tidas_available, "TIDAS not found")
     def test_export(self):
         start = MPI.Wtime()
 

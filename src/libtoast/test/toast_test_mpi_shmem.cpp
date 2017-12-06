@@ -14,10 +14,10 @@ using namespace std;
 using namespace toast;
 
 
-const size_t mpiShmemTest::n = 100;
+const size_t TOASTmpiShmemTest::n = 100;
 
 
-TEST_F( mpiShmemTest, instantiate ) {
+TEST_F( TOASTmpiShmemTest, instantiate ) {
 
     toast::mpi_shmem::mpi_shmem<double> shmem;
     shmem.allocate( n );
@@ -32,7 +32,7 @@ TEST_F( mpiShmemTest, instantiate ) {
 
 }
 
-TEST_F( mpiShmemTest, access ) {
+TEST_F( TOASTmpiShmemTest, access ) {
 
     toast::mpi_shmem::mpi_shmem<double> shmem( n );
 

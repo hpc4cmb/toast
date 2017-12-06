@@ -10,6 +10,7 @@ a BSD-style license that can be found in the LICENSE file.
 
 int toast::test::runner ( int argc, char *argv[] ) {
 
+    ::testing::GTEST_FLAG(filter) = std::string("TOAST*");
     ::testing::InitGoogleTest ( &argc, argv );
 
     toast::init ( argc, argv );

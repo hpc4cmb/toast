@@ -14,7 +14,7 @@ using namespace std;
 using namespace toast;
 
 
-TEST_F( healpixTest, pixelops ) {
+TEST_F( TOASThealpixTest, pixelops ) {
 
     // These numbers were generated with the included script.
 

@@ -14,10 +14,10 @@ using namespace std;
 using namespace toast;
 
 
-const int sfTest::size = 1000;
+const int TOASTsfTest::size = 1000;
 
 
-void sfTest::SetUp () {
+void TOASTsfTest::SetUp () {
 
     angin = toast::mem::simd_array<double>(size);
     sinout = toast::mem::simd_array<double>(size);
@@ -57,13 +57,13 @@ void sfTest::SetUp () {
 }
 
 
-void sfTest::TearDown () {
+void TOASTsfTest::TearDown () {
 
     return;
 }
 
 
-TEST_F( sfTest, trig ) {
+TEST_F( TOASTsfTest, trig ) {
     double comp1[size];
     double comp2[size];
 
@@ -90,7 +90,7 @@ TEST_F( sfTest, trig ) {
 }
 
 
-TEST_F( sfTest, fasttrig ) {
+TEST_F( TOASTsfTest, fasttrig ) {
     double comp1[size];
     double comp2[size];
 
@@ -117,7 +117,7 @@ TEST_F( sfTest, fasttrig ) {
 }
 
 
-TEST_F( sfTest, sqrtlog ) {
+TEST_F( TOASTsfTest, sqrtlog ) {
     double comp[size];
 
     sf::sqrt ( size, sqin, comp );
@@ -142,7 +142,7 @@ TEST_F( sfTest, sqrtlog ) {
 }
 
 
-TEST_F( sfTest, fast_sqrtlog ) {
+TEST_F( TOASTsfTest, fast_sqrtlog ) {
     double comp[size];
 
     sf::fast_sqrt ( size, sqin, comp );
@@ -167,7 +167,7 @@ TEST_F( sfTest, fast_sqrtlog ) {
 }
 
 
-TEST_F( sfTest, fast_erfinv ) {
+TEST_F( TOASTsfTest, fast_erfinv ) {
     double in[10] = {
         -9.990000e-01,
         -7.770000e-01,
