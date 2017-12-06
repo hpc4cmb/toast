@@ -16,25 +16,25 @@ using namespace std;
 using namespace toast;
 
 
-const double qarrayTest::q1[] = { 0.50487417,  0.61426059,  0.60118994,  0.07972857 };
-const double qarrayTest::q1inv[] = { -0.50487417,  -0.61426059,  -0.60118994,  0.07972857 };
-const double qarrayTest::q2[] = { 0.43561544,  0.33647027,  0.40417115,  0.73052901 };
-const double qarrayTest::qtonormalize[] = { 1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0 };
-const double qarrayTest::qnormalized[] = { 0.18257419, 0.36514837, 0.54772256, 0.73029674, 0.27216553, 0.40824829, 0.54433105, 0.68041382 };
-const double qarrayTest::vec[] = { 0.57734543, 0.30271255, 0.75831218 };
-const double qarrayTest::vec2[] = { 0.57734543, 8.30271255, 5.75831218, 1.57734543, 3.30271255, 0.75831218 };
-const double qarrayTest::qeasy[] = { 0.3, 0.3, 0.1, 0.9, 0.3, 0.3, 0.1, 0.9 };
-const double qarrayTest::mult_result[] = { 0.44954009, 0.53339352, 0.37370443, -0.61135101 };
-const double qarrayTest::rot_by_q1[] = { 0.4176698, 0.84203849, 0.34135482 };
-const double qarrayTest::rot_by_q2[] = { 0.8077876, 0.3227185, 0.49328689 };
+const double TOASTqarrayTest::q1[] = { 0.50487417,  0.61426059,  0.60118994,  0.07972857 };
+const double TOASTqarrayTest::q1inv[] = { -0.50487417,  -0.61426059,  -0.60118994,  0.07972857 };
+const double TOASTqarrayTest::q2[] = { 0.43561544,  0.33647027,  0.40417115,  0.73052901 };
+const double TOASTqarrayTest::qtonormalize[] = { 1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0 };
+const double TOASTqarrayTest::qnormalized[] = { 0.18257419, 0.36514837, 0.54772256, 0.73029674, 0.27216553, 0.40824829, 0.54433105, 0.68041382 };
+const double TOASTqarrayTest::vec[] = { 0.57734543, 0.30271255, 0.75831218 };
+const double TOASTqarrayTest::vec2[] = { 0.57734543, 8.30271255, 5.75831218, 1.57734543, 3.30271255, 0.75831218 };
+const double TOASTqarrayTest::qeasy[] = { 0.3, 0.3, 0.1, 0.9, 0.3, 0.3, 0.1, 0.9 };
+const double TOASTqarrayTest::mult_result[] = { 0.44954009, 0.53339352, 0.37370443, -0.61135101 };
+const double TOASTqarrayTest::rot_by_q1[] = { 0.4176698, 0.84203849, 0.34135482 };
+const double TOASTqarrayTest::rot_by_q2[] = { 0.8077876, 0.3227185, 0.49328689 };
 
 
-void qarrayTest::SetUp () {
+void TOASTqarrayTest::SetUp () {
     return;
 }
 
 
-TEST_F( qarrayTest, arraylist_dot1 ) {
+TEST_F( TOASTqarrayTest, arraylist_dot1 ) {
     double check;
     double result;
     double pone[3];
@@ -51,7 +51,7 @@ TEST_F( qarrayTest, arraylist_dot1 ) {
 }
 
 
-TEST_F( qarrayTest, arraylist_dot2 ) {
+TEST_F( TOASTqarrayTest, arraylist_dot2 ) {
     double check[2];
     double result[2];
     double pone[6];
@@ -72,7 +72,7 @@ TEST_F( qarrayTest, arraylist_dot2 ) {
 }
 
 
-TEST_F( qarrayTest, inv ) {
+TEST_F( TOASTqarrayTest, inv ) {
     double result[4];
 
     for ( size_t i = 0; i < 4; ++i ) {
@@ -87,7 +87,7 @@ TEST_F( qarrayTest, inv ) {
 }
 
 
-TEST_F( qarrayTest, norm ) {
+TEST_F( TOASTqarrayTest, norm ) {
     double result[4];
 
     qarray::normalize ( 1, 4, 4, qtonormalize, result );
@@ -98,7 +98,7 @@ TEST_F( qarrayTest, norm ) {
 }
 
 
-TEST_F( qarrayTest, mult ) {
+TEST_F( TOASTqarrayTest, mult ) {
     double result[4];
 
     qarray::mult ( 1, q1, 1, q2, result );
@@ -109,7 +109,7 @@ TEST_F( qarrayTest, mult ) {
 }
 
 
-TEST_F( qarrayTest, multarray ) {
+TEST_F( TOASTqarrayTest, multarray ) {
     size_t n = 3;
     double in1[4*n];
     double in2[4*n];
@@ -146,7 +146,7 @@ TEST_F( qarrayTest, multarray ) {
 }
 
 
-TEST_F( qarrayTest, rot1 ) {
+TEST_F( TOASTqarrayTest, rot1 ) {
     double result[3];
 
     qarray::rotate ( 1, q1, 1, vec, result );
@@ -157,7 +157,7 @@ TEST_F( qarrayTest, rot1 ) {
 }
 
 
-TEST_F( qarrayTest, rotarray ) {
+TEST_F( TOASTqarrayTest, rotarray ) {
     size_t n = 2;
     double qin[4*n];
     double vin[3*n];
@@ -183,7 +183,7 @@ TEST_F( qarrayTest, rotarray ) {
 }
 
 
-TEST_F( qarrayTest, slerp ) {
+TEST_F( TOASTqarrayTest, slerp ) {
     size_t n = 2;
     size_t ninterp = 4;
 
@@ -215,7 +215,7 @@ TEST_F( qarrayTest, slerp ) {
 }
 
 
-TEST_F( qarrayTest, rotation ) {
+TEST_F( TOASTqarrayTest, rotation ) {
     double result[4];
     double axis[3] = { 0.0, 0.0, 1.0 };
     double ang = PI * 30.0 / 180.0;
@@ -229,7 +229,7 @@ TEST_F( qarrayTest, rotation ) {
 }
 
 
-TEST_F( qarrayTest, toaxisangle ) {
+TEST_F( TOASTqarrayTest, toaxisangle ) {
     double in[4] = { 0.0, 0.0, ::sin(15.0 * PI / 180.0), ::cos(15.0 * PI / 180.0) };
     double axis[3];
     double ang;
@@ -245,7 +245,7 @@ TEST_F( qarrayTest, toaxisangle ) {
 }
 
 
-TEST_F( qarrayTest, exp ) {
+TEST_F( TOASTqarrayTest, exp ) {
     double result[8];
     double check[8] = { 0.71473568, 0.71473568, 0.23824523, 2.22961712, 0.71473568, 0.71473568, 0.23824523, 2.22961712 };
 
@@ -257,7 +257,7 @@ TEST_F( qarrayTest, exp ) {
 }
 
 
-TEST_F( qarrayTest, ln ) {
+TEST_F( TOASTqarrayTest, ln ) {
     double result[8];
     double check[8] = { 0.31041794, 0.31041794, 0.10347265, 0.0, 0.31041794, 0.31041794, 0.10347265, 0.0 };
 
@@ -269,7 +269,7 @@ TEST_F( qarrayTest, ln ) {
 }
 
 
-TEST_F( qarrayTest, pow ) {
+TEST_F( TOASTqarrayTest, pow ) {
     double p[2];
     double result[8];
     double check1[8] = { 0.672, 0.672, 0.224, 0.216, 0.672, 0.672, 0.224, 0.216 };
@@ -293,7 +293,7 @@ TEST_F( qarrayTest, pow ) {
 }
 
 
-TEST_F( qarrayTest, torotmat ) {
+TEST_F( TOASTqarrayTest, torotmat ) {
     double result[9];
     double check[9] = { 8.00000000e-01, -2.77555756e-17, 6.00000000e-01, 3.60000000e-01, 8.00000000e-01, -4.80000000e-01, -4.80000000e-01, 6.00000000e-01, 6.40000000e-01 };
 
@@ -307,7 +307,7 @@ TEST_F( qarrayTest, torotmat ) {
 }
 
 
-TEST_F( qarrayTest, fromrotmat ) {
+TEST_F( TOASTqarrayTest, fromrotmat ) {
     double result[9];
     double qresult[4];
 
@@ -320,7 +320,7 @@ TEST_F( qarrayTest, fromrotmat ) {
 }
 
 
-TEST_F( qarrayTest, fromvectors ) {
+TEST_F( TOASTqarrayTest, fromvectors ) {
     double result[4];
     double check[4] = { 0.0, 0.0, ::sin(15.0 * PI / 180.0), ::cos(15.0 * PI / 180.0) };
     double ang = 30.0 * PI / 180.0;
@@ -335,7 +335,7 @@ TEST_F( qarrayTest, fromvectors ) {
 }
 
 
-TEST_F( qarrayTest, thetaphipa ) {
+TEST_F( TOASTqarrayTest, thetaphipa ) {
     size_t n_theta = 5;
     size_t n_phi = 5;
     size_t n = n_theta * n_phi;

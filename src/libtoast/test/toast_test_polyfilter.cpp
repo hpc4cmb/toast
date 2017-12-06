@@ -14,11 +14,11 @@ using namespace std;
 using namespace toast;
 
 
-const size_t polyfilterTest::order = 3;
-const size_t polyfilterTest::n = 1000;
+const size_t TOASTpolyfilterTest::order = 3;
+const size_t TOASTpolyfilterTest::n = 1000;
 
 
-TEST_F( polyfilterTest, filter ) {
+TEST_F( TOASTpolyfilterTest, filter ) {
 
     vector<double> signal1(n);
     vector<double> signal2(n);
@@ -76,7 +76,7 @@ TEST_F( polyfilterTest, filter ) {
 }
 
 
-TEST_F( polyfilterTest, filter_with_flags ) {
+TEST_F( TOASTpolyfilterTest, filter_with_flags ) {
 
     vector<double> signal1(n);
     vector<double> signal2(n);

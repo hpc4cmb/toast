@@ -80,7 +80,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testpsdmath) )
         suite.addTest( loader.loadTestsFromModule(testintervals) )
         suite.addTest( loader.loadTestsFromModule(testopspmat) )
-        suite.addTest( loader.loadTestsFromModule(testtidas) )
+        #suite.addTest( loader.loadTestsFromModule(testtidas) )
         suite.addTest( loader.loadTestsFromModule(testcov) )
         suite.addTest( loader.loadTestsFromModule(testopsdipole) )
         suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
