@@ -27,13 +27,10 @@ In order to load a full python-3.5 stack, and also all dependencies needed by to
 Install TOAST
 ------------------
 
-If you are using a stable release of TOAST, there may already be an installation
-you can use.  Do::
+The TOAST codebase is evolving daily, therefore we do not maintain a `toast` module.
+You have to install TOAST yourself from source.
 
-    %> module avail toast
-
-to see if something is already built meets your needs.  If not, then you will have
-to install TOAST yourself.  When installing *any* software at NERSC, we need to 
+When installing *any* software at NERSC, we need to 
 keep several things in mind:
 
     *  The home directories are small.
@@ -62,29 +59,29 @@ Now we will create a small shell function that loads this location into our sear
 paths for executables and python packages.  Add this function to ~/.bashrc.ext and
 you can rename it to whatever you like::
 
-    toast () {
-        pref=${SCRATCH}/software/toast
-        export PATH=${pref}/bin:${PATH}
-        export PYTHONPATH=${pref}/lib/python3.5/site-packages:${PYTHONPATH}
+    loadtoast () {
+        export PREFIX=${SCRATCH}/software/toast
+        export PATH=$PREFIX/bin:${PATH}
+        export PYTHONPATH=$PREFIX/lib/python3.5/site-packages:${PYTHONPATH}
     }
 
 Log out and back in to make this function visible to your shell environment.
 Now checkout the toast source in your home directory somewhere::
 
     %> cd
-    %> git clone https://github.com/hpc4cmb/toast.git
+    %> git clone https://github.com/hpc4cmb/toast
 
 Then configure and build the software.  Unless you know what you are doing, you
 should probably use the platform config example for the machine you are building
-for::
+for, consider that the `toast-deps` environment requires Intel compilers::
 
     %> cd toast
     %> ./autogen.sh
-    %> ./platforms/edison_gnu_mkl.sh --prefix=${SCRATCH}/software/toast
+    %> ./platforms/edison-intel.sh --prefix=${SCRATCH}/software/toast
 
 Now we can run our function to load this installation into our environment::
 
-    %> toast
+    %> loadtoast
 
 On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to 
 run our unittests, we first get an interactive compute node::
