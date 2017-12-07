@@ -1,5 +1,5 @@
 
-add_option(DASHBOARD_MODE "Internally used to skip generation of CDash files" OFF)
+add_option(DASHBOARD_MODE "Internally used to skip generation of CDash files" OFF NO_FEATURE)
 
 if(NOT DASHBOARD_MODE)
     add_option(USE_LOCAL_FOR_CTEST "Use the local source tree for CTest/CDash" OFF)
@@ -77,8 +77,8 @@ if(NOT DASHBOARD_MODE)
     include(CTest)
     
     ## -- CTest Setup
-    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestSetup.cmake.in
-        ${CMAKE_BINARY_DIR}/CTestSetup.cmake @ONLY)
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CDashExec.cmake.in
+        ${CMAKE_BINARY_DIR}/CDashExec.cmake @ONLY)
     
     ## -- CTest Custom
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestCustom.cmake.in
@@ -92,13 +92,24 @@ endif(NOT DASHBOARD_MODE)
 # ------------------------------------------------------------------------ #
 ENABLE_TESTING()
 
-add_test(NAME toast_test
+add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND toast_test)
+set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
 
-add_test(NAME pytoast_test
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND python -c "import toast ; toast.test()")
+set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")
+FILE(GLOB _PYTHON_TEST_FILES "${_PYDIR}/*.py")
+LIST(REMOVE_ITEM _PYTHON_TEST_FILES ${_PYDIR}/__init__.py ${_PYDIR}/runner.py)
+set(PYTHON_TEST_FILES )
+foreach(_FILE ${_PYTHON_TEST_FILES})
+    get_filename_component(_FILE_NE "${_FILE}" NAME_WE)
+    list(APPEND PYTHON_TEST_FILES "${_FILE_NE}")
+endforeach(_FILE ${_PYTHON_TEST_FILES})
 
-set_tests_properties(toast_test   PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
-set_tests_properties(pytoast_test PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
+foreach(_test_ext ${PYTHON_TEST_FILES})
+    set(_test_name pyc_toast_test_${_test_ext})
+    add_test(NAME ${_test_name}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMAND python -c "import toast ; toast.test('${_test_ext}')")    
+    set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
+endforeach(_test_ext ${PYTHON_TEST_FILES})

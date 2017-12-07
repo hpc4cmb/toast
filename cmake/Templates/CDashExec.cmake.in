@@ -73,9 +73,6 @@ configure_file(CTestConfig.cmake    ${CTEST_BINARY_DIRECTORY}/CTestConfig.cmake)
 ## -- CTest Custom
 configure_file(CTestCustom.cmake    ${CTEST_BINARY_DIRECTORY}/CTestCustom.cmake)
 
-## -- CTest Custom
-#configure_file(CTestTestfile.cmake  ${CTEST_BINARY_DIRECTORY}/CTestTestfile.cmake)
-
 # ---------------------------------------------------------------------------- #
 # -- CTest Start
 # ---------------------------------------------------------------------------- #
