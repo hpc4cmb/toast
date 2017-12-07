@@ -16,9 +16,14 @@ proc ModulesHelp { } {
   puts stderr ""
 }
 
-conflict toastdeps
+conflict toast-deps
 
 @modload@
+
+# altd is evil and causes random job hangs
+if [ is-loaded altd ] {
+  module unload altd
+}
 
 # This is set by OS python and gives us problems.
 unsetenv PYTHONSTARTUP
