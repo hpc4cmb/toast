@@ -30,7 +30,7 @@ Install TOAST
 The TOAST codebase is evolving daily, therefore we do not maintain a `toast` module.
 You have to install TOAST yourself from source.
 
-When installing *any* software at NERSC, we need to 
+When installing *any* software at NERSC, we need to
 keep several things in mind:
 
     *  The home directories are small.
@@ -47,7 +47,7 @@ So unfortunately there is no location which has good performance and also
 persistent file storage.  For this example, we will install software to scratch
 and assume that we will be using the software frequently enough that it will never
 be purged.  If you have not used the tools for a month or so, you should probably
-reinstall just to be sure that everything is in place.  
+reinstall just to be sure that everything is in place.
 
 First, we pick a location to install our software.  For this example, we will
 be installing to a "software" directory in our scratch space.  First make sure
@@ -83,7 +83,7 @@ Now we can run our function to load this installation into our environment::
 
     %> loadtoast
 
-On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to 
+On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to
 run our unittests, we first get an interactive compute node::
 
     %> salloc
