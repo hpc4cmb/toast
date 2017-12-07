@@ -19,7 +19,7 @@ You can safely put the above line in your ~/.bashrc.ext inside the sections for 
 Load Dependencies
 --------------------
 
-In order to load a full python-3.5 stack, and also all dependencies needed by toast, do::
+In order to load a full python-3.6 stack, and also all dependencies needed by toast, do::
 
     %> module load toast-deps
 
@@ -62,7 +62,7 @@ you can rename it to whatever you like::
     loadtoast () {
         export PREFIX=${SCRATCH}/software/toast
         export PATH=$PREFIX/bin:${PATH}
-        export PYTHONPATH=$PREFIX/lib/python3.5/site-packages:${PYTHONPATH}
+        export PYTHONPATH=$PREFIX/lib/python3.6/site-packages:${PYTHONPATH}
     }
 
 Log out and back in to make this function visible to your shell environment.
