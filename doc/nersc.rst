@@ -11,7 +11,7 @@ Module Files
 
 To get access to the needed module files, add the machine-specific module file location to your search path::
 
-    %> module use /global/common/${NERSC_HOST}/contrib/hpcosmo/modulefiles
+    %> module use /global/common/software/cmb/${NERSC_HOST}/modulefiles
 
 You can safely put the above line in your ~/.bashrc.ext inside the sections for edison and cori.
 
