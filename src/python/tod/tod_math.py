@@ -324,34 +324,13 @@ class OpCacheCopy(Operator):
         comm = data.comm
 
         for obs in data.obs:
-
             tod = obs['tod']
-
             for det in tod.local_dets:
-
-                # if the cache object exists, copy it
-
-                inname = "{}_{}".format(self._in, det)
+                inref = tod.local_signal(det, self._in)
                 outname = "{}_{}".format(self._out, det)
-
-                inref = None
-                if tod.cache.exists(inname):
-                    inref = tod.cache.reference(inname)
-                elif self._force:
-                    inref = np.zeros(tod.local_samples[1])
-
-                if inref is not None:
-                    outref = None
-                    if tod.cache.exists(outname):
-                        outref = tod.cache.reference(outname)
-                    else:
-                        outref = tod.cache.create(outname, np.float64,
-                                    (tod.local_samples[1],))
-
-                    outref[:] = inref[:]
-
-                    del outref
-                    del inref
+                outref = tod.cache.put(outname, inref, replace=self._force)
+                del outref
+                del inref
 
         return
 

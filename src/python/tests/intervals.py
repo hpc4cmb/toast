@@ -35,7 +35,8 @@ class IntervalTest(MPITestCase):
     def test_regular(self):
         start = MPI.Wtime()
         
-        intrvls = regular_intervals(self.nint, self.start, self.first, self.rate, self.duration, self.gap)
+        intrvls = regular_intervals(self.nint, self.start, self.first,
+                                    self.rate, self.duration, self.gap)
 
         goodsamp = self.nint * ( int(0.5 + self.duration * self.rate) + 1 )
 

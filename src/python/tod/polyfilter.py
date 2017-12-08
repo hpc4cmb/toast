@@ -37,11 +37,13 @@ class OpPolyFilter(Operator):
            based on the detector flags.
         poly_flag_mask (byte):  Bitmask to use when adding flags based
            on polynomial filter failures.
+        intervals (str):  Name of the valid intervals in observation.
     """
 
-    def __init__(self, order=1, pattern=r'.*', name='signal',
-                 common_flag_name='common_flags', common_flag_mask=255,
-                 flag_name='flags', flag_mask=255, poly_flag_mask=1):
+    def __init__(self, order=1, pattern=r'.*', name=None,
+                 common_flag_name=None, common_flag_mask=255,
+                 flag_name=None, flag_mask=255, poly_flag_mask=1,
+                 intervals='intervals'):
 
         self._order = order
         self._pattern = pattern
@@ -51,6 +53,7 @@ class OpPolyFilter(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._poly_flag_mask = poly_flag_mask
+        self._intervals = intervals
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -74,25 +77,12 @@ class OpPolyFilter(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
-            tod_first = tod.local_samples[0]
-            tod_nsamp = tod.local_samples[1]
-
-            # get the total list of intervals
-            intervals = None
-            if 'intervals' in obs.keys():
-                intervals = obs['intervals']
-            if intervals is None:
-                intervals = [Interval(start=0.0, stop=0.0, first=0,
-                                      last=(tod.total_samples-1))]
-
-             # Cache the output common flags
-            cachename = self._common_flag_name
-            if tod.cache.exists(cachename):
-                common_ref = tod.cache.reference(cachename)
+            if self._intervals in obs:
+                intervals = obs[self._intervals]
             else:
-                common_flag = tod.read_common_flags()
-                common_ref = tod.cache.put(cachename, common_flag)
-                del common_flag
+                intervals = None
+            local_intervals = tod.local_intervals(intervals)
+            common_ref = tod.local_common_flags(self._common_flag_name)
 
             pat = re.compile(self._pattern)
 
@@ -102,43 +92,16 @@ class OpPolyFilter(Operator):
                 if not pat.match(det):
                     continue
 
-                # Cache the output signal
-                cachename = '{}_{}'.format(self._name, det)
-                if tod.cache.exists(cachename):
-                    ref = tod.cache.reference(cachename)
-                else:
-                    signal = tod.read(detector=det)
-                    ref = tod.cache.put(cachename, signal)
-
-                # Cache the output flags
-                cachename = '{}_{}'.format(self._flag_name, det)
-                if tod.cache.exists(cachename):
-                    flag_ref = tod.cache.reference(cachename)
-                else:
-                    # read_flags always returns both common and detector
-                    # flags but we already cached the common flags.
-                    flag, dummy = tod.read_flags(detector=det)
-                    flag_ref = tod.cache.put(cachename, flag)
-                    del flag, dummy
+                ref = tod.local_signal(det, self._name)
+                flag_ref = tod.local_flags(det, self._flag_name)
 
                 # Iterate over each interval
 
                 local_starts = []
                 local_stops = []
-
-                for ival in intervals:
-                    if ival.last >= tod_first and \
-                       ival.first < tod_first + tod_nsamp:
-                        # This interval overlaps with this tod.
-                        # Apply the filter to the overlap.
-                        local_start = ival.first - tod_first
-                        local_stop = ival.last - tod_first
-                        if local_start < 0:
-                            local_start = 0
-                        if local_stop > tod_nsamp:
-                            local_stop = tod_nsamp
-                        local_starts.append(local_start)
-                        local_stops.append(local_stop)
+                for ival in local_intervals:
+                    local_starts.append(ival.first)
+                    local_stops.append(ival.last)
 
                 local_starts = np.array(local_starts)
                 local_stops = np.array(local_stops)

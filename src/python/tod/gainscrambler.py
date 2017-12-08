@@ -32,7 +32,7 @@ class OpGainScrambler(Operator):
     """
 
     def __init__(self, center=1, sigma=1e-3, pattern=r'.*',
-                 name='signal', realization=0, component=234567):
+                 name=None, realization=0, component=234567):
 
         self._center = center
         self._sigma = sigma
@@ -85,12 +85,7 @@ class OpGainScrambler(Operator):
                 detindx = tod.detindx[det]
 
                 # Cache the output signal
-                cachename = '{}_{}'.format(self._name, det)
-                if tod.cache.exists(cachename):
-                    ref = tod.cache.reference(cachename)
-                else:
-                    signal = tod.read(detector=det)
-                    ref = tod.cache.put(cachename, signal)
+                ref = tod.local_signal(det, self._name)
 
                 """
                 key1 = realization * 2^32 + telescope * 2^16 + component

@@ -12,6 +12,8 @@ from ..dist import distribute_samples
 
 from ..cache import Cache
 
+from .interval import Interval
+
 
 class TOD(object):
     """
@@ -43,7 +45,7 @@ class TOD(object):
 
     """
     def __init__(self, mpicomm, detectors, samples, detindx=None, detranks=1,
-        detbreaks=None, sampsizes=None, sampbreaks=None, meta=None):
+                 detbreaks=None, sampsizes=None, sampbreaks=None, meta=None):
 
         self._mpicomm = mpicomm
         self._detranks = detranks
@@ -58,7 +60,7 @@ class TOD(object):
         self._rank_det = mpicomm.rank // self._sampranks
         self._rank_samp = mpicomm.rank % self._sampranks
 
-        # Split the main communicator into process row and column 
+        # Split the main communicator into process row and column
         # communicators, since this is useful for gathering data in some
         # operations.
 
@@ -116,9 +118,6 @@ class TOD(object):
                     "in TOD.".format(r))
 
         self.cache = Cache()
-        """
-        The timestream data cache.
-        """
 
     def __del__(self):
         self.cache.clear()
@@ -141,7 +140,7 @@ class TOD(object):
         Return dictionary of detector quaternions.
 
         This returns a dictionary with the detector names as the keys and the
-        values are 4-element numpy arrays containing the quaternion offset 
+        values are 4-element numpy arrays containing the quaternion offset
         from the boresight.
 
         Args:
@@ -193,6 +192,177 @@ class TOD(object):
         tuple is the number of chunks assigned to this process.
         """
         return self._dist_sizes[self._rank_samp]
+
+    def local_times(self, name=None):
+        """ Timestamps covering locally stored data.
+
+        Args:
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a timestamp vector.  If 'name' is None
+            a default name 'timestamps' is used and the vector may be
+            constructed and cached using the 'read_timess' method.
+            If 'name' is given, then the times must already be cached.
+
+        """
+        if name is None:
+            cachename = 'timestamps'
+            if not self.cache.exists(cachename):
+                times = self.read_times()
+                self.cache.put(cachename, times)
+        else:
+            cachename = name
+        return self.cache.reference(cachename)
+
+    def local_signal(self, det, name=None):
+        """ Locally stored signal.
+
+        Args:
+            det (str):  Name of the detector.
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a signal vector.  If 'name' is None
+            a default name 'signal' is used and the vector may be
+            constructed and cached using the 'read' method.
+            If 'name' is given, then the signal must already be cached.
+
+        """
+        if name is None:
+            cachename = 'signal_{}'.format(det)
+            if not self.cache.exists(cachename):
+                signal = self.read(detector=det)
+                self.cache.put(cachename, signal)
+        else:
+            cachename = '{}_{}'.format(name, det)
+        return self.cache.reference(cachename)
+
+    def local_pointing(self, det, name=None):
+        """ Locally stored pointing.
+
+        Args:
+            det (str):  Name of the detector.
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a pointing array.  If 'name' is None
+            a default name 'quat' is used and the array may be
+            constructed and cached using the 'read_pntg' method.
+            If 'name' is given, then the pointing must already be cached.
+
+        """
+        if name is None:
+            cachename = 'quat_{}'.format(det)
+            if not self.cache.exists(cachename):
+                quats = self.read_pntg(detector=det)
+                self.cache.put(cachename, quats)
+        else:
+            cachename = '{}_{}'.format(name, det)
+        return self.cache.reference(cachename)
+
+    def local_position(self, name=None):
+        """ Locally stored position.
+
+        Args:
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a position array.  If 'name' is None
+            a default name 'positino' is used and the array may be
+            constructed and cached using the 'read_position' method.
+            If 'name' is given, then the position must already be cached.
+
+        """
+        if name is None:
+            cachename = 'position'
+            if not self.cache.exists(cachename):
+                pos = self.read_position()
+                self.cache.put(cachename, pos)
+        else:
+            cachename = name
+        return self.cache.reference(cachename)
+
+    def local_velocity(self, name=None):
+        """ Locally stored velocity.
+
+        Args:
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a velocity array.  If 'name' is None
+            a default name 'velocity' is used and the array may be
+            constructed and cached using the 'read_velocity' method.
+            If 'name' is given, then the velocity must already be cached.
+
+        """
+        if name is None:
+            cachename = 'velocity'
+            if not self.cache.exists(cachename):
+                vel = self.read_velocity()
+                self.cache.put(cachename, vel)
+        else:
+            cachename = name
+        return self.cache.reference(cachename)
+
+    def local_flags(self, det, name=None):
+        """ Locally stored flags.
+
+        Args:
+            det (str):  Name of the detector.
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a flag vector.  If 'name' is None
+            a default name 'flags' is used and the vector may be
+            constructed and cached using the 'read_flags' method.
+            If 'name' is given, then the flags must already be cached.
+
+        """
+        if name is None:
+            cachename = 'flags_{}'.format(det)
+            if not self.cache.exists(cachename):
+                flags = self.read_flags(detector=det)
+                self.cache.put(cachename, flags)
+        else:
+            cachename = '{}_{}'.format(name, det)
+        return self.cache.reference(cachename)
+
+    def local_common_flags(self, name=None):
+        """ Locally stored common flags.
+
+        Args:
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a common flag vector.  If 'name' is None
+            a default name 'common_flags' is used and the vector may be
+            constructed and cached using the 'read_common_flags' method.
+            If 'name' is given, then the flags must already be cached.
+
+        """
+        if name is None:
+            cachename = 'common_flags'
+            if not self.cache.exists(cachename):
+                common_flags = self.read_common_flags()
+                self.cache.put(cachename, common_flags)
+        else:
+            cachename = name
+        return self.cache.reference(cachename)
+
+    def local_intervals(self, intervals):
+        """ Translate observation-wide intervals into local sample indices.
+        """
+        if intervals is None:
+            intervals = [Interval(start=0, stop=0,
+                                  first=0, last=self.total_samples-1)]
+        offset, nsamp = self.local_samples
+        local_intervals = []
+        times = self.local_times()
+        for ival in intervals:
+            if (ival.last >= offset and
+                ival.first < offset + nsamp):
+                local_first = max(0, ival.first-offset)
+                local_last = min(nsamp-1, ival.last-offset)
+                local_start = times[local_first]
+                local_stop = times[local_last]
+                local_intervals.append(
+                    Interval(start=local_start, stop=local_stop,
+                             first=local_first, last=local_last))
+        return local_intervals
 
     @property
     def total_samples(self):
@@ -293,9 +463,9 @@ class TOD(object):
             "Fell through to TOD._get_flags base class method")
         return None
 
-    def _put_det_flags(self, detector, start, flags):
+    def _put_flags(self, detector, start, flags):
         raise NotImplementedError(
-            "Fell through to TOD._put_det_flags base class method")
+            "Fell through to TOD._put_flags base class method")
         return
 
     def _get_common_flags(self, start, n):
@@ -365,7 +535,6 @@ class TOD(object):
                              "".format(local_start, local_start+n-1))
         return self._get_times(local_start, n, **kwargs)
 
-
     def write_times(self, local_start=0, stamps=None, **kwargs):
         """
         Write timestamps.
@@ -390,7 +559,6 @@ class TOD(object):
                 "".format(local_start, local_start+stamps.shape[0]-1))
         self._put_times(local_start, stamps, **kwargs)
         return
-
 
     # Read and write telescope boresight pointing
 
@@ -419,7 +587,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_boresight(local_start, n, **kwargs)
 
-
     def write_boresight(self, local_start=0, data=None, **kwargs):
         """
         Write boresight quaternion pointing.
@@ -443,7 +610,6 @@ class TOD(object):
             raise ValueError("local sample range is invalid")
         self._put_boresight(local_start, data, **kwargs)
         return
-
 
     # Read and write detector data
 
@@ -477,7 +643,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get(detector, local_start, n, **kwargs)
 
-
     def write(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector data.
@@ -506,7 +671,6 @@ class TOD(object):
                 "".format(local_start, local_start+data.shape[0]-1))
         self._put(detector, local_start, data, **kwargs)
         return
-
 
     # Read and write detector quaternion pointing
 
@@ -540,7 +704,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n, **kwargs)
 
-
     def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector quaternion pointing.
@@ -572,14 +735,13 @@ class TOD(object):
         self._put_pntg(detector, local_start, data, **kwargs)
         return
 
-
     # Read and write detector flags
 
     def read_flags(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector flags.
 
-        This returns the detector-specific flags and the common flags.
+        This returns the detector-specific flags.
 
         Args:
             detector (str): the name of the detector.
@@ -588,8 +750,7 @@ class TOD(object):
             n (int): the number of samples to read.  If zero, read to end.
 
         Returns:
-            A 2-tuple of arrays, containing the detector flags and the common
-                flags.
+            An array containing the detector flags.
         """
         if detector is None:
             raise ValueError("you must specify the detector")
@@ -633,7 +794,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n, **kwargs)
 
-
     def write_common_flags(self, local_start=0, flags=None, **kwargs):
         """
         Write common flags.
@@ -660,8 +820,7 @@ class TOD(object):
         self._put_common_flags(local_start, flags, **kwargs)
         return
 
-
-    def write_det_flags(self, detector=None, local_start=0, flags=None,
+    def write_flags(self, detector=None, local_start=0, flags=None,
                         **kwargs):
         """
         Write detector flags.
@@ -688,9 +847,8 @@ class TOD(object):
             raise ValueError(
                 "local sample range {} - {} is invalid"
                 "".format(local_start, local_start+flags.shape[0]-1))
-        self._put_det_flags(detector, local_start, flags, **kwargs)
+        self._put_flags(detector, local_start, flags, **kwargs)
         return
-
 
     # Read and write telescope position
 
@@ -721,7 +879,6 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_position(local_start, n, **kwargs)
 
-
     def write_position(self, local_start=0, pos=None, **kwargs):
         """
         Write telescope position.
@@ -746,7 +903,6 @@ class TOD(object):
                 "".format(local_start, local_start+pos.shape[0]-1))
         self._put_position(local_start, pos, **kwargs)
         return
-
 
     # Read and write telescope velocity
 
@@ -776,7 +932,6 @@ class TOD(object):
                 "local sample range {} - {} is invalid"
                 "".format(local_start, local_start+n-1))
         return self._get_velocity(local_start, n, **kwargs)
-
 
     def write_velocity(self, local_start=0, vel=None, **kwargs):
         """
@@ -830,7 +985,8 @@ class TODCache(TOD):
             distribution.
     """
 
-    def __init__(self, mpicomm, detectors, samples, detindx=None, detquats=None, detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
+    def __init__(self, mpicomm, detectors, samples, detindx=None, detquats=None,
+                 detranks=1, detbreaks=None, sampsizes=None, sampbreaks=None):
 
         super().__init__(mpicomm, detectors, samples, detindx=detindx,
             detranks=detranks, detbreaks=detbreaks, sampsizes=sampsizes,
@@ -893,7 +1049,7 @@ class TODCache(TOD):
 
     def _put_boresight(self, start, data):
         if not self.cache.exists(self._bore):
-            self.cache.create(self._bore, np.float64, 
+            self.cache.create(self._bore, np.float64,
                 (self.local_samples[1],4))
         ref = self.cache.reference(self._bore)
         ref[start:(start+data.shape[0]),:] = data
@@ -932,13 +1088,10 @@ class TODCache(TOD):
         if not self.cache.exists(cacheflags):
             raise ValueError(
                 "detector {} flags not yet written".format(detector))
-        if not self.cache.exists(self._common):
-            raise ValueError("common flags not yet written")
         flagsref = self.cache.reference(cacheflags)[start:start+n]
-        comref = self.cache.reference(self._common)[start:start+n]
-        return flagsref, comref
+        return flagsref
 
-    def _put_det_flags(self, detector, start, flags):
+    def _put_flags(self, detector, start, flags):
         if detector not in self.local_dets:
             raise ValueError(
                 "detector {} not assigned to local process".format(detector))
@@ -992,8 +1145,8 @@ class TODCache(TOD):
         if not self.cache.exists(self._pos):
             self.cache.create(self._pos, np.float64, (self.local_samples[1], 3))
         n = pos.shape[0]
-        ref = self.cache.reference(self._pos)[start:start+n,:]
-        ref[:,:] = pos
+        ref = self.cache.reference(self._pos)[start:start+n, :]
+        ref[:, :] = pos
         return
 
     def _get_velocity(self, start, n):
@@ -1006,6 +1159,6 @@ class TODCache(TOD):
         if not self.cache.exists(self._vel):
             self.cache.create(self._vel, np.float64, (self.local_samples[1], 3))
         n = vel.shape[0]
-        ref = self.cache.reference(self._vel)[start:start+n,:]
-        ref[:,:] = vel
+        ref = self.cache.reference(self._vel)[start:start+n, :]
+        ref[:, :] = vel
         return
