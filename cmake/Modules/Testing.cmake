@@ -21,10 +21,11 @@ endif(NOT DASHBOARD_MODE)
 # ------------------------------------------------------------------------ #
 
 function(GET_TEMPORARY_DIRECTORY DIR_VAR DIR_BASE)
-    set(_TMP_ROOT "$ENV{TMPDIR}")
-    if("${_TMP_ROOT}" STREQUAL "")
-        set(_TMP_ROOT "/tmp")
-    endif()
+    # create a root working directory
+    set(_TMP_ROOT "${CMAKE_BINARY_DIR}/dashboard-work-dir")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${_TMP_ROOT}) 
+    
+    # make temporary directory
     find_program(MKTEMP_COMMAND NAMES mktemp)
     set(_TMP_STR "${_TMP_ROOT}/${DIR_BASE}-XXXX")
     if(MKTEMP_COMMAND)
@@ -35,9 +36,10 @@ function(GET_TEMPORARY_DIRECTORY DIR_VAR DIR_BASE)
         set(${DIR_VAR} "${_VAR}" PARENT_SCOPE)
     else()
         message(WARNING "Unable to create temporary directory - using ${_TMP_STR}")
-        execute_process(COMMAND "${CMAKE_COMMAND} -E make_directory ${_TMP_STR}")
+        execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${_TMP_STR})
         set(${DIR_VAR} "${_TMP_STR}" PARENT_SCOPE)
     endif(MKTEMP_COMMAND)
+    
 endfunction()
 
 # ------------------------------------------------------------------------ #
@@ -57,6 +59,7 @@ string(REPLACE " " "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
 if(NOT DASHBOARD_MODE)
     # get temporary directory for dashboard testing
     GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
+    add_feature(CMAKE_DASHBOARD_ROOT "Dashboard directory")
     
     ## -- USE_<PROJECT> and <PROJECT>_ROOT
     foreach(_OPTION ARCH BLAS ELEMENTAL LAPACK OPENMP 
@@ -100,12 +103,28 @@ endif(NOT DASHBOARD_MODE)
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
 ENABLE_TESTING()
-    
-add_test(NAME cxx_toast_test
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${TEST_BINDIR}/toast_test)
-set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest;CXX" TIMEOUT 7200)
 
+# slurm config
+add_option(USE_SLURM "Enable generation of SLURM scripts for testing" OFF)
+
+# whether we need to run through SLURM
+set(CMD_PREFIX )
+if(USE_SLURM)
+    set_ifnot(TIME \"00:30:00\" CACHE STRING "Test runtime")
+    set_ifnot(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
+    set_ifnot(QUEUE "regular" CACHE STRING "SLURM queue")
+    add_feature(ACCOUNT "SLURM account")
+    add_feature(QUEUE "SLURM queue")
+    add_feature(CTEST_MACHINE "Machine to run unit test on")
+    enum_option(CTEST_MACHINE
+        DOC "Machine to run CTest on"
+        VALUES knl haswell edison
+        CASE_INSENSITIVE
+    )   
+    set(CMD_PREFIX "salloc -N 1 -t 30 -C ${CTEST_MACHINE} -A ${ACCOUNT} -p debug")
+endif()
+
+# get the python sets
 set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")
 FILE(GLOB _PYTHON_TEST_FILES "${_PYDIR}/*.py")
 LIST(REMOVE_ITEM _PYTHON_TEST_FILES ${_PYDIR}/__init__.py ${_PYDIR}/runner.py)
@@ -115,13 +134,23 @@ foreach(_FILE ${_PYTHON_TEST_FILES})
     list(APPEND PYTHON_TEST_FILES "${_FILE_NE}")
 endforeach(_FILE ${_PYTHON_TEST_FILES})
 
+# add CXX unit test
+add_test(NAME cxx_toast_test
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND ${CMD_PREFIX} ${TEST_BINDIR}/toast_test)
+set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest;CXX" TIMEOUT 7200)
+
+# add Python unit test
 foreach(_test_ext ${PYTHON_TEST_FILES})
+    # name of python test
     set(_test_name pyc_toast_test_${_test_ext})
+    # add the test
     add_test(NAME ${_test_name}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMAND python -c "import toast ; toast.test('${_test_ext}')")    
+        COMMAND ${CMD_PREFIX} python -c "import toast ; toast.test('${_test_ext}')")    
     set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
 
-include(ConfigureSLURM)
-
+if(USE_SLURM)
+    include(ConfigureSLURM)
+endif(USE_SLURM)

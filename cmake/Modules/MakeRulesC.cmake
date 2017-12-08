@@ -104,7 +104,7 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 
     clean_c_vars()
     add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
-    add(_std_flags   "-faligned-new -fdiagnostics-color=always")
+    add(_std_flags   "-fdiagnostics-color=always")
     add(_std_flags   "-Qunused-arguments")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")

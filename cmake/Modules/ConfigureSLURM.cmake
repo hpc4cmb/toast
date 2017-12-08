@@ -1,12 +1,6 @@
 
 include(MacroUtilities)
 
-add_option(USE_SLURM "Enable generation of SLURM scripts for testing" OFF)
-
-if(NOT USE_SLURM)
-    return()
-endif(NOT USE_SLURM)
-
 #------------------------------------------------------------------------------#
 
 function(machine_options)
@@ -65,12 +59,6 @@ execute_process(COMMAND ./fetch_data.sh
     ERROR_FILE fetch_data.log
     RESULT_VARIABLE FETCH_RET)
 check_return(FETCH_RET)
-
-set_ifnot(TIME \"00:30:00\" CACHE STRING "Test runtime")
-set_ifnot(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
-set_ifnot(QUEUE "regular" CACHE STRING "SLURM queue")
-add_feature(ACCOUNT "SLURM account")
-add_feature(QUEUE "SLURM queue")
 
 foreach(MACHINE ${MACHINES})
 
