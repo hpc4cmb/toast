@@ -1,9 +1,18 @@
-#!/bin/bash
+#!/bin/bash -l
 
 set -o errexit
 
+# if no realpath command, then add function
+if ! eval command -v realpath &> /dev/null ; then
+    realpath()
+    {
+        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+    }
+fi 
+
 # get the absolute path to the directory with this script
 topdir=$(realpath $(dirname ${BASH_SOURCE[0]}))
+
 echo "Running in top directory: ${topdir}..."
 
 if ! eval command -v cmake &> /dev/null ; then
@@ -22,7 +31,7 @@ fi
 : ${vtune:=${LOADED_VTUNE}}
 : ${TYPES:="satellite ground ground_simple"}
 : ${SIZES:="tiny small medium large representative"}
-: ${MACHINES:="cori-intel-knl cori-intel-haswell edison-intel"}
+: ${MACHINES:="cori-knl cori-haswell edison"}
 
 # if "tiny" is not in SIZES then disable "tiny" in SHELL_SIZES
 SHELL_SIZES="tiny"
@@ -64,7 +73,7 @@ for type in ${TYPES}; do
 	
             template="${topdir}/templates/vtune_${type}.in"
             sizefile="${topdir}/templates/params/${type}.${size}"
-            machfile="${topdir}/templates/machines/machine.${machine}"
+            machfile="${topdir}/templates/machines/${machine}"
             outfile="${topdir}/vtune_${size}_${type}_${machine}.slurm"
 
             echo "Generating ${outfile}"

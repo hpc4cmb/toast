@@ -28,6 +28,7 @@ include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 include(CheckCXXSourceRuns)
 
+set(USE_CACHED_FLAGS OFF CACHE BOOL "If OFF, check all the flags for validity")
 
 ################################################################################
 # macro generate a test compile file
@@ -160,8 +161,29 @@ endmacro(add_flags _LANG _VAR _FLAGS)
 ################################################################################
 # macro for adding C compiler flags to variable
 ################################################################################
-macro(add_c_flags _VAR _FLAGS)
-    add_flags(C "${_VAR}" "${_FLAGS}")
+macro(add_c_flags _VAR _FLAGS)        
+    # cache the flags to test
+    set(CACHED_C_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING "Possible C flags for ${_VAR}")
+    # if flags were changed or not previously processed
+    if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
+            NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
+        if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}")
+            message(STATUS "Test C flags differ for ${_VAR}")
+            message(STATUS "  new: ${_FLAGS}")
+            message(STATUS "  old: ${CACHED_C_${_VAR}_TEST_FLAGS}")
+        endif()
+        if(NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
+            message(STATUS "CACHED_C_${_VAR}_GOOD_FLAGS is not defined")
+        endif()
+        # test flags
+        add_flags(C "${_VAR}" "${_FLAGS}")
+        # cache the valid flags
+        set(CACHED_C_${_VAR}_GOOD_FLAGS "${${_VAR}}" CACHE STRING
+            "Valid C flags for ${_VAR}" FORCE)
+    endif(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
+        NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
+    # set the ${_VAR} to the valid flags
+    set(${_VAR} "${CACHED_C_${_VAR}_GOOD_FLAGS}")
 endmacro(add_c_flags _VAR _FLAGS)
 
 
@@ -169,7 +191,26 @@ endmacro(add_c_flags _VAR _FLAGS)
 # macro for adding C++ compiler flags to variable
 ################################################################################
 macro(add_cxx_flags _VAR _FLAGS)
-    add_flags(CXX "${_VAR}" "${_FLAGS}")
+    # cache the flags to test
+    set(CACHED_CXX_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING "Possible C++ flags for ${_VAR}")
+    # if flags were changed or not previously processed
+    if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
+            NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
+        if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}")
+            message(STATUS "Test C++ flags differ for ${_VAR}")
+        endif()
+        if(NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
+            message(STATUS "CACHED_CXX_${_VAR}_GOOD_FLAGS is not defined")
+        endif()
+        # test flags
+        add_flags(CXX "${_VAR}" "${_FLAGS}")
+        # cache the valid flags
+        set(CACHED_CXX_${_VAR}_GOOD_FLAGS "${${_VAR}}" CACHE STRING
+            "Valid C++ flags for ${_VAR}" FORCE)
+    endif(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
+        NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
+    # set the ${_VAR} to the valid flags
+    set(${_VAR} "${CACHED_CXX_${_VAR}_GOOD_FLAGS}")
 endmacro(add_cxx_flags _VAR _FLAGS)
 
 

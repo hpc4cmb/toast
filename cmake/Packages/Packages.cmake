@@ -314,8 +314,8 @@ if(USE_SSE)
     endforeach()
     unset(SSE_DEFINITIONS)
 
-    add_c_flags(CMAKE_C_FLAGS_EXTRA "${SSE_FLAGS}")
-    add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${SSE_FLAGS}")
+    add(CMAKE_C_FLAGS_EXTRA "${SSE_FLAGS}")
+    add(CMAKE_CXX_FLAGS_EXTRA "${SSE_FLAGS}")
 
 else(USE_SSE)
 
@@ -336,7 +336,10 @@ if(USE_ARCH OR USE_SSE)
     include(Architecture)
 
     ArchitectureFlags(ARCH_FLAGS)
-    add_c_flags(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")
-    add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
+    add(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")
+    add(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
 
 endif(USE_ARCH OR USE_SSE)
+
+add_c_flags(CMAKE_C_FLAGS_EXTRA "${CMAKE_C_FLAGS_EXTRA}")
+add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${CMAKE_CXX_FLAGS_EXTRA}")

@@ -18,6 +18,19 @@ if(MSVC)
     message(FATAL_ERROR "${PROJECT_NAME} does not support Windows")
 endif()
 
+
+#------------------------------------------------------------------------------#
+# macro for cleaning variables used by MakeRulesC.cmake and MakeRuleCXX.cmake
+#------------------------------------------------------------------------------#
+macro(clean_c_vars)
+    foreach(_type std loud quiet fast extra par)
+        if(DEFINED _${_type}_flags)
+            unset(_${_type}_flags)
+        endif(DEFINED _${_type}_flags)
+    endforeach(_type std loud quiet fast extra par)
+endmacro(clean_c_vars)
+
+
 #------------------------------------------------------------------------------#
 # macro for finding the x86intrin.h header path that needs to be explicitly
 # in the search path
@@ -89,7 +102,10 @@ endmacro()
 #
 if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 
+    clean_c_vars()
     add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    add(_std_flags   "-faligned-new -fdiagnostics-color=always")
+    add(_std_flags   "-Qunused-arguments")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
@@ -100,10 +116,8 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
     add(_quiet_flags "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
     add(_quiet_flags "-Wno-implicit-fallthrough")
     add(_fast_flags  "-ftree-vectorize -ftree-loop-vectorize")
-    add(_std_flags   "-faligned-new -fdiagnostics-color=always")
-    add(_std_flags   "-Qunused-arguments")
 
-    if(NOT CMAKE_C_COMPILER_IS_GNU)
+    if(NOT CMAKE_C_COMPILER_IS_GNU AND APPLE)
         INCLUDE_DIRECTORIES("/usr/include/libcxxabi")
     endif()
 
@@ -119,7 +133,7 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
     add_c_flags(_quiet_flags "${_quiet_flags}")
     add_c_flags(_fast_flags "${_fast_flags}")
 
-    set_no_duplicates(CMAKE_C_FLAGS_INIT                "-W -Wall ${_std_cxx}")
+    set_no_duplicates(CMAKE_C_FLAGS_INIT                "-W -Wall ${_std_flags}")
     set_no_duplicates(CMAKE_C_FLAGS_DEBUG_INIT          "-g -DDEBUG ${_loud_flags}")
     set_no_duplicates(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG ${_quiet_flags}")
     set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-g -O2 ${_fast_flags}")
@@ -130,13 +144,14 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 #
 elseif(CMAKE_C_COMPILER_IS_INTEL)
 
+    clean_c_vars()
     add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
     add(_quiet_flags "-Wno-attributes -Wno-unused-but-set-variable")
     add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
-    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
     add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
     add(_par_flags   "-parallel-source-info=2")
 
@@ -154,7 +169,7 @@ elseif(CMAKE_C_COMPILER_IS_INTEL)
     set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
     set_no_duplicates(CMAKE_C_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG ${_quiet_flags}")
 
-#-----------------------------------------------------------------------
+#------------------------------------------------------------------------------#
 # IBM xlC compiler
 #
 elseif(CMAKE_C_COMPILER_IS_XLC)
@@ -165,7 +180,7 @@ elseif(CMAKE_C_COMPILER_IS_XLC)
     add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
     add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "-O2 -qtwolink -+")
 
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------#
 # HP aC++ Compiler
 #
 elseif(CMAKE_C_COMPILER_IS_HP_ACC)
@@ -176,7 +191,7 @@ elseif(CMAKE_C_COMPILER_IS_HP_ACC)
     add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O3 +Onolimit -g")
     add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "+O2 +Onolimit")
 
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------#
 # IRIX MIPSpro CC Compiler
 #
 elseif(CMAKE_C_COMPILER_IS_MIPS)

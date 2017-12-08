@@ -56,7 +56,7 @@ include(CMakeDependentOption)
 #
 macro(set_ifnot _var _value)
   if(NOT DEFINED ${_var})
-    set(${_var} ${_value})
+    set(${_var} ${_value} ${ARGN})
   endif()
 endmacro()
 

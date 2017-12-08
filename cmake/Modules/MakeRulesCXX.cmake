@@ -18,6 +18,19 @@ if(MSVC)
     message(FATAL_ERROR "${PROJECT_NAME} does not support Windows")
 endif()
 
+
+#------------------------------------------------------------------------------#
+# macro for cleaning variables used by MakeRulesC.cmake and MakeRuleCXX.cmake
+#------------------------------------------------------------------------------#
+macro(clean_cxx_vars)
+    foreach(_type std loud quiet fast extra par)
+        if(DEFINED _${_type}_flags)
+            unset(_${_type}_flags)
+        endif(DEFINED _${_type}_flags)
+    endforeach(_type std loud quiet fast extra par)
+endmacro(clean_cxx_vars)
+
+
 #------------------------------------------------------------------------------#
 # macro for finding the x86intrin.h header path that needs to be explicitly
 # in the search path
@@ -99,7 +112,10 @@ endmacro()
 #
 if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 
+    clean_cxx_vars()
     add(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
+    add(_std_flags   "-faligned-new -fdiagnostics-color=always")
+    add(_std_flags   "-Qunused-arguments")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
@@ -111,8 +127,6 @@ if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
     add(_quiet_flags "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
     add(_quiet_flags "-Wno-implicit-fallthrough")
     add(_fast_flags  "-ftree-vectorize -ftree-loop-vectorize")
-    add(_std_flags   "-faligned-new -fdiagnostics-color=always")
-    add(_std_flags   "-Qunused-arguments")
 
     if(NOT CMAKE_CXX_COMPILER_IS_GNU)
         INCLUDE_DIRECTORIES("/usr/include/libcxxabi")
@@ -124,11 +138,11 @@ if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
         add(_std_flags "-fprofile-arcs -ftest-coverage")
     endif(ENABLE_GCOV)
 
-    add_c_flags(_std_flags "${_std_flags}")
-    add_c_flags(_par_flags "${_par_flags}")
-    add_c_flags(_loud_flags "${_loud_flags}")
-    add_c_flags(_quiet_flags "${_quiet_flags}")
-    add_c_flags(_fast_flags "${_fast_flags}")
+    add_cxx_flags(_std_flags "${_std_flags}")
+    add_cxx_flags(_par_flags "${_par_flags}")
+    add_cxx_flags(_loud_flags "${_loud_flags}")
+    add_cxx_flags(_quiet_flags "${_quiet_flags}")
+    add_cxx_flags(_fast_flags "${_fast_flags}")
 
     set_no_duplicates(CMAKE_CXX_FLAGS_INIT                "-W -Wall ${_std_flags}")
     set_no_duplicates(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -DDEBUG ${_loud_flags}")
@@ -141,13 +155,14 @@ if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 #
 elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 
+    clean_cxx_vars()
     add(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
+    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
     add(_quiet_flags "-Wno-attributes -Wno-unused-but-set-variable")
     add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
-    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
     add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
     add(_par_flags   "-parallel-source-info=2")
 

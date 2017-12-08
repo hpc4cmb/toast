@@ -1,6 +1,14 @@
 
 add_option(DASHBOARD_MODE "Internally used to skip generation of CDash files" OFF NO_FEATURE)
 
+set_ifnot(TEST_BINDIR "${CMAKE_BINARY_DIR}" CACHE DIRECTORY 
+    "Path to bin directory for testing executables")
+
+set(CMAKE_CONFIGURE_OPTIONS )
+if(NOT "${TEST_BINDIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+    set(CMAKE_CONFIGURE_OPTIONS "-DTEST_BINDIR=${TEST_BINDIR}")
+endif(NOT "${TEST_BINDIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+
 if(NOT DASHBOARD_MODE)
     add_option(USE_LOCAL_FOR_CTEST "Use the local source tree for CTest/CDash" OFF)
     if(USE_LOCAL_FOR_CTEST)
@@ -51,7 +59,6 @@ if(NOT DASHBOARD_MODE)
     GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
     
     ## -- USE_<PROJECT> and <PROJECT>_ROOT
-    set(CMAKE_CONFIGURE_OPTIONS )
     foreach(_OPTION ARCH BLAS ELEMENTAL LAPACK OPENMP 
         PYTHON_INCLUDE_DIR SSE TBB TIMERS WCSLIB FFTW MATH MKL IMF)
         # add "USE_" definition
@@ -76,26 +83,28 @@ if(NOT DASHBOARD_MODE)
     ENABLE_TESTING()
     include(CTest)
     
-    ## -- CTest Setup
-    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CDashExec.cmake.in
-        ${CMAKE_BINARY_DIR}/CDashExec.cmake @ONLY)
-    
+    set(CTEST_MODEL Continuous)
+    foreach(_type CDashExec CDashBuild CDashTest)
+        ## -- CTest Setup
+        configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/${_type}.cmake.in
+            ${CMAKE_BINARY_DIR}/${_type}.cmake @ONLY)
+    endforeach(_type CDashExec CDashBuild CDashTest)
+
     ## -- CTest Custom
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestCustom.cmake.in
         ${CMAKE_BINARY_DIR}/CTestCustom.cmake @ONLY)
 
 endif(NOT DASHBOARD_MODE)
 
-
 # ------------------------------------------------------------------------ #
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
 ENABLE_TESTING()
-
+    
 add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND toast_test)
-set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
+    COMMAND ${TEST_BINDIR}/toast_test)
+set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest;CXX" TIMEOUT 7200)
 
 set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")
 FILE(GLOB _PYTHON_TEST_FILES "${_PYDIR}/*.py")
@@ -111,5 +120,8 @@ foreach(_test_ext ${PYTHON_TEST_FILES})
     add_test(NAME ${_test_name}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMAND python -c "import toast ; toast.test('${_test_ext}')")    
-    set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest" TIMEOUT 7200)
+    set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
+
+include(ConfigureSLURM)
+
