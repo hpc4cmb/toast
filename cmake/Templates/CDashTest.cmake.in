@@ -63,10 +63,17 @@ configure_file(CTestConfig.cmake    ${CTEST_BINARY_DIRECTORY}/CTestConfig.cmake)
 ## -- CTest Custom
 configure_file(CTestCustom.cmake    ${CTEST_BINARY_DIRECTORY}/CTestCustom.cmake)
 
+set(CHECKOUT OFF)
+if(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}/CMakeLists.txt")
+    set(CHECKOUT ON)
+endif(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}/CMakeLists.txt")
+
 # ---------------------------------------------------------------------------- #
 # -- CTest Start
 # ---------------------------------------------------------------------------- #
-ctest_start(${MODEL}   TRACK ${MODEL})
+if(CHECKOUT)
+    ctest_start(${MODEL}   TRACK ${MODEL})
+endif(CHECKOUT)
 
 ## -- read CTestCustom.cmake file
 ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
@@ -75,7 +82,9 @@ ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
 # -- CTest Steps
 # ---------------------------------------------------------------------------- #
 
-ctest_configure (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
+if(CHECKOUT)
+    ctest_configure (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
+endif(CHECKOUT)
 ctest_test      (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
 ctest_submit    (                                           RETURN_VALUE ret)
 

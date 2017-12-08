@@ -1,5 +1,6 @@
 
-add_option(DASHBOARD_MODE "Internally used to skip generation of CDash files" OFF NO_FEATURE)
+add_option(DASHBOARD_MODE 
+    "Internally used to skip generation of CDash files" OFF NO_FEATURE)
 
 set_ifnot(TEST_BINDIR "${CMAKE_BINARY_DIR}" CACHE DIRECTORY 
     "Path to bin directory for testing executables")
@@ -10,11 +11,38 @@ if(NOT "${TEST_BINDIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif(NOT "${TEST_BINDIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 
 if(NOT DASHBOARD_MODE)
-    add_option(USE_LOCAL_FOR_CTEST "Use the local source tree for CTest/CDash" OFF)
-    if(USE_LOCAL_FOR_CTEST)
-        set(CMAKE_LOCAL_DIRECTORY "${CMAKE_SOURCE_DIR}")
-    endif(USE_LOCAL_FOR_CTEST)
+    add_option(CTEST_LOCAL_CHECKOUT "Use the local source tree for CTest/CDash" OFF)
+    if(CTEST_LOCAL_CHECKOUT)
+        set_ifnot(CMAKE_LOCAL_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        add_feature(CMAKE_LOCAL_DIRECTORY "Local checkout directory")
+    endif(CTEST_LOCAL_CHECKOUT)
 endif(NOT DASHBOARD_MODE)
+
+# slurm config
+add_option(USE_SLURM "Enable generation of SLURM scripts for testing" OFF)
+
+# whether we need to run through SLURM
+set(CMD_PREFIX )
+if(USE_SLURM)
+    set_ifnot(TIME \"00:30:00\" CACHE STRING "Test runtime")
+    set_ifnot(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
+    set_ifnot(QUEUE "regular" CACHE STRING "SLURM queue")
+    enum_option(MACHINE
+        DOC "Machine to run CTest SLURM scripts"
+        VALUES cori-knl cori-haswell edison
+        CASE_INSENSITIVE
+    )
+    add_feature(ACCOUNT "SLURM account")
+    add_feature(QUEUE "SLURM queue")
+    add_feature(MACHINE "SLURM machine")
+    STRING(REPLACE "cori-" "" _MACHINE "${MACHINE}")
+    find_program(SLURM_ALLOC_CMD salloc HINTS ENV PATH PATHS ENV PATH)
+    if(NOT SLURM_ALLOC_CMD)
+        message(FATAL_ERROR "Unable to find program: salloc")
+    endif(NOT SLURM_ALLOC_CMD)
+    set(CMD_PREFIX ${SLURM_ALLOC_CMD} -N 1 -t 15 -C ${_MACHINE} -A ${ACCOUNT} -p debug)
+    add_feature(SLURM_ALLOC_CMD "SLURM salloc command")
+endif()
 
 # ------------------------------------------------------------------------ #
 # -- Function to create a temporary directory
@@ -81,7 +109,7 @@ if(NOT DASHBOARD_MODE)
         endif(NOT "${${C_OPTION}_ROOT}" STREQUAL "")
     endforeach()
 
-    foreach(_OPTION ACCOUNT CMAKE_DASHBOARD_ROOT CTEST_MACHINE MACHINE QUEUE TARGET_ARCHITECTURE)
+    foreach(_OPTION ACCOUNT MACHINE QUEUE TARGET_ARCHITECTURE CTEST_LOCAL_CHECKOUT CMAKE_LOCAL_DIRECTORY)
         if(NOT "${${_OPTION}}" STREQUAL "")
             add(CMAKE_CONFIGURE_OPTIONS "-D${_OPTION}=${${_OPTION}}")
         endif(NOT "${${_OPTION}}" STREQUAL "")
@@ -111,26 +139,6 @@ endif(NOT DASHBOARD_MODE)
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
 ENABLE_TESTING()
-
-# slurm config
-add_option(USE_SLURM "Enable generation of SLURM scripts for testing" OFF)
-
-# whether we need to run through SLURM
-set(CMD_PREFIX )
-if(USE_SLURM)
-    set_ifnot(TIME \"00:30:00\" CACHE STRING "Test runtime")
-    set_ifnot(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
-    set_ifnot(QUEUE "regular" CACHE STRING "SLURM queue")
-    add_feature(ACCOUNT "SLURM account")
-    add_feature(QUEUE "SLURM queue")
-    add_feature(CTEST_MACHINE "Machine to run unit test on")
-    enum_option(CTEST_MACHINE
-        DOC "Machine to run CTest on"
-        VALUES knl haswell edison
-        CASE_INSENSITIVE
-    )   
-    set(CMD_PREFIX "salloc -N 1 -t 15 -C ${CTEST_MACHINE} -A ${ACCOUNT} -p debug")
-endif()
 
 # get the python sets
 set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")

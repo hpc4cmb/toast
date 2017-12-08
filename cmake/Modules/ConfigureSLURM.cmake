@@ -42,13 +42,6 @@ endfunction(check_return _VAR)
 
 #------------------------------------------------------------------------------#
 
-enum_option(MACHINE
-    DOC "Machine to run CTest SLURM scripts"
-    VALUES cori-knl cori-haswell edison
-    CASE_INSENSITIVE
-)   
-add_feature(MACHINE "SLURM machine")
-
 machine_defined()
 valid_machine()
     
@@ -90,7 +83,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(CTEST_SCRIPT_NAME ${_SIZE}_${_TYPE}_${MACHINE}.slurm)
         add_test(NAME ${_test_name}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-            COMMAND salloc ${CTEST_SCRIPT_NAME})
+            COMMAND ${SLURM_ALLOC_CMD} ${CTEST_SCRIPT_NAME})
         set_tests_properties(${_test_name} PROPERTIES LABELS "Examples;${_TYPE};${MACHINE};${_SIZE};Nightly" TIMEOUT 14400)
     endforeach(_SIZE ${PROBLEM_SIZES})
 endforeach(_TYPE ${PROBLEM_TYPES})
