@@ -58,12 +58,14 @@ string(REPLACE " " "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
 # ------------------------------------------------------------------------ #
 if(NOT DASHBOARD_MODE)
     # get temporary directory for dashboard testing
-    GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
+    if(NOT DEFINED CMAKE_DASHBOARD_ROOT)
+        GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
+    endif(NOT DEFINED CMAKE_DASHBOARD_ROOT)
     add_feature(CMAKE_DASHBOARD_ROOT "Dashboard directory")
     
     ## -- USE_<PROJECT> and <PROJECT>_ROOT
     foreach(_OPTION ARCH BLAS ELEMENTAL LAPACK OPENMP 
-        PYTHON_INCLUDE_DIR SSE TBB TIMERS WCSLIB FFTW MATH MKL IMF)
+        PYTHON_INCLUDE_DIR SSE TBB TIMERS WCSLIB FFTW MATH MKL IMF SLURM)
         # add "USE_" definition
         if(NOT "${USE_${_OPTION}}" STREQUAL "")
             add(CMAKE_CONFIGURE_OPTIONS "-DUSE_${_OPTION}=${USE_${_OPTION}}")
@@ -77,6 +79,12 @@ if(NOT DASHBOARD_MODE)
         if(NOT "${${C_OPTION}_ROOT}" STREQUAL "")
             add(CMAKE_CONFIGURE_OPTIONS "-D${C_OPTION}_ROOT=${${C_OPTION}_ROOT}")
         endif(NOT "${${C_OPTION}_ROOT}" STREQUAL "")
+    endforeach()
+
+    foreach(_OPTION ACCOUNT CMAKE_DASHBOARD_ROOT CTEST_MACHINE MACHINE QUEUE TARGET_ARCHITECTURE)
+        if(NOT "${${_OPTION}}" STREQUAL "")
+            add(CMAKE_CONFIGURE_OPTIONS "-D${_OPTION}=${${_OPTION}}")
+        endif(NOT "${${_OPTION}}" STREQUAL "")
     endforeach()
         
     ## -- CTest Config
@@ -121,7 +129,7 @@ if(USE_SLURM)
         VALUES knl haswell edison
         CASE_INSENSITIVE
     )   
-    set(CMD_PREFIX "salloc -N 1 -t 30 -C ${CTEST_MACHINE} -A ${ACCOUNT} -p debug")
+    set(CMD_PREFIX "salloc -N 1 -t 15 -C ${CTEST_MACHINE} -A ${ACCOUNT} -p debug")
 endif()
 
 # get the python sets

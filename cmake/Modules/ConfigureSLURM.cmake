@@ -42,7 +42,15 @@ endfunction(check_return _VAR)
 
 #------------------------------------------------------------------------------#
 
-set(MACHINES "cori-knl;cori-haswell;edison" CACHE STRING "Machines to run SLURM tests on")
+enum_option(MACHINE
+    DOC "Machine to run CTest SLURM scripts"
+    VALUES cori-knl cori-haswell edison
+    CASE_INSENSITIVE
+)   
+add_feature(MACHINE "SLURM machine")
+
+machine_defined()
+valid_machine()
     
 message(STATUS "Cleaning up examples directory...")
 execute_process(COMMAND ./cleanup.sh
@@ -60,38 +68,31 @@ execute_process(COMMAND ./fetch_data.sh
     RESULT_VARIABLE FETCH_RET)
 check_return(FETCH_RET)
 
-foreach(MACHINE ${MACHINES})
+include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})
+    
+set(ENV{MACHINES} "${MACHINE}")
 
-    machine_defined()
-    valid_machine()
-    
-    include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})
-        
-    set(ENV{MACHINES} "${MACHINE}")
-    
-    message(STATUS "Generating SLURM examples for ${MACHINE}...")
-    execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-        OUTPUT_FILE generate_slurm.log
-        ERROR_FILE generate_slurm.log
-        RESULT_VARIABLE GENERATE_RET)
-    check_return(GENERATE_RET)
-    
-    set(PROBLEM_TYPES ground ground_simple satellite)
-    set(PROBLEM_SIZES tiny small medium large representative)
-    
-    foreach(_TYPE ${PROBLEM_TYPES})
-        foreach(_SIZE ${PROBLEM_SIZES})
-            set(_test_name slurm_${_TYPE}_${_SIZE}_${MACHINE})
-            set(JOB_NAME "${_TYPE}_${_SIZE}_${MACHINE}")
-            set(CTEST_SCRIPT_NAME ${_SIZE}_${_TYPE}_${MACHINE}.slurm)
-            add_test(NAME ${_test_name}
-                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-                COMMAND salloc ${CTEST_SCRIPT_NAME})
-            set_tests_properties(${_test_name} PROPERTIES LABELS "Examples;${_TYPE};${MACHINE};${_SIZE};Nightly" TIMEOUT 14400)
-        endforeach(_SIZE ${PROBLEM_SIZES})
-    endforeach(_TYPE ${PROBLEM_TYPES})
+message(STATUS "Generating SLURM examples for ${MACHINE}...")
+execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
+    OUTPUT_FILE generate_slurm.log
+    ERROR_FILE generate_slurm.log
+    RESULT_VARIABLE GENERATE_RET)
+check_return(GENERATE_RET)
 
-endforeach(MACHINE ${MACHINES}) 
+set(PROBLEM_TYPES ground ground_simple satellite)
+set(PROBLEM_SIZES tiny small medium large representative)
+
+foreach(_TYPE ${PROBLEM_TYPES})
+    foreach(_SIZE ${PROBLEM_SIZES})
+        set(_test_name slurm_${_TYPE}_${_SIZE}_${MACHINE})
+        set(JOB_NAME "${_TYPE}_${_SIZE}_${MACHINE}")
+        set(CTEST_SCRIPT_NAME ${_SIZE}_${_TYPE}_${MACHINE}.slurm)
+        add_test(NAME ${_test_name}
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
+            COMMAND salloc ${CTEST_SCRIPT_NAME})
+        set_tests_properties(${_test_name} PROPERTIES LABELS "Examples;${_TYPE};${MACHINE};${_SIZE};Nightly" TIMEOUT 14400)
+    endforeach(_SIZE ${PROBLEM_SIZES})
+endforeach(_TYPE ${PROBLEM_TYPES})
    
     
