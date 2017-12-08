@@ -23,7 +23,7 @@ cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENMP=ON \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
     -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
-    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linx/compiler \
+    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
     -DTARGET_ARCHITECTURE=knl \
     ${OPTS} ${ROOT}
 

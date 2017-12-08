@@ -30,7 +30,7 @@ cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Debug \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
     -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
-    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linx/compiler \
+    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
     -DTARGET_ARCHITECTURE=auto \
     ${OPTS} ${ROOT}
 
