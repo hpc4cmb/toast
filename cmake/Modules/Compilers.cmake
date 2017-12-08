@@ -167,14 +167,6 @@ macro(add_c_flags _VAR _FLAGS)
     # if flags were changed or not previously processed
     if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
-        if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}")
-            message(STATUS "Test C flags differ for ${_VAR}")
-            message(STATUS "  new: ${_FLAGS}")
-            message(STATUS "  old: ${CACHED_C_${_VAR}_TEST_FLAGS}")
-        endif()
-        if(NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
-            message(STATUS "CACHED_C_${_VAR}_GOOD_FLAGS is not defined")
-        endif()
         # test flags
         add_flags(C "${_VAR}" "${_FLAGS}")
         # cache the valid flags
@@ -196,12 +188,6 @@ macro(add_cxx_flags _VAR _FLAGS)
     # if flags were changed or not previously processed
     if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
-        if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}")
-            message(STATUS "Test C++ flags differ for ${_VAR}")
-        endif()
-        if(NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
-            message(STATUS "CACHED_CXX_${_VAR}_GOOD_FLAGS is not defined")
-        endif()
         # test flags
         add_flags(CXX "${_VAR}" "${_FLAGS}")
         # cache the valid flags
