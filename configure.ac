@@ -205,6 +205,16 @@ fi
 AM_CONDITIONAL([HAVE_AM_ELEMENTAL], [test $toast_elemental = yes])
 
 dnl +------------------------------------------------
+dnl | Check for aatm
+dnl +------------------------------------------------
+toast_aatm=yes
+AC_ARG_ENABLE([aatm], [AC_HELP_STRING([--disable-aatm], [Disable all checks for aatm])], [toast_aatm=$enable_aatm], [toast_aatm=yes])
+if test x"$toast_aatm" != xno; then
+  ACX_AATM([toast_aatm=yes;AC_DEFINE(HAVE_AATM,1,[Define we have aatm])], [toast_aatm=no;AC_MSG_WARN([Could not find aatm library, some TOAST features will not be built.])])
+fi
+AM_CONDITIONAL([HAVE_AM_AATM], [test $toast_aatm = yes])
+
+dnl +------------------------------------------------
 dnl | Set outputs
 dnl +------------------------------------------------
 AC_CONFIG_FILES([Makefile])
@@ -301,6 +311,13 @@ if test $toast_elemental = yes; then
   AC_MSG_NOTICE([  Elemental link            : $ELEMENTAL])
 else
   AC_MSG_NOTICE([  Elemental                 : Disabled])
+fi
+
+if test $toast_aatm = yes; then
+  AC_MSG_NOTICE([  aatm compile              : $AATM_CPPFLAGS])
+  AC_MSG_NOTICE([  aatm link                 : $AATM])
+else
+  AC_MSG_NOTICE([  aatm                      : Disabled])
 fi
 
 if test $ax_have_tbb = yes; then

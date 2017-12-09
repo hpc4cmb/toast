@@ -40,7 +40,7 @@ double mean( std::vector<double> vec ) {
 }
 
 
-toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
+toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
               double tmin, double tmax,
               double lmin_center, double lmin_sigma,
               double lmax_center, double lmax_sigma,
@@ -191,7 +191,7 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 }
 
 
-toast::atm::sim::~sim() {
+toast::tatm::sim::~sim() {
     if ( grid ) delete grid;
     if ( compressed_index ) delete compressed_index;
     if ( full_index ) delete full_index;
@@ -204,7 +204,7 @@ toast::atm::sim::~sim() {
 }
 
 
-void toast::atm::sim::print() {
+void toast::tatm::sim::print() {
     for (int i=0; i<ntask; ++i) {
         MPI_Barrier(comm);
         if (rank != i) continue;
@@ -251,7 +251,7 @@ void toast::atm::sim::print() {
 }
 
 
-void toast::atm::sim::load_realization() {
+void toast::tatm::sim::load_realization() {
 
     cached = false;
 
@@ -438,7 +438,7 @@ void toast::atm::sim::load_realization() {
     return;
 }
 
-void toast::atm::sim::save_realization() {
+void toast::tatm::sim::save_realization() {
 
     if ( rank == 0 ) {
 
@@ -500,7 +500,7 @@ void toast::atm::sim::save_realization() {
     return;
 }
 
-void toast::atm::sim::simulate( bool use_cache ) {
+void toast::tatm::sim::simulate( bool use_cache ) {
 
     if ( use_cache ) load_realization();
 
@@ -603,7 +603,7 @@ void toast::atm::sim::simulate( bool use_cache ) {
 }
 
 
-void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
+void toast::tatm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     // Identify a manageable slice of compressed indices to simulate next
 
@@ -637,7 +637,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
 }
 
 
-void toast::atm::sim::smooth() {
+void toast::tatm::sim::smooth() {
 
     // Replace each vertex with a mean of its immediate vicinity
 
@@ -709,7 +709,7 @@ void toast::atm::sim::smooth() {
 }
 
 
-void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
+void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 			       long nsamp, double fixed_r ) {
 
     if ( !cached ) {
@@ -906,7 +906,7 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 }
 
 
-void toast::atm::sim::draw() {
+void toast::tatm::sim::draw() {
 
     // Draw 100 gaussian variates to use in drawing the simulation
     // parameters
@@ -1003,7 +1003,7 @@ void toast::atm::sim::draw() {
 }
 
 
-void toast::atm::sim::get_volume() {
+void toast::tatm::sim::get_volume() {
 
     // Horizontal volume
 
@@ -1119,7 +1119,7 @@ void toast::atm::sim::get_volume() {
 }
 
 
-void toast::atm::sim::initialize_kolmogorov() {
+void toast::tatm::sim::initialize_kolmogorov() {
 
     MPI_Barrier( comm );
     double t1 = MPI_Wtime();
@@ -1265,7 +1265,7 @@ void toast::atm::sim::initialize_kolmogorov() {
 }
 
 
-double toast::atm::sim::kolmogorov( double r ) {
+double toast::tatm::sim::kolmogorov( double r ) {
 
     // Return autocovariance of a Kolmogorov process at separation r
 
@@ -1307,7 +1307,7 @@ double toast::atm::sim::kolmogorov( double r ) {
 }
 
 
-void toast::atm::sim::compress_volume() {
+void toast::tatm::sim::compress_volume() {
 
     // Establish a mapping between full volume indices and observed
     // volume indices
@@ -1443,7 +1443,7 @@ void toast::atm::sim::compress_volume() {
 }
 
 
-bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
+bool toast::tatm::sim::in_cone( double x, double y, double z, double t_in ) {
 
     // Input coordinates are in the scan frame, rotate to horizontal frame
 
@@ -1522,7 +1522,7 @@ bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
 }
 
 
-void toast::atm::sim::ind2coord( long i, double *coord ) {
+void toast::tatm::sim::ind2coord( long i, double *coord ) {
 
     // Translate a compressed index into xyz-coordinates
     // in the horizontal frame
@@ -1548,7 +1548,7 @@ void toast::atm::sim::ind2coord( long i, double *coord ) {
 }
 
 
-long toast::atm::sim::coord2ind( double x, double y, double z ) {
+long toast::tatm::sim::coord2ind( double x, double y, double z ) {
 
     // Translate scan frame xyz-coordinates into a compressed index
 
@@ -1574,7 +1574,7 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
 }
 
 
-double toast::atm::sim::interp( double x, double y, double z,
+double toast::tatm::sim::interp( double x, double y, double z,
                                 std::vector<long> &last_ind,
 				std::vector<double> &last_nodes ) {
 
@@ -1785,7 +1785,7 @@ double toast::atm::sim::interp( double x, double y, double z,
 }
 
 
-El::DistMatrix<double> *toast::atm::sim::build_covariance(
+El::DistMatrix<double> *toast::tatm::sim::build_covariance(
     long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();
@@ -1862,7 +1862,7 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance(
 }
 
 
-double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
+double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
 
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
@@ -1917,7 +1917,7 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
 }
 
 
-void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
+void toast::tatm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 				       long ind_start, long ind_stop ) {
 
     // Cholesky decompose the covariance matrix.  If the matrix is singular,
@@ -2002,7 +2002,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 }
 
 
-void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
+void toast::tatm::sim::apply_covariance( El::DistMatrix<double> *cov,
 					long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();
