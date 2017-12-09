@@ -131,6 +131,10 @@ fi
 
 @tidas@
 
+# Install aatm
+
+@aatm@
+
 # Install PyMPIT for environment testing
 
 @pympit@
