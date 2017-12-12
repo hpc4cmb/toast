@@ -39,10 +39,15 @@ execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND}
     OUTPUT_STRIP_TRAILING_WHITESPACE)
     
 macro(getuname name flag)
-    execute_process(COMMAND ${CTEST_UNAME_COMMAND} ${flag} 
-        OUTPUT_VARIABLE ${name}
-        WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT}
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(_RET 1)
+    while(_RET GREATER 0)
+        execute_process(COMMAND ${CTEST_UNAME_COMMAND} ${flag} 
+            OUTPUT_VARIABLE ${name}
+            WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT}
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _RET)
+    endwhile(_RET GREATER 0)
+    unset(_RET)
 endmacro(getuname)
 
 if(NOT DEFINED MODEL)

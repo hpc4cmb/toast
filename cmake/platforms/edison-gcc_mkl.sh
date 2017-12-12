@@ -23,5 +23,6 @@ cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
     -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
+    -DTARGET_ARCHITECTURE="ivy-bridge" \
     ${OPTS} ${ROOT}
 
