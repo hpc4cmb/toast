@@ -9,6 +9,8 @@ from .madam import OpMadam
 
 from .pixels import OpLocalPixels, DistPixels
 from .rings import DistRings
+from .pysm import PySMSky
+from .smooth import LibSharpSmooth
 
 from .noise import (OpAccumDiag, covariance_invert, covariance_rcond, 
     covariance_multiply, covariance_apply)
