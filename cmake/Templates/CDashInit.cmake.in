@@ -22,6 +22,7 @@ if(NOT DEFINED CTEST_MODEL)
     set(CTEST_MODEL         "@CTEST_MODEL@")
 endif(NOT DEFINED CTEST_MODEL)
 
+
 # ---------------------------------------------------------------------------- #
 # -- Programs
 # ---------------------------------------------------------------------------- #
@@ -44,8 +45,6 @@ macro(getuname name flag)
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 endmacro(getuname)
 
-getuname(osname -s)
-
 if(NOT DEFINED MODEL)
     if("${CTEST_MODEL}" STREQUAL "")
         set(MODEL Continuous)
@@ -58,6 +57,8 @@ set(NPROCS "${CTEST_PROCESSOR_COUNT}")
 if("${NPROCS}" GREATER 16)
     set(NPROCS 16)
 endif("${NPROCS}" GREATER 16)
+
+getuname(osname -s)
 
 set(CTEST_BUILD_NAME            "${CTEST_BRANCH}-${osname}-${CTEST_COMPILER}-${CTEST_COMPILER_VERSION}-${MODEL}")
 set(CTEST_SOURCE_DIRECTORY      "${CTEST_DASHBOARD_ROOT}/source-toast")
@@ -74,7 +75,7 @@ if(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
 else(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
     set(CTEST_CHECKOUT_COMMAND      "${CTEST_GIT_COMMAND} clone -b ${CTEST_BRANCH} --recurse-submodules https://github.com/hpc4cmb/toast ${CTEST_SOURCE_DIRECTORY}")
 endif(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
-set(CTEST_UPDATE_COMMAND        "${CTEST_GIT_COMMAND}")
+set(CTEST_UPDATE_COMMAND        "${CTEST_GIT_COMMAND} pull")
 set(CTEST_CONFIGURATION_TYPE    "@CMAKE_BUILD_TYPE@")
 set(CTEST_CONFIGURE_COMMAND     "${CTEST_CMAKE_COMMAND} ${CTEST_CONFIG_OPTIONS} -DBUILD_TESTING=ON -DDASHBOARD_MODE=ON -DCMAKE_INSTALL_PREFIX=${CTEST_INSTALL_DIRECTORY} -Wno-dev ${CTEST_SOURCE_DIRECTORY} -G ${CTEST_CMAKE_GENERATOR}")
 set(CTEST_BUILD_COMMAND         "${CTEST_MAKE_COMMAND} install ${OPTION_BUILD}")
@@ -92,7 +93,7 @@ if(NOT DEFINED TRIGGER)
     set(TRIGGER "Any" CACHE STRING "Delay submit until TRIGGER == '(Any|Build|Test|Coverage|MemCheck)'")
 endif(NOT DEFINED TRIGGER)
 
-message(STATUS "CDash init submit trigger (TRIGGER) : [\"${TRIGGER}\"]")
+message(STATUS "CDash submit trigger (TRIGGER) : [\"${TRIGGER}\"]")
 
 # ---------------------------------------------------------------------------- #
 # -- Clean/Reset
@@ -123,27 +124,25 @@ set(ENV{PROJECT_PYC_PATH}   "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_PYTHONDIR
 # ---------------------------------------------------------------------------- #
 # -- Configure file
 # ---------------------------------------------------------------------------- #
-macro(CONFIGURE_DIRECTORIES)
+macro(CONFIGURE_CTEST_FILES)
     ## -- CTest Config
     configure_file(CTestConfig.cmake ${CTEST_BINARY_DIRECTORY}/CTestConfig.cmake)
     ## -- CTest Custom
     configure_file(CTestCustom.cmake ${CTEST_BINARY_DIRECTORY}/CTestCustom.cmake)
-endmacro(CONFIGURE_DIRECTORIES)
+endmacro(CONFIGURE_CTEST_FILES)
 
 
 # ---------------------------------------------------------------------------- #
 # -- Determine if submit time
 # ---------------------------------------------------------------------------- #
 macro(SUBMIT KEY)
-    if("${TRIGGER}" STREQUAL "Any")
-        message(STATUS "Submitting ${KEY} matching any trigger (${TRIGGER})...")
+    if("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
         ctest_submit(RETURN_VALUE ret)
-    else("${TRIGGER}" STREQUAL "Any")
+    else("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
         if("${TRIGGER}" STREQUAL "${KEY}")
-            message(STATUS "Submitting ${KEY} matching trigger (${TRIGGER})...")
             ctest_submit(RETURN_VALUE ret)
         endif("${TRIGGER}" STREQUAL "${KEY}")
-    endif("${TRIGGER}" STREQUAL "Any")
+    endif("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
 endmacro(SUBMIT KEY)
 
 
@@ -165,11 +164,17 @@ macro(SETUP KEY)
     if("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")
         message(STATUS "Key (${KEY}) triggered a fresh build...")
         clean_directories()
-        configure_directories()    
+        configure_ctest_files()    
         ctest_start(${MODEL}   TRACK ${MODEL})
         ## -- read CTestCustom.cmake file
         ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
         ctest_configure (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
         ctest_build     (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
-    endif("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")    
+    else("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")
+        unset(CTEST_CHECKOUT_COMMAND)
+        configure_ctest_files()    
+        ctest_start(${MODEL}   TRACK ${MODEL} APPEND)
+        ## -- read CTestCustom.cmake file
+        ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
+    endif("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")
 endmacro(SETUP KEY)

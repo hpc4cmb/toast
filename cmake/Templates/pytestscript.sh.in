@@ -8,7 +8,7 @@ export PROJECT_LIB_PATH="@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@"
 export PROJECT_PYC_PATH="@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_PYTHONDIR@"
 
 # make sure using correct installation
-source @CMAKE_BINARY_DIR@/ctest.env.sh
+source @CMAKE_BINARY_DIR@/ctest-wrapper.sh
 
 # run test
 @PYTHON_EXECUTABLE@ -c "import toast ; toast.test('@_test_ext@')"
