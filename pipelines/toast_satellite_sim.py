@@ -7,9 +7,11 @@
 from toast.mpi import MPI
 
 import os
+import sys
 
 import re
 import argparse
+import traceback
 
 import pickle
 
@@ -27,7 +29,8 @@ from toast.vis import set_backend
 def main():
 
     if MPI.COMM_WORLD.rank == 0:
-        print("Running with {} processes".format(MPI.COMM_WORLD.size))
+        print("Running with {} processes".format(MPI.COMM_WORLD.size),
+            flush=True)
 
     global_start = MPI.Wtime()
 
@@ -126,7 +129,7 @@ def main():
     if MPI.COMM_WORLD.size % groupsize != 0:
         if MPI.COMM_WORLD.rank == 0:
             print("WARNING:  process groupsize does not evenly divide into "
-                "total number of processes")
+                "total number of processes", flush=True)
     comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=groupsize)
 
     # get options
@@ -169,7 +172,8 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print("Create focalplane:  {:.2f} seconds".format(stop-start))
+        print("Create focalplane:  {:.2f} seconds".format(stop-start), 
+            flush=True)
     start = stop
 
     if args.debug:
@@ -186,7 +190,8 @@ def main():
 
     if groupsize > len(fp.keys()):
         if comm.comm_world.rank == 0:
-            print("process group is too large for the number of detectors")
+            print("process group is too large for the number of detectors",
+                flush=True)
             comm.comm_world.Abort()
 
     # Detector information from the focalplane
@@ -266,7 +271,7 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print("Read parameters, compute data distribution:  "
-            "{:.2f} seconds".format(stop-start))
+            "{:.2f} seconds".format(stop-start), flush=True)
     start = stop
 
     # we set the precession axis now, which will trigger calculation
@@ -288,7 +293,7 @@ def main():
     elapsed = stop - start
     if comm.comm_world.rank == 0:
         print("Construct boresight pointing:  "
-            "{:.2f} seconds".format(stop-start))
+            "{:.2f} seconds".format(stop-start), flush=True)
     start = stop
 
     # make a Healpix pointing matrix.
@@ -301,7 +306,7 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print("Pointing generation took {:.3f} s".format(elapsed))
+        print("Pointing generation took {:.3f} s".format(elapsed), flush=True)
     start = stop
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
@@ -315,7 +320,7 @@ def main():
 
     if not args.madam:
         if comm.comm_world.rank == 0:
-            print("Not using Madam, will only make a binned map!")
+            print("Not using Madam, will only make a binned map!", flush=True)
 
         # get locally hit pixels
         lc = tm.OpLocalPixels()
@@ -351,7 +356,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print("Building hits and N_pp^-1 took {:.3f} s".format(elapsed))
+            print("Building hits and N_pp^-1 took {:.3f} s".format(elapsed),
+                flush=True)
         start = stop
 
         hits.write_healpix_fits("{}_hits.fits".format(args.outdir))
@@ -361,7 +367,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print("Writing hits and N_pp^-1 took {:.3f} s".format(elapsed))
+            print("Writing hits and N_pp^-1 took {:.3f} s".format(elapsed),
+                flush=True)
         start = stop
 
         # invert it
@@ -371,7 +378,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print("Inverting N_pp^-1 took {:.3f} s".format(elapsed))
+            print("Inverting N_pp^-1 took {:.3f} s".format(elapsed),
+                flush=True)
         start = stop
 
         invnpp.write_healpix_fits("{}_npp.fits".format(args.outdir))
@@ -380,7 +388,8 @@ def main():
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print("Writing N_pp took {:.3f} s".format(elapsed))
+            print("Writing N_pp took {:.3f} s".format(elapsed),
+                flush=True)
         start = stop
 
         # in debug mode, print out data distribution information
@@ -397,7 +406,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("Dumping debug data distribution took "
-                    "{:.3f} s".format(elapsed))
+                    "{:.3f} s".format(elapsed), flush=True)
             start = stop
 
         mcstart = start
@@ -419,7 +428,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("Creating output dir {:04d} took {:.3f} s".format(mc,
-                    elapsed))
+                    elapsed), flush=True)
             start = stop
 
             # clear all noise data from the cache, so that we can generate
@@ -445,7 +454,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("  Noise simulation {:04d} took {:.3f} s".format(mc,
-                    elapsed))
+                    elapsed), flush=True)
             start = stop
 
             zmap.data.fill(0.0)
@@ -459,7 +468,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("  Building noise weighted map {:04d} took {:.3f} s".format(
-                    mc, elapsed))
+                    mc, elapsed), flush=True)
             start = stop
 
             tm.covariance_apply(invnpp, zmap)
@@ -469,7 +478,7 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("  Computing binned map {:04d} took {:.3f} s".format(mc,
-                    elapsed))
+                    elapsed), flush=True)
             start = stop
 
             zmap.write_healpix_fits(os.path.join(outpath, "binned.fits"))
@@ -479,10 +488,11 @@ def main():
             elapsed = stop - start
             if comm.comm_world.rank == 0:
                 print("  Writing binned map {:04d} took {:.3f} s".format(mc,
-                    elapsed))
+                    elapsed), flush=True)
             elapsed = stop - mcstart
             if comm.comm_world.rank == 0:
-                print("  Mapmaking {:04d} took {:.3f} s".format(mc, elapsed))
+                print("  Mapmaking {:04d} took {:.3f} s".format(mc, elapsed),
+                    flush=True)
             start = stop
 
     else:
@@ -543,7 +553,8 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print("Noise simulation took {:.3f} s".format(elapsed))
+                print("Noise simulation took {:.3f} s".format(elapsed),
+                    flush=True)
             start = stop
 
             # create output directory for this realization
@@ -570,17 +581,24 @@ def main():
             stop = MPI.Wtime()
             elapsed = stop - start
             if comm.comm_world.rank == 0:
-                print("Mapmaking took {:.3f} s".format(elapsed))
+                print("Mapmaking took {:.3f} s".format(elapsed), flush=True)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     elapsed = stop - global_start
     if comm.comm_world.rank == 0:
-        print("Total Time:  {:.2f} seconds".format(elapsed))
+        print("Total Time:  {:.2f} seconds".format(elapsed), flush=True)
 
 
 if __name__ == "__main__":
-    main()
-    tman = timing.timing_manager()
-    tman.report()
-    MPI.Finalize()
+    try:
+        main()
+        tman = timing.timing_manager()
+        tman.report()
+        MPI.Finalize()
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
+        print("".join(lines), flush=True)
+        MPI.COMM_WORLD.Abort()

@@ -19,12 +19,13 @@ from ..op import Operator
 from .tod import TOD
 from .interval import Interval
 
-available = True
-try:
-    import tidas as tds
-    from tidas.mpi_volume import MPIVolume
-except:
-    available = False
+available = False
+# available = True
+# try:
+#     import tidas as tds
+#     from tidas.mpi_volume import MPIVolume
+# except:
+#     available = False
 
 
 # Module-level constants

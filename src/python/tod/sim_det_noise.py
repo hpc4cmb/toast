@@ -97,8 +97,7 @@ class OpSimNoise(Operator):
             # eventually we'll redistribute, to allow long correlations...
 
             if self._rate is None:
-                times = tod.read_times(
-                    local_start=0, n=tod.local_samples[1])
+                times = tod.local_times()
             else:
                 times = None
 
@@ -174,7 +173,7 @@ class OpSimNoise(Operator):
                     ref = tod.cache.reference(cachename)
                 else:
                     ref = tod.cache.create(cachename, np.float64,
-                                           (tod.local_samples[1],))
+                                           (tod.local_samples[1], ))
                 ref[local_offset : local_offset+chunk_samp] += weight*nsedata
                 del ref
 

@@ -14,12 +14,12 @@ using namespace std;
 using namespace toast;
 
 
-const int64_t fftTest::length = 32;
-const int64_t fftTest::n = 3;
+const int64_t TOASTfftTest::length = 32;
+const int64_t TOASTfftTest::n = 3;
 
 
 
-void fftTest::runbatch(int64_t nbatch, fft::r1d_p forward, 
+void TOASTfftTest::runbatch(int64_t nbatch, fft::r1d_p forward, 
     fft::r1d_p reverse) {
     bool debug = false;
 
@@ -106,7 +106,7 @@ void fftTest::runbatch(int64_t nbatch, fft::r1d_p forward,
 }
 
 
-TEST_F( fftTest, roundtrip_single ) {
+TEST_F( TOASTfftTest, roundtrip_single ) {
     // create FFT plans
     fft::r1d_p fplan ( fft::r1d::create ( length, 1, fft::plan_type::fast, 
         fft::direction::forward, 1.0 ) );
@@ -116,7 +116,7 @@ TEST_F( fftTest, roundtrip_single ) {
     runbatch(1, fplan, rplan);
 }
 
-TEST_F( fftTest, roundtrip_multi ) {
+TEST_F( TOASTfftTest, roundtrip_multi ) {
     // create FFT plans
     fft::r1d_p fplan ( fft::r1d::create ( length, n, fft::plan_type::fast, 
         fft::direction::forward, 1.0 ) );
@@ -126,7 +126,7 @@ TEST_F( fftTest, roundtrip_multi ) {
     runbatch(n, fplan, rplan);
 }
 
-TEST_F( fftTest, plancache_single ) {
+TEST_F( TOASTfftTest, plancache_single ) {
     // use the plan store.  test both reuse of plans and
     // creation after a clear().
     fft::r1d_plan_store & store = fft::r1d_plan_store::get();
@@ -148,7 +148,7 @@ TEST_F( fftTest, plancache_single ) {
 }
 
 
-TEST_F( fftTest, plancache_multi ) {
+TEST_F( TOASTfftTest, plancache_multi ) {
     // use the plan store.  test both reuse of plans and
     // creation after a clear().
     fft::r1d_plan_store & store = fft::r1d_plan_store::get();

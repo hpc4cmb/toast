@@ -14,14 +14,14 @@ using namespace std;
 using namespace toast;
 
 
-const int64_t covTest::nsm = 2;
-const int64_t covTest::npix = 3;
-const int64_t covTest::nnz = 4;
-const int64_t covTest::nsamp = 100;
-const int64_t covTest::scale = 2.0;
+const int64_t TOASTcovTest::nsm = 2;
+const int64_t TOASTcovTest::npix = 3;
+const int64_t TOASTcovTest::nnz = 4;
+const int64_t TOASTcovTest::nsamp = 100;
+const int64_t TOASTcovTest::scale = 2.0;
 
 
-TEST_F( covTest, accumulate ) {
+TEST_F( TOASTcovTest, accumulate ) {
 
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
 
@@ -99,7 +99,7 @@ TEST_F( covTest, accumulate ) {
 }
 
 
-TEST_F( covTest, eigendecompose ) {
+TEST_F( TOASTcovTest, eigendecompose ) {
 
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
 
@@ -141,7 +141,7 @@ TEST_F( covTest, eigendecompose ) {
 }
 
 
-TEST_F( covTest, matrixmultiply ) {
+TEST_F( TOASTcovTest, matrixmultiply ) {
 
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
 

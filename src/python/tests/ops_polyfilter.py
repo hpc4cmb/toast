@@ -171,6 +171,7 @@ class OpPolyFilterTest(MPITestCase):
             p = np.polyfit(x, y, self.order)
             y[:] = np.polyval(p, x)
             old_rms[det] = np.std(y)
+            del y
 
         # Filter timestreams
 
@@ -197,5 +198,6 @@ class OpPolyFilterTest(MPITestCase):
             if rms / old < 1e-1 and 'apply' not in det:
                 raise RuntimeError('det {} old rms = {}, new rms = {}'
                                    ''.format(det, old, rms))
+            del y
 
         self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))

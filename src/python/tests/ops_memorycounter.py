@@ -145,6 +145,9 @@ class OpMemoryCounterTest(MPITestCase):
         tod = ob['tod']
         nse = ob['noise']
 
+        # Ensure timestamps are cached before simulating noise
+        tod.local_times()
+
         counter = OpMemoryCounter()
 
         tot_old = counter.exec(self.data)

@@ -88,7 +88,7 @@ void time_fibonacci_lv(int32_t n)
 
 //============================================================================//
 
-TEST_F( timingTest, manager )
+TEST_F( TOASTtimingTest, manager )
 {
 #if defined(DISABLE_TIMERS)
 

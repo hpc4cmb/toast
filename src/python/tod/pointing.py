@@ -18,8 +18,8 @@ from .. import timing as timing
 
 
 
-def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights, hwpang=None, flags=None,
-    eps=0.0, cal=1.0):
+def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights,
+                            hwpang=None, flags=None, eps=0.0, cal=1.0):
     """
     Compute the HEALPix pointing matrix for one detector.
 
@@ -105,8 +105,7 @@ class OpPointingHpix(Operator):
     def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False,
                  mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None,
                  hwpsteptime=None, common_flag_name=None, common_flag_mask=255,
-                 apply_flags=False):
-
+                 apply_flags=False, keep_quats=False):
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -117,12 +116,15 @@ class OpPointingHpix(Operator):
         self._common_flag_mask = common_flag_mask
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
+        self._keep_quats = keep_quats
 
         if (hwprpm is not None) and (hwpstep is not None):
-            raise RuntimeError("choose either continuously rotating or stepped HWP")
+            raise RuntimeError("choose either continuously rotating or stepped "
+                               "HWP")
 
         if (hwpstep is not None) and (hwpsteptime is None):
-            raise RuntimeError("for a stepped HWP, you must specify the time between steps")
+            raise RuntimeError("for a stepped HWP, you must specify the time "
+                               "between steps")
 
         if hwprpm is not None:
             # convert to radians / second
@@ -205,31 +207,30 @@ class OpPointingHpix(Operator):
 
             # compute effective sample rate
 
-            times = tod.read_times(local_start=0, n=tod.local_samples[1])
+            times = tod.local_times()
             dt = np.mean(times[1:-1] - times[0:-2])
             rate = 1.0 / dt
             del times
 
+            offset, nsamp = tod.local_samples
+
             # generate HWP angles
 
-            nsamp = tod.local_samples[1]
-            first = tod.local_samples[0]
             hwpang = None
-
             if self._hwprate is not None:
                 # continuous HWP
                 # HWP increment per sample is:
                 # (hwprate / samplerate)
                 hwpincr = self._hwprate / rate
-                startang = np.fmod(first * hwpincr, 2*np.pi)
+                startang = np.fmod(offset * hwpincr, 2*np.pi)
                 hwpang = hwpincr * np.arange(nsamp, dtype=np.float64)
                 hwpang += startang
             elif self._hwpstep is not None:
                 # stepped HWP
                 hwpang = np.ones(nsamp, dtype=np.float64)
                 stepsamples = int(self._hwpsteptime * rate)
-                wholesteps = int(first / stepsamples)
-                remsamples = first - wholesteps * stepsamples
+                wholesteps = int(offset / stepsamples)
+                remsamples = offset - wholesteps * stepsamples
                 curang = np.fmod(wholesteps * self._hwpstep, 2*np.pi)
                 curoff = 0
                 fill = remsamples
@@ -245,16 +246,10 @@ class OpPointingHpix(Operator):
 
             common = None
             if self._apply_flags:
-                if self._common_flag_name is not None:
-                    common = tod.cache.reference(self._common_flag_name)
-                else:
-                    # This could be a pointer to cache
-                    common = tod.read_common_flags()
-                common = np.copy(common)
-                common &= self._common_flag_mask
+                common = tod.local_common_flags(self._common_flag_name)
+                common = (common & self._common_flag_mask)
 
             for det in tod.local_dets:
-
                 eps = 0.0
                 if self._epsilon is not None:
                     eps = self._epsilon[det]
@@ -263,9 +258,9 @@ class OpPointingHpix(Operator):
                 if self._cal is not None:
                     cal = self._cal[det]
 
-                # We are not modifying this data, so we can use the raw
+                # We are not modifying these data, so we can use the raw
                 # reference here, which might point to Cache memory.
-                pdata = tod.read_pntg(detector=det)
+                pdata = tod.local_pointing(det)
 
                 # Create cache objects and use that memory directly
 
@@ -279,13 +274,13 @@ class OpPointingHpix(Operator):
                     pixelsref = tod.cache.reference(pixelsname)
                 else:
                     pixelsref = tod.cache.create(pixelsname, np.int64,
-                        (tod.local_samples[1],))
+                                                 (nsamp, ))
 
                 if tod.cache.exists(weightsname):
                     weightsref = tod.cache.reference(weightsname)
                 else:
                     weightsref = tod.cache.create(weightsname, np.float64,
-                        (tod.local_samples[1], self._nnz))
+                        (nsamp, self._nnz))
 
                 healpix_pointing_matrix(self.hpix, self._nest, self._mode,
                     pdata, pixelsref, weightsref, hwpang=hwpang, flags=common,
@@ -294,6 +289,10 @@ class OpPointingHpix(Operator):
                 del pixelsref
                 del weightsref
                 del pdata
+
+                if not self._keep_quats:
+                    cachename = 'quat_{}'.format(det)
+                    tod.cache.destroy(cachename)
 
             del common
 

@@ -19,22 +19,22 @@ namespace toast { namespace test {
     int runner ( int argc, char *argv[] );
 }}
 
-class timingTest : public ::testing::Test
+class TOASTtimingTest : public ::testing::Test
 {
 public:
-    timingTest () { }
-    ~timingTest () { }
+    TOASTtimingTest () { }
+    ~TOASTtimingTest () { }
     virtual void SetUp() { }
     virtual void TearDown() { }
 };
 
 
-class qarrayTest : public ::testing::Test {
+class TOASTqarrayTest : public ::testing::Test {
 
     public :
 
-        qarrayTest () { }
-        ~qarrayTest () { }
+        TOASTqarrayTest () { }
+        ~TOASTqarrayTest () { }
         virtual void SetUp();
         virtual void TearDown() { }
 
@@ -53,12 +53,12 @@ class qarrayTest : public ::testing::Test {
 };
 
 
-class rngTest : public ::testing::Test {
+class TOASTrngTest : public ::testing::Test {
 
     public :
 
-        rngTest () { }
-        ~rngTest () { }
+        TOASTrngTest () { }
+        ~TOASTrngTest () { }
         virtual void SetUp();
         virtual void TearDown() { }
 
@@ -81,12 +81,12 @@ class rngTest : public ::testing::Test {
 };
 
 
-class sfTest : public ::testing::Test {
+class TOASTsfTest : public ::testing::Test {
 
     public :
 
-        sfTest () { }
-        ~sfTest () { }
+        TOASTsfTest () { }
+        ~TOASTsfTest () { }
         virtual void SetUp();
         virtual void TearDown();
 
@@ -109,24 +109,24 @@ class sfTest : public ::testing::Test {
 };
 
 
-class healpixTest : public ::testing::Test {
+class TOASThealpixTest : public ::testing::Test {
 
     public :
 
-        healpixTest () { }
-        ~healpixTest () { }
+        TOASThealpixTest () { }
+        ~TOASThealpixTest () { }
         virtual void SetUp() { }
         virtual void TearDown() { }
 
 };
 
 
-class fftTest : public ::testing::Test {
+class TOASTfftTest : public ::testing::Test {
 
     public :
 
-        fftTest () { }
-        ~fftTest () { }
+        TOASTfftTest () { }
+        ~TOASTfftTest () { }
         virtual void SetUp() { }
         virtual void TearDown() { }
 
@@ -139,12 +139,12 @@ class fftTest : public ::testing::Test {
 };
 
 
-class covTest : public ::testing::Test {
+class TOASTcovTest : public ::testing::Test {
 
     public :
 
-        covTest () { }
-        ~covTest () { }
+        TOASTcovTest () { }
+        ~TOASTcovTest () { }
         virtual void SetUp() { }
         virtual void TearDown() { }
 
@@ -157,12 +157,12 @@ class covTest : public ::testing::Test {
 };
 
 
-class mpiShmemTest : public ::testing::Test {
+class TOASTmpiShmemTest : public ::testing::Test {
 
     public :
 
-        mpiShmemTest () { }
-        ~mpiShmemTest () { }
+        TOASTmpiShmemTest () { }
+        ~TOASTmpiShmemTest () { }
         virtual void SetUp() { }
         virtual void TearDown() { }
 
@@ -171,12 +171,12 @@ class mpiShmemTest : public ::testing::Test {
 };
 
 
-class polyfilterTest : public ::testing::Test {
+class TOASTpolyfilterTest : public ::testing::Test {
 
 public :
 
-    polyfilterTest () { }
-    ~polyfilterTest () { }
+    TOASTpolyfilterTest () { }
+    ~TOASTpolyfilterTest () { }
     virtual void SetUp() { }
     virtual void TearDown() { }
 

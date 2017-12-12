@@ -104,8 +104,8 @@ class OpSimAtmosphere(Operator):
             w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             fp_radius=1, apply_flags=False,
-            common_flag_name='common_flags', common_flag_mask=255,
-            flag_name='flags', flag_mask=255, report_timing=True,
+            common_flag_name=None, common_flag_mask=255,
+            flag_name=None, flag_mask=255, report_timing=True,
             wind_time_min=600, cachedir='.', flush=False):
 
         # We call the parent class constructor, which currently does nothing
@@ -201,14 +201,8 @@ class OpSimAtmosphere(Operator):
                       ''.format(obsname), flush=self._flush)
             comm.Barrier()
 
-             # Cache the output common flags
-            cachename = self._common_flag_name
-            if tod.cache.exists(cachename):
-                common_ref = tod.cache.reference(cachename)
-            else:
-                common_flag = tod.read_common_flags()
-                common_ref = tod.cache.put(cachename, common_flag)
-                del common_flag
+            # Cache the output common flags
+            common_ref = tod.local_common_flags(self._common_flag_name)
 
             # FIXME: This is where (eventually) we should get the wind speed,
             # wind direction, temperature, and water vapor from the tod
@@ -298,7 +292,7 @@ class OpSimAtmosphere(Operator):
 
             # Get the timestamps
 
-            times = tod.read_times()
+            times = tod.local_times()
 
             tmin = times[0]
             tmax = times[-1]
@@ -450,7 +444,7 @@ class OpSimAtmosphere(Operator):
                         plt.close()
                     del my_snapshots
 
-                nsamp = tod.local_samples[1]
+                offset, nsamp = tod.local_samples
 
                 if self._report_timing:
                     comm.Barrier()
@@ -467,18 +461,10 @@ class OpSimAtmosphere(Operator):
                     if tod.cache.exists(cachename):
                         ref = tod.cache.reference(cachename)
                     else:
-                        ref = tod.cache.create(cachename, np.float64, (nsamp,))
+                        ref = tod.cache.create(cachename, np.float64, (nsamp, ))
 
                     # Cache the output flags
-                    cachename = '{}_{}'.format(self._flag_name, det)
-                    if tod.cache.exists(cachename):
-                        flag_ref = tod.cache.reference(cachename)
-                    else:
-                        # read_flags always returns both common and detector
-                        # flags but we already cached the common flags.
-                        flag, dummy = tod.read_flags(detector=det)
-                        flag_ref = tod.cache.put(cachename, flag)
-                        del flag, dummy
+                    flag_ref = tod.local_flags(det, self._flag_name)
 
                     if self._apply_flags:
                         good = np.logical_and(

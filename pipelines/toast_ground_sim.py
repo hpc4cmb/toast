@@ -464,23 +464,20 @@ def create_observations(args, comm, schedules, counter):
         site_id = name2id(site_name)
         telescope_id = name2id(telescope_name)
 
-        ob = {}
-        ob['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
-                                                 CES_name, scan, subscan)
-        ob['tod'] = tod
-        if len(tod.subscans) > 0:
-            ob['intervals'] = tod.subscans
-        else:
-            raise RuntimeError('{} has no valid intervals'.format(ob['name']))
-        ob['baselines'] = None
-        ob['noise'] = noise
-        ob['id'] = int(mjdstart * 10000)
+        obs = {}
+        obs['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
+                                                  CES_name, scan, subscan)
+        obs['tod'] = tod
+        obs['baselines'] = None
+        obs['noise'] = noise
+        obs['id'] = int(mjdstart * 10000)
+        obs['intervals'] = tod.subscans
         # Site is not yet recognized as an RNG index
-        #ob['site'] = site_id
-        #ob['telescope'] = telescope_id
-        ob['telescope'] = (site_id + telescope_id) % 2**16
+        #obs['site'] = site_id
+        #obs['telescope'] = telescope_id
+        obs['telescope'] = (site_id + telescope_id) % 2**16
 
-        data.obs.append(ob)
+        data.obs.append(obs)
 
     if args.skip_atmosphere:
         for ob in data.obs:

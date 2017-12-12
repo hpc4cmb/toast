@@ -1238,10 +1238,10 @@ lib.ctoast_test_runner.restype = ct.c_int
 lib.ctoast_test_runner.argtypes = [ ct.c_int, pp_c_char ]
 
 def ctest_runner ():
-    argc = len(sys.argv)
-    argv = (p_c_char * (argc + 1))()
+    cargc = len(sys.argv)
+    cargv = (p_c_char * cargc)()
     for i, arg in enumerate(sys.argv):
         enc_arg = arg.encode('utf-8')
-        argv[i] = ct.create_string_buffer(enc_arg)
-    ret = lib.ctoast_test_runner(argc, argv)
+        cargv[i] = ct.create_string_buffer(enc_arg)
+    ret = lib.ctoast_test_runner(cargc, cargv)
     return ret

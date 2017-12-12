@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -39,12 +39,12 @@ class OpAccumDiag(Operator):
             use for the detector timestream.  If None, use the TOD.
         flag_name (str): the name of the cache object (<flag_name>_<detector>) to
             use for the detector flags.  If None, use the TOD.
-        flag_mask (int): the integer bit mask (0-255) that should be 
+        flag_mask (int): the integer bit mask (0-255) that should be
             used with the detector flags in a bitwise AND.
-        common_flag_name (str): the name of the cache object 
-            (<common_flag_name>_<detector>) to use for the common flags.  
+        common_flag_name (str): the name of the cache object
+            (<common_flag_name>_<detector>) to use for the common flags.
             If None, use the TOD.
-        common_flag_mask (int): the integer bit mask (0-255) that should be 
+        common_flag_mask (int): the integer bit mask (0-255) that should be
             used with the common flags in a bitwise AND.
         apply_flags (bool): whether to apply flags to the pixel numbers.
         pixels (str): the name of the cache object (<pixels>_<detector>)
@@ -65,9 +65,11 @@ class OpAccumDiag(Operator):
         hwpsteptime: The time in minutes between HWP steps.
     """
 
-    def __init__(self, zmap=None, hits=None, invnpp=None, detweights=None, name=None, flag_name=None, 
-                flag_mask=255, common_flag_name=None, common_flag_mask=255, pixels='pixels', 
-                weights='weights', apply_flags=True):
+    def __init__(
+            self, zmap=None, hits=None, invnpp=None, detweights=None,
+            name=None, flag_name=None, flag_mask=255, common_flag_name=None,
+            common_flag_mask=255, pixels='pixels', weights='weights',
+            apply_flags=True):
 
         self._flag_name = flag_name
         self._flag_mask = flag_mask
@@ -157,7 +159,7 @@ class OpAccumDiag(Operator):
     def exec(self, data):
         """
         Iterate over all observations and detectors and accumulate.
-        
+
         Args:
             data (toast.Data): The distributed data.
         """
@@ -179,10 +181,8 @@ class OpAccumDiag(Operator):
 
             commonflags = None
             if self._apply_flags:
-                if self._common_flag_name is not None:
-                    commonflags = np.copy(tod.cache.reference(self._common_flag_name))
-                else:
-                    commonflags = np.copy(tod.read_common_flags())
+                commonflags = tod.local_common_flags(
+                    self._common_flag_name).copy()
                 commonflags &= self._common_flag_mask
 
             for det in tod.local_dets:
@@ -198,39 +198,31 @@ class OpAccumDiag(Operator):
                 signal = None
 
                 if self._do_z:
-                    if self._name is not None:
-                        cachename = "{}_{}".format(self._name, det)
-                        signal = tod.cache.reference(cachename)
-                    else:
-                        signal = tod.read(detector=det)
+                    signal = tod.local_signal(det, self._name)
 
                 # get flags
 
                 if self._apply_flags:
-                    detflags = None
-                    if self._flag_name is not None:
-                        cacheflagname = "{}_{}".format(self._flag_name, det)
-                        detflags = tod.cache.reference(cacheflagname)
-                    else:
-                        detflags, ctemp = tod.read_flags(detector=det)
-                        del ctemp
-                        
-                    flags = np.logical_or((detflags & self._flag_mask) != 0, commonflags != 0)
+                    detflags = tod.local_flags(det, self._flag_name)
+                    flags = np.logical_or((detflags & self._flag_mask) != 0,
+                                          commonflags != 0)
 
                     del detflags
 
-                    pixels = pixels.copy() # Don't change the cached pixel numbers
+                    # Don't change the cached pixel numbers
+                    pixels = pixels.copy()
                     pixels[flags] = -1
 
                 # local pointing
 
                 sm, lpix = self._globloc.global_to_local(pixels)
-                
+
                 detweight = 1.0
-                
+
                 if self._detweights is not None:
                     if det not in self._detweights.keys():
-                        raise RuntimeError("no detector weights found for {}".format(det))
+                        raise RuntimeError("no detector weights found for {}"
+                                           "".format(det))
                     detweight = self._detweights[det]
                     if detweight == 0:
                         continue
@@ -239,27 +231,27 @@ class OpAccumDiag(Operator):
                 # on which input pixel objects were given.
 
                 if self._do_invn and self._do_z:
-                    
+
                     ctoast.cov_accumulate_diagonal(
-                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix, 
-                        weights, detweight, signal, self._zmap.data, 
+                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix,
+                        weights, detweight, signal, self._zmap.data,
                         self._hits.data, self._invnpp.data)
 
                 elif self._do_invn:
-                    
+
                     ctoast.cov_accumulate_diagonal_invnpp(
-                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix, 
+                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix,
                         weights, detweight, self._hits.data, self._invnpp.data)
 
                 elif self._do_z:
 
-                    ctoast.cov_accumulate_zmap(self._nsub, self._subsize, 
-                        self._nnz, nsamp, sm, lpix, weights, detweight, signal, 
+                    ctoast.cov_accumulate_zmap(self._nsub, self._subsize,
+                        self._nnz, nsamp, sm, lpix, weights, detweight, signal,
                         self._zmap.data)
 
                 elif self._do_hits:
 
-                    ctoast.cov_accumulate_diagonal_hits(self._nsub, 
+                    ctoast.cov_accumulate_diagonal_hits(self._nsub,
                         self._subsize, self._nnz, nsamp, sm, lpix, self._hits.data)
 
                 # print("det {}:".format(det))
@@ -298,12 +290,12 @@ def covariance_invert(npp, threshold, rcond=None):
             raise RuntimeError("condition number map should have NNZ = 1")
         do_rcond = 1
 
-        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz, 
+        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
             npp.data, rcond.data, threshold, 1, 1)
 
     else:
         temp = np.zeros(1, dtype=np.float64)
-        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz, 
+        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
             npp.data, temp, threshold, 1, 0)
     return
 
@@ -330,7 +322,7 @@ def covariance_multiply(npp1, npp2):
     if npp1.nnz != npp2.nnz:
         raise RuntimeError("covariance matrices must have same NNZ values")
 
-    ctoast.cov_multiply_diagonal(npp1.nsubmap, npp1.submap, mapnnz, 
+    ctoast.cov_multiply_diagonal(npp1.nsubmap, npp1.submap, mapnnz,
         npp1.data, npp2.data)
     return
 
@@ -364,7 +356,7 @@ def covariance_rcond(npp):
     """
     Compute the inverse condition number map.
 
-    This computes the inverse condition number map of the supplied 
+    This computes the inverse condition number map of the supplied
     covariance matrix.
 
     Args:
@@ -376,13 +368,12 @@ def covariance_rcond(npp):
     autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
-    rcond = DistPixels(comm=npp.comm, size=npp.size, nnz=1, dtype=np.float64, 
+    rcond = DistPixels(comm=npp.comm, size=npp.size, nnz=1, dtype=np.float64,
         submap=npp.submap, local=npp.local, nest=npp.nested)
 
     threshold = np.finfo(np.float64).eps
-    
-    ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz, 
-        npp.data, rcond.data, threshold, 0, 1)
-    
-    return rcond
 
+    ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
+        npp.data, rcond.data, threshold, 0, 1)
+
+    return rcond

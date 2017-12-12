@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -31,8 +31,7 @@ class OpSimGradient(Operator):
     """
 
     def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False,
-                 flag_mask=255, common_flag_mask=255):
-
+                 flag_mask=255, common_flag_mask=255, keep_quats=False):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -42,12 +41,13 @@ class OpSimGradient(Operator):
         self._nest = nest
         self._flag_mask = flag_mask
         self._common_flag_mask = common_flag_mask
+        self._keep_quats = keep_quats
 
     def exec(self, data):
         """
         Create the gradient timestreams.
 
-        This pixelizes each detector's pointing and then assigns a 
+        This pixelizes each detector's pointing and then assigns a
         timestream value based on the cartesian Z coordinate of the pixel
         center.
 
@@ -57,8 +57,8 @@ class OpSimGradient(Operator):
         autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
-        zaxis = np.array([0,0,1], dtype=np.float64)
-        nullquat = np.array([0,0,0,1], dtype=np.float64)
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         range = self._max - self._min
 
@@ -66,23 +66,21 @@ class OpSimGradient(Operator):
             tod = obs['tod']
             base = obs['baselines']
             nse = obs['noise']
-            intrvl = obs['intervals']
+
+            offset, nsamp = tod.local_samples
+
+            common = tod.local_common_flags() & self._common_flag_mask
 
             for det in tod.local_dets:
-                pdata = np.copy(tod.read_pntg(detector=det, local_start=0,
-                                              n=tod.local_samples[1]))
-                flags, common = tod.read_flags(detector=det, local_start=0,
-                                               n=tod.local_samples[1])
-                totflags = flags & self._flag_mask
-                totflags |= (common & self._common_flag_mask)
-
+                flags = tod.local_flags(det) & self._flag_mask
+                totflags = (flags | common)
                 del flags
-                del common
 
-                pdata[totflags != 0,:] = nullquat
+                pdata = tod.local_pointing(det).copy()
+                pdata[totflags != 0, :] = nullquat
 
                 dir = qa.rotate(pdata, zaxis)
-                pixels = hp.vec2pix(self._nside, dir[:,0], dir[:,1], dir[:,2],
+                pixels = hp.vec2pix(self._nside, dir[:, 0], dir[:, 1], dir[:, 2],
                                     nest=self._nest)
                 x, y, z = hp.pix2vec(self._nside, pixels, nest=self._nest)
                 z += 1.0
@@ -93,13 +91,16 @@ class OpSimGradient(Operator):
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64,
-                                     (tod.local_samples[1],))
+                    tod.cache.create(cachename, np.float64, (nsamp, ))
                 ref = tod.cache.reference(cachename)
                 ref[:] += z
                 del ref
-                #print('Grad timestream:', ref, np.sum(ref!=0),' non-zeros', flush=True) # DEBUG
 
+                if not self._keep_quats:
+                    cachename = 'quat_{}'.format(det)
+                    tod.cache.destroy(cachename)
+
+            del common
         return
 
     def sigmap(self):
@@ -188,14 +189,12 @@ class OpSimScan(Operator):
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64,
-                                     (tod.local_samples[1],))
+                    tod.cache.create(cachename, np.float64, (nsamp, ))
                 ref = tod.cache.reference(cachename)
                 ref[:] += maptod
-                
+
                 del ref
                 del pixels
                 del weights
 
         return
-

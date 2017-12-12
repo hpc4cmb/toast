@@ -37,9 +37,9 @@ class OpGroundFilter(Operator):
            on ground filter failures.
     """
 
-    def __init__(self, wbin=1, name='signal',
-                 common_flag_name='common_flags', common_flag_mask=255,
-                 flag_name='flags', flag_mask=255, ground_flag_mask=1):
+    def __init__(self, wbin=1, name=None, common_flag_name=None,
+                 common_flag_mask=255, flag_name=None, flag_mask=255,
+                 ground_flag_mask=1):
 
         self._wbin = wbin
         self._name = name
@@ -84,13 +84,7 @@ class OpGroundFilter(Operator):
                     'not ground TOD? "{}"'.format(e))
 
              # Cache the output common flags
-            cachename = self._common_flag_name
-            if tod.cache.exists(cachename):
-                common_ref = tod.cache.reference(cachename)
-            else:
-                common_flag = tod.read_common_flags()
-                common_ref = tod.cache.put(cachename, common_flag)
-                del common_flag
+            common_ref = tod.local_common_flags(self._common_flag_name)
 
             # The azimuth vector is assumed to be arranged so that the
             # azimuth increases monotonously even across the zero meridian.
@@ -106,24 +100,8 @@ class OpGroundFilter(Operator):
                 # Bin the local data
 
                 if det in tod.local_dets:
-                    # Cache the output signal
-                    cachename = '{}_{}'.format(self._name, det)
-                    if tod.cache.exists(cachename):
-                        ref = tod.cache.reference(cachename)
-                    else:
-                        signal = tod.read(detector=det)
-                        ref = tod.cache.put(cachename, signal)
-
-                    # Cache the output flags
-                    cachename = '{}_{}'.format(self._flag_name, det)
-                    if tod.cache.exists(cachename):
-                        flag_ref = tod.cache.reference(cachename)
-                    else:
-                        # read_flags always returns both common and detector
-                        # flags but we already cached the common flags.
-                        flag, dummy = tod.read_flags(detector=det)
-                        flag_ref = tod.cache.put(cachename, flag)
-                        del flag, dummy
+                    ref = tod.local_signal(det, self._name)
+                    flag_ref = tod.local_flags(det, self._flag_name)
 
                     good = np.logical_and(
                         common_ref & self._common_flag_mask == 0,
@@ -139,7 +117,8 @@ class OpGroundFilter(Operator):
 
                     del flag_ref
 
-                # Reduce the binned data
+                # Reduce the binned data.  The detector signal may be
+                # distributed across the group communicator.
 
                 cgroup.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
                 cgroup.Allreduce(MPI.IN_PLACE, binned, op=MPI.SUM)

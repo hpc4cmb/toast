@@ -55,9 +55,9 @@ class OpSimDipole(Operator):
         freq (float): optional observing frequency in Hz (not GHz).
     """
     def __init__(self, mode='total', coord='C', subtract=False, out='dipole', 
-        cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26, solar_gal_lon=263.99,
-        freq=0):
-
+                 cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26,
+                 solar_gal_lon=263.99, freq=0, keep_quats=False, keep_vel=False,
+                 flag_mask=255, common_flag_mask=255):
         self._mode = mode
         self._coord = coord
         self._subtract = subtract
@@ -67,6 +67,10 @@ class OpSimDipole(Operator):
         self._solar_speed = solar_speed
         self._solar_gal_theta = np.deg2rad(90.0 - solar_gal_lat)
         self._solar_gal_phi = np.deg2rad(solar_gal_lon)
+        self._keep_quats = keep_quats
+        self._keep_vel = keep_vel
+        self._flag_mask = flag_mask
+        self._common_flag_mask = common_flag_mask
 
         projected = self._solar_speed * np.sin(self._solar_gal_theta)
         z = self._solar_speed * np.cos(self._solar_gal_theta)
@@ -106,12 +110,12 @@ class OpSimDipole(Operator):
         # the same rank within their group
         crank = comm.comm_rank
 
-        nullquat = np.array([0,0,0,1], dtype=np.float64)
+        nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         for obs in data.obs:
             tod = obs['tod']
 
-            nsamp = tod.local_samples[1]
+            offset, nsamp = tod.local_samples
 
             vel = None
             sol = None
@@ -119,25 +123,26 @@ class OpSimDipole(Operator):
             if (self._mode == 'solar') or (self._mode == 'total'):
                 sol = self._solar_vel
             if (self._mode == 'orbital') or (self._mode == 'total'):
-                vel = tod.read_velocity()
+                vel = tod.local_velocity()
+
+            common = tod.local_common_flags() & self._common_flag_mask
 
             for det in tod.local_dets:
 
-                pdata = np.copy(tod.read_pntg(detector=det, local_start=0, n=nsamp))
-                flags, common = tod.read_flags(detector=det, local_start=0, n=nsamp)
-                totflags = np.copy(flags)
-                totflags |= common
-
+                flags = tod.local_flags(det) & self._flag_mask
+                totflags = (flags | common)
                 del flags
-                del common
 
-                pdata[(totflags != 0),:] = nullquat
+                pdata = tod.local_pointing(det).copy()
+                pdata[(totflags != 0), :] = nullquat
 
-                dipoletod = dipole(pdata, vel=vel, solar=sol, cmb=self._cmb, freq=self._freq)
+                dipoletod = dipole(pdata, vel=vel, solar=sol, cmb=self._cmb,
+                                   freq=self._freq)
+                del pdata
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64, (tod.local_samples[1],))
+                    tod.cache.create(cachename, np.float64, (nsamp, ))
                 
                 ref = tod.cache.reference(cachename)
                 if self._subtract:
@@ -146,5 +151,14 @@ class OpSimDipole(Operator):
                     ref[:] += dipoletod
                 del ref
 
-        return
+                if not self._keep_quats:
+                    cachename = 'quat_{}'.format(det)
+                    tod.cache.destroy(cachename)
 
+            del common
+
+            if vel is not None and not self._keep_vel:
+                del vel
+                tod.cache.destroy('velocity')
+
+        return
