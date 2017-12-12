@@ -158,6 +158,75 @@ macro(REMOVE_FILE _LIST _NAME)
 
 endmacro(REMOVE_FILE _LIST _NAME)
 
+function(check_return _VAR)
+    if("${${_VAR}}" GREATER 0)
+        message(WARNING "Error code for ${_VAR} is greater than zero: ${${_VAR}}")
+    endif("${${_VAR}}" GREATER 0)
+endfunction(check_return _VAR)
 
+################################################################################
+#   numerically sort a list
+################################################################################
+
+function(numeric_sort _VAR)
+    set(_LIST ${ARGN})
+    set(NOT_FINISHED ON)
+    while(NOT_FINISHED)
+        set(_N 0)
+        list(LENGTH _LIST _L)
+        math(EXPR _L "${_L}-1")
+        set(NOT_FINISHED OFF)
+        while(_N LESS _L)
+            math(EXPR _P "${_N}+1")
+            list(GET _LIST ${_N} _A)
+            list(GET _LIST ${_P} _B)
+            if(_B LESS _A)
+                list(REMOVE_AT _LIST ${_P})
+                list(INSERT _LIST ${_N} ${_B})
+                set(NOT_FINISHED ON)
+            endif(_B LESS _A)
+            math(EXPR _N "${_N}+1")
+        endwhile(_N LESS _L)
+    endwhile(NOT_FINISHED)
+    set(${_VAR} ${_LIST} PARENT_SCOPE)
+endfunction(numeric_sort _LIST)
+
+################################################################################
+#   Get a parameter from a CMake file
+#   - useful when variable is set to CACHE but needed as non-cache
+################################################################################
+
+function(GET_PARAMETER _VAR _FILE _PARAM)
+
+    execute_process(COMMAND ${CMAKE_COMMAND} -DFILE=${_FILE} -DQUERY=${_PARAM}
+        -P ${CMAKE_SOURCE_DIR}/cmake/Scripts/GetParam.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    OUTPUT_VARIABLE PARAM
+    RESULT_VARIABLE RET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(REGEX REPLACE "^-- " "" PARAM "${PARAM}")
+    if(NOT RET GREATER 0)
+        set(${_VAR} ${PARAM} PARENT_SCOPE)
+    else(NOT RET GREATER 0)
+        message(FATAL_ERROR "Error retrieving ${_PARAM} value from \"${_FILE}\"")
+    endif(NOT RET GREATER 0)
+
+endfunction(GET_PARAMETER _VAR _FILE _PARAM)
+
+################################################################################
+#   get value in [0-9][0-9] format
+################################################################################
+
+function(GET_00 _VAR _VAL)
+    if(${_VAL} LESS 10)
+        set(${_VAR} "0${_VAL}" PARENT_SCOPE)
+    else()
+        set(${_VAR} "${_VAL}" PARENT_SCOPE)
+    endif()
+endfunction(GET_00 _VAR _VAL)
+
+################################################################################
+#
+################################################################################
 
 cmake_policy(POP)

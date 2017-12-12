@@ -34,58 +34,6 @@ endfunction(machine_defined)
 
 #------------------------------------------------------------------------------#
 
-function(check_return _VAR)
-    if("${${_VAR}}" GREATER 0)
-        message(WARNING "Error code for ${_VAR} is greater than zero: ${${_VAR}}")
-    endif("${${_VAR}}" GREATER 0)
-endfunction(check_return _VAR)
-
-#------------------------------------------------------------------------------#
-
-function(numeric_sort _VAR)
-    set(_LIST ${ARGN})
-    set(NOT_FINISHED ON)
-    while(NOT_FINISHED)
-        set(_N 0)
-        list(LENGTH _LIST _L)
-        math(EXPR _L "${_L}-1")
-        set(NOT_FINISHED OFF)
-        while(_N LESS _L)
-            math(EXPR _P "${_N}+1")
-            list(GET _LIST ${_N} _A)
-            list(GET _LIST ${_P} _B)
-            if(_B LESS _A)
-                list(REMOVE_AT _LIST ${_P})
-                list(INSERT _LIST ${_N} ${_B})
-                set(NOT_FINISHED ON)
-            endif(_B LESS _A)
-            math(EXPR _N "${_N}+1") 
-        endwhile(_N LESS _L)
-    endwhile(NOT_FINISHED)
-    set(${_VAR} ${_LIST} PARENT_SCOPE)
-endfunction(numeric_sort _LIST)
-
-#------------------------------------------------------------------------------#
-
-function(GET_PARAMETER _VAR _FILE _PARAM)
-
-    execute_process(COMMAND ${CMAKE_COMMAND} -DFILE=${_FILE} -DQUERY=${_PARAM}
-        -P ${CMAKE_SOURCE_DIR}/cmake/Scripts/GetParam.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    OUTPUT_VARIABLE PARAM
-    RESULT_VARIABLE RET
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-    string(REGEX REPLACE "^-- " "" PARAM "${PARAM}")
-    if(NOT RET GREATER 0)
-        set(${_VAR} ${PARAM} PARENT_SCOPE)
-    else(NOT RET GREATER 0)
-        message(FATAL_ERROR "Error retrieving ${_PARAM} value from \"${_FILE}\"")
-    endif(NOT RET GREATER 0)
-    
-endfunction(GET_PARAMETER _VAR _FILE _PARAM)
-
-#------------------------------------------------------------------------------#
-
 machine_defined()
 valid_machine()
 
@@ -111,7 +59,7 @@ include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})
     
 set(ENV{MACHINES} "${MACHINE}")
 
-message(STATUS "Generating shell examples for ${MACHINE}...")
+message(STATUS "Generating examples for ${MACHINE}...")
 execute_process(COMMAND ./generate_shell.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     OUTPUT_FILE generate_shell.log
@@ -119,7 +67,6 @@ execute_process(COMMAND ./generate_shell.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} 
     RESULT_VARIABLE GENERATE_SHELL_RET)
 check_return(GENERATE_SHELL_RET)
 
-message(STATUS "Generating SLURM examples for ${MACHINE}...")
 execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     OUTPUT_FILE generate_slurm.log
@@ -144,7 +91,6 @@ foreach(_TYPE ${PROBLEM_TYPES})
             COMMAND ctest.env.sh ${_SIZE}_${_TYPE}_${MACHINE}.slurm)
         get_parameter(_NODES "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
-        message(STATUS "# nodes for ${_TYPE}.${_SIZE} == ${_NODES}") 
         set(_FREQ "${FREQ_${_SIZE}}")
         string(TOLOWER "${_FREQ}" _LFREQ)
         set(_LABELS 
@@ -165,18 +111,6 @@ foreach(_TYPE ${PROBLEM_TYPES})
     endforeach(_SIZE ${PROBLEM_SIZES})
 endforeach(_TYPE ${PROBLEM_TYPES})
    
-get_parameter(CONSTRAINT 
-    "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}" CONSTRAINT)
-message(STATUS "Constraint: ${CONSTRAINT}")
-
-function(GET_00 _VAR _VAL)
-    if(${_VAL} LESS 10)
-        set(${_VAR} "0${_VAL}" PARENT_SCOPE)
-    else()
-        set(${_VAR} "${_VAL}" PARENT_SCOPE)
-    endif()
-endfunction(GET_00 _VAR _VAL)
-
 list(REMOVE_DUPLICATES NODES_LIST)
 numeric_sort(NODES_LIST ${NODES_LIST})
 set(_STR )
@@ -188,7 +122,6 @@ foreach(_N ${NODES_LIST})
     math(EXPR _HRS_TOT "(${_MIN_TOT}-${_MIN_REM})/60")
     get_00(_MIN_REM "${_MIN_REM}")
     get_00(_HRS_TOT "${_HRS_TOT}")
-    message(STATUS "TIME for ${_N} nodes (x${_C}): \"${_HRS_TOT}:${_MIN_REM}:00\"")
     set(NODES ${_N})
     set(TIME "${_HRS_TOT}:${_MIN_REM}:00")
     set(JOB_NAME "example_${_N}_node")

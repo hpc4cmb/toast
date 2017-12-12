@@ -1,25 +1,7 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
 
-# ---------------------------------------------------------------------------- #
-# -- Script Label
-# ---------------------------------------------------------------------------- #
-set_property(GLOBAL APPEND PROPERTY Label Build)
+setup(Build)
+submit(Build)
 
-# ---------------------------------------------------------------------------- #
-# -- CTest Start
-# ---------------------------------------------------------------------------- #
-ctest_start(${MODEL}   TRACK ${MODEL})
-
-## -- read CTestCustom.cmake file
-ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
-
-# ---------------------------------------------------------------------------- #
-# -- CTest Steps
-# ---------------------------------------------------------------------------- #
-
-ctest_configure (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
-ctest_build     (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
-ctest_submit    (                                           RETURN_VALUE ret)
-
-message(" -- Finished ${MODEL} - ${CTEST_BUILD_NAME} --")
+message(" -- Finished ${MODEL} Build - ${CTEST_BUILD_NAME} --")

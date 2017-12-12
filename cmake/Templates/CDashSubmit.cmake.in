@@ -1,0 +1,6 @@
+
+include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
+
+ctest_submit(RETURN_VALUE ret)
+
+message(" -- Finished ${MODEL} Submission - ${CTEST_BUILD_NAME} --")

@@ -1,4 +1,10 @@
 
+# include guard
+if(__cdashinit_is_loaded)
+    return()
+endif()
+set(__cdashinit_is_loaded ON)
+
 include(ProcessorCount)
 ProcessorCount(CTEST_PROCESSOR_COUNT)
 
@@ -12,7 +18,9 @@ set(CTEST_DASHBOARD_ROOT    "@CMAKE_DASHBOARD_ROOT@")
 set(CTEST_BRANCH            "@CMAKE_SOURCE_BRANCH@")
 set(CTEST_LOCAL_DIRECTORY   "@CMAKE_LOCAL_DIRECTORY@")
 set(CTEST_GENERATOR         "@CMAKE_GENERATOR@")
-set(CTEST_MODEL             "@CTEST_MODEL@")
+if(NOT DEFINED CTEST_MODEL)
+    set(CTEST_MODEL         "@CTEST_MODEL@")
+endif(NOT DEFINED CTEST_MODEL)
 
 # ---------------------------------------------------------------------------- #
 # -- Programs
@@ -38,11 +46,13 @@ endmacro(getuname)
 
 getuname(osname -s)
 
-if("${CTEST_MODEL}" STREQUAL "")
-    set(MODEL Continuous)
-else("${CTEST_MODEL}" STREQUAL "")
-    set(MODEL ${CTEST_MODEL})
-endif("${CTEST_MODEL}" STREQUAL "")
+if(NOT DEFINED MODEL)
+    if("${CTEST_MODEL}" STREQUAL "")
+        set(MODEL Continuous)
+    else("${CTEST_MODEL}" STREQUAL "")
+        set(MODEL ${CTEST_MODEL})
+    endif("${CTEST_MODEL}" STREQUAL "")
+endif(NOT DEFINED MODEL)
 
 set(NPROCS "${CTEST_PROCESSOR_COUNT}")
 if("${NPROCS}" GREATER 16)
@@ -77,6 +87,12 @@ set(CTEST_MEMORYCHECK_COMMAND "${CTEST_VALGRIND_COMMAND}")
 set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "--leak-check=full --show-reachable=no --show-possibly-lost=yes")
 #  --main-stacksize=104857600 --valgrind-stacksize=10485760
 
+
+if(NOT DEFINED TRIGGER)
+    set(TRIGGER "Any" CACHE STRING "Delay submit until TRIGGER == '(Any|Build|Test|Coverage|MemCheck)'")
+endif(NOT DEFINED TRIGGER)
+
+message(STATUS "CDash init submit trigger (TRIGGER) : [\"${TRIGGER}\"]")
 
 # ---------------------------------------------------------------------------- #
 # -- Clean/Reset
@@ -116,6 +132,22 @@ endmacro(CONFIGURE_DIRECTORIES)
 
 
 # ---------------------------------------------------------------------------- #
+# -- Determine if submit time
+# ---------------------------------------------------------------------------- #
+macro(SUBMIT KEY)
+    if("${TRIGGER}" STREQUAL "Any")
+        message(STATUS "Submitting ${KEY} matching any trigger (${TRIGGER})...")
+        ctest_submit(RETURN_VALUE ret)
+    else("${TRIGGER}" STREQUAL "Any")
+        if("${TRIGGER}" STREQUAL "${KEY}")
+            message(STATUS "Submitting ${KEY} matching trigger (${TRIGGER})...")
+            ctest_submit(RETURN_VALUE ret)
+        endif("${TRIGGER}" STREQUAL "${KEY}")
+    endif("${TRIGGER}" STREQUAL "Any")
+endmacro(SUBMIT KEY)
+
+
+# ---------------------------------------------------------------------------- #
 # -- Labels
 # ---------------------------------------------------------------------------- #
 if(DEFINED CTestLabels)
@@ -126,8 +158,18 @@ endif(DEFINED CTestLabels)
 
 
 # ---------------------------------------------------------------------------- #
-# -- Fresh build
+# -- Setup the test
 # ---------------------------------------------------------------------------- #
-clean_directories()
-configure_directories()
-
+macro(SETUP KEY)
+    set_property(GLOBAL APPEND PROPERTY Label ${KEY})
+    if("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")
+        message(STATUS "Key (${KEY}) triggered a fresh build...")
+        clean_directories()
+        configure_directories()    
+        ctest_start(${MODEL}   TRACK ${MODEL})
+        ## -- read CTestCustom.cmake file
+        ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
+        ctest_configure (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+        ctest_build     (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+    endif("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")    
+endmacro(SETUP KEY)

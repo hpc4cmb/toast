@@ -1,5 +1,13 @@
 #!/bin/bash
 
+#SBATCH --partition=@QUEUE@
+@CONSTRAINT@
+#SBATCH --account=@ACCOUNT@
+#SBATCH --nodes=@NODES@
+#SBATCH --time="@TIME@"
+#SBATCH --job-name=@JOB_NAME@
+#SBATCH --output=out_@JOB_NAME@_@MACHINE@_%j.log
+
 # set environment paths
 export PATH="${PROJECT_BIN_PATH}:@PATH@"
 export PYTHONPATH="${PROJECT_PYC_PATH}:@PYTHONPATH@"
