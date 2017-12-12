@@ -28,8 +28,6 @@ include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 include(CheckCXXSourceRuns)
 
-set(USE_CACHED_FLAGS OFF CACHE BOOL "If OFF, check all the flags for validity")
-
 ################################################################################
 # macro generate a test compile file
 ################################################################################
@@ -142,7 +140,8 @@ macro(add_flags _LANG _VAR _FLAGS)
         to_list(_LANGFLAGS "${_FLAGS}")
         foreach(_FLAG ${_LANGFLAGS})
             # check individual flag
-            test_compile(${_LANG} COMPILE_SUCCESS "${WARNING_AS_ERROR} ${_FLAG}")
+            test_compile(${_LANG} COMPILE_SUCCESS
+                "${WARNING_AS_ERROR} ${_FLAG}")
             if(COMPILE_SUCCESS)
                 # add individual flag
                 add(_VAR_GOOD "${_FLAG}")
@@ -163,7 +162,8 @@ endmacro(add_flags _LANG _VAR _FLAGS)
 ################################################################################
 macro(add_c_flags _VAR _FLAGS)        
     # cache the flags to test
-    set(CACHED_C_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING "Possible C flags for ${_VAR}")
+    set(CACHED_C_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
+        "Possible C flags for ${_VAR}")
     # if flags were changed or not previously processed
     if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
@@ -176,6 +176,9 @@ macro(add_c_flags _VAR _FLAGS)
         NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
     # set the ${_VAR} to the valid flags
     set(${_VAR} "${CACHED_C_${_VAR}_GOOD_FLAGS}")
+    # cache the flags that were tested
+    set(CACHED_C_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
+        "Possible C flags for ${_VAR}" FORCE)
 endmacro(add_c_flags _VAR _FLAGS)
 
 
@@ -184,7 +187,8 @@ endmacro(add_c_flags _VAR _FLAGS)
 ################################################################################
 macro(add_cxx_flags _VAR _FLAGS)
     # cache the flags to test
-    set(CACHED_CXX_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING "Possible C++ flags for ${_VAR}")
+    set(CACHED_CXX_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
+        "Possible C++ flags for ${_VAR}")
     # if flags were changed or not previously processed
     if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
@@ -197,6 +201,9 @@ macro(add_cxx_flags _VAR _FLAGS)
         NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
     # set the ${_VAR} to the valid flags
     set(${_VAR} "${CACHED_CXX_${_VAR}_GOOD_FLAGS}")
+    # cache the flags that were tested
+    set(CACHED_CXX_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
+        "Possible C++ flags for ${_VAR}" FORCE)
 endmacro(add_cxx_flags _VAR _FLAGS)
 
 
@@ -250,7 +257,8 @@ foreach(LANG C CXX)
         # HP aC++ compiler
         SET_COMPILER_VAR(       HP_ACC              ON)
 
-    elseif(CMAKE_${LANG}_COMPILER MATCHES "CC" AND CMAKE_SYSTEM_NAME MATCHES "IRIX" AND UNIX)
+    elseif(CMAKE_${LANG}_COMPILER MATCHES "CC" AND
+            CMAKE_SYSTEM_NAME MATCHES "IRIX" AND UNIX)
 
         # IRIX MIPSpro CC Compiler
         SET_COMPILER_VAR(       MIPS                ON)

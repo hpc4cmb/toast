@@ -4,7 +4,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
 # ---------------------------------------------------------------------------- #
 # -- Script Label
 # ---------------------------------------------------------------------------- #
-set_property(GLOBAL APPEND PROPERTY Label Build)
+set_property(GLOBAL APPEND PROPERTY Label MemoryCheck)
 
 # ---------------------------------------------------------------------------- #
 # -- CTest Start
@@ -18,8 +18,10 @@ ctest_read_custom_files("${CTEST_BINARY_DIRECTORY}")
 # -- CTest Steps
 # ---------------------------------------------------------------------------- #
 
-ctest_configure (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
-ctest_build     (BUILD      "${CTEST_BINARY_DIRECTORY}"     RETURN_VALUE ret)
-ctest_submit    (                                           RETURN_VALUE ret)
+ctest_configure (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+ctest_build     (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+ctest_test      (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+ctest_memcheck  (BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
+ctest_submit    (                                  RETURN_VALUE ret)
 
 message(" -- Finished ${MODEL} - ${CTEST_BUILD_NAME} --")

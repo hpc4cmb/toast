@@ -11,12 +11,13 @@ if ! eval command -v realpath &> /dev/null ; then
 fi 
 
 # get the absolute path to the directory with this script
-topdir=$(realpath $(dirname ${BASH_SOURCE[0]}))
+TOPDIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
 
-echo "Running in top directory: ${topdir}..."
+echo "Running in top directory: ${TOPDIR}..."
 
 if ! eval command -v cmake &> /dev/null ; then
-    module load cmake
+    echo -e "\n\tCommand: \"cmake\" not available. Unable to proceed...\n"
+    exit 2
 fi
 
 LOADED_VTUNE="$(module list &> /dev/stdout | grep vtune | awk '{print $NF}')"
@@ -26,9 +27,9 @@ if [ -z "${LOADED_VTUNE}" ]; then
     NO_SLURM=1
 fi
 
-: ${account:=mp107}
-: ${queue:=debug}
-: ${vtune:=${LOADED_VTUNE}}
+: ${ACCOUNT:=mp107}
+: ${QUEUE:=debug}
+: ${VTUNE:=${LOADED_VTUNE}}
 : ${TYPES:="satellite ground ground_simple"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-knl cori-haswell edison"}
@@ -39,27 +40,30 @@ if [ -z "$(echo ${SIZES} | grep tiny)" ]; then
     SHELL_SIZES=""
 fi
 
+: ${GENERATE_SHELL:=1}
+export GENERATE_SHELL
+
 # Generate Shell
-for type in ${TYPES}; do
-    for size in ${SHELL_SIZES}; do
-
-        if [ -z "${size}" ]; then continue; fi
-        
-        template="${topdir}/templates/vtune_${type}_shell.in"
-        sizefile="${topdir}/templates/params/${type}.tiny"
-        outfile="${topdir}/vtune_${size}_${type}_shell.sh"
-
-        echo "Generating ${outfile}"
-
-        cmake -DINFILE=${template} -DOUTFILE=${outfile} \
-            -DSIZEFILE=${sizefile} \
-            -DTOPDIR="${topdir}" -DTYPE=${type} \
-            -DSIZE=${size} \
-            -DVTUNE="${vtune}" $@ \
-            -P ${topdir}/templates/config.cmake
-        
+if [ "${TOAST_SHELL_EXAMPLES}" -gt 0 ]; then
+    for TYPE in ${TYPES}; do
+        for SIZE in ${SHELL_SIZES}; do
+    
+            if [ -z "${SIZE}" ]; then continue; fi
+            
+            TEMPLATE="${TOPDIR}/templates/vtune_${TYPE}_shell.in"
+            SIZEFILE="${TOPDIR}/templates/params/${TYPE}.tiny"
+            OUTFILE="${TOPDIR}/vtune_${SIZE}_${TYPE}_shell.sh"
+    
+            echo "Generating ${OUTFILE}"
+    
+            cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
+                -DSIZEFILE=${SIZEFILE} -DTOPDIR="${TOPDIR}" -DTYPE=${TYPE} \
+                -DSIZE=${SIZE} -DVTUNE="${VTUNE}" $@ \
+                -P ${TOPDIR}/templates/config.cmake
+            
+        done
     done
-done
+fi
 
 # skip the SLURM generation
 if [ "${NO_SLURM}" -eq 1 ]; then
@@ -67,23 +71,23 @@ if [ "${NO_SLURM}" -eq 1 ]; then
 fi
 
 # generate SLURM
-for type in ${TYPES}; do
-    for size in ${SIZES}; do
-        for machine in ${MACHINES}; do
+for TYPE in ${TYPES}; do
+    for SIZE in ${SIZES}; do
+        for MACHINE in ${MACHINES}; do
 	
-            template="${topdir}/templates/vtune_${type}.in"
-            sizefile="${topdir}/templates/params/${type}.${size}"
-            machfile="${topdir}/templates/machines/${machine}"
-            outfile="${topdir}/vtune_${size}_${type}_${machine}.slurm"
+            TEMPLATE="${TOPDIR}/templates/vtune_${TYPE}.in"
+            SIZEFILE="${TOPDIR}/templates/params/${TYPE}.${SIZE}"
+            MACHFILE="${TOPDIR}/templates/machines/${MACHINE}"
+            OUTFILE="${TOPDIR}/vtune_${SIZE}_${TYPE}_${MACHINE}.slurm"
 
-            echo "Generating ${outfile}"
+            echo "Generating ${OUTFILE}"
 
-            cmake -DINFILE=${template} -DOUTFILE=${outfile} \
-                -DMACHFILE=${machfile} -DSIZEFILE=${sizefile} \
-                -DTOPDIR="${topdir}" -DACCOUNT=${account} -DTYPE=${type} \
-                -DSIZE=${size} -DMACHINE=${machine} -DQUEUE=${queue} \
+            cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
+                -DMACHFILE=${MACHFILE} -DSIZEFILE=${SIZEFILE} \
+                -DTOPDIR="${TOPDIR}" -DACCOUNT=${ACCOUNT} -DTYPE=${TYPE} \
+                -DSIZE=${SIZE} -DMACHINE=${MACHINE} -DQUEUE=${QUEUE} \
                 -DVTUNE="${vtune}" $@ \
-                -P ${topdir}/templates/config.cmake
+                -P ${TOPDIR}/templates/config.cmake
         done
     done
 done

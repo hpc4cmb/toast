@@ -13,7 +13,9 @@ file(GLOB_RECURSE PYTHON_MODULE_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
     ${CMAKE_CURRENT_LIST_DIR}/*.py.in
     ${CMAKE_SOURCE_DIR}/pipelines/*.py)
 
-add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES})
+add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES}
+    $<TARGET_OBJECTS:libtoast-object>)
+add_dependencies(cbuffer-lib ${PROJECT_LINK_TARGETS})
 
 if(CMAKE_C_COMPILER_IS_GNU AND NOT APPLE)
     set(_LINK_FLAGS "-Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions")
@@ -27,8 +29,9 @@ set_target_properties(cbuffer-lib
     PREFIX                      ""
     SUFFIX                      ".so"
     COMPILE_FLAGS               "${CMAKE_C_FLAGS_EXTRA}"
-    RPATH                       ${CMAKE_INSTALL_FULL_PYTHONDIR}
-    LANGUAGE                    C)
+    #RPATH                       ${CMAKE_INSTALL_FULL_PYTHONDIR}
+    LANGUAGE                    C
+    LINKER_LANGUAGE             CXX)
 
 # py libs
 set(PYLIBS )
@@ -41,11 +44,10 @@ foreach(_LIB dl util m)
     endif()
 endforeach()
 target_link_libraries(cbuffer-lib ${PYLIBS}
-    ${PROJECT_LINK_TARGETS}
+    ${EXTERNAL_LIBRARIES}
     ${MPI_LIBRARIES}
-    ${PYTHON_LIBRARIES}
-    )
-install(TARGETS cbuffer-lib DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
+    ${PYTHON_LIBRARIES})
+install(TARGETS cbuffer-lib DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
 
 
 # =============================================================================#
@@ -85,7 +87,14 @@ foreach(PYCONFIG ${PYTHON_CONFIG_FILES})
     list(APPEND PYTHON_FILES ${CMAKE_BINARY_DIR}/InstallTreeFiles/${PYCONFIG_NAME}.py)
 endforeach()
 
-install(FILES ${PYTHON_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
+install(FILES ${PYTHON_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
+
+if(USE_COVERAGE)
+    file(GLOB_RECURSE _PYINSTALL_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
+        ${CMAKE_BINARY_DIR}/InstallTreeFiles/*.py
+        ${CMAKE_SOURCE_DIR}/pipelines/*.py)
+    set(PYTHON_INSTALL_FILES ${_PYINSTALL_FILES} CACHE INTERNAL "Python files installed" FORCE)
+endif(USE_COVERAGE)
 
 # install the python sub-directories
 install(DIRECTORY
@@ -93,12 +102,12 @@ install(DIRECTORY
     ${CMAKE_CURRENT_LIST_DIR}/map
     ${CMAKE_CURRENT_LIST_DIR}/tests
     ${CMAKE_CURRENT_LIST_DIR}/tod
-    DESTINATION ${CMAKE_INSTALL_PYTHONDIR})
+    DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
 
 # ensure all the python files are executable
 foreach(DIR fod map tests tod)
     file(GLOB _FILES ${CMAKE_CURRENT_LIST_DIR}/${DIR}/*.py)
-    install(FILES ${_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${DIR}
+    install(FILES ${_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME}/${DIR}
         #PERMISSIONS
         #OWNER_READ    GROUP_READ    WORLD_READ
         #OWNER_WRITE

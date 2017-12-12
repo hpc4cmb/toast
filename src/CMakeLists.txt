@@ -55,7 +55,6 @@ set(PROJECT_LIBRARIES ${EXTERNAL_LIBRARIES})
 # =============================================================================#
 #   Library build
 # =============================================================================#
-set(PROJECT_LINK_TARGETS )
 
 #------------------------------------------------------------------------------#
 
@@ -92,10 +91,10 @@ if(BUILD_SHARED_LIBS)
                    VERSION          "${${PROJECT_NAME}_SHORT_VERSION}"
                    SOVERSION        "${${PROJECT_NAME}_MAJOR_VERSION}"
                    LINK_FLAGS       "${EXTERNAL_CXX_LINK_FLAGS}"
-                   RPATH            ${CMAKE_INSTALL_FULL_PYTHONDIR})
+                   )
     target_link_libraries(${PROJECT_NAME}-shared ${EXTERNAL_LIBRARIES})
-    list(APPEND PROJECT_LIBRARIES ${PROJECT_NAME}-shared)
     set(PROJECT_LINK_TARGETS ${PROJECT_NAME}-shared)
+    list(APPEND PROJECT_LIBRARIES ${PROJECT_NAME}-shared)
     #--------------------------------------------------------------------------#
 
 endif()
@@ -110,9 +109,67 @@ add_subdirectory(python)
 # =============================================================================#
 #   Executable build
 # =============================================================================#
-add_executable(toast_test libtoast/toast_test.cpp)
+add_executable(toast_test libtoast/toast_test.cpp $<TARGET_OBJECTS:libtoast-object>)
 target_link_libraries(toast_test
-    ${PROJECT_LINK_TARGETS} ${EXTERNAL_LIBRARIES})
+    ${PROJECT_LINK_TARGETS}
+    ${EXTERNAL_LIBRARIES})
+
+
+# =============================================================================#
+#   Code coverage
+# =============================================================================#
+if(USE_COVERAGE)
+
+    set(CTEST_MODEL "Continuous" CACHE STRING "Model for CTest")
+    # CXX coverage
+    SETUP_TARGET_FOR_COVERAGE(NAME cxx_toast_test_coverage
+        EXECUTABLE toast_test
+        DEPENDS toast_test)
+
+    set(PYC_FILEPATH ${CMAKE_BINARY_DIR}/python
+        CACHE PATH "Path to pyc_toast_test_coverage.py" FORCE)
+
+    set(_PYFILES )
+    foreach(_file ${PYTHON_INSTALL_FILES})
+        set(_fname "${_file}")
+        string(REPLACE "${CMAKE_SOURCE_DIR}/pipelines/" "toast." _fname "${_fname}")
+        string(REPLACE "${CMAKE_CURRENT_LIST_DIR}/python/" "toast." _fname "${_fname}")
+        string(REPLACE "${CMAKE_BINARY_DIR}/InstallTreeFiles/" "toast." _fname "${_fname}")
+        string(REPLACE "/" "." _fname "${_fname}")
+        configure_file(${_file} ${PYC_FILEPATH}/${_fname} COPYONLY)
+    endforeach()
+
+    # Python coverage
+    FILE(WRITE ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py
+"#!/usr/bin/env python
+
+import trace
+import sys
+import os
+import toast
+
+def run_tests():
+    toast.test()
+
+toast_path = os.path.abspath(toast.__file__)
+print('toast path: {}'.format(toast_path))
+# create a Trace object, telling it what to ignore, and whether to do tracing
+# or line-counting or both.
+tracer = trace.Trace(ignoredirs=[sys.exec_prefix], trace=0, count=1)
+# run the new command using the given tracer
+tracer.run('run_tests()')
+# make a report, placing output in the current directory
+r = tracer.results()
+r.write_results(show_missing=False, coverdir='${PYC_FILEPATH}')
+
+")
+
+    SETUP_TARGET_FOR_COVERAGE(NAME pyc_toast_test_coverage
+        EXECUTABLE ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py
+        DEPENDS ${PROJECT_LINK_TARGETS})
+
+endif(USE_COVERAGE)
+
 
 # =============================================================================#
 #   Export

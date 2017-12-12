@@ -1,0 +1,133 @@
+
+include(ProcessorCount)
+ProcessorCount(CTEST_PROCESSOR_COUNT)
+
+set(CTEST_MAKE_COMMAND      "@CMAKE_MAKE_PROGRAM@")
+set(CTEST_CMAKE_COMMAND     "@CMAKE_COMMAND@")
+set(CTEST_CMAKE_GENERATOR   "'@CMAKE_GENERATOR@'")
+set(CTEST_CONFIG_OPTIONS    "@CMAKE_CONFIGURE_OPTIONS@")
+set(CTEST_COMPILER          "@CMAKE_CXX_COMPILER_ID@")
+set(CTEST_COMPILER_VERSION  "@CMAKE_CXX_COMPILER_VERSION@")
+set(CTEST_DASHBOARD_ROOT    "@CMAKE_DASHBOARD_ROOT@")
+set(CTEST_BRANCH            "@CMAKE_SOURCE_BRANCH@")
+set(CTEST_LOCAL_DIRECTORY   "@CMAKE_LOCAL_DIRECTORY@")
+set(CTEST_GENERATOR         "@CMAKE_GENERATOR@")
+set(CTEST_MODEL             "@CTEST_MODEL@")
+
+# ---------------------------------------------------------------------------- #
+# -- Programs
+# ---------------------------------------------------------------------------- #
+
+find_program(CTEST_HOSTNAME_COMMAND NAMES hostname)
+find_program(CTEST_UNAME_COMMAND    NAMES uname)
+find_program(CTEST_GIT_COMMAND      NAMES git)
+find_program(CTEST_VALGRIND_COMMAND NAMES valgrind)
+find_program(CTEST_GNU_COV_COMMAND  NAMES gcov)
+find_program(CTEST_LLVM_COV_COMMAND NAMES llvm-cov)
+
+execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND} 
+    OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT}
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    
+macro(getuname name flag)
+    execute_process(COMMAND ${CTEST_UNAME_COMMAND} ${flag} 
+        OUTPUT_VARIABLE ${name}
+        WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT}
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+endmacro(getuname)
+
+getuname(osname -s)
+
+if("${CTEST_MODEL}" STREQUAL "")
+    set(MODEL Continuous)
+else("${CTEST_MODEL}" STREQUAL "")
+    set(MODEL ${CTEST_MODEL})
+endif("${CTEST_MODEL}" STREQUAL "")
+
+set(NPROCS "${CTEST_PROCESSOR_COUNT}")
+if("${NPROCS}" GREATER 16)
+    set(NPROCS 16)
+endif("${NPROCS}" GREATER 16)
+
+set(CTEST_BUILD_NAME            "${CTEST_BRANCH}-${osname}-${CTEST_COMPILER}-${CTEST_COMPILER_VERSION}-${MODEL}")
+set(CTEST_SOURCE_DIRECTORY      "${CTEST_DASHBOARD_ROOT}/source-toast")
+set(CTEST_BINARY_DIRECTORY      "${CTEST_DASHBOARD_ROOT}/build-${CTEST_BUILD_NAME}")
+set(CTEST_INSTALL_DIRECTORY     "${CTEST_DASHBOARD_ROOT}/install-${CTEST_BUILD_NAME}")
+set(OPTION_BUILD                "-j${NPROCS}")
+
+set(CTEST_COMPILER_IS_GNU       "@CMAKE_CXX_COMPILER_IS_GNU@")
+set(CTEST_COMPILER_IS_CLANG     "@CMAKE_CXX_COMPILER_IS_CLANG@")
+set(CTEST_COMPILER_IS_INTEL     "@CMAKE_CXX_COMPILER_IS_INTEL@")
+
+if(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
+    set(CTEST_CHECKOUT_COMMAND      "rsync -ruv --exclude ${CTEST_LOCAL_DIRECTORY}/build-toast --exclude build-toast ${CTEST_LOCAL_DIRECTORY}/ ${CTEST_SOURCE_DIRECTORY}")
+else(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
+    set(CTEST_CHECKOUT_COMMAND      "${CTEST_GIT_COMMAND} clone -b ${CTEST_BRANCH} --recurse-submodules https://github.com/hpc4cmb/toast ${CTEST_SOURCE_DIRECTORY}")
+endif(NOT "${CTEST_LOCAL_DIRECTORY}" STREQUAL "")
+set(CTEST_UPDATE_COMMAND        "${CTEST_GIT_COMMAND}")
+set(CTEST_CONFIGURATION_TYPE    "@CMAKE_BUILD_TYPE@")
+set(CTEST_CONFIGURE_COMMAND     "${CTEST_CMAKE_COMMAND} ${CTEST_CONFIG_OPTIONS} -DBUILD_TESTING=ON -DDASHBOARD_MODE=ON -DCMAKE_INSTALL_PREFIX=${CTEST_INSTALL_DIRECTORY} -Wno-dev ${CTEST_SOURCE_DIRECTORY} -G ${CTEST_CMAKE_GENERATOR}")
+set(CTEST_BUILD_COMMAND         "${CTEST_MAKE_COMMAND} install ${OPTION_BUILD}")
+if(CTEST_COMPILER_IS_GNU)
+    set(CTEST_COVERAGE_COMMAND ${CTEST_GNU_COV_COMMAND})
+elseif(CTEST_COMPILER_IS_CLANG)
+    set(CTEST_COVERAGE_COMMAND ${CTEST_LLVM_COV_COMMAND})
+endif(CTEST_COMPILER_IS_GNU)
+set(CTEST_MEMORYCHECK_COMMAND "${CTEST_VALGRIND_COMMAND}")
+set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "--leak-check=full --show-reachable=no --show-possibly-lost=yes")
+#  --main-stacksize=104857600 --valgrind-stacksize=10485760
+
+
+# ---------------------------------------------------------------------------- #
+# -- Clean/Reset
+# ---------------------------------------------------------------------------- #
+macro(CLEAN_DIRECTORIES)
+    execute_process(
+        COMMAND ${CTEST_CMAKE_COMMAND} -E remove_directory ${CTEST_SOURCE_DIRECTORY}
+        COMMAND ${CTEST_CMAKE_COMMAND} -E remove_directory ${CTEST_BINARY_DIRECTORY}
+        COMMAND ${CTEST_CMAKE_COMMAND} -E remove_directory ${CTEST_INSTALL_DIRECTORY}
+        WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT})
+endmacro(CLEAN_DIRECTORIES)
+
+# ---------------------------------------------------------------------------- #
+# -- Settings
+# ---------------------------------------------------------------------------- #
+
+## -- Process timeout in seconds
+set(CTEST_TIMEOUT           "7200")
+## -- Set output to English
+set(ENV{LC_MESSAGES}      "en_EN" )
+
+# set environment paths
+set(ENV{PROJECT_BIN_PATH}   "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_BINDIR@")
+set(ENV{PROJECT_LIB_PATH}   "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_LIBDIR@")
+set(ENV{PROJECT_PYC_PATH}   "${CTEST_INSTALL_DIRECTORY}/@CMAKE_INSTALL_PYTHONDIR@")
+
+
+# ---------------------------------------------------------------------------- #
+# -- Configure file
+# ---------------------------------------------------------------------------- #
+macro(CONFIGURE_DIRECTORIES)
+    ## -- CTest Config
+    configure_file(CTestConfig.cmake ${CTEST_BINARY_DIRECTORY}/CTestConfig.cmake)
+    ## -- CTest Custom
+    configure_file(CTestCustom.cmake ${CTEST_BINARY_DIRECTORY}/CTestCustom.cmake)
+endmacro(CONFIGURE_DIRECTORIES)
+
+
+# ---------------------------------------------------------------------------- #
+# -- Labels
+# ---------------------------------------------------------------------------- #
+if(DEFINED CTestLabels)
+    foreach(_label ${CTestLabels})
+        set_property(GLOBAL APPEND PROPERTY Label ${_label})
+    endforeach(_label ${CTestLabels})
+endif(DEFINED CTestLabels)
+
+
+# ---------------------------------------------------------------------------- #
+# -- Fresh build
+# ---------------------------------------------------------------------------- #
+clean_directories()
+configure_directories()
+

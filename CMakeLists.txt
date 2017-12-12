@@ -15,6 +15,7 @@ endif()
 
 project(TOAST C CXX)
 
+STRING(TOLOWER "${CMAKE_PROJECT_NAME}" LPROJECT_NAME)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "CMake build type")
 # Above cache variable isn't immediately set in first build
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
@@ -62,6 +63,7 @@ add_feature(CMAKE_INSTALL_PREFIX "Installation prefix")
 add_feature(CMAKE_CXX_FLAGS "CXX flags")
 add_feature(CMAKE_BUILD_TYPE "Build type")
 add_feature(CMAKE_CXX_FLAGS_${UPPER_BUILD_TYPE} "CXX flags for ${CMAKE_BUILD_TYPE}")
+add_feature(CMAKE_GENERATOR "Build file generator")
 
 foreach(_INCLUDE_DIR ${EXTERNAL_INCLUDE_DIRS})
     include_directories(SYSTEM ${_INCLUDE_DIR})
@@ -108,3 +110,8 @@ if(BUILD_TESTING)
 endif()
 
 print_features()
+
+if(EXISTS ${CMAKE_BINARY_DIR}/compile-testing)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove_directory
+        ${CMAKE_BINARY_DIR}/compile-testing)
+endif(EXISTS ${CMAKE_BINARY_DIR}/compile-testing)

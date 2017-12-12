@@ -39,7 +39,13 @@ macro(add_compile_flags)
 
     # Now for each file, add the definitions
     foreach(_acd_source ${ADDDEF_SOURCES})
-        set(_acd_full_source ${_ACD_BASE_PATH}/${_acd_source})
+        # add base path
+        if(NOT IS_ABSOLUTE ${_acd_source})
+            set(_acd_full_source ${_ACD_BASE_PATH}/${_acd_source})
+        else()
+            set(_acd_full_source ${_acd_source})
+        endif()
+        
         # Extract any existing compile definitions
         get_source_file_property(_acd_existing_properties
                                  ${_acd_full_source}
@@ -58,6 +64,7 @@ macro(add_compile_flags)
     endforeach()
 endmacro()
 
+
 #-----------------------------------------------------------------------
 # macro define_module(NAME <name>
 #           HEADER_EXT <header_ext1> <header_ext2> ... <header_extN>
@@ -70,7 +77,7 @@ macro(define_module)
     cmake_parse_arguments(DEFMOD
         "NO_SOURCE_GROUP"
         "NAME;HEADER_DIR;SOURCE_DIR;LANG"
-        "HEADER_EXT;SOURCE_EXT;HEADERS;SOURCES;EXCLUDE;LINK_LIBRARIES;NOTIFY_EXCLUDE"
+        "HEADER_EXT;SOURCE_EXT;HEADERS;SOURCES;EXCLUDE;LINK_LIBRARIES;NOTIFY_EXCLUDE;COMPILE_FLAGS"
         ${ARGN}
         )
 
@@ -186,10 +193,15 @@ macro(define_module)
     # check for existance of modules.cmake and if it exists
     # add it to list of files to include
     if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/modules.cmake")
-        set_property(GLOBAL APPEND PROPERTY SWIG_MODULE_FILES
+        set_property(GLOBAL APPEND PROPERTY MODULE_FILES
             ${CMAKE_CURRENT_LIST_DIR}/modules.cmake)
     endif()
 
+    if(DEFMOD_COMPILE_FLAGS)
+        add_compile_flags(SOURCES ${${MODULE_NAME}_HEADERS} ${${MODULE_NAME}_SOURCES}
+            COMPILE_FLAGS ${DEFMOD_COMPILE_FLAGS})
+    endif(DEFMOD_COMPILE_FLAGS)
+        
     if(NOT ${DEFMOD_NO_SOURCE_GROUP})
         set_property(GLOBAL APPEND PROPERTY SOURCE_GROUPS ${MODULE_NAME})
         STRING(REPLACE "." "\\\\" _mod_name ${MODULE_NAME})

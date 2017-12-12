@@ -11,37 +11,51 @@ if ! eval command -v realpath &> /dev/null ; then
 fi 
 
 # get the absolute path to the directory with this script
-topdir=$(realpath $(dirname ${BASH_SOURCE[0]}))
+TOPDIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
 
-echo "Running in top directory: ${topdir}..."
+echo "Running in top directory: ${TOPDIR}..."
 
 if ! eval command -v cmake &> /dev/null ; then
-    #if eval command -v module &> /dev/null ; then
-        module load cmake
-    #fi
+    echo -e "\n\tCommand: \"cmake\" not available. Unable to proceed...\n"
+    exit 2
 fi
 
-: ${account:=mp107}
-: ${queue:=debug}
+: ${ACCOUNT:=mp107}
+: ${QUEUE:=debug}
 : ${TYPES:="satellite ground ground_simple"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-knl cori-haswell edison"}
 
-for type in ${TYPES}; do
-    for size in ${SIZES}; do
-        for machine in ${MACHINES}; do    
-            template="${topdir}/templates/${type}.in"
-            sizefile="${topdir}/templates/params/${type}.${size}"
-            machfile="${topdir}/templates/machines/${machine}"
-            outfile="${topdir}/${size}_${type}_${machine}.slurm"
+for TYPE in ${TYPES}; do
+    for SIZE in ${SIZES}; do
+        for MACHINE in ${MACHINES}; do   
+         
+            TEMPLATE="${TOPDIR}/templates/${TYPE}.in"
+            SIZEFILE="${TOPDIR}/templates/params/${TYPE}.${SIZE}"
+            MACHFILE="${TOPDIR}/templates/machines/${MACHINE}"
+            OUTFILE="${TOPDIR}/${SIZE}_${TYPE}_${MACHINE}.slurm"
 
-            echo "Generating ${outfile}"
+            echo "Generating ${OUTFILE}"
 
-            cmake -DINFILE=${template} -DOUTFILE=${outfile} \
-                -DMACHFILE=${machfile} -DSIZEFILE=${sizefile} \
-                -DTOPDIR="${topdir}" -DACCOUNT=${account} -DTYPE=${type} \
-                -DSIZE=${size} -DMACHINE=${machine} -DQUEUE=${queue} $@ \
-                -P ${topdir}/templates/config.cmake
+            cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
+                -DMACHFILE=${MACHFILE} -DSIZEFILE=${SIZEFILE} \
+                -DTOPDIR="${TOPDIR}" -DACCOUNT=${ACCOUNT} -DTYPE=${TYPE} \
+                -DSIZE=${SIZE} -DMACHINE=${MACHINE} -DQUEUE=${QUEUE} $@ \
+                -P ${TOPDIR}/templates/config.cmake
         done
     done
 done
+
+# set default to 0
+: ${GENERATE_SHELL:=0}
+# generate shell if set to greater than zero
+if [ "${GENERATE_SHELL}" -gt 0 ]; then
+    ${TOPDIR}/generate_shell.sh
+fi
+
+# set default to 0
+: ${GENERATE_VTUNE:=0}
+# generate VTune if set to greater than zero
+if [ "${GENERATE_VTUNE}" -gt 0 ]; then
+    ${TOPDIR}/generate_vtune.sh
+fi

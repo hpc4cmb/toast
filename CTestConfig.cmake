@@ -10,17 +10,17 @@
 # See the License for more information.
 #=============================================================================
 
-set(CTEST_COMPILER "@CMAKE_CXX_COMPILER_ID@")
-
 find_program(CTEST_HOSTNAME_COMMAND NAMES hostname)
-exec_program(${CTEST_HOSTNAME_COMMAND} ARGS OUTPUT_VARIABLE HOSTNAME)
-
+execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND} 
+    OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    
 set(CTEST_SITE                  "${HOSTNAME}")
-set(CTEST_PROJECT_NAME          "@CMAKE_PROJECT_NAME@")
-set(CTEST_NIGHTLY_START_TIME    "09:15:00 PDT")
+set(CTEST_PROJECT_NAME          "TOAST")
+set(CTEST_NIGHTLY_START_TIME    "00:00:00 PDT")
 set(CTEST_DROP_METHOD           "http")
 set(CTEST_DROP_SITE             "jonathan-madsen.info")
-set(CTEST_DROP_LOCATION         "/cdash/public/submit.php?project=@CMAKE_PROJECT_NAME@")
+set(CTEST_DROP_LOCATION         "/cdash/public/submit.php?project=TOAST")
 set(CTEST_DROP_SITE_CDASH       TRUE)
 set(CTEST_CDASH_VERSION         "1.6")
 set(CTEST_CDASH_QUERY_VERSION   TRUE)

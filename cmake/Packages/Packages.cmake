@@ -41,6 +41,7 @@ add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
 
 add_option(USE_TIMERS "Enable internal timers" ON)
+add_option(USE_COVERAGE "Enable compilation flags for GNU coverage tool (gcov)" OFF)
 
 
 ################################################################################
@@ -54,6 +55,30 @@ add_definitions(-DHAVE_CONFIG_H)
 if(NOT USE_TIMERS)
     add_definitions(-DDISABLE_TIMERS)
 endif(NOT USE_TIMERS)
+
+if(USE_COVERAGE)
+    include(Coverage)
+    add(CMAKE_C_FLAGS_EXTRA "${COVERAGE_COMPILER_FLAGS}")
+    add(CMAKE_CXX_FLAGS_EXTRA "${COVERAGE_COMPILER_FLAGS}")
+    #add(CMAKE_EXE_LINKER_FLAGS "${COVERAGE_COMPILER_FLAGS}")
+    set(Coverage_LIBRARIES )
+    if(CMAKE_CXX_COMPILER_IS_GNU)
+        find_library(GCOV_LIBRARY
+            NAMES gcov
+            HINTS
+                ENV DYLD_LIBRARY_PATH
+                ENV LIBRARY_PATH
+                ENV LD_LIBRARY_PATH
+            PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR} lib lib64)
+        if(GCOV_LIBRARY)
+            list(APPEND Coverage_LIBRARIES ${GCOV_LIBRARIES})
+        else(GCOV_LIBRARY)
+            list(APPEND Coverage_LIBRARIES gcov)
+        endif(GCOV_LIBRARY)
+    endif(CMAKE_CXX_COMPILER_IS_GNU)
+else(USE_COVERAGE)
+    unset(COVERAGE_COMPILER_FLAGS CACHE)
+endif(USE_COVERAGE)
 
 
 ################################################################################
@@ -292,6 +317,7 @@ set(EXTERNAL_LIBRARIES ${CMAKE_THREAD_LIBS_INIT}
     ${FFTW3_LIBRARIES}
     ${wcslib_LIBRARIES}
     ${Elemental_LIBRARIES}
+    ${Coverage_LIBRARIES}
 )
 
 REMOVE_DUPLICATES(EXTERNAL_INCLUDE_DIRS)
