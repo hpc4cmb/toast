@@ -291,7 +291,7 @@ void toast::util::timing_manager::set_output_stream(const string_t& fname)
     auto ostreamop = [&] (ostream_t*& m_os, const string_t& _fname)
     {
         if(m_os != &std::cout)
-            delete m_os;
+            delete (ofstream_t*) m_os;
 
         ofstream_t* _fos = new ofstream_t;
         for(int32_t i = 0; i < mpi_size(); ++i)

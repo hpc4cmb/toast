@@ -126,9 +126,8 @@ struct base_clock_data
 
     this_type& operator=(const this_type& rhs)
     {
-        if(this == &rhs)
-            return *this;
-        data = rhs.data;
+        if(this != &rhs)
+            data = rhs.data;
         return *this;
     }
 

@@ -24,7 +24,7 @@ def enabled():
 
 
 #------------------------------------------------------------------------------#
-def toggle(on_or_off = None):
+def toggle(on_or_off=None):
     if on_or_off is None:
         if enabled():
             on_or_off = False
@@ -34,20 +34,20 @@ def toggle(on_or_off = None):
 
 
 #------------------------------------------------------------------------------#
-def LINE(back = 1):
+def LINE(back=1):
     """Function that emulates __LINE__ macro"""
     return int(sys._getframe(back).f_lineno)
 
 
 #------------------------------------------------------------------------------#
-def FUNC(back = 1):
+def FUNC(back=1):
     """Function that emulates __FUNCTION__ macro"""
     ret = ("{}".format(sys._getframe(back).f_code.co_name))
     return ret
 
 
 #------------------------------------------------------------------------------#
-def FILE(back = 2, only_basename = True, use_dirname = False, noquotes = False):
+def FILE(back=2, only_basename=True, use_dirname=False, noquotes=False):
     """Function that emulates __FILE__ macro"""
     ret = None
     def get_fcode():
@@ -85,40 +85,40 @@ class timer(object):
     def enabled():
         return ctoast.timers_enabled()
 
-    def __init__(self, key, obj = None):
+    def __init__(self, key=None, obj=None):
         if obj is not None:
-            self.ctimer = obj
+            self._ctimer = obj
         else:
             if enabled():
-                self.ctimer = ctoast.get_timer(key)
+                self._ctimer = ctoast.get_timer(key)
             else:
-                self.ctimer = None
+                self._ctimer = None
 
     def start(self):
-        if self.ctimer is not None:
-            ctoast.timer_start(self.ctimer)
+        if self._ctimer is not None:
+            ctoast.timer_start(self._ctimer)
 
     def stop(self):
-        if self.ctimer is not None:
-            ctoast.timer_stop(self.ctimer)
+        if self._ctimer is not None:
+            ctoast.timer_stop(self._ctimer)
 
     def report(self):
-        if self.ctimer is not None:
-            ctoast.timer_report(self.ctimer)
+        if self._ctimer is not None:
+            ctoast.timer_report(self._ctimer)
 
     def real_elapsed(self):
-        if self.ctimer is not None:
-            return ctoast.timer_real_elapsed(self.ctimer)
+        if self._ctimer is not None:
+            return ctoast.timer_real_elapsed(self._ctimer)
         return 0.0
 
     def system_elapsed(self):
-        if self.ctimer is not None:
-            return ctoast.timer_system_elapsed(self.ctimer)
+        if self._ctimer is not None:
+            return ctoast.timer_system_elapsed(self._ctimer)
         return 0.0
 
     def user_elapsed(self):
-        if self.ctimer is not None:
-            return ctoast.timer_user_elapsed(self.ctimer)
+        if self._ctimer is not None:
+            return ctoast.timer_user_elapsed(self._ctimer)
         return 0.0
 
 
@@ -130,15 +130,16 @@ class timing_manager(object):
     output_dir = "./"
     serial_fname = "timing_report.json"
     serial_report = True
+    max_timer_depth = 65536
 
     @staticmethod
     def enabled():
         return ctoast.timers_enabled()
 
     def __init__(self):
-        self.ctiming_manager = ctoast.get_timing_manager()
+        self._ctiming_manager = ctoast.get_timing_manager()
 
-    def set_output_file(self, fname, odir = None, serial = None):
+    def set_output_file(self, fname, odir=None, serial=None):
         timing_manager.report_fname = fname
         timing_manager.output_dir = odir
         if odir is not None:
@@ -179,29 +180,41 @@ class auto_timer(object):
     def enabled():
         return ctoast.timers_enabled()
 
-    def __init__(self, key = ""):
+    def __init__(self, key=""):
+        self._toggled = False
         keyfunc = FUNC(2)
         if key != "" and key[0] != '@':
             key = ("@{}".format(key))
-        self.op_line = LINE(2)
-        ctoast.op_timer_instance_count(1, self.op_line)
+        self._op_line = LINE(2)
+        # increment the instance count
+        ctoast.op_timer_instance_count(1, self._op_line)
+        # turn off if exceed count
+        if ctoast.get_timer_instance_count() + 1 > timing_manager.max_timer_depth:
+            toggle(False)
+            self._toggled = True
+        # timer key
         self.t = timer('{}{}'.format(keyfunc, key))
         self.t.start()
 
     def __del__(self):
+        # stop timer
         self.t.stop()
-        ctoast.op_timer_instance_count(-1, -self.op_line)
+        # decrement instance count
+        ctoast.op_timer_instance_count(-1, -self._op_line)
+        if not enabled() and self._toggled:
+            toggle(True)
+            self._toggled = False
+
 
 #------------------------------------------------------------------------------#
-
 def get_file_tag(fname):
     _l = basename(fname).split('.')
     _l.pop()
     return ("{}".format('_'.join(_l)))
 
-#------------------------------------------------------------------------------#
 
-def add_arguments(parser, fname = None):
+#------------------------------------------------------------------------------#
+def add_arguments(parser, fname=None):
     """Function to add default output arguments"""
     def_fname = "timing_report"
     if fname is not None:
@@ -211,7 +224,7 @@ def add_arguments(parser, fname = None):
                         default='./', type=str, help="Output directory")
     parser.add_argument('--toast-timing-fname', required=False,
                         default=def_fname, type=str,
-                        help="Filename for timing reports without directory and without suffix")
+                        help="Filename for timing report w/o directory and w/o suffix")
     parser.add_argument('--disable-timers', required=False, action='store_false',
                         dest='use_timers', help="Disable timers for script")
     parser.add_argument('--enable-timers', required=False, action='store_true',
@@ -223,15 +236,16 @@ def add_arguments(parser, fname = None):
     parser.add_argument('--enable-timer-serialization',
                         required=False, action='store_true',
                         dest='serial_report', help="Enable serialization for timers")
+    parser.add_argument('--max-timer-depth', help="Maximum timer depth", type=int,
+                        default=65536)
+
     parser.set_defaults(use_timers=True)
-    parser.set_defaults(serial_report=True)
+    parser.set_defaults(serial_report=False)
+
 
 #------------------------------------------------------------------------------#
-
 def parse_args(args):
     """Function to handle the output arguments"""
-    txt_ext = "out"
-    json_ext = "json"
     tman = timing_manager()
     timing_manager.report_fname = "{}.{}".format(args.toast_timing_fname, "out")
     timing_manager.serial_fname = "{}.{}".format(args.toast_timing_fname, "json")
@@ -239,14 +253,16 @@ def parse_args(args):
     tman.clear()
     toggle(args.use_timers)
     timing_manager.serial_report = args.serial_report
+    timing_manager.max_timer_depth = args.max_timer_depth
+
 
 #------------------------------------------------------------------------------#
-
-def add_arguments_and_parse(parser, fname = None):
+def add_arguments_and_parse(parser, fname=None):
     """Combination of timing.add_arguments and timing.parse_args but returns"""
     add_arguments(parser, fname)
     args = parser.parse_args()
     parse_args(args)
     return args
+
 
 #------------------------------------------------------------------------------#

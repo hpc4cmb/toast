@@ -101,6 +101,9 @@ TEST_F( timingTest, manager )
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
 
+    bool _is_enabled = tman->is_enabled();
+    tman->enable(true);
+
     toast_timer_t& t = tman->timer("tmanager_test");
     t.start();
 
@@ -126,6 +129,7 @@ TEST_F( timingTest, manager )
         ASSERT_FALSE(itr.timer().user_elapsed() < 0.0);
     }
 
+    tman->enable(_is_enabled);
 #endif
 }
 
@@ -143,6 +147,9 @@ TEST_F( timingTest, toggle )
 
     timing_manager_t* tman = timing_manager_t::instance();
     tman->clear();
+
+    bool _is_enabled = tman->is_enabled();
+    tman->enable(true);
 
     tman->enable(true);
     {
@@ -169,6 +176,7 @@ TEST_F( timingTest, toggle )
     }
     EXPECT_EQ(timing_manager::instance()->size(), 1);
 
+    tman->enable(_is_enabled);
 #endif
 }
 
