@@ -34,7 +34,7 @@ class PySMSky(object):
                 pysm.nominal.models(model_id, self._nside, self._local_pixels)
         return pysm.Sky(initialized_sky_config)
 
-    def exec(self, data):
+    def exec(self, local_map, out):
 
         import pysm
 
@@ -53,10 +53,8 @@ class PySMSky(object):
             'pixel_indices': self._local_pixels
         }
 
-        local_map = {}
         for ch_name, bandpass in self.bandpasses.items():
             pysm_instrument_config["channels"] = [bandpass]
             instrument = pysm.Instrument(pysm_instrument_config)
-            local_map[ch_name], _ = instrument.observe(self.sky, write_outputs=False)
-
-        return local_map
+            local_map[out + "_" + ch_name], _ = \
+                instrument.observe(self.sky, write_outputs=False)

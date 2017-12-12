@@ -111,16 +111,17 @@ class OpSimPySMTest(MPITestCase):
         }
         op = PySMSky(local_pixels=local_pixels, nside=self.nside,
                        pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
-        local_map = op.exec(self.data)
+        local_map = {} # it should be Cache in production
+        op.exec(local_map, out="sky")
 
-        # Now we have timestreams in the cache.  We could compare the 
+        # Now we have timestreams in the cache.  We could compare the
         # timestream values or we could make a binned map and look at those
         # values.
 
-        np.testing.assert_almost_equal(local_map["1a"][0, 0, :3],
+        np.testing.assert_almost_equal(local_map["sky_1a"][0, 0, :3],
             np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(local_map["1b"][0, 2, -3:],
+        np.testing.assert_almost_equal(local_map["sky_1b"][0, 2, -3:],
             np.array([1.57564944, -0.22345616, -3.55604102]))
 
         stop = MPI.Wtime()
@@ -151,12 +152,17 @@ class OpSimPySMTest(MPITestCase):
         }
         op = PySMSky(local_pixels=dist_rings.local_pixels, nside=self.nside,
                        pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
-        local_map = op.exec(self.data)
+        local_map = {} # it should be Cache in production
+        op.exec(local_map, out="sky")
 
-        np.testing.assert_almost_equal(local_map["1a"][0, 0, :3],
+        # Now we have timestreams in the cache.  We could compare the 
+        # timestream values or we could make a binned map and look at those
+        # values.
+
+        np.testing.assert_almost_equal(local_map["sky_1a"][0, 0, :3],
             np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(local_map["1b"][0, 2, -3:],
+        np.testing.assert_almost_equal(local_map["sky_1b"][0, 2, -3:],
             np.array([1.57564944, -0.22345616, -3.55604102]))
 
         stop = MPI.Wtime()
