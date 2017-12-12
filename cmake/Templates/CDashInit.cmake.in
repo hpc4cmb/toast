@@ -40,13 +40,18 @@ execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND}
     
 macro(getuname name flag)
     set(_RET 1)
-    while(_RET GREATER 0)
+    set(_NITER 0)
+    while(_RET GREATER 0 AND _NITER LESS 100)
         execute_process(COMMAND ${CTEST_UNAME_COMMAND} ${flag} 
             OUTPUT_VARIABLE ${name}
             WORKING_DIRECTORY ${CTEST_DASHBOARD_ROOT}
             OUTPUT_STRIP_TRAILING_WHITESPACE
             RESULT_VARIABLE _RET)
-    endwhile(_RET GREATER 0)
+        math(EXPR _NITER "${_NITER}+1")
+    endwhile(_RET GREATER 0 AND _NITER LESS 100)
+    if(_RET GREATER 0)
+        message(FATAL_ERROR "Unable to successfully execute: '${CTEST_UNAME_COMMAND} ${flag}'")    
+    endif(_RET GREATER 0)
     unset(_RET)
 endmacro(getuname)
 
