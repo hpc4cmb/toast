@@ -1,8 +1,8 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
 
-setup(Testing)
+setup(Test)
 ctest_test(BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)
-submit(Testing)
+submit(Test)
 
 message(" -- Finished ${MODEL} Testing - ${CTEST_BUILD_NAME} --")

@@ -10,11 +10,14 @@
 # See the License for more information.
 #=============================================================================
 
-find_program(CTEST_HOSTNAME_COMMAND NAMES hostname)
-execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND} 
-    OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-    
+set(HOSTNAME "@SITE_HOSTNAME@")
+if("${HOSTNAME}" STREQUAL "")
+    find_program(CTEST_HOSTNAME_COMMAND NAMES hostname)
+    execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND}
+        OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif("${HOSTNAME}" STREQUAL "")
+
 set(CTEST_SITE                  "${HOSTNAME}")
 set(CTEST_PROJECT_NAME          "TOAST")
 set(CTEST_NIGHTLY_START_TIME    "00:00:00 PDT")

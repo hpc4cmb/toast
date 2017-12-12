@@ -69,6 +69,11 @@ foreach(_INCLUDE_DIR ${EXTERNAL_INCLUDE_DIRS})
     include_directories(SYSTEM ${_INCLUDE_DIR})
 endforeach()
 
+find_program(HOSTNAME_COMMAND NAMES hostname)
+execute_process(COMMAND ${HOSTNAME_COMMAND}
+    OUTPUT_VARIABLE SITE_HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 #-----------------------------------------------------------------------
 # BUILD_CXXSTD
 # Choose C++ Standard to build against, if supported.

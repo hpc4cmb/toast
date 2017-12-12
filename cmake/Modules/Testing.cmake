@@ -162,7 +162,7 @@ if(NOT DASHBOARD_MODE)
 
     ## -- CTest Config
     configure_file(${CMAKE_SOURCE_DIR}/CTestConfig.cmake
-        ${CMAKE_BINARY_DIR}/CTestConfig.cmake COPYONLY)
+        ${CMAKE_BINARY_DIR}/CTestConfig.cmake @ONLY)
     
     set(cdash_templates Init Build Test Submit Glob Stages)
     if(USE_COVERAGE)
@@ -204,7 +204,7 @@ endforeach(_FILE ${_PYTHON_TEST_FILES})
 # add CXX unit test
 add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} toast_test)
+    COMMAND ctest-wrapper.sh toast_test)
 set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest;CXX" TIMEOUT 7200)
 
 # add Python unit test
@@ -215,15 +215,15 @@ foreach(_test_ext ${PYTHON_TEST_FILES})
         ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh @ONLY)
     # add the test
     add_test(NAME ${_test_name}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/scripts
-        COMMAND ${SRUN_COMMAND} ${_test_name}.sh)
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMAND ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
     set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
 
 if(USE_COVERAGE)
     add_test(NAME pyc_coverage
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
+    COMMAND ctest-wrapper.sh ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
     set_tests_properties(pyc_coverage PROPERTIES LABELS "Coverage;Python" TIMEOUT 7200)
 endif(USE_COVERAGE)
 
