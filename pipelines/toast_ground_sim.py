@@ -220,7 +220,7 @@ def parse_arguments(comm):
                         '"fknee" (float, Hz), "alpha" (float), and '
                         '"NET" (float).  For optional plotting, the key "color"'
                         ' can specify a valid matplotlib color string.')
-    parser.add_argument('freq',
+    parser.add_argument('--freq',
                         required=True,
                         help='Comma-separated list of frequencies with '
                         'identical focal planes')
@@ -230,7 +230,7 @@ def parse_arguments(comm):
 
     args = parser.parse_args()
 
-    if len(args.freqs.split(',')) != 1:
+    if len(args.freq.split(',')) != 1:
         # Multi frequency run.  We don't support multiple copies of
         # scanned signal.
         if args.input_map:
@@ -598,8 +598,11 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
                 cachename_in = '{}_{}'.format(signalname, det)
                 cachename_out = '{}_{}'.format(totalname_freq, det)
                 ref_in = tod.cache.reference(cachename_in)
-                ref_out = tod.cache.reference(cachename_out)
-                ref_out += ref_in
+                if tod.cache.exists(cachename_out):
+                    ref_out = tod.cache.reference(cachename_out)
+                    ref_out += ref_in
+                else:
+                    ref_out = tod.cache.put(cachename_out, ref_in)
                 del ref_in, ref_out
 
     return
@@ -962,7 +965,7 @@ def copy_signal(args, comm, data, sigcopy, counter):
     return
 
 
-def scale_atmosphere_by_frequency(freq, totalname_freq):
+def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq):
     """ Scale atmospheric fluctuations by frequency.
 
     Assume that cached signal under totalname_freq is pure atmosphere
@@ -982,7 +985,7 @@ def scale_atmosphere_by_frequency(freq, totalname_freq):
                 cachename = '{}_{}'.format(totalname_freq, det)
                 ref = tod.cache.reference(cachename)
                 ref *= absorption
-                del def
+                del ref
 
     return
 
