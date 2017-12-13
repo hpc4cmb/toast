@@ -119,7 +119,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(_test_name ${_TYPE}_${_SIZE}_${MACHINE})
         add_test(NAME ${_test_name}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-            COMMAND ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
+            COMMAND ${SLURM_SBATCH_COMMAND} ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
         get_parameter(_NODES "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
