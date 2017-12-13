@@ -1347,7 +1347,7 @@ def main():
 
         # Simulate input sky
 
-        dist_rings = tm.DistRings(comm.comm_world,
+        dist_rings = tm.DistRings(comm.comm_rank,
                             nside = args.nside,
                             nnz = 3)
 
@@ -1396,7 +1396,7 @@ def main():
         full_map_rank0 = {}
         for det, fwhm in fwhm_deg.items():
             # LibSharp also supports transforming multiple channels together each with own beam
-            smooth = tm.LibSharpSmooth(comm.comm_world, signal_map="sky_"+det,
+            smooth = tm.LibSharpSmooth(comm.comm_rank, signal_map="sky_"+det,
                                        lmax=lmax, grid=dist_rings.libsharp_grid,
                                        fwhm_deg=fwhm, beam=None)
             smooth.exec(local_maps)
