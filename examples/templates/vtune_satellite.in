@@ -11,6 +11,8 @@
 
 set -o errexit
 
+@EXTRA_INIT@
+
 echo Starting slurm script at $(date)
 
 ulimit -s unlimited
@@ -122,8 +124,9 @@ export vtune_collect
 
 echo Calling srun at $(date)
 
+: ${LOG_OUT:="${outdir}/log_${vtune_collect}"}
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com}"
-eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > ${LOG_OUT} 2>&1
 
 if eval command -v vfinal &> /dev/null ; then
     echo "Run \"vfinal <vtune-output-dir>\" to finalize results"

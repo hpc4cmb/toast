@@ -1,0 +1,12 @@
+
+# set environment paths
+export LOG_OUT=/dev/stdout
+export PATH="${PROJECT_BIN_PATH}:@PATH@"
+export PYTHONPATH="${PROJECT_PYC_PATH}:@PYTHONPATH@"
+
+if [ "$(uname -s)" = "Darwin" ]; 
+then
+    export DYLD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@DYLD_LIBRARY_PATH@"
+else
+    export LD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@LD_LIBRARY_PATH@"
+fi

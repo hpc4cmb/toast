@@ -65,14 +65,19 @@ add_feature(CMAKE_BUILD_TYPE "Build type")
 add_feature(CMAKE_CXX_FLAGS_${UPPER_BUILD_TYPE} "CXX flags for ${CMAKE_BUILD_TYPE}")
 add_feature(CMAKE_GENERATOR "Build file generator")
 
+if(BUILD_TESTING)
+    if(DEFINED CTEST_SITE AND "${CTEST_SITE}" STREQUAL "")
+        unset(CTEST_SITE CACHE)
+    endif()
+    get_os_node_name(_SITE)
+    set(CTEST_SITE "${_SITE}" CACHE STRING "OS name over network")
+    add_feature(CTEST_SITE "Site name (e.g. hostname)")
+endif(BUILD_TESTING)
+
 foreach(_INCLUDE_DIR ${EXTERNAL_INCLUDE_DIRS})
     include_directories(SYSTEM ${_INCLUDE_DIR})
 endforeach()
 
-find_program(HOSTNAME_COMMAND NAMES hostname)
-execute_process(COMMAND ${HOSTNAME_COMMAND}
-    OUTPUT_VARIABLE SITE_HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 #-----------------------------------------------------------------------
 # BUILD_CXXSTD

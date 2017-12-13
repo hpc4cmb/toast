@@ -1,5 +1,7 @@
 #!/bin/bash
 
+@EXTRA_INIT@
+
 outdir="out_@SIZE@_ground_simple"
 mkdir -p "${outdir}"
 
@@ -61,5 +63,6 @@ export OMP_NUM_THREADS=${threads}
 
 run="mpirun -np ${procs}"
 
+: ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > ${LOG_OUT} 2>&1

@@ -226,7 +226,72 @@ function(GET_00 _VAR _VAL)
 endfunction(GET_00 _VAR _VAL)
 
 ################################################################################
-#
+# Get the hostname
 ################################################################################
+
+function(GET_HOSTNAME VAR)
+    find_program(HOSTNAME_COMMAND NAMES hostname)
+    execute_process(COMMAND ${HOSTNAME_COMMAND}
+        OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(${VAR} ${HOSTNAME} PARENT_SCOPE)
+endfunction(GET_HOSTNAME VAR)
+
+################################################################################
+# Function for usine "uname" for OS data
+################################################################################
+
+function(GET_UNAME NAME FLAG)
+    find_program(UNAME_COMMAND NAMES uname)
+    # checking if worked
+    set(_RET 1)
+    # iteration limiting
+    set(_NITER 0)
+    # empty
+    set(_NAME "")
+    while(_RET GREATER 0 AND _NITER LESS 100 AND "${_NAME}" STREQUAL "")
+        execute_process(COMMAND ${UNAME_COMMAND} ${FLAG}
+            OUTPUT_VARIABLE _NAME
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _RET)
+        math(EXPR _NITER "${_NITER}+1")
+    endwhile(_RET GREATER 0 AND _NITER LESS 100 AND "${_NAME}" STREQUAL "")
+    # fail if not successful
+    if(_RET GREATER 0)
+        message(FATAL_ERROR
+            "Unable to successfully execute: '${UNAME_COMMAND} ${FLAG}'")
+    endif(_RET GREATER 0)
+    # set the variable in parent scope
+    set(${NAME} ${_NAME} PARENT_SCOPE)
+endfunction(GET_UNAME NAME FLAG)
+
+################################################################################
+# Get the OS system name (e.g. Darwin, Linux)
+################################################################################
+
+function(GET_OS_SYSTEM_NAME VAR)
+    get_uname(_VAR -s)
+    set(${VAR} ${_VAR} PARENT_SCOPE)
+endfunction(GET_OS_SYSTEM_NAME VAR)
+
+################################################################################
+# Get the OS node name (e.g. JRM-macOS-DOE.local, cori09)
+################################################################################
+
+function(GET_OS_NODE_NAME VAR)
+    get_uname(_VAR -n)
+    set(${VAR} ${_VAR} PARENT_SCOPE)
+endfunction(GET_OS_NODE_NAME VAR)
+
+################################################################################
+# Get the OS machine hardware name (e.g. x86_64)
+################################################################################
+
+function(GET_OS_MACHINE_HARDWARE_NAME VAR)
+    get_uname(_VAR -m)
+    set(${VAR} ${_VAR} PARENT_SCOPE)
+endfunction(GET_OS_MACHINE_HARDWARE_NAME VAR)
+
 
 cmake_policy(POP)

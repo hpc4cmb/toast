@@ -9,15 +9,22 @@ add_option(DASHBOARD_MODE
 add_dependent_option(USE_SLURM "Enable generation of SLURM scripts for testing"
     ON "SLURM_SBATCH_COMMAND" OFF)
 
-get_parameter(CONSTRAINT
-    "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}" CONSTRAINT)
+set(MACHINEFILE "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}")
+foreach(VAR NODEPROCS NODECORES HYPERTHREAD)
+    get_parameter(${VAR} ${MACHINEFILE} ${VAR})
+    string(REGEX MATCHALL "([0-9]+)" ${VAR} "${${VAR}}")    
+endforeach(VAR NODEPROCS NODECORES HYPERTHREAD)
+math(EXPR NODEDEPTH "${NODECORES}/${NODEPROCS}")
+    
 set(TIME "00:30:00" CACHE STRING "SLURM runtime")
 set(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
 set(QUEUE "debug" CACHE STRING "SLURM queue")
 set_ifnot(JOB_NAME "UnitTest")
 set_ifnot(NODES 1)
 
-# SLURM variables
+# ------------------------------------------------------------------------ #
+# -- SLURM variables
+# ------------------------------------------------------------------------ #
 if(USE_SLURM)
     # first value is default so if TARGET_ARCHITECTURE is known, then use it
     set(_MACHINE_ORDERING cori-knl cori-haswell edison)
@@ -32,7 +39,11 @@ if(USE_SLURM)
     add_feature(MACHINE "SLURM machine")
     STRING(REPLACE "cori-" "" _MACHINE "${MACHINE}")
 endif(USE_SLURM)
-    
+
+
+# ------------------------------------------------------------------------ #
+# -- Miscellaneous
+# ------------------------------------------------------------------------ #
 if(NOT DASHBOARD_MODE)
     add_option(CTEST_LOCAL_CHECKOUT "Use the local source tree for CTest/CDash" OFF)
     if(CTEST_LOCAL_CHECKOUT)
@@ -40,7 +51,7 @@ if(NOT DASHBOARD_MODE)
     endif(CTEST_LOCAL_CHECKOUT)
 endif(NOT DASHBOARD_MODE)
 
-set(ENV{CTEST_USE_LAUNCHERS_DEFAULT} ${CMAKE_BINARY_DIR}/CDashBuild.cmake)
+set(ENV{CTEST_USE_LAUNCHERS_DEFAULT} ${CMAKE_BINARY_DIR}/CDashGlob.cmake)
 # environment variables
 foreach(_ENV PATH LD_LIBRARY_PATH DYLD_LIBRARY_PATH PYTHONPATH)
     set(${_ENV} "$ENV{${_ENV}}")
@@ -49,15 +60,13 @@ endforeach(_ENV PATH LD_LIBRARY_PATH DYLD_LIBRARY_PATH PYTHONPATH)
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-wrapper.sh.in
     ${CMAKE_BINARY_DIR}/ctest-wrapper.sh @ONLY)
 
-configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-wrapper.sh.in
-    ${CMAKE_BINARY_DIR}/examples/ctest-wrapper.sh @ONLY)
 
 # ------------------------------------------------------------------------ #
 # -- Function to create a temporary directory
 # ------------------------------------------------------------------------ #
 function(GET_TEMPORARY_DIRECTORY DIR_VAR DIR_BASE)
     # create a root working directory
-    set(_TMP_ROOT "${CMAKE_BINARY_DIR}/tests")
+    set(_TMP_ROOT "${CMAKE_BINARY_DIR}/cdash")
     set(${DIR_VAR} "${_TMP_ROOT}" PARENT_SCOPE)
     return()
     execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${_TMP_ROOT}) 
@@ -158,7 +167,7 @@ if(NOT DASHBOARD_MODE)
         CTEST_LOCAL_CHECKOUT CMAKE_BUILD_TYPE
         CMAKE_C_COMPILER CMAKE_CXX_COMPILER
         MPI_C_COMPILER MPI_CXX_COMPILER
-        CTEST_MODEL)
+        CTEST_MODEL CTEST_SITE)
 
     ## -- CTest Config
     configure_file(${CMAKE_SOURCE_DIR}/CTestConfig.cmake
@@ -174,7 +183,7 @@ if(NOT DASHBOARD_MODE)
     foreach(_type ${cdash_templates})
         ## -- CTest Setup
         configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CDash${_type}.cmake.in
-            ${CMAKE_BINARY_DIR}/CDash${_type}.cmake @ONLY)
+            ${CMAKE_BINARY_DIR}/cdash/${_type}.cmake @ONLY)
     endforeach(_type Init Build Test Coverage MemCheck Submit Glob Stages)
 
     ## -- CTest Custom
@@ -188,7 +197,7 @@ endif(NOT DASHBOARD_MODE)
 # ------------------------------------------------------------------------ #
 set(SRUN_COMMAND )
 if(USE_SLURM)
-    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND})
+    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -n 1 -N 1)
 endif(USE_SLURM)
 
 # get the python sets
@@ -204,8 +213,9 @@ endforeach(_FILE ${_PYTHON_TEST_FILES})
 # add CXX unit test
 add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ctest-wrapper.sh toast_test)
-set_tests_properties(cxx_toast_test PROPERTIES LABELS "UnitTest;CXX" TIMEOUT 7200)
+    COMMAND ${SRUN_COMMAND} ctest-wrapper.sh toast_test)
+set_tests_properties(cxx_toast_test PROPERTIES 
+    LABELS "UnitTest;CXX" TIMEOUT 7200)
 
 # add Python unit test
 foreach(_test_ext ${PYTHON_TEST_FILES})
@@ -216,17 +226,18 @@ foreach(_test_ext ${PYTHON_TEST_FILES})
     # add the test
     add_test(NAME ${_test_name}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMAND ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
-    set_tests_properties(${_test_name} PROPERTIES LABELS "UnitTest;Python" TIMEOUT 7200)
+        COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
+    set_tests_properties(${_test_name} PROPERTIES 
+        LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
 
 if(USE_COVERAGE)
     add_test(NAME pyc_coverage
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ctest-wrapper.sh ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
-    set_tests_properties(pyc_coverage PROPERTIES LABELS "Coverage;Python" TIMEOUT 7200)
+    COMMAND ${SRUN_COMMAND} ctest-wrapper.sh ${PYTHON_EXECUTABLE}
+        ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
+    set_tests_properties(pyc_coverage PROPERTIES 
+        LABELS "Coverage;Python" TIMEOUT 7200)
 endif(USE_COVERAGE)
 
-if(USE_SLURM)
-    include(ConfigureSLURM)
-endif(USE_SLURM)
+include(GenerateExamples)

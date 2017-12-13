@@ -10,6 +10,8 @@
 
 set -o errexit
 
+@EXTRA_INIT@
+
 echo Starting slurm script at $(date)
 
 export PYTHONNOUSERSITE=1
@@ -117,8 +119,9 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 
 echo Calling srun at $(date)
 
+: ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > ${LOG_OUT} 2>&1
 
 echo End slurm script at $(date)
 

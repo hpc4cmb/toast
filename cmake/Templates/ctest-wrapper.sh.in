@@ -9,6 +9,7 @@
 #SBATCH --output=out_@JOB_NAME@_@MACHINE@_%j.log
 
 # set environment paths
+export LOG_OUT=/dev/stdout
 export PATH="${PROJECT_BIN_PATH}:@PATH@"
 export PYTHONPATH="${PROJECT_PYC_PATH}:@PYTHONPATH@"
 
@@ -20,3 +21,14 @@ else
 fi
 
 $@
+
+if [ "@USE_SLURM@" = "ON" ]; then
+    FNOTES=@JOB_NAME@_notes.cmake
+    echo > ${FNOTES}
+    for i in out_@JOB_NAME@_@MACHINE@_*.log
+    do
+        cat >> ${FNOTES} <<EOF
+list(APPEND CTEST_NOTES_FILES "${i}")
+        EOF
+    done
+fi

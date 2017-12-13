@@ -1,5 +1,7 @@
 #!/bin/bash
 
+@EXTRA_INIT@
+
 outdir="out_@SIZE@_ground"
 mkdir -p "${outdir}"
 
@@ -74,6 +76,7 @@ run="mpirun -np ${procs}"
 export vrun
 export vtune_collect
 
+: ${LOG_OUT:="${outdir}/log_${vtune_collect}"}
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
-eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > ${LOG_OUT} 2>&1
 

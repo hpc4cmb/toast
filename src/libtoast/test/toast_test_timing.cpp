@@ -135,7 +135,7 @@ TEST_F( TOASTtimingTest, manager )
 
 //============================================================================//
 
-TEST_F( timingTest, toggle )
+TEST_F( TOASTtimingTest, toggle )
 {
 #if defined(DISABLE_TIMERS)
 

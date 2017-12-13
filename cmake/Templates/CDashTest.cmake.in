@@ -1,5 +1,5 @@
 
-include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Init.cmake")
 
 setup(Test)
 ctest_test(BUILD "${CTEST_BINARY_DIRECTORY}" RETURN_VALUE ret)

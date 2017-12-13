@@ -10,15 +10,22 @@
 # See the License for more information.
 #=============================================================================
 
-set(HOSTNAME "@SITE_HOSTNAME@")
-if("${HOSTNAME}" STREQUAL "")
-    find_program(CTEST_HOSTNAME_COMMAND NAMES hostname)
-    execute_process(COMMAND ${CTEST_HOSTNAME_COMMAND}
-        OUTPUT_VARIABLE HOSTNAME WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-endif("${HOSTNAME}" STREQUAL "")
+# if CTEST_SITE was not provided
+if(NOT DEFINED CTEST_SITE)
+    # [A] if CTEST_SITE set at configure
+    set(_HOSTNAME "@CTEST_SITE@")
+    # [B] if CTEST_SITE not set at configure, grab the HOSTNAME
+    if("${_HOSTNAME}" STREQUAL "")
+        execute_process(COMMAND uname -n
+            OUTPUT_VARIABLE _HOSTNAME
+            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif("${_HOSTNAME}" STREQUAL "")
+    # either [A] or [B]
+    set(CTEST_SITE              "${_HOSTNAME}")
+    unset(_HOSTNAME)
+endif(NOT DEFINED CTEST_SITE)
 
-set(CTEST_SITE                  "${HOSTNAME}")
 set(CTEST_PROJECT_NAME          "TOAST")
 set(CTEST_NIGHTLY_START_TIME    "00:00:00 PDT")
 set(CTEST_DROP_METHOD           "http")

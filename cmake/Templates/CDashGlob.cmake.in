@@ -11,12 +11,12 @@ macro(include_if _TESTFILE)
     endif(EXISTS "${_TESTFILE}")
 macro(include_if _TESTFILE)
 
-include("${CMAKE_CURRENT_LIST_DIR}/CDashInit.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/CDashBuild.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Init.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Build.cmake")
 # CDashTest.cmake is essentially called in CDashCoverage
-include_if("${CMAKE_CURRENT_LIST_DIR}/CDashCoverage.cmake"
-    "${CMAKE_CURRENT_LIST_DIR}/CDashTest.cmake")
-include_if("${CMAKE_CURRENT_LIST_DIR}/CDashMemCheck.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/CDashSubmit.cmake")
+include_if("${CMAKE_CURRENT_LIST_DIR}/Coverage.cmake"
+    "${CMAKE_CURRENT_LIST_DIR}/Test.cmake")
+include_if("${CMAKE_CURRENT_LIST_DIR}/MemCheck.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Submit.cmake")
 
 message(" -- Finished ${MODEL} Glob - ${CTEST_BUILD_NAME} --")

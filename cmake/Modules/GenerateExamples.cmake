@@ -37,8 +37,6 @@ endfunction(machine_defined)
 machine_defined()
 valid_machine()
 
-set(ENV{GENERATE_SHELL} 1)
-
 message(STATUS "Cleaning up examples directory...")
 execute_process(COMMAND ./cleanup.sh
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
@@ -55,19 +53,52 @@ execute_process(COMMAND ./fetch_data.sh
     RESULT_VARIABLE FETCH_RET)
 check_return(FETCH_RET)
 
-include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})
-    
-set(ENV{MACHINES} "${MACHINE}")
+configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-wrapper.sh.in
+    ${CMAKE_BINARY_DIR}/examples/ctest-wrapper.sh @ONLY)
 
-message(STATUS "Generating examples for ${MACHINE}...")
-execute_process(COMMAND ./generate_shell.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
+message(STATUS "Generating shell examples...")
+execute_process(COMMAND ./generate_shell.sh
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     OUTPUT_FILE generate_shell.log
     ERROR_FILE generate_shell.log
     RESULT_VARIABLE GENERATE_SHELL_RET)
 check_return(GENERATE_SHELL_RET)
 
-execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
+# add tests
+foreach(_TYPE ground ground_simple satellite)
+    set(_file_name tiny_${_TYPE}_shell)
+    set(_test_name pyc_${_file_name}_example)
+    add_test(NAME ${_test_name}
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
+    COMMAND ${SRUN_COMMAND} ./ctest-wrapper.sh ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
+    set_tests_properties(${_test_name} PROPERTIES 
+        LABELS "Examples;Shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
+endforeach(_TYPE ground ground_simple satellite)
+
+
+# return if no SLURM
+if(NOT USE_SLURM)
+    return()
+endif(NOT USE_SLURM)
+
+# ------------------------------------------------------------------------ #
+# -- SLURM examples
+# ------------------------------------------------------------------------ #
+include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})    
+set(ENV{MACHINES} "${MACHINE}")
+
+configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-simple-wrapper.sh.in
+    ${CMAKE_BINARY_DIR}/examples/ctest-simple-wrapper.sh @ONLY)
+
+FILE(WRITE "${CMAKE_BINARY_DIR}/examples/read.cmake"
+"
+FILE(READ \"${CMAKE_BINARY_DIR}/examples/ctest-simple-wrapper.sh\" _INIT)
+set(EXTRA_INIT \"\${_INIT}\" CACHE STRING \"Extra initialization\" FORCE)
+")
+
+message(STATUS "Generating SLURM examples for ${MACHINE}...")
+execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} 
+        -DQUEUE=${QUEUE} -DREADFILE=${CMAKE_BINARY_DIR}/examples/read.cmake
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     OUTPUT_FILE generate_slurm.log
     ERROR_FILE generate_slurm.log
@@ -88,7 +119,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(_test_name ${_TYPE}_${_SIZE}_${MACHINE})
         add_test(NAME ${_test_name}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-            COMMAND ctest-wrapper.sh ${_SIZE}_${_TYPE}_${MACHINE}.slurm)
+            COMMAND ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
         get_parameter(_NODES "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
