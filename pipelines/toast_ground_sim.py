@@ -220,15 +220,22 @@ def parse_arguments(comm):
                         '"fknee" (float, Hz), "alpha" (float), and '
                         '"NET" (float).  For optional plotting, the key "color"'
                         ' can specify a valid matplotlib color string.')
-    parser.add_argument('--nfreq',
-                        required=False, default=1, type=np.int,
-                        help='Number of frequencies with identical focal '
-                        'planes')
+    parser.add_argument('freq',
+                        required=True,
+                        help='Comma-separated list of frequencies with '
+                        'identical focal planes')
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
 
     args = parser.parse_args()
+
+    if len(args.freqs.split(',')) != 1:
+        # Multi frequency run.  We don't support multiple copies of
+        # scanned signal.
+        if args.input_map:
+            raise RuntimeError('Multiple frequencies are not supported when '
+                               'scanning from a map')
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -440,6 +447,9 @@ def create_observations(args, comm, schedules, counter):
 
         # create the single TOD for this observation
 
+        # FIXME: TOD must know the PWV distribution and set
+        # tod.meta['pwv_center'] and tod.meta['pwv_sigma']
+
         try:
             tod = tt.TODGround(
                 comm.comm_group, detquats, totsamples,
@@ -577,6 +587,24 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
+def add_sky_signal(args, comm, data, totalname_freq, signalname):
+    """ Add previously simulated sky signal to the atmospheric noise.
+
+    """
+    if signalname is not None:
+        for obs in data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                cachename_in = '{}_{}'.format(signalname, det)
+                cachename_out = '{}_{}'.format(totalname_freq, det)
+                ref_in = tod.cache.reference(cachename_in)
+                ref_out = tod.cache.reference(cachename_out)
+                ref_out += ref_in
+                del ref_in, ref_out
+
+    return
+
+
 def scan_signal(args, comm, data, counter, localsm, subnpix):
     signalname = None
 
@@ -613,7 +641,7 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
 def setup_sigcopy(args, comm, signalname):
     # Operator for signal copying, used in each MC iteration
 
-    if args.nfreq == 1:
+    if len(args.freq.split(',')) == 1:
         totalname = 'total'
         totalname_freq = 'total'
     else:
@@ -931,6 +959,31 @@ def copy_signal(args, comm, data, sigcopy, counter):
             print('Making a copy of the signal TOD', flush=args.flush)
         sigcopy.exec(data)
         counter.exec(data)
+    return
+
+
+def scale_atmosphere_by_frequency(freq, totalname_freq):
+    """ Scale atmospheric fluctuations by frequency.
+
+    Assume that cached signal under totalname_freq is pure atmosphere
+    and scale the absorption coefficient according to the frequency.
+
+    """
+    if not args.skip_atmosphere:
+        for obs in data.obs:
+            tod = obs['tod']
+            pwv = tod.meta['pwv']
+            altitude = tod.meta['site_alt']
+            absorption = toast.ctoast.atm_get_absorption_coefficient(
+                altitude, pwv, freq)
+            #loading = toast.ctoast.atm_get_atmospheric_loading(
+            #    altitude, pwv, freq)
+            for det in tod.local_dets:
+                cachename = '{}_{}'.format(totalname_freq, det)
+                ref = tod.cache.reference(cachename)
+                ref *= absorption
+                del def
+
     return
 
 
@@ -1331,12 +1384,10 @@ def main():
     firstmc = int(args.MC_start)
     nmc = int(args.MC_count)
 
+    freqs = [float(freq) for freq in args.freq.split(',')]
+    nfreq = len(freqs)
+
     for mc in range(firstmc, firstmc+nmc):
-
-        # Copy the signal timestreams to the total ones before
-        # accumulating the noise.
-
-        copy_signal(args, comm, data, sigcopy, counter)
 
         flag_name, common_flag_name = simulate_atmosphere(
             args, comm, data, mc, counter,
@@ -1345,13 +1396,18 @@ def main():
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
 
-        for ifreq in range(args.nfreq):
+        for ifreq, freq in enumerate(freqs):
+
+            if comm.comm_world.rank == 0:
+                print('Processing frequency {}GHz {} / {}, MC = {}'
+                      ''.format(freq, ifreq+1, nfreq, mc), flush=args.flush)
 
             copy_signal_freq(args, comm, data, sigcopy_freq, counter)
 
-            if comm.comm_world.rank == 0:
-                print('Processing frequency {} / {}, MC = {}'
-                      ''.format(ifreq+1, args.nfreq, mc), flush=args.flush)
+            scale_atmosphere_by_frequency(args, comm, data, freq,
+                                          totalname_freq)
+
+            add_sky_signal(args, comm, data, totalname_freq, signalname)
 
             mcoffset = ifreq * 1000000
 

@@ -13,9 +13,12 @@ import healpy as hp
 from .. import qarray as qa
 from .tod import TOD
 from ..op import Operator
+from .. import rng as rng
 
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
-    atm_sim_simulate, atm_sim_observe)
+                      atm_sim_simulate, atm_sim_observe,
+                      atm_get_absorption_coefficient,
+                      atm_get_atmospheric_loading)
 
 # FIXME:  For now, we use a fixed distribution of the "weather" (wind speed,
 # temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base
@@ -105,7 +108,7 @@ class OpSimAtmosphere(Operator):
             fp_radius=1, apply_flags=False,
             common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
-            wind_time_min=600, cachedir='.', flush=False):
+            wind_time_min=600, cachedir='.', flush=False, freq=None):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -128,6 +131,7 @@ class OpSimAtmosphere(Operator):
         self._gangsize = gangsize
         self._cachedir = cachedir
         self._flush = flush
+        self._freq = None
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -193,6 +197,35 @@ class OpSimAtmosphere(Operator):
 
             tod = obs['tod']
             comm = tod.mpicomm
+
+            # Draw the PWV.  If freq is None, PWV is not used by this
+            # operator but rather by the pipelines when they scale the
+            # atmospheric noise to particular frequency.
+
+            pwv_center = tod.meta['pwv_center']
+            pwv_sigma = tod.meta['pwv_sigma']
+            pwv = rng.random(10000, sampler="gaussian", key=(key1, key2),
+                             counter=(counter1, counter2))
+            counter2 += 10000
+            pwv = pwv_center + pwv_sima*pwv
+            good = pwv > 0
+            ngood = np.sum(good)
+            if ngood == 0:
+                raise runtimeError(
+                    'Failed to draw a PWV from a gaussian distribution: '
+                    '{} +- {} mm'.format(pwv_center, pwv_sigma))
+            pwv = pwv[good][0]
+            tod.meta['pwv'] = pwv
+
+            if self._freq is not None:
+                altitude = tod.meta['site_alt']
+                absorption = atm_get_absorption_coefficient(
+                    altitude, pwv, self._freq)
+                loading = atm_get_atmospheric_loading(
+                    altitude, pwv, self._freq)
+                tod.meta['loading'] = loading
+            else:
+                absorption = None
 
             comm.Barrier()
             if comm.rank == 0:
@@ -507,6 +540,10 @@ class OpSimAtmosphere(Operator):
 
                     if self._gain:
                         atmdata *= self._gain
+
+                    if absorption is not None:
+                        # Apply the frequency-dependent absorption-coefficient
+                        atmdata *= absorption
 
                     if self._apply_flags:
                         ref[ind][good] += atmdata
