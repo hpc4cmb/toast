@@ -73,48 +73,58 @@ def attempt_scan(
     for (name, weight, corners) in visible:
         for rising in [True, False]:
             observer.date = to_DJD(t)
-            if args.pole_mode:
-                radius = 0
-            else:
-                radius = fp_radius
-            el = get_constant_elevation(observer, corners, rising, radius,
-                                        el_min, el_max, not_visible, name)
+            el = get_constant_elevation(
+                observer, corners, rising, fp_radius, el_min, el_max,
+                not_visible, name)
             if el is None:
                 continue
-            if args.pole_mode:
-                pole_success = True
-                subscan = -1
-                while pole_success:
-                    pole_success, azmins, azmaxs, aztimes, tstop \
-                        = scan_patch_pole(
-                            args, el, corners, t, fp_radius, observer, sun,
-                            not_visible, name, tstep, stop_timestamp,
-                            sun_el_max, rising)
-                    if pole_success:
-                        if success:
-                            # Still the same scan
-                            hits[name] -= 1
-                            subscan += 1
-                        t = add_scan(
-                            args, t, tstop, aztimes, azmins, azmaxs, rising,
-                            fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                            name, el, subscan=subscan)
-                        if rising:
-                            el -= np.radians(args.pole_el_step)
-                        else:
-                            el += np.radians(args.pole_el_step)
-                        success = True
+            success, azmins, azmaxs, aztimes, tstop = scan_patch(
+                el, corners, t, fp_radius, observer, sun, not_visible,
+                name, tstep, stop_timestamp, sun_el_max, rising)
+            if success:
+                t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
+                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
+                             name, el)
+                break
+        if success:
+            break
+
+    return success, t
+
+
+def attempt_scan_pole(
+        args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt):
+    """ Attempt scanning the visible patches in order until success.
+    """
+    success = False
+    for (name, weight, corners) in visible:
+        observer.date = to_DJD(t)
+        # In pole scheduling, first elevation is just below the patch
+        el = get_constant_elevation_pole(
+            observer, corners, fp_radius, el_min, el_max, not_visible,
+            name)
+        if el is None:
+            continue
+        pole_success = True
+        subscan = -1
+        while pole_success:
+            pole_success, azmins, azmaxs, aztimes, tstop \
+                = scan_patch_pole(
+                    args, el, corners, t, fp_radius, observer, sun,
+                    not_visible, name, tstep, stop_timestamp,
+                    sun_el_max)
+            if pole_success:
                 if success:
-                    break
-            else:
-                success, azmins, azmaxs, aztimes, tstop = scan_patch(
-                    el, corners, t, fp_radius, observer, sun, not_visible,
-                    name, tstep, stop_timestamp, sun_el_max, rising)
-                if success:
-                    t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
-                                 fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                                 name, el)
-                    break
+                    # Still the same scan
+                    hits[name] -= 1
+                    subscan += 1
+                t = add_scan(
+                    args, t, tstop, aztimes, azmins, azmaxs, False,
+                    fp_radius, observer, sun, moon, fout, fout_fmt, hits,
+                    name, el, subscan=subscan)
+                el += np.radians(args.pole_el_step)
+                success = True
         if success:
             break
 
@@ -155,6 +165,27 @@ def get_constant_elevation(observer, corners, rising, fp_radius, el_min, el_max,
     return el
 
 
+def get_constant_elevation_pole(observer, corners, fp_radius, el_min, el_max,
+                                not_visible, name):
+    """ Determine the elevation at which to scan.
+    """
+    azs, els = corner_coordinates(observer, corners)
+    el = np.amin(els) - fp_radius
+
+    if el < el_min:
+        not_visible.append((
+            name, 'el < el_min ({:.2f} < {:.2f}) rising = {}'.format(
+                el/degree, el_min/degree, rising)))
+        el = None
+    elif el > el_max:
+        not_visible.append((
+            name, 'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
+                el/degree, el_max/degree, rising)))
+        el = None
+
+    return el
+
+
 def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
                name, tstep, stop_timestamp, sun_el_max, rising):
     """ Attempt scanning the patch specified by corners at elevation el.
@@ -164,7 +195,6 @@ def scan_patch(el, corners, t, fp_radius, observer, sun, not_visible,
     tstop = t
     to_cross = np.ones(len(corners), dtype=np.bool)
     azmins, azmaxs, aztimes = [], [], []
-    azs, els = corner_coordinates(observer, corners)
     while True:
         tstop += tstep / 10
         if tstop > stop_timestamp or tstop - t > 86400:
@@ -210,40 +240,43 @@ def unwind_angle(alpha, beta):
 
 
 def scan_patch_pole(args, el, corners, t, fp_radius, observer, sun, not_visible,
-               name, tstep, stop_timestamp, sun_el_max, rising):
+                    name, tstep, stop_timestamp, sun_el_max):
     """ Attempt scanning the patch specified by corners at elevation el.
 
     The pole scheduling mode will not wait for the patch to drift across.
+    It simply attempts to scan for the required time: args.pole_ces_time.
     """
     success = False
-    # and now track when all corners are past the elevation
     tstop = t
     azmins, azmaxs, aztimes = [], [], []
-    azs, els = corner_coordinates(observer, corners)
     while True:
         tstop += tstep / 10
         if tstop - t >= args.pole_ces_time:
             # Succesfully scanned the maximum time
             if len(azmins) > 0:
                 success = True
+            else:
+                not_visible.append((name, 'No overlap at {:.2f}'
+                                    ''.format(el/degree)))
             break
         if tstop > stop_timestamp or tstop - t > 86400:
-            not_visible.append((name, 'Ran out of time rising = {}'
-                                ''.format(rising)))
+            not_visible.append((name, 'Ran out of time'))
             break
         observer.date = to_DJD(tstop)
         sun.compute(observer)
         if sun.alt > sun_el_max:
-            not_visible.append((name, 'Sun too high {:.2f} rising = {}'
-                                ''.format(sun.alt/degree, rising)))
+            not_visible.append((name, 'Sun too high {:.2f}'
+                                ''.format(sun.alt/degree)))
             break
         azs, els = corner_coordinates(observer, corners)
-        if fp_radius == 0:
-            radius = np.radians(1)
-        else:
-            radius = fp_radius
+        if np.amax(els)+fp_radius < el:
+            not_visible.append((name, 'Patch below {:.2f}'
+                                ''.format(el/degree)))
+            break
+        radius = max(np.radians(1), fp_radius)
         current_extent_pole(
-            azmins, azmaxs, aztimes, corners, radius, el, azs, els, tstop)
+            azmins, azmaxs, aztimes, corners, radius, el, azs, els,
+            tstop)
 
     return success, azmins, azmaxs, aztimes, tstop
 
@@ -285,13 +318,6 @@ def current_extent_pole(
         azs_cross[i] = unwind_angle(azs_cross[0], azs_cross[i])
 
     if len(azs_cross) > 0:
-        # DEBUG begin
-        if np.ptp(np.array(azs_cross)) > np.pi or \
-           np.ptp(np.array(azs_cross)) < np.radians(50):
-            import pdb
-            pdb.set_trace()
-        # DEBUG end
-
         azs_cross = np.sort(azs_cross)
         azmin = azs_cross[0]
         azmax = azs_cross[-1]
@@ -392,11 +418,6 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
         fp_radius_eff = fp_radius / np.cos(el)
         azmin = (azmin - fp_radius_eff) % (2*np.pi)
         azmax = (azmax + fp_radius_eff) % (2*np.pi)
-        # DEBUG begin
-        #if np.abs(azmin-2*np.pi) < .1:
-        #    import pdb
-        #    pdb.set_trace()
-        # DEBUG end
         ces_start = datetime.utcfromtimestamp(t1).strftime(
             '%Y-%m-%d %H:%M:%S %Z')
         ces_stop = datetime.utcfromtimestamp(t2).strftime(
@@ -566,9 +587,14 @@ def build_schedule(
 
         prioritize(visible, hits)
 
-        success, t = attempt_scan(
-            args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
-            tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
+        if args.pole_mode:
+            success, t = attempt_scan_pole(
+                args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+                tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
+        else:
+            success, t = attempt_scan(
+                args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+                tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
 
         if not success:
             if args.debug:
