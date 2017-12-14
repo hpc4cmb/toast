@@ -14,7 +14,7 @@ class PySMSky(object):
             If the named cache objects do not exist, then they are created.
     """
     def __init__(self, pixels='pixels',
-                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None, bandpasses=None):
+                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._nside = nside
@@ -24,7 +24,6 @@ class PySMSky(object):
 
         self.pysm_sky_config = pysm_sky_config
         self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
-        self.bandpasses = bandpasses
 
     def init_sky(self, pysm_sky_config):
         import pysm
@@ -34,7 +33,7 @@ class PySMSky(object):
                 pysm.nominal.models(model_id, self._nside, self._local_pixels)
         return pysm.Sky(initialized_sky_config)
 
-    def exec(self, local_map, out):
+    def exec(self, local_map, out, bandpasses=None):
 
         import pysm
 
@@ -46,14 +45,14 @@ class PySMSky(object):
             'nside': self._nside,
             'use_bandpass': True,
             'channels': None,
-            'channel_names': ['channel_1'],
+            'channel_names': list(bandpasses.keys()),
             'add_noise': False,
             'output_units': 'uK_RJ',
             'use_smoothing': False,
             'pixel_indices': self._local_pixels
         }
 
-        for ch_name, bandpass in self.bandpasses.items():
+        for ch_name, bandpass in bandpasses.items():
             pysm_instrument_config["channels"] = [bandpass]
             instrument = pysm.Instrument(pysm_instrument_config)
             local_map[out + "_" + ch_name], _ = \
