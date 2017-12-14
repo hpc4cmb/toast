@@ -216,7 +216,10 @@ def assemble_map_on_rank0(comm, local_map, n_components, npix):
 def extract_detector_parameters(det, focalplanes):
     for fp in focalplanes:
         if det in fp:
-            return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], fp[det]["fwhm"]
+            if "fwhm" in fp[det]:
+                return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], fp[det]["fwhm"]
+            else:
+                return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], -1
     raise RuntimeError("Cannot find detector {} in any focalplane")
 
 
@@ -238,7 +241,7 @@ class OpSimPySM(Operator):
     """
     def __init__(self, comm=None,
                  out='signal', pysm_model='', focalplanes=None, nside=None,
-                 subnpix=None, localsm=None):
+                 subnpix=None, localsm=None, apply_beam=False):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
@@ -268,6 +271,7 @@ class OpSimPySM(Operator):
         self.distmap = DistPixels(
             comm=comm.comm_world, size=self.npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
+        self.apply_beam = apply_beam
 
     def exec(self, data):
         local_dets = extract_local_dets(data)
@@ -293,11 +297,16 @@ class OpSimPySM(Operator):
         for det in local_dets:
             self.pysm_sky.exec(local_maps, out="sky",
                                bandpasses={"": bandpasses[det]})
-            # LibSharp also supports transforming multiple channels together each with own beam
-            smooth = LibSharpSmooth(self.comm.comm_rank, signal_map="sky",
-                                       lmax=lmax, grid=self.dist_rings.libsharp_grid,
-                                       fwhm_deg=fwhm_deg[det], beam=None)
-            smooth.exec(local_maps)
+
+            if self.apply_beam:
+                if fwhm_deg[det] == -1:
+                    raise RuntimeError(
+                     "OpSimPySM: apply beam is True but focalplane doesn't have fwhm")
+                # LibSharp also supports transforming multiple channels together each with own beam
+                smooth = LibSharpSmooth(self.comm.comm_rank, signal_map="sky",
+                                           lmax=lmax, grid=self.dist_rings.libsharp_grid,
+                                           fwhm_deg=fwhm_deg[det], beam=None)
+                smooth.exec(local_maps)
 
             n_components = 3
 

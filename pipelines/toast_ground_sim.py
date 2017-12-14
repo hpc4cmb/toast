@@ -1322,7 +1322,8 @@ def main():
                                    pysm_model=args.input_pysm_model,
                                    focalplanes=[s[2] for s in schedules],
                                    nside=args.nside,
-                                   subnpix=subnpix, localsm=localsm)
+                                   subnpix=subnpix, localsm=localsm,
+                                   apply_beam=args.apply_beam)
 
         op_sim_pysm.exec(data)
 
