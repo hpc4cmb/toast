@@ -46,7 +46,8 @@ qarray.py \
 op.py \
 healpix.py \
 vis.py \
-timing.py
+timing.py \
+weather.py
 
 
 toast_LTLIBRARIES = cbuffer.la

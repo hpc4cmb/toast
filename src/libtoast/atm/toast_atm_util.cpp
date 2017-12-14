@@ -26,35 +26,15 @@
 #include "ATMAngle.h"
 
 
-atm::Pressure get_pressure(atm::Length Alt, atm::Pressure P0,
-                           atm::Temperature T) {
-    /*
-      Return an approximate atmospheric pressure at the observing
-      altitude.
-      
-      Args:
-          altitude : Altitude in meters.
-          P0 : Sea level pressure.
-          T : Temperature at the observing site.
-     */
-
-    const double R = 8.3144598; // Ideal gas constant [J / mol / K]
-    const double Ma = 29e-3; // Air molecular weight [kg/mol]
-    const double g = 9.80665; // gravitational acceleration [m/s^2]
-    double atm_scale_height = R * T.get("K") / Ma / g;
-
-    return P0 * exp(-Alt.get("m") / atm_scale_height);
-}
-
-
-atm::SkyStatus get_sky_status(double altitude, double freq) {
+atm::SkyStatus get_sky_status(double altitude, double temperature,
+                              double pressure, double freq) {
     /*
       Create an ATM SkyStatus object for the observing altitude and frequency.
      */
 
     unsigned int atmType = 1; // Atmospheric type (to reproduce
                               // behavior above the tropopause)
-    atm::Temperature T(270, "K"); // Ground level temperature (K)
+    atm::Temperature T(temperature, "K"); // Ground level temperature (K)
     atm::Length Alt(altitude, "m"); // Altitude of the site (m)
     atm::Length WVL(2, "km"); // Water vapour scale height (km)
     double TLR=-5.6; // Tropospheric lapse rate (K/km)
@@ -62,9 +42,8 @@ atm::SkyStatus get_sky_status(double altitude, double freq) {
     atm::Pressure Pstep(1.0, "mb"); // Primary pressure step
     double PstepFact=1.2; // Pressure step ratio between two
                           // consecutive layers
-    atm::Pressure P0(1000, "mb"); // Ocean level pressure (mBar)
-    atm::Pressure P = get_pressure(Alt, P0, T);
-    atm::Humidity H(10, "%");
+    atm::Pressure P(pressure, "Pa"); // Pressure (Pa)
+    atm::Humidity H(10, "%"); // Placeholder humidity (overridden by PWV)
 
     atm::AtmProfile atmo(Alt, P, T, TLR, H, WVL, Pstep, PstepFact,
                          topAtm, atmType);
@@ -76,7 +55,10 @@ atm::SkyStatus get_sky_status(double altitude, double freq) {
 }
 
 
-double toast::tatm::get_absorption_coefficient(double altitude, double pwv,
+double toast::tatm::get_absorption_coefficient(double altitude,
+                                               double temperature,
+                                               double pressure,
+                                               double pwv,
                                                double freq) {
     /*
       Return the dimensionless absorption coefficient for a zenith
@@ -84,10 +66,12 @@ double toast::tatm::get_absorption_coefficient(double altitude, double pwv,
       
       Args:
           altitude : Observation altitude in meters.
+          temperature : Observing temperature in Kelvins.
+          pressure : Observing pressure in Pascals.
           pwv : Precipitable water vapor column height in mm.
           freq : Observing frequency in GHz.
     */
-    atm::SkyStatus ss = get_sky_status(altitude, freq);
+    atm::SkyStatus ss = get_sky_status(altitude, temperature, pressure, freq);
     ss.setUserWH2O(pwv, "mm");
     double opacity = ss.getWetOpacity().get();
 
@@ -95,17 +79,22 @@ double toast::tatm::get_absorption_coefficient(double altitude, double pwv,
 }
 
 
-double toast::tatm::get_atmospheric_loading(double altitude, double pwv,
-                                           double freq) {
+double toast::tatm::get_atmospheric_loading(double altitude,
+                                            double temperature,
+                                            double pressure,
+                                            double pwv,
+                                            double freq) {
     /*
       Return the equivalent black body temperature in Kelvin.
 
       Args:
           altitude : Observation altitude in meters.
+          temperature : Observing temperature in Kelvins.
+          pressure : Observing pressure in Pascals.
           pwv : Precipitable water vapor column height in mm.
           freq : Observing frequency in GHz.
     */
-    atm::SkyStatus ss = get_sky_status(altitude, freq);
+    atm::SkyStatus ss = get_sky_status(altitude, temperature, pressure, freq);
     ss.setUserWH2O(pwv, "mm");
     double opacity = ss.getWetOpacity().get();
 

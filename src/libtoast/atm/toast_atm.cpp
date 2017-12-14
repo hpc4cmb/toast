@@ -199,7 +199,7 @@ toast::tatm::sim::~sim() {
     if ( comm_gang != MPI_COMM_NULL && comm_gang != MPI_COMM_SELF
          && comm_gang != comm ) {
         if ( MPI_Comm_free( &comm_gang ) )
-            throw std::runtime_error( "Failed to free MPI communicator." );
+            std::cerr << "Failed to free MPI communicator." << std::endl;
     }
 }
 
@@ -866,10 +866,6 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
                     throw std::runtime_error( o.str().c_str() );
                 }
 
-                // Add dissipation due to distance
-
-                step_val /= r*r;
-
                 val += step_val;
 
                 // Prepare for the next step
@@ -908,7 +904,7 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
 void toast::tatm::sim::draw() {
 
-    // Draw 100 gaussian variates to use in drawing the simulation
+    // Draw 10000 gaussian variates to use in drawing the simulation
     // parameters
 
     const size_t nrand = 10000;
@@ -919,12 +915,6 @@ void toast::tatm::sim::draw() {
     long irand=0;
 
     if ( rank == 0 ) {
-        std::cerr << "atm::sim::draw(): key1 = " << key1 << ", key2 = " << key2
-                  << ", counter1 = " << counter1
-                  << ", counter2 = " << counter2 - nrand
-                  << std::endl;
-        for (int i=0; i<10; ++i) std::cerr << i << " : " << prand[i] << std::endl;
-
         lmin = 0;
         lmax = 0;
         w = -1;
@@ -975,15 +965,24 @@ void toast::tatm::sim::draw() {
 
     z0inv = 1. / (2. * z0);
 
-    // Wind parallel to surface
+    // Wind is parallel to surface. Rotate to a frame where the scan
+    // is along the X-axis.
 
-    double wx_h = w * sin( wdir );
-    wy = w * cos( wdir );
+    double eastward_wind = w * cos( wdir );
+    double northward_wind = w * sin( wdir );
 
-    // Rotate to a frame where scan is along X axis
+    double angle = az0-M_PI/2;
+    double wx_h = eastward_wind*cos( angle ) - northward_wind*sin( angle );
+    wy = eastward_wind*sin( angle ) + northward_wind*cos( angle );
 
     wx = wx_h * cosel0;
     wz = -wx_h * sinel0;
+
+    // Inverse the wind direction so we can apply it to the
+    // telescope position
+
+    wx = -wx;
+    wy = -wy;
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
@@ -991,6 +990,10 @@ void toast::tatm::sim::draw() {
         std::cerr << " lmin = " << lmin << " m" << std::endl;
         std::cerr << " lmax = " << lmax << " m" << std::endl;
         std::cerr << "    w = " << w << " m/s" << std::endl;
+        std::cerr << " easthward wind = " << eastward_wind << " m/s" << std::endl;
+        std::cerr << " northward wind = " << northward_wind << " m/s" << std::endl;
+        std::cerr << "  az0 = " << az0*180./M_PI << " degrees" << std::endl;
+        std::cerr << "  el0 = " << el0*180./M_PI << " degrees" << std::endl;
         std::cerr << "   wx = " << wx << " m/s" << std::endl;
         std::cerr << "   wy = " << wy << " m/s" << std::endl;
         std::cerr << "   wz = " << wz << " m/s" << std::endl;
@@ -1869,8 +1872,9 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
     // Coordinates are in the horizontal frame
 
     const long nn = 1;
-    const double ndxinv = xxstep / (nn-1);
-    const double ndzinv = zzstep / (nn-1);
+    // Uncomment these lines for smoothing
+    //const double ndxinv = xxstep / (nn-1);
+    //const double ndzinv = zzstep / (nn-1);
     const double ninv = 1. / ( nn * nn );
 
     double val = 0;
@@ -1880,20 +1884,22 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
         double yy1 = coord1[1];
         double zz1 = coord1[2];
 
-        if ( ii1 ) {
-            xx1 += ii1 * ndxinv;
-            zz1 += ii1 * ndzinv;
-        }
+        // Uncomment these lines for smoothing
+        //if ( ii1 ) {
+        //    xx1 += ii1 * ndxinv;
+        //    zz1 += ii1 * ndzinv;
+        //}
 
         for ( int ii2=0; ii2<nn; ++ii2 ) {
             double xx2 = coord2[0];
             double yy2 = coord2[1];
             double zz2 = coord2[2];
 
-            if ( ii2 ) {
-                xx2 += ii2 * ndxinv;
-                zz2 += ii2 * ndzinv;
-            }
+            // Uncomment these lines for smoothing
+            //if ( ii2 ) {
+            //    xx2 += ii2 * ndxinv;
+            //    zz2 += ii2 * ndzinv;
+            //}
 
             // Water vapor altitude factor
 

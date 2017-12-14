@@ -271,9 +271,15 @@ void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache );
 void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
     double *el, double *tod, long nsamp, double fixed_r );
 
-double ctoast_atm_get_absorption_coefficient(double altitude, double pwv,
+double ctoast_atm_get_absorption_coefficient(double altitude,
+					     double temperature,
+					     double pressure,
+					     double pwv,
 					     double freq);
-double ctoast_atm_get_atmospheric_loading(double altitude, double pwv,
+double ctoast_atm_get_atmospheric_loading(double altitude,
+					  double temperature,
+					  double pressure,
+					  double pwv,
 					  double freq);
 
 

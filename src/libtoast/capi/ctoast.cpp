@@ -813,20 +813,26 @@ void ctoast_atm_sim_observe(
     return;
 }
 
-double ctoast_atm_get_absorption_coefficient(double altitude, double pwv,
+double ctoast_atm_get_absorption_coefficient(double altitude,
+                                             double temperature,
+                                             double pressure, double pwv,
                                              double freq) {
     double absorption = 0;
 #ifdef HAVE_AATM
-    absorption = toast::tatm::get_absorption_coefficient(altitude, pwv, freq);
+    absorption = toast::tatm::get_absorption_coefficient(altitude, temperature,
+                                                         pressure, pwv, freq);
 #endif
     return absorption;
 }
 
-double ctoast_atm_get_atmospheric_loading(double altitude, double pwv,
+double ctoast_atm_get_atmospheric_loading(double altitude, double temperature,
+                                          double pressure, double pwv,
                                           double freq) {
     double loading = 0;
 #ifdef HAVE_AATM
-    loading = toast::tatm::get_atmospheric_loading(altitude, pwv, freq);
+    loading = toast::tatm::get_atmospheric_loading(altitude, temperature,
+                                                   pressure, pwv, freq);
+                                                   
 #endif
     return loading;
 }
