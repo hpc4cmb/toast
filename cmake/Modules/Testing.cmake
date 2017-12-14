@@ -198,7 +198,7 @@ endif(NOT DASHBOARD_MODE)
 # ------------------------------------------------------------------------ #
 set(SRUN_COMMAND )
 if(USE_SLURM AND SLURM_SRUN_COMMAND)
-    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -n 1 -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} --time=${TIME})
+    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} --time=${TIME})
 endif(USE_SLURM AND SLURM_SRUN_COMMAND)
 
 # get the python sets
@@ -214,7 +214,7 @@ endforeach(_FILE ${_PYTHON_TEST_FILES})
 # add CXX unit test
 add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} ctest-wrapper.sh toast_test)
+    COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh ${CMAKE_BINARY_DIR}/toast_test)
 set_tests_properties(cxx_toast_test PROPERTIES 
     LABELS "UnitTest;CXX" TIMEOUT 7200)
 
@@ -235,7 +235,7 @@ endforeach(_test_ext ${PYTHON_TEST_FILES})
 if(USE_COVERAGE)
     add_test(NAME pyc_coverage
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} ctest-wrapper.sh ${PYTHON_EXECUTABLE}
+    COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh ${PYTHON_EXECUTABLE}
         ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
     set_tests_properties(pyc_coverage PROPERTIES 
         LABELS "Coverage;Python" TIMEOUT 7200)
