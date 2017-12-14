@@ -209,8 +209,8 @@ def extract_local_dets(data):
     return local_dets
 
 def assemble_map_on_rank0(comm, local_map, n_components, npix):
-    full_maps_rank0 = np.zeros((n_components, npix), dtype=np.float64) if comm.comm_world.rank == 0 else None
-    comm.comm_world.Reduce(local_map, full_maps_rank0, root=0, op=MPI.SUM)
+    full_maps_rank0 = np.zeros((n_components, npix), dtype=np.float64) if comm.rank == 0 else None
+    comm.Reduce(local_map, full_maps_rank0, root=0, op=MPI.SUM)
     return full_maps_rank0
 
 def extract_detector_parameters(det, focalplanes):
@@ -301,7 +301,7 @@ class OpSimPySM(Operator):
 
             n_components = 3
 
-            full_map_rank0 = assemble_map_on_rank0(self.comm,
+            full_map_rank0 = assemble_map_on_rank0(self.comm.comm_rank,
                                      local_maps["sky"], n_components, self.npix)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
 
