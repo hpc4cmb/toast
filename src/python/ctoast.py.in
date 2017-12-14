@@ -954,6 +954,22 @@ def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
     lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
     return
 
+lib.ctoast_atm_get_absorption_coefficient.restype = ct.c_double
+lib.ctoast_atm_get_absorption_coefficient.argtypes = [
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double]
+
+def atm_get_absorption_coefficient(altitude, temperature, pressure, pwv, freq):
+    return lib.ctoast_atm_get_absorption_coefficient(altitude, temperature,
+                                                     pressure, pwv, freq)
+
+lib.ctoast_atm_get_atmospheric_loading.restype = ct.c_double
+lib.ctoast_atm_get_atmospheric_loading.argtypes = [
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double]
+
+def atm_get_atmospheric_loading(altitude, temperature, pressure, pwv, freq):
+    return lib.ctoast_atm_get_atmospheric_loading(altitude, temperature,
+                                                  pressure, pwv, freq)
+
 
 #--------------------------------------
 #  TOD sublibrary
