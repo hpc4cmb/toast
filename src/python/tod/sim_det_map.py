@@ -5,6 +5,7 @@
 
 import numpy as np
 import healpy as hp
+import libsharp
 
 from .. import qarray as qa
 from .tod import TOD
