@@ -110,9 +110,9 @@ class OpSimPySMTest(MPITestCase):
                 "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=local_pixels, nside=self.nside,
-                       pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
+                       pysm_sky_config=pysm_sky_config)
         local_map = {} # it should be Cache in production
-        op.exec(local_map, out="sky")
+        op.exec(local_map, out="sky", bandpasses=bandpasses)
 
         # Now we have timestreams in the cache.  We could compare the
         # timestream values or we could make a binned map and look at those
@@ -151,9 +151,9 @@ class OpSimPySMTest(MPITestCase):
                 "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=dist_rings.local_pixels, nside=self.nside,
-                       pysm_sky_config=pysm_sky_config, bandpasses=bandpasses)
+                       pysm_sky_config=pysm_sky_config)
         local_map = {} # it should be Cache in production
-        op.exec(local_map, out="sky")
+        op.exec(local_map, out="sky", bandpasses=bandpasses)
 
         # Now we have timestreams in the cache.  We could compare the 
         # timestream values or we could make a binned map and look at those
