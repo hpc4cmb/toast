@@ -1369,7 +1369,8 @@ def main():
         fwhm_deg = {}
         N_POINTS_BANDPASS = 10  # possibly take as parameter
         for det in local_dets:
-            bandcenter, bandwidth, fwhm_deg[det] = extract_detector_parameters(det, schedules)
+            bandcenter, bandwidth, fwhm_deg[det] = \
+                    extract_detector_parameters(det, schedules)
             bandpasses[det] = \
                 (np.linspace(bandcenter-bandwidth/2,
                              bandcenter+bandwidth/2,
@@ -1377,10 +1378,7 @@ def main():
                  np.ones(N_POINTS_BANDPASS))
         pysm_sky = tm.PySMSky(local_pixels=dist_rings.local_pixels,
                               nside=args.nside,
-                              pysm_sky_config=pysm_sky_config,
-                              bandpasses=bandpasses)
-        local_maps = dict()  # FIXME use Cache instead
-        pysm_sky.exec(local_maps, out="sky")
+                              pysm_sky_config=pysm_sky_config)
 
         lmax = 512
 
@@ -1394,11 +1392,13 @@ def main():
         start = MPI.Wtime()
 
         full_map_rank0 = {}
-        for det, fwhm in fwhm_deg.items():
+        local_maps = dict()  # FIXME use Cache instead
+        for det in local_dets:
+            pysm_sky.exec(local_maps, out="sky", bandpasses={det: bandpasses[det]})
             # LibSharp also supports transforming multiple channels together each with own beam
-            smooth = tm.LibSharpSmooth(comm.comm_rank, signal_map="sky_"+det,
+            smooth = tm.LibSharpSmooth(comm.comm_rank, signal_map="sky",
                                        lmax=lmax, grid=dist_rings.libsharp_grid,
-                                       fwhm_deg=fwhm, beam=None)
+                                       fwhm_deg=fwhm_deg[det], beam=None)
             smooth.exec(local_maps)
 
             n_components = 3
