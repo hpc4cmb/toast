@@ -25,30 +25,6 @@ import toast.map as tm
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
-def extract_detector_parameters(det, schedules):
-    for _, _, fp in schedules:  # loop through focalplanes
-        if det in fp:
-            return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], fp[det]["fwhm"]
-    raise RuntimeError("Cannot find detector {} in any focalplane")
-
-def extract_local_dets(data):
-    """Extracts the local detectors from the TOD objects
-
-    Some detectors could only appear in some observations, so we need
-    to loop through all observations and accumulate all detectors in
-    a set
-    """
-    local_dets = set()
-    for obs in data.obs:
-        tod = obs['tod']
-        local_dets.update(tod.local_dets)
-    return local_dets
-
-def assemble_map_on_rank0(comm, local_map, n_components, npix):
-    full_maps_rank0 = np.zeros((n_components, npix), dtype=np.float64) if comm.comm_world.rank == 0 else None
-    comm.comm_world.Reduce(local_map, full_maps_rank0, root=0, op=MPI.SUM)
-    return full_maps_rank0
-
 def parse_arguments(comm):
 
     parser = argparse.ArgumentParser(
@@ -1339,97 +1315,21 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
-    local_dets = extract_local_dets(data)
-    print(local_dets)
+    if args.input_pysm_model:
 
-    run_pysm = True
-    if run_pysm:
+        op_sim_pysm = tt.OpSimPySM(comm=comm,
+                                   out='signal',
+                                   pysm_model=args.input_pysm_model,
+                                   focalplanes=[s[2] for s in schedules],
+                                   nside=args.nside,
+                                   subnpix=subnpix, localsm=localsm)
 
-        # Simulate input sky
+        op_sim_pysm.exec(data)
 
-        dist_rings = tm.DistRings(comm.comm_rank,
-                            nside = args.nside,
-                            nnz = 3)
+    else:
+        # Scan input map
 
-        pysm_sky_components = [
-            'synchrotron',
-            'dust',
-            'freefree',
-            'cmb',
-            'ame',
-        ]
-        pysm_sky_config = dict()
-        for component_model in args.input_pysm_model.split(','):
-            full_component_name = \
-                    [each for each in pysm_sky_components
-                     if each.startswith(component_model[0])][0]
-            pysm_sky_config[full_component_name] = component_model
-
-        bandpasses = {}
-        fwhm_deg = {}
-        N_POINTS_BANDPASS = 10  # possibly take as parameter
-        for det in local_dets:
-            bandcenter, bandwidth, fwhm_deg[det] = \
-                    extract_detector_parameters(det, schedules)
-            bandpasses[det] = \
-                (np.linspace(bandcenter-bandwidth/2,
-                             bandcenter+bandwidth/2,
-                             N_POINTS_BANDPASS),
-                 np.ones(N_POINTS_BANDPASS))
-        pysm_sky = tm.PySMSky(local_pixels=dist_rings.local_pixels,
-                              nside=args.nside,
-                              pysm_sky_config=pysm_sky_config)
-
-        lmax = 512
-
-        npix = hp.nside2npix(args.nside)
-        distmap = tm.DistPixels(
-            comm=comm.comm_world, size=npix, nnz=3,
-            dtype=np.float32, submap=subnpix, local=localsm)
-
-        if comm.comm_world.rank == 0:
-            print('Collecting, Broadcasting map', flush=args.flush)
-        start = MPI.Wtime()
-
-        full_map_rank0 = {}
-        local_maps = dict()  # FIXME use Cache instead
-        for det in local_dets:
-            pysm_sky.exec(local_maps, out="sky", bandpasses={det: bandpasses[det]})
-            # LibSharp also supports transforming multiple channels together each with own beam
-            smooth = tm.LibSharpSmooth(comm.comm_rank, signal_map="sky",
-                                       lmax=lmax, grid=dist_rings.libsharp_grid,
-                                       fwhm_deg=fwhm_deg[det], beam=None)
-            smooth.exec(local_maps)
-
-            n_components = 3
-
-            full_map_rank0 = assemble_map_on_rank0(comm, local_maps["sky_"+det], n_components, npix)
-            #full_map_rank0 dict contains on rank 0 the smoothed PySM maps
-
-            if comm.comm_world.rank == 0:
-                print(full_map_rank0[:10])
-
-            distmap.broadcast_healpix_map(full_map_rank0)
-            scansim = tt.OpSimScan(distmap=distmap, out='signal_'+det)
-            scansim.exec(data)
-            if comm.comm_world.rank == 0:
-                print("Time domain signal", data["signal_fake_0A"][:10])
-
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print('Map smoothed and rescanned to timelines:  {:.2f} seconds'
-                  ''.format(stop-start), flush=args.flush)
-
-
-        # Prepare auxiliary information for distributed map objects
-
-        #localpix, localsm, subnpix = get_submaps(args, comm, data)
-
-        #scan_signal(comm, full_map_rank0, nside, channels, data, localsm, subnpix)
-
-    # Scan input map
-
-    signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
+        signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
 
