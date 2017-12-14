@@ -22,6 +22,7 @@ mkdir -p ${DIR}
 cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
-    -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
+    -DUSE_TBB=OFF -DUSE_ARCH=ON -DUSE_SSE=ON \
+    -DCTEST_SITE=cori-knl \
     ${OPTS} ${ROOT}
 

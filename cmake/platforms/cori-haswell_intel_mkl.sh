@@ -24,6 +24,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENMP=ON \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
     -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
     -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
-    -DTARGET_ARCHITECTURE=haswell \
+    -DUSE_ARCH=ON -DUSE_SSE=ON \
+    -DTARGET_ARCHITECTURE=haswell -DCTEST_SITE=cori-haswell \
     ${OPTS} ${ROOT}
 

@@ -8,7 +8,7 @@
 #
 
 ROOT=${PWD}
-DIR=${PWD}/build-toast/edison-gcc-mkl/release
+DIR=${PWD}/build-toast/edison-intel-mkl/release
 OPTS="$@"
 
 export CC=$(which cc)
@@ -22,7 +22,8 @@ mkdir -p ${DIR}
 cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
-    -DUSE_ARCH=ON -DUSE_SSE=ON -DUSE_TBB=OFF \
+    -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
+    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
     -DTARGET_ARCHITECTURE="ivy-bridge" -DCTEST_SITE=edison \
     ${OPTS} ${ROOT}
 
