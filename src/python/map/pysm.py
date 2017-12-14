@@ -55,5 +55,6 @@ class PySMSky(object):
         for ch_name, bandpass in bandpasses.items():
             pysm_instrument_config["channels"] = [bandpass]
             instrument = pysm.Instrument(pysm_instrument_config)
-            local_map[out + "_" + ch_name], _ = \
+            out_name = (out + "_" + ch_name) if ch_name else out
+            local_map[out_name], _ = \
                 instrument.observe(self.sky, write_outputs=False)
