@@ -1,16 +1,16 @@
-FROM ubuntu:17.04
+FROM ubuntu:17.04 as builder
 
 MAINTAINER Theodore Kisner <tskisner@lbl.gov>
 
 # Use bash
 
-SHELL ["/bin/bash", "-c"]
+SHELL ["/bin/bash", "--login", "-c"]
 
 # Install system dependencies.
 
 RUN apt-get update \
     && apt-get install -y curl procps build-essential gfortran git subversion \
-    autoconf automake libtool m4 cmake locales libfftw3-dev libopenblas-dev \
+    autoconf automake libtool m4 cmake locales \
     libgl1-mesa-glx xvfb \
     && rm -fr /var/lib/apt/lists/*
 
@@ -20,6 +20,20 @@ RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8 
 ENV LANGUAGE en_US:en 
 ENV LC_ALL en_US.UTF-8
+
+# Install Intel tools to /opt/intel.  We assume that the build context already
+# contains a copy of the Intel tools, and we just copy it into the image.
+
+RUN mkdir -p /opt/intel
+
+COPY intel /opt/intel/
+
+RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/bin/compilervars.sh intel64" >> /etc/profile
+RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/mkl/bin/mklvars.sh intel64" >> /etc/profile
+
+RUN cp -a /opt/intel/compilers_and_libraries/linux/lib/intel64/* /usr/lib/
+
+RUN cp -a /opt/intel/mkl/lib/intel64/* /usr/lib/
 
 # We install everything directly into /usr so that we do
 # not need to modify the default library and executable
@@ -37,13 +51,7 @@ ENV PYTHONSTARTUP ""
 ENV PYTHONNOUSERSITE "1"
 ENV PYTHONUSERBASE "/tmp"
 
-# Install conda root environment
-
-ENV ACCEPT_INTEL_PYTHON_EULA yes
-
 @conda_root@
-
-@conda_intel@
 
 # Install conda packages.
 
@@ -115,6 +123,10 @@ ENV PYTHONPATH /usr/lib/python3.5/site-packages
 
 @tidas@
 
+# Install TOAST
+
+@toast@
+
 # Remove the temporary patches
 
 RUN rm -rf ./rules
@@ -135,7 +147,31 @@ ENV HOME /home/toast
 RUN python -c "import astropy"
 RUN python -c "import matplotlib.font_manager as fm; f = fm.FontManager"
 
+#---------------------------------------------------------------
+# Now we create the runtime image (second stage of the build).
+#---------------------------------------------------------------
+
+FROM ubuntu:17.04
+
+# Copy our installed software binaries and libraries
+
+COPY --from=builder /usr/bin /usr/bin/
+COPY --from=builder /usr/lib /usr/lib/
+
+ENV PYTHONPATH /usr/lib/python3.6/site-packages
+
+# Copy our conda install
+
+COPY --from=builder /usr/local /usr/local/
+
+# Copy our fake home directory
+
+COPY --from=builder /home/toast /home/toast/
+
 # Set the entrypoint and default command
+
+WORKDIR /home/toast
+ENV HOME /home/toast
 
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
