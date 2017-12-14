@@ -10,25 +10,25 @@
 
 # set environment paths
 export LOG_OUT=/dev/stdout
-export PATH="${PROJECT_BIN_PATH}:@PATH@"
-export PYTHONPATH="${PROJECT_PYC_PATH}:@PYTHONPATH@"
+export PATH="${PROJECT_BIN_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@:@PATH@"
+export PYTHONPATH="${PROJECT_PYC_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_PYTHONDIR@:@PYTHONPATH@"
 
 if [ "$(uname -s)" = "Darwin" ]; 
 then
-    export DYLD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@DYLD_LIBRARY_PATH@"
+    export DYLD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@:@DYLD_LIBRARY_PATH@"
 else
-    export LD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@LD_LIBRARY_PATH@"
+    export LD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@:@LD_LIBRARY_PATH@"
 fi
 
 $@
 
-if [ "@USE_SLURM@" = "ON" ]; then
-    FNOTES=@JOB_NAME@_notes.cmake
-    echo > ${FNOTES}
-    for i in out_@JOB_NAME@_@MACHINE@_*.log
-    do
-        cat >> ${FNOTES} <<EOF
-list(APPEND CTEST_NOTES_FILES "${i}")
-        EOF
-    done
-fi
+#if [ "@USE_SLURM@" = "ON" ]; then
+#    FNOTES=@JOB_NAME@_notes.cmake
+#    echo > ${FNOTES}
+#    for i in out_@JOB_NAME@_@MACHINE@_*.log
+#    do
+#        cat >> ${FNOTES} <<EOF
+#list(APPEND CTEST_NOTES_FILES "${i}")
+#        EOF
+#    done
+#fi

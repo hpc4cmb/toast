@@ -87,14 +87,20 @@ endif(NOT USE_SLURM)
 include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})    
 set(ENV{MACHINES} "${MACHINE}")
 
-configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-simple-wrapper.sh.in
-    ${CMAKE_BINARY_DIR}/examples/ctest-simple-wrapper.sh @ONLY)
+set(PATH_INFO_FILE ctest-path-info.sh)
+configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/${PATH_INFO_FILE}.in
+    ${CMAKE_BINARY_DIR}/examples/${PATH_INFO_FILE} @ONLY)
 
 FILE(WRITE "${CMAKE_BINARY_DIR}/examples/read.cmake"
 "
-FILE(READ \"${CMAKE_BINARY_DIR}/examples/ctest-simple-wrapper.sh\" _INIT)
+FILE(READ \"${CMAKE_BINARY_DIR}/examples/${PATH_INFO_FILE}\" _INIT)
 set(EXTRA_INIT \"\${_INIT}\" CACHE STRING \"Extra initialization\" FORCE)
+
 ")
+
+set(SRUN_WRAPPER srun-wrapper.sh)
+configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/${SRUN_WRAPPER}
+    ${CMAKE_BINARY_DIR}/examples/${SRUN_WRAPPER} @ONLY)
 
 message(STATUS "Generating SLURM examples for ${MACHINE}...")
 execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} 
@@ -119,23 +125,15 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(_test_name ${_TYPE}_${_SIZE}_${MACHINE})
         add_test(NAME ${_test_name}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-            COMMAND ${SLURM_SBATCH_COMMAND} ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
+            COMMAND ./${SRUN_WRAPPER} ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
         get_parameter(_NODES "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
         string(TOLOWER "${_FREQ}" _LFREQ)
-        set(_LABELS 
-            Examples 
-            ${_TYPE} 
-            ${MACHINE} 
-            ${_SIZE} 
-            ${_FREQ} 
-            ${_TYPE}_${_SIZE} 
-            ${_TYPE}_${_LFREQ}
-            EXAMPLE_${_NODES}_NODE 
-            ${_TYPE}_${_NODES}
-            ${_LFREQ}_${_NODES}
-            )
+        set(_LABELS  Examples${_TYPE} ${MACHINE} ${_SIZE} ${_FREQ}
+            ${_TYPE}_${_SIZE} ${_TYPE}_${_LFREQ}
+            ${_TYPE}_${_NODES} ${_LFREQ}_${_NODES}
+            EXAMPLE_${_NODES}_NODE )
             list(APPEND NODES_LIST ${_NODES})
             math(EXPR NODES_COUNT_${_NODES} "${NODES_COUNT_${_NODES}}+1")
         set_tests_properties(${_test_name} PROPERTIES LABELS "${_LABELS}" TIMEOUT 14400)
@@ -168,4 +166,3 @@ foreach(_N ${NODES_LIST})
     set(QUEUE "${QUEUE_ORIG}")
 endforeach(_N ${NODES_LIST})
 file(WRITE ${CMAKE_BINARY_DIR}/examples/nodes.cmake.out "${_STR}")
-

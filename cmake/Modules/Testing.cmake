@@ -10,6 +10,7 @@ add_dependent_option(USE_SLURM "Enable generation of SLURM scripts for testing"
     ON "SLURM_SBATCH_COMMAND" OFF)
 
 set(MACHINEFILE "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}")
+get_parameter(CONSTRAINT ${MACHINEFILE} CONSTRAINT)
 foreach(VAR NODEPROCS NODECORES HYPERTHREAD)
     get_parameter(${VAR} ${MACHINEFILE} ${VAR})
     string(REGEX MATCHALL "([0-9]+)" ${VAR} "${${VAR}}")    
@@ -196,9 +197,9 @@ endif(NOT DASHBOARD_MODE)
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
 set(SRUN_COMMAND )
-if(USE_SLURM)
-    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -n 1 -N 1)
-endif(USE_SLURM)
+if(USE_SLURM AND SLURM_SRUN_COMMAND)
+    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -n 1 -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} --time=${TIME})
+endif(USE_SLURM AND SLURM_SRUN_COMMAND)
 
 # get the python sets
 set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")
