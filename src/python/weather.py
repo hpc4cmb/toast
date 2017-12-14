@@ -9,8 +9,6 @@ import numpy as np
 
 from . import rng as rng
 
-NSAMP = 1000
-
 
 class Weather(object):
     """ TOAST Weather objects allow sampling weather parameters.
