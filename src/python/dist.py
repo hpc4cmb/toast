@@ -1,5 +1,5 @@
 # Copyright (c) 2015 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from .mpi import MPI
@@ -7,6 +7,7 @@ from .mpi import MPI
 import os
 
 import numpy as np
+import numpy.testing as nt
 
 
 class Comm(object):
@@ -148,7 +149,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     """
     Distribute indivisible blocks of items between groups.
 
-    Given some contiguous blocks of items which cannot be 
+    Given some contiguous blocks of items which cannot be
     subdivided, distribute these blocks to the specified
     number of groups in a way which minimizes the maximum
     total items given to any group.  Optionally weight the
@@ -162,9 +163,9 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
         breaks (list): List of hard breaks in the data distribution.
 
     Returns:
-        A list of tuples.  There is one tuple per group.  
-        The first element of the tuple is the first item 
-        assigned to the group, and the second element is 
+        A list of tuples.  There is one tuple per group.
+        The first element of the tuple is the first item
+        assigned to the group, and the second element is
         the number of items assigned to the group.
     """
     chunks = np.array(sizes, dtype=np.int64)
@@ -226,10 +227,10 @@ def distribute_uniform(totalsize, groups, breaks=None):
         breaks (list): List of hard breaks in the data distribution.
 
     Returns:
-        list of tuples: there is one tuple per group.  The 
-        first element of the tuple is the first item 
-        assigned to the group, and the second element is 
-        the number of items assigned to the group. 
+        list of tuples: there is one tuple per group.  The
+        first element of the tuple is the first item
+        assigned to the group, and the second element is
+        the number of items assigned to the group.
     """
     if breaks is not None:
         all_breaks = np.unique(breaks)
@@ -291,18 +292,18 @@ def distribute_samples(mpicomm, detectors, samples, detranks=1, detbreaks=None, 
 
                             samples -->
                       +--------------+--------------
-                    / | sampsize[0]  | sampsize[1] ... 
+                    / | sampsize[0]  | sampsize[1] ...
         detrank = 0   +--------------+--------------
                     \ | sampsize[0]  | sampsize[1] ...
                       +--------------+--------------
-                    / | sampsize[0]  | sampsize[1] ... 
+                    / | sampsize[0]  | sampsize[1] ...
         detrank = 1   +--------------+--------------
                     \ | sampsize[0]  | sampsize[1] ...
                       +--------------+--------------
                       | ...
 
     Args:
-        mpicomm (mpi4py.MPI.Comm):  the MPI communicator over which the 
+        mpicomm (mpi4py.MPI.Comm):  the MPI communicator over which the
             data is distributed.
         detectors (list):  The list of detector names.
         samples (int):  The total number of samples.
@@ -311,17 +312,17 @@ def distribute_samples(mpicomm, detectors, samples, detranks=1, detbreaks=None, 
             by this number.
         detbreaks (list):  Optional list of hard breaks in the detector
             distribution.
-        sampsizes (list):  Optional list of sample chunk sizes which 
-            cannot be split.    
-        sampbreaks (list):  Optional list of hard breaks in the sample 
+        sampsizes (list):  Optional list of sample chunk sizes which
+            cannot be split.
+        sampbreaks (list):  Optional list of hard breaks in the sample
             distribution.
 
     Returns:
-        tuple of lists: the 3 lists returned contain information about 
-        the detector distribution, the sample distribution, and the chunk 
+        tuple of lists: the 3 lists returned contain information about
+        the detector distribution, the sample distribution, and the chunk
         distribution.  The first list has one entry for each detrank and
         contains the list of detectors for that row of the process grid.
-        The second list contains tuples of (first sample, N samples) for 
+        The second list contains tuples of (first sample, N samples) for
         each column of the process grid.  The third list contains tuples
         of (first chunk, N chunks) for each column of the process grid.
 
@@ -388,7 +389,8 @@ class Data(object):
 
     def clear(self):
         """
-        Clear the dictionary of all observations, so that they can be garbage collected.
+        Clear the dictionary of all observations, so that they can be
+        garbage collected.
         """
         for ob in self.obs:
             ob.clear()
@@ -445,7 +447,7 @@ class Data(object):
                 my_chunks = tod.local_chunks[1]
             procstr = "{}    sample range {} --> {} in {} chunks:\n".format(
                 procstr, offset, (offset + nsamp - 1), my_chunks)
-            
+
             if tod.local_chunks is not None:
                 chkoff = tod.local_samples[0]
                 for chk in range(tod.local_chunks[1]):
@@ -457,7 +459,7 @@ class Data(object):
                     chkoff += tod.total_chunks[abschk]
 
             if nsamp > 0:
-    
+
                 stamps = tod.local_times()
 
                 procstr = "{}    timestamps {} --> {}\n".format(
@@ -534,3 +536,41 @@ class Data(object):
 
         return
 
+
+    def split(self, key):
+        """
+        Split the Data object.
+
+        Split the Data object based on the value of `key` in the
+        observation dictionary.
+
+        Args:
+            key(str) :  Observation key to use.
+
+        Returns:
+            List of 2-tuples of the form (value, data)
+        """
+
+        # Build a superset of all values
+
+        values = set()
+        for obs in self.obs:
+            if key not in obs:
+                raise RuntimeError('Cannot split data by "{}". Key is not '
+                                   'defined for all observations.'.format(key))
+            values.add(obs[key])
+        all_values = self._comm.comm_world.allgather(values)
+        for vals in all_values:
+            values = values.union(vals)
+
+        # Split the data
+
+        datasplit = []
+        for value in values:
+            new_data = Data(comm=self._comm)
+            for obs in self.obs:
+                if obs[key] == value:
+                    new_data.obs.append(obs)
+            datasplit.append((value, new_data))
+
+        return datasplit
