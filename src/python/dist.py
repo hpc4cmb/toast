@@ -328,7 +328,9 @@ def distribute_samples(mpicomm, detectors, samples, detranks=1, detbreaks=None, 
 
     """
     if mpicomm.size % detranks != 0:
-        raise RuntimeError("The number of detranks ({}) does not divide evenly into the communicator size ({})".format(detranks, mpicomm.size))
+        raise RuntimeError(
+            "The number of detranks ({}) does not divide evenly "
+            "into the communicator size ({})".format(detranks, mpicomm.size))
 
     # Compute the other dimension of the process grid.
 
@@ -562,6 +564,10 @@ class Data(object):
         all_values = self._comm.comm_world.allgather(values)
         for vals in all_values:
             values = values.union(vals)
+
+        # Order the values alphabetically.
+
+        values = sorted(list(values))
 
         # Split the data
 
