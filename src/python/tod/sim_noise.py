@@ -33,7 +33,6 @@ class AnalyticNoise(Noise):
 
     def __init__(self, *, detectors, rate, fmin, fknee, alpha, NET):
 
-        autotimer = timing.auto_timer(type(self).__name__)
         self._rate = rate
         self._fmin = fmin
         self._fknee = fknee

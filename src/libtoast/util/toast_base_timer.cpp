@@ -191,6 +191,8 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     size_type len = ter - pos;
     string_t substr = m_format_string.substr(pos, len);
     ss << substr;
+
+    ss << " [ total " << m_rss_tot << " ] [ self " << m_rss_self << " ]";
     if(avg)
         ss << " (average of " << this->laps() << " laps)";
     else if(this->laps() > 1)

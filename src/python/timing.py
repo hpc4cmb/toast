@@ -19,6 +19,11 @@ nprocs = MPI.COMM_WORLD.Get_size()
 
 
 #------------------------------------------------------------------------------#
+def default_max_depth():
+    return 65536
+
+
+#------------------------------------------------------------------------------#
 def enabled():
     return ctoast.timers_enabled()
 
@@ -130,7 +135,7 @@ class timing_manager(object):
     output_dir = "./"
     serial_fname = "timing_report.json"
     serial_report = True
-    max_timer_depth = 65536
+    max_timer_depth = ctoast.timing_manager_max_depth()
 
     @staticmethod
     def enabled():
@@ -188,8 +193,9 @@ class auto_timer(object):
         self._op_line = LINE(2)
         # increment the instance count
         ctoast.op_timer_instance_count(1, self._op_line)
-        # turn off if exceed count
-        if ctoast.get_timer_instance_count() + 1 > timing_manager.max_timer_depth:
+        # turn off if exceed count and only when enabled
+        if (enabled() and
+        ctoast.get_timer_instance_count() + 1 > timing_manager.max_timer_depth):
             toggle(False)
             self._toggled = True
         # timer key
@@ -204,6 +210,19 @@ class auto_timer(object):
         if not enabled() and self._toggled:
             toggle(True)
             self._toggled = False
+
+
+#------------------------------------------------------------------------------#
+def set_max_depth(_depth):
+    """Function for setting the max depth of timers"""
+    ctoast.timing_manager_set_max_depth(_depth)
+    timing_manager.max_timer_depth = ctoast.timing_manager_max_depth()
+
+
+#------------------------------------------------------------------------------#
+def max_depth():
+    """Function for getting the max depth of timers"""
+    return ctoast.timing_manager_max_depth()
 
 
 #------------------------------------------------------------------------------#
@@ -253,7 +272,7 @@ def parse_args(args):
     tman.clear()
     toggle(args.use_timers)
     timing_manager.serial_report = args.serial_report
-    timing_manager.max_timer_depth = args.max_timer_depth
+    set_max_depth(args.max_timer_depth)
 
 
 #------------------------------------------------------------------------------#

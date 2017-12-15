@@ -10,6 +10,7 @@ a BSD-style license that can be found in the LICENSE file.
 //----------------------------------------------------------------------------//
 
 #include "base_clock.hpp"
+#include "rss.hpp"
 #include <fstream>
 #include <string>
 
@@ -93,6 +94,7 @@ public:
     typedef data_t::duration_t                  duration_t;
     typedef base_timer                          this_type;
     typedef uomap<const base_timer*, data_t>    data_map_t;
+    typedef toast::rss::usage                   rss_usage_t;
 
 public:
     base_timer(uint16_t = 3, const string_t& =
@@ -114,6 +116,8 @@ public:
     double cpu_utilization() const { return cpu_elapsed() / real_elapsed() * 100.; }
     inline const char* clock_time() const;
     inline size_type laps() const { return t_main_list.size(); }
+    inline void rss_init();
+    inline void rss_record();
 
 public:
     void report(ostream_t&, bool endline = true, bool avg = false) const;
@@ -144,6 +148,10 @@ protected:
     // strings
     string_t                m_format_string;
     string_t                m_output_format;
+    // memory usage
+    rss_usage_t             m_rss_tot;
+    rss_usage_t             m_rss_self;
+    rss_usage_t             m_rss_tmp;
 
 private:
     // world mutex map, thread-safe ostreams
@@ -186,11 +194,25 @@ public:
            cereal::make_nvp("cpu_util_max", get_max<4>()),
            // conversion to seconds
            cereal::make_nvp("to_seconds_ratio_num", ratio_t::num),
-           cereal::make_nvp("to_seconds_ratio_den", ratio_t::den));
+           cereal::make_nvp("to_seconds_ratio_den", ratio_t::den),
+           // memory usage
+           cereal::make_nvp("rss_max", m_rss_tot),
+           cereal::make_nvp("rss_self", m_rss_self));
     }
 
 };
 
+//----------------------------------------------------------------------------//
+inline void base_timer::rss_init()
+{
+    m_rss_tmp.record();
+}
+//----------------------------------------------------------------------------//
+inline void base_timer::rss_record()
+{
+    m_rss_self.record(m_rss_tmp);
+    m_rss_tot.record();
+}
 //----------------------------------------------------------------------------//
 // Print timer status n std::ostream
 static inline
@@ -240,6 +262,7 @@ void base_timer::start()
     {
         m_running = true;
         m_timer().start() = base_clock_t::now();
+        rss_init();
     }
 }
 //----------------------------------------------------------------------------//
@@ -249,6 +272,7 @@ void base_timer::stop()
     if(m_running)
     {
         m_timer().stop() = base_clock_t::now();
+        rss_record();
         static mutex_t _mutex;
         auto_lock_t l(_mutex);
         t_main_list.push_back(m_timer());

@@ -48,6 +48,8 @@ void ctoast_set_timing_output_file(char* cfname);
 void ctoast_serialize_timing_manager(char*);
 void ctoast_timing_manager_report();
 void ctoast_timing_manager_clear();
+void ctoast_timing_manager_set_max_depth(int32_t);
+int32_t ctoast_timing_manager_max_depth();
 size_t ctoast_timing_manager_size();
 
 double ctoast_timer_real_elapsed(ctoast_timer*);

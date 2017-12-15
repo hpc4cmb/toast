@@ -156,6 +156,18 @@ lib.ctoast_timing_manager_clear.argtypes = []
 def timing_manager_clear():
     return lib.ctoast_timing_manager_clear()
 
+lib.ctoast_timing_manager_set_max_depth.restype = None
+lib.ctoast_timing_manager_set_max_depth.argtypes = [ ct.c_int ]
+
+def timing_manager_set_max_depth(_depth):
+    lib.ctoast_timing_manager_set_max_depth(_depth)
+
+lib.ctoast_timing_manager_max_depth.restype = ct.c_int
+lib.ctoast_timing_manager_max_depth.argtypes = []
+
+def timing_manager_max_depth():
+    return lib.ctoast_timing_manager_max_depth()
+
 lib.ctoast_timer_real_elapsed.restype = ct.c_double
 lib.ctoast_timer_real_elapsed.argtypes = [ ct.POINTER(cTimer) ]
 

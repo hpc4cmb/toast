@@ -10,6 +10,10 @@ from ..mpi import MPI
 from .mpi import MPITestCase
 from .. import timing as timing
 
+def fibonacci(n):
+    if n < 2:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
 
 class TimingTest(MPITestCase):
 
@@ -25,11 +29,6 @@ class TimingTest(MPITestCase):
 
         tman = timing.timing_manager()
         tman.set_output_file("timing_report.out", self.outdir, "timing_report.json")
-
-        def fibonacci(n):
-            if n < 2:
-                return n
-            return fibonacci(n - 1) + fibonacci(n - 2)
 
         def time_fibonacci(n):
             atimer = timing.auto_timer('({})@{}'.format(n, timing.FILE(use_dirname=True)))
@@ -71,19 +70,21 @@ class TimingTest(MPITestCase):
 
         tman = timing.timing_manager()
         timing.toggle(True)
+        print ('Current max depth: {}'.format(timing.max_depth()))
+        timing.set_max_depth(timing.default_max_depth())
         tman.clear()
 
         timing.toggle(True)
         if True:
             autotimer = timing.auto_timer("on")
-            time.sleep(1)
+            fibonacci(24)
         self.assertEqual(tman.size(), 1)
 
         tman.clear()
         timing.toggle(False)
         if True:
             autotimer = timing.auto_timer("off")
-            time.sleep(1)
+            fibonacci(24)
         self.assertEqual(tman.size(), 0)
 
         tman.clear()
@@ -92,7 +93,7 @@ class TimingTest(MPITestCase):
             autotimer_on = timing.auto_timer("on")
             timing.toggle(False)
             autotimer_off = timing.auto_timer("off")
-            time.sleep(1)
+            fibonacci(24)
         self.assertEqual(tman.size(), 1)
 
         tman.set_output_file("timing_toggle.out", self.outdir,
@@ -112,7 +113,7 @@ class TimingTest(MPITestCase):
 
         def create_timer(n):
             autotimer = timing.auto_timer('{}'.format(n))
-            time.sleep(0.25)
+            fibonacci(24)
             if n < 8:
                 create_timer(n + 1)
 

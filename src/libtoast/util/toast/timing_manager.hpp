@@ -157,6 +157,7 @@ public:
     static bool is_enabled() { return fgEnabled; }
     static void enable(bool val = true);
     static void write_json(const string_t& _fname);
+    static int32_t& max_depth() { return fgMaxDepth; }
 
 public:
     // Public member functions
@@ -216,6 +217,8 @@ private:
     static timing_manager*  fgInstance;
     // for temporary enabling/disabling
     static bool             fgEnabled;
+    // max depth of timers
+    static int32_t          fgMaxDepth;
     // hashed string map for fast lookup
     timer_map_t             m_timer_map;
     // ordered list for output (outputs in order of timer instantiation)
@@ -232,6 +235,32 @@ timing_manager::clear()
     m_timer_map.clear();
     details::base_timer::get_instance_count() = 0;
     details::base_timer::get_instance_hash() = 0;
+
+    ofstream_t* m_fos = get_ofstream(m_report);
+    for(int32_t i = 0; i < mpi_size(); ++i)
+    {
+        if(mpi_is_initialized())
+            MPI_Barrier(MPI_COMM_WORLD);
+        if(mpi_rank() != i)
+            continue;
+
+        if(m_fos->good() && m_fos->is_open())
+        {
+            if(mpi_rank()+1 >= mpi_size())
+            {
+                m_fos->flush();
+                m_fos->close();
+                delete m_fos;
+            }
+            else
+            {
+                m_fos->flush();
+                m_fos->close();
+                delete m_fos;
+            }
+        }
+    }
+    m_report = &std::cout;
 }
 //----------------------------------------------------------------------------//
 template <typename _Ret, typename _Func>

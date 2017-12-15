@@ -198,6 +198,26 @@ void ctoast_timing_manager_clear()
 
 //----------------------------------------------------------------------------//
 
+void ctoast_timing_manager_set_max_depth(int32_t _depth)
+{
+#if defined(DISABLE_TIMERS)
+    return;
+#endif
+    timing_manager::max_depth() = _depth;
+}
+
+//----------------------------------------------------------------------------//
+
+int32_t ctoast_timing_manager_max_depth()
+{
+#if defined(DISABLE_TIMERS)
+    return 0;
+#endif
+    return timing_manager::max_depth();
+}
+
+//----------------------------------------------------------------------------//
+
 size_t ctoast_timing_manager_size()
 {
 #if defined(DISABLE_TIMERS)

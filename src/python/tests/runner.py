@@ -12,6 +12,7 @@ import warnings
 from .._version import __version__
 
 from .mpi import MPITestRunner
+from .mpi import MPITestInfo
 
 from ..vis import set_backend
 
@@ -104,9 +105,14 @@ def test(name=None):
             modname = "toast.tests.{}".format(name)
             suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
 
+    ret = 0
     with warnings.catch_warnings(record=True) as w:
         # Cause all toast warnings to be shown.
         warnings.simplefilter("always", UserWarning)
-        mpirunner.run(suite)
+        _ret = mpirunner.run(suite)
+        if not _ret.wasSuccessful():
+            ret += 1
+
+    sys.exit(ret)
 
     return

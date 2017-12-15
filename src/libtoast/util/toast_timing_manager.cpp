@@ -21,6 +21,11 @@ CEREAL_CLASS_VERSION(toast::util::timing_manager, TOAST_TIMER_VERSION)
 toast::util::timing_manager* toast::util::timing_manager::fgInstance = nullptr;
 
 //============================================================================//
+
+int32_t toast::util::timing_manager::fgMaxDepth =
+        std::numeric_limits<uint16_t>::max();
+
+//============================================================================//
 // static function
 toast::util::timing_manager* toast::util::timing_manager::instance()
 {

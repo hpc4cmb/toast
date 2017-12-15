@@ -46,7 +46,8 @@ inline auto_timer::auto_timer(const std::string& timer_tag,
     ++auto_timer::ncount();
     auto_timer::nhash() += m_hash;
 
-    if(timing_manager::is_enabled())
+    if(timing_manager::is_enabled() &&
+       timing_manager::max_depth() > auto_timer::ncount() + 1)
         m_timer = &timing_manager::instance()->timer(timer_tag, "cxx",
                                                      auto_timer::ncount(),
                                                      auto_timer::nhash());
