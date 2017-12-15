@@ -93,10 +93,12 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+$@ \
 "
 
 #--- Hardware configuration (no need to change) ----

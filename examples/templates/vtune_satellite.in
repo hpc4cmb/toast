@@ -86,10 +86,12 @@ fi
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \
 --outdir ${outdir}/out \
+$@ \
 "
 
 #--- Hardware configuration ----

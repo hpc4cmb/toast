@@ -77,9 +77,9 @@ endforeach(_TYPE ground ground_simple satellite)
 
 
 # return if no SLURM
-if(NOT USE_SLURM)
+if(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
     return()
-endif(NOT USE_SLURM)
+endif(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
 
 # ------------------------------------------------------------------------ #
 # -- SLURM examples

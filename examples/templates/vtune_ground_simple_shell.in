@@ -49,9 +49,11 @@ parfile="@TOPDIR@/params/ground/ground_sim_simple.par"
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+$@ \
 "
 
 # Use 2 processes, each with 2 threads

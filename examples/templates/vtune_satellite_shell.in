@@ -44,6 +44,7 @@ groupsize=1
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --nside ${nside} \
@@ -51,6 +52,7 @@ com="${ex} @${parfile} \
 --gap ${obs_gap} \
 --numobs ${nobs} \
 --outdir ${outdir}/out \
+$@ \
 "
 
 # Use 2 processes, each with 2 threads

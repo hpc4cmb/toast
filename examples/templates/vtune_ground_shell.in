@@ -49,6 +49,7 @@ parfile="@TOPDIR@/params/ground/ground_sim.par"
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
@@ -56,6 +57,7 @@ com="${ex} @${parfile} \
 --atm_xstep @CELLSIZE@ \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
+$@ \
 "
 
 # Use 2 processes, each with 2 threads

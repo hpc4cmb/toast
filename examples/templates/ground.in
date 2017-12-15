@@ -90,6 +90,7 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 
 com="${ex} @${parfile} \
 --toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
@@ -99,6 +100,7 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --madam_iter_max @ITERMAX@ \
+$@ \
 "
 
 #--- Hardware configuration (no need to change) ----
