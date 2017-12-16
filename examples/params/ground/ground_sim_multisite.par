@@ -21,8 +21,8 @@
 --input_map
 data/ffp10_lensed_scl_100_nside0512.fits
 --weather
-data/weather_Atacama.fits
+data/weather_Atacama.fits,data/weather_South_Pole.fits
 --madam_baseline_order
-3
+0
 --freq
 95

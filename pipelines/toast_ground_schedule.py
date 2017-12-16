@@ -378,7 +378,7 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     """ Make an entry for a CES in the schedule file.
     """
     ces_time = tstop - t
-    if ces_time > args.ces_max_time:
+    if ces_time > args.ces_max_time and not args.pole_mode:
         nsub = np.int(np.ceil(ces_time / args.ces_max_time))
         ces_time /= nsub
     aztimes = np.array(aztimes)

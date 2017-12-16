@@ -729,8 +729,10 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 #pragma omp parallel for schedule(static, 100)
         for ( long i=0; i<nsamp; ++i ) {
 
-            if ( az[i] < azmin || az[i] > azmax
-                 || el[i] < elmin || el[i] > elmax ) {
+            if (
+                (!(azmin <= az[i] && az[i] <= azmax) &&
+                 !(azmin <= az[i]-2*M_PI && az[i]-2*M_PI <= azmax))
+                || !(elmin <= el[i] && el[i] <= elmax) ) {
                 std::ostringstream o;
                 o.precision( 16 );
                 o << "atmsim::observe : observation out of bounds (az, el, t)"

@@ -694,8 +694,10 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
             detranks=detranks, detgroup=detgroup, distintervals=distintervals)
         if "obs_id" in obs["tod"].group.props:
             obs["id"] = obs["tod"].group.props["obs_id"]
-        if "obs_telescope" in obs["tod"].group.props:
-            obs["telescope"] = obs["tod"].group.props["obs_telescope"]
+        if "obs_telescope_id" in obs["tod"].group.props:
+            obs["telescope_id"] = obs["tod"].group.props["obs_telescope_id"]
+        if "obs_site_id" in obs["tod"].group.props:
+            obs["site_id"] = obs["tod"].group.props["obs_site_id"]
 
         obs["intervals"] = None
         if distintervals is not None:
@@ -843,8 +845,10 @@ class OpTidasExport(Operator):
 
                 # Get the telescope ID (used for RNG)
                 obstele = 0
-                if "telescope" in obs:
-                    metadata["obs_telescope"] = obs["telescope"]
+                if "telescope_id" in obs:
+                    metadata["obs_telescope_id"] = obs["telescope_id"]
+                if "site_id" in obs:
+                    metadata["obs_site_id"] = obs["site_id"]
 
                 # Optionally setup intervals for future data distribution
                 intervals = None

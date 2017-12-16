@@ -102,8 +102,6 @@ class OpMadam(Operator):
         common_flag_mask (int): the integer bit mask (0-255) that should
             be used with the common flags in a bitwise AND.
         apply_flags (bool): whether to apply flags to the pixel numbers.
-        timestamps_name (str): the name of the cache object to use for
-            time stamps.
         purge (bool): if True, clear any cached data that is copied into
             the Madam buffers.
         purge_tod (bool): if True, clear any cached signal that is
@@ -123,7 +121,7 @@ class OpMadam(Operator):
              from the observation.
     """
 
-    def __init__(self, params={}, timestamps_name=None, detweights=None,
+    def __init__(self, params={}, detweights=None,
                  pixels='pixels', pixels_nested=True, weights='weights',
                  name=None, name_out=None, flag_name=None, flag_mask=255,
                  common_flag_name=None, common_flag_mask=255,
@@ -134,8 +132,6 @@ class OpMadam(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         # madam uses time-based distribution
-        self._timedist = True
-        self._timestamps_name = timestamps_name
         self._name = name
         self._name_out = name_out
         self._flag_name = flag_name
@@ -158,20 +154,20 @@ class OpMadam(Operator):
             self._purge_weights = purge_weights
             self._purge_flags = purge_flags
         self._apply_flags = apply_flags
-        self._params = params
+        self.params = params
         if dets is not None:
             self._dets = set(dets)
         else:
             self._dets = None
         self._mcmode = mcmode
         if mcmode:
-            self._params['mcmode'] = True
+            self.params['mcmode'] = True
         else:
-            self._params['mcmode'] = False
+            self.params['mcmode'] = False
         if self._name_out is not None:
-            self._params['write_tod'] = True
+            self.params['write_tod'] = True
         else:
-            self._params['write_tod'] = False
+            self.params['write_tod'] = False
         self._cached = False
         self._noisekey = noise
         self._intervals = intervals
@@ -219,10 +215,9 @@ class OpMadam(Operator):
             # Just use COMM_WORLD
             comm = data.comm.comm_world
 
-        # Madam only works with a data model where there is either
-        #   1) one global observation split among the processes,
-        #      and where the data is distributed time-wise OR
-        #   2) one or more private observation per process
+        if len(data.obs) == 0:
+            raise RuntimeError('OpMadam requires every supplied data object to '
+                               'contain at least one observation')
 
         if len(data.obs) != 1:
             nsamp = 0
@@ -272,8 +267,8 @@ class OpMadam(Operator):
         nnzname = "{}_{}".format(self._weights, detectors[0])
         nnz_full = tod.cache.reference(nnzname).shape[1]
 
-        if 'temperature_only' in self._params \
-           and self._params['temperature_only'] in [
+        if 'temperature_only' in self.params \
+           and self.params['temperature_only'] in [
                'T', 'True', 'TRUE', 'true', True]:
             if nnz_full not in [1, 3]:
                 raise RuntimeError(
@@ -287,12 +282,12 @@ class OpMadam(Operator):
 
         fcomm = comm.py2f()
 
-        if 'nside_map' not in self._params:
+        if 'nside_map' not in self.params:
             raise RuntimeError(
                 'OpMadam: "nside_map" must be set in the parameter dictionary')
-        nside = int(self._params['nside_map'])
+        nside = int(self.params['nside_map'])
 
-        parstring = self._dict2parstring(self._params)
+        parstring = self._dict2parstring(self.params)
 
         # create madam-compatible buffers
 
@@ -309,8 +304,8 @@ class OpMadam(Operator):
         # determine the number of samples per detector
 
         # Discard intervals that are too short to fit a baseline
-        if 'basis_order' in self._params:
-            norder = int(self._params['basis_order']) + 1
+        if 'basis_order' in self.params:
+            norder = int(self.params['basis_order']) + 1
         else:
             norder = 1
 
@@ -385,7 +380,7 @@ class OpMadam(Operator):
                 period_ranges = obs_period_ranges[iobs]
 
                 # Collect the timestamps for the valid intervals
-                timestamps = tod.local_times(self._timestamps_name)
+                timestamps = tod.local_times()
 
                 offset = global_offset
                 for istart, istop in period_ranges:
@@ -530,8 +525,8 @@ class OpMadam(Operator):
         if self._cached:
             # destripe
             outpath = ''
-            if 'path_output' in self._params:
-                outpath = self._params['path_output']
+            if 'path_output' in self.params:
+                outpath = self.params['path_output']
             outpath = outpath.encode('ascii')
             libmadam.destripe_with_cache(
                 fcomm, ndet, nsamp, nnz, madam_timestamps, madam_pixels,

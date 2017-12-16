@@ -78,7 +78,7 @@ class OpSimNoise(Operator):
 
             telescope = 0
             if 'telescope' in obs:
-                telescope = obs['telescope']
+                telescope = obs['telescope_id']
 
             global_offset = 0
             if 'global_offset' in obs:

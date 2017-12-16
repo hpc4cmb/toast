@@ -5,7 +5,7 @@ pushd $(dirname $0) > /dev/null
 topdir=$(pwd -P)
 popd > /dev/null
 
-: ${TYPES:="satellite ground ground_simple"}
+: ${TYPES:="satellite ground ground_simple ground_multisite"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-intel-knl cori-intel-haswell edison-intel"}
 
