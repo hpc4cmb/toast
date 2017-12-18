@@ -78,3 +78,8 @@ export vtune_collect
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
 eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > ${LOG_OUT} 2>&1
 
+for i in ${outdir}/timing_report*.out
+do
+    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+    cat ${i} >> ${LOG_OUT}
+done

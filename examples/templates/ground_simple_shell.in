@@ -68,3 +68,9 @@ run="mpirun -np ${procs}"
 : ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
+
+for i in ${outdir}/timing_report*.out
+do
+    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+    cat ${i} >> ${LOG_OUT}
+done

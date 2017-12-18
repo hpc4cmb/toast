@@ -136,5 +136,11 @@ else
     echo "No alias \"vfinal\" defined. Remember to finalize results"
 fi
 
+for i in ${outdir}/timing_report*.out
+do
+    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+    cat ${i} >> ${LOG_OUT}
+done
+
 echo End slurm script at $(date)
 

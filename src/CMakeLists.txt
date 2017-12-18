@@ -120,7 +120,6 @@ target_link_libraries(toast_test
 # =============================================================================#
 if(USE_COVERAGE)
 
-    set(CTEST_MODEL "Continuous" CACHE STRING "Model for CTest")
     # CXX coverage
     SETUP_TARGET_FOR_COVERAGE(NAME cxx_toast_test_coverage
         EXECUTABLE toast_test

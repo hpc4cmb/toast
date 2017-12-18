@@ -36,5 +36,6 @@ cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DUSE_MKL=OFF -DUSE_TBB=OFF \
       -DUSE_FFTW=ON -DFFTW_ROOT=/opt/local \
+      -DUSE_AATM=ON -DUSE_WCSLIB=ON -DUSE_SSE=ON -DUSE_ARCH=ON \
       ${OPTS} ${ROOT}
 

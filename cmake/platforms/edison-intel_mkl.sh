@@ -36,7 +36,7 @@ mkdir -p ${DIR}
 cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
-    -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
+    -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb -DUSE_AATM=ON \
     -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
     -DUSE_ELEMENTAL=ON -DCMAKE_PREFIX_PATH=${AUX_PREFIX} \
     -DTARGET_ARCHITECTURE="ivy-bridge" -DCTEST_SITE=edison \

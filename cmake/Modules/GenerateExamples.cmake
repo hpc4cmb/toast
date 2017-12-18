@@ -37,6 +37,19 @@ endfunction(machine_defined)
 machine_defined()
 valid_machine()
 
+#------------------------------------------------------------------------------#
+# -- Global variable settings
+#------------------------------------------------------------------------------#
+set(PROBLEM_TYPES ground ground_simple ground_multisite satellite)
+set(PROBLEM_SIZES tiny small medium large representative)
+set(FREQ_tiny           "Nightly")
+set(FREQ_small          "Nightly")
+set(FREQ_medium         "Weekly")
+set(FREQ_representative "Weekly")
+set(FREQ_large          "Monthly")
+
+#------------------------------------------------------------------------------#
+
 message(STATUS "Cleaning up examples directory...")
 execute_process(COMMAND ./cleanup.sh
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
@@ -44,6 +57,8 @@ execute_process(COMMAND ./cleanup.sh
     ERROR_FILE cleanup.log
     RESULT_VARIABLE CLEAN_RET)
 check_return(CLEAN_RET)
+
+#------------------------------------------------------------------------------#
 
 message(STATUS "Fetching data for examples...")
 execute_process(COMMAND ./fetch_data.sh
@@ -53,8 +68,12 @@ execute_process(COMMAND ./fetch_data.sh
     RESULT_VARIABLE FETCH_RET)
 check_return(FETCH_RET)
 
+#------------------------------------------------------------------------------#
+
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-wrapper.sh.in
     ${CMAKE_BINARY_DIR}/examples/ctest-wrapper.sh @ONLY)
+
+#------------------------------------------------------------------------------#
 
 message(STATUS "Generating shell examples...")
 execute_process(COMMAND ./generate_shell.sh
@@ -64,19 +83,22 @@ execute_process(COMMAND ./generate_shell.sh
     RESULT_VARIABLE GENERATE_SHELL_RET)
 check_return(GENERATE_SHELL_RET)
 
-# add tests
-foreach(_TYPE ground ground_simple satellite)
+#------------------------------------------------------------------------------#
+# -- Add shell tests
+#------------------------------------------------------------------------------#
+foreach(_TYPE ${PROBLEM_TYPES})
     set(_file_name tiny_${_TYPE}_shell)
     set(_test_name pyc_${_file_name}_example)
     add_test(NAME ${_test_name}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
     COMMAND ${SRUN_COMMAND} ./ctest-wrapper.sh ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
     set_tests_properties(${_test_name} PROPERTIES 
-        LABELS "Examples;Shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
+        LABELS "Examples;shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
 endforeach(_TYPE ground ground_simple satellite)
 
-
-# return if no SLURM
+#------------------------------------------------------------------------------#
+# -- return if no SLURM
+#------------------------------------------------------------------------------#
 if(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
     return()
 endif(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
@@ -102,6 +124,8 @@ set(SRUN_WRAPPER srun-wrapper.sh)
 configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/${SRUN_WRAPPER}
     ${CMAKE_BINARY_DIR}/examples/${SRUN_WRAPPER} @ONLY)
 
+#------------------------------------------------------------------------------#
+
 message(STATUS "Generating SLURM examples for ${MACHINE}...")
 execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME} 
         -DQUEUE=${QUEUE} -DREADFILE=${CMAKE_BINARY_DIR}/examples/read.cmake
@@ -111,14 +135,7 @@ execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME}
     RESULT_VARIABLE GENERATE_SLURM_RET)
 check_return(GENERATE_SLURM_RET)
 
-set(PROBLEM_TYPES ground ground_simple satellite)
-set(PROBLEM_SIZES tiny small medium large representative)
-
-set(FREQ_tiny           "Nightly")
-set(FREQ_small          "Nightly")
-set(FREQ_medium         "Weekly")
-set(FREQ_representative "Weekly")
-set(FREQ_large          "Monthly")
+#------------------------------------------------------------------------------#
 
 foreach(_TYPE ${PROBLEM_TYPES})
     foreach(_SIZE ${PROBLEM_SIZES})
@@ -133,13 +150,15 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(_LABELS  Examples${_TYPE} ${MACHINE} ${_SIZE} ${_FREQ}
             ${_TYPE}_${_SIZE} ${_TYPE}_${_LFREQ}
             ${_TYPE}_${_NODES} ${_LFREQ}_${_NODES}
-            EXAMPLE_${_NODES}_NODE )
+            EXAMPLE_${_NODES}_NODE "slurm")
             list(APPEND NODES_LIST ${_NODES})
             math(EXPR NODES_COUNT_${_NODES} "${NODES_COUNT_${_NODES}}+1")
         set_tests_properties(${_test_name} PROPERTIES LABELS "${_LABELS}" TIMEOUT 14400)
     endforeach(_SIZE ${PROBLEM_SIZES})
 endforeach(_TYPE ${PROBLEM_TYPES})
    
+#------------------------------------------------------------------------------#
+
 list(REMOVE_DUPLICATES NODES_LIST)
 numeric_sort(NODES_LIST ${NODES_LIST})
 set(_STR )
@@ -166,3 +185,5 @@ foreach(_N ${NODES_LIST})
     set(QUEUE "${QUEUE_ORIG}")
 endforeach(_N ${NODES_LIST})
 file(WRITE ${CMAKE_BINARY_DIR}/examples/nodes.cmake.out "${_STR}")
+
+#------------------------------------------------------------------------------#

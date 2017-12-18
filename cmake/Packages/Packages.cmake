@@ -319,6 +319,7 @@ set(EXTERNAL_INCLUDE_DIRS
     ${IMF_INCLUDE_DIRS}
     ${FFTW3_INCLUDE_DIRS}
     ${wcslib_INCLUDE_DIRS}
+    ${aatm_INCLUDE_DIRS}
     ${Elemental_INCLUDE_DIRS}
 )
 
@@ -333,6 +334,7 @@ set(EXTERNAL_LIBRARIES ${CMAKE_THREAD_LIBS_INIT}
     ${OpenBLAS_LIBRARIES}
     ${FFTW3_LIBRARIES}
     ${wcslib_LIBRARIES}
+    ${aatm_LIBRARIES}
     ${Elemental_LIBRARIES}
     ${Coverage_LIBRARIES}
 )
