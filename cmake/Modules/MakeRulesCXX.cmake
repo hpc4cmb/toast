@@ -155,13 +155,14 @@ elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 
     clean_cxx_vars()
     add(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
-    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
+    add(_std_flags   "-Wno-unknown-pragmas")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
     add(_quiet_flags "-Wno-attributes -Wno-unused-but-set-variable")
     add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
-    add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings")
+    add(_extra_flags "-fp-model=precise")
     add(_par_flags   "-parallel-source-info=2")
 
     add_intel_intrinsic_include_dir()
@@ -210,6 +211,18 @@ elseif(CMAKE_CXX_COMPILER_IS_MIPS)
     add_cxx_flags(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-O -OPT:Olimit=5000")
     add_cxx_flags(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O -OPT:Olimit=5000 -g")
     add_cxx_flags(CMAKE_CXX_FLAGS_RELEASE_INIT        "-O -OPT:Olimit=5000")
+
+#------------------------------------------------------------------------------#
+# Unknown compiler
+#
+else()
+
+    message(WARNING "Unknown C++ compiler: ${CMAKE_CXX_COMPILER}. Using generic defaults")
+    set_no_duplicates(CMAKE_CXX_FLAGS_INIT                "")
+    set_no_duplicates(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set_no_duplicates(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
+    set_no_duplicates(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set_no_duplicates(CMAKE_CXX_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG")
 
 endif()
 

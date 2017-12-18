@@ -8,14 +8,6 @@ add_option(DASHBOARD_MODE
 # slurm config
 add_dependent_option(USE_SLURM "Enable generation of SLURM scripts for testing"
     ON "SLURM_SBATCH_COMMAND" OFF)
-
-set(MACHINEFILE "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}")
-get_parameter(CONSTRAINT ${MACHINEFILE} CONSTRAINT)
-foreach(VAR NODEPROCS NODECORES HYPERTHREAD)
-    get_parameter(${VAR} ${MACHINEFILE} ${VAR})
-    string(REGEX MATCHALL "([0-9]+)" ${VAR} "${${VAR}}")    
-endforeach(VAR NODEPROCS NODECORES HYPERTHREAD)
-math(EXPR NODEDEPTH "${NODECORES}/${NODEPROCS}")
     
 set(TIME "00:30:00" CACHE STRING "SLURM runtime")
 set(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
@@ -39,6 +31,13 @@ if(USE_SLURM)
     add_feature(QUEUE "SLURM queue")
     add_feature(MACHINE "SLURM machine")
     STRING(REPLACE "cori-" "" _MACHINE "${MACHINE}")
+    set(MACHINEFILE "${CMAKE_BINARY_DIR}/examples/templates/machines/${MACHINE}")
+    get_parameter(CONSTRAINT ${MACHINEFILE} CONSTRAINT)
+    foreach(VAR NODEPROCS NODECORES HYPERTHREAD)
+        get_parameter(${VAR} ${MACHINEFILE} ${VAR})
+        string(REGEX MATCHALL "([0-9]+)" ${VAR} "${${VAR}}")
+    endforeach(VAR NODEPROCS NODECORES HYPERTHREAD)
+    math(EXPR NODEDEPTH "${NODECORES}/${NODEPROCS}")
 endif(USE_SLURM)
 
 

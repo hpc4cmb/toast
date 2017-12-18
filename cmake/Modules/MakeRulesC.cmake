@@ -150,7 +150,8 @@ elseif(CMAKE_C_COMPILER_IS_INTEL)
     add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
     add(_quiet_flags "-Wno-attributes -Wno-unused-but-set-variable")
     add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
-    add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
+    add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings")
+    add(_extra_flags "-fp-model=precise")
     add(_par_flags   "-parallel-source-info=2")
 
     add_intel_intrinsic_include_dir()
@@ -199,6 +200,18 @@ elseif(CMAKE_C_COMPILER_IS_MIPS)
     add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O -OPT:Olimit=5000")
     add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O -OPT:Olimit=5000 -g")
     add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "-O -OPT:Olimit=5000")
+
+#------------------------------------------------------------------------------#
+# Unknown compiler
+#
+else()
+
+    message(WARNING "Unknown C compiler: ${CMAKE_C_COMPILER}. Using generic defaults")
+    set_no_duplicates(CMAKE_C_FLAGS_INIT                "")
+    set_no_duplicates(CMAKE_C_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set_no_duplicates(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
+    set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set_no_duplicates(CMAKE_C_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG")
 
 endif()
 

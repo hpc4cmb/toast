@@ -28,15 +28,22 @@ if HAVE_AM_ELEMENTAL
   AM_LIBS += $(ELEMENTAL)
 endif
 
+# aatm
+
+if HAVE_AM_AATM
+  AM_CPPFLAGS += $(AATM_CPPFLAGS)
+  AM_LIBS += $(AATM)
+endif
+
 # MKL, FFTW, LAPACK
 
 if HAVE_AM_MKL
-  
+
 AM_CPPFLAGS += $(MKL_CPPFLAGS)
 AM_LIBS += $(MKL)
 
 else
-  
+
 if HAVE_AM_FFTW
   AM_CPPFLAGS += $(FFTW_CPPFLAGS)
   AM_LIBS += $(FFTW)

@@ -14,17 +14,12 @@ from .. import qarray as qa
 from .tod import TOD
 from ..op import Operator
 from .. import timing as timing
+from .. import rng as rng
 
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
-    atm_sim_simulate, atm_sim_observe)
-
-# FIXME:  For now, we use a fixed distribution of the "weather" (wind speed,
-# temperature, etc) for all CESs.  Eventually we plan to have 2 TOD base
-# classes (TODSatellite and TODGround).  The TODGround class and descendants
-# will have methods to return the site conditions for a given CES.  Once that
-# is in place, then we should have this operator call those methods for each
-# observation to get the actual weather conditions.  Simulating a realization
-# of the weather could then move to a class that derives from TODGround.
+                      atm_sim_simulate, atm_sim_observe,
+                      atm_get_absorption_coefficient,
+                      atm_get_atmospheric_loading)
 
 
 class OpSimAtmosphere(Operator):
@@ -62,17 +57,9 @@ class OpSimAtmosphere(Operator):
         nelem_sim_max (int): controls the size of the simulation slices.
         verbosity (int): more information is printed for values > 0.
         gangsize (int): size of the gangs that create slices.
-        w_center (float):  central value of the wind speed distribution.
-        w_sigma (float):  sigma of the wind speed distribution.
-        wdir_center (float):  central value of the wind direction
-            distribution.
-        wdir_sigma (float):  sigma of the wind direction distribution.
         z0_center (float):  central value of the water vapor
              distribution.
         z0_sigma (float):  sigma of the water vapor distribution.
-        T0_center (float):  central value of the temperature
-             distribution.
-        T0_sigma (float):  sigma of the temperature distribution.
         fp_radius (float):  focal plane radius in degrees.
         common_flag_name (str):  Cache name of the output common flags.
             If it already exists, it is used.  Otherwise flags
@@ -94,6 +81,7 @@ class OpSimAtmosphere(Operator):
         cachedir (str):  Directory to use for loading and saving
             atmosphere realizations.  Set to None to disable caching.
         flush (bool):  Flush all print statements
+        freq (float):  Observing frequency in GHz.
     """
     def __init__(
             self, out='atm', realization=0, component=123456,
@@ -106,7 +94,7 @@ class OpSimAtmosphere(Operator):
             fp_radius=1, apply_flags=False,
             common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
-            wind_time_min=600, cachedir='.', flush=False):
+            wind_time_min=600, cachedir='.', flush=False, freq=None):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -129,6 +117,7 @@ class OpSimAtmosphere(Operator):
         self._gangsize = gangsize
         self._cachedir = cachedir
         self._flush = flush
+        self._freq = None
 
         # FIXME: eventually these will come from the TOD object
         # for each obs...
@@ -167,16 +156,22 @@ class OpSimAtmosphere(Operator):
                 obsname = obs['name']
             except:
                 obsname = 'observation'
+            tod = self._get_from_obs('tod', obs)
+            comm = tod.mpicomm
+            obsindx = self._get_from_obs('id', obs)
+            telescope = self._get_from_obs('telescope', obs)
+            site = self._get_from_obs('site', obs)
+            altitude = self._get_from_obs('altitude', obs)
+            weather = self._get_from_obs('weather', obs)
 
-            obsindx = 0
-            if 'id' in obs:
-                obsindx = obs['id']
-            else:
-                print("Warning: observation ID is not set, using zero!")
-
-            telescope = 0
-            if 'telescope' in obs:
-                telescope = obs['telescope']
+            # Get the observation time span and initialize the weather
+            # object if one is provided.
+            times = tod.local_times()
+            tmin = times[0]
+            tmax = times[-1]
+            tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
+            tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
+            weather.set(site, self._realization, tmin_tot)
 
             """
             The random number generator accepts a key and a counter,
@@ -188,12 +183,20 @@ class OpSimAtmosphere(Operator):
             counter2 = sample in stream (incremented internally in the atm code)
             """
             key1 = self._realization*2**32 + telescope*2**16 + self._component
-            key2 = obsindx
+            key2 = site*2**16 + obsindx
             counter1 = 0
             counter2 = 0
 
-            tod = obs['tod']
-            comm = tod.mpicomm
+            if self._freq is not None:
+                absorption = atm_get_absorption_coefficient(
+                    altitude, weather.air_temperature, weather.surface_pressure,
+                    weather.pwv, self._freq)
+                loading = atm_get_atmospheric_loading(
+                    altitude, weather.air_temperature, weather.surface_pressure,
+                    weather.pwv, self._freq)
+                tod.meta['loading'] = loading
+            else:
+                absorption = None
 
             comm.Barrier()
             if comm.rank == 0:
@@ -203,10 +206,6 @@ class OpSimAtmosphere(Operator):
 
             # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
-
-            # FIXME: This is where (eventually) we should get the wind speed,
-            # wind direction, temperature, and water vapor from the tod
-            # object, which will be derived from the new TODGround base class.
 
             # Read the extent of the AZ/EL boresight pointing, and use that
             # to compute the range of angles needed for simulating the slab.
@@ -288,16 +287,9 @@ class OpSimAtmosphere(Operator):
                       flush=self._flush)
             comm.Barrier()
 
-            #print("patch = {}, {}, {}, {}".format(azmin, azmax, elmin, elmax))
-
-            # Get the timestamps
-
-            times = tod.local_times()
-
-            tmin = times[0]
-            tmax = times[-1]
-            tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
-            tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
+            # Loop over the time span in "wind_time"-sized chunks.
+            # wind_time is intended to reflect the correlation length
+            # in the atmospheric noise.
 
             tmin = tmin_tot
             istart = 0
@@ -350,13 +342,19 @@ class OpSimAtmosphere(Operator):
                           ''.format(obsname), flush=self._flush)
                 comm.Barrier()
 
+                T0_center = weather.air_temperature
+                wx = weather.west_wind
+                wy = weather.south_wind
+                w_center = np.sqrt(wx**2 + wy**2)
+                wdir_center = np.arctan2(wy, wx)
+
                 sim = atm_sim_alloc(
                     azmin, azmax, elmin, elmax, tmin, tmax,
                     self._lmin_center, self._lmin_sigma,
-                    self._lmax_center, self._lmax_sigma, self._w_center,
-                    self._w_sigma, self._wdir_center, self._wdir_sigma,
-                    self._z0_center, self._z0_sigma, self._T0_center,
-                    self._T0_sigma, self._zatm, self._zmax, self._xstep,
+                    self._lmax_center, self._lmax_sigma,
+                    w_center, 0, wdir_center, 0,
+                    self._z0_center, self._z0_sigma, T0_center, 0,
+                    self._zatm, self._zmax, self._xstep,
                     self._ystep, self._zstep, self._nelem_sim_max,
                     self._verbosity, comm, self._gangsize,
                     key1, key2, counter1, counter2, self._cachedir)
@@ -509,6 +507,10 @@ class OpSimAtmosphere(Operator):
                     if self._gain:
                         atmdata *= self._gain
 
+                    if absorption is not None:
+                        # Apply the frequency-dependent absorption-coefficient
+                        atmdata *= absorption
+
                     if self._apply_flags:
                         ref[ind][good] += atmdata
                     else:
@@ -528,3 +530,15 @@ class OpSimAtmosphere(Operator):
                 tmin = tmax
 
         return
+
+    def _get_from_obs(self, name, obs):
+        """ Extract value for name from observation.
+
+        If name is not defined in observation, raise an exception.
+
+        """
+        if name in obs:
+            return obs[name]
+        else:
+            raise RuntimeError('Error simulating atmosphere: observation '
+                               'does not define "{}"'.format(name))

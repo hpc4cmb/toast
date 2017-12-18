@@ -10,7 +10,7 @@
 #include <toast/math.hpp>
 
 
-namespace toast { namespace atm {
+namespace toast { namespace tatm {
 
 
 } }

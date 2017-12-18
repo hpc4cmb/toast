@@ -18,10 +18,17 @@
 #endif
 
 
-namespace toast { namespace atm {
+namespace toast { namespace tatm {
 
 typedef mpi_shmem::mpi_shmem<double> mpi_shmem_double;
 typedef mpi_shmem::mpi_shmem<long> mpi_shmem_long;
+
+#ifdef HAVE_AATM
+double get_absorption_coefficient(double altitude, double temperature,
+                                  double pressure, double pwv, double freq);
+double get_atmospheric_loading(double altitude, double temperature,
+                               double pressure, double pwv, double freq);
+#endif
 
 #ifdef HAVE_ELEMENTAL
 

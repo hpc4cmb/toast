@@ -40,7 +40,7 @@ double mean( std::vector<double> vec ) {
 }
 
 
-toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
+toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
               double tmin, double tmax,
               double lmin_center, double lmin_sigma,
               double lmax_center, double lmax_sigma,
@@ -191,7 +191,7 @@ toast::atm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 }
 
 
-toast::atm::sim::~sim() {
+toast::tatm::sim::~sim() {
     if ( grid ) delete grid;
     if ( compressed_index ) delete compressed_index;
     if ( full_index ) delete full_index;
@@ -199,12 +199,12 @@ toast::atm::sim::~sim() {
     if ( comm_gang != MPI_COMM_NULL && comm_gang != MPI_COMM_SELF
          && comm_gang != comm ) {
         if ( MPI_Comm_free( &comm_gang ) )
-            throw std::runtime_error( "Failed to free MPI communicator." );
+            std::cerr << "Failed to free MPI communicator." << std::endl;
     }
 }
 
 
-void toast::atm::sim::print() {
+void toast::tatm::sim::print() {
     for (int i=0; i<ntask; ++i) {
         MPI_Barrier(comm);
         if (rank != i) continue;
@@ -251,7 +251,7 @@ void toast::atm::sim::print() {
 }
 
 
-void toast::atm::sim::load_realization() {
+void toast::tatm::sim::load_realization() {
 
     cached = false;
 
@@ -438,7 +438,7 @@ void toast::atm::sim::load_realization() {
     return;
 }
 
-void toast::atm::sim::save_realization() {
+void toast::tatm::sim::save_realization() {
 
     if ( rank == 0 ) {
 
@@ -500,7 +500,7 @@ void toast::atm::sim::save_realization() {
     return;
 }
 
-void toast::atm::sim::simulate( bool use_cache ) {
+void toast::tatm::sim::simulate( bool use_cache ) {
 
     if ( use_cache ) load_realization();
 
@@ -603,7 +603,7 @@ void toast::atm::sim::simulate( bool use_cache ) {
 }
 
 
-void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
+void toast::tatm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     // Identify a manageable slice of compressed indices to simulate next
 
@@ -637,7 +637,7 @@ void toast::atm::sim::get_slice( long &ind_start, long &ind_stop ) {
 }
 
 
-void toast::atm::sim::smooth() {
+void toast::tatm::sim::smooth() {
 
     // Replace each vertex with a mean of its immediate vicinity
 
@@ -709,7 +709,7 @@ void toast::atm::sim::smooth() {
 }
 
 
-void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
+void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 			       long nsamp, double fixed_r ) {
 
     if ( !cached ) {
@@ -866,10 +866,6 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
                     throw std::runtime_error( o.str().c_str() );
                 }
 
-                // Add dissipation due to distance
-
-                step_val /= r*r;
-
                 val += step_val;
 
                 // Prepare for the next step
@@ -906,9 +902,9 @@ void toast::atm::sim::observe( double *t, double *az, double *el, double *tod,
 }
 
 
-void toast::atm::sim::draw() {
+void toast::tatm::sim::draw() {
 
-    // Draw 100 gaussian variates to use in drawing the simulation
+    // Draw 10000 gaussian variates to use in drawing the simulation
     // parameters
 
     const size_t nrand = 10000;
@@ -919,12 +915,6 @@ void toast::atm::sim::draw() {
     long irand=0;
 
     if ( rank == 0 ) {
-        std::cerr << "atm::sim::draw(): key1 = " << key1 << ", key2 = " << key2
-                  << ", counter1 = " << counter1
-                  << ", counter2 = " << counter2 - nrand
-                  << std::endl;
-        for (int i=0; i<10; ++i) std::cerr << i << " : " << prand[i] << std::endl;
-
         lmin = 0;
         lmax = 0;
         w = -1;
@@ -975,15 +965,24 @@ void toast::atm::sim::draw() {
 
     z0inv = 1. / (2. * z0);
 
-    // Wind parallel to surface
+    // Wind is parallel to surface. Rotate to a frame where the scan
+    // is along the X-axis.
 
-    double wx_h = w * sin( wdir );
-    wy = w * cos( wdir );
+    double eastward_wind = w * cos( wdir );
+    double northward_wind = w * sin( wdir );
 
-    // Rotate to a frame where scan is along X axis
+    double angle = az0-M_PI/2;
+    double wx_h = eastward_wind*cos( angle ) - northward_wind*sin( angle );
+    wy = eastward_wind*sin( angle ) + northward_wind*cos( angle );
 
     wx = wx_h * cosel0;
     wz = -wx_h * sinel0;
+
+    // Inverse the wind direction so we can apply it to the
+    // telescope position
+
+    wx = -wx;
+    wy = -wy;
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
@@ -991,6 +990,10 @@ void toast::atm::sim::draw() {
         std::cerr << " lmin = " << lmin << " m" << std::endl;
         std::cerr << " lmax = " << lmax << " m" << std::endl;
         std::cerr << "    w = " << w << " m/s" << std::endl;
+        std::cerr << " easthward wind = " << eastward_wind << " m/s" << std::endl;
+        std::cerr << " northward wind = " << northward_wind << " m/s" << std::endl;
+        std::cerr << "  az0 = " << az0*180./M_PI << " degrees" << std::endl;
+        std::cerr << "  el0 = " << el0*180./M_PI << " degrees" << std::endl;
         std::cerr << "   wx = " << wx << " m/s" << std::endl;
         std::cerr << "   wy = " << wy << " m/s" << std::endl;
         std::cerr << "   wz = " << wz << " m/s" << std::endl;
@@ -1003,7 +1006,7 @@ void toast::atm::sim::draw() {
 }
 
 
-void toast::atm::sim::get_volume() {
+void toast::tatm::sim::get_volume() {
 
     // Horizontal volume
 
@@ -1119,7 +1122,7 @@ void toast::atm::sim::get_volume() {
 }
 
 
-void toast::atm::sim::initialize_kolmogorov() {
+void toast::tatm::sim::initialize_kolmogorov() {
 
     MPI_Barrier( comm );
     double t1 = MPI_Wtime();
@@ -1265,7 +1268,7 @@ void toast::atm::sim::initialize_kolmogorov() {
 }
 
 
-double toast::atm::sim::kolmogorov( double r ) {
+double toast::tatm::sim::kolmogorov( double r ) {
 
     // Return autocovariance of a Kolmogorov process at separation r
 
@@ -1307,7 +1310,7 @@ double toast::atm::sim::kolmogorov( double r ) {
 }
 
 
-void toast::atm::sim::compress_volume() {
+void toast::tatm::sim::compress_volume() {
 
     // Establish a mapping between full volume indices and observed
     // volume indices
@@ -1443,7 +1446,7 @@ void toast::atm::sim::compress_volume() {
 }
 
 
-bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
+bool toast::tatm::sim::in_cone( double x, double y, double z, double t_in ) {
 
     // Input coordinates are in the scan frame, rotate to horizontal frame
 
@@ -1522,7 +1525,7 @@ bool toast::atm::sim::in_cone( double x, double y, double z, double t_in ) {
 }
 
 
-void toast::atm::sim::ind2coord( long i, double *coord ) {
+void toast::tatm::sim::ind2coord( long i, double *coord ) {
 
     // Translate a compressed index into xyz-coordinates
     // in the horizontal frame
@@ -1548,7 +1551,7 @@ void toast::atm::sim::ind2coord( long i, double *coord ) {
 }
 
 
-long toast::atm::sim::coord2ind( double x, double y, double z ) {
+long toast::tatm::sim::coord2ind( double x, double y, double z ) {
 
     // Translate scan frame xyz-coordinates into a compressed index
 
@@ -1574,7 +1577,7 @@ long toast::atm::sim::coord2ind( double x, double y, double z ) {
 }
 
 
-double toast::atm::sim::interp( double x, double y, double z,
+double toast::tatm::sim::interp( double x, double y, double z,
                                 std::vector<long> &last_ind,
 				std::vector<double> &last_nodes ) {
 
@@ -1785,7 +1788,7 @@ double toast::atm::sim::interp( double x, double y, double z,
 }
 
 
-El::DistMatrix<double> *toast::atm::sim::build_covariance(
+El::DistMatrix<double> *toast::tatm::sim::build_covariance(
     long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();
@@ -1862,15 +1865,16 @@ El::DistMatrix<double> *toast::atm::sim::build_covariance(
 }
 
 
-double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
+double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
 
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
     // Coordinates are in the horizontal frame
 
     const long nn = 1;
-    const double ndxinv = xxstep / (nn-1);
-    const double ndzinv = zzstep / (nn-1);
+    // Uncomment these lines for smoothing
+    //const double ndxinv = xxstep / (nn-1);
+    //const double ndzinv = zzstep / (nn-1);
     const double ninv = 1. / ( nn * nn );
 
     double val = 0;
@@ -1880,20 +1884,22 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
         double yy1 = coord1[1];
         double zz1 = coord1[2];
 
-        if ( ii1 ) {
-            xx1 += ii1 * ndxinv;
-            zz1 += ii1 * ndzinv;
-        }
+        // Uncomment these lines for smoothing
+        //if ( ii1 ) {
+        //    xx1 += ii1 * ndxinv;
+        //    zz1 += ii1 * ndzinv;
+        //}
 
         for ( int ii2=0; ii2<nn; ++ii2 ) {
             double xx2 = coord2[0];
             double yy2 = coord2[1];
             double zz2 = coord2[2];
 
-            if ( ii2 ) {
-                xx2 += ii2 * ndxinv;
-                zz2 += ii2 * ndzinv;
-            }
+            // Uncomment these lines for smoothing
+            //if ( ii2 ) {
+            //    xx2 += ii2 * ndxinv;
+            //    zz2 += ii2 * ndzinv;
+            //}
 
             // Water vapor altitude factor
 
@@ -1917,7 +1923,7 @@ double toast::atm::sim::cov_eval( double *coord1, double *coord2 ) {
 }
 
 
-void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
+void toast::tatm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 				       long ind_start, long ind_stop ) {
 
     // Cholesky decompose the covariance matrix.  If the matrix is singular,
@@ -2002,7 +2008,7 @@ void toast::atm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
 }
 
 
-void toast::atm::sim::apply_covariance( El::DistMatrix<double> *cov,
+void toast::tatm::sim::apply_covariance( El::DistMatrix<double> *cov,
 					long ind_start, long ind_stop ) {
 
     double t1 = MPI_Wtime();

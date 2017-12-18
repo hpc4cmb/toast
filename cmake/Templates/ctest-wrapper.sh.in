@@ -22,13 +22,3 @@ fi
 
 $@
 
-#if [ "@USE_SLURM@" = "ON" ]; then
-#    FNOTES=@JOB_NAME@_notes.cmake
-#    echo > ${FNOTES}
-#    for i in out_@JOB_NAME@_@MACHINE@_*.log
-#    do
-#        cat >> ${FNOTES} <<EOF
-#list(APPEND CTEST_NOTES_FILES "${i}")
-#        EOF
-#    done
-#fi

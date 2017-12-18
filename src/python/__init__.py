@@ -33,3 +33,5 @@ from .dist import (Comm, Data, distribute_uniform, distribute_discrete,
                    distribute_samples)
 
 from .op import Operator
+
+from .weather import Weather

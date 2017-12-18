@@ -23,6 +23,7 @@ import toast.tod as tt
 import toast.map as tm
 import toast.qarray as qa
 import toast.timing as timing
+from toast import Weather
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -41,7 +42,13 @@ def parse_arguments(comm):
     parser.add_argument('--coord', required=False, default='C',
                         help='Sky coordinate system [C,E,G]')
     parser.add_argument('--schedule', required=True,
-                        help='CES schedule file from toast_ground_schedule.py')
+                        help='Comma-separated list CES schedule files '
+                        '(from toast_ground_schedule.py)')
+    parser.add_argument('--weather',
+                        required=True,
+                        help='Comma-separated list of TOAST weather files for '
+                        'every schedule.  Repeat the same file if the '
+                        'schedules share observing site.')
     parser.add_argument('--samplerate',
                         required=False, default=100.0, type=np.float,
                         help='Detector sample rate (Hz)')
@@ -112,8 +119,8 @@ def parse_arguments(comm):
                         required=False, default=10.0, type=np.float,
                         help='Kolmogorov turbulence injection scale sigma')
     parser.add_argument('--atm_gain',
-                        required=False, default=2e-7, type=np.float,
-                        help='Atmospheric gain, modulated by T0.')
+                        required=False, default=1e-4, type=np.float,
+                        help='Atmospheric gain factor.')
     parser.add_argument('--atm_zatm',
                         required=False, default=40000.0, type=np.float,
                         help='atmosphere extent for temperature profile')
@@ -218,17 +225,27 @@ def parse_arguments(comm):
                         'names, and each value is also a dictionary with keys '
                         '"quat" (4 element ndarray), "fwhm" (float, arcmin), '
                         '"fknee" (float, Hz), "alpha" (float), and '
-                        '"NET" (float).  For optional plotting, the key "color"'
-                        ' can specify a valid matplotlib color string.')
-    parser.add_argument('--nfreq',
-                        required=False, default=1, type=np.int,
-                        help='Number of frequencies with identical focal '
-                        'planes')
+                        '"NET" (float).')
+    parser.add_argument('--freq',
+                        required=True,
+                        help='Comma-separated list of frequencies with '
+                        'identical focal planes')
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+
+    if len(args.freq.split(',')) != 1:
+        # Multi frequency run.  We don't support multiple copies of
+        # scanned signal.
+        if args.input_map:
+            raise RuntimeError('Multiple frequencies are not supported when '
+                               'scanning from a map')
+
+    if not args.skip_atmosphere and args.weather is None:
+        raise RuntimeError('Cannot simulate atmosphere without a TOAST '
+                           'weather file')
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -253,21 +270,67 @@ def parse_arguments(comm):
 
 
 def name2id(name, maxval=2**16):
+    """ Map a name into an index.
+
+    """
     value = 0
     for c in name:
         value += ord(c)
     return value % maxval
 
 
+def load_weather(args, comm, schedules):
+    """ Load TOAST weather file(s) and attach them to the schedules.
+
+    """
+    if args.weather is None:
+        return
+    
+    start = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        weathers = []
+        weatherdict = {}
+        for fname in args.weather.split(','):
+            if fname not in weatherdict:
+                if not os.path.isfile(fname):
+                    raise RuntimeError('No such weather file: {}'.format(fname))
+                start1 = MPI.Wtime()
+                weatherdict[fname] = Weather(fname)
+                stop1 = MPI.Wtime()
+                print('Load {}: {:.2f} seconds'.format(fname, stop1-start1),
+                      flush=args.flush)
+            weathers.append(weatherdict[fname])
+    else:
+        weathers = None
+
+    weathers = comm.comm_world.bcast(weathers)
+    if len(weathers) == 1 and len(schedules) > 1:
+        weathers *= len(schedules)
+    if len(weathers) != len(schedules):
+        raise RuntimeError(
+            'Number of weathers must equal number of schedules or be 1.')
+
+    for schedule, weather in zip(schedules, weathers):
+        schedule.append(weather)
+
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Loading weather {:.3f} s'.format(stop-start), flush=args.flush)
+
+
 def load_schedule(args, comm):
+    """ Load the observing schedule(s).
+
+    """
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
     schedules = []
+
     if comm.comm_world.rank == 0:
-        for fn in args.schedule.split(','):
+        for ischedule, fn in enumerate(args.schedule.split(',')):
             if not os.path.isfile(fn):
                 raise RuntimeError('No such schedule file: {}'.format(fn))
-            start = MPI.Wtime()
+            start1 = MPI.Wtime()
             with open(fn, 'r') as f:
                 while True:
                     line = f.readline()
@@ -301,14 +364,12 @@ def load_schedule(args, comm):
                         int(scan), int(subscan), float(azmin), float(azmax),
                         float(el)])
             schedules.append([site, all_ces])
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            print('Load {}: {:.2f} seconds'.format(fn, stop-start),
+            stop1 = MPI.Wtime()
+            print('Load {}: {:.2f} seconds'.format(fn, stop1-start1),
                   flush=args.flush)
 
     schedules = comm.comm_world.bcast(schedules)
 
-    comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print('Loading schedule {:.3f} s'.format(stop-start), flush=args.flush)
@@ -318,6 +379,7 @@ def load_schedule(args, comm):
 
 def load_fp(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
+
     """
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
@@ -327,33 +389,36 @@ def load_fp(args, comm, schedules):
     focalplanes = []
     if comm.comm_world.rank == 0:
         for fpfile in args.fp.split(','):
+            start1 = MPI.Wtime()
             with open(fpfile, 'rb') as p:
                 fp = pickle.load(p)
+                stop1 = MPI.Wtime()
+                print('Load {}:  {:.2f} seconds'.format(fpfile, stop1-start1),
+                      flush=args.flush)
                 focalplanes.append(fp)
-        if len(focalplanes) == 1 and len(schedules) > 1:
-            focalplanes *= len(schedules)
-        if len(focalplanes) != len(schedules):
-            raise RuntimeError(
-                'Number of focalplanes must equal number of schedules or be 1.')
+                start1 = stop1
     focalplanes = comm.comm_world.bcast(focalplanes)
-
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print('Load focalplane:  {:.2f} seconds'.format(stop-start),
-              flush=args.flush)
-    start = stop
+    if len(focalplanes) == 1 and len(schedules) > 1:
+        focalplanes *= len(schedules)
+    if len(focalplanes) != len(schedules):
+        raise RuntimeError(
+            'Number of focalplanes must equal number of schedules or be 1.')
 
     detweights = {}
-    for ifp, fp in enumerate(focalplanes):
-        schedules[ifp].append(fp)
-        for detname, det in fp.items():
+    for schedule, focalplane in zip(schedules, focalplanes):
+        schedule.append(focalplane)
+        for detname, det in focalplane.items():
             net = det['NET']
             detweight = 1.0 / (args.samplerate * net * net)
             if detname in detweights and detweights[detname] != detweight:
                 raise RuntimeError(
                     'Detector weight for {} changes'.format(detname))
             detweights[detname] = detweight
+
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Load focalplane(s):  {:.2f} seconds'.format(stop-start),
+              flush=args.flush)
 
     return detweights
 
@@ -368,7 +433,13 @@ def create_observations(args, comm, schedules, counter):
     breaks = []
     all_ces_tot = []
 
-    for (site, all_ces, fp) in schedules:
+    for schedule in schedules:
+        if args.weather is None:
+            site, all_ces, fp = schedule
+            weather = None
+        else:
+            site, all_ces, weather, fp = schedule
+            
         if nces_tot != 0:
             breaks.append(nces_tot)
 
@@ -395,7 +466,7 @@ def create_observations(args, comm, schedules, counter):
 
         nces = len(all_ces)
         for ces in all_ces:
-            all_ces_tot.append((ces, site, fp, detquats))
+            all_ces_tot.append((ces, site, fp, detquats, weather))
 
         do_break = False
         for i in range(nces-1):
@@ -432,7 +503,7 @@ def create_observations(args, comm, schedules, counter):
     group_numobs = groupdist[comm.group][1]
 
     for ices in range(group_firstobs, group_firstobs + group_numobs):
-        ces, site, fp, detquats = all_ces_tot[ices]
+        ces, site, fp, detquats, weather = all_ces_tot[ices]
 
         (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
          azmin, azmax, el) = ces
@@ -442,6 +513,9 @@ def create_observations(args, comm, schedules, counter):
         totsamples = int((CES_stop - CES_start) * args.samplerate)
 
         # create the single TOD for this observation
+
+        # FIXME: TOD must know the PWV distribution and set
+        # tod.meta['pwv_center'] and tod.meta['pwv_sigma']
 
         try:
             tod = tt.TODGround(
@@ -472,10 +546,11 @@ def create_observations(args, comm, schedules, counter):
         obs['noise'] = noise
         obs['id'] = int(mjdstart * 10000)
         obs['intervals'] = tod.subscans
-        # Site is not yet recognized as an RNG index
-        #obs['site'] = site_id
-        #obs['telescope'] = telescope_id
-        obs['telescope'] = (site_id + telescope_id) % 2**16
+        obs['site'] = site_id
+        obs['telescope'] = telescope_id
+        obs['weather'] = weather
+        obs['start_time'] = CES_start
+        obs['altitude'] = site_alt
 
         data.obs.append(obs)
 
@@ -582,6 +657,27 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
+def add_sky_signal(args, comm, data, totalname_freq, signalname):
+    """ Add previously simulated sky signal to the atmospheric noise.
+
+    """
+    if signalname is not None:
+        for obs in data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                cachename_in = '{}_{}'.format(signalname, det)
+                cachename_out = '{}_{}'.format(totalname_freq, det)
+                ref_in = tod.cache.reference(cachename_in)
+                if tod.cache.exists(cachename_out):
+                    ref_out = tod.cache.reference(cachename_out)
+                    ref_out += ref_in
+                else:
+                    ref_out = tod.cache.put(cachename_out, ref_in)
+                del ref_in, ref_out
+
+    return
+
+
 def scan_signal(args, comm, data, counter, localsm, subnpix):
     signalname = None
 
@@ -620,7 +716,7 @@ def setup_sigcopy(args, comm, signalname):
     # Operator for signal copying, used in each MC iteration
     autotimer = timing.auto_timer()
 
-    if args.nfreq == 1:
+    if len(args.freq.split(',')) == 1:
         totalname = 'total'
         totalname_freq = 'total'
     else:
@@ -944,6 +1040,35 @@ def copy_signal(args, comm, data, sigcopy, counter):
     return
 
 
+def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
+    """ Scale atmospheric fluctuations by frequency.
+
+    Assume that cached signal under totalname_freq is pure atmosphere
+    and scale the absorption coefficient according to the frequency.
+
+    """
+    if not args.skip_atmosphere:
+        for obs in data.obs:
+            tod = obs['tod']
+            site = obs['site']
+            weather = obs['weather']
+            start_time = obs['start_time']
+            weather.set(site, mc, start_time)
+            altitude = obs['altitude']
+            absorption = toast.ctoast.atm_get_absorption_coefficient(
+                altitude, weather.air_temperature, weather.surface_pressure,
+                weather.pwv, freq)
+            #loading = toast.ctoast.atm_get_atmospheric_loading(
+            #    altitude, pwv, freq)
+            for det in tod.local_dets:
+                cachename = '{}_{}'.format(totalname_freq, det)
+                ref = tod.cache.reference(cachename)
+                ref *= absorption
+                del ref
+
+    return
+
+
 def simulate_atmosphere(args, comm, data, mc, counter,
                         flag_name, common_flag_name, totalname):
     if not args.skip_atmosphere:
@@ -973,11 +1098,7 @@ def simulate_atmosphere(args, comm, data, mc, counter,
             ystep=args.atm_ystep, zstep=args.atm_zstep,
             nelem_sim_max=args.atm_nelem_sim_max,
             verbosity=int(args.debug), gangsize=args.atm_gangsize,
-            wind_time_min=args.atm_wind_time, w_center=args.atm_w_center,
-            w_sigma=args.atm_w_sigma, wdir_center=args.atm_wdir_center,
-            wdir_sigma=args.atm_wdir_sigma,
             z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
-            T0_center=args.atm_T0_center, T0_sigma=args.atm_T0_sigma,
             fp_radius=args.fp_radius, apply_flags=True,
             common_flag_name=common_flag_name,
             common_flag_mask=args.common_flag_mask, flag_name=flag_name,
@@ -1311,6 +1432,10 @@ def main():
 
     schedules = load_schedule(args, comm)
 
+    # Load the weather and append to schedules
+
+    load_weather(args, comm, schedules)
+
     # load or simulate the focalplane
 
     detweights = load_fp(args, comm, schedules)
@@ -1355,12 +1480,10 @@ def main():
     firstmc = int(args.MC_start)
     nmc = int(args.MC_count)
 
+    freqs = [float(freq) for freq in args.freq.split(',')]
+    nfreq = len(freqs)
+
     for mc in range(firstmc, firstmc+nmc):
-
-        # Copy the signal timestreams to the total ones before
-        # accumulating the noise.
-
-        copy_signal(args, comm, data, sigcopy, counter)
 
         flag_name, common_flag_name = simulate_atmosphere(
             args, comm, data, mc, counter,
@@ -1369,13 +1492,18 @@ def main():
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
 
-        for ifreq in range(args.nfreq):
+        for ifreq, freq in enumerate(freqs):
+
+            if comm.comm_world.rank == 0:
+                print('Processing frequency {}GHz {} / {}, MC = {}'
+                      ''.format(freq, ifreq+1, nfreq, mc), flush=args.flush)
 
             copy_signal_freq(args, comm, data, sigcopy_freq, counter)
 
-            if comm.comm_world.rank == 0:
-                print('Processing frequency {} / {}, MC = {}'
-                      ''.format(ifreq+1, args.nfreq, mc), flush=args.flush)
+            scale_atmosphere_by_frequency(args, comm, data, freq,
+                                          totalname_freq, mc)
+
+            add_sky_signal(args, comm, data, totalname_freq, signalname)
 
             mcoffset = ifreq * 1000000
 
