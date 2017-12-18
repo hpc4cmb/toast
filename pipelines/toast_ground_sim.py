@@ -22,6 +22,7 @@ import healpy as hp
 import toast
 import toast.tod as tt
 import toast.map as tm
+import toast.qarray as qa
 from toast import Weather
 
 
