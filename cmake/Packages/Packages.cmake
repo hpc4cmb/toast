@@ -39,6 +39,7 @@ add_option(USE_LAPACK "Use LAPACK" ON)
 add_dependent_option(USE_FFTW "Use FFTW" OFF "USE_MKL" ON)
 add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
+add_option(USE_AATM "Use aatm" OFF)
 
 add_option(USE_TIMERS "Enable internal timers" ON)
 add_option(USE_COVERAGE "Enable compilation flags for GNU coverage tool (gcov)" OFF)
@@ -272,6 +273,22 @@ if(USE_WCSLIB)
     add_definitions(-DUSE_WCSLIB)
 
 endif(USE_WCSLIB)
+
+
+################################################################################
+#
+#        aatm
+#
+################################################################################
+
+if(USE_AATM)
+
+    ConfigureRootSearchPath(aatm)
+    find_package(aatm 0.5.0 REQUIRED)
+
+    add_definitions(-DUSE_AATM)
+
+endif(USE_AATM)
 
 
 ################################################################################

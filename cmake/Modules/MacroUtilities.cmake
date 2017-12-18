@@ -538,6 +538,17 @@ function(print_enabled_features)
                    NOT "${${_feature}}" STREQUAL "TRUE")
                     set(_currentFeatureText "${_currentFeatureText}: ${_desc} -- [\"${${_feature}}\"]")
                 else()
+                    string(REGEX REPLACE "^USE_" "" _feature_tmp "${_feature}")
+                    string(TOLOWER "${_feature_tmp}" _feature_tmp_l)
+                    capitalize("${_feature_tmp}" _feature_tmp_c)
+                    foreach(_var _feature_tmp _feature_tmp_l _feature_tmp_c)
+                        set(_ver "${${${_var}}_VERSION}")
+                        if(NOT "${_ver}" STREQUAL "")
+                            set(_desc "${_desc} -- [found version ${_ver}]")
+                            break()
+                        endif()
+                        unset(_ver)
+                    endforeach(_var _feature_tmp _feature_tmp_l _feature_tmp_c)
                     set(_currentFeatureText "${_currentFeatureText}: ${_desc}")
                 endif()
                 set(_desc NOTFOUND)
@@ -561,11 +572,6 @@ function(print_enabled_features)
                 endif()
             endforeach()
 
-            # print that following are enabled subfeatures
-            #if(_enabled_subfeatures)
-            #    set(_currentFeatureText "${_currentFeatureText}\n\t-- The following subfeatures of ${_feature} are defined/enabled:")
-            #endif()
-
             # loop over enabled subfeatures
             foreach(_subfeature ${_enabled_subfeatures})
                 # add subfeature to text
@@ -584,11 +590,6 @@ function(print_enabled_features)
                     set(_subdesc NOTFOUND)
                 endif(_subdesc)
             endforeach(_subfeature)
-
-            # print that following are disabled subfeatures
-            #if(_disabled_subfeatures)
-            #    set(_currentFeatureText "${_currentFeatureText}\n\t-- The following subfeatures of ${_feature} are NOT defined/enabled:")
-            #endif()
 
             # loop over disabled subfeatures
             foreach(_subfeature ${_disabled_subfeatures})

@@ -394,6 +394,14 @@ SET_MACRO_FIELDS(${HAS}
 
 #==============================================================================#
 
+GET_DEFINED_FLAG(HAS aatm_FOUND)
+SET_MACRO_FIELDS(${HAS}
+    LABEL   "HAVE_AATM"
+    ENTRY   "1"
+    MSG     "if you are using aatm")
+
+#==============================================================================#
+
 CHECK_FOR_HEADER(HEADER_FILE "wcslib/wcs.h")
 GET_DEFINED_FLAG(HAS HEADER_FILE)
 SET_MACRO_FIELDS(${HAS}

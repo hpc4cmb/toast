@@ -55,7 +55,8 @@ INCLUDE (FindPackageHandleStandardArgs)
 
 #----- wcslib installation root
 FIND_PATH (wcslib_ROOT
-  NAMES include/wcslib/wcs.h
+  NAMES include/wcslib/wcs.h 
+        include/wcslib-${PACKAGE_FIND_VERSION_MAJOR}.${PACKAGE_FIND_VERSION_MINOR}/wcs.h
   PATHS ${wcslib_ROOT}
         ENV wcslib_ROOT
         ENV wcslibROOT
@@ -64,7 +65,8 @@ FIND_PATH (wcslib_ROOT
 
 #----- wcslib include directory
 FIND_PATH (wcslib_INCLUDE_DIR
-  NAMES wcslib/wcs.h
+  NAMES wcslib/wcsconfig.h
+        wcslib-${PACKAGE_FIND_VERSION_MAJOR}.${PACKAGE_FIND_VERSION_MINOR}/wcsconfig.h
   HINTS ${wcslib_ROOT}
         ENV wcslib_ROOT
         ENV wcslibROOT
@@ -81,12 +83,12 @@ FIND_LIBRARY (wcslib_LIBRARY
 
 
 #----- Determine library's version
-SET (_wcslib_VERSION_HEADER ${wcslib_INCLUDE_DIR}/wcsconfig.h)
+SET (_wcslib_VERSION_HEADER ${wcslib_INCLUDE_DIR}/wcslib/wcsconfig.h)
 IF (EXISTS ${_wcslib_VERSION_HEADER})
 
     FILE (READ ${_wcslib_VERSION_HEADER} _wcslib_VERSION_CONTENTS)
 
-    STRING (REGEX REPLACE ".*#define WCSLIB_VERSION[ \t]+([0-9]+).*" "\\1"
+    STRING (REGEX REPLACE ".*#define WCSLIB_VERSION[ \t\"]+([0-9\.]+).*" "\\1"
         wcslib_VERSION "${_wcslib_VERSION_CONTENTS}")
 
     STRING (REPLACE "." ";" wcslib_VERSION_LIST "${wcslib_VERSION}")
