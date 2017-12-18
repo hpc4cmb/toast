@@ -134,13 +134,14 @@ class OpSimScan(Operator):
             If the named cache objects do not exist, then they are created.
     """
     def __init__(self, distmap=None, pixels='pixels', weights='weights',
-                 out='scan'):
+                 out='scan', dets=None):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._map = distmap
         self._pixels = pixels
         self._weights = weights
         self._out = out
+        self._dets = dets
 
     def exec(self, data):
         """
@@ -164,7 +165,9 @@ class OpSimScan(Operator):
         for obs in data.obs:
             tod = obs['tod']
 
-            for det in tod.local_dets:
+            dets = tod.local_dets if self._dets is None else self._dets
+
+            for det in dets:
 
                 # get the pixels and weights from the cache
 
@@ -319,7 +322,8 @@ class OpSimPySM(Operator):
                 print(full_map_rank0[:10])
 
             self.distmap.broadcast_healpix_map(full_map_rank0)
-            scansim = OpSimScan(distmap=self.distmap, out=self._out+'_'+det)
+            print("distmap data", self.distmap.data)
+            scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
 
         stop = MPI.Wtime()
