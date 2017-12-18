@@ -18,11 +18,12 @@
 5
 --atm_w_sigma
 0
---input_map
-data/ffp10_lensed_scl_100_nside0512.fits
 --weather
 data/weather_Atacama.fits,data/weather_South_Pole.fits
 --madam_baseline_order
 3
 --freq
 95
+--input_pysm_model
+s3,d6,f1,a2,c1
+--apply_beam
