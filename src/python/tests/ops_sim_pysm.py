@@ -185,7 +185,7 @@ class OpSimPySMTest(MPITestCase):
               'bandwidth_ghz': 5,
               'fmin': 1e-05,
               'fwhm': 0.16666666666666666}}
-        op_sim_pysm = OpSimPySM(comm=self.toastcomm,
+        op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
                                    out='signal',
                                    pysm_model="a2,d7,f1,s3,c1",
                                    focalplanes=[focalplane],
@@ -225,7 +225,7 @@ class OpSimPySMTestSmooth(MPITestCase):
               'bandwidth_ghz': 5,
               #'fwhm': 30*0.16666666666666666}}
               'fwhm': 10}}
-        op_sim_pysm = OpSimPySM(comm=self.toastcomm,
+        op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
                                    out='signal',
                                    pysm_model="a2,d7,f1,s3,c1",
                                    focalplanes=[focalplane],

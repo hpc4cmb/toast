@@ -250,7 +250,7 @@ class OpSimPySM(Operator):
         super().__init__()
         self._out = out
         self.comm = comm
-        self.dist_rings = DistRings(comm.comm_rank,
+        self.dist_rings = DistRings(comm,
                             nside = nside,
                             nnz = 3)
 
@@ -267,14 +267,15 @@ class OpSimPySM(Operator):
                     [each for each in pysm_sky_components
                      if each.startswith(component_model[0])][0]
             pysm_sky_config[full_component_name] = component_model
-        self.pysm_sky = PySMSky(local_pixels=self.dist_rings.local_pixels,
+        self.pysm_sky = PySMSky(comm=self.comm,
+                local_pixels=self.dist_rings.local_pixels,
                               nside=nside,
                               pysm_sky_config=pysm_sky_config)
         self.nside = nside
         self.focalplanes = focalplanes
         self.npix = hp.nside2npix(nside)
         self.distmap = DistPixels(
-            comm=comm.comm_world, size=self.npix, nnz=3,
+            comm=comm, size=self.npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
         self.apply_beam = apply_beam
 
@@ -295,7 +296,7 @@ class OpSimPySM(Operator):
 
         lmax = 3*self.nside -1
 
-        if self.comm.comm_world.rank == 0:
+        if self.comm.rank == 0:
             print('Collecting, Broadcasting map', flush=True)
         start = MPI.Wtime()
         local_maps = dict()  # FIXME use Cache instead
@@ -308,25 +309,22 @@ class OpSimPySM(Operator):
                     raise RuntimeError(
                      "OpSimPySM: apply beam is True but focalplane doesn't have fwhm")
                 # LibSharp also supports transforming multiple channels together each with own beam
-                smooth = LibSharpSmooth(self.comm.comm_rank, signal_map="sky", out="sky",
+                smooth = LibSharpSmooth(self.comm, signal_map="sky", out="sky",
                                            lmax=lmax, grid=self.dist_rings.libsharp_grid,
                                            fwhm_deg=fwhm_deg[det], beam=None)
                 smooth.exec(local_maps)
 
             n_components = 3
 
-            full_map_rank0 = assemble_map_on_rank0(self.comm.comm_rank,
+            full_map_rank0 = assemble_map_on_rank0(self.comm,
                                      local_maps["sky"], n_components, self.npix)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
-
-            if self.comm.comm_world.rank == 0:
-                print(full_map_rank0[:10])
 
             self.distmap.broadcast_healpix_map(full_map_rank0)
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
 
         stop = MPI.Wtime()
-        if self.comm.comm_world.rank == 0:
+        if self.comm.rank == 0:
             print('PySM Operator completed:  {:.2f} seconds'
                   ''.format(stop-start), flush=True)

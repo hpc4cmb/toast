@@ -13,7 +13,7 @@ class PySMSky(object):
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
     """
-    def __init__(self, pixels='pixels',
+    def __init__(self, comm=None, pixels='pixels',
                  out='pysm', nside=None, pysm_sky_config=None, init_sky=True, local_pixels=None):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -21,6 +21,7 @@ class PySMSky(object):
         self._pixels = pixels
         self._out = out
         self._local_pixels = local_pixels
+        self._comm = comm
 
         self.pysm_sky_config = pysm_sky_config
         self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
@@ -30,8 +31,8 @@ class PySMSky(object):
         initialized_sky_config = {}
         for name, model_id in pysm_sky_config.items():
             initialized_sky_config[name] = \
-                pysm.nominal.models(model_id, self._nside, self._local_pixels)
-        return pysm.Sky(initialized_sky_config)
+                pysm.nominal.models(model_id, self._nside, self._local_pixels, mpi_comm=self._comm)
+        return pysm.Sky(initialized_sky_config, mpi_comm=self._comm)
 
     def exec(self, local_map, out, bandpasses=None):
 
