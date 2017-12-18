@@ -29,4 +29,9 @@ libtoast_atm_la_include_HEADERS = \
 toast/atm.hpp
 
 libtoast_atm_la_SOURCES = \
-toast_atm.cpp toast_atm_util.cpp
+toast_atm.cpp
+
+if HAVE_AM_AATM
+libtoast_atm_la_SOURCES += toast_atm_util.cpp
+endif
+
