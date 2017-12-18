@@ -56,5 +56,10 @@ class PySMSky(object):
             pysm_instrument_config["channels"] = [bandpass]
             instrument = pysm.Instrument(pysm_instrument_config)
             out_name = (out + "_" + ch_name) if ch_name else out
-            local_map[out_name], _ = \
-                instrument.observe(self.sky, write_outputs=False)
+            # output of observe is a tuple, first item is the map
+            # however the map has 1 extra dimension of size 1,
+            # so we need to index [0] twice to get a map of (3, npix)
+            local_map[out_name] = \
+                instrument.observe(self.sky, write_outputs=False)[0][0]
+            assert local_map[out_name].shape[0] == 3
+            assert local_map[out_name].ndim == 2
