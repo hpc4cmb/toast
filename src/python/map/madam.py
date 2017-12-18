@@ -397,6 +397,10 @@ class OpMadam(Operator):
                 # entries in the dictionary when the PSD actually changes
                 if self._noisekey in obs.keys():
                     nse = obs[self._noisekey]
+                    if 'noise_scale' in obs:
+                        noise_scale = obs['noise_scale']
+                    else:
+                        noise_scale = 1
                     if nse is not None:
                         if psdfreqs is None:
                             psdfreqs = nse.freq(detectors[0]).astype(
@@ -408,7 +412,7 @@ class OpMadam(Operator):
                                 raise RuntimeError(
                                     'All PSDs passed to Madam must have'
                                     ' the same frequency binning.')
-                            psd = nse.psd(det)
+                            psd = nse.psd(det) * noise_scale**2
                             if det not in psds:
                                 psds[det] = [(0, psd)]
                             else:

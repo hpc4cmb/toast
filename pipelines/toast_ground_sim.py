@@ -111,6 +111,9 @@ def parse_arguments(comm):
     parser.add_argument('--skip_destripe',
                         required=False, default=False, action='store_true',
                         help='Do not destripe the data')
+    parser.add_argument('--skip_daymaps',
+                        required=False, default=False, action='store_true',
+                        help='Do not bin daily maps')
 
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
@@ -834,6 +837,14 @@ def setup_madam(args, comm):
     pars['nside_cross'] = cross
     pars['nside_submap'] = submap
     pars['allreduce'] = args.madam_allreduce
+    pars['pixlim_cross'] = 1e-3
+    pars['pixmode_cross'] = 2
+    pars['pixlim_map'] = 1e-2
+    pars['pixmode_map'] = 2
+    # Instead of fixed detector weights, we'll want to use scaled noise
+    # PSD:s that include the atmospheric noise
+    pars['radiometers'] = True
+    pars['noise_weights_from_psd'] = True
 
     if args.madampar is not None:
         pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
@@ -860,10 +871,6 @@ def setup_madam(args, comm):
     pars['fsample'] = args.samplerate
     pars['iter_max'] = args.madam_iter_max
     pars['file_root'] = args.madam_prefix
-    pars['pixlim_cross'] = 1e-3
-    pars['pixmode_cross'] = 2
-    pars['pixlim_map'] = 1e-2
-    pars['pixmode_map'] = 2
 
     return pars
 
@@ -894,6 +901,36 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
                 ref = tod.cache.reference(cachename)
                 ref *= absorption
                 del ref
+
+    return
+
+
+def update_atmospheric_noise_weights(args, comm, data, freq, mc):
+    """ Update atmospheric noise weights.
+
+    Estimate the atmospheric noise level from weather parameters and
+    encode it as a noise_scale in the observation.  Madam will apply
+    the noise_scale to the detector weights.  This approach assumes
+    that the atmospheric noise dominates over detector noise.  To be
+    more precise, we would have to add the squared noise weights but
+    we do not have their relative calibration.
+
+    """
+    if args.weather:
+        for obs in data.obs:
+            tod = obs['tod']
+            site_id = obs['site_id']
+            weather = obs['weather']
+            start_time = obs['start_time']
+            weather.set(site_id, mc, start_time)
+            altitude = obs['altitude']
+            absorption = toast.ctoast.atm_get_absorption_coefficient(
+                altitude, weather.air_temperature, weather.surface_pressure,
+                weather.pwv, freq)
+            obs['noise_scale'] = absorption * weather.air_temperature
+    else:
+        for obs in data.obs:
+            obs['noise_scale'] = 1.
 
     return
 
@@ -1160,6 +1197,8 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
         for tele_name, tele_data in telescope_data:
             if len(time_name.split('-')) == 3:
                 # Special rules for daily maps
+                if args.skip_daymaps:
+                    continue
                 if ((len(telescope_data) > 1) and (tele_name == 'all')):
                     # Skip daily maps over multiple telescopes
                     continue
@@ -1304,6 +1343,8 @@ def main():
 
             scale_atmosphere_by_frequency(args, comm, data, freq,
                                           totalname_freq, mc)
+
+            update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
             add_sky_signal(args, comm, data, totalname_freq, signalname)
 
