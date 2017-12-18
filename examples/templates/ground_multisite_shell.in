@@ -1,6 +1,6 @@
 #!/bin/bash
 
-outdir="out_@@size@@_ground_multisite"
+outdir="out_@SIZE@_ground_multisite"
 mkdir -p "${outdir}"
 
 # This script assumes that you have toast and all dependencies
@@ -8,9 +8,9 @@ mkdir -p "${outdir}"
 
 # Generate the focalplane files if they do not already exist.
 
-detpix=@@detpix@@
+detpix=@DETPIX@
 
-fpparfile="@@topdir@@/params/ground/focalplane.par"
+fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
@@ -26,24 +26,24 @@ fi
 
 # Generate the schedule files if they do not already exist.
 
-schparfile="@@topdir@@/params/ground/schedule.par"
+schparfile="@TOPDIR@/params/ground/schedule.par"
 
 schedulefile_atacama="${outdir}/schedule_atacama.txt"
 
 if [ ! -e "${schedulefile_atacama}" ]; then
     toast_ground_schedule.py @$schparfile \
-         --out "${schedulefile_atacama}" --patch @@patch@@ \
-         --stop @@schedule_stop@@
+         --out "${schedulefile_atacama}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
 fi
 
-schparfile="@@topdir@@/params/ground/schedule_pole.par"
+schparfile="@TOPDIR@/params/ground/schedule_pole.par"
 
 schedulefile_pole="${outdir}/schedule_pole.txt"
 
 if [ ! -e "${schedulefile_pole}" ]; then
     toast_ground_schedule.py @$schparfile \
-         --out "${schedulefile_pole}" --patch @@patch@@ \
-         --stop @@schedule_stop@@
+         --out "${schedulefile_pole}" --patch @PATCH@ \
+         --stop @SCHEDULE_STOP@
 fi
 
 # The executable script
@@ -53,7 +53,7 @@ echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim_multisite.par"
+parfile="@TOPDIR@/params/ground/ground_sim_multisite.par"
 
 # Data distribution parameters
 
@@ -64,9 +64,9 @@ com="${ex} @${parfile} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
 --atm_cache ${outdir}/atm_cache \
---atm_xstep @@cellsize@@ \
---atm_ystep @@cellsize@@ \
---atm_zstep @@cellsize@@ \
+--atm_xstep @CELLSIZE@ \
+--atm_ystep @CELLSIZE@ \
+--atm_zstep @CELLSIZE@ \
 --groupsize 2 \
 "
 
