@@ -270,6 +270,7 @@ class OpSimPySM(Operator):
         self.pysm_sky = PySMSky(local_pixels=self.dist_rings.local_pixels,
                               nside=nside,
                               pysm_sky_config=pysm_sky_config)
+        self.nside = nside
         self.focalplanes = focalplanes
         self.npix = hp.nside2npix(nside)
         self.distmap = DistPixels(
@@ -292,7 +293,7 @@ class OpSimPySM(Operator):
                              N_POINTS_BANDPASS),
                  np.ones(N_POINTS_BANDPASS))
 
-        lmax = 512
+        lmax = 3*self.nside -1
 
         if self.comm.comm_world.rank == 0:
             print('Collecting, Broadcasting map', flush=True)
@@ -307,7 +308,7 @@ class OpSimPySM(Operator):
                     raise RuntimeError(
                      "OpSimPySM: apply beam is True but focalplane doesn't have fwhm")
                 # LibSharp also supports transforming multiple channels together each with own beam
-                smooth = LibSharpSmooth(self.comm.comm_rank, signal_map="sky",
+                smooth = LibSharpSmooth(self.comm.comm_rank, signal_map="sky", out="sky",
                                            lmax=lmax, grid=self.dist_rings.libsharp_grid,
                                            fwhm_deg=fwhm_deg[det], beam=None)
                 smooth.exec(local_maps)
@@ -322,7 +323,6 @@ class OpSimPySM(Operator):
                 print(full_map_rank0[:10])
 
             self.distmap.broadcast_healpix_map(full_map_rank0)
-            print("distmap data", self.distmap.data)
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
 
