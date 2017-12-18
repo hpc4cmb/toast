@@ -35,6 +35,8 @@ ops_dipole.py \
 ops_madam.py \
 ops_pmat.py \
 ops_simnoise.py \
+ops_sim_pysm.py \
+smooth.py \
 ops_polyfilter.py \
 ops_groundfilter.py \
 ops_gainscrambler.py \

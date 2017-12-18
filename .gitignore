@@ -86,3 +86,7 @@ __pycache__/
 /src/python/_version.py
 /src/python/ctoast.py
 /src/python/mpi.py
+
+# vim
+*.swp
+*.swo

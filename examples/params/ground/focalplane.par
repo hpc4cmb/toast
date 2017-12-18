@@ -10,3 +10,7 @@
 1.0
 --psd_fmin
 1e-5
+--bandcenter_ghz
+25
+--bandwidth_ghz
+6.3

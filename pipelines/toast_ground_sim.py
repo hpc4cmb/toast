@@ -17,12 +17,11 @@ import sys
 import traceback
 
 import numpy as np
-from scipy.constants import degree
+import healpy as hp
 
 import toast
 import toast.tod as tt
 import toast.map as tm
-import toast.qarray as qa
 from toast import Weather
 
 
@@ -89,6 +88,12 @@ def parse_arguments(comm):
 
     parser.add_argument('--input_map', required=False,
                         help='Input map for signal')
+    parser.add_argument('--input_pysm_model', required=False,
+                        help='Comma separated models for on-the-fly PySM '
+                        'simulation, e.g. s3,d6,f1,a2"')
+    parser.add_argument('--apply_beam', required=False, action='store_true',
+                        help='Apply beam convolution to input map with gaussian '
+                        'beam parameters defined in focalplane')
 
     parser.add_argument('--skip_atmosphere',
                         required=False, default=False, action='store_true',
@@ -1233,9 +1238,22 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
-    # Scan input map
+    if args.input_pysm_model:
 
-    signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
+        op_sim_pysm = tt.OpSimPySM(comm=comm,
+                                   out='signal',
+                                   pysm_model=args.input_pysm_model,
+                                   focalplanes=[s[2] for s in schedules],
+                                   nside=args.nside,
+                                   subnpix=subnpix, localsm=localsm,
+                                   apply_beam=args.apply_beam)
+
+        op_sim_pysm.exec(data)
+
+    else:
+        # Scan input map
+
+        signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
 
