@@ -1,12 +1,14 @@
 #!/bin/bash
 
+@EXTRA_INIT@
+
 outdir="out_@SIZE@_ground_multisite"
 mkdir -p "${outdir}"
 
 # This script assumes that you have toast and all dependencies
 # installed and loaded in your environment.
 
-# Generate the focalplane files if they do not already exist.
+# Generate the focalplane file if it does not already exist.
 
 detpix=@DETPIX@
 
@@ -15,7 +17,8 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
     toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp_atacama" --minpix $detpix
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+        --out "${outdir}/fp_atacama" --minpix $detpix
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
@@ -32,6 +35,7 @@ schedulefile_atacama="${outdir}/schedule_atacama.txt"
 
 if [ ! -e "${schedulefile_atacama}" ]; then
     toast_ground_schedule.py @$schparfile \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
 fi
@@ -42,6 +46,7 @@ schedulefile_pole="${outdir}/schedule_pole.txt"
 
 if [ ! -e "${schedulefile_pole}" ]; then
     toast_ground_schedule.py @$schparfile \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
 fi
@@ -60,6 +65,8 @@ parfile="@TOPDIR@/params/ground/ground_sim_multisite.par"
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --fp ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
@@ -68,6 +75,7 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --groupsize 2 \
+$@ \
 "
 
 # Use 2 processes, each with 2 threads
@@ -79,5 +87,6 @@ export OMP_NUM_THREADS=${threads}
 
 run="mpirun -np ${procs}"
 
+: ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > ${LOG_OUT} 2>&1

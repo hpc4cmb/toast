@@ -2,11 +2,15 @@
 
 #SBATCH --partition=@QUEUE@
 @CONSTRAINT@
-#SBATCH --account=mp107
+#SBATCH --account=@ACCOUNT@
 #SBATCH --nodes=@NODES@
 #SBATCH --time=@TIME@
 #SBATCH --job-name=@SIZE@-ground_multisite
 #SBATCH --output=out_@SIZE@_ground_multisite_@MACHINE@_%j.log
+
+set -o errexit
+
+@EXTRA_INIT@
 
 echo Starting slurm script at $(date)
 
@@ -47,13 +51,19 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
+    echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
          --out "${outdir}/fp_atacama" --minpix $detpix
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
 if [ ! -e "${fpfile_pole}" ]; then
+    echo "Running toast_fake_focalplane.py (pole)..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_pole" \
          --out "${outdir}/fp_pole" --minpix $detpix --fov 1
 fi
 
@@ -62,7 +72,10 @@ fi
 schparfile="@TOPDIR@/params/ground/schedule.par"
 schedulefile_atacama="${outdir}/schedule_atacama.txt"
 if [ ! -e "${schedulefile_atacama}" ]; then
+    echo "Running toast_ground_schedule.py (atacama)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_actcama" \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
 fi
@@ -70,7 +83,10 @@ fi
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
 schedulefile_pole="${outdir}/schedule_pole.txt"
 if [ ! -e "${schedulefile_pole}" ]; then
+    echo "Running toast_ground_schedule.py (pole)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+         --disable-timer-serialization \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
 fi
@@ -91,6 +107,8 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
@@ -100,6 +118,7 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --madam_iter_max @ITERMAX@ \
+$@ \
 "
 
 #--- Hardware configuration (no need to change) ----
@@ -125,7 +144,8 @@ run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
 
 echo Calling srun at $(date)
 
+: ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
-eval ${run} ${com} > "${outdir}/log" 2>&1
+eval ${run} ${com} > ${LOG_OUT} 2>&1
 
 echo End slurm script at $(date)
