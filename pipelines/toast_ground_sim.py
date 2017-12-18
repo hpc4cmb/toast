@@ -6,13 +6,14 @@
 
 from toast.mpi import MPI
 
-import os
-import sys
-import re
 import argparse
-import pickle
+import copy
 from datetime import datetime
 import dateutil.parser
+import os
+import pickle
+import re
+import sys
 import traceback
 
 import numpy as np
@@ -45,7 +46,7 @@ def parse_arguments(comm):
                         help='Comma-separated list CES schedule files '
                         '(from toast_ground_schedule.py)')
     parser.add_argument('--weather',
-                        required=True,
+                        required=False,
                         help='Comma-separated list of TOAST weather files for '
                         'every schedule.  Repeat the same file if the '
                         'schedules share observing site.')
@@ -101,11 +102,10 @@ def parse_arguments(comm):
     parser.add_argument('--skip_hits',
                         required=False, default=False, action='store_true',
                         help='Do not save the 3x3 matrices and hitmaps')
+    parser.add_argument('--skip_destripe',
+                        required=False, default=False, action='store_true',
+                        help='Do not destripe the data')
 
-    parser.add_argument('--fp_radius',
-                        required=False, default=1, type=np.float,
-                        help='Focal plane radius assumed in the atmospheric '
-                        'simulation.')
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
                         help='Kolmogorov turbulence dissipation scale center')
@@ -188,6 +188,9 @@ def parse_arguments(comm):
     parser.add_argument('--nside',
                         required=False, default=512, type=np.int,
                         help='Healpix NSIDE')
+    parser.add_argument('--madam_prefix',
+                        required=False, default='toast',
+                        help='Output map prefix')
     parser.add_argument('--madam_iter_max',
                         required=False, default=1000, type=np.int,
                         help='Maximum number of CG iterations in Madam')
@@ -200,9 +203,6 @@ def parse_arguments(comm):
     parser.add_argument('--madam_noisefilter',
                         required=False, default=False, action='store_true',
                         help='Destripe with the noise filter enabled')
-    parser.add_argument('--madam',
-                        required=False, default=False, action='store_true',
-                        help='If specified, use libmadam for map-making')
     parser.add_argument('--madampar',
                         required=False, default=None,
                         help='Madam parameter file')
@@ -285,7 +285,7 @@ def load_weather(args, comm, schedules):
     """
     if args.weather is None:
         return
-    
+
     start = MPI.Wtime()
     if comm.comm_world.rank == 0:
         weathers = []
@@ -351,6 +351,9 @@ def load_schedule(args, comm):
                      moon_phase, scan, subscan) = line.split()
                     start_time = start_date + ' ' + start_time
                     stop_time = stop_date + ' ' + stop_time
+                    # Define season as a calendar year.  This can be
+                    # changed later and could even be in the schedule file.
+                    season = int(start_date.split('-')[0])
                     try:
                         start_time = dateutil.parser.parse(start_time+' +0000')
                         stop_time = dateutil.parser.parse(stop_time+' +0000')
@@ -362,7 +365,7 @@ def load_schedule(args, comm):
                     all_ces.append([
                         start_timestamp, stop_timestamp, name, float(mjdstart),
                         int(scan), int(subscan), float(azmin), float(azmax),
-                        float(el)])
+                        float(el), season, start_date])
             schedules.append([site, all_ces])
             stop1 = MPI.Wtime()
             print('Load {}: {:.2f} seconds'.format(fn, stop1-start1),
@@ -377,7 +380,23 @@ def load_schedule(args, comm):
     return schedules
 
 
-def load_fp(args, comm, schedules):
+def get_focalplane_radius(focalplane):
+    """ Find the furthest angular distance from the boresight
+
+    """
+    xaxis, yxis, zaxis = np.eye(3)
+    cosangs = []
+    for det in focalplane:
+        quat = focalplane[det]['quat']
+        vec = qa.rotate(quat, zaxis)
+        cosangs.append(np.dot(zaxis, vec))
+    mincos = np.amin(cosangs)
+    maxdist = np.degrees(np.arccos(mincos))
+    
+    return maxdist*1.001
+
+
+def load_focalplanes(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
 
     """
@@ -390,14 +409,15 @@ def load_fp(args, comm, schedules):
     if comm.comm_world.rank == 0:
         for fpfile in args.fp.split(','):
             start1 = MPI.Wtime()
-            with open(fpfile, 'rb') as p:
-                fp = pickle.load(p)
+            with open(fpfile, 'rb') as picklefile:
+                focalplane = pickle.load(picklefile)
                 stop1 = MPI.Wtime()
                 print('Load {}:  {:.2f} seconds'.format(fpfile, stop1-start1),
                       flush=args.flush)
-                focalplanes.append(fp)
+                focalplanes.append(focalplane)
                 start1 = stop1
     focalplanes = comm.comm_world.bcast(focalplanes)
+    
     if len(focalplanes) == 1 and len(schedules) > 1:
         focalplanes *= len(schedules)
     if len(focalplanes) != len(schedules):
@@ -423,74 +443,56 @@ def load_fp(args, comm, schedules):
     return detweights
 
 
-def create_observations(args, comm, schedules, counter):
-    start = MPI.Wtime()
-    autotimer = timing.auto_timer()
+def get_analytic_noise(args, focalplane):
+    """ Create a TOAST noise object.
 
-    data = toast.Data(comm)
+    Create a noise object from the 1/f noise parameters contained in the
+    focalplane database.
 
-    nces_tot = 0
+    """
+    detectors = sorted(focalplane.keys())
+    fmin = {}
+    fknee = {}
+    alpha = {}
+    NET = {}
+    rates = {}
+    for d in detectors:
+        rates[d] = args.samplerate
+        fmin[d] = focalplane[d]['fmin']
+        fknee[d] = focalplane[d]['fknee']
+        alpha[d] = focalplane[d]['alpha']
+        NET[d] = focalplane[d]['NET']
+        
+    return tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
+                            fknee=fknee, alpha=alpha, NET=NET)
+
+
+def get_breaks(comm, all_ces, nces, args):
+    """ List operational day limits in the list of CES:s.
+
+    """
     breaks = []
-    all_ces_tot = []
-
-    for schedule in schedules:
-        if args.weather is None:
-            site, all_ces, fp = schedule
-            weather = None
-        else:
-            site, all_ces, weather, fp = schedule
-            
-        if nces_tot != 0:
-            breaks.append(nces_tot)
-
-        # Focalplane information for this schedule
-        detectors = sorted(fp.keys())
-        detquats = {}
-        for d in detectors:
-            detquats[d] = fp[d]['quat']
-
-        # Noise model for this schedule
-        fmin = {}
-        fknee = {}
-        alpha = {}
-        NET = {}
-        rates = {}
-        for d in detectors:
-            rates[d] = args.samplerate
-            fmin[d] = fp[d]['fmin']
-            fknee[d] = fp[d]['fknee']
-            alpha[d] = fp[d]['alpha']
-            NET[d] = fp[d]['NET']
-        noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
-                                 fknee=fknee, alpha=alpha, NET=NET)
-
-        nces = len(all_ces)
-        for ces in all_ces:
-            all_ces_tot.append((ces, site, fp, detquats, weather))
-
-        do_break = False
-        for i in range(nces-1):
-            # If current and next CES are on different days, insert a break
-            tz = args.timezone / 24
-            start1 = all_ces[i][3] # MJD start
-            start2 = all_ces[i+1][3] # MJD start
-            scan1 = all_ces[i][4]
-            scan2 = all_ces[i+1][4]
-            if scan1 != scan2 and do_break:
-                breaks.append(nces_tot + i + 1)
-                do_break = False
-                continue
-            day1 = int(start1 + tz)
-            day2 = int(start2 + tz)
-            if day1 != day2:
-                if scan1 == scan2:
-                    # We want an entire CES, even if it crosses the day bound.
-                    # Wait until the scan number changes.
-                    do_break = True
-                else:
-                    breaks.append(nces_tot + i + 1)
-
-        nces_tot += nces
+    do_break = False
+    for i in range(nces-1):
+        # If current and next CES are on different days, insert a break
+        tz = args.timezone / 24
+        start1 = all_ces[i][3] # MJD start
+        start2 = all_ces[i+1][3] # MJD start
+        scan1 = all_ces[i][4]
+        scan2 = all_ces[i+1][4]
+        if scan1 != scan2 and do_break:
+            breaks.append(nces + i + 1)
+            do_break = False
+            continue
+        day1 = int(start1 + tz)
+        day2 = int(start2 + tz)
+        if day1 != day2:
+            if scan1 == scan2:
+                # We want an entire CES, even if it crosses the day bound.
+                # Wait until the scan number changes.
+                do_break = True
+            else:
+                breaks.append(nces + i + 1)
 
     nbreak = len(breaks)
     if nbreak != comm.ngroups-1:
@@ -498,61 +500,115 @@ def create_observations(args, comm, schedules, counter):
             'Number of observing days ({}) does not match number of process '
             'groups ({}).'.format(nbreak+1, comm.ngroups))
 
-    groupdist = toast.distribute_uniform(nces_tot, comm.ngroups, breaks=breaks)
-    group_firstobs = groupdist[comm.group][0]
-    group_numobs = groupdist[comm.group][1]
+    return breaks
 
-    for ices in range(group_firstobs, group_firstobs + group_numobs):
-        ces, site, fp, detquats, weather = all_ces_tot[ices]
 
-        (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
-         azmin, azmax, el) = ces
+def create_observation(args, comm, all_ces_tot, ices, noise):
+    """ Create a TOAST observation.
 
-        site_name, telescope, site_lat, site_lon, site_alt = site
+    Create an observation for the CES scan defined by all_ces_tot[ices].
 
-        totsamples = int((CES_stop - CES_start) * args.samplerate)
+    """
+    ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
 
-        # create the single TOD for this observation
+    (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
+     azmin, azmax, el, season, date) = ces
 
-        # FIXME: TOD must know the PWV distribution and set
-        # tod.meta['pwv_center'] and tod.meta['pwv_sigma']
+    site_name, telescope, site_lat, site_lon, site_alt = site
 
-        try:
-            tod = tt.TODGround(
-                comm.comm_group, detquats, totsamples,
-                detranks=comm.comm_group.size, firsttime=CES_start,
-                rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
-                site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
-                scanrate=args.scanrate, scan_accel=args.scan_accel,
-                CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
-                coord=args.coord, sampsizes=None)
-        except RuntimeError as e:
-            print('Failed to create the CES scan: {}'.format(e),
-                  flush=args.flush)
-            continue
+    totsamples = int((CES_stop - CES_start) * args.samplerate)
 
-        # Create the (single) observation
+    # create the TOD for this observation
 
-        site_name = site[0]
-        telescope_name = site[1]
-        site_id = name2id(site_name)
-        telescope_id = name2id(telescope_name)
+    tod = tt.TODGround(
+        comm.comm_group, detquats, totsamples,
+        detranks=comm.comm_group.size, firsttime=CES_start,
+        rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
+        site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
+        scanrate=args.scanrate, scan_accel=args.scan_accel,
+        CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
+        coord=args.coord, sampsizes=None)
 
-        obs = {}
-        obs['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
-                                                  CES_name, scan, subscan)
-        obs['tod'] = tod
-        obs['baselines'] = None
-        obs['noise'] = noise
-        obs['id'] = int(mjdstart * 10000)
-        obs['intervals'] = tod.subscans
-        obs['site'] = site_id
-        obs['telescope'] = telescope_id
-        obs['weather'] = weather
-        obs['start_time'] = CES_start
-        obs['altitude'] = site_alt
+    # Create the observation
 
-        data.obs.append(obs)
+    site_name = site[0]
+    telescope_name = site[1]
+    site_id = name2id(site_name)
+    telescope_id = name2id(telescope_name)
+
+    obs = {}
+    obs['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
+                                              CES_name, scan, subscan)
+    obs['tod'] = tod
+    obs['baselines'] = None
+    obs['noise'] = noise
+    obs['id'] = int(mjdstart * 10000)
+    obs['intervals'] = tod.subscans
+    obs['site'] = site_name
+    obs['telescope'] = telescope_name
+    obs['site_id'] = site_id
+    obs['telescope_id'] = telescope_id
+    obs['fpradius'] = fpradius
+    obs['weather'] = weather
+    obs['start_time'] = CES_start
+    obs['altitude'] = site_alt
+    obs['season'] = season
+    obs['date'] = date
+    obs['MJD'] = mjdstart
+
+    return obs
+
+
+def create_observations(args, comm, schedules, counter):
+    """ Create and distribute TOAST observations for every CES in schedules.
+
+    """
+    start = MPI.Wtime()
+    autotimer = timing.auto_timer()
+
+    data = toast.Data(comm)
+
+    # Loop over the schedules, distributing each schedule evenly across
+    # the process groups.  For now, we'll assume that each schedule has
+    # the same number of operational days and the number of process groups
+    # matches the number of operational days.  Relaxing these constraints
+    # will cause the season break to occur on different process groups
+    # for different schedules and prevent splitting the communicator.
+
+    for schedule in schedules:
+
+        if args.weather is None:
+            site, all_ces, focalplane = schedule
+            weather = None
+        else:
+            site, all_ces, weather, focalplane = schedule
+
+        fpradius = get_focalplane_radius(focalplane)
+
+        # Focalplane information for this schedule
+        detectors = sorted(focalplane.keys())
+        detquats = {}
+        for d in detectors:
+            detquats[d] = focalplane[d]['quat']
+
+        # Noise model for this schedule
+        noise = get_analytic_noise(args, focalplane)
+
+        all_ces_tot = []
+        nces = len(all_ces)
+        for ces in all_ces:
+            all_ces_tot.append((ces, site, focalplane, fpradius,
+                                detquats, weather))
+
+        breaks = get_breaks(comm, all_ces, nces, args)
+
+        groupdist = toast.distribute_uniform(nces, comm.ngroups, breaks=breaks)
+        group_firstobs = groupdist[comm.group][0]
+        group_numobs = groupdist[comm.group][1]
+
+        for ices in range(group_firstobs, group_firstobs + group_numobs):
+            obs = create_observation(args, comm, all_ces_tot, ices, noise)
+            data.obs.append(obs)
 
     if args.skip_atmosphere:
         for ob in data.obs:
@@ -575,13 +631,25 @@ def create_observations(args, comm, schedules, counter):
         print('Simulated scans in {:.2f} seconds'
               ''.format(stop-start), flush=args.flush)
 
-    # Report the memory allocated for the TOAST caches.
+    # Split the data object for each telescope for separate mapmaking.
+    # We could also split by site.
 
+    if len(schedules) > 1:
+        telescope_data = data.split('telescope')
+        if len(telescope_data) == 1:
+            # Only one telescope available
+            telescope_data = []
+    else:
+        telescope_data = []
+    telescope_data.insert(0, ('all', data))
 
-    return data
+    return data, telescope_data
 
 
 def expand_pointing(args, comm, data, counter):
+    """ Expand boresight pointing to every detector.
+
+    """
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
 
@@ -620,6 +688,9 @@ def expand_pointing(args, comm, data, counter):
 
 
 def get_submaps(args, comm, data):
+    """ Get a list of locally hit pixels and submaps on every process.
+
+    """
     if not args.skip_bin or args.input_map:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -679,6 +750,9 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
 
 
 def scan_signal(args, comm, data, counter, localsm, subnpix):
+    """ Scan sky signal from a map.
+
+    """
     signalname = None
 
     if args.input_map:
@@ -712,10 +786,13 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
     return signalname
 
 
-def setup_sigcopy(args, comm, signalname):
-    # Operator for signal copying, used in each MC iteration
-    autotimer = timing.auto_timer()
+def setup_sigcopy(args, comm):
+    """ Determine if an extra copy of the atmospheric signal is needed.
 
+    When we simulate multichroic focal planes, the frequency-independent
+    part of the atmospheric noise is simulated first and then the
+    frequency scaling is applied to a copy of the atmospheric noise.
+    """
     if len(args.freq.split(',')) == 1:
         totalname = 'total'
         totalname_freq = 'total'
@@ -723,321 +800,66 @@ def setup_sigcopy(args, comm, signalname):
         totalname = 'total'
         totalname_freq = 'total_freq'
 
-    if args.skip_bin:
-        totalname_madam = totalname_freq
-    else:
-        totalname_madam = 'total_madam'
-
-    if signalname is not None:
-        sigcopy = tt.OpCacheCopy(signalname, totalname)
-    else:
-        sigcopy = None
-
-    if totalname != totalname_freq:
-        sigcopy_freq = tt.OpCacheCopy(totalname, totalname_freq, force=True)
-    else:
-        sigcopy_freq = None
-
-    if args.madam and totalname_freq != totalname_madam:
-        sigcopy_madam = tt.OpCacheCopy(totalname_freq, totalname_madam)
-        sigclear = tt.OpCacheClear(totalname_freq)
-    else:
-        sigcopy_madam = None
-        sigclear = None
-
-    return sigcopy, sigcopy_freq, sigcopy_madam, sigclear, \
-        totalname, totalname_freq, totalname_madam
-
-
-def build_npp(args, comm, data, counter, localsm, subnpix, detweights,
-              flag_name, common_flag_name):
-
-    if not args.skip_bin:
-        autotimer = timing.auto_timer()
-
-        if comm.comm_world.rank == 0:
-            print('Preparing distributed map', flush=args.flush)
-        start0 = MPI.Wtime()
-        start = start0
-
-        npix = 12*args.nside**2
-
-        # construct distributed maps to store the covariance,
-        # noise weighted map, and hits
-
-        invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
-                               dtype=np.float64, submap=subnpix, local=localsm)
-        counter._objects.append(invnpp)
-        invnpp.data.fill(0.0)
-
-        hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
-                             dtype=np.int64, submap=subnpix, local=localsm)
-        counter._objects.append(hits)
-        hits.data.fill(0)
-
-        zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
-                             dtype=np.float64, submap=subnpix, local=localsm)
-        counter._objects.append(zmap)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - distobjects initialized in {:.3f} s'
-                  ''.format(stop-start), flush=args.flush)
-        start = stop
-
-        invnpp_group = None
-        hits_group = None
-        zmap_group = None
-        if comm.comm_group.size < comm.comm_world.size:
-            invnpp_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=6,
-                                         dtype=np.float64, submap=subnpix,
-                                         local=localsm)
-            counter._objects.append(invnpp_group)
-            invnpp_group.data.fill(0.0)
-
-            hits_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=1,
-                                       dtype=np.int64, submap=subnpix,
-                                       local=localsm)
-            counter._objects.append(hits_group)
-            hits_group.data.fill(0)
-
-            zmap_group = tm.DistPixels(comm=comm.comm_group, size=npix, nnz=3,
-                                       dtype=np.float64, submap=subnpix,
-                                       local=localsm)
-            counter._objects.append(zmap_group)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - group distobjects initialized in {:.3f} s'
-                      ''.format(stop-start), flush=args.flush)
-            start = stop
-
-        # compute the hits and covariance once, since the pointing and noise
-        # weights are fixed.
-
-        build_invnpp = tm.OpAccumDiag(
-            detweights=detweights, invnpp=invnpp, hits=hits,
-            flag_name=flag_name, common_flag_name=common_flag_name,
-            common_flag_mask=args.common_flag_mask)
-
-        build_invnpp.exec(data)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - distobjects accumulated in {:.3f} s'
-                  ''.format(stop-start), flush=args.flush)
-        start = stop
-
-        invnpp.allreduce()
-        if not args.skip_hits:
-            hits.allreduce()
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - distobjects reduced in {:.3f} s'.format(stop-start),
-                  flush=args.flush)
-        start = stop
-
-        if invnpp_group is not None:
-            build_invnpp_group = tm.OpAccumDiag(
-                detweights=detweights, invnpp=invnpp_group, hits=hits_group,
-                flag_name=flag_name, common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask)
-
-            build_invnpp_group.exec(data)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - group distobjects accumulated in {:.3f} s'
-                      ''.format(stop-start), flush=args.flush)
-            start = stop
-
-            invnpp_group.allreduce()
-            if not args.skip_hits:
-                hits_group.allreduce()
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - group distobjects reduced in {:.3f} s'
-                      ''.format(stop-start), flush=args.flush)
-            start = stop
-
-        if not args.skip_hits:
-            fn = '{}/hits.fits'.format(args.outdir)
-            if args.zip:
-                fn += '.gz'
-            hits.write_healpix_fits(fn)
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_world.rank == 0:
-                print(' - Writing hit map to {} took {:.3f} s'
-                      ''.format(fn, stop-start), flush=args.flush)
-            start = stop
-        counter._objects.remove(hits)
-        del hits
-
-        if hits_group is not None:
-            if not args.skip_hits:
-                fn = '{}/hits_group_{:04}.fits'.format(args.outdir, comm.group)
-                if args.zip:
-                    fn += '.gz'
-                hits_group.write_healpix_fits(fn)
-                comm.comm_group.barrier()
-                stop = MPI.Wtime()
-                if comm.comm_group.rank == 0:
-                    print(' - Writing group hit map to {} took {:.3f} s'
-                          ''.format(fn, stop-start), flush=args.flush)
-                start = stop
-            counter._objects.remove(hits_group)
-            del hits_group
-
-        if not args.skip_hits:
-            fn = '{}/invnpp.fits'.format(args.outdir)
-            if args.zip:
-                fn += '.gz'
-            invnpp.write_healpix_fits(fn)
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_world.rank == 0:
-                print(' - Writing N_pp^-1 to {} took {:.3f} s'
-                      ''.format(fn, stop-start), flush=args.flush)
-            start = stop
-
-        if not args.skip_hits:
-            if invnpp_group is not None:
-                fn = '{}/invnpp_group_{:04}.fits'.format(args.outdir,
-                                                         comm.group)
-                if args.zip:
-                    fn += '.gz'
-                invnpp_group.write_healpix_fits(fn)
-                comm.comm_group.barrier()
-                stop = MPI.Wtime()
-                if comm.comm_group.rank == 0:
-                    print(' - Writing group N_pp^-1 to {} took {:.3f} s'
-                          ''.format(fn, stop-start), flush=args.flush)
-                start = stop
-
-        # invert it
-        tm.covariance_invert(invnpp, 1.0e-3)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - Inverting N_pp^-1 took {:.3f} s'.format(stop-start),
-                  flush=args.flush)
-        start = stop
-
-        if not args.skip_hits:
-            fn = '{}/npp.fits'.format(args.outdir)
-            if args.zip:
-                fn += '.gz'
-            invnpp.write_healpix_fits(fn)
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_world.rank == 0:
-                print(' - Writing N_pp to {} took {:.3f} s'
-                      ''.format(fn, stop-start), flush=args.flush)
-            start = stop
-
-        if invnpp_group is not None:
-            tm.covariance_invert(invnpp_group, 1.0e-3)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - Inverting group N_pp^-1 took {:.3f} s'
-                ''.format(stop-start), flush=args.flush)
-            start = stop
-
-            if not args.skip_hits:
-                fn = '{}/npp_group_{:04}.fits'.format(args.outdir, comm.group)
-                if args.zip:
-                    fn += '.gz'
-                invnpp_group.write_healpix_fits(fn)
-                comm.comm_group.barrier()
-                stop = MPI.Wtime()
-                if comm.comm_group.rank == 0:
-                    print(' - Writing group N_pp to {} took {:.3f} s'.format(
-                        fn, stop-start), flush=args.flush)
-                start = stop
-
-        stop = MPI.Wtime()
-        if comm.comm_group.rank == 0:
-            print('Building Npp took {:.3f} s'.format(
-                stop-start0), flush=args.flush)
-
-        counter.exec(data)
-
-    return invnpp, zmap, invnpp_group, zmap_group, flag_name, common_flag_name
+    return totalname, totalname_freq
 
 
 def setup_madam(args, comm):
+    """ Create a Madam parameter dictionary.
 
-    pars = None
+    Initialize the Madam parameters from the command line arguments.
 
-    if args.madam:
-        autotimer = timing.auto_timer()
+    """
+    autotimer = timing.auto_timer()
+    pars = {}
 
-        # Set up MADAM map making.
+    cross = args.nside // 2
+    submap = 16
+    if submap > args.nside:
+        submap = args.nside
 
-        pars = {}
+    pars['temperature_only'] = False
+    pars['force_pol'] = True
+    pars['kfirst'] = not args.skip_destripe
+    pars['write_map'] = not args.skip_destripe
+    pars['write_binmap'] = not args.skip_bin
+    pars['write_matrix'] = not args.skip_hits
+    pars['write_wcov'] = not args.skip_hits
+    pars['write_hits'] = not args.skip_hits
+    pars['nside_cross'] = cross
+    pars['nside_submap'] = submap
+    pars['allreduce'] = args.madam_allreduce
 
-        cross = args.nside // 2
-        submap = 16
-        if submap > args.nside:
-            submap = args.nside
+    if args.madampar is not None:
+        pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
+        comment = re.compile(r'^#.*')
+        with open(args.madampar, 'r') as f:
+            for line in f:
+                if comment.match(line) is None:
+                    result = pat.match(line)
+                    if result is not None:
+                        key, value = result.group(1), result.group(2)
+                        pars[key] = value
 
-        pars['temperature_only'] = False
-        pars['force_pol'] = True
-        pars['kfirst'] = True
-        pars['write_map'] = True
-        pars['write_binmap'] = True
-        pars['write_matrix'] = True
-        pars['write_wcov'] = True
-        pars['write_hits'] = True
-        pars['nside_cross'] = cross
-        pars['nside_submap'] = submap
-        pars['allreduce'] = args.madam_allreduce
-
-        if args.madampar is not None:
-            pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
-            comment = re.compile(r'^#.*')
-            with open(args.madampar, 'r') as f:
-                for line in f:
-                    if comment.match(line) is None:
-                        result = pat.match(line)
-                        if result is not None:
-                            key, value = result.group(1), result.group(2)
-                            pars[key] = value
-
-        pars['base_first'] = args.madam_baseline_length
-        pars['basis_order'] = args.madam_baseline_order
-        pars['nside_map'] = args.nside
-        if args.madam_noisefilter:
-            pars['kfilter'] = True
-        else:
-            pars['kfilter'] = False
-        pars['precond_width'] = 1
-        pars['fsample'] = args.samplerate
-        pars['iter_max'] = args.madam_iter_max
+    pars['base_first'] = args.madam_baseline_length
+    pars['basis_order'] = args.madam_baseline_order
+    pars['nside_map'] = args.nside
+    if args.madam_noisefilter:
+        if args.madam_baseline_order != 0:
+            raise RuntimeError('Madam cannot build a noise filter when baseline'
+                               'order is higher than zero.')
+        pars['kfilter'] = True
+    else:
+        pars['kfilter'] = False
+    pars['precond_width'] = 1
+    pars['fsample'] = args.samplerate
+    pars['iter_max'] = args.madam_iter_max
+    pars['file_root'] = args.madam_prefix
+    pars['pixlim_cross'] = 1e-3
+    pars['pixmode_cross'] = 2
+    pars['pixlim_map'] = 1e-2
+    pars['pixmode_map'] = 2
 
     return pars
-
-
-def copy_signal(args, comm, data, sigcopy, counter):
-    if sigcopy is not None:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print('Making a copy of the signal TOD', flush=args.flush)
-        sigcopy.exec(data)
-        counter.exec(data)
-    return
 
 
 def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
@@ -1048,12 +870,13 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
 
     """
     if not args.skip_atmosphere:
+        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
-            site = obs['site']
+            site_id = obs['site_id']
             weather = obs['weather']
             start_time = obs['start_time']
-            weather.set(site, mc, start_time)
+            weather.set(site_id, mc, start_time)
             altitude = obs['altitude']
             absorption = toast.ctoast.atm_get_absorption_coefficient(
                 altitude, weather.air_temperature, weather.surface_pressure,
@@ -1070,7 +893,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
 
 
 def simulate_atmosphere(args, comm, data, mc, counter,
-                        flag_name, common_flag_name, totalname):
+                        totalname):
     if not args.skip_atmosphere:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -1081,11 +904,6 @@ def simulate_atmosphere(args, comm, data, mc, counter,
                 except FileExistsError:
                     pass
         start = MPI.Wtime()
-
-        if common_flag_name is None:
-            common_flag_name = 'common_flags'
-        if flag_name is None:
-            flag_name = 'flags'
 
         # Simulate the atmosphere signal
         atm = tt.OpSimAtmosphere(
@@ -1099,9 +917,7 @@ def simulate_atmosphere(args, comm, data, mc, counter,
             nelem_sim_max=args.atm_nelem_sim_max,
             verbosity=int(args.debug), gangsize=args.atm_gangsize,
             z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
-            fp_radius=args.fp_radius, apply_flags=True,
-            common_flag_name=common_flag_name,
-            common_flag_mask=args.common_flag_mask, flag_name=flag_name,
+            apply_flags=True, common_flag_mask=args.common_flag_mask,
             cachedir=args.atm_cache, flush=args.flush)
 
         atm.exec(data)
@@ -1114,18 +930,23 @@ def simulate_atmosphere(args, comm, data, mc, counter,
 
         counter.exec(data)
 
-    return flag_name, common_flag_name
+    return
 
 
-def copy_signal_freq(args, comm, data, sigcopy_freq, counter):
-    if sigcopy_freq is not None:
+def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
+    """ Copy the atmospheric signal.
+
+    Make a copy of the atmosphere so we can scramble the gains and apply
+    frequency-dependent scaling.
+
+    """
+    if totalname != totalname_freq:
         autotimer = timing.auto_timer()
-        # Make a copy of the atmosphere so we can scramble the gains
-        # repeatedly
         if comm.comm_world.rank == 0:
-            print('Making a copy of the TOD for multifrequency',
-                  flush=args.flush)
-        sigcopy_freq.exec(data)
+            print('Copying atmosphere from {} to {}'.format(
+                totalname, totalname_freq), flush=args.flush)
+        cachecopy = tt.OpCacheCopy(totalname, totalname_freq, force=True)
+        cachecopy.exec(data)
         counter.exec(data)
     return
 
@@ -1171,9 +992,8 @@ def scramble_gains(args, comm, data, mc, counter, totalname_freq):
     return
 
 
-def setup_output(args, comm, mc):
-    autotimer = timing.auto_timer()
-    outpath = '{}/{:08d}'.format(args.outdir, mc)
+def setup_output(args, comm, mc, freq):
+    outpath = '{}/{:08}/{:03}'.format(args.outdir, mc, int(freq))
     if comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
             try:
@@ -1183,129 +1003,15 @@ def setup_output(args, comm, mc):
     return outpath
 
 
-def copy_signal_madam(args, comm, data, sigcopy_madam, counter):
-    if sigcopy_madam is not None:
-        autotimer = timing.auto_timer()
-        # Make a copy of the timeline for Madam
-        if comm.comm_world.rank == 0:
-            print('Making a copy of the TOD for Madam', flush=args.flush)
-        sigcopy_madam.exec(data)
-
-        counter.exec(data)
-    return
-
-
-def bin_maps(args, comm, data, rootname, counter,
-             zmap, invnpp, zmap_group, invnpp_group, detweights, totalname_freq,
-             flag_name, common_flag_name, mc, outpath):
-    if not args.skip_bin:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print('Binning unfiltered maps', flush=args.flush)
-        start0 = MPI.Wtime()
-        start = start0
-
-        # Bin a map using the toast facilities
-
-        zmap.data.fill(0.0)
-        build_zmap = tm.OpAccumDiag(
-            detweights=detweights, zmap=zmap, name=totalname_freq,
-            flag_name=flag_name, common_flag_name=common_flag_name,
-            common_flag_mask=args.common_flag_mask)
-        build_zmap.exec(data)
-        zmap.allreduce()
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - Building noise weighted map {:04d} took {:.3f} s'
-                  ''.format(mc, stop-start), flush=args.flush)
-        start = stop
-
-        tm.covariance_apply(invnpp, zmap)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - Computing {} map {:04d} took {:.3f} s'
-                  ''.format(rootname, mc, stop-start), flush=args.flush)
-        start = stop
-
-        fn = os.path.join(outpath, rootname+'.fits')
-        if args.zip:
-            fn += '.gz'
-        zmap.write_healpix_fits(fn)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(' - Writing {} map {:04d} to {} took {:.3f} s'
-                  ''.format(rootname, mc, fn, stop-start), flush=args.flush)
-
-        if zmap_group is not None:
-
-            zmap_group.data.fill(0.0)
-            build_zmap_group = tm.OpAccumDiag(
-                detweights=detweights, zmap=zmap_group,
-                name=totalname_freq,
-                flag_name=flag_name, common_flag_name=common_flag_name,
-                common_flag_mask=args.common_flag_mask)
-            build_zmap_group.exec(data)
-            zmap_group.allreduce()
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - Building group noise weighted map {:04d} took '
-                      '{:.3f} s'.format(mc, stop-start), flush=args.flush)
-            start = stop
-
-            tm.covariance_apply(invnpp_group, zmap_group)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_group.rank == 0:
-                print(' - Computing {} map {:04d} took {:.3f} s'
-                      ''.format(rootname, mc, stop-start), flush=args.flush)
-            start = stop
-
-            fn = os.path.join(outpath, '{}_group_{:04}.fits'
-                              ''.format(rootname, comm.group))
-            if args.zip:
-                fn += '.gz'
-            zmap_group.write_healpix_fits(fn)
-
-            comm.comm_group.barrier()
-            stop = MPI.Wtime()
-            if comm.comm_group.rank == 0:
-                print(' - Writing group {} map {:04d} to {} took '
-                      '{:.3f} s'.format(rootname, mc, fn, stop-start),
-                      flush=args.flush)
-
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print('Mapmaking {:04d} took {:.3f} s'
-                  ''.format(mc, stop-start0), flush=args.flush)
-
-        counter.exec(data)
-
-    return
-
-
 def apply_polyfilter(args, comm, data, counter, totalname_freq):
     if args.polyorder:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
         start = MPI.Wtime()
-        common_flag_name = 'common_flags'
-        flag_name = 'flags'
         polyfilter = tt.OpPolyFilter(
             order=args.polyorder, name=totalname_freq,
-            common_flag_name=common_flag_name,
-            common_flag_mask=args.common_flag_mask,
-            flag_name=flag_name)
+            common_flag_mask=args.common_flag_mask)
         polyfilter.exec(data)
 
         comm.comm_world.barrier()
@@ -1324,13 +1030,9 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
         start = MPI.Wtime()
-        common_flag_name = 'common_flags'
-        flag_name = 'flags'
         groundfilter = tt.OpGroundFilter(
             wbin=args.wbin_ground, name=totalname_freq,
-            common_flag_name=common_flag_name,
-            common_flag_mask=args.common_flag_mask,
-            flag_name=flag_name)
+            common_flag_mask=args.common_flag_mask)
         groundfilter.exec(data)
 
         comm.comm_world.barrier()
@@ -1343,17 +1045,7 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
     return
 
 
-def clear_signal(args, comm, data, sigclear, counter):
-    if sigclear is not None:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print('Clearing filtered signal')
-        sigclear.exec(data)
-        counter.exec(data)
-    return
-
-
-def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
+def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
     autotimer = timing.auto_timer()
@@ -1365,9 +1057,7 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname,
-        common_flag_name=common_flag_name,
-        flag_name=flag_name, usedist=True)
+    export = OpTidasExport(tidas_path, name=totalname, usedist=True)
     export.exec(data)
 
     comm.comm_world.Barrier()
@@ -1379,36 +1069,133 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     return
 
 
-def apply_madam(args, comm, data, madampars, counter, mc, firstmc, outpath,
-                detweights, totalname_madam, flag_name, common_flag_name):
-    if args.madam:
-        autotimer = timing.auto_timer()
+def get_time_communicators(comm, data):
+    """ Split the world communicator by time.
+
+    """
+    autotimer = timing.auto_timer()
+    time_comms = [('all', comm.comm_world)]
+
+    # A process will only have data for one season and one day.  If more
+    # than one season is observed, we split the communicator to make
+    # season maps.
+
+    my_season = data.obs[0]['season']
+    seasons = np.array(comm.comm_world.allgather(my_season))
+    do_seasons = np.any(seasons != my_season)
+    if do_seasons:
+        season_comm = comm.comm_world.Split(my_season, comm.comm_world.rank)
+        time_comms.append((str(my_season), season_comm))
+
+    # Split the communicator to make daily maps.  We could easily split
+    # by month as well
+
+    my_day = int(data.obs[0]['MJD'])
+    my_date = data.obs[0]['date']
+    days = np.array(comm.comm_world.allgather(my_day))
+    do_days = np.any(days != my_day)
+    if do_days:
+        day_comm = comm.comm_world.Split(my_day, comm.comm_world.rank)
+        time_comms.append((my_date, day_comm))
+
+    return time_comms
+
+
+def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
+                counter, mc, firstmc, outpath, detweights, totalname_madam,
+                destripe=True, extra_prefix=None):
+    """ Use libmadam to bin and optionally destripe data.
+
+    Bin and optionally destripe all conceivable subsets of the data.
+
+    """
+    if comm.comm_world.rank == 0:
+        print('Making maps', flush=args.flush)
+    start = MPI.Wtime()
+    autotimer = timing.auto_timer()
+
+    pars = copy.deepcopy(madampars)
+    pars['path_output'] = outpath
+    file_root = pars['file_root']
+    if len(file_root) > 0 and not file_root.endswith('_'):
+        file_root += '_'
+    if extra_prefix is not None:
+        file_root += '{}_'.format(extra_prefix)
+    file_root += '{:03}'.format(int(freq))
+
+    if mc != firstmc or not destripe:
+        pars['write_matrix'] = False
+        pars['write_wcov'] = False
+        pars['write_hits'] = False
+    if not destripe:
+        pars['kfirst'] = False
+        pars['write_map'] = False
+        pars['write_binmap'] = True
+
+    outputs = [pars['write_map'], pars['write_binmap'], pars['write_hits'],
+               pars['write_wcov'], pars['write_matrix']]
+    if not np.any(outputs):
         if comm.comm_world.rank == 0:
-            print('Destriping signal', flush=args.flush)
-        start = MPI.Wtime()
+            print('No Madam outputs requested.  Skipping.', flush=args.flush)
+        return
 
-        # create output directory for this realization
-        madampars['path_output'] = outpath
-        if mc != firstmc:
-            madampars['write_matrix'] = False
-            madampars['write_wcov'] = False
-            madampars['write_hits'] = False
+    madam = tm.OpMadam(
+        params=pars, detweights=detweights,
+        name=totalname_madam,
+        common_flag_mask=args.common_flag_mask,
+        purge_tod=False)
 
-        madam = tm.OpMadam(
-            params=madampars, detweights=detweights,
-            name=totalname_madam,
-            common_flag_name=common_flag_name, flag_name=flag_name,
-            common_flag_mask=args.common_flag_mask,
-            purge_tod=True)
+    if 'info' in madam.params:
+        info = madam.params['info']
+    else:
+        info = 3
 
-        madam.exec(data)
+    for time_name, time_comm in time_comms:
+        for tele_name, tele_data in telescope_data:
+            if len(time_name.split('-')) == 3:
+                # Special rules for daily maps
+                if ((len(telescope_data) > 1) and (tele_name == 'all')):
+                    # Skip daily maps over multiple telescopes
+                    continue
+                if destripe:
+                    # Do not destripe daily maps
+                    kfirst_save = pars['kfirst']
+                    write_map_save = pars['write_map']
+                    write_binmap_save = pars['write_binmap']
+                    pars['kfirst'] = False
+                    pars['write_map'] = False
+                    pars['write_binmap'] = True
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print('Madam took {:.3f} s'.format(stop-start), flush=args.flush)
+            start1 = MPI.Wtime()
+            madam.params['file_root'] = '{}_telescope_{}_time_{}'.format(
+                file_root, tele_name, time_name)
+            if time_comm == comm.comm_world:
+                madam.params['info'] = info
+            else:
+                # Cannot have verbose output from concurrent mapmaking
+                madam.params['info'] = 0
+            if time_comm.rank == 0:
+                print('Mapping {}'.format(madam.params['file_root']),
+                      flush=args.flush)
+            madam.exec(tele_data, time_comm)
+            time_comm.barrier()
+            stop1 = MPI.Wtime()
+            if time_comm.rank == 0:
+                print('Mapping {} took {:.3f} s'.format(
+                    madam.params['file_root'], stop1-start1), flush=args.flush)
+            if len(time_name.split('-')) == 3 and destripe:
+                # Restore destriping parameters
+                pars['kfirst'] = kfirst_save
+                pars['write_map'] = write_map_save
+                pars['write_binmap'] = write_binmap_save
 
-        counter.exec(data)
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Madam took {:.3f} s'.format(stop-start), flush=args.flush)
+
+    counter.exec(data)
+
     return
 
 
@@ -1428,6 +1215,10 @@ def main():
 
     autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
+    # Initialize madam parameters
+
+    madampars = setup_madam(args, comm)
+
     # Load and broadcast the schedule file
 
     schedules = load_schedule(args, comm)
@@ -1438,14 +1229,18 @@ def main():
 
     # load or simulate the focalplane
 
-    detweights = load_fp(args, comm, schedules)
+    detweights = load_focalplanes(args, comm, schedules)
 
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
     counter = tt.OpMemoryCounter()
 
-    data = create_observations(args, comm, schedules, counter)
+    data, telescope_data = create_observations(args, comm, schedules, counter)
+
+    # Split the communicator for day and season mapmaking
+
+    time_comms = get_time_communicators(comm, data)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
@@ -1462,18 +1257,7 @@ def main():
 
     # Set up objects to take copies of the TOD at appropriate times
 
-    sigcopy, sigcopy_freq, sigcopy_madam, sigclear, \
-        totalname, totalname_freq, totalname_madam \
-        = setup_sigcopy(args, comm, signalname)
-
-    common_flag_name = None
-    flag_name = None
-
-    invnpp, zmap, invnpp_group, zmap_group, flag_name, common_flag_name \
-        = build_npp(args, comm, data, counter, localsm, subnpix, detweights,
-                    flag_name, common_flag_name)
-
-    madampars = setup_madam(args, comm)
+    totalname, totalname_freq = setup_sigcopy(args, comm)
 
     # Loop over Monte Carlos
 
@@ -1485,9 +1269,7 @@ def main():
 
     for mc in range(firstmc, firstmc+nmc):
 
-        flag_name, common_flag_name = simulate_atmosphere(
-            args, comm, data, mc, counter,
-            flag_name, common_flag_name, totalname)
+        simulate_atmosphere(args, comm, data, mc, counter, totalname)
 
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
@@ -1498,7 +1280,7 @@ def main():
                 print('Processing frequency {}GHz {} / {}, MC = {}'
                       ''.format(freq, ifreq+1, nfreq, mc), flush=args.flush)
 
-            copy_signal_freq(args, comm, data, sigcopy_freq, counter)
+            copy_atmosphere(args, comm, data, counter, totalname, totalname_freq)
 
             scale_atmosphere_by_frequency(args, comm, data, freq,
                                           totalname_freq, mc)
@@ -1516,33 +1298,31 @@ def main():
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally
                 # export the timestream data to a TIDAS volume.
-                output_tidas(args, comm, data, totalname, common_flag_name,
-                             flag_name)
+                output_tidas(args, comm, data, totalname)
 
-            outpath = setup_output(args, comm, mc+mcoffset)
+            outpath = setup_output(args, comm, mc, freq)
 
-            copy_signal_madam(args, comm, data, sigcopy_madam, counter)
+            # Bin and destripe maps
 
-            bin_maps(args, comm, data, 'binned', counter,
-                     zmap, invnpp, zmap_group, invnpp_group, detweights,
-                     totalname_freq, flag_name, common_flag_name,
-                     mc+mcoffset, outpath)
-
-            apply_polyfilter(args, comm, data, counter, totalname_freq)
-
-            apply_groundfilter(args, comm, data, counter, totalname_freq)
+            apply_madam(args, comm, time_comms, data, telescope_data, freq,
+                        madampars, counter, mc+mcoffset, firstmc, outpath,
+                        detweights, totalname_freq,
+                        destripe=(not args.skip_destripe))
 
             if args.polyorder or args.wbin_ground:
-                bin_maps(args, comm, data, 'filtered', counter,
-                         zmap, invnpp, zmap_group, invnpp_group, detweights,
-                         totalname_freq, flag_name, common_flag_name,
-                         mc+mcoffset, outpath)
 
-            clear_signal(args, comm, data, sigclear, counter)
+                # Filter signal
 
-            apply_madam(args, comm, data, madampars, counter,
-                        mc+mcoffset, firstmc, outpath, detweights,
-                        totalname_madam, flag_name, common_flag_name)
+                apply_polyfilter(args, comm, data, counter, totalname_freq)
+
+                apply_groundfilter(args, comm, data, counter, totalname_freq)
+
+                # Bin maps
+
+                apply_madam(args, comm, time_comms, data, telescope_data, freq,
+                            madampars, counter, mc+mcoffset, firstmc, outpath,
+                            detweights, totalname_freq, destripe=False,
+                            extra_prefix='filtered')
 
     counter.exec(data)
 

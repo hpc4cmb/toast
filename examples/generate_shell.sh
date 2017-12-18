@@ -20,7 +20,7 @@ if ! eval command -v cmake &> /dev/null ; then
     exit 2
 fi
 
-: ${TYPES:="satellite ground ground_simple"}
+: ${TYPES:="satellite ground ground_simple ground_multisite"}
 # don't allow customization
 SIZES="tiny"
 

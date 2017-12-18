@@ -22,7 +22,7 @@ fi
 
 : ${ACCOUNT:=mp107}
 : ${QUEUE:=debug}
-: ${TYPES:="satellite ground ground_simple"}
+: ${TYPES:="satellite ground ground_simple ground_multisite"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-knl cori-haswell edison"}
 

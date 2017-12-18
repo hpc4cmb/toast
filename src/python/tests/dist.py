@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -86,7 +86,7 @@ class DataTest(MPITestCase):
             431375
         ]
         self.totsamp1 = np.sum(self.sizes1)
-        
+
         self.sizes2 = [ (int(3600*169.7)) for i in range(8640) ]
         self.totsamp2 = np.sum(self.sizes2)
 
@@ -103,7 +103,7 @@ class DataTest(MPITestCase):
 
         n = self.totsamp1
         breaks = [n//2+1000, n//4-1000000, n//2+1000, (3*n)//4]
-        dist_uni2 = distribute_uniform(self.totsamp1, self.ntask, 
+        dist_uni2 = distribute_uniform(self.totsamp1, self.ntask,
             breaks=breaks)
 
         n2 = np.sum(np.array(dist_uni2)[:,1])
@@ -125,7 +125,7 @@ class DataTest(MPITestCase):
 
         n = len(self.sizes1)
         breaks = [n//2, n//4, n//2, (3*n)//4]
-        dist_disc2 = distribute_discrete(self.sizes1, self.ntask, 
+        dist_disc2 = distribute_discrete(self.sizes1, self.ntask,
             breaks=breaks)
 
         n = np.sum(np.array(dist_disc2)[:,1])
@@ -139,7 +139,7 @@ class DataTest(MPITestCase):
 
         self.assertEqual(self.toastcomm.ngroups, self.ngroup)
         self.assertEqual(self.toastcomm.group_size, self.groupsize)
-        
+
         self.data = Data(self.toastcomm)
 
         handle = None
@@ -162,3 +162,40 @@ class DataTest(MPITestCase):
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
 
+
+    def test_split(self):
+        start = MPI.Wtime()
+
+        data = Data(self.toastcomm)
+        data.obs.append({'site':'Atacama', 'season':1})
+        data.obs.append({'site':'Atacama', 'season':2})
+        data.obs.append({'site':'Atacama', 'season':3})
+        data.obs.append({'site':'Pole', 'season':1})
+        data.obs.append({'site':'Pole', 'season':2})
+        data.obs.append({'site':'Pole', 'season':3})
+
+        datasplit_site = data.split('site')
+        datasplit_season = data.split('season')
+
+        nt.assert_equal(len(datasplit_site), 2)
+        nt.assert_equal(len(datasplit_season), 3)
+
+        # Verify that the observations are shared
+
+        sum1 = 0
+        for value, site_data in datasplit_site:
+            for obs in site_data.obs:
+                assert('var1' not in obs)
+                obs['var1'] = 1
+                sum1 += 1
+
+        sum2 = 0
+        for value, season_data in datasplit_season:
+            for obs in season_data.obs:
+                sum2 += obs['var1']
+
+        nt.assert_equal(sum1, sum2)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))

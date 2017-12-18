@@ -891,8 +891,14 @@ class TODGround(TOD):
         # Store the scan range before discarding samples not assigned
         # to this process
 
-        self._min_az = np.amin(self._az)
-        self._max_az = np.amax(self._az)
+        self._az %= 2*np.pi
+        if np.ptp(self._az) < np.pi:
+            self._min_az = np.amin(self._az)
+            self._max_az = np.amax(self._az)
+        else:
+            # Scanning across the zero azimuth.
+            self._min_az = np.amin(self._az[self._az > np.pi]) - 2*np.pi
+            self._max_az = np.amax(self._az[self._az < np.pi])
         self._min_el = self._el
         self._max_el = self._el
 

@@ -72,7 +72,7 @@ class OpGainScrambler(Operator):
 
             telescope = 0
             if 'telescope' in obs:
-                telescope = obs['telescope']
+                telescope = obs['telescope_id']
 
             tod = obs['tod']
 
