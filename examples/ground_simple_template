@@ -5,7 +5,7 @@
 #SBATCH --account=mp107
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
-#SBATCH --job-name=@@size@@-ground
+#SBATCH --job-name=@@size@@-ground_simple
 #SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)

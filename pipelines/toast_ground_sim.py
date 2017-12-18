@@ -848,6 +848,10 @@ def setup_madam(args, comm):
     pars['fsample'] = args.samplerate
     pars['iter_max'] = args.madam_iter_max
     pars['file_root'] = args.madam_prefix
+    pars['pixlim_cross'] = 1e-3
+    pars['pixmode_cross'] = 2
+    pars['pixlim_map'] = 1e-2
+    pars['pixmode_map'] = 2
 
     return pars
 
@@ -1131,10 +1135,24 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
         info = 3
 
     for time_name, time_comm in time_comms:
-        for telescope_name, telescope_data in telescope_data:
+        for tele_name, tele_data in telescope_data:
+            if len(time_name.split('-')) == 3:
+                # Special rules for daily maps
+                if ((len(telescope_data) > 1) and (tele_name == 'all')):
+                    # Skip daily maps over multiple telescopes
+                    continue
+                if destripe:
+                    # Do not destripe daily maps
+                    kfirst_save = pars['kfirst']
+                    write_map_save = pars['write_map']
+                    write_binmap_save = pars['write_binmap']
+                    pars['kfirst'] = False
+                    pars['write_map'] = False
+                    pars['write_binmap'] = True
+
             start1 = MPI.Wtime()
             madam.params['file_root'] = '{}_telescope_{}_time_{}'.format(
-                file_root, telescope_name, time_name)
+                file_root, tele_name, time_name)
             if time_comm == comm.comm_world:
                 madam.params['info'] = info
             else:
@@ -1143,12 +1161,17 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
             if time_comm.rank == 0:
                 print('Mapping {}'.format(madam.params['file_root']),
                       flush=args.flush)
-            madam.exec(telescope_data, time_comm)
+            madam.exec(tele_data, time_comm)
             time_comm.barrier()
             stop1 = MPI.Wtime()
             if time_comm.rank == 0:
                 print('Mapping {} took {:.3f} s'.format(
                     madam.params['file_root'], stop1-start1), flush=args.flush)
+            if len(time_name.split('-')) == 3 and destripe:
+                # Restore destriping parameters
+                pars['kfirst'] = kfirst_save
+                pars['write_map'] = write_map_save
+                pars['write_binmap'] = write_binmap_save
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
