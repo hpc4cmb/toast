@@ -62,6 +62,8 @@ __pycache__/
 
 /examples/*.slurm
 /examples/tiny_*_shell.sh
+/examples/*ground*_shell.sh
+/examples/*satellite*_shell.sh
 /examples/out_*
 /examples/data/
 
@@ -84,4 +86,3 @@ __pycache__/
 /src/python/_version.py
 /src/python/ctoast.py
 /src/python/mpi.py
-

@@ -1,6 +1,6 @@
 diff -urN aatm-0.5_orig/Makefile.am aatm-0.5/Makefile.am
 --- aatm-0.5_orig/Makefile.am	2016-04-04 02:36:19.000000000 -0700
-+++ aatm-0.5/Makefile.am	2017-12-08 19:42:32.000000000 -0800
++++ aatm-0.5/Makefile.am	2017-12-16 01:44:38.000000000 -0800
 @@ -1,11 +1,5 @@
  
 -MAYBE_DIRS = 
@@ -15,19 +15,19 @@ diff -urN aatm-0.5_orig/Makefile.am aatm-0.5/Makefile.am
  
  pkgconfigdir = $(libdir)/pkgconfig
 diff -urN aatm-0.5_orig/configure.ac aatm-0.5/configure.ac
---- aatm-0.5_orig/configure.ac	2017-12-08 17:58:29.000000000 -0800
-+++ aatm-0.5/configure.ac	2017-12-08 19:42:03.000000000 -0800
-@@ -31,17 +31,12 @@
+--- aatm-0.5_orig/configure.ac	2016-04-04 02:36:19.000000000 -0700
++++ aatm-0.5/configure.ac	2017-12-16 01:45:03.000000000 -0800
+@@ -31,17 +31,8 @@
  AC_PROG_CC
  AC_PROG_CXX
  
 -AX_BOOST_BASE(1.34.0)
 -AX_BOOST_PROGRAM_OPTIONS
 -
- AM_CONDITIONAL([TESTDIR_OPT], 
- 	       [test "$ax_cv_boost_program_options" == yes])
- 
- 
+-AM_CONDITIONAL([TESTDIR_OPT], 
+-	       [test "$ax_cv_boost_program_options" == yes])
+-
+-
  AC_OUTPUT(Makefile 
            src/Makefile
 -	  test/Makefile
@@ -35,3 +35,20 @@ diff -urN aatm-0.5_orig/configure.ac aatm-0.5/configure.ac
  	  aatm.pc
  	  doc/developer.doxy
  	  )
+diff -urN aatm-0.5_orig/src/ATMSkyStatus.cpp aatm-0.5/src/ATMSkyStatus.cpp
+--- aatm-0.5_orig/src/ATMSkyStatus.cpp	2016-04-04 02:36:19.000000000 -0700
++++ aatm-0.5/src/ATMSkyStatus.cpp	2017-12-16 01:45:46.000000000 -0800
+@@ -1486,13 +1486,6 @@
+                                         tspill);
+ }
+   
+-  Length SkyStatus::WaterVaporRetrieval_fromTEBB(unsigned int spwId,
+-						 Percent signalGain,
+-						 Temperature tebb,
+-						 double airmass,
+-						 double skycoupling,
+-						 Temperature tspill);
+-  
+ Length SkyStatus::WaterVaporRetrieval_fromTEBB(vector<unsigned int> spwId,
+                                                vector<Percent> signalGain,
+                                                vector<Temperature> v_tebb,

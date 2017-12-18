@@ -5,8 +5,8 @@
 #SBATCH --account=mp107
 #SBATCH --nodes=@@nodes@@
 #SBATCH --time=@@time@@
-#SBATCH --job-name=@@size@@-ground_simple
-#SBATCH --output=out_@@size@@_ground_simple_@@machine@@_%j.log
+#SBATCH --job-name=@@size@@-ground_multisite
+#SBATCH --output=out_@@size@@_ground_multisite_@@machine@@_%j.log
 
 echo Starting slurm script at $(date)
 
@@ -22,7 +22,7 @@ echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
 echo ""
 
 pstr=@@machine@@
-outdir="out_@@size@@_ground_simple_${pstr}"
+outdir="out_@@size@@_ground_multisite_${pstr}"
 mkdir -p "${outdir}"
 
 # This script assumes that you are running at NERSC and have already
@@ -39,38 +39,50 @@ else
     node_proc=@@nodeprocs@@
 fi
 
-# Generate the focalplane file if it does not already exist.
+# Generate the focalplane files if they do not already exist.
 
 detpix=@@detpix@@
 
-fpfile="${outdir}/fp_${detpix}.pkl"
 fpparfile="@@topdir@@/params/ground/focalplane.par"
 
-if [ ! -e "${fpfile}" ]; then
+fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
+if [ ! -e "${fpfile_atacama}" ]; then
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp" --minpix $detpix
+         --out "${outdir}/fp_atacama" --minpix $detpix
 fi
 
-# Generate the schedule file if it does not already exist.
+fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
+if [ ! -e "${fpfile_pole}" ]; then
+    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+         --out "${outdir}/fp_pole" --minpix $detpix --fov 1
+fi
+
+# Generate the schedule files if they do not already exist.
 
 schparfile="@@topdir@@/params/ground/schedule.par"
-
-schedulefile="${outdir}/schedule.txt"
-
-if [ ! -e "${schedulefile}" ]; then
+schedulefile_atacama="${outdir}/schedule_atacama.txt"
+if [ ! -e "${schedulefile_atacama}" ]; then
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --out "${schedulefile}" --patch @@patch@@ \
+         --out "${schedulefile_atacama}" --patch @@patch@@ \
+         --stop @@schedule_stop@@
+fi
+
+schparfile="@@topdir@@/params/ground/schedule_pole.par"
+schedulefile_pole="${outdir}/schedule_pole.txt"
+if [ ! -e "${schedulefile_pole}" ]; then
+    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+         --out "${schedulefile_pole}" --patch @@patch@@ \
          --stop @@schedule_stop@@
 fi
 
 # The executable script
 
-ex=$(which toast_ground_sim_simple.py)
+ex=$(which toast_ground_sim.py)
 echo "Using ${ex}"
 
 # Scan strategy parameters from a file
 
-parfile="@@topdir@@/params/ground/ground_sim_simple.par"
+parfile="@@topdir@@/params/ground/ground_sim_multisite.par"
 
 # Data distribution parameters
 
@@ -80,9 +92,14 @@ groupsize=$(( @@nodes_per_group@@ * node_proc ))
 
 com="${ex} @${parfile} \
 --groupsize ${groupsize} \
---fp ${fpfile} \
---schedule ${schedulefile} \
+--fp ${fpfile_atacama},${fpfile_pole} \
+--schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
+--atm_cache ${outdir}/atm_cache \
+--atm_xstep @@cellsize@@ \
+--atm_ystep @@cellsize@@ \
+--atm_zstep @@cellsize@@ \
+--madam_iter_max @@itermax@@ \
 "
 
 #--- Hardware configuration (no need to change) ----

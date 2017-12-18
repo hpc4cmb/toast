@@ -59,7 +59,6 @@ class OpSimAtmosphere(Operator):
         z0_center (float):  central value of the water vapor
              distribution.
         z0_sigma (float):  sigma of the water vapor distribution.
-        fp_radius (float):  focal plane radius in degrees.
         common_flag_name (str):  Cache name of the output common flags.
             If it already exists, it is used.  Otherwise flags
             are read from the tod object and stored in the cache under
@@ -90,8 +89,7 @@ class OpSimAtmosphere(Operator):
             verbosity=0, gangsize=-1, gain=1,
             w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
-            fp_radius=1, apply_flags=False,
-            common_flag_name=None, common_flag_mask=255,
+            apply_flags=False, common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
             wind_time_min=600, cachedir='.', flush=False, freq=None):
 
@@ -129,8 +127,6 @@ class OpSimAtmosphere(Operator):
         self._T0_center = T0_center
         self._T0_sigma = T0_sigma
 
-        self._fp_radius = fp_radius
-
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
         self._common_flag_mask = common_flag_mask
@@ -158,10 +154,11 @@ class OpSimAtmosphere(Operator):
             tod = self._get_from_obs('tod', obs)
             comm = tod.mpicomm
             obsindx = self._get_from_obs('id', obs)
-            telescope = self._get_from_obs('telescope', obs)
-            site = self._get_from_obs('site', obs)
+            telescope = self._get_from_obs('telescope_id', obs)
+            site = self._get_from_obs('site_id', obs)
             altitude = self._get_from_obs('altitude', obs)
             weather = self._get_from_obs('weather', obs)
+            fp_radius = np.radians(self._get_from_obs('fpradius', obs))
 
             # Get the observation time span and initialize the weather
             # object if one is provided.
@@ -213,48 +210,8 @@ class OpSimAtmosphere(Operator):
             #print("boresight scan range = {}, {}, {}, {}".format(
             #min_az_bore, max_az_bore, min_el_bore, max_el_bore))
 
-            if self._verbosity:
-
-                # Go through all detectors and compute the maximum angular extent
-                # of the focalplane from the boresight.  Add a tiny margin, since
-                # the atmosphere simulation already adds some margin.
-
-                # FIXME: the TOD class should really provide a method to return
-                # the detector quaternions relative to the boresight.
-                # For now, we jump through hoops by getting one sample
-                # of the pointing.
-
-                zaxis = np.array([0.0, 0.0, 1.0])
-                detdir = []
-                detmeanx = 0.0
-                detmeany = 0.0
-                for det in tod.local_dets:
-                    dquat = tod.read_pntg(
-                        detector=det, local_start=0, n=1, azel=True)
-                    dvec = qa.rotate(dquat, zaxis).flatten()
-                    detmeanx += dvec[0]
-                    detmeany += dvec[1]
-                    detdir.append(dvec)
-                detmeanx /= len(detdir)
-                detmeany /= len(detdir)
-
-                #print("detmeanx = {}, detmeany = {}".format(detmeanx, detmeany))
-
-                detrad = [np.sqrt((detdir[t][0] - detmeanx)**2
-                                  + (detdir[t][1] - detmeany)**2)
-                          for t in range(len(detdir))]
-
-                fp_radius = np.arcsin(np.max(detrad)) / degree
-                if fp_radius > self._fp_radius:
-                    raise RuntimeError(
-                        'Detectors in the TOD span {:.2} degrees, but the '
-                        'atmosphere simulation only covers {:.2f} degrees'
-                        ''.format(fp_radius, self._fp_radius))
-
-            # Use the fixed focal plane radius so that changing the actual
+            # Use a fixed focal plane radius so that changing the actual
             # set of detectors will not affect the simulated atmosphere.
-
-            fp_radius = self._fp_radius * degree
 
             azmin = min_az_bore - fp_radius / np.cos(max_el_bore)
             azmax = max_az_bore + fp_radius / np.cos(max_el_bore)
@@ -485,12 +442,23 @@ class OpSimAtmosphere(Operator):
                     az = phi
                     el = np.pi/2 - theta
 
-                    azmin_det = np.amin(az)
-                    azmax_det = np.amax(az)
+                    if np.ptp(az) < np.pi:
+                        azmin_det = np.amin(az)
+                        azmax_det = np.amax(az)
+                    else:
+                        # Scanning across the zero azimuth.
+                        azmin_det = np.amin(az[az > np.pi]) - 2*np.pi
+                        azmax_det = np.amax(az[az < np.pi])
                     elmin_det = np.amin(el)
                     elmax_det = np.amax(el)
-                    if (azmin_det < azmin or azmax < azmax_det or
-                        elmin_det < elmin or elmax < elmax_det):
+                    if (
+                            (not (azmin <= azmin_det and azmax_det <= azmax) and
+                             not (azmin <= azmin_det-2*np.pi
+                                  and azmax_det-2*np.pi <= azmax)
+                            )
+                            or
+                            not (elmin <= elmin_det and elmin_det <= elmax)
+                    ):
                         raise RuntimeError(
                             'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
                             'is not contained in [{:.5f}, {:.5f}], '
