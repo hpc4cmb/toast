@@ -1241,8 +1241,9 @@ def main():
 
     if args.input_pysm_model:
 
+        signalname = 'signal'
         op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
-                                   out='signal',
+                                   out=signalname,
                                    pysm_model=args.input_pysm_model,
                                    focalplanes=[s[3] for s in schedules],
                                    nside=args.nside,
