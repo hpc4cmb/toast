@@ -318,6 +318,9 @@ class OpSimPySM(Operator):
 
             full_map_rank0 = assemble_map_on_rank0(self.comm,
                                      local_maps["sky"], n_components, self.npix)
+            if self.comm.rank == 0:
+                # PySM is RING, toast is NEST
+                full_map_rank0 = hp.reorder(full_map_rank0, r2n=True)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
 
             self.distmap.broadcast_healpix_map(full_map_rank0)
