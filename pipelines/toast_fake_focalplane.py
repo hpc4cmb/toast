@@ -43,6 +43,12 @@ parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0,
 parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
                      help="Detector noise model f_min" )
 
+parser.add_argument( "--bandcenter_ghz", required=False, type=float, default=25,
+                     help="Band center frequency [GHz]" )
+
+parser.add_argument( "--bandwidth_ghz", required=False, type=float, default=6,
+                     help="Bandwidth [GHz]" )
+
 args = parser.parse_args()
 
 # Make one big hexagon layout at the center of the focalplane.
@@ -79,6 +85,9 @@ for indx, d in enumerate(sorted(dets.keys())):
     dets[d]["fmin"] = args.psd_fmin
     dets[d]["alpha"] = args.psd_alpha
     dets[d]["NET"] = args.psd_NET
+    dets[d]["fwhm_deg"] = fwhm  # in degrees
+    dets[d]["bandcenter_ghz"] = args.bandcenter_ghz
+    dets[d]["bandwidth_ghz"] = args.bandwidth_ghz
     dets[d]["index"] = indx
 
 outfile = "{}_{}".format(args.out, npix)

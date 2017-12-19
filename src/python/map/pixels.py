@@ -472,6 +472,76 @@ class DistPixels(object):
         return
 
 
+    def broadcast_healpix_map(self, fdata, comm_bytes=None):
+        if comm_bytes is None:
+            comm_bytes = self._commsize
+        comm_submap = self._comm_nsubmap(comm_bytes)
+
+        # we make the assumption that FITS binary tables are still stored in
+        # blocks of 2880 bytes just like always...
+        dbytes = self._dtype(1).itemsize
+        rowbytes = self._nnz * dbytes
+        optrows = int(2880 / rowbytes)
+
+        # get a tuple of all columns in the table.  We choose memmap here so
+        # that we can (hopefully) read through all columns in chunks such that
+        # we only ever have a couple FITS blocks in memory.
+        if self._comm.rank == 0:
+            if self._nnz == 1:
+                fdata = (fdata, )
+
+        buf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+        view = buf.reshape(comm_submap, self._submap, self._nnz)
+
+        in_off = 0
+        out_off = 0
+        submap_off = 0
+
+        rows = optrows
+        while in_off < self._size:
+            if in_off + rows > self._size:
+                rows = self._size - in_off
+            # is this the last block for this communication?
+            islast = False
+            copyrows = rows
+            if out_off + rows > (comm_submap * self._submap):
+                copyrows = (comm_submap * self._submap) - out_off
+                islast = True
+
+            if self._comm.rank == 0:
+                for col in range(self._nnz):
+                    coloff = (out_off * self._nnz) + col
+                    buf[coloff:coloff+(copyrows*self._nnz):self._nnz] \
+                        = fdata[col][in_off:in_off+copyrows]
+
+            out_off += copyrows
+            in_off += copyrows
+
+            if islast:
+                self._comm.Bcast(buf, root=0)
+                # loop over these submaps, and copy any that we are assigned
+                for sm in range(submap_off, submap_off+comm_submap):
+                    if sm in self._local:
+                        loc = self._glob2loc[sm]
+                        self.data[loc,:,:] = view[sm-submap_off,:,:]
+                out_off = 0
+                submap_off += comm_submap
+                buf.fill(0)
+                islast = False
+
+        # flush the remaining buffer
+
+        if out_off > 0:
+            self._comm.Bcast(buf, root=0)
+            # loop over these submaps, and copy any that we are assigned
+            for sm in range(submap_off, submap_off+comm_submap):
+                if sm in self._local:
+                    loc = self._glob2loc[sm]
+                    self.data[loc,:,:] = view[sm-submap_off,:,:]
+
+        return
+
+
     def write_healpix_fits(self, path, comm_bytes=None):
         """
         Write data to a HEALPix format FITS table.

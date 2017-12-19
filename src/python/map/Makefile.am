@@ -22,7 +22,10 @@ toastmapdir = $(pythondir)/toast/map
 toastmap_PYTHON = \
 __init__.py \
 pixels.py \
-noise.py
+noise.py \
+rings.py \
+pysm.py \
+smooth.py
 
 if HAVE_AM_MPI
   toastmap_PYTHON += madam.py
