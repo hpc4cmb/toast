@@ -2,6 +2,20 @@
 
 set -o errexit
 
+calc()
+{
+    awk "BEGIN{ print $* }"
+}
+
+convert_time()
+{
+    local STR=$(echo $1 | sed 's/:/ /g' | sed 's/=/ /g' | sed 's/"//g')
+    local HOUR=$(echo $STR | awk '{print $2}' | sed 's/^00/0/g')
+    local MIN=$(echo $STR | awk '{print $3}' | sed 's/^00/0/g')
+    local TIME=$(calc "(${HOUR}*60 + ${MIN})")
+    echo "${TIME}"
+}
+
 # default to not output
 : ${INCLUDE_OUTPUT:=1}
 
@@ -27,6 +41,8 @@ do
             fi
         fi
         continue
+    else
+        chmod a+x ${i}
     fi
     
     for j in $(grep '^#SBATCH ' ${i} | sed 's/#SBATCH//g' | sed 's/  / /g')
@@ -34,6 +50,10 @@ do
         if [ "${INCLUDE_OUTPUT}" -gt 0 -a ! -z "$(echo $j | grep 'output=')" ]
         then
             continue
+        fi
+        if [ ! -z "$(echo ${j} | grep '\--time=')" ]; then
+            TIME=$(convert_time ${j})
+            j="-t ${TIME}"
         fi
         SRUN_ARGS="${SRUN_ARGS} ${j}"
     done
@@ -52,5 +72,7 @@ then
 else
     export LD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@:@LD_LIBRARY_PATH@"
 fi
+
+echo -e "\nRunning \"${SLURM_SRUN_COMMAND} ${SRUN_ARGS} ${ARGS}\"...\n"
 
 ${SLURM_SRUN_COMMAND} ${SRUN_ARGS} ${ARGS}

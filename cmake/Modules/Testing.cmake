@@ -15,6 +15,14 @@ set(QUEUE "debug" CACHE STRING "SLURM queue")
 set_ifnot(JOB_NAME "UnitTest")
 set_ifnot(NODES 1)
 
+function(convert_time VAR VAL)
+    string(REPLACE ":" ";" VAL "${VAL}")
+    list(GET VAL 0 HOUR)
+    list(GET VAL 1 MIN)
+    math(EXPR _TIME "${HOUR}*60+${MIN}")
+    set(${VAR} ${_TIME} PARENT_SCOPE)
+endfunction(convert_time VAR VAL)
+
 # ------------------------------------------------------------------------ #
 # -- SLURM variables
 # ------------------------------------------------------------------------ #
@@ -196,12 +204,14 @@ if(NOT DASHBOARD_MODE)
 
 endif(NOT DASHBOARD_MODE)
 
+
 # ------------------------------------------------------------------------ #
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
 set(SRUN_COMMAND )
 if(USE_SLURM AND SLURM_SRUN_COMMAND)
-    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} --time=${TIME})
+    convert_time(_TIME ${TIME})
+    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} -t ${_TIME})
 endif(USE_SLURM AND SLURM_SRUN_COMMAND)
 
 # get the python sets
