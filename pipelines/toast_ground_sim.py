@@ -1244,7 +1244,7 @@ def main():
         op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
                                    out='signal',
                                    pysm_model=args.input_pysm_model,
-                                   focalplanes=[s[2] for s in schedules],
+                                   focalplanes=[s[3] for s in schedules],
                                    nside=args.nside,
                                    subnpix=subnpix, localsm=localsm,
                                    apply_beam=args.apply_beam)
