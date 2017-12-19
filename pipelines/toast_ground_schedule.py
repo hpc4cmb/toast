@@ -174,13 +174,13 @@ def get_constant_elevation_pole(observer, corners, fp_radius, el_min, el_max,
 
     if el < el_min:
         not_visible.append((
-            name, 'el < el_min ({:.2f} < {:.2f}) rising = {}'.format(
-                el/degree, el_min/degree, rising)))
+            name, 'el < el_min ({:.2f} < {:.2f})'.format(
+                el/degree, el_min/degree)))
         el = None
     elif el > el_max:
         not_visible.append((
-            name, 'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
-                el/degree, el_max/degree, rising)))
+            name, 'el > el_max ({:.2f} > {:.2f})'.format(
+                el/degree, el_max/degree)))
         el = None
 
     return el
@@ -358,7 +358,9 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
                 if az1 - az2 > np.pi:
                     az2 += 2*np.pi
                 az_cross = (az1 + el1*(az2 - az1)/(el1 - el2)) % (2*np.pi)
-                azs_cross.append(az_cross)
+                if (rising and az_cross < np.pi) or \
+                   (not rising and az_cross > np.pi):
+                    azs_cross.append(az_cross)
 
     if len(azs_cross) > 1:
         azs_cross = np.sort(azs_cross)
