@@ -110,9 +110,7 @@ add_subdirectory(python)
 #   Executable build
 # =============================================================================#
 add_executable(toast_test libtoast/toast_test.cpp $<TARGET_OBJECTS:libtoast-object>)
-target_link_libraries(toast_test
-    ${PROJECT_LINK_TARGETS}
-    ${EXTERNAL_LIBRARIES})
+target_link_libraries(toast_test ${EXTERNAL_LIBRARIES})
 
 
 # =============================================================================#
