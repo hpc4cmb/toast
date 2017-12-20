@@ -29,6 +29,9 @@ parser.add_argument( "--out", required=False, default="fp_fake",
 parser.add_argument( "--fwhm", required=False, type=float, default=5.0,
                      help="beam FWHM in arcmin" )
 
+parser.add_argument( "--fwhm_sigma", required=False, type=float, default=0,
+                     help="Relative beam FWHM distribution width" )
+
 parser.add_argument( "--fov", required=False, type=float, default=5.0,
                      help="Field of View in degrees" )
 
@@ -47,8 +50,18 @@ parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
 parser.add_argument( "--bandcenter_ghz", required=False, type=float, default=25,
                      help="Band center frequency [GHz]" )
 
+parser.add_argument( "--bandcenter_sigma", required=False, type=float, default=0,
+                     help="Relative band center distribution width" )
+
 parser.add_argument( "--bandwidth_ghz", required=False, type=float, default=6,
                      help="Bandwidth [GHz]" )
+
+parser.add_argument( "--bandwidth_sigma", required=False, type=float, default=0,
+                     help="Relative bandwidth distribution width" )
+
+parser.add_argument( "--random_seed", required=False, type=np.int, default=123456,
+                     help="Random number generator seed for randomized detector"
+                     " parameters" )
 
 args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
@@ -83,14 +96,20 @@ Bdets = tt.hex_layout(npix, width, angwidth, fwhm, "fake_", "B", Bpol)
 dets = Adets.copy()
 dets.update(Bdets)
 
+np.random.seed(args.random_seed)
+
 for indx, d in enumerate(sorted(dets.keys())):
     dets[d]["fknee"] = args.psd_fknee
     dets[d]["fmin"] = args.psd_fmin
     dets[d]["alpha"] = args.psd_alpha
     dets[d]["NET"] = args.psd_NET
-    dets[d]["fwhm_deg"] = fwhm  # in degrees
-    dets[d]["bandcenter_ghz"] = args.bandcenter_ghz
-    dets[d]["bandwidth_ghz"] = args.bandwidth_ghz
+    dets[d]["fwhm_deg"] = fwhm \
+                          * (1 + np.random.randn()*args.fwhm_sigma)
+    dets[d]["fwhm"] = dets[d]["fwhm_deg"] # Support legacy code
+    dets[d]["bandcenter_ghz"] = args.bandcenter_ghz \
+                                * (1 + np.random.randn()*args.bandcenter_sigma)
+    dets[d]["bandwidth_ghz"] = args.bandwidth_ghz \
+                               * (1 + np.random.randn()*args.bandwidth_sigma)
     dets[d]["index"] = indx
 
 outfile = "{}_{}".format(args.out, npix)
