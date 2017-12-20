@@ -111,6 +111,9 @@ def parse_arguments(comm):
     parser.add_argument('--skip_destripe',
                         required=False, default=False, action='store_true',
                         help='Do not destripe the data')
+    parser.add_argument('--skip_daymaps',
+                        required=False, default=False, action='store_true',
+                        help='Do not bin daily maps')
 
     parser.add_argument('--atm_lmin_center',
                         required=False, default=0.01, type=np.float,
@@ -398,7 +401,7 @@ def get_focalplane_radius(focalplane):
         cosangs.append(np.dot(zaxis, vec))
     mincos = np.amin(cosangs)
     maxdist = np.degrees(np.arccos(mincos))
-    
+
     return maxdist*1.001
 
 
@@ -423,7 +426,7 @@ def load_focalplanes(args, comm, schedules):
                 focalplanes.append(focalplane)
                 start1 = stop1
     focalplanes = comm.comm_world.bcast(focalplanes)
-    
+
     if len(focalplanes) == 1 and len(schedules) > 1:
         focalplanes *= len(schedules)
     if len(focalplanes) != len(schedules):
@@ -468,7 +471,7 @@ def get_analytic_noise(args, focalplane):
         fknee[d] = focalplane[d]['fknee']
         alpha[d] = focalplane[d]['alpha']
         NET[d] = focalplane[d]['NET']
-        
+
     return tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
                             fknee=fknee, alpha=alpha, NET=NET)
 
@@ -561,6 +564,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     obs['season'] = season
     obs['date'] = date
     obs['MJD'] = mjdstart
+    obs['focalplane'] = fp
 
     return obs
 
@@ -834,6 +838,14 @@ def setup_madam(args, comm):
     pars['nside_cross'] = cross
     pars['nside_submap'] = submap
     pars['allreduce'] = args.madam_allreduce
+    pars['pixlim_cross'] = 1e-3
+    pars['pixmode_cross'] = 2
+    pars['pixlim_map'] = 1e-2
+    pars['pixmode_map'] = 2
+    # Instead of fixed detector weights, we'll want to use scaled noise
+    # PSD:s that include the atmospheric noise
+    pars['radiometers'] = True
+    pars['noise_weights_from_psd'] = True
 
     if args.madampar is not None:
         pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
@@ -860,10 +872,6 @@ def setup_madam(args, comm):
     pars['fsample'] = args.samplerate
     pars['iter_max'] = args.madam_iter_max
     pars['file_root'] = args.madam_prefix
-    pars['pixlim_cross'] = 1e-3
-    pars['pixmode_cross'] = 2
-    pars['pixlim_map'] = 1e-2
-    pars['pixmode_map'] = 2
 
     return pars
 
@@ -874,9 +882,66 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     Assume that cached signal under totalname_freq is pure atmosphere
     and scale the absorption coefficient according to the frequency.
 
+    If the focalplane is included in the observation and defines
+    bandpasses for the detectors, the scaling is computed for each
+    detector separately.
+
     """
-    if not args.skip_atmosphere:
-        autotimer = timing.auto_timer()
+    if args.skip_atmosphere:
+        return
+
+    autotimer = timing.auto_timer()
+    for obs in data.obs:
+        tod = obs['tod']
+        site_id = obs['site_id']
+        weather = obs['weather']
+        if 'focalplane' in obs:
+            focalplane = obs['focalplane']
+        else:
+            focalplane = None
+        start_time = obs['start_time']
+        weather.set(site_id, mc, start_time)
+        altitude = obs['altitude']
+        absorption = toast.ctoast.atm_get_absorption_coefficient(
+            altitude, weather.air_temperature, weather.surface_pressure,
+            weather.pwv, freq)
+        #loading = toast.ctoast.atm_get_atmospheric_loading(
+        #    altitude, pwv, freq)
+        for det in tod.local_dets:
+            try:
+                # Convolve top hat detector bandpass.
+                center = focalplane[det]['bandcenter_ghz']
+                width = focalplane[det]['bandwidth_ghz']
+                nstep = 101
+                freqs = np.linspace(center-width/2, center+width/2, nstep)
+                absorption_det = [
+                    toast.ctoast.atm_get_absorption_coefficient(
+                        altitude, weather.air_temperature,
+                        weather.surface_pressure,
+                        weather.pwv, x) for x in freqs]
+                absorption_det = np.mean(absorption_det)
+            except:
+                absorption_det = absorption
+            cachename = '{}_{}'.format(totalname_freq, det)
+            ref = tod.cache.reference(cachename)
+            ref *= absorption_det
+            del ref
+
+    return
+
+
+def update_atmospheric_noise_weights(args, comm, data, freq, mc):
+    """ Update atmospheric noise weights.
+
+    Estimate the atmospheric noise level from weather parameters and
+    encode it as a noise_scale in the observation.  Madam will apply
+    the noise_scale to the detector weights.  This approach assumes
+    that the atmospheric noise dominates over detector noise.  To be
+    more precise, we would have to add the squared noise weights but
+    we do not have their relative calibration.
+
+    """
+    if args.weather:
         for obs in data.obs:
             tod = obs['tod']
             site_id = obs['site_id']
@@ -887,13 +952,10 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
             absorption = toast.ctoast.atm_get_absorption_coefficient(
                 altitude, weather.air_temperature, weather.surface_pressure,
                 weather.pwv, freq)
-            #loading = toast.ctoast.atm_get_atmospheric_loading(
-            #    altitude, pwv, freq)
-            for det in tod.local_dets:
-                cachename = '{}_{}'.format(totalname_freq, det)
-                ref = tod.cache.reference(cachename)
-                ref *= absorption
-                del ref
+            obs['noise_scale'] = absorption * weather.air_temperature
+    else:
+        for obs in data.obs:
+            obs['noise_scale'] = 1.
 
     return
 
@@ -1109,7 +1171,7 @@ def get_time_communicators(comm, data):
 
 def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
                 counter, mc, firstmc, outpath, detweights, totalname_madam,
-                destripe=True, extra_prefix=None):
+                first_call=True, extra_prefix=None):
     """ Use libmadam to bin and optionally destripe data.
 
     Bin and optionally destripe all conceivable subsets of the data.
@@ -1129,14 +1191,18 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
         file_root += '{}_'.format(extra_prefix)
     file_root += '{:03}'.format(int(freq))
 
-    if mc != firstmc or not destripe:
-        pars['write_matrix'] = False
-        pars['write_wcov'] = False
-        pars['write_hits'] = False
-    if not destripe:
+    if first_call:
+        if mc != firstmc:
+            pars['write_matrix'] = False
+            pars['write_wcov'] = False
+            pars['write_hits'] = False
+    else:
         pars['kfirst'] = False
         pars['write_map'] = False
         pars['write_binmap'] = True
+        pars['write_matrix'] = False
+        pars['write_wcov'] = False
+        pars['write_hits'] = False
 
     outputs = [pars['write_map'], pars['write_binmap'], pars['write_hits'],
                pars['write_wcov'], pars['write_matrix']]
@@ -1160,6 +1226,8 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
         for tele_name, tele_data in telescope_data:
             if len(time_name.split('-')) == 3:
                 # Special rules for daily maps
+                if args.skip_daymaps:
+                    continue
                 if ((len(telescope_data) > 1) and (tele_name == 'all')):
                     # Skip daily maps over multiple telescopes
                     continue
@@ -1305,6 +1373,8 @@ def main():
             scale_atmosphere_by_frequency(args, comm, data, freq,
                                           totalname_freq, mc)
 
+            update_atmospheric_noise_weights(args, comm, data, freq, mc)
+
             add_sky_signal(args, comm, data, totalname_freq, signalname)
 
             mcoffset = ifreq * 1000000
@@ -1327,7 +1397,7 @@ def main():
             apply_madam(args, comm, time_comms, data, telescope_data, freq,
                         madampars, counter, mc+mcoffset, firstmc, outpath,
                         detweights, totalname_freq,
-                        destripe=(not args.skip_destripe))
+                        first_call=True)
 
             if args.polyorder or args.wbin_ground:
 
@@ -1341,7 +1411,7 @@ def main():
 
                 apply_madam(args, comm, time_comms, data, telescope_data, freq,
                             madampars, counter, mc+mcoffset, firstmc, outpath,
-                            detweights, totalname_freq, destripe=False,
+                            detweights, totalname_freq, first_call=False,
                             extra_prefix='filtered')
 
     counter.exec(data)

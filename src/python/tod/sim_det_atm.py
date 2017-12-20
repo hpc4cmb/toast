@@ -195,6 +195,22 @@ class OpSimAtmosphere(Operator):
             else:
                 absorption = None
 
+            if self._cachedir is None:
+                cachedir = None
+            else:
+                # The number of atmospheric realizations can be large.  Use
+                # sub-directories under cachedir.
+                subdir = str(int((obsindx % 1000) // 100 ))
+                subsubdir = str(int((obsindx % 100) // 10 ))
+                subsubsubdir = str(obsindx % 10)
+                cachedir = os.path.join(self._cachedir, subdir, subsubdir,
+                                        subsubsubdir)
+                if comm.rank == 0:
+                    try:
+                        os.makedirs(cachedir)
+                    except FileExistsError:
+                        pass
+
             comm.Barrier()
             if comm.rank == 0:
                 print('Setting up atmosphere simulation for {}'
@@ -271,14 +287,6 @@ class OpSimAtmosphere(Operator):
                     tmax = tmax_tot
                     istop = times.size
 
-                if comm.rank == 0:
-                    if self._cachedir is not None \
-                       and not os.path.isdir(self._cachedir):
-                        try:
-                            os.makedirs(self._cachedir)
-                        except FileExistsError:
-                            pass
-
                 if comm.rank == 0 and tmax < tmax_tot:
                     print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
                           'of ([{:.2f}, {:.2f}])'.format(
@@ -314,7 +322,7 @@ class OpSimAtmosphere(Operator):
                     self._zatm, self._zmax, self._xstep,
                     self._ystep, self._zstep, self._nelem_sim_max,
                     self._verbosity, comm, self._gangsize,
-                    key1, key2, counter1, counter2, self._cachedir)
+                    key1, key2, counter1, counter2, cachedir)
 
                 if self._report_timing:
                     comm.Barrier()
