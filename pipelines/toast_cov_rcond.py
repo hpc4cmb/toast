@@ -18,6 +18,7 @@ import healpy as hp
 
 import toast
 import toast.map as tm
+import toast.timing as timing
 
 
 def main():
@@ -33,7 +34,9 @@ def main():
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
     
-    args = parser.parse_args()
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+
+    autotimer = timing.auto_timer(timing.FILE())
 
     # get options
 
@@ -104,4 +107,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+    tman = timing.timing_manager()
+    tman.report()
 

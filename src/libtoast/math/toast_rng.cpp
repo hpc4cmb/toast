@@ -5,6 +5,7 @@ a BSD-style license that can be found in the LICENSE file.
 */
 
 #include <toast_math_internal.hpp>
+#include <toast_util_internal.hpp>
 
 #include <cstring>
 #include <cmath>
@@ -43,8 +44,9 @@ typedef r123::Threefry2x64 RNG;
 void toast::rng::dist_uint64 ( size_t n,
                                uint64_t key1, uint64_t key2,
                                uint64_t counter1, uint64_t counter2,
-                               uint64_t* data, size_t beg) {
-    
+                               uint64_t* data, size_t beg) {    
+    TOAST_AUTO_TIMER();
+
     RNG rng;
     RNG::ukey_type uk = {{ key1, key2 }};
 
@@ -113,6 +115,8 @@ void toast::rng::dist_uniform_01 ( size_t n,
         return;
 #endif
   */
+    TOAST_AUTO_TIMER();
+
     RNG rng;
     RNG::ukey_type uk = {{ key1, key2 }};
 
@@ -134,6 +138,7 @@ void toast::rng::dist_uniform_11 ( size_t n,
                                    uint64_t key1, uint64_t key2,
                                    uint64_t counter1, uint64_t counter2,
                                    double * data, size_t beg ) {
+    TOAST_AUTO_TIMER();
 
     RNG rng;
     RNG::ukey_type uk = {{ key1, key2 }};
@@ -156,6 +161,7 @@ void toast::rng::dist_normal ( size_t n,
                                uint64_t key1, uint64_t key2,
                                uint64_t counter1, uint64_t counter2,
                                double * data, size_t beg ) {
+    TOAST_AUTO_TIMER();
 
     // first compute uniform randoms on [0.0, 1.0)
 
@@ -220,6 +226,7 @@ void toast::rng::mt::dist_uint64 ( size_t blocks,      size_t n,
                                    uint64_t* counter1, uint64_t* counter2,
                                    uint64_t* data )
 {
+    TOAST_AUTO_TIMER();
     // call dist_uint64 in parallel
     dist_mt(toast::rng::dist_uint64,
             blocks, n, key1, key2, counter1, counter2, data);
@@ -233,6 +240,7 @@ void toast::rng::mt::dist_uniform_01 ( size_t blocks,      size_t n,
                                        uint64_t* counter1, uint64_t* counter2,
                                        double* data )
 {
+    TOAST_AUTO_TIMER();
     // call dist_uniform_01 in parallel
     dist_mt(toast::rng::dist_uniform_01,
             blocks, n, key1, key2, counter1, counter2, data);
@@ -246,6 +254,7 @@ void toast::rng::mt::dist_uniform_11 ( size_t blocks,      size_t n,
                                        uint64_t* counter1, uint64_t* counter2,
                                        double* data )
 {
+    TOAST_AUTO_TIMER();
     // call dist_uniform_11 in parallel
     dist_mt(toast::rng::dist_uniform_11,
             blocks, n, key1, key2, counter1, counter2, data);
@@ -258,6 +267,7 @@ void toast::rng::mt::dist_normal ( size_t blocks,      size_t n,
                                    uint64_t* counter1, uint64_t* counter2,
                                    double* data )
 {
+    TOAST_AUTO_TIMER();
     // call dist_normal in parallel
     dist_mt(toast::rng::dist_normal,
             blocks, n, key1, key2, counter1, counter2, data);

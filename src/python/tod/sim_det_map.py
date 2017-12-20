@@ -7,6 +7,7 @@ import numpy as np
 import healpy as hp
 
 from .. import qarray as qa
+from .. import timing as timing
 from .tod import TOD
 from ..op import Operator
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
@@ -55,6 +56,7 @@ class OpSimGradient(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         zaxis = np.array([0, 0, 1], dtype=np.float64)
@@ -107,6 +109,7 @@ class OpSimGradient(Operator):
         """
         (array): Return the underlying signal map (full map on all processes).
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         range = self._max - self._min
         pix = np.arange(0, 12*self._nside*self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
@@ -153,6 +156,7 @@ class OpSimScan(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world

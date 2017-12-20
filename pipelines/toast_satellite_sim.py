@@ -22,9 +22,9 @@ import toast.tod as tt
 import toast.map as tm
 
 import toast.qarray as qa
+import toast.timing as timing
 
 from toast.vis import set_backend
-
 
 def main():
 
@@ -112,7 +112,9 @@ def main():
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = parser.parse_args()
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+
+    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -586,16 +588,17 @@ def main():
     elapsed = stop - global_start
     if comm.comm_world.rank == 0:
         print("Total Time:  {:.2f} seconds".format(elapsed), flush=True)
-    MPI.Finalize()
 
 
 if __name__ == "__main__":
     try:
         main()
+        tman = timing.timing_manager()
+        tman.report()
+        MPI.Finalize()
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
         print("".join(lines), flush=True)
         MPI.COMM_WORLD.Abort()
-

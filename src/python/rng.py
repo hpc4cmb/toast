@@ -5,6 +5,7 @@
 
 import numpy as np
 
+from . import timing as timing
 from .ctoast import ( rng_dist_uint64, rng_dist_uniform_01,
     rng_dist_uniform_11, rng_dist_normal,
     rng_dist_uint64_mt, rng_dist_uniform_01_mt,
@@ -29,6 +30,7 @@ def random(samples, counter=(0,0), sampler="gaussian", key=(0,0)):
     Returns:
         array: The random values of appropriate type for the sampler.
     """
+    autotimer = timing.auto_timer()
     ret = None
     if sampler == "gaussian":
         ret = rng_dist_normal(samples, key[0], key[1], counter[0], counter[1])
@@ -64,6 +66,7 @@ def random_mt(blocks, samples, counter=[(0,0)], sampler="gaussian", key=[(0,0)])
     Returns:
         array: The random values of appropriate type for the sampler.
     """
+    autotimer = timing.auto_timer()
     nkeys = len(key)
     nctrs = len(counter)
     

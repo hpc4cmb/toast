@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#SBATCH --partition=@QUEUE@
+@CONSTRAINT@
+#SBATCH --account=@ACCOUNT@
+#SBATCH --nodes=@NODES@
+#SBATCH --time="@TIME@"
+#SBATCH --job-name=@JOB_NAME@
+#SBATCH --output=out_@JOB_NAME@_@MACHINE@_%j.log
+
+ctest @CTEST_PARAMS@
+

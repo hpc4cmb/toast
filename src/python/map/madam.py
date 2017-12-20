@@ -18,6 +18,8 @@ from ..op import Operator
 from ..tod import TOD
 from ..cache import Cache
 
+from .. import timing as timing
+
 libmadam = None
 
 try:
@@ -210,6 +212,8 @@ class OpMadam(Operator):
         """
         if libmadam is None:
             raise RuntimeError("Cannot find libmadam")
+
+        auto_timer = timing.auto_timer(type(self).__name__)
 
         if comm is None:
             # Just use COMM_WORLD

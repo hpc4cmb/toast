@@ -5,6 +5,7 @@ a BSD-style license that can be found in the LICENSE file.
 */
 
 #include <toast_math_internal.hpp>
+#include <toast_util_internal.hpp>
 
 #ifdef HAVE_MKL
 #  include <mkl_dfti.h>
@@ -40,20 +41,17 @@ class r1d_fftw : public toast::fft::r1d {
             toast::fft::direction dir, double scale ) : 
             toast::fft::r1d ( length, n, type, dir, scale ) {
 
+            TOAST_AUTO_TIMER();
+
             int threads = 1;
 
             // enable threads
-
-            #ifdef HAVE_FFTW_THREADS
-            #  ifdef _OPENMP
-
+        #ifdef HAVE_FFTW_THREADS
+        #   ifdef _OPENMP
             threads = omp_get_max_threads();
-
-            #  endif
-
+        #   endif
             fftw_plan_with_nthreads(threads);
-
-            #endif
+        #endif
 
             // allocate memory
 
@@ -115,6 +113,8 @@ class r1d_fftw : public toast::fft::r1d {
         }
 
         void exec ( ) {
+
+            TOAST_AUTO_TIMER("@r1d_fftw");
 
             fftw_execute ( plan_ );
 

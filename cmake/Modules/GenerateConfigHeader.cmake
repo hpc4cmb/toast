@@ -228,11 +228,11 @@ function(CHECK_FOR_HEADER VAR HEADER)
 
     set(HEADER_FILE ${HEADER})
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/header-test.cc.in
-        ${CMAKE_BINARY_DIR}/header-test.cc @ONLY)
+        ${CMAKE_BINARY_DIR}/compile-testing/header-test.cc @ONLY)
 
     try_compile(RET
-        ${CMAKE_BINARY_DIR}
-        ${CMAKE_BINARY_DIR}/header-test.cc
+        ${CMAKE_BINARY_DIR}/compile-testing
+        ${CMAKE_BINARY_DIR}/compile-testing/header-test.cc
         CMAKE_FLAGS ${CMAKE_CXX_FLAGS}
         INCLUDE_DIRECTORIES ${dirs}
         OUTPUT_VARIABLE RET_OUT)
@@ -391,6 +391,14 @@ SET_MACRO_FIELDS(${HAS}
     LABEL   "HAVE_WCSLIB"
     ENTRY   "1"
     MSG     "if you are using wcslib")
+
+#==============================================================================#
+
+GET_DEFINED_FLAG(HAS aatm_FOUND)
+SET_MACRO_FIELDS(${HAS}
+    LABEL   "HAVE_AATM"
+    ENTRY   "1"
+    MSG     "if you are using aatm")
 
 #==============================================================================#
 

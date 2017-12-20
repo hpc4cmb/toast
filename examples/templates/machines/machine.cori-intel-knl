@@ -1,4 +1,0 @@
-SET(CONSTRAINT "#SBATCH --constraint=knl,quad,cache\n#SBATCH --core-spec=4")
-SET(NODEPROCS "16")
-SET(NODECORES "64")
-SET(HYPERTHREAD "4")

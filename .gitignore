@@ -90,3 +90,5 @@ __pycache__/
 # vim
 *.swp
 *.swo
+
+*.json

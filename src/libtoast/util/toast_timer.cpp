@@ -33,12 +33,27 @@
 
 //============================================================================//
 
+CEREAL_CLASS_VERSION(toast::util::timer, TOAST_TIMER_VERSION)
+
+//============================================================================//
+
+thread_local uint64_t toast::util::timer::f_output_width = 20;
+
+//============================================================================//
+
 std::string toast::util::timer::default_format
-    =  "%w wall, %u user + %s system = %t CPU [seconds] (%p%)";
+    =  " : %w wall, %u user + %s system = %t CPU [seconds] (%p%)";
 
 //============================================================================//
 
 uint16_t toast::util::timer::default_precision = 3;
+
+//============================================================================//
+
+void toast::util::timer::propose_output_width(uint64_t _w)
+{
+    f_output_width = std::max(f_output_width, _w);
+}
 
 //============================================================================//
 
@@ -59,5 +74,17 @@ toast::util::timer::timer(std::string _begin, std::string _close)
 
 toast::util::timer::~timer()
 { }
+
+//============================================================================//
+
+void toast::util::timer::compose()
+{
+    std::stringstream ss;
+    ss << std::setw(f_output_width + 2)
+       << std::left << m_begin
+       << std::right << default_format
+       << m_close;
+    m_format_string = ss.str();
+}
 
 //============================================================================//

@@ -14,6 +14,7 @@ from ..dist import Comm, Data
 from .tod import TOD
 
 from .. import ctoast as ct
+from .. import timing as timing
 
 
 
@@ -185,6 +186,7 @@ class OpPointingHpix(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

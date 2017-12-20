@@ -8,6 +8,7 @@ import numpy as np
 import healpy as hp
 
 from .. import qarray as qa
+from .. import timing as timing
 
 from .tod import TOD
 
@@ -99,6 +100,7 @@ class OpSimDipole(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world

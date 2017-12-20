@@ -5,7 +5,7 @@ a BSD-style license that can be found in the LICENSE file.
 */
 
 #include <toast_tod_internal.hpp>
-
+#include <toast_util_internal.hpp>
 
 void toast::sim_noise::sim_noise_timestream(
     const uint64_t realization, const uint64_t telescope,
@@ -13,6 +13,8 @@ void toast::sim_noise::sim_noise_timestream(
     const double rate, const uint64_t firstsamp, const uint64_t samples,
     const uint64_t oversample, const double *freq, const double *psd,
     const uint64_t psdlen, double *noise) {
+
+    TOAST_AUTO_TIMER();
 
     /*
     Generate a noise timestream, given a starting RNG state.

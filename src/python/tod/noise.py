@@ -8,6 +8,7 @@ noise.py implements the Noise class for storing noise PSDs.
 """
 
 import numpy as np
+from .. import timing as timing
 
 
 class Noise(object):
@@ -42,6 +43,7 @@ class Noise(object):
     """
 
     def __init__(self, *, detectors, freqs, psds, mixmatrix=None, indices=None):
+
         self._dets = list(sorted(detectors))
         if mixmatrix is None:
             # Default diagonal mixing matrix

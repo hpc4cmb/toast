@@ -297,7 +297,6 @@ class MPITestRunner(TextTestRunner):
                                 failfast=failfast, buffer=buffer)
         self.verbosity = verbosity
 
-
     def _make_result(self):
         """
         Creates a TestResult object which will be used to store
@@ -346,6 +345,7 @@ class MPITestRunner(TextTestRunner):
             else:
                 expectedFails, unexpectedSuccesses, skipped = results
 
+            self.result = result
             # Error traces
             infos = []
             if not result.wasSuccessful():
