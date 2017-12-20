@@ -191,7 +191,7 @@ class OpSimPySMTest(MPITestCase):
                                    focalplanes=[focalplane],
                                    nside=self.nside,
                                    subnpix=subnpix, localsm=localsm,
-                                   apply_beam=False)
+                                   apply_beam=False, nest=False)
 
         op_sim_pysm.exec(self.data)
         rescanned_tod = self.data.obs[0]["tod"].cache.reference("signal_fake_0A")
@@ -231,7 +231,7 @@ class OpSimPySMTestSmooth(MPITestCase):
                                    focalplanes=[focalplane],
                                    nside=self.nside,
                                    subnpix=subnpix, localsm=localsm,
-                                   apply_beam=True)
+                                   apply_beam=True, nest=False)
 
         op_sim_pysm.exec(self.data)
         rescanned_tod = self.data.obs[0]["tod"].cache.reference("signal_fake_0A")
