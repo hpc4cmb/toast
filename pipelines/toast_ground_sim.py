@@ -296,6 +296,7 @@ def load_weather(args, comm, schedules):
         return
 
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
     if comm.comm_world.rank == 0:
         weathers = []
         weatherdict = {}
@@ -393,6 +394,7 @@ def get_focalplane_radius(focalplane):
     """ Find the furthest angular distance from the boresight
 
     """
+    autotimer = timing.auto_timer()
     xaxis, yxis, zaxis = np.eye(3)
     cosangs = []
     for det in focalplane:
@@ -459,6 +461,7 @@ def get_analytic_noise(args, focalplane):
     focalplane database.
 
     """
+    autotimer = timing.auto_timer()
     detectors = sorted(focalplane.keys())
     fmin = {}
     fknee = {}
@@ -480,6 +483,7 @@ def get_breaks(comm, all_ces, nces, args):
     """ List operational day limits in the list of CES:s.
 
     """
+    autotimer = timing.auto_timer()
     breaks = []
     do_break = False
     for i in range(nces-1):
@@ -518,6 +522,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     Create an observation for the CES scan defined by all_ces_tot[ices].
 
     """
+    autotimer = timing.auto_timer()
     ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
 
     (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
@@ -743,6 +748,7 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
 
     """
     if signalname is not None:
+        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
@@ -942,6 +948,7 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
 
     """
     if args.weather:
+        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
             site_id = obs['site_id']
