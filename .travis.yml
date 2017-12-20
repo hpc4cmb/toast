@@ -171,6 +171,10 @@ before_install:
     # Install libsharp Python
     - cd python
     - CC="mpicc -g" LDSHARED="mpicc -g -shared" python setup.py install
+    # Install PySM
+    - git clone https://github.com/zonca/PySM_public.git --branch megarun_2017 --single-branch --depth 1
+    - cd PySM_public
+    - python setup.py install
 
 # Skip this
 
