@@ -146,7 +146,7 @@ import os
 import toast
 
 def run_tests():
-    toast.test()
+    return toast.test()
 
 toast_path = os.path.abspath(toast.__file__)
 print('toast path: {}'.format(toast_path))
@@ -154,15 +154,22 @@ print('toast path: {}'.format(toast_path))
 # or line-counting or both.
 tracer = trace.Trace(ignoredirs=[sys.exec_prefix], trace=0, count=1)
 # run the new command using the given tracer
-tracer.run('run_tests()')
+print('Running coverage...')
+ret = tracer.run('run_tests()')
 # make a report, placing output in the current directory
+print('Creating report...')
 r = tracer.results()
-r.write_results(show_missing=False, coverdir='${PYC_FILEPATH}')
+r.write_results(show_missing=True, coverdir='${PYC_FILEPATH}')
+if ret is None:
+    ret = 0
+print('Exiting with code {}...'.format(ret))
+sys.exit(ret)
 
 ")
 
     SETUP_TARGET_FOR_COVERAGE(NAME pyc_toast_test_coverage
-        EXECUTABLE ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py
+        EXECUTABLE ${CMAKE_BINARY_DIR}/ctest-wrapper.sh ${PYTHON_EXECUTABLE}
+            ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py
         DEPENDS ${PROJECT_LINK_TARGETS})
 
 endif(USE_COVERAGE)

@@ -13,9 +13,14 @@ file(GLOB_RECURSE PYTHON_MODULE_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
     ${CMAKE_CURRENT_LIST_DIR}/*.py.in
     ${CMAKE_SOURCE_DIR}/pipelines/*.py)
 
-add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES}
-    $<TARGET_OBJECTS:libtoast-object>)
-add_dependencies(cbuffer-lib ${PROJECT_LINK_TARGETS})
+if(USE_COVERAGE)
+    add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES}
+        $<TARGET_OBJECTS:libtoast-object>)
+    add_dependencies(cbuffer-lib ${PROJECT_LINK_TARGETS})
+else()
+    add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES})
+    target_link_libraries(cbuffer-lib ${PROJECT_LINK_TARGETS})
+endif()
 
 if(CMAKE_C_COMPILER_IS_GNU AND NOT APPLE)
     set(_LINK_FLAGS "-Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions")
@@ -43,6 +48,7 @@ foreach(_LIB dl util m)
         list(APPEND PYLIBS ${${_LIB}_LIBRARY})
     endif()
 endforeach()
+
 target_link_libraries(cbuffer-lib ${PYLIBS}
     ${EXTERNAL_LIBRARIES}
     ${MPI_LIBRARIES}

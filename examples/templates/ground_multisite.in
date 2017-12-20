@@ -19,7 +19,7 @@ export HOME=${SCRATCH}
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-env
+if [ "${LOG_OUT}" != "/dev/stdout" ]; then env ; fi
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
@@ -107,8 +107,8 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir ${outdir} \
---enable-timers --enable-timer-serialization \
+--toast-output-dir "${outdir}" \
+--toast-timing-fname "timing_report_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \

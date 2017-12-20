@@ -43,8 +43,8 @@ groupsize=1
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir ${outdir} \
---enable-timers --enable-timer-serialization \
+--toast-output-dir "${outdir}" \
+--toast-timing-fname "timing_report_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --nside ${nside} \

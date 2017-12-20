@@ -16,7 +16,7 @@ echo Starting slurm script at $(date)
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-env
+if [ "${LOG_OUT}" != "/dev/stdout" ]; then env ; fi
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
@@ -49,7 +49,7 @@ if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py \
         --disable-timer-serialization \
-        --toast-output-dir ${outdir} --toast-timing-fname "timing_report_fp" \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --minpix ${detpix} --out "${outdir}/fp"
 fi
 
@@ -82,8 +82,8 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir ${outdir} \
---enable-timers --enable-timer-serialization \
+--toast-output-dir "${outdir}" \
+--toast-timing-fname "timing_report_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \

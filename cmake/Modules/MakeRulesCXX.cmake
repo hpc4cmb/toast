@@ -113,7 +113,7 @@ endmacro()
 if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 
     clean_cxx_vars()
-    add(_std_flags   "-Wno-deprecated -faligned-new $ENV{CXX_FLAGS}")
+    add(_std_flags   "-Wno-deprecated -faligned-new $ENV{CXX_FLAGS} ${CXX_FLAGS}")
     if(NOT "${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" AND
         NOT DASHBOARD_MODE)
         add(_std_flags   "-fdiagnostics-color=always")
@@ -154,7 +154,7 @@ if(CMAKE_CXX_COMPILER_IS_GNU OR CMAKE_CXX_COMPILER_IS_CLANG)
 elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 
     clean_cxx_vars()
-    add(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS}")
+    add(_std_flags   "-Wno-deprecated $ENV{CXX_FLAGS} ${CXX_FLAGS}")
     add(_std_flags   "-Wno-unknown-pragmas")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
@@ -184,7 +184,7 @@ elseif(CMAKE_CXX_COMPILER_IS_INTEL)
 #
 elseif(CMAKE_CXX_COMPILER_IS_XLC)
 
-    add_cxx_flags(CMAKE_CXX_FLAGS_INIT                "$ENV{CXX_FLAGS}")
+    add_cxx_flags(CMAKE_CXX_FLAGS_INIT                "$ENV{CXX_FLAGS} ${CXX_FLAGS}")
     add_cxx_flags(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
     add_cxx_flags(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-O2 -qtwolink -+")
     add_cxx_flags(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O2 -g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
@@ -195,7 +195,7 @@ elseif(CMAKE_CXX_COMPILER_IS_XLC)
 #
 elseif(CMAKE_CXX_COMPILER_IS_HP_ACC)
 
-    add_cxx_flags(CMAKE_CXX_FLAGS_INIT                "+DAportable +W823 $ENV{CXX_FLAGS}")
+    add_cxx_flags(CMAKE_CXX_FLAGS_INIT                "+DAportable +W823 $ENV{CXX_FLAGS} ${CXX_FLAGS}")
     add_cxx_flags(CMAKE_CXX_FLAGS_DEBUG_INIT          "-g")
     add_cxx_flags(CMAKE_CXX_FLAGS_MINSIZEREL_INIT     "-O3 +Onolimit")
     add_cxx_flags(CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT "-O3 +Onolimit -g")

@@ -11,7 +11,7 @@ add_dependent_option(USE_SLURM "Enable generation of SLURM scripts for testing"
     
 set(TIME "00:30:00" CACHE STRING "SLURM runtime")
 set(ACCOUNT "dasrepo" CACHE STRING "SLURM account")
-set(QUEUE "debug" CACHE STRING "SLURM queue")
+set(QUEUE "regular" CACHE STRING "SLURM queue")
 set_ifnot(JOB_NAME "UnitTest")
 set_ifnot(NODES 1)
 

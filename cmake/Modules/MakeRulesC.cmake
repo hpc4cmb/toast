@@ -103,7 +103,7 @@ endmacro()
 if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 
     clean_c_vars()
-    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS} ${C_FLAGS}")
     if(NOT "${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" AND
         NOT DASHBOARD_MODE)
         add(_std_flags   "-fdiagnostics-color=always")
@@ -143,7 +143,7 @@ if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 elseif(CMAKE_C_COMPILER_IS_INTEL)
 
     clean_c_vars()
-    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS} ${C_FLAGS}")
     add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
     add(_loud_flags  "-Wwrite-strings -Wpointer-arith")
     add(_loud_flags  "-Wshadow -Wextra -pedantic")
@@ -173,7 +173,7 @@ elseif(CMAKE_C_COMPILER_IS_INTEL)
 #
 elseif(CMAKE_C_COMPILER_IS_XLC)
 
-    add_c_flags(CMAKE_C_FLAGS_INIT "$ENV{C_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_INIT "$ENV{C_FLAGS} ${C_FLAGS}")
     add_c_flags(CMAKE_C_FLAGS_DEBUG_INIT          "-g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
     add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O2 -qtwolink -+")
     add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
@@ -184,7 +184,7 @@ elseif(CMAKE_C_COMPILER_IS_XLC)
 #
 elseif(CMAKE_C_COMPILER_IS_HP_ACC)
 
-    add_c_flags(CMAKE_C_FLAGS_INIT                "+DAportable +W823 $ENV{C_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_INIT                "+DAportable +W823 $ENV{C_FLAGS} ${C_FLAGS}")
     add_c_flags(CMAKE_C_FLAGS_DEBUG_INIT          "-g")
     add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O3 +Onolimit")
     add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O3 +Onolimit -g")

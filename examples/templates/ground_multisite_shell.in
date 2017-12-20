@@ -65,8 +65,8 @@ parfile="@TOPDIR@/params/ground/ground_sim_multisite.par"
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir ${outdir} \
---enable-timers --enable-timer-serialization \
+--toast-output-dir "${outdir}" \
+--toast-timing-fname "timing_report_main" \
 --fp ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
