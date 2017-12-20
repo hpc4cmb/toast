@@ -81,10 +81,6 @@ ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 @healpix@
 
-# Install Boost
-
-@boost@
-
 # Install libmadam
 
 @madam@

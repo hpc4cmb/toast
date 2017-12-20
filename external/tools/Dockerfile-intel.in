@@ -21,20 +21,6 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en 
 ENV LC_ALL en_US.UTF-8
 
-# Install Intel tools to /opt/intel.  We assume that the build context already
-# contains a copy of the Intel tools, and we just copy it into the image.
-
-RUN mkdir -p /opt/intel
-
-COPY intel /opt/intel/
-
-RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/bin/compilervars.sh intel64" >> /etc/profile
-RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/mkl/bin/mklvars.sh intel64" >> /etc/profile
-
-RUN cp -a /opt/intel/compilers_and_libraries/linux/lib/intel64/* /usr/lib/
-
-RUN cp -a /opt/intel/mkl/lib/intel64/* /usr/lib/
-
 # We install everything directly into /usr so that we do
 # not need to modify the default library and executable
 # search paths.  Shifter will manipulate LD_LIBRARY_PATH,
@@ -60,6 +46,20 @@ ENV PYTHONUSERBASE "/tmp"
 # Install pip packages.
 
 @pip_pkgs@
+
+# Install Intel tools to /opt/intel.  We assume that the build context already
+# contains a copy of the Intel tools, and we just copy it into the image.
+
+RUN mkdir -p /opt/intel
+
+COPY intel /opt/intel/
+
+RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/bin/compilervars.sh intel64" >> /etc/profile
+RUN echo ". /opt/intel/compilers_and_libraries_2018/linux/mkl/bin/mklvars.sh intel64" >> /etc/profile
+
+RUN cp -a /opt/intel/compilers_and_libraries/linux/lib/intel64/* /usr/lib/
+
+RUN cp -a /opt/intel/mkl/lib/intel64/* /usr/lib/
 
 # Copy all patch files to current working directory
 
@@ -94,10 +94,6 @@ ENV PYTHONPATH /usr/lib/python3.6/site-packages
 # Install Healpix
 
 @healpix@
-
-# Install Boost
-
-@boost@
 
 # Install libmadam
 
