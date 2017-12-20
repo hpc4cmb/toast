@@ -25,5 +25,5 @@ data/weather_Atacama.fits
 --freq
 95
 --input_pysm_model
-s3,d6,f1,a2
+s3,d7,f1,a2,c2
 --apply_beam
