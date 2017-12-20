@@ -8,7 +8,7 @@ import datetime
 import numpy as np
 
 from . import rng as rng
-from .. import timing as timing
+from . import timing as timing
 
 
 class Weather(object):

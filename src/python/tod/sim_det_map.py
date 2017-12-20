@@ -315,6 +315,9 @@ class OpSimPySM(Operator):
         start = MPI.Wtime()
         local_maps = dict()  # FIXME use Cache instead
         for det in local_dets:
+            self.comm.Barrier()
+            if self.comm.rank == 0:
+                print('Running PySM on {}'.format(det), flush=True)
             self.pysm_sky.exec(local_maps, out="sky",
                                bandpasses={"": bandpasses[det]})
 
@@ -325,10 +328,16 @@ class OpSimPySM(Operator):
                         "have fwhm")
                 # LibSharp also supports transforming multiple channels
                 # together each with own beam
+                self.comm.Barrier()
+                if self.comm.rank == 0:
+                    print('Initializing LibSharpSmooth on {}'.format(det), flush=True)
                 smooth = LibSharpSmooth(
                     self.comm, signal_map="sky", out="sky",
                     lmax=lmax, grid=self.dist_rings.libsharp_grid,
                     fwhm_deg=fwhm_deg[det], beam=None)
+                self.comm.Barrier()
+                if self.comm.rank == 0:
+                    print('Executing LibSharpSmooth on {}'.format(det), flush=True)
                 smooth.exec(local_maps)
 
             n_components = 3

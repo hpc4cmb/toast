@@ -22,7 +22,7 @@ MPI_EXTRA_LINK =
 
 CFLAGS = -O3 -g -fPIC -xmic-avx512 -pthread
 CXXFLAGS = -O3 -g -fPIC -xmic-avx512 -pthread
-FCFLAGS = -O3 -g -fPIC -xmic-avx512 -fexceptions -pthread
+FCFLAGS = -O3 -g -fPIC -xmic-avx512 -fexceptions -pthread -heap-arrays 16
 
 OPENMP_CFLAGS = -qopenmp
 OPENMP_CXXFLAGS = -qopenmp
