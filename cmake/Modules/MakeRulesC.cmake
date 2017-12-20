@@ -12,18 +12,24 @@
 include(Compilers)
 
 #------------------------------------------------------------------------------#
-# macro for adding flags to variable
-#------------------------------------------------------------------------------#
-macro(add _VAR _FLAG)
-    set(${_VAR} "${${_VAR}} ${_FLAG}")
-endmacro()
-
-#------------------------------------------------------------------------------#
 # MSVC
 #------------------------------------------------------------------------------#
 if(MSVC)
     message(FATAL_ERROR "${PROJECT_NAME} does not support Windows")
 endif()
+
+
+#------------------------------------------------------------------------------#
+# macro for cleaning variables used by MakeRulesC.cmake and MakeRuleCXX.cmake
+#------------------------------------------------------------------------------#
+macro(clean_c_vars)
+    foreach(_type std loud quiet fast extra par)
+        if(DEFINED _${_type}_flags)
+            unset(_${_type}_flags)
+        endif(DEFINED _${_type}_flags)
+    endforeach(_type std loud quiet fast extra par)
+endmacro(clean_c_vars)
+
 
 #------------------------------------------------------------------------------#
 # macro for finding the x86intrin.h header path that needs to be explicitly
@@ -36,7 +42,7 @@ endif()
 # - When explicitly setting this folder, be sure to include icc/ or whatever
 #   the parent directory is
 #------------------------------------------------------------------------------#
-macro(get_intel_intrinsic_include_dir)
+macro(add_intel_intrinsic_include_dir)
 
     get_filename_component(COMPILER_DIR "${CMAKE_C_COMPILER}" PATH)
     set(SYSNAME "${CMAKE_SYSTEM_NAME}")
@@ -96,81 +102,116 @@ endmacro()
 #
 if(CMAKE_C_COMPILER_IS_GNU OR CMAKE_C_COMPILER_IS_CLANG)
 
-    set(_def_cxx     "-Wno-deprecated $ENV{C_FLAGS} -Wno-missing-field-initializers")
-    add(_def_cxx     "-Wno-unused-parameter -Wno-sign-compare")
-    set(_verb_flags  "-Wwrite-strings -Wpointer-arith -Woverloaded-virtual")
-    add(_verb_flags  "-pedantic")
-    set(_loud_flags  "-Wshadow -Wextra")
-    set(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
-    if(CMAKE_C_COMPILER_IS_GNU)
-        add(_def_cxx      "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
-        add(_fast_flags   "-ftree-vectorize -ftree-loop-vectorize")
-    else()
-        add(_def_cxx "-Qunused-arguments")
+    clean_c_vars()
+    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    if(NOT "${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" AND
+        NOT DASHBOARD_MODE)
+        add(_std_flags   "-fdiagnostics-color=always")
+    endif(NOT "${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" AND
+        NOT DASHBOARD_MODE)
+    add(_std_flags   "-Qunused-arguments")
+    add(_loud_flags  "-Wwrite-strings -Wpointer-arith")
+    add(_loud_flags  "-Wshadow -Wextra -pedantic")
+    add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
+    add(_quiet_flags "-Wno-attributes -Wno-expansion-to-defined")
+    add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
+    add(_quiet_flags "-Wno-attributes -Wno-expansion-to-defined")
+    add(_quiet_flags "-Wno-maybe-uninitialized -Wno-missing-field-initializers")
+    add(_quiet_flags "-Wno-unused-but-set-variable -Wno-unused-local-typedefs")
+    add(_quiet_flags "-Wno-implicit-fallthrough -Wno-discarded-qualifiers")
+    add(_fast_flags  "-ftree-vectorize -ftree-loop-vectorize")
+
+    if(NOT CMAKE_C_COMPILER_IS_GNU AND APPLE)
         INCLUDE_DIRECTORIES("/usr/include/libcxxabi")
     endif()
 
-    option(ENABLE_GCOV "Enable compilation flags for GNU coverage tool (gcov)" OFF)
-    mark_as_advanced(ENABLE_GCOV)
-    if(ENABLE_GCOV)
-        add(_def_cxx "-fprofile-arcs -ftest-coverage")
-    endif(ENABLE_GCOV)
+    add_c_flags(_std_flags "${_std_flags}")
+    add_c_flags(_par_flags "${_par_flags}")
+    add_c_flags(_loud_flags "${_loud_flags}")
+    add_c_flags(_quiet_flags "${_quiet_flags}")
+    add_c_flags(_fast_flags "${_fast_flags}")
 
-    set(CMAKE_C_FLAGS_INIT                "-W -Wall ${_def_cxx}")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-g -DDEBUG ${_loud_flags}")
-    set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG ${_quiet_flags}")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-g -O2 ${_fast_flags}")
-    set(CMAKE_C_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG ${_fast_flags} ${_quiet_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_INIT                "-W -Wall ${_std_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_DEBUG_INIT          "-g -O0 -DDEBUG ${_loud_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG ${_quiet_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-g -O2 ${_fast_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG ${_fast_flags} ${_quiet_flags}")
 
 #------------------------------------------------------------------------------#
 # Intel C++ Compilers
 #
 elseif(CMAKE_C_COMPILER_IS_INTEL)
 
-    set(_std_flags "-Wno-unknown-pragmas -Wno-deprecated")
-    set(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings -fp-model precise")
-    set(_par_flags "-parallel-source-info=2")
+    clean_c_vars()
+    add(_std_flags   "-Wno-deprecated $ENV{C_FLAGS}")
+    add(_std_flags   "-Wno-unknown-pragmas -Wno-deprecated")
+    add(_loud_flags  "-Wwrite-strings -Wpointer-arith")
+    add(_loud_flags  "-Wshadow -Wextra -pedantic")
+    add(_quiet_flags "-Wno-unused-function -Wno-unused-variable")
+    add(_quiet_flags "-Wno-attributes -Wno-unused-but-set-variable")
+    add(_quiet_flags "-Wno-unused-parameter -Wno-sign-compare")
+    add(_extra_flags "-Wno-non-virtual-dtor -Wpointer-arith -Wwrite-strings")
+    add(_extra_flags "-fp-model=precise")
+    add(_par_flags   "-parallel-source-info=2")
 
-    get_intel_intrinsic_include_dir()
+    add_intel_intrinsic_include_dir()
 
-    set(CMAKE_C_FLAGS_INIT                "${_std_flags} ${_extra_flags} $ENV{C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-debug -DDEBUG ${_par_flags}")
-    set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
-    set(CMAKE_C_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG")
+    add_c_flags(_std_flags "${_std_flags}")
+    add_c_flags(_extra_flags "${_extra_flags}")
+    add_c_flags(_par_flags "${_par_flags}")
+    add_c_flags(_loud_flags "${_loud_flags}")
+    add_c_flags(_quiet_flags "${_quiet_flags}")
 
-#-----------------------------------------------------------------------
+    set_no_duplicates(CMAKE_C_FLAGS_INIT                "${_std_flags} ${_extra_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_DEBUG_INIT          "-debug -DDEBUG ${_par_flags} ${_loud_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG ${_quiet_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -debug ${_par_flags}")
+    set_no_duplicates(CMAKE_C_FLAGS_RELEASE_INIT        "-Ofast -DNDEBUG ${_quiet_flags}")
+
+#------------------------------------------------------------------------------#
 # IBM xlC compiler
 #
 elseif(CMAKE_C_COMPILER_IS_XLC)
 
-    set(CMAKE_C_FLAGS_INIT "$ENV{C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
-    set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O2 -qtwolink -+")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
-    set(CMAKE_C_FLAGS_RELEASE_INIT        "-O2 -qtwolink -+")
+    add_c_flags(CMAKE_C_FLAGS_INIT "$ENV{C_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_DEBUG_INIT          "-g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
+    add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O2 -qtwolink -+")
+    add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g -qdbextra -qcheck=all -qfullpath -qtwolink -+")
+    add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "-O2 -qtwolink -+")
 
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------#
 # HP aC++ Compiler
 #
 elseif(CMAKE_C_COMPILER_IS_HP_ACC)
 
-    set(CMAKE_C_FLAGS_INIT                "+DAportable +W823 $ENV{C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-g")
-    set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O3 +Onolimit")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O3 +Onolimit -g")
-    set(CMAKE_C_FLAGS_RELEASE_INIT        "+O2 +Onolimit")
+    add_c_flags(CMAKE_C_FLAGS_INIT                "+DAportable +W823 $ENV{C_FLAGS}")
+    add_c_flags(CMAKE_C_FLAGS_DEBUG_INIT          "-g")
+    add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O3 +Onolimit")
+    add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O3 +Onolimit -g")
+    add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "+O2 +Onolimit")
 
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------#
 # IRIX MIPSpro CC Compiler
 #
 elseif(CMAKE_C_COMPILER_IS_MIPS)
 
-    set(CMAKE_C_FLAGS_INIT                "-ptused -DSOCKET_IRIX_SOLARIS")
-    set(CMAKE_C_FLAGS_DEBUG_INIT          "-g")
-    set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O -OPT:Olimit=5000")
-    set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O -OPT:Olimit=5000 -g")
-    set(CMAKE_C_FLAGS_RELEASE_INIT        "-O -OPT:Olimit=5000")
+    add_c_flags(CMAKE_C_FLAGS_INIT                "-ptused -DSOCKET_IRIX_SOLARIS")
+    add_c_flags(CMAKE_C_FLAGS_DEBUG_INIT          "-g")
+    add_c_flags(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-O -OPT:Olimit=5000")
+    add_c_flags(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O -OPT:Olimit=5000 -g")
+    add_c_flags(CMAKE_C_FLAGS_RELEASE_INIT        "-O -OPT:Olimit=5000")
+
+#------------------------------------------------------------------------------#
+# Unknown compiler
+#
+else()
+
+    message(WARNING "Unknown C compiler: ${CMAKE_C_COMPILER}. Using generic defaults")
+    set_no_duplicates(CMAKE_C_FLAGS_INIT                "")
+    set_no_duplicates(CMAKE_C_FLAGS_DEBUG_INIT          "-g -DDEBUG")
+    set_no_duplicates(CMAKE_C_FLAGS_MINSIZEREL_INIT     "-Os -DNDEBUG")
+    set_no_duplicates(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "-O2 -g")
+    set_no_duplicates(CMAKE_C_FLAGS_RELEASE_INIT        "-O3 -DNDEBUG")
 
 endif()
 

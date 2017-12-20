@@ -1,5 +1,7 @@
 #!/bin/bash
 
+@EXTRA_INIT@
+
 outdir="out_@SIZE@_ground"
 mkdir -p "${outdir}"
 
@@ -15,7 +17,8 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp" --minpix $detpix
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+        --out "${outdir}/fp" --minpix $detpix
 fi
 
 # Generate the schedule file if it does not already exist.
@@ -26,6 +29,7 @@ schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     toast_ground_schedule.py @$schparfile \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
 fi
@@ -44,6 +48,8 @@ parfile="@TOPDIR@/params/ground/ground_sim.par"
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
@@ -51,6 +57,7 @@ com="${ex} @${parfile} \
 --atm_xstep @CELLSIZE@ \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
+$@ \
 "
 
 # Use 2 processes, each with 2 threads
@@ -71,6 +78,12 @@ run="mpirun -np ${procs}"
 export vrun
 export vtune_collect
 
+: ${LOG_OUT:="${outdir}/log_${vtune_collect}"}
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com}"
-eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect} -- ${com} > ${LOG_OUT} 2>&1
 
+for i in ${outdir}/timing_report*.out
+do
+    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+    cat ${i} >> ${LOG_OUT}
+done

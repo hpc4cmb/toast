@@ -1,87 +1,61 @@
-#!/bin/bash
+#!/bin/bash -l
+
+set -o errexit
+
+# if no realpath command, then add function
+if ! eval command -v realpath &> /dev/null ; then
+    realpath()
+    {
+        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+    }
+fi 
 
 # get the absolute path to the directory with this script
-pushd $(dirname $0) > /dev/null
-topdir=$(pwd -P)
-popd > /dev/null
+TOPDIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
 
+echo "Running in top directory: ${TOPDIR}..."
+
+if ! eval command -v cmake &> /dev/null ; then
+    echo -e "\n\tCommand: \"cmake\" not available. Unable to proceed...\n"
+    exit 2
+fi
+
+: ${ACCOUNT:=mp107}
+: ${QUEUE:=debug}
 : ${TYPES:="satellite ground ground_simple ground_multisite"}
 : ${SIZES:="tiny small medium large representative"}
-: ${MACHINES:="cori-intel-knl cori-intel-haswell edison-intel"}
+: ${MACHINES:="cori-knl cori-haswell edison"}
 
-for type in ${TYPES}; do
-    for size in ${SIZES}; do
-        for machine in ${MACHINES}; do
-            template="${type}_template"
-            sizefile="${type}.${size}"
-            machfile="machine.${machine}"
-            outfile="${size}_${type}_${machine}.slurm"
+for TYPE in ${TYPES}; do
+    for SIZE in ${SIZES}; do
+        for MACHINE in ${MACHINES}; do   
+         
+            TEMPLATE="${TOPDIR}/templates/${TYPE}.in"
+            SIZEFILE="${TOPDIR}/templates/params/${TYPE}.${SIZE}"
+            MACHFILE="${TOPDIR}/templates/machines/${MACHINE}"
+            OUTFILE="${TOPDIR}/${SIZE}_${TYPE}_${MACHINE}.slurm"
 
-            echo "Generating ${outfile}"
+            echo "Generating ${OUTFILE}"
 
-            # Create list of substitutions
-
-            confsub=""
-
-            while IFS='' read -r line || [[ -n "${line}" ]]; do
-                # is this line commented?
-                comment=$(echo "${line}" | cut -c 1)
-                if [ "${comment}" != "#" ]; then
-
-                    check=$(echo "${line}" | sed -e "s#.*=.*#=#")
-                
-                    if [ "x${check}" = "x=" ]; then
-                        # get the variable and its value
-                        var=$(echo ${line} | sed -e "s#\([^=]*\)=.*#\1#" | awk '{print $1}')
-                        val=$(echo ${line} | sed -e "s#[^=]*= *\(.*\)#\1#")
-                        # add to list of substitutions
-                        confsub="${confsub} -e 's#@@${var}@@#${val}#g'"
-                    fi
-                fi
-
-            done < "${sizefile}"
-
-            while IFS='' read -r line || [[ -n "${line}" ]]; do
-                # is this line commented?
-                comment=$(echo "${line}" | cut -c 1)
-                if [ "${comment}" != "#" ]; then
-
-                    check=$(echo "${line}" | sed -e "s#.*=.*#=#")
-                
-                    if [ "x${check}" = "x=" ]; then
-                        # get the variable and its value
-                        var=$(echo ${line} | sed -e "s#\([^=]*\)=.*#\1#" | awk '{print $1}')
-                        val=$(echo ${line} | sed -e "s#[^=]*= *\(.*\)#\1#")
-                        # add to list of substitutions
-                        confsub="${confsub} -e 's#@@${var}@@#${val}#g'"
-                    fi
-                fi
-
-            done < "${machfile}"
-
-            # We add these predefined matches at the end- so that the config
-            # files can also use these.
-
-            confsub="${confsub} -e 's#@@machine@@#${machine}#g'"
-            confsub="${confsub} -e 's#@@size@@#${size}#g'"
-            confsub="${confsub} -e 's#@@topdir@@#${topdir}#g'"
-
-            #echo "${confsub}"
-
-            # Process the template
-
-            rm -f "${outfile}"
-
-            while IFS='' read -r line || [[ -n "${line}" ]]; do
-                echo "${line}" | eval sed ${confsub} >> "${outfile}"
-            done < "${template}"
-
+            cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
+                -DMACHFILE=${MACHFILE} -DSIZEFILE=${SIZEFILE} \
+                -DTOPDIR="${TOPDIR}" -DACCOUNT=${ACCOUNT} -DTYPE=${TYPE} \
+                -DSIZE=${SIZE} -DMACHINE=${MACHINE} -DQUEUE=${QUEUE} $@ \
+                -P ${TOPDIR}/templates/config.cmake
         done
     done
 done
 
+# set default to 0
+: ${GENERATE_SHELL:=0}
+# generate shell if set to greater than zero
+if [ "${GENERATE_SHELL}" -gt 0 ]; then
+    ${TOPDIR}/generate_shell.sh
+fi
 
-
-
-
-
+# set default to 0
+: ${GENERATE_VTUNE:=0}
+# generate VTune if set to greater than zero
+if [ "${GENERATE_VTUNE}" -gt 0 ]; then
+    ${TOPDIR}/generate_vtune.sh
+fi

@@ -19,10 +19,10 @@ pushd "${DATA}" > /dev/null
 # Are we running at NERSC?
 if [ -d "${LOCAL_DATA}" ]; then
     # yes
-    eval ${RSYNC} "${LOCAL_DATA}/*" "."
+    eval ${RSYNC} "${LOCAL_DATA}/*" "." &> /dev/stdout
 else
     # no
-    eval ${WGET} "${REMOTE_DATA}"
+    eval ${WGET} "${REMOTE_DATA}" &> /dev/stdout
     rm robots.txt toast_data
 fi
 

@@ -11,8 +11,8 @@ import numpy as np
 
 from ..op import Operator
 
-#from .tod_math import sim_noise_timestream
 from ..ctoast import sim_noise_sim_noise_timestream as sim_noise_timestream
+from .. import timing as timing
 
 
 class OpSimNoise(Operator):
@@ -68,7 +68,7 @@ class OpSimNoise(Operator):
             RuntimeError: If observations are not split into chunks.
 
         """
-
+        autotimer = timing.auto_timer(type(self).__name__)
         for obs in data.obs:
             obsindx = 0
             if 'id' in obs:
@@ -132,6 +132,7 @@ class OpSimNoise(Operator):
             chunk_samp (int): Number of simulated samples
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         chunk_samp = tod.total_chunks[tod.local_chunks[0] + curchunk]
         local_offset = chunk_first - tod.local_samples[0]
 

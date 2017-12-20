@@ -63,3 +63,6 @@ endif
 # Always need the C math and pthreads libraries
 
 AM_LIBS += $(PTHREAD_LIBS) $(MATH)
+
+# Always need the Cereal include directories
+AM_CPPFLAGS += -I$(top_srcdir)/src/cereal/include

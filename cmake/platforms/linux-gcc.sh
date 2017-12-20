@@ -27,5 +27,7 @@ export MPICXX=$(which g++)
 # on command line (e.g. -DUSE_MKL=ON -DUSE_MKL=OFF --> USE_MKL == OFF)
 mkdir -p ${DIR} 
 cd ${DIR}
-cmake -DCMAKE_BUILD_TYPE=Release -DUSE_MKL=OFF -DUSE_TBB=OFF ${OPTS} ${ROOT}
-
+cmake -DCMAKE_BUILD_TYPE=Release \
+    -DUSE_MKL=OFF -DUSE_TBB=OFF -DUSE_AATM=ON \
+    -DUSE_FFTW=ON -DUSE_ARCH=ON -DUSE_SSE=ON \
+    ${OPTS} ${ROOT}

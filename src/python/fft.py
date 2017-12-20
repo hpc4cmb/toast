@@ -4,6 +4,7 @@
 
 
 import numpy as np
+from . import timing as timing
 
 from .ctoast import ( fft_r1d_store_get, fft_r1d_store_forward,
     fft_r1d_store_backward, fft_r1d_exec, fft_r1d_tdata_set, fft_r1d_tdata_get,
@@ -24,6 +25,7 @@ def r1d_forward(indata):
     Returns:
         array: The output Fourier-domain data in FFTW half-complex format.
     """
+    autotimer = timing.auto_timer()
     cnt = 1
     len = indata.shape[0]
     store = fft_r1d_store_get()
@@ -48,6 +50,7 @@ def r1d_backward(indata):
     Returns:
         array: The output data.
     """
+    autotimer = timing.auto_timer()
     cnt = 1
     len = indata.shape[0]
     store = fft_r1d_store_get()

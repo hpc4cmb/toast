@@ -78,9 +78,8 @@ unset(_LIBDIR_DEFAULT)
 if(NOT "${PYTHON_VERSION_STRING}" STREQUAL "")
     GET_VERSION_COMPONENTS(PYTHON "${PYTHON_VERSION_STRING}")
 endif(NOT "${PYTHON_VERSION_STRING}" STREQUAL "")
-STRING(TOLOWER "${CMAKE_PROJECT_NAME}" LPROJECT_NAME)
 set(CMAKE_INSTALL_PYTHONDIR
-    "${CMAKE_INSTALL_LIBDIR_DEFAULT}/python${PYTHON_SHORT_VERSION}/site-packages/${LPROJECT_NAME}"
+    "${CMAKE_INSTALL_LIBDIR_DEFAULT}/python${PYTHON_SHORT_VERSION}/site-packages"
     CACHE PATH "CMake python install directory" FORCE)
 
 # ---------------------------------------------------------------------------- #

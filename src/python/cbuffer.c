@@ -190,7 +190,7 @@ static void ToastBuffer_dealloc ( ToastBuffer * self ) {
 /* This function returns the string representation of our object */
 
 char * ToastBuffer_stringify ( void * data, ToastItemType type, size_t len, size_t nmax ) {
-    char * output = (char*) malloc(nmax * 20);
+    char * output = (char*) malloc(nmax * 40);
     int pos = sprintf(&output[0], "[");
 
     switch ( type ) {
@@ -362,18 +362,18 @@ static PyTypeObject ToastBufferType = {
     0,                            /* tp_getattr */
     0,                            /* tp_setattr */
     0,                            /* tp_reserved */
-    (reprfunc)ToastBuffer_str,      /* tp_repr */
+    (reprfunc)ToastBuffer_str,    /* tp_repr */
     0,                            /* tp_as_number */
     0,                            /* tp_as_sequence */
     0,                            /* tp_as_mapping */
-    0,                            /* tp_hash  */
+    PyObject_HashNotImplemented,  /* tp_hash  */
     0,                            /* tp_call */
-    (reprfunc)ToastBuffer_str,      /* tp_str */
+    (reprfunc)ToastBuffer_str,    /* tp_str */
     0,                            /* tp_getattro */
     0,                            /* tp_setattro */
-    &ToastBuffer_as_buffer,         /* tp_as_buffer */
+    &ToastBuffer_as_buffer,       /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,           /* tp_flags */
-    "ToastBuffer object",           /* tp_doc */
+    "ToastBuffer object",         /* tp_doc */
     0,                            /* tp_traverse */
     0,                            /* tp_clear */
     0,                            /* tp_richcompare */
@@ -388,7 +388,7 @@ static PyTypeObject ToastBufferType = {
     0,                            /* tp_descr_get */
     0,                            /* tp_descr_set */
     0,                            /* tp_dictoffset */
-    (initproc)ToastBuffer_init,     /* tp_init */
+    (initproc)ToastBuffer_init,   /* tp_init */
 };
 
 

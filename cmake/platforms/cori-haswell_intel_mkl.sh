@@ -7,6 +7,20 @@
 #    -DCMAKE_INSTALL_PREFIX=$SCRATCH/software/toast-haswell
 #
 
+set -o errexit
+for i in $(env | grep aux | grep ^PATH | sed 's/:/ /g' | sed 's/PATH=//g')
+do 
+    if [ ! -z "$(echo $i | grep 'aux/bin')" ]; then 
+        : ${AUX_PREFIX:=$(dirname $i)}
+        break
+    fi
+done
+
+if [ -z "${AUX_PREFIX}" ]; then 
+    echo "Please set AUX_PREFIX to the TOAST auxilary path"
+    exit 1
+fi
+
 ROOT=${PWD}
 DIR=${PWD}/build-toast/cori-haswell-intel-mkl/release
 OPTS="$@"
@@ -23,7 +37,9 @@ cd ${DIR}
 cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENMP=ON \
     -DUSE_MKL=ON -DMKL_ROOT=${INTEL_PATH}/linux/mkl \
     -DUSE_TBB=ON -DTBB_ROOT=${INTEL_PATH}/linux/tbb \
-    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linx/compiler \
-    -DTARGET_ARCHITECTURE=haswell \
+    -DUSE_MATH=ON -DIMF_ROOT=${INTEL_PATH}/linux/compiler \
+    -DUSE_ARCH=ON -DUSE_SSE=ON -DUSE_AATM=ON \
+    -DUSE_ELEMENTAL=ON -DCMAKE_PREFIX_PATH=${AUX_PREFIX} \
+    -DTARGET_ARCHITECTURE=haswell -DCTEST_SITE=cori-haswell \
+    -DMACHINE=cori-haswell \
     ${OPTS} ${ROOT}
-

@@ -1,4 +1,0 @@
-constraint = 
-nodeprocs = 8
-nodecores = 24
-hyperthread = 2

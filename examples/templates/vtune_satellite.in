@@ -11,6 +11,8 @@
 
 set -o errexit
 
+@EXTRA_INIT@
+
 echo Starting slurm script at $(date)
 
 ulimit -s unlimited
@@ -47,7 +49,11 @@ detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    srun -n 1 -N 1 toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
+    echo "Running toast_fake_focalplane.py..."
+    srun -n 1 -N 1 toast_fake_focalplane.py \
+        --disable-timer-serialization \
+        --toast-output-dir ${outdir} --toast-timing-fname "timing_report_fp" \
+        --minpix ${detpix} --out "${outdir}/fp"
 fi
 
 # The executable script
@@ -79,10 +85,13 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
+--toast-output-dir ${outdir} \
+--enable-timers --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \
 --outdir ${outdir}/out \
+$@ \
 "
 
 #--- Hardware configuration ----
@@ -117,14 +126,21 @@ export vtune_collect
 
 echo Calling srun at $(date)
 
+: ${LOG_OUT:="${outdir}/log_${vtune_collect}"}
 echo "${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com}"
-eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > "${outdir}/log_${vtune_collect}" 2>&1
+eval ${run} ${vrun} -r ${outdir}/vtune_${vtune_collect}  -- ${com} > ${LOG_OUT} 2>&1
 
 if eval command -v vfinal &> /dev/null ; then
     echo "Run \"vfinal <vtune-output-dir>\" to finalize results"
 else
     echo "No alias \"vfinal\" defined. Remember to finalize results"
 fi
+
+for i in ${outdir}/timing_report*.out
+do
+    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+    cat ${i} >> ${LOG_OUT}
+done
 
 echo End slurm script at $(date)
 

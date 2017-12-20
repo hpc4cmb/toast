@@ -28,6 +28,7 @@ noinst_LTLIBRARIES = libtoast_util.la
 libtoast_util_la_includedir = $(includedir)/toast
 
 libtoast_util_la_include_HEADERS = \
+toast/auto_timer.hpp \
 toast/base_timer.hpp \
 toast/timer.hpp \
 toast/timing_manager.hpp

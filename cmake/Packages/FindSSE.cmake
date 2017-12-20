@@ -179,25 +179,27 @@ FUNCTION(GET_SSE_COMPILE_FLAGS _FLAGS_VAR _DEFS_VAR)
             list(APPEND SSE_DEFINITIONS HAS_AVX2)
         endif()
 
-        set(SSE_CXX_FLAGS "${_FLAGS}")
+        add_cxx_flags(SSE_CXX_FLAGS "${_FLAGS}")
 
     elseif(CMAKE_CXX_COMPILER_IS_GNU)
 
+        set(_FLAGS )
         foreach(type SSE2 SSE3 SSSE3 SSE4_1 SSE4_2 AVX AVX2)
             string(TOLOWER "${type}" _flag)
             string(REPLACE "_" "." _flag "${_flag}")
             set(${type}_FLAGS "-m${_flag}")
             if(${type}_FOUND)
-                set(SSE_CXX_FLAGS "${SSE_CXX_FLAGS} ${${type}_FLAGS}")
+                set(_FLAGS "${SSE_CXX_FLAGS} ${${type}_FLAGS}")
                 list(APPEND SSE_DEFINITIONS HAS_${type})
             endif()
         endforeach()
 
         if(APPLE AND USE_CLANG_ASSEMBLER)
-            add(SSE_CXX_FLAGS "-Wa,-W")
-            add(SSE_CXX_FLAGS "-Wa,-q")
+            add(_FLAGS "-Wa,-W")
+            add(_FLAGS "-Wa,-q")
         endif(APPLE AND USE_CLANG_ASSEMBLER)
 
+        add_cxx_flags(SSE_CXX_FLAGS "${_FLAGS}")
     endif(CMAKE_CXX_COMPILER_IS_INTEL)
 
     set(${_FLAGS_VAR} "${SSE_CXX_FLAGS}" PARENT_SCOPE)

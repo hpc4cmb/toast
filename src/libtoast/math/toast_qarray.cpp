@@ -478,7 +478,7 @@ void toast::qarray::ln ( size_t n, double const * q_in, double * q_out ) {
 // Real power of quaternion array
 
 void toast::qarray::pow ( size_t n, double const * p, double const * q_in, double * q_out ) {
-    
+
     toast::mem::simd_array<double> q_tmp(4*n);
 
     toast::qarray::ln ( n, q_in, q_tmp );

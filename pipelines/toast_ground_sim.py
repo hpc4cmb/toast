@@ -23,8 +23,8 @@ import toast
 import toast.tod as tt
 import toast.map as tm
 import toast.qarray as qa
+import toast.timing as timing
 from toast import Weather
-
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -240,7 +240,7 @@ def parse_arguments(comm):
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = parser.parse_args()
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     if len(args.freq.split(',')) != 1:
         # Multi frequency run.  We don't support multiple copies of
@@ -329,6 +329,7 @@ def load_schedule(args, comm):
 
     """
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
     schedules = []
 
     if comm.comm_world.rank == 0:
@@ -406,6 +407,7 @@ def load_focalplanes(args, comm, schedules):
 
     """
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     # Load focalplane information
 
@@ -568,6 +570,7 @@ def create_observations(args, comm, schedules, counter):
 
     """
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     data = toast.Data(comm)
 
@@ -654,6 +657,7 @@ def expand_pointing(args, comm, data, counter):
 
     """
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     hwprpm = args.hwprpm
     hwpstep = None
@@ -694,6 +698,7 @@ def get_submaps(args, comm, data):
 
     """
     if not args.skip_bin or args.input_map:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
         start = MPI.Wtime()
@@ -757,6 +762,7 @@ def scan_signal(args, comm, data, counter, localsm, subnpix):
     signalname = None
 
     if args.input_map:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning input map', flush=args.flush)
         start = MPI.Wtime()
@@ -792,7 +798,6 @@ def setup_sigcopy(args, comm):
     When we simulate multichroic focal planes, the frequency-independent
     part of the atmospheric noise is simulated first and then the
     frequency scaling is applied to a copy of the atmospheric noise.
-
     """
     if len(args.freq.split(',')) == 1:
         totalname = 'total'
@@ -810,6 +815,7 @@ def setup_madam(args, comm):
     Initialize the Madam parameters from the command line arguments.
 
     """
+    autotimer = timing.auto_timer()
     pars = {}
 
     cross = args.nside // 2
@@ -870,6 +876,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
 
     """
     if not args.skip_atmosphere:
+        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
             site_id = obs['site_id']
@@ -894,6 +901,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
 def simulate_atmosphere(args, comm, data, mc, counter,
                         totalname):
     if not args.skip_atmosphere:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating atmosphere', flush=args.flush)
             if args.atm_cache and not os.path.isdir(args.atm_cache):
@@ -939,6 +947,7 @@ def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
 
     """
     if totalname != totalname_freq:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Copying atmosphere from {} to {}'.format(
                 totalname, totalname_freq), flush=args.flush)
@@ -950,6 +959,7 @@ def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
 
 def simulate_noise(args, comm, data, mc, counter, totalname_freq):
     if not args.skip_noise:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating noise', flush=args.flush)
         start = MPI.Wtime()
@@ -969,6 +979,7 @@ def simulate_noise(args, comm, data, mc, counter, totalname_freq):
 
 def scramble_gains(args, comm, data, mc, counter, totalname_freq):
     if args.gain_sigma:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scrambling gains', flush=args.flush)
         start = MPI.Wtime()
@@ -1000,6 +1011,7 @@ def setup_output(args, comm, mc, freq):
 
 def apply_polyfilter(args, comm, data, counter, totalname_freq):
     if args.polyorder:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1020,6 +1032,7 @@ def apply_polyfilter(args, comm, data, counter, totalname_freq):
 
 def apply_groundfilter(args, comm, data, counter, totalname_freq):
     if args.wbin_ground:
+        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1041,6 +1054,7 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
 def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
+    autotimer = timing.auto_timer()
     from toast.tod.tidas import OpTidasExport
     tidas_path = os.path.abspath(args.tidas)
     comm.comm_world.Barrier()
@@ -1065,6 +1079,7 @@ def get_time_communicators(comm, data):
     """ Split the world communicator by time.
 
     """
+    autotimer = timing.auto_timer()
     time_comms = [('all', comm.comm_world)]
 
     # A process will only have data for one season and one day.  If more
@@ -1103,6 +1118,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
     if comm.comm_world.rank == 0:
         print('Making maps', flush=args.flush)
     start = MPI.Wtime()
+    autotimer = timing.auto_timer()
 
     pars = copy.deepcopy(madampars)
     pars['path_output'] = outpath
@@ -1202,6 +1218,8 @@ def main():
     global_start = MPI.Wtime()
 
     args, comm = parse_arguments(comm)
+
+    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     # Initialize madam parameters
 
@@ -1334,12 +1352,12 @@ def main():
     if comm.comm_world.rank == 0:
         print('Total Time:  {:.2f} seconds'.format(elapsed), flush=True)
 
-    #raise Exception('Done!')
-
 
 if __name__ == '__main__':
     try:
         main()
+        tman = timing.timing_manager()
+        tman.report()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
         if MPI.COMM_WORLD.size == 1:

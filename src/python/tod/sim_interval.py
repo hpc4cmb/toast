@@ -6,6 +6,7 @@
 import numpy as np
 
 from ..dist import distribute_uniform
+from .. import timing as timing
 
 from .interval import Interval
 
@@ -34,6 +35,7 @@ def regular_intervals(n, start, first, rate, duration, gap):
     Returns:
         (list): a list of Interval objects.
     """
+    autotimer = timing.auto_timer()
     invrate = 1.0 / rate
 
     # Compute the whole number of samples that fit within the

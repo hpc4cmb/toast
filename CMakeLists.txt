@@ -15,6 +15,7 @@ endif()
 
 project(TOAST C CXX)
 
+STRING(TOLOWER "${CMAKE_PROJECT_NAME}" LPROJECT_NAME)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "CMake build type")
 # Above cache variable isn't immediately set in first build
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
@@ -28,12 +29,15 @@ set(CMAKE_MODULE_PATH
     ${PROJECT_SOURCE_DIR}/cmake/Packages
     ${CMAKE_MODULE_PATH})
 
+set(CMAKE_USER_MAKE_RULES_OVERRIDE_C
+    ${CMAKE_SOURCE_DIR}/cmake/Modules/MakeRulesC.cmake)
+
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX
     ${CMAKE_SOURCE_DIR}/cmake/Modules/MakeRulesCXX.cmake)
 
 include(MakeRulesC)
 include(MakeRulesCXX)
-include(GenericCMakeFunctions)
+include(GenericFunctions)
 set_project_version("2" "2" "0" "Time Ordered Astrophysics Scalable Tools")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_MESSAGE LAZY)
@@ -48,7 +52,7 @@ if(NOT "${CMAKE_ARGS}" MATCHES "CMAKE_PREFIX_PATH")
     unset(CMAKE_PREFIX_PATH CACHE)
 endif()
 
-include(GenericCMakeOptions)
+include(GenericOptions)
 include(Packages)
 include(LibraryBuildOptions)
 include(InstallDirs)
@@ -59,10 +63,21 @@ add_feature(CMAKE_INSTALL_PREFIX "Installation prefix")
 add_feature(CMAKE_CXX_FLAGS "CXX flags")
 add_feature(CMAKE_BUILD_TYPE "Build type")
 add_feature(CMAKE_CXX_FLAGS_${UPPER_BUILD_TYPE} "CXX flags for ${CMAKE_BUILD_TYPE}")
+add_feature(CMAKE_GENERATOR "Build file generator")
+
+if(BUILD_TESTING)
+    if(DEFINED CTEST_SITE AND "${CTEST_SITE}" STREQUAL "")
+        unset(CTEST_SITE CACHE)
+    endif()
+    get_os_node_name(_SITE)
+    set(CTEST_SITE "${_SITE}" CACHE STRING "OS name over network")
+    add_feature(CTEST_SITE "Site name (e.g. hostname)")
+endif(BUILD_TESTING)
 
 foreach(_INCLUDE_DIR ${EXTERNAL_INCLUDE_DIRS})
     include_directories(SYSTEM ${_INCLUDE_DIR})
 endforeach()
+
 
 #-----------------------------------------------------------------------
 # BUILD_CXXSTD
@@ -84,6 +99,8 @@ install(FILES ${PYTHON_EXAMPLES} DESTINATION ${CMAKE_INSTALL_BINDIR}
     OWNER_WRITE
     OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE)
 
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/examples ${CMAKE_BINARY_DIR}/examples)
 #------------------------------------------------------------------------------#
 
 include(Documentation)
@@ -95,7 +112,7 @@ endif()
 
 #------------------------------------------------------------------------------#
 
-add_feature(BUILD_TESTING "Enable CTest and CDash submission")
+add_option(BUILD_TESTING "Enable CTest and CDash submission" OFF)
 
 include(CMakeUninstallTarget)
 if(BUILD_TESTING)
@@ -103,3 +120,8 @@ if(BUILD_TESTING)
 endif()
 
 print_features()
+
+if(EXISTS ${CMAKE_BINARY_DIR}/compile-testing)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove_directory
+        ${CMAKE_BINARY_DIR}/compile-testing)
+endif(EXISTS ${CMAKE_BINARY_DIR}/compile-testing)

@@ -201,6 +201,7 @@ function(ArchitectureFlags VAR)
         add(_ARCH_FLAGS "-Wa,-q")
     endif(APPLE)
 
+    add_cxx_flags(_ARCH_FLAGS "${_ARCH_FLAGS}")
     set(${VAR} "${_ARCH_FLAGS}" PARENT_SCOPE)
 endfunction()
 

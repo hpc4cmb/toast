@@ -9,11 +9,9 @@ import os
 import numpy as np
 
 from ..dist import distribute_samples
-
 from ..cache import Cache
-
+from .. import timing as timing
 from .interval import Interval
-
 
 class TOD(object):
     """
@@ -525,6 +523,7 @@ class TOD(object):
         Returns:
             (array): a numpy array containing the timestamps.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -547,6 +546,7 @@ class TOD(object):
                 assigned sample.
             stamps (array): the array of timestamps to write.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if stamps is None:
             raise ValueError("you must specify the vector of time stamps")
         if self.local_samples[1] <= 0:
@@ -576,6 +576,7 @@ class TOD(object):
         Returns:
             A 2D array of shape (n, 4)
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -598,6 +599,7 @@ class TOD(object):
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if len(data.shape) != 2:
             raise ValueError("data should be a 2D array")
         if data.shape[1] != 4:
@@ -628,6 +630,7 @@ class TOD(object):
         Returns:
             An array containing the data.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -655,6 +658,7 @@ class TOD(object):
                 assigned sample.
             data (array): the data array.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -689,6 +693,7 @@ class TOD(object):
         Returns:
             A 2D array of shape (n, 4)
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -716,6 +721,7 @@ class TOD(object):
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -752,6 +758,7 @@ class TOD(object):
         Returns:
             An array containing the detector flags.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -783,6 +790,7 @@ class TOD(object):
         Returns:
             (array): a numpy array containing the flags.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if self.local_samples[1] <= 0:
             raise RuntimeError("cannot read common flags- process has no "
                                "assigned local samples")
@@ -806,6 +814,7 @@ class TOD(object):
                 assigned sample.
             flags (array): array containing the flags to write.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if flags is None:
             raise ValueError("flags must be specified")
         if self.local_samples[1] <= 0:
@@ -833,6 +842,7 @@ class TOD(object):
                 assigned sample.
             flags (array): the detector flags.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -868,6 +878,7 @@ class TOD(object):
             (array): a 2D numpy array containing the x,y,z coordinates at each
                 sample.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -891,6 +902,7 @@ class TOD(object):
                 assigned sample.
             pos (array): the 2D array of x,y,z coordinates at each sample.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if pos is None:
             raise ValueError("you must specify the array of coordinates")
         if self.local_samples[1] <= 0:
@@ -922,6 +934,7 @@ class TOD(object):
             (array): a 2D numpy array containing the x,y,z velocity components
                 at each sample.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -946,6 +959,7 @@ class TOD(object):
             vel (array): the 2D array of x,y,z velocity components at each
                 sample.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if vel is None:
             raise ValueError("you must specify the array of velocities.")
         if self.local_samples[1] <= 0:

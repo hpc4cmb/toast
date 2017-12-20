@@ -9,7 +9,7 @@ import os
 import numpy as np
 
 from ..ctoast import fod_autosums
-
+from .. import timing as timing
 
 def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=None):
     """
@@ -26,7 +26,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
         stationary_period (float):  Length of a stationary interval in units of the times vector. 
         fsample (float):  The sampling frequency in Hz
     """
-
+    autotimer = timing.auto_timer()
     if comm is None:
         rank = 0
         ntask = 1

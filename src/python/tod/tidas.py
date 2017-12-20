@@ -11,6 +11,7 @@ import re
 import numpy as np
 
 from .. import qarray as qa
+from .. import timing as timing
 
 from ..dist import Data, distribute_discrete
 from ..op import Operator
@@ -113,6 +114,7 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
         raise RuntimeError("tidas is not available")
         return
 
+    autotimer = timing.auto_timer()
     # The root block
     root = vol.root()
 
@@ -158,6 +160,7 @@ def decode_tidas_quats(props):
         a dictionary of detectors and their quaternions, each stored as a 4
         element numpy array.
     """
+    autotimer = timing.auto_timer()
     quatpat = re.compile(r"(.*)_{}([XYZW])".format(STR_QUAT))
     loc = {"X":0, "Y":1, "Z":2, "W":3}
     quats = {}
@@ -195,6 +198,7 @@ def encode_tidas_quats(detquats, props=None):
     Returns (dict):
         a dictionary of detector quaternion values appended to the input.
     """
+    autotimer = timing.auto_timer()
     ret = props
     if ret is None:
         ret = {}
@@ -385,6 +389,7 @@ class TODTidas(TOD):
         Helper function to read multi-component data, pack into an
         array, optionally cache it, and return.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         # Number of components we have
         ncomp = len(comps)
 
@@ -620,6 +625,7 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
     if not available:
         raise RuntimeError("tidas is not available")
         return None
+    autotimer = timing.auto_timer()
     # the global communicator
     cworld = comm.comm_world
     # the communicator within the group
@@ -787,7 +793,7 @@ class OpTidasExport(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-
+        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level toast communicator
         comm = data.comm
         # the global communicator

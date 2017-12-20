@@ -1,8 +1,8 @@
 # find packages for TOAST
 
 include(MacroUtilities)
-include(GenericCMakeOptions)
-include(GenericCMakeFunctions)
+include(GenericOptions)
+include(GenericFunctions)
 include(Compilers)
 
 if(NOT CMAKE_VERSION VERSION_LESS 2.6.3)
@@ -21,7 +21,9 @@ endif()
 # - wcslib
 # - Elemental
 
-add_option(USE_SSE "Use SSE/AVX optimization flags" OFF)
+add_option(USE_SSE "Enable SSE/AVX optimization flags" OFF)
+add_dependent_option(USE_ARCH "Enable architecture optimization flags" ON
+    "USE_SSE" OFF)
 add_option(USE_OPENMP "Use OpenMP" ON)
 
 add_option(USE_TBB "Enable Intel Thread Building Blocks (TBB)" OFF)
@@ -37,9 +39,48 @@ add_option(USE_LAPACK "Use LAPACK" ON)
 add_dependent_option(USE_FFTW "Use FFTW" OFF "USE_MKL" ON)
 add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
+add_option(USE_AATM "Use aatm" OFF)
 
+add_option(USE_TIMERS "Enable internal timers" ON)
+add_option(USE_COVERAGE "Enable compilation flags for GNU coverage tool (gcov)" OFF)
+
+
+################################################################################
+#
+#        Definitions
+#
+################################################################################
 # used as a definition in autotools compilation
 add_definitions(-DHAVE_CONFIG_H)
+
+if(NOT USE_TIMERS)
+    add_definitions(-DDISABLE_TIMERS)
+endif(NOT USE_TIMERS)
+
+if(USE_COVERAGE)
+    include(Coverage)
+    add(CMAKE_C_FLAGS_EXTRA "${COVERAGE_COMPILER_FLAGS}")
+    add(CMAKE_CXX_FLAGS_EXTRA "${COVERAGE_COMPILER_FLAGS}")
+    #add(CMAKE_EXE_LINKER_FLAGS "${COVERAGE_COMPILER_FLAGS}")
+    set(Coverage_LIBRARIES )
+    if(CMAKE_CXX_COMPILER_IS_GNU)
+        find_library(GCOV_LIBRARY
+            NAMES gcov
+            HINTS
+                ENV DYLD_LIBRARY_PATH
+                ENV LIBRARY_PATH
+                ENV LD_LIBRARY_PATH
+            PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR} lib lib64)
+        if(GCOV_LIBRARY)
+            list(APPEND Coverage_LIBRARIES ${GCOV_LIBRARIES})
+        else(GCOV_LIBRARY)
+            list(APPEND Coverage_LIBRARIES gcov)
+        endif(GCOV_LIBRARY)
+    endif(CMAKE_CXX_COMPILER_IS_GNU)
+else(USE_COVERAGE)
+    unset(COVERAGE_COMPILER_FLAGS CACHE)
+endif(USE_COVERAGE)
+
 
 ################################################################################
 #
@@ -236,6 +277,22 @@ endif(USE_WCSLIB)
 
 ################################################################################
 #
+#        aatm
+#
+################################################################################
+
+if(USE_AATM)
+
+    ConfigureRootSearchPath(aatm)
+    find_package(aatm 0.5.0 REQUIRED)
+
+    add_definitions(-DUSE_AATM)
+
+endif(USE_AATM)
+
+
+################################################################################
+#
 #        Elemental
 #
 ################################################################################
@@ -262,6 +319,7 @@ set(EXTERNAL_INCLUDE_DIRS
     ${IMF_INCLUDE_DIRS}
     ${FFTW3_INCLUDE_DIRS}
     ${wcslib_INCLUDE_DIRS}
+    ${aatm_INCLUDE_DIRS}
     ${Elemental_INCLUDE_DIRS}
 )
 
@@ -276,7 +334,9 @@ set(EXTERNAL_LIBRARIES ${CMAKE_THREAD_LIBS_INIT}
     ${OpenBLAS_LIBRARIES}
     ${FFTW3_LIBRARIES}
     ${wcslib_LIBRARIES}
+    ${aatm_LIBRARIES}
     ${Elemental_LIBRARIES}
+    ${Coverage_LIBRARIES}
 )
 
 REMOVE_DUPLICATES(EXTERNAL_INCLUDE_DIRS)
@@ -299,6 +359,7 @@ if(USE_SSE)
     endforeach()
     unset(SSE_DEFINITIONS)
 
+    add(CMAKE_C_FLAGS_EXTRA "${SSE_FLAGS}")
     add(CMAKE_CXX_FLAGS_EXTRA "${SSE_FLAGS}")
 
 else(USE_SSE)
@@ -316,16 +377,14 @@ endif(USE_SSE)
 #
 ################################################################################
 
-include(Architecture)
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
-   "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo" OR
-   (DEFINED TARGET_ARCHITECTURE AND
-       NOT "${TARGET_ARCHITECTURE}" STREQUAL "auto"))
+if(USE_ARCH OR USE_SSE)
+    include(Architecture)
 
     ArchitectureFlags(ARCH_FLAGS)
     add(CMAKE_C_FLAGS_EXTRA "${ARCH_FLAGS}")
     add(CMAKE_CXX_FLAGS_EXTRA "${ARCH_FLAGS}")
 
-endif()
+endif(USE_ARCH OR USE_SSE)
 
+add_c_flags(CMAKE_C_FLAGS_EXTRA "${CMAKE_C_FLAGS_EXTRA}")
+add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${CMAKE_CXX_FLAGS_EXTRA}")

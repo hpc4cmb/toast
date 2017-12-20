@@ -13,6 +13,7 @@ import healpy as hp
 from .. import qarray as qa
 from .tod import TOD
 from ..op import Operator
+from .. import timing as timing
 from .. import rng as rng
 
 from ..ctoast import (atm_sim_alloc, atm_sim_free,
@@ -145,7 +146,7 @@ class OpSimAtmosphere(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-
+        autotimer = timing.auto_timer(type(self).__name__)
         for obs in data.obs:
             try:
                 obsname = obs['name']
