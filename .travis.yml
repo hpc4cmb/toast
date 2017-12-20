@@ -163,7 +163,8 @@ before_install:
     - pip install mpi4py
     # Install libsharp C
     - git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1
-    - cd libsharp; autoreconf
+    - cd libsharp
+    - autoreconf
     - ./configure --enable-mpi --enable-pic
     - make
     - export LIBSHARP="$HOME/miniconda"
@@ -171,10 +172,12 @@ before_install:
     # Install libsharp Python
     - cd python
     - CC="mpicc -g" LDSHARED="mpicc -g -shared" python setup.py install
+    - cd ../..
     # Install PySM
     - git clone https://github.com/zonca/PySM_public.git --branch megarun_2017 --single-branch --depth 1
     - cd PySM_public
     - python setup.py install
+    - cd ..
 
 # Skip this
 
