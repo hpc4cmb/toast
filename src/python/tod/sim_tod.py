@@ -587,6 +587,7 @@ class TODGround(TOD):
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  sampsizes=None, sampbreaks=None, coord="C",
                  report_timing=True, **kwargs):
+        autotimer = timing.auto_timer(type(self).__name__)
 
         if samples < 1:
             raise RuntimeError(
