@@ -1444,7 +1444,7 @@ if __name__ == '__main__':
         traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
         print('*** print_exception:')
         traceback.print_exception(exc_type, exc_value, exc_traceback,
-                                  limit=2, file=sys.stdout)
+                                  limit=5, file=sys.stdout)
         print('*** print_exc:')
         traceback.print_exc()
         print('*** format_exc, first and last line:')
