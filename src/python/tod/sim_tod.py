@@ -587,6 +587,7 @@ class TODGround(TOD):
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  sampsizes=None, sampbreaks=None, coord="C",
                  report_timing=True, **kwargs):
+        autotimer = timing.auto_timer(type(self).__name__)
 
         if samples < 1:
             raise RuntimeError(
@@ -731,6 +732,7 @@ class TODGround(TOD):
                       "".format(tstop - tstart), flush=True)
 
     def __del__(self):
+        autotimer = timing.auto_timer(type(self).__name__)
 
         try:
             del self._boresight_azel
@@ -772,7 +774,6 @@ class TODGround(TOD):
         (tuple):  The extent of the boresight pointing as (min_az, max_az,
             min_el, max_el) in radians.  Includes turnarounds.
         """
-
         return self._min_az, self._max_az, self._min_el, self._max_el
 
     def simulate_scan(self, samples):
@@ -780,6 +781,7 @@ class TODGround(TOD):
         # we must simulate from the beginning of the CES.
         # Generate matching common flags.
         # Sets self._boresight.
+        autotimer = timing.auto_timer(type(self).__name__)
 
         self._az = np.zeros(samples)
         self._commonflags = np.zeros(samples, dtype=np.uint8)
@@ -905,11 +907,11 @@ class TODGround(TOD):
         return sizes, starts[:-1]
 
     def translate_pointing(self):
-
         # Translate the azimuth and elevation into bore sight quaternions
         # in the desired frame. Use two (az, el) pairs to measure the
         # position angle
 
+        autotimer = timing.auto_timer(type(self).__name__)
         orient = XAXIS
         sun = ephem.Sun()
 
@@ -1007,6 +1009,7 @@ class TODGround(TOD):
         return
 
     def free_azel_quats(self):
+        autotimer = timing.auto_timer(type(self).__name__)
         self._boresight_azel = None
         #try:
         self.cache.destroy("boresight_azel")
@@ -1014,6 +1017,7 @@ class TODGround(TOD):
         #    pass
 
     def free_radec_quats(self):
+        autotimer = timing.auto_timer(type(self).__name__)
         self._boresight = None
         #try:
         self.cache.destroy("boresight_radec")
@@ -1021,6 +1025,7 @@ class TODGround(TOD):
         #    pass
 
     def radec2quat(self, ra, dec, pa):
+        autotimer = timing.auto_timer(type(self).__name__)
 
         qR = qa.rotation(ZAXIS, ra+np.pi/2)
         qD = qa.rotation(XAXIS, np.pi/2-dec)
@@ -1065,6 +1070,7 @@ class TODGround(TOD):
         return
 
     def _get_times(self, start, n):
+        autotimer = timing.auto_timer(type(self).__name__)
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         return start_time + np.arange(n) / self._rate
@@ -1099,6 +1105,7 @@ class TODGround(TOD):
         Returns:
             (array): a numpy array containing the timestamps.
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -1110,6 +1117,7 @@ class TODGround(TOD):
         return self._az[local_start:local_start+n]
 
     def _get_pntg(self, detector, start, n, azel=False):
+        autotimer = timing.auto_timer(type(self).__name__)
         boresight = self._get_boresight(start, n, azel=azel)
         detquat = self._fp[detector]
         return qa.mult(boresight, detquat)
@@ -1123,6 +1131,7 @@ class TODGround(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
+        autotimer = timing.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
@@ -1139,6 +1148,7 @@ class TODGround(TOD):
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
+        autotimer = timing.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
         x = self._earthspeed * np.cos(ang)

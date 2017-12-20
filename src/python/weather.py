@@ -93,6 +93,7 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         self.site = site
         self.realization = realization
         if time is not None:
@@ -106,6 +107,7 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         self._time = time
         self._date = datetime.datetime.utcfromtimestamp(self._time)
         self._doy = self._date.timetuple().tm_yday
@@ -127,6 +129,7 @@ class Weather(object):
         if self._year is None:
             raise RuntimeError('Weather object must be initialized by calling '
                                'set_time(time)')
+        autotimer = timing.auto_timer(type(self).__name__)
         # Set the RNG counters for this variable and time
         counter1 = self._varindex[name]
         counter2 = (self._year*366 + self._doy)*24 + self._hour
@@ -147,6 +150,7 @@ class Weather(object):
         for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('TQI')
 
     @property
@@ -157,6 +161,7 @@ class Weather(object):
         for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('TQL')
 
     @property
@@ -167,6 +172,7 @@ class Weather(object):
         for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('TQV')
 
     @property
@@ -177,6 +183,7 @@ class Weather(object):
         ground at the preset time and for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('QV10M')
 
     @property
@@ -187,6 +194,7 @@ class Weather(object):
         preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('PS')
 
     @property
@@ -197,6 +205,7 @@ class Weather(object):
         for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('TS')
 
     @property
@@ -207,6 +216,7 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('T10M')
 
     @property
@@ -217,6 +227,7 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('U10M')
 
     @property
@@ -227,4 +238,5 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
+        autotimer = timing.auto_timer(type(self).__name__)
         return self._draw('V10M')
