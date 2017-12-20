@@ -2,6 +2,6 @@ curl -SL https://pypi.python.org/packages/41/7a/6048de44c62fc5e618178ef9888850c3
     | tar xzf - \
     && cd h5py-2.7.1 \
     && CC="@CC@" LDSHARED="@CC@ -shared" \
-    python setup.py install --prefix=@CONDA_PREFIX@ \
+    python setup.py install --prefix=@AUX_PREFIX@ \
     && cd .. \
     && rm -rf h5py*

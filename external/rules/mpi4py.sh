@@ -11,6 +11,6 @@ curl -SL https://pypi.python.org/packages/31/27/1288918ac230cc9abc0da17d84d66f3d
 	&& echo "extra_compile_args = @MPI_EXTRA_COMP@" >> mpi.cfg \
 	&& echo "extra_link_args = @MPI_EXTRA_LINK@" >> mpi.cfg \
     && python setup.py build --mpi=toast \
-    && python setup.py install --prefix=@CONDA_PREFIX@ \
+    && python setup.py install --prefix=@AUX_PREFIX@ \
     && cd .. \
     && rm -rf mpi4py*

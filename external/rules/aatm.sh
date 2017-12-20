@@ -1,5 +1,5 @@
 curl -SL https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
-    | tar xvzf - \
+    | tar xzf - \
     && cd aatm-0.5 \
     && chmod -R u+w . \
     && patch -p1 < ../rules/patch_aatm \
