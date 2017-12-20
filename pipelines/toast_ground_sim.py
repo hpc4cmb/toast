@@ -215,9 +215,9 @@ def parse_arguments(comm):
     parser.add_argument('--madampar',
                         required=False, default=None,
                         help='Madam parameter file')
-    parser.add_argument('--madam_allreduce',
+    parser.add_argument('--no_madam_allreduce',
                         required=False, default=False, action='store_true',
-                        help='Use allreduce communication in Madam')
+                        help='Do not use allreduce communication in Madam')
     parser.add_argument('--common_flag_mask',
                         required=False, default=1, type=np.uint8,
                         help='Common flag mask')
@@ -843,7 +843,7 @@ def setup_madam(args, comm):
     pars['write_hits'] = not args.skip_hits
     pars['nside_cross'] = cross
     pars['nside_submap'] = submap
-    pars['allreduce'] = args.madam_allreduce
+    pars['allreduce'] = not args.no_madam_allreduce
     pars['pixlim_cross'] = 1e-3
     pars['pixmode_cross'] = 2
     pars['pixlim_map'] = 1e-2
