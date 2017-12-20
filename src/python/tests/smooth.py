@@ -10,7 +10,10 @@ import os
 
 import numpy as np
 import healpy as hp
-import libsharp
+try:
+    import libsharp
+except:
+    libsharp = None
 
 from ..tod.tod import *
 from ..tod.pointing import *

@@ -37,8 +37,6 @@ from . import ops_groundfilter as testopsgroundfilter
 from . import ops_gainscrambler as testopsgainscrambler
 from . import ops_memorycounter as testopsmemorycounter
 from . import ops_madam as testopsmadam
-from . import ops_sim_pysm as testopspysm
-from . import smooth as testsmooth
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
 from . import binned as testbinned
@@ -46,6 +44,11 @@ from . import binned as testbinned
 from ..tod import tidas_available
 if tidas_available:
     from . import tidas as testtidas
+
+from ..map import libsharp_available
+if libsharp_available:
+    from . import ops_sim_pysm as testopspysm
+    from . import smooth as testsmooth
 
 
 def test(name=None):
@@ -94,13 +97,14 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
         suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
         suite.addTest( loader.loadTestsFromModule(testopsmadam) )
-        suite.addTest( loader.loadTestsFromModule(testopspysm) )
-        suite.addTest( loader.loadTestsFromModule(testsmooth) )
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
         if tidas_available:
             suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if libsharp_available:
+            suite.addTest( loader.loadTestsFromModule(testopspysm) )
+            suite.addTest( loader.loadTestsFromModule(testsmooth) )
     elif name != "ctoast":
         if (name == "tidas") and (not tidas_available):
             print("Cannot run TIDAS tests- package not available")
