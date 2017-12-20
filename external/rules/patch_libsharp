@@ -1,0 +1,34 @@
+diff -urN libsharp_orig/configure.ac libsharp/configure.ac
+--- libsharp_orig/configure.ac	2017-12-19 13:06:02.330548852 -0800
++++ libsharp/configure.ac	2017-12-19 16:26:29.721038031 -0800
+@@ -47,9 +47,10 @@
+      ENABLE_PIC=yes
+    fi])
+ 
++CCFLAGS="$CFLAGS"
++
+ case $CCTYPE in
+   gcc)
+-    CCFLAGS="-O3 -fno-tree-vectorize -ffast-math -fomit-frame-pointer -std=c99 -pedantic -Wextra -Wall -Wno-unknown-pragmas -Wshadow -Wmissing-prototypes -Wfatal-errors"
+     GCCVERSION="`$CC -dumpversion 2>&1`"
+     echo "Using gcc version $GCCVERSION"
+     AC_SUBST(GCCVERSION)
+@@ -57,18 +58,10 @@
+     gcc43=`echo $GCCVERSION | grep -c '^4\.[3456789]'`
+     gcc44=`echo $GCCVERSION | grep -c '^4\.4'`
+     changequote([,])
+-    if test $gcc43 -gt 0; then
+-      CCFLAGS="$CCFLAGS -march=native"
+-    fi
+-    if test $gcc44 -gt 0; then
+-      CCFLAGS="$CCFLAGS -fno-tree-fre"
+-    fi
+     ;;
+   icc)
+-    CCFLAGS="-O3 -xHOST -std=c99 -ip -Wbrief -Wall -vec-report0 -openmp-report0 -wd383,981,1419,1572"
+     ;;
+   *)
+-    CCFLAGS="-O2"
+     # Don't do anything now
+     ;;
+ esac

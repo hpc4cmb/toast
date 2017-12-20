@@ -131,6 +131,14 @@ fi
 
 @tidas@
 
+# Install libsharp
+
+@libsharp@
+
+# Install PySM
+
+@pysm@
+
 # Install aatm
 
 @aatm@

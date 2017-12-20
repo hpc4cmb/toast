@@ -66,8 +66,8 @@ ENV PYTHONUSERBASE "/tmp"
 RUN mkdir ./rules
 ADD rules/patch_* ./rules/
 
-RUN mkdir -p /usr/lib/python3.5/site-packages
-ENV PYTHONPATH /usr/lib/python3.5/site-packages
+RUN mkdir -p /usr/lib/python3.6/site-packages
+ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
@@ -122,6 +122,14 @@ ENV PYTHONPATH /usr/lib/python3.5/site-packages
 # Install TIDAS
 
 @tidas@
+
+# Install libsharp
+
+@libsharp@
+
+# Install PySM
+
+@pysm@
 
 # Install aatm
 
