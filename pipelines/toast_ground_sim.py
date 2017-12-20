@@ -1264,7 +1264,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
             if time_comm.rank == 0:
                 print('Mapping {} took {:.3f} s'.format(
                     madam.params['file_root'], stop1-start1), flush=args.flush)
-            if len(time_name.split('-')) == 3 and destripe:
+            if len(time_name.split('-')) == 3 and first_call:
                 # Restore destriping parameters
                 pars['kfirst'] = kfirst_save
                 pars['write_map'] = write_map_save
