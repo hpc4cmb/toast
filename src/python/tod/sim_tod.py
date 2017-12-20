@@ -758,7 +758,6 @@ class TODGround(TOD):
         """
         Convert TOAST UTC time stamp to Julian date
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         return t / 86400. + 2440587.5
 
     def to_DJD(self, t):
@@ -766,7 +765,6 @@ class TODGround(TOD):
         Convert TOAST UTC time stamp to Dublin Julian date used
         by pyEphem.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         return self.to_JD(t) - 2415020
 
     @property
@@ -775,7 +773,6 @@ class TODGround(TOD):
         (tuple):  The extent of the boresight pointing as (min_az, max_az,
             min_el, max_el) in radians.  Includes turnarounds.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         return self._min_az, self._max_az, self._min_el, self._max_el
 
     def simulate_scan(self, samples):
@@ -1047,21 +1044,17 @@ class TODGround(TOD):
         return q
 
     def detoffset(self):
-        autotimer = timing.auto_timer(type(self).__name__)
         return { d : np.asarray(self._fp[d]) for d in self._detlist }
 
     def _get(self, detector, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         # This class just returns data streams of zeros
         return np.zeros(n, dtype=np.float64)
 
     def _put(self, detector, start, data):
-        autotimer = timing.auto_timer(type(self).__name__)
         raise RuntimeError("cannot write data to simulated data streams")
         return
 
     def _get_flags(self, detector, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         return np.zeros(n, dtype=np.uint8)
 
     def _put_flags(self, detector, start, flags):
@@ -1069,7 +1062,6 @@ class TODGround(TOD):
         return
 
     def _get_common_flags(self, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         return self._commonflags[start:start+n]
 
     def _put_common_flags(self, start, flags):
@@ -1087,7 +1079,6 @@ class TODGround(TOD):
         return
 
     def _get_boresight(self, start, n, azel=False):
-        autotimer = timing.auto_timer(type(self).__name__)
         if azel:
             if self._boresight_azel is None:
                 raise RuntimeError("Boresight azel pointing was purged.")
