@@ -159,7 +159,7 @@ before_install:
     - conda update -q conda
     # Useful for debugging any issues with conda
     - conda info -a
-    - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip
+    - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip cython
     - pip install mpi4py
     # Install libsharp C
     - git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1
