@@ -257,10 +257,11 @@ class OpSimPySM(Operator):
     """
     def __init__(self, comm=None,
                  out='signal', pysm_model='', focalplanes=None, nside=None,
-                 subnpix=None, localsm=None, apply_beam=False):
+                 subnpix=None, localsm=None, apply_beam=False, nest=True):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
+        self._nest = nest
         self.comm = comm
         self.dist_rings = DistRings(comm,
                             nside = nside,
@@ -334,7 +335,7 @@ class OpSimPySM(Operator):
 
             full_map_rank0 = assemble_map_on_rank0(self.comm,
                                      local_maps["sky"], n_components, self.npix)
-            if self.comm.rank == 0:
+            if self.comm.rank == 0 and self._nest:
                 # PySM is RING, toast is NEST
                 full_map_rank0 = hp.reorder(full_map_rank0, r2n=True)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
