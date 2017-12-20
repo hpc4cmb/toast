@@ -121,4 +121,7 @@ def test(name=None):
         if not _ret.wasSuccessful():
             ret += 1
 
+    if ret > 0:
+        sys.exit(ret)
+
     return ret
