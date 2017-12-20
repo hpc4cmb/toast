@@ -8,7 +8,12 @@ import numpy as np
 
 import healpy as hp
 
-import libsharp
+available = False
+try:
+    import libsharp
+    available = True
+except:
+    libsharp = None
 
 from ..cache import Cache
 
@@ -47,6 +52,8 @@ def distribute_rings(nside, rank, n_mpi_processes):
         integer array of local pixel indices in the current MPI process in RING
         ordering
     """
+    if libsharp is None:
+        raise RuntimeError('libsharp not available')
     nrings = 4 * nside - 1  # four missing pixels
 
     # ring indices are 1-based
@@ -95,6 +102,8 @@ class DistRings(object):
     """
     def __init__(self, comm=MPI.COMM_WORLD, nnz=1, dtype=np.float64,
                  nside=16):
+        if libsharp is None:
+            raise RuntimeError('libsharp not available')
         self.data = None
         self._comm = comm
         self._nnz = nnz

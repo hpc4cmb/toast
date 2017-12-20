@@ -1,4 +1,9 @@
-import libsharp
+available = False
+try:
+    import libsharp
+    available = True
+except:
+    libsharp = None
 import numpy as np
 import healpy as hp
 
@@ -65,6 +70,9 @@ class LibSharpSmooth():
         Args:
             data (toast.Data): The distributed data.
         """
+
+        if libsharp is None:
+            raise RuntimeError('libsharp not available')
 
         has_pol = len(data[self.signal_map]) > 1
 
