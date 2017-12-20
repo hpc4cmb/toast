@@ -25,7 +25,7 @@ data/weather_Atacama.fits,data/weather_South_Pole.fits
 --freq
 95
 --input_pysm_model
-s3,d7,f1,a2,c1
+s3,d7,f1,a2,c2
 --apply_beam
 --hwprpm
 2
