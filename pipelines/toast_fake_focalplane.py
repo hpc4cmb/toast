@@ -33,16 +33,16 @@ parser.add_argument( "--fov", required=False, type=float, default=5.0,
                      help="Field of View in degrees" )
 
 parser.add_argument( "--psd_fknee", required=False, type=float, default=0.05,
-                     help="Detector noise model f_knee" )
+                     help="Detector noise model f_knee in Hz" )
 
 parser.add_argument( "--psd_NET", required=False, type=float, default=60.0e-6,
-                     help="Detector noise model NET" )
+                     help="Detector noise model NET in K*sqrt(sec)" )
 
 parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0,
                      help="Detector noise model slope" )
 
 parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
-                     help="Detector noise model f_min" )
+                     help="Detector noise model f_min in Hz" )
 
 parser.add_argument( "--bandcenter_ghz", required=False, type=float, default=25,
                      help="Band center frequency [GHz]" )
