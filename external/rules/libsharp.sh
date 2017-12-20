@@ -3,7 +3,7 @@ git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --de
     && patch -p1 < ../rules/patch_libsharp \
     && autoreconf \
     && CC="@MPICC@" CFLAGS="@CFLAGS@" \
-    ./configure --enable-mpi --enable-pic --prefix="@AUX_PREFIX@" \
+    ./configure @CROSS@ --enable-mpi --enable-pic --prefix="@AUX_PREFIX@" \
     && make \
     && cp -a auto/* "@AUX_PREFIX@/" \
     && cd python \
