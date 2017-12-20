@@ -1238,7 +1238,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
                 if ((len(telescope_data) > 1) and (tele_name == 'all')):
                     # Skip daily maps over multiple telescopes
                     continue
-                if destripe:
+                if first_call:
                     # Do not destripe daily maps
                     kfirst_save = pars['kfirst']
                     write_map_save = pars['write_map']
