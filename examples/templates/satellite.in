@@ -16,7 +16,7 @@ echo Starting slurm script at $(date)
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-if [ "${LOG_OUT}" != "/dev/stdout" ]; then env ; fi
+env
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"

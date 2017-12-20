@@ -2,6 +2,14 @@
 
 @EXTRA_INIT@
 
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
 outdir="out_@SIZE@_ground"
 mkdir -p "${outdir}"
 
