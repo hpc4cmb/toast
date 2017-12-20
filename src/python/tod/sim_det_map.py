@@ -219,11 +219,14 @@ def extract_local_dets(data):
     return local_dets
 
 
-def assemble_map_on_rank0(comm, local_map, n_components, npix):
+def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
     autotimer = timing.auto_timer()
     full_maps_rank0 = np.zeros((n_components, npix),
                                dtype=np.float64) if comm.rank == 0 else None
-    comm.Reduce(local_map, full_maps_rank0, root=0, op=MPI.SUM)
+    local_map_buffer = np.zeros((n_components, npix),
+                                   dtype=np.float64)
+    local_map_buffer[:,pixel_indices] = local_map
+    comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
     return full_maps_rank0
 
 
@@ -339,17 +342,32 @@ class OpSimPySM(Operator):
                 if self.comm.rank == 0:
                     print('Executing LibSharpSmooth on {}'.format(det), flush=True)
                 smooth.exec(local_maps)
+                self.comm.Barrier()
+                if self.comm.rank == 0:
+                    print('LibSharpSmooth completed on {}'.format(det), flush=True)
 
             n_components = 3
 
+            self.comm.Barrier()
+            if self.comm.rank == 0:
+                print('Assemble PySM map on rank0, shape of local map is {}'.format(local_maps["sky"].shape), flush=True)
             full_map_rank0 = assemble_map_on_rank0(self.comm,
-                                     local_maps["sky"], n_components, self.npix)
+                                     local_maps["sky"], self.dist_rings.local_pixels, n_components, self.npix)
+            self.comm.Barrier()
+            if self.comm.rank == 0:
+                print('Communication completed', flush=True)
             if self.comm.rank == 0 and self._nest:
                 # PySM is RING, toast is NEST
                 full_map_rank0 = hp.reorder(full_map_rank0, r2n=True)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
 
+            self.comm.Barrier()
+            if self.comm.rank == 0:
+                print('Broadcasting the map to other processes', flush=True)
             self.distmap.broadcast_healpix_map(full_map_rank0)
+            self.comm.Barrier()
+            if self.comm.rank == 0:
+                print('Running OpSimScan', flush=True)
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
 
