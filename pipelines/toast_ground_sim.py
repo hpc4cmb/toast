@@ -153,7 +153,7 @@ def parse_arguments(comm):
                         help='size of the gangs that create slices')
     parser.add_argument('--atm_wind_time',
                         required=False, default=36000.0, type=np.float,
-                        help='Minimum time to simulate without discontinuity')
+                        help='Maximum time to simulate without discontinuity')
     parser.add_argument('--atm_z0_center',
                         required=False, default=2000.0, type=np.float,
                         help='central value of the water vapor distribution')
@@ -1012,7 +1012,8 @@ def simulate_atmosphere(args, comm, data, mc, counter,
             verbosity=int(args.debug), gangsize=args.atm_gangsize,
             z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
             apply_flags=True, common_flag_mask=args.common_flag_mask,
-            cachedir=args.atm_cache, flush=args.flush)
+            cachedir=args.atm_cache, flush=args.flush,
+            wind_time=args.atm_wind_time)
 
         atm.exec(data)
 

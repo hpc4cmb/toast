@@ -75,7 +75,7 @@ class OpSimAtmosphere(Operator):
              simulated.
         report_timing (bool):  Print out time taken to initialize,
              simulate and observe
-        wind_time_min (float):  Minimum time to simulate before
+        wind_time (float):  Maximum time to simulate before
             discarding the volume and creating a new one [seconds].
         cachedir (str):  Directory to use for loading and saving
             atmosphere realizations.  Set to None to disable caching.
@@ -92,7 +92,7 @@ class OpSimAtmosphere(Operator):
             z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
             apply_flags=False, common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
-            wind_time_min=600, cachedir='.', flush=False, freq=None):
+            wind_time=3600, cachedir='.', flush=False, freq=None):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -134,7 +134,7 @@ class OpSimAtmosphere(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._report_timing = report_timing
-        self._wind_time_min = wind_time_min
+        self._wind_time = wind_time
 
     def exec(self, data):
         """
@@ -147,11 +147,13 @@ class OpSimAtmosphere(Operator):
             data (toast.Data): The distributed data.
         """
         autotimer = timing.auto_timer(type(self).__name__)
+        group = data.comm.group
         for obs in data.obs:
             try:
                 obsname = obs['name']
             except:
                 obsname = 'observation'
+            prefix = '{} : {} : '.format(group, obsname)
             tod = self._get_from_obs('tod', obs)
             comm = tod.mpicomm
             obsindx = self._get_from_obs('id', obs)
@@ -213,8 +215,8 @@ class OpSimAtmosphere(Operator):
 
             comm.Barrier()
             if comm.rank == 0:
-                print('Setting up atmosphere simulation for {}'
-                      ''.format(obsname), flush=self._flush)
+                print(prefix+'Setting up atmosphere simulation',
+                      flush=self._flush)
             comm.Barrier()
 
             # Cache the output common flags
@@ -245,19 +247,6 @@ class OpSimAtmosphere(Operator):
                     'Error in CES elevation: elmin = {:.2f}, elmax = {:.2f}'
                     ''.format(elmin, elmax))
 
-            # Determine an appropriate time interval to simulate based
-            # on field of view and wind speed.  Wind time is the time it
-            # takes for the entire field of view to be replaced by wind.
-
-            dist = self._zmax / np.tan(elmin)
-            width = 2 * dist * np.tan((azmax - azmin)/2)
-            wind_time = 0
-            if self._w_center != 0:
-                wind_time = width / self._w_center
-            wind_time = max(self._wind_time_min, wind_time)
-            if comm.rank == 0 and self._verbosity:
-                print('Wind time = {:.2f} s'.format(wind_time),
-                      flush=self._flush)
             comm.Barrier()
 
             # Loop over the time span in "wind_time"-sized chunks.
@@ -270,7 +259,7 @@ class OpSimAtmosphere(Operator):
                 while times[istart] < tmin:
                     istart += 1
 
-                tmax = tmin + wind_time
+                tmax = tmin + self._wind_time
                 if tmax < tmax_tot:
                     # Extend the scan to the next turnaround
                     istop = istart
@@ -287,13 +276,6 @@ class OpSimAtmosphere(Operator):
                     tmax = tmax_tot
                     istop = times.size
 
-                if comm.rank == 0 and tmax < tmax_tot:
-                    print('Simulating atmosphere for t in [{:.2f}, {:.2f}] out '
-                          'of ([{:.2f}, {:.2f}])'.format(
-                              tmin, tmax, tmin_tot, tmax_tot),
-                          flush=self._flush)
-                comm.Barrier()
-
                 ind = slice(istart, istop)
                 nind = istop - istart
 
@@ -303,8 +285,8 @@ class OpSimAtmosphere(Operator):
 
                 comm.Barrier()
                 if comm.rank == 0:
-                    print('Instantiating the atmosphere for {}'
-                          ''.format(obsname), flush=self._flush)
+                    print(prefix+'Instantiating the atmosphere for t = {}'
+                          ''.format(tmin-tmin_tot), flush=self._flush)
                 comm.Barrier()
 
                 T0_center = weather.air_temperature
@@ -328,26 +310,41 @@ class OpSimAtmosphere(Operator):
                     comm.Barrier()
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
-                        print('OpSimAtmosphere: Initialized atmosphere in '
-                              '{:.2f} s'.format(tstop - tstart),
+                        print(prefix+'OpSimAtmosphere: Initialized atmosphere '
+                              'in {:.2f} s'.format(tstop - tstart),
                               flush=self._flush)
                     tstart = tstop
 
                 comm.Barrier()
-                if comm.rank == 0:
-                    print('Simulating the atmosphere for {}'
-                          ''.format(obsname), flush=self._flush)
-                comm.Barrier()
 
-                use_cache = self._cachedir is not None
+                use_cache = cachedir is not None
+                if comm.rank == 0:
+                    fname = os.path.join(
+                        cachedir, '{}_{}_{}_{}_metadata.txt'.format(
+                            key1, key2, counter1, counter2))
+                    if use_cache and os.path.isfile(fname):
+                        print(prefix+'Loading the atmosphere for t = {} '
+                              'from {}'.format(tmin-tmin_tot, fname),
+                              flush=self._flush)
+                    else:
+                        print(prefix+'Simulating the atmosphere for t = {}'
+                              ''.format(tmin-tmin_tot),
+                              flush=self._flush)
+
                 atm_sim_simulate(sim, use_cache)
+
+                # Advance the sample counter in case wind_time broke the
+                # observation in parts
+
+                counter2 += 100000000
 
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
-                        print('OpSimAtmosphere: Simulated atmosphere in {:.2f} s'
-                              ''.format(tstop - tstart), flush=self._flush)
+                        print(prefix+'OpSimAtmosphere: Simulated atmosphere in '
+                              '{:.2f} s'.format(tstop-tstart),
+                              flush=self._flush)
                     tstart = tstop
 
                 if self._verbosity > 0:
@@ -414,8 +411,7 @@ class OpSimAtmosphere(Operator):
                     tstart = MPI.Wtime()
 
                 if comm.rank == 0:
-                    print('Observing the atmosphere for {}'
-                          ''.format(obsname), flush=self._flush)
+                    print(prefix+'Observing the atmosphere', flush=self._flush)
 
                 for det in tod.local_dets:
 
@@ -469,9 +465,9 @@ class OpSimAtmosphere(Operator):
                             not (elmin <= elmin_det and elmin_det <= elmax)
                     ):
                         raise RuntimeError(
-                            'Detector Az/El: [{:.5f}, {:.5f}], [{:.5f}, {:.5f}] '
-                            'is not contained in [{:.5f}, {:.5f}], '
-                            '[{:.5f} {:.5f}]'
+                            prefix+'Detector Az/El: [{:.5f}, {:.5f}], '
+                            '[{:.5f}, {:.5f}] is not contained in '
+                            '[{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
                             ''.format(
                                 azmin_det, azmax_det, elmin_det, elmax_det,
                                 azmin, azmax, elmin, elmax))
@@ -500,8 +496,8 @@ class OpSimAtmosphere(Operator):
                     comm.Barrier()
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
-                        print('OpSimAtmosphere: Observed atmosphere in {:.2f} s'
-                              ''.format(tstop - tstart), flush=self._flush)
+                        print(prefix+'OpSimAtmosphere: Observed atmosphere in '
+                              '{:.2f} s'.format(tstop-tstart), flush=self._flush)
 
                 tmin = tmax
 
