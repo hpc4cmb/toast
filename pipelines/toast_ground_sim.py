@@ -1238,7 +1238,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
                 if ((len(telescope_data) > 1) and (tele_name == 'all')):
                     # Skip daily maps over multiple telescopes
                     continue
-                if destripe:
+                if first_call:
                     # Do not destripe daily maps
                     kfirst_save = pars['kfirst']
                     write_map_save = pars['write_map']
@@ -1264,7 +1264,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
             if time_comm.rank == 0:
                 print('Mapping {} took {:.3f} s'.format(
                     madam.params['file_root'], stop1-start1), flush=args.flush)
-            if len(time_name.split('-')) == 3 and destripe:
+            if len(time_name.split('-')) == 3 and first_call:
                 # Restore destriping parameters
                 pars['kfirst'] = kfirst_save
                 pars['write_map'] = write_map_save
@@ -1333,7 +1333,8 @@ def main():
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
-
+        # Convolve a signal TOD from PySM
+        start1 = MPI.Wtime()
         signalname = 'signal'
         op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
                                    out=signalname,
@@ -1342,12 +1343,13 @@ def main():
                                    nside=args.nside,
                                    subnpix=subnpix, localsm=localsm,
                                    apply_beam=args.apply_beam)
-
         op_sim_pysm.exec(data)
-
+        stop1 = MPI.Wtime()
+        if comm.comm_world.rank == 0:
+            print('PySM took {:.2f} seconds'.format(fname, stop1-start1),
+                  flush=args.flush)
     else:
         # Scan input map
-
         signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times

@@ -93,13 +93,13 @@ def attempt_scan(
 
 
 def attempt_scan_pole(
-        args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
+        args, observer, visible, not_visible, tstart, fp_radius, el_max, el_min,
         tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt):
     """ Attempt scanning the visible patches in order until success.
     """
     success = False
     for (name, weight, corners) in visible:
-        observer.date = to_DJD(t)
+        observer.date = to_DJD(tstart)
         # In pole scheduling, first elevation is just below the patch
         el = get_constant_elevation_pole(
             observer, corners, fp_radius, el_min, el_max, not_visible,
@@ -108,6 +108,7 @@ def attempt_scan_pole(
             continue
         pole_success = True
         subscan = -1
+        t = tstart
         while pole_success:
             pole_success, azmins, azmaxs, aztimes, tstop \
                 = scan_patch_pole(
@@ -127,8 +128,13 @@ def attempt_scan_pole(
                 success = True
         if success:
             break
+    tstop = t
+    if args.one_scan_per_day:
+        day1 = int(to_MJD(tstart))
+        while int(to_MJD(tstop)) == day1:
+            tstop += 60.
 
-    return success, t
+    return success, tstop
 
 
 def get_constant_elevation(observer, corners, rising, fp_radius, el_min, el_max,
@@ -376,11 +382,11 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
     return
 
 
-def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
+def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
              observer, sun, moon, fout, fout_fmt, hits, name, el, subscan=-1):
     """ Make an entry for a CES in the schedule file.
     """
-    ces_time = tstop - t
+    ces_time = tstop - tstart
     if ces_time > args.ces_max_time and not args.pole_mode:
         nsub = np.int(np.ceil(ces_time / args.ces_max_time))
         ces_time /= nsub
@@ -397,7 +403,7 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     hits[name] += 1
-    t1 = t
+    t1 = tstart
     while t1 < tstop:
         subscan += 1
         t2 = min(t1 + ces_time, tstop)
@@ -449,11 +455,10 @@ def add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
                 0.005*(moon_phase1 + moon_phase2), hits[name], subscan))
         t1 = t2 + args.gap_small
     # Advance the time
-    t = tstop
-    # Add the gap
-    t += args.gap
+    tstop += args.gap
 
-    return t
+    return tstop
+
 
 def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
                 sun_avoidance_angle, moon_angle_min):
@@ -676,6 +681,9 @@ def parse_args():
     parser.add_argument('--gap_small',
                         required=False, default=10, type=np.float,
                         help='Gap between split CES:es [seconds]')
+    parser.add_argument('--one_scan_per_day',
+                        required=False, default=False, action='store_true',
+                        help='Pad each operational day to have only one CES')
     parser.add_argument('--ces_max_time',
                         required=False, default=900, type=np.float,
                         help='Maximum length of a CES [seconds]')
