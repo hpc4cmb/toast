@@ -125,14 +125,27 @@ delimit(const std::string& _str, const std::string& _delims,
 
 enum class sys_signal : int
 {
-    abort_signal = SIGABRT,
-    bus_signal = SIGBUS,
-    hangup_signal = SIGHUP,
-    illegal_signal = SIGILL,
-    interrupt_signal = SIGINT,
-    kill_signal = SIGKILL,
-    quit_signal = SIGQUIT,
-    seg_fault = SIGSEGV
+    sHangup = SIGHUP,
+    sInterrupt = SIGINT,
+    sQuit = SIGQUIT,
+    sIllegal = SIGILL,
+    sTrap = SIGTRAP,
+    sAbort = SIGABRT,
+    sEmulate = SIGEMT,
+    sFPE = SIGFPE,
+    sKill = SIGKILL,
+    sBus = SIGBUS,
+    sSegFault = SIGSEGV,
+    sSystem = SIGSYS,
+    sPipe = SIGPIPE,
+    sAlarm = SIGALRM,
+    sTerminate = SIGTERM,
+    sUrgent = SIGURG,
+    sStop = SIGTSTP,
+    sCPUtime = SIGXCPU,
+    sFileSize = SIGXFSZ,
+    sVirtualAlarm = SIGVTALRM,
+    sProfileAlarm = SIGPIPE
 };
 
 //----------------------------------------------------------------------------//
@@ -305,52 +318,23 @@ inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
         message << "### ERROR ### " << sig;
     message << " : " << signal_settings::str(_sig);
 
-    switch (sig)
+    if(sig == SIGSEGV)
     {
-        case SIGSEGV:
-        {
-            if(sinfo)
+        if(sinfo)
+            switch (sinfo->si_code)
             {
-                switch (sinfo->si_code)
-                {
-                    case SEGV_MAPERR:
-                        message << "Address not mapped to object.";
-                        break;
-                    case SEGV_ACCERR:
-                        message << "Invalid permissions for mapped object.";
-                        break;
-                    default:
-                        message << "Unknown error: " << sinfo->si_code << ".";
-                        break;
-                }
+                case SEGV_MAPERR:
+                    message << "Address not mapped to object.";
+                    break;
+                case SEGV_ACCERR:
+                    message << "Invalid permissions for mapped object.";
+                    break;
+                default:
+                    message << "Unknown error: " << sinfo->si_code << ".";
+                    break;
             }
-            else
-            {
-                message << "Segmentation fault (generic).";
-            }
-            break;
-        }
-        case SIGABRT:
-            message << "Abort signal.";
-            break;
-        case SIGINT:
-            message << "Interrupt signal.";
-            break;
-        case SIGILL:
-            message << "Illegal instruction signal.";
-            break;
-        case SIGKILL:
-            message << "Kill signal.";
-            break;
-        case SIGHUP:
-            message << "Hangup signal.";
-            break;
-        case SIGQUIT:
-            message << "Quit signal.";
-            break;
-        case SIGBUS:
-            message << "Bus error signal.";
-            break;
+        else
+            message << "Segmentation fault (unknown).";
     }
 
     message << std::endl;
@@ -367,10 +351,10 @@ inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
 
     StackBackTrace(message);
 
-    if(signal_settings::enabled().find(sys_signal::abort_signal) !=
+    if(signal_settings::enabled().find(sys_signal::sAbort) !=
        signal_settings::enabled().end())
     {
-        signal_settings::disable(sys_signal::abort_signal);
+        signal_settings::disable(sys_signal::sAbort);
         signal_settings::disable(_sig);
         DisableSignalDetection();
         EnableSignalDetection(signal_settings::enabled());

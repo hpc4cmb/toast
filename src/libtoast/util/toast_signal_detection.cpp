@@ -25,17 +25,29 @@ bool signal_settings::signals_active = false;
 
 //============================================================================//
 
-std::set<sys_signal> signal_settings::signals_default
-= {
-    sys_signal::abort_signal,
-    sys_signal::bus_signal,
-    sys_signal::hangup_signal,
-    sys_signal::illegal_signal,
-    sys_signal::interrupt_signal,
-    sys_signal::kill_signal,
-    sys_signal::quit_signal,
-    sys_signal::seg_fault
-  };
+std::set<sys_signal> signal_settings::signals_default =
+{
+    sys_signal::sHangup,
+    sys_signal::sInterrupt,
+    sys_signal::sQuit,
+    sys_signal::sIllegal,
+    sys_signal::sTrap,
+    sys_signal::sAbort,
+    sys_signal::sEmulate,
+    sys_signal::sKill,
+    sys_signal::sBus,
+    sys_signal::sSegFault,
+    sys_signal::sSystem,
+    sys_signal::sPipe,
+    sys_signal::sAlarm,
+    sys_signal::sTerminate,
+    sys_signal::sUrgent,
+    sys_signal::sStop,
+    sys_signal::sCPUtime,
+    sys_signal::sFileSize,
+    sys_signal::sVirtualAlarm,
+    sys_signal::sProfileAlarm,
+};
 
 //============================================================================//
 
@@ -43,9 +55,10 @@ std::set<sys_signal> signal_settings::signals_enabled = signal_settings::signals
 
 //============================================================================//
 
-std::set<sys_signal> signal_settings::signals_disabled
-= {
-  };
+std::set<sys_signal> signal_settings::signals_disabled =
+{
+    sys_signal::sFPE
+};
 
 //============================================================================//
 
@@ -54,10 +67,11 @@ signal_settings::signal_function_t signal_settings::signals_exit_func =
 
 //============================================================================//
 
-void insert_and_remove(const sys_signal& _type,            // fpe type
-                       signal_settings::signal_set_t* _ins, // set to insert into
-                       signal_settings::signal_set_t* _rem  // set to remove from
-                       )
+void
+insert_and_remove(const sys_signal& _type,             // signal type
+                  signal_settings::signal_set_t* _ins, // set to insert into
+                  signal_settings::signal_set_t* _rem) // set to remove from
+
 {
     _ins->insert(_type);
     auto itr = _rem->find(_type);
@@ -87,14 +101,27 @@ void signal_settings::check_environment()
 
     auto _list =
     {
-        match_t("ABORT",    sys_signal::abort_signal),
-        match_t("BUS",      sys_signal::bus_signal),
-        match_t("HUP",      sys_signal::hangup_signal),
-        match_t("ILL",      sys_signal::illegal_signal),
-        match_t("INT",      sys_signal::interrupt_signal),
-        match_t("KILL",     sys_signal::kill_signal),
-        match_t("QUIT",     sys_signal::quit_signal),
-        match_t("SEGF",     sys_signal::seg_fault)
+        match_t("HANGUP",       sys_signal::sHangup),
+        match_t("INTERRUPT", 	sys_signal::sInterrupt),
+        match_t("QUIT",         sys_signal::sQuit),
+        match_t("ILLEGAL",      sys_signal::sIllegal),
+        match_t("TRAP",         sys_signal::sTrap),
+        match_t("ABORT",        sys_signal::sAbort),
+        match_t("EMULATE",      sys_signal::sEmulate),
+        match_t("FPE",          sys_signal::sFPE),
+        match_t("KILL",         sys_signal::sKill),
+        match_t("BUS",          sys_signal::sBus),
+        match_t("SEGFAULT", 	sys_signal::sSegFault),
+        match_t("SYSTEM",       sys_signal::sSystem),
+        match_t("PIPE",         sys_signal::sPipe),
+        match_t("ALARM",        sys_signal::sAlarm),
+        match_t("TERMINATE", 	sys_signal::sTerminate),
+        match_t("URGENT",       sys_signal::sUrgent),
+        match_t("STOP",         sys_signal::sStop),
+        match_t("CPUTIME",      sys_signal::sCPUtime),
+        match_t("FILESIZE", 	sys_signal::sFileSize),
+        match_t("VIRTUALALARM", sys_signal::sVirtualAlarm),
+        match_t("PROFILEALARM", sys_signal::sProfileAlarm),
     };
 
     for(auto itr : _list)
@@ -124,39 +151,60 @@ void signal_settings::check_environment()
 
 std::string signal_settings::str(const sys_signal& _type)
 {
+    typedef std::tuple<std::string, int, std::string> descript_tuple_t;
+
     std::stringstream ss;
-    auto descript = [&] (const std::string& _name, const int& _err)
+    auto descript = [&] (const descript_tuple_t& _data)
     {
-        ss << " Signal: " << _name << " (error code: " << _err << ") ";
+        ss << " Signal: " << std::get<0>(_data)
+           << " (error code: " << std::get<1>(_data) << ") "
+           << std::get<2>(_data);
     };
 
-    switch (_type)
+    // some of these signals are not handled but added in case they are
+    // enabled in the future
+    static std::vector<descript_tuple_t> descript_data =
     {
-        case sys_signal::abort_signal:
-            descript("SIGABRT", SIGABRT);
+        { "SIGHUP",  SIGHUP, "terminal line hangup" },
+        { "SIGINT",  SIGINT, "interrupt program" },
+        { "SIGQUIT",  SIGQUIT, "quit program" },
+        { "SIGILL",  SIGILL, "illegal instruction" },
+        { "SIGTRAP",  SIGTRAP, "trace trap" },
+        { "SIGABRT",  SIGABRT, "abort program (formerly SIGIOT)"},
+        { "SIGEMT",  SIGEMT, "emulate instruction executed" },
+        { "SIGFPE",  SIGFPE, "floating-point exception" },
+        { "SIGKILL",  SIGKILL, "kill program" },
+        { "SIGBUS",  SIGBUS, "bus error" },
+        { "SIGSEGV",  SIGSEGV, "segmentation violation" },
+        { "SIGSYS",  SIGSYS, "non-existent system call invoked" },
+        { "SIGPIPE",  SIGPIPE, "write on a pipe with no reader" },
+        { "SIGALRM",  SIGALRM, "real-time timer expired" },
+        { "SIGTERM",  SIGTERM, "software termination signal" },
+        { "SIGURG",  SIGURG, "urgent condition present on socket" },
+        { "SIGSTOP",  SIGSTOP, "stop (cannot be caught or ignored)"},
+        { "SIGTSTP",  SIGTSTP, "stop signal generated from keyboard" },
+        { "SIGCONT",  SIGCONT, "continue after stop" },
+        { "SIGCHLD",  SIGCHLD, "child status has changed" },
+        { "SIGTTIN",  SIGTTIN, "background read attempted from control terminal" },
+        { "SIGTTOU",  SIGTTOU, "background write attempted to control terminal" },
+        { "SIGIO ",  SIGIO, "I/O is possible on a descriptor (see fcntl(2))"},
+        { "SIGXCPU",  SIGXCPU, "cpu time limit exceeded (see setrlimit(2))"},
+        { "SIGXFSZ",  SIGXFSZ, "file size limit exceeded (see setrlimit(2))"},
+        { "SIGVTALRM",  SIGVTALRM, "virtual time alarm (see setitimer(2))"},
+        { "SIGPROF",  SIGPROF, "profiling timer alarm (see setitimer(2))"},
+        { "SIGWINCH",  SIGWINCH, "Window size change" },
+        { "SIGINFO",  SIGINFO, "status request from keyboard" },
+        { "SIGUSR1",  SIGUSR1, "User defined signal 1"},
+        { "SIGUSR2",  SIGUSR2, "User defined signal 2"}
+    };
+
+    int key = (int) _type;
+    for(const auto& itr : descript_data)
+        if(std::get<1>(itr) == key)
+        {
+            descript(itr);
             break;
-        case sys_signal::bus_signal:
-            descript("SIGBUS", SIGBUS);
-            break;
-        case sys_signal::hangup_signal:
-            descript("SIGHUP", SIGHUP);
-            break;
-        case sys_signal::illegal_signal:
-            descript("SIGILL", SIGILL);
-            break;
-        case sys_signal::interrupt_signal:
-            descript("SIGINT", SIGINT);
-            break;
-        case sys_signal::kill_signal:
-            descript("SIGKILL", SIGKILL);
-            break;
-        case sys_signal::quit_signal:
-            descript("SIGQUIT", SIGQUIT);
-            break;
-        case sys_signal::seg_fault:
-            descript("SIGSEGV", SIGSEGV);
-            break;
-    }
+        }
 
     return ss.str();
 }
