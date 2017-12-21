@@ -14,10 +14,6 @@
 100
 --atm_lmax_sigma
 30
---atm_w_center
-5
---atm_w_sigma
-0
 --weather
 data/weather_Atacama.fits,data/weather_South_Pole.fits
 --madam_baseline_order
@@ -28,4 +24,6 @@ data/weather_Atacama.fits,data/weather_South_Pole.fits
 s3,d7,f1,a2,c2
 --apply_beam
 --hwprpm
+2
+--focalplane_radius
 2
