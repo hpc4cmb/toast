@@ -13,6 +13,7 @@ a BSD-style license that can be found in the LICENSE file.
 #include <toast/base_timer.hpp>
 #include <toast/timing_manager.hpp>
 #include <toast/auto_timer.hpp>
+#include <toast/signal_detection.hpp>
 
 namespace toast {
 
