@@ -71,6 +71,40 @@
 #endif
 
 //============================================================================//
+//  these are not in the original POSIX.1-1990 standard so we are defining
+//  them in case the OS hasn't
+//  POSIX-1.2001
+#ifndef SIGTRAP
+#   define SIGTRAP 5
+#endif
+//  not specified in POSIX.1-2001, but nevertheless appears on most other
+//  UNIX systems, where its default action is typically to terminate the
+//  process with a core dump.
+#ifndef SIGEMT
+#   define SIGEMT 7
+#endif
+//  POSIX-1.2001
+#ifndef SIGURG
+#   define SIGURG 16
+#endif
+//  POSIX-1.2001
+#ifndef SIGXCPU
+#   define SIGXCPU 24
+#endif
+//  POSIX-1.2001
+#ifndef SIGXFSZ
+#   define SIGXFSZ 25
+#endif
+//  POSIX-1.2001
+#ifndef SIGVTALRM
+#   define SIGVTALRM 26
+#endif
+//  POSIX-1.2001
+#ifndef SIGPROF
+#   define SIGPROF 27
+#endif
+
+//============================================================================//
 
 namespace toast
 {
