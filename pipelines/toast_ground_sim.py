@@ -154,18 +154,6 @@ def parse_arguments(comm):
     parser.add_argument('--atm_wind_time',
                         required=False, default=36000.0, type=np.float,
                         help='Minimum time to simulate without discontinuity')
-    parser.add_argument('--atm_w_center',
-                        required=False, default=1.0, type=np.float,
-                        help='central value of the wind speed distribution')
-    parser.add_argument('--atm_w_sigma',
-                        required=False, default=0.1, type=np.float,
-                        help='sigma of the wind speed distribution')
-    parser.add_argument('--atm_wdir_center',
-                        required=False, default=0.0, type=np.float,
-                        help='central value of the wind direction distribution')
-    parser.add_argument('--atm_wdir_sigma',
-                        required=False, default=100.0, type=np.float,
-                        help='sigma of the wind direction distribution')
     parser.add_argument('--atm_z0_center',
                         required=False, default=2000.0, type=np.float,
                         help='central value of the water vapor distribution')
@@ -235,6 +223,9 @@ def parse_arguments(comm):
                         '"quat" (4 element ndarray), "fwhm" (float, arcmin), '
                         '"fknee" (float, Hz), "alpha" (float), and '
                         '"NET" (float).')
+    parser.add_argument('--focalplane_radius',
+                        required=False, type=np.float,
+                        help='Override focal plane radius [deg]')
     parser.add_argument('--freq',
                         required=True,
                         help='Comma-separated list of frequencies with '
@@ -390,10 +381,13 @@ def load_schedule(args, comm):
     return schedules
 
 
-def get_focalplane_radius(focalplane):
+def get_focalplane_radius(args, focalplane, rmin=1.0):
     """ Find the furthest angular distance from the boresight
 
     """
+    if args.focalplane_radius:
+        return args.focalplane_radius
+
     autotimer = timing.auto_timer()
     xaxis, yxis, zaxis = np.eye(3)
     cosangs = []
@@ -402,7 +396,7 @@ def get_focalplane_radius(focalplane):
         vec = qa.rotate(quat, zaxis)
         cosangs.append(np.dot(zaxis, vec))
     mincos = np.amin(cosangs)
-    maxdist = np.degrees(np.arccos(mincos))
+    maxdist = max(np.degrees(np.arccos(mincos)), rmin)
 
     return maxdist*1.001
 
@@ -598,7 +592,7 @@ def create_observations(args, comm, schedules, counter):
         else:
             site, all_ces, weather, focalplane = schedule
 
-        fpradius = get_focalplane_radius(focalplane)
+        fpradius = get_focalplane_radius(args, focalplane)
 
         # Focalplane information for this schedule
         detectors = sorted(focalplane.keys())
@@ -765,7 +759,32 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
     return
 
 
-def scan_signal(args, comm, data, counter, localsm, subnpix):
+def simulate_sky_signal(args, comm, data, counter, schedules, subnpix, localsm):
+    """ Use PySM to simulate smoothed sky signal.
+
+    """
+    # Convolve a signal TOD from PySM
+    start = MPI.Wtime()
+    signalname = 'signal'
+    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+                               out=signalname,
+                               pysm_model=args.input_pysm_model,
+                               focalplanes=[s[3] for s in schedules],
+                               nside=args.nside,
+                               subnpix=subnpix, localsm=localsm,
+                               apply_beam=args.apply_beam)
+    op_sim_pysm.exec(data)
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('PySM took {:.2f} seconds'.format(stop-start),
+              flush=args.flush)
+
+    counter.exec(data)
+
+    return signalname
+
+
+def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
     """ Scan sky signal from a map.
 
     """
@@ -1333,24 +1352,11 @@ def main():
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
-        # Convolve a signal TOD from PySM
-        start1 = MPI.Wtime()
-        signalname = 'signal'
-        op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
-                                   out=signalname,
-                                   pysm_model=args.input_pysm_model,
-                                   focalplanes=[s[3] for s in schedules],
-                                   nside=args.nside,
-                                   subnpix=subnpix, localsm=localsm,
-                                   apply_beam=args.apply_beam)
-        op_sim_pysm.exec(data)
-        stop1 = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print('PySM took {:.2f} seconds'.format(fname, stop1-start1),
-                  flush=args.flush)
+        signalname = simulate_sky_signal(args, comm, data, counter,
+                                         schedules, subnpix, localsm)
     else:
-        # Scan input map
-        signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
+        signalname = scan_sky_signal(args, comm, data, counter, localsm,
+                                     subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
 
