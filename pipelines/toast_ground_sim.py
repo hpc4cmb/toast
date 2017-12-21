@@ -1333,7 +1333,8 @@ def main():
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
-
+        # Convolve a signal TOD from PySM
+        start1 = MPI.Wtime()
         signalname = 'signal'
         op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
                                    out=signalname,
@@ -1342,12 +1343,13 @@ def main():
                                    nside=args.nside,
                                    subnpix=subnpix, localsm=localsm,
                                    apply_beam=args.apply_beam)
-
         op_sim_pysm.exec(data)
-
+        stop1 = MPI.Wtime()
+        if comm.comm_world.rank == 0:
+            print('PySM took {:.2f} seconds'.format(fname, stop1-start1),
+                  flush=args.flush)
     else:
         # Scan input map
-
         signalname = scan_signal(args, comm, data, counter, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
