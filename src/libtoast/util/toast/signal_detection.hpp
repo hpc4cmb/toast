@@ -103,6 +103,10 @@
 #ifndef SIGPROF
 #   define SIGPROF 27
 #endif
+//  POSIX-1.2001
+#ifndef SIGINFO
+#   define SIGINFO 29
+#endif
 
 //============================================================================//
 
