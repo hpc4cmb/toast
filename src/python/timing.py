@@ -29,12 +29,7 @@ def enabled():
 
 
 #------------------------------------------------------------------------------#
-def toggle(on_or_off=None):
-    if on_or_off is None:
-        if enabled():
-            on_or_off = False
-        else:
-            on_or_off = True
+def toggle(on_or_off):
     return ctoast.timers_toggle(on_or_off)
 
 
@@ -248,7 +243,6 @@ def add_arguments(parser, fname=None):
                         dest='use_timers', help="Disable timers for script")
     parser.add_argument('--enable-timers', required=False, action='store_true',
                         dest='use_timers', help="Enable timers for script")
-    parser.set_defaults(use_timers=True)
     parser.add_argument('--disable-timer-serialization',
                         required=False, action='store_false',
                         dest='serial_report', help="Disable serialization for timers")

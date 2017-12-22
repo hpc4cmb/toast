@@ -1,6 +1,8 @@
 
 ENABLE_TESTING()
-include(CTest)
+if(BUILD_TESTING)
+    include(CTest)
+endif(BUILD_TESTING)
 
 # if this is directory we are running CDash (don't set to ON)
 add_option(DASHBOARD_MODE
@@ -52,7 +54,7 @@ endif(USE_SLURM)
 # ------------------------------------------------------------------------ #
 # -- Miscellaneous
 # ------------------------------------------------------------------------ #
-if(NOT DASHBOARD_MODE)
+if(NOT DASHBOARD_MODE AND BUILD_TESTING)
     add_option(CTEST_LOCAL_CHECKOUT "Use the local source tree for CTest/CDash" OFF)
     if(CTEST_LOCAL_CHECKOUT)
         set_ifnot(CMAKE_LOCAL_DIRECTORY "${CMAKE_SOURCE_DIR}")
@@ -61,7 +63,7 @@ if(NOT DASHBOARD_MODE)
         set(CTEST_MODEL "Nightly" CACHE STRING "Model for CTest")
     endif(CTEST_LOCAL_CHECKOUT)
     add_feature(CTEST_MODEL "Model for CDash")
-endif(NOT DASHBOARD_MODE)
+endif(NOT DASHBOARD_MODE AND BUILD_TESTING)
 
 set(ENV{CTEST_USE_LAUNCHERS_DEFAULT} ${CMAKE_BINARY_DIR}/CDashGlob.cmake)
 # environment variables
@@ -165,7 +167,7 @@ endmacro(add_ctest_options VARIABLE )
 # ------------------------------------------------------------------------ #
 # -- Configure CTest for CDash
 # ------------------------------------------------------------------------ #
-if(NOT DASHBOARD_MODE)
+if(NOT DASHBOARD_MODE AND BUILD_TESTING)
     # get temporary directory for dashboard testing
     if(NOT DEFINED CMAKE_DASHBOARD_ROOT)
         GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
@@ -202,17 +204,20 @@ if(NOT DASHBOARD_MODE)
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestCustom.cmake.in
         ${CMAKE_BINARY_DIR}/CTestCustom.cmake @ONLY)
 
-endif(NOT DASHBOARD_MODE)
+endif(NOT DASHBOARD_MODE AND BUILD_TESTING)
 
 
 # ------------------------------------------------------------------------ #
 # -- Configure CTest tests
 # ------------------------------------------------------------------------ #
-set(SRUN_COMMAND )
-if(USE_SLURM AND SLURM_SRUN_COMMAND)
+find_program(SLURM_SALLOC_COMMAND salloc)
+set(SLURM_COMMAND )
+set(SLURM_COMMAND_RUN )
+if(USE_SLURM AND SLURM_SALLOC_COMMAND)
     convert_time(_TIME ${TIME})
-    set(SRUN_COMMAND ${SLURM_SRUN_COMMAND} -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} -t ${_TIME})
-endif(USE_SLURM AND SLURM_SRUN_COMMAND)
+    set(SLURM_COMMAND ${SLURM_SALLOC_COMMAND} -N 1 -C ${_MACHINE} -A ${ACCOUNT} -p ${QUEUE} -t ${_TIME})
+    set(SLURM_COMMAND_RUN ${SLURM_SRUN_COMMAND})
+endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
 
 # get the python sets
 set(_PYDIR "${CMAKE_SOURCE_DIR}/src/python/tests")
@@ -227,7 +232,8 @@ endforeach(_FILE ${_PYTHON_TEST_FILES})
 # add CXX unit test
 add_test(NAME cxx_toast_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh ${CMAKE_BINARY_DIR}/toast_test)
+    COMMAND ${SLURM_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh
+        ${SLURM_COMMAND_RUN} ${CMAKE_BINARY_DIR}/toast_test)
 set_tests_properties(cxx_toast_test PROPERTIES 
     LABELS "UnitTest;CXX" TIMEOUT 7200)
 
@@ -240,7 +246,8 @@ foreach(_test_ext ${PYTHON_TEST_FILES})
     # add the test
     add_test(NAME ${_test_name}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
+        COMMAND ${SLURM_COMMAND}
+            ${SLURM_COMMAND_RUN} ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
     set_tests_properties(${_test_name} PROPERTIES 
         LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
@@ -248,8 +255,8 @@ endforeach(_test_ext ${PYTHON_TEST_FILES})
 if(USE_COVERAGE)
     add_test(NAME pyc_coverage
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${SRUN_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh ${PYTHON_EXECUTABLE}
-        ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
+    COMMAND ${SLURM_COMMAND} ${CMAKE_BINARY_DIR}/ctest-wrapper.sh
+        ${PYTHON_EXECUTABLE} ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
     set_tests_properties(pyc_coverage PROPERTIES 
         LABELS "Coverage;Python" TIMEOUT 7200)
 endif(USE_COVERAGE)

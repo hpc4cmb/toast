@@ -34,8 +34,6 @@ endfunction(machine_defined)
 
 #------------------------------------------------------------------------------#
 
-machine_defined()
-valid_machine()
 
 #------------------------------------------------------------------------------#
 # -- Global variable settings
@@ -91,7 +89,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
     set(_test_name pyc_${_file_name}_example)
     add_test(NAME ${_test_name}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-    COMMAND ${SRUN_COMMAND} ./ctest-wrapper.sh ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
+    COMMAND ${SLURM_COMMAND} ./ctest-wrapper.sh ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
     set_tests_properties(${_test_name} PROPERTIES 
         LABELS "Examples;shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
 endforeach(_TYPE ground ground_simple satellite)
@@ -106,6 +104,9 @@ endif(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
 # ------------------------------------------------------------------------ #
 # -- SLURM examples
 # ------------------------------------------------------------------------ #
+machine_defined()
+valid_machine()
+
 include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})    
 set(ENV{MACHINES} "${MACHINE}")
 

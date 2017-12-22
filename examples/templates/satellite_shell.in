@@ -2,6 +2,14 @@
 
 @EXTRA_INIT@
 
+echo -e "\n-----------------------------------------------------------------------"
+echo -e "ENVIRONMENT:\n"
+env
+echo -e "-----------------------------------------------------------------------\n"
+echo "PYTHON: $(which python)"
+echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
+echo ""
+
 outdir="out_@SIZE@_satellite"
 mkdir -p "${outdir}"
 
@@ -68,6 +76,8 @@ run="mpirun -np ${procs}"
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
 
+# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
+shopt -s nullglob
 for i in ${outdir}/timing_report*.out
 do
     echo -e "\n--> ${i}\n" >> ${LOG_OUT}

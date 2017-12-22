@@ -53,6 +53,23 @@ void toast::init ( int argc, char *argv[] )
         tbb_scheduler = new tbb::task_scheduler_init(toast::get_num_threads());
 #   endif
 
+    toast::EnableSignalDetection();
+
+    if(toast::get_env<int32_t>("TOAST_VERBOSE", 0) > 0)
+        std::cout << toast::signal_settings::str() << std::endl;
+
+    auto _exit_func = [] (int errcode)
+    {
+        auto tman = toast::util::timing_manager::instance();
+        tman->report();
+        std::stringstream ss;
+        ss << "timing_report_err_" << errcode << ".out";
+        tman->set_output_stream(ss.str());
+        tman->report();
+    };
+
+    toast::signal_settings::set_exit_action(_exit_func);
+
     return;
 }
 

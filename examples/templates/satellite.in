@@ -16,7 +16,7 @@ echo Starting slurm script at $(date)
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-if [ "${LOG_OUT}" != "/dev/stdout" ]; then env ; fi
+env
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
@@ -118,6 +118,8 @@ echo Calling srun at $(date)
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
 
+# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
+shopt -s nullglob
 for i in ${outdir}/timing_report*.out
 do
     echo -e "\n--> ${i}\n" >> ${LOG_OUT}

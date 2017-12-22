@@ -30,11 +30,13 @@ libtoast_util_la_includedir = $(includedir)/toast
 libtoast_util_la_include_HEADERS = \
 toast/auto_timer.hpp \
 toast/base_timer.hpp \
+toast/signal_detection.hpp \
 toast/timer.hpp \
 toast/timing_manager.hpp
 
 libtoast_util_la_SOURCES = \
 toast_base_timer.cpp \
+toast_signal_detection.cpp \
 toast_timer.cpp \
 toast_timing_manager.cpp
 

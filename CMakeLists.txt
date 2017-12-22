@@ -115,9 +115,7 @@ endif()
 add_option(BUILD_TESTING "Enable CTest and CDash submission" OFF)
 
 include(CMakeUninstallTarget)
-if(BUILD_TESTING)
-    include(Testing)
-endif()
+include(Testing)
 
 print_features()
 
