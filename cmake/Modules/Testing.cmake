@@ -1,6 +1,8 @@
 
 ENABLE_TESTING()
-include(CTest)
+if(BUILD_TESTING)
+    include(CTest)
+endif(BUILD_TESTING)
 
 # if this is directory we are running CDash (don't set to ON)
 add_option(DASHBOARD_MODE
@@ -52,7 +54,7 @@ endif(USE_SLURM)
 # ------------------------------------------------------------------------ #
 # -- Miscellaneous
 # ------------------------------------------------------------------------ #
-if(NOT DASHBOARD_MODE)
+if(NOT DASHBOARD_MODE AND BUILD_TESTING)
     add_option(CTEST_LOCAL_CHECKOUT "Use the local source tree for CTest/CDash" OFF)
     if(CTEST_LOCAL_CHECKOUT)
         set_ifnot(CMAKE_LOCAL_DIRECTORY "${CMAKE_SOURCE_DIR}")
@@ -61,7 +63,7 @@ if(NOT DASHBOARD_MODE)
         set(CTEST_MODEL "Nightly" CACHE STRING "Model for CTest")
     endif(CTEST_LOCAL_CHECKOUT)
     add_feature(CTEST_MODEL "Model for CDash")
-endif(NOT DASHBOARD_MODE)
+endif(NOT DASHBOARD_MODE AND BUILD_TESTING)
 
 set(ENV{CTEST_USE_LAUNCHERS_DEFAULT} ${CMAKE_BINARY_DIR}/CDashGlob.cmake)
 # environment variables
@@ -165,7 +167,7 @@ endmacro(add_ctest_options VARIABLE )
 # ------------------------------------------------------------------------ #
 # -- Configure CTest for CDash
 # ------------------------------------------------------------------------ #
-if(NOT DASHBOARD_MODE)
+if(NOT DASHBOARD_MODE AND BUILD_TESTING)
     # get temporary directory for dashboard testing
     if(NOT DEFINED CMAKE_DASHBOARD_ROOT)
         GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
@@ -202,7 +204,7 @@ if(NOT DASHBOARD_MODE)
     configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestCustom.cmake.in
         ${CMAKE_BINARY_DIR}/CTestCustom.cmake @ONLY)
 
-endif(NOT DASHBOARD_MODE)
+endif(NOT DASHBOARD_MODE AND BUILD_TESTING)
 
 
 # ------------------------------------------------------------------------ #

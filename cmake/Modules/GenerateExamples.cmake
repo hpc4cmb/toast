@@ -34,8 +34,6 @@ endfunction(machine_defined)
 
 #------------------------------------------------------------------------------#
 
-machine_defined()
-valid_machine()
 
 #------------------------------------------------------------------------------#
 # -- Global variable settings
@@ -106,6 +104,9 @@ endif(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
 # ------------------------------------------------------------------------ #
 # -- SLURM examples
 # ------------------------------------------------------------------------ #
+machine_defined()
+valid_machine()
+
 include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})    
 set(ENV{MACHINES} "${MACHINE}")
 
