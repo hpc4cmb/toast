@@ -60,7 +60,7 @@ class PySMSky(object):
             'channels': None,
             'channel_names': list(bandpasses.keys()),
             'add_noise': False,
-            'output_units': 'uK_RJ',
+            'output_units': 'K_CMB',
             'use_smoothing': False,
             'pixel_indices': self._local_pixels
         }
