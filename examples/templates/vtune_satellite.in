@@ -136,6 +136,8 @@ else
     echo "No alias \"vfinal\" defined. Remember to finalize results"
 fi
 
+# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
+shopt -s nullglob
 for i in ${outdir}/timing_report*.out
 do
     echo -e "\n--> ${i}\n" >> ${LOG_OUT}

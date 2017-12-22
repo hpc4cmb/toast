@@ -130,6 +130,8 @@ echo Calling srun at $(date)
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
 
+# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
+shopt -s nullglob
 for i in ${outdir}/timing_report*.out
 do
     echo -e "\n--> ${i}\n" >> ${LOG_OUT}
