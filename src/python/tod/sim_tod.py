@@ -932,6 +932,12 @@ class TODGround(TOD):
             np.pi/2 - np.ones(my_nsamp)*self._el,
             my_az, np.zeros(my_nsamp), IAU=False)
         azel_orients = qa.rotate(my_azelquats, orient)
+        lengths = np.sqrt(np.sum(azel_orients**2, 0))
+        if np.any(lengths == 0):
+            bad = lengths == 0
+            print('WARNING: {} zero length vectors in translate pointing.'
+                  ''.format(np.sum(bad)), flush=True)
+            azel_orients[bad, 0] = 1
         el_orients, az_orients = hp.vec2ang(azel_orients)
         del azel_orients
 
