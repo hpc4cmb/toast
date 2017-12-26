@@ -26,6 +26,14 @@ import toast.qarray as qa
 import toast.timing as timing
 from toast import Weather
 
+#import warnings
+#warnings.filterwarnings('error')
+#warnings.simplefilter('ignore', ImportWarning)
+#warnings.simplefilter('ignore', ResourceWarning)
+#warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+#warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+
+
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 def parse_arguments(comm):
