@@ -232,8 +232,15 @@ class OpSimAtmosphere(Operator):
             # Use a fixed focal plane radius so that changing the actual
             # set of detectors will not affect the simulated atmosphere.
 
-            azmin = min_az_bore - fp_radius / np.cos(max_el_bore)
-            azmax = max_az_bore + fp_radius / np.cos(max_el_bore)
+            elfac = 1 / np.cos(max_el_bore + fp_radius)
+            azmin = min_az_bore - fp_radius * elfac
+            azmax = max_az_bore + fp_radius * elfac
+            if azmin < -2*np.pi:
+                azmin += 2*np.pi
+                azmax += 2*np.pi
+            elif azmax > 2*np.pi:
+                azmin -= 2*np.pi
+                azmax -= 2*np.pi
             elmin = min_el_bore - fp_radius
             elmax = max_el_bore + fp_radius
 
