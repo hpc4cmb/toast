@@ -924,6 +924,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         return
 
     autotimer = timing.auto_timer()
+    start = MPI.Wtime()
     for obs in data.obs:
         tod = obs['tod']
         site_id = obs['site_id']
@@ -960,6 +961,12 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
             ref *= absorption_det
             del ref
 
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Atmosphere scaling took {:.3f} s'.format(stop-start),
+              flush=args.flush)
+
     return
 
 
@@ -976,6 +983,7 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     """
     if args.weather:
         autotimer = timing.auto_timer()
+        start = MPI.Wtime()
         for obs in data.obs:
             tod = obs['tod']
             site_id = obs['site_id']
@@ -987,6 +995,12 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
                 altitude, weather.air_temperature, weather.surface_pressure,
                 weather.pwv, freq)
             obs['noise_scale'] = absorption * weather.air_temperature
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        if comm.comm_world.rank == 0:
+            print('Atmosphere weighting took {:.3f} s'.format(stop-start),
+                  flush=args.flush)
+
     else:
         for obs in data.obs:
             obs['noise_scale'] = 1.
