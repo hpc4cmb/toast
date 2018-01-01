@@ -164,7 +164,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
         string(TOLOWER "${_FREQ}" _LFREQ)
-        set(_LABELS  Examples${_TYPE} ${MACHINE} ${_SIZE} ${_FREQ}
+        set(_LABELS  Examples ${_TYPE} ${MACHINE} ${_SIZE} ${_FREQ}
             ${_TYPE}_${_SIZE} ${_TYPE}_${_LFREQ}
             ${_TYPE}_${_NODES} ${_LFREQ}_${_NODES}
             EXAMPLE_${_NODES}_NODE "slurm")
