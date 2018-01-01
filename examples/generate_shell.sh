@@ -24,6 +24,16 @@ fi
 # don't allow customization
 SIZES="tiny"
 
+# Determine "mpirun" available for shell scripts
+: ${MPI_RUN:=mpirun}
+for i in mpirun mpiexec lamexec srun
+do
+    if command -v ${i} &> /dev/null; then
+        MPI_RUN=$(which ${i})
+        break
+    fi
+done
+
 for TYPE in ${TYPES}; do
     for SIZE in ${SIZES}; do
     
@@ -34,7 +44,7 @@ for TYPE in ${TYPES}; do
         echo "Generating ${OUTFILE}"
 
         cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
-            -DSIZEFILE=${SIZEFILE} \
+            -DSIZEFILE=${SIZEFILE} -DMPI_RUN=${MPI_RUN} \
             -DTOPDIR="${TOPDIR}" -DTYPE=${TYPE} \
             -DSIZE=${SIZE} $@ \
             -P ${TOPDIR}/templates/config.cmake

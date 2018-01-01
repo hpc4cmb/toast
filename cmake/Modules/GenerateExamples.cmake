@@ -87,9 +87,16 @@ check_return(GENERATE_SHELL_RET)
 foreach(_TYPE ${PROBLEM_TYPES})
     set(_file_name tiny_${_TYPE}_shell)
     set(_test_name pyc_${_file_name}_example)
+    # set the job name
+    if(USE_SLURM AND SLURM_SALLOC_COMMAND)
+        set(SLURM_JOB_NAME --job-name='${_test_name}')
+    endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
+    # add the test
     add_test(NAME ${_test_name}
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-    COMMAND ${SLURM_COMMAND} ./ctest-wrapper.sh ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
+        COMMAND ${SLURM_COMMAND} ${SLURM_JOB_NAME}
+            ${CMAKE_BINARY_DIR}/examples/ctest-wrapper.sh
+            ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
     set_tests_properties(${_test_name} PROPERTIES 
         LABELS "Examples;shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
 endforeach(_TYPE ground ground_simple satellite)
@@ -137,14 +144,23 @@ execute_process(COMMAND ./generate_slurm.sh -DACCOUNT=${ACCOUNT} -DTIME=${TIME}
 check_return(GENERATE_SLURM_RET)
 
 #------------------------------------------------------------------------------#
+# SLURM example tests
+#------------------------------------------------------------------------------#
 
 foreach(_TYPE ${PROBLEM_TYPES})
     foreach(_SIZE ${PROBLEM_SIZES})
         set(_test_name ${_TYPE}_${_SIZE}_${MACHINE})
+        # set the job name
+        if(USE_SLURM AND SLURM_SALLOC_COMMAND)
+            set(SLURM_JOB_NAME --job-name='${_test_name}')
+        endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
+        # add the test
         add_test(NAME ${_test_name}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/examples
-            COMMAND ./${SRUN_WRAPPER} ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
-        get_parameter(_NODES "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
+            COMMAND ${CMAKE_BINARY_DIR}/examples/${SRUN_WRAPPER}
+                ${CMAKE_BINARY_DIR}/examples/${_SIZE}_${_TYPE}_${MACHINE}.slurm)
+        get_parameter(_NODES
+            "${CMAKE_BINARY_DIR}/examples/templates/params/${_TYPE}.${_SIZE}" NODES)
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
         string(TOLOWER "${_FREQ}" _LFREQ)
@@ -162,6 +178,8 @@ foreach(_TYPE ${PROBLEM_TYPES})
 endforeach(_TYPE ${PROBLEM_TYPES})
    
 #------------------------------------------------------------------------------#
+# SLURM node scripts
+#------------------------------------------------------------------------------#
 
 list(REMOVE_DUPLICATES NODES_LIST)
 numeric_sort(NODES_LIST ${NODES_LIST})
@@ -178,7 +196,7 @@ foreach(_N ${NODES_LIST})
     set(TIME "${_HRS_TOT}:${_MIN_REM}:00")
     set(JOB_NAME "example_${_N}_node")
     set(FILENAME "example_${_N}_node.sh")
-    set(CTEST_PARAMS "-L EXAMPLE_${_N}_NODE -S CDashTest.cmake -O ctest_${JOB_NAME}.log --output-on-failure")
+    set(CTEST_PARAMS "-L EXAMPLE_${_N}_NODE -DTRIGGER=Test -DSTAGES='Build;Test' -S cdash/Stages.cmake -O ctest_${JOB_NAME}.log --output-on-failure")
     set(QUEUE_ORIG "${QUEUE}")
     set(QUEUE "debug")
     if(_MIN_TOT GREATER 120)

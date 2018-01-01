@@ -43,6 +43,7 @@ Makefile.in
 
 /doc/xml
 /doc/sphinx/_build
+/doc/_build
 
 /src/tests/toast_test
 /src/tests/*.out

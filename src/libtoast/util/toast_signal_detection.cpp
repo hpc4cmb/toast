@@ -165,37 +165,37 @@ std::string signal_settings::str(const sys_signal& _type)
     // enabled in the future
     static std::vector<descript_tuple_t> descript_data =
     {
-        descript_tuple_t("SIGHUP",  SIGHUP, "terminal line hangup"),
-        descript_tuple_t("SIGINT",  SIGINT, "interrupt program"),
-        descript_tuple_t("SIGQUIT",  SIGQUIT, "quit program"),
-        descript_tuple_t("SIGILL",  SIGILL, "illegal instruction"),
-        descript_tuple_t("SIGTRAP",  SIGTRAP, "trace trap"),
-        descript_tuple_t("SIGABRT",  SIGABRT, "abort program (formerly SIGIOT)"),
-        descript_tuple_t("SIGEMT",  SIGEMT, "emulate instruction executed"),
-        descript_tuple_t("SIGFPE",  SIGFPE, "floating-point exception"),
-        descript_tuple_t("SIGKILL",  SIGKILL, "kill program"),
-        descript_tuple_t("SIGBUS",  SIGBUS, "bus error"),
-        descript_tuple_t("SIGSEGV",  SIGSEGV, "segmentation violation"),
-        descript_tuple_t("SIGSYS",  SIGSYS, "non-existent system call invoked"),
-        descript_tuple_t("SIGPIPE",  SIGPIPE, "write on a pipe with no reader"),
-        descript_tuple_t("SIGALRM",  SIGALRM, "real-time timer expired"),
-        descript_tuple_t("SIGTERM",  SIGTERM, "software termination signal"),
-        descript_tuple_t("SIGURG",  SIGURG, "urgent condition present on socket"),
-        descript_tuple_t("SIGSTOP",  SIGSTOP, "stop (cannot be caught or ignored)"),
-        descript_tuple_t("SIGTSTP",  SIGTSTP, "stop signal generated from keyboard"),
-        descript_tuple_t("SIGCONT",  SIGCONT, "continue after stop"),
-        descript_tuple_t("SIGCHLD",  SIGCHLD, "child status has changed"),
-        descript_tuple_t("SIGTTIN",  SIGTTIN, "background read attempted from control terminal"),
-        descript_tuple_t("SIGTTOU",  SIGTTOU, "background write attempted to control terminal"),
-        descript_tuple_t("SIGIO ",  SIGIO, "I/O is possible on a descriptor"),
-        descript_tuple_t("SIGXCPU",  SIGXCPU, "cpu time limit exceeded"),
-        descript_tuple_t("SIGXFSZ",  SIGXFSZ, "file size limit exceeded"),
-        descript_tuple_t("SIGVTALRM",  SIGVTALRM, "virtual time alarm"),
-        descript_tuple_t("SIGPROF",  SIGPROF, "profiling timer alarm"),
-        descript_tuple_t("SIGWINCH",  SIGWINCH, "Window size change"),
-        descript_tuple_t("SIGINFO",  SIGINFO, "status request from keyboard"),
-        descript_tuple_t("SIGUSR1",  SIGUSR1, "User defined signal 1"),
-        descript_tuple_t("SIGUSR2",  SIGUSR2, "User defined signal 2")
+        descript_tuple_t("SIGHUP", SIGHUP, "terminal line hangup"),
+        descript_tuple_t("SIGINT", SIGINT, "interrupt program"),
+        descript_tuple_t("SIGQUIT", SIGQUIT, "quit program"),
+        descript_tuple_t("SIGILL", SIGILL, "illegal instruction"),
+        descript_tuple_t("SIGTRAP", SIGTRAP, "trace trap"),
+        descript_tuple_t("SIGABRT", SIGABRT, "abort program (formerly SIGIOT)"),
+        descript_tuple_t("SIGEMT", SIGEMT, "emulate instruction executed"),
+        descript_tuple_t("SIGFPE", SIGFPE, "floating-point exception"),
+        descript_tuple_t("SIGKILL", SIGKILL, "kill program"),
+        descript_tuple_t("SIGBUS", SIGBUS, "bus error"),
+        descript_tuple_t("SIGSEGV", SIGSEGV, "segmentation violation"),
+        descript_tuple_t("SIGSYS", SIGSYS, "non-existent system call invoked"),
+        descript_tuple_t("SIGPIPE", SIGPIPE, "write on a pipe with no reader"),
+        descript_tuple_t("SIGALRM", SIGALRM, "real-time timer expired"),
+        descript_tuple_t("SIGTERM", SIGTERM, "software termination signal"),
+        descript_tuple_t("SIGURG", SIGURG, "urgent condition present on socket"),
+        descript_tuple_t("SIGSTOP", SIGSTOP, "stop (cannot be caught or ignored)"),
+        descript_tuple_t("SIGTSTP", SIGTSTP, "stop signal generated from keyboard"),
+        descript_tuple_t("SIGCONT", SIGCONT, "continue after stop"),
+        descript_tuple_t("SIGCHLD", SIGCHLD, "child status has changed"),
+        descript_tuple_t("SIGTTIN", SIGTTIN, "background read attempted from control terminal"),
+        descript_tuple_t("SIGTTOU", SIGTTOU, "background write attempted to control terminal"),
+        descript_tuple_t("SIGIO ", SIGIO, "I/O is possible on a descriptor"),
+        descript_tuple_t("SIGXCPU", SIGXCPU, "cpu time limit exceeded"),
+        descript_tuple_t("SIGXFSZ", SIGXFSZ, "file size limit exceeded"),
+        descript_tuple_t("SIGVTALRM", SIGVTALRM, "virtual time alarm"),
+        descript_tuple_t("SIGPROF", SIGPROF, "profiling timer alarm"),
+        descript_tuple_t("SIGWINCH", SIGWINCH, "Window size change"),
+        descript_tuple_t("SIGINFO", SIGINFO, "status request from keyboard"),
+        descript_tuple_t("SIGUSR1", SIGUSR1, "User defined signal 1"),
+        descript_tuple_t("SIGUSR2", SIGUSR2, "User defined signal 2")
     };
 
     int key = (int) _type;
@@ -213,7 +213,6 @@ std::string signal_settings::str(const sys_signal& _type)
 
 std::string signal_settings::str()
 {
-
     std::stringstream ss;
     auto spacer = [&] () { return "    "; };
 

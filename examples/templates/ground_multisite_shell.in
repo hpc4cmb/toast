@@ -93,7 +93,7 @@ threads=2
 
 export OMP_NUM_THREADS=${threads}
 
-run="mpirun -np ${procs}"
+run="@MPI_RUN@ -n ${procs}"
 
 : ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"

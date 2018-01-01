@@ -22,6 +22,7 @@ Contents:
     pointing.rst
     sim.rst
     maptools.rst
+    timing.rst
     nersc.rst
     dev.rst
 

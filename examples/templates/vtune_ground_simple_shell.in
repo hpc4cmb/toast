@@ -71,7 +71,7 @@ threads=2
 
 export OMP_NUM_THREADS=${threads}
 
-run="mpirun -np ${procs}"
+run="@MPI_RUN@ -n ${procs}"
 
 # only set "vrun" if not defined in environment (see vtune_params/ directory)
 : ${vrun:="amplxe-cl -collect hotspots -knob sampling-interval=25 -mrte-mode=mixed \

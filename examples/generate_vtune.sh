@@ -20,10 +20,19 @@ if ! eval command -v cmake &> /dev/null ; then
     exit 2
 fi
 
+# determine if we should generate SLURM scripts
 LOADED_VTUNE="$(module list &> /dev/stdout | grep vtune | awk '{print $NF}')"
 NO_SLURM=0
-if [ -z "${LOADED_VTUNE}" ]; then
-    echo "Only generating shell scripts. To Generate SLURM scripts at NERSC, please load the preferred vtune module"
+if ! command -v sbatch &> /dev/null; then
+    echo ""
+    echo "WARNING! Only generating shell scripts. \"sbatch\" command does not exist"
+    echo ""
+    NO_SLURM=1
+elif [ -z "${LOADED_VTUNE}" ]; then
+    echo ""
+    echo "WARNING! Only generating shell scripts. To Generate SLURM scripts at"\
+    "NERSC, please load the preferred vtune module"
+    echo ""
     NO_SLURM=1
 fi
 
@@ -43,8 +52,18 @@ fi
 : ${GENERATE_SHELL:=1}
 export GENERATE_SHELL
 
+# Determine "mpirun" available for shell scripts
+: ${MPI_RUN:=mpirun}
+for i in mpirun mpiexec lamexec srun
+do
+    if command -v ${i} &> /dev/null; then
+        MPI_RUN=$(which ${i})
+        break
+    fi
+done
+
 # Generate Shell
-if [ "${TOAST_SHELL_EXAMPLES}" -gt 0 ]; then
+if [ "${GENERATE_SHELL}" -gt 0 ]; then
     for TYPE in ${TYPES}; do
         for SIZE in ${SHELL_SIZES}; do
     
@@ -58,9 +77,10 @@ if [ "${TOAST_SHELL_EXAMPLES}" -gt 0 ]; then
     
             cmake -DINFILE=${TEMPLATE} -DOUTFILE=${OUTFILE} \
                 -DSIZEFILE=${SIZEFILE} -DTOPDIR="${TOPDIR}" -DTYPE=${TYPE} \
-                -DSIZE=${SIZE} -DVTUNE="${VTUNE}" $@ \
+                -DSIZE=${SIZE} -DVTUNE="${VTUNE}" -DMPI_RUN=${MPI_RUN} $@ \
                 -P ${TOPDIR}/templates/config.cmake
             
+            chmod 755 ${OUTFILE}
         done
     done
 fi
