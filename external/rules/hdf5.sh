@@ -5,7 +5,7 @@ curl -SL https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.8/hdf5-1.8.20/src
        else echo "-O3"; fi) \
     CXX="@CXX@" CXXFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@CXXFLAGS@"; \
        else echo "-O3"; fi) \
-    FC="@FC@" CXXFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@FCFLAGS@"; \
+    FC="@FC@" FCFLAGS=$(if [ "x@CROSS@" = x ]; then echo "@FCFLAGS@"; \
        else echo "-O3"; fi) \
     ./configure \
     --disable-silent-rules \

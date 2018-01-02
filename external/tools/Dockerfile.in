@@ -85,10 +85,6 @@ ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 @madam@
 
-# Install conviqt
-
-@conviqt@
-
 # Install elemental
 
 @elemental@
@@ -101,21 +97,29 @@ ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 @h5py@
 
-# Install TIDAS
+# Install aatm
 
-@tidas@
+@aatm@
+
+# Install conviqt
+
+@conviqt@
 
 # Install libsharp
 
 @libsharp@
 
+# Install libmadam
+
+@madam@
+
+# Install TIDAS
+
+@tidas@
+
 # Install PySM
 
 @pysm@
-
-# Install aatm
-
-@aatm@
 
 # Install TOAST
 
