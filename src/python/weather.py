@@ -83,6 +83,8 @@ class Weather(object):
 
         hdulist.close()
 
+        self._reset_vars()
+
         return
 
     def set(self, site, realization, time=None):
@@ -99,7 +101,23 @@ class Weather(object):
         self.realization = realization
         if time is not None:
             self.set_time(time)
+        else:
+            self._reset_vars()
         return
+
+    def _reset_vars(self):
+        """ Reset the cached random variables.
+
+        """
+        self._ice_water = None
+        self._liquid_water = None
+        self._pwv = None
+        self._humidity = None
+        self._surface_pressure = None
+        self._surface_templerature = None
+        self._air_temperature = None
+        self._west_wind = None
+        self._south_wind = None
 
     def set_time(self, time):
         """ Set the observing time.
@@ -116,6 +134,7 @@ class Weather(object):
         self._hour = self._date.hour
         # This is the definition of month used in the weather files
         self._month = int((self._doy-1) // 30.5)
+        self._reset_vars()
         return
 
     def _draw(self, name):
@@ -151,8 +170,10 @@ class Weather(object):
         for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('TQI')
+        if self._ice_water is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._ice_water = self._draw('TQI')
+        return self._ice_water
 
     @property
     def liquid_water(self):
@@ -162,8 +183,10 @@ class Weather(object):
         for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('TQL')
+        if self._liquid_water is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._liquid_water = self._draw('TQL')
+        return self._liquid_water
 
     @property
     def pwv(self):
@@ -173,8 +196,10 @@ class Weather(object):
         for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('TQV')
+        if self._pwv is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._pwv = self._draw('TQV')
+        return self._pwv
 
     @property
     def humidity(self):
@@ -184,8 +209,10 @@ class Weather(object):
         ground at the preset time and for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('QV10M')
+        if self._humidity is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._humidity = self._draw('QV10M')
+        return self._humidity
 
     @property
     def surface_pressure(self):
@@ -195,8 +222,10 @@ class Weather(object):
         preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('PS')
+        if self._surface_pressure is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._surface_pressure = self._draw('PS')
+        return self._surface_pressure
 
     @property
     def surface_temperature(self):
@@ -206,8 +235,10 @@ class Weather(object):
         for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('TS')
+        if self._surface_temperature is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._surface_temperature = self._draw('TS')
+        return self._surface_temperature
 
     @property
     def air_temperature(self):
@@ -217,8 +248,10 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('T10M')
+        if self._air_temperature is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._air_temperature = self._draw('T10M')
+        return self._air_temperature
 
     @property
     def west_wind(self):
@@ -228,8 +261,10 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('U10M')
+        if self._west_wind is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._west_wind = self._draw('U10M')
+        return self._west_wind
 
     @property
     def south_wind(self):
@@ -239,5 +274,7 @@ class Weather(object):
         at the preset time and for the preset realization.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        return self._draw('V10M')
+        if self._south_wind is None:
+            autotimer = timing.auto_timer(type(self).__name__)
+            self._south_wind = self._draw('V10M')
+        return self._south_wind

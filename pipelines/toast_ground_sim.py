@@ -927,9 +927,11 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         start_time = obs['start_time']
         weather.set(site_id, mc, start_time)
         altitude = obs['altitude']
+        air_temperature = weather.air_temperature
+        surface_pressure = weather.surface_pressure
+        pwv = weather.pwv
         absorption = toast.ctoast.atm_get_absorption_coefficient(
-            altitude, weather.air_temperature, weather.surface_pressure,
-            weather.pwv, freq)
+            altitude, air_temperature, surface_pressure, pwv, freq)
         #loading = toast.ctoast.atm_get_atmospheric_loading(
         #    altitude, pwv, freq)
         for det in tod.local_dets:
@@ -941,9 +943,8 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
                 freqs = np.linspace(center-width/2, center+width/2, nstep)
                 absorption_det = [
                     toast.ctoast.atm_get_absorption_coefficient(
-                        altitude, weather.air_temperature,
-                        weather.surface_pressure,
-                        weather.pwv, x) for x in freqs]
+                        altitude, air_temperature, surface_pressure, pwv, x)
+                    for x in freqs]
                 absorption_det = np.mean(absorption_det)
             except:
                 absorption_det = absorption
