@@ -51,9 +51,17 @@ p_c_char = ct.POINTER(ct.c_char)
 pp_c_char = ct.POINTER(p_c_char)
 
 #--------------------------------------
+# Global library
+#--------------------------------------
+lib.ctoast_raise_error.restype = None
+lib.ctoast_raise_error.argtypes = [ ct.c_int ]
+
+def raise_error(errcode):
+    lib.ctoast_raise_error(errcode)
+
+#--------------------------------------
 # Util sub-library
 #--------------------------------------
-
 class cTimer(ct.Structure):
     pass
 

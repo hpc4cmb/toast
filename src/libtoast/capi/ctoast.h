@@ -23,10 +23,12 @@ extern "C" {
 
 void ctoast_init ( int argc, char *argv[] );
 void ctoast_finalize ( );
+void ctoast_raise_error(int errcode);
 
 //--------------------------------------
 // Util sub-library
 //--------------------------------------
+
 struct ctoast_timer_;
 typedef struct ctoast_timer_ ctoast_timer;
 

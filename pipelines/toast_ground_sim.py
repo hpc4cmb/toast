@@ -1491,4 +1491,5 @@ if __name__ == '__main__':
         print('*** format_tb:')
         print(repr(traceback.format_tb(exc_traceback)))
         print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
-        MPI.COMM_WORLD.Abort()
+        toast.raise_error(6) # typical error code for SIGABRT
+        MPI.COMM_WORLD.Abort(6)

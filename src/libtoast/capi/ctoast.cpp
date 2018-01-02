@@ -29,6 +29,11 @@ void ctoast_finalize ( )
     return;
 }
 
+void ctoast_raise_error(int errcode)
+{
+    toast::TerminationSignalMessage(errcode, nullptr, std::cerr);
+}
+
 //============================================================================//
 // Util sub-library
 //============================================================================//

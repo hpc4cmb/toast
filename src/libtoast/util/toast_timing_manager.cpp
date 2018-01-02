@@ -258,7 +258,7 @@ void toast::util::timing_manager::report(ostream_t* os) const
 {
     auto check_stream = [&] (ostream_t*& _os, const string_t& id)
     {
-        if(_os == &std::cout)
+        if(_os == &std::cout || _os == &std::cerr)
             return;
         ofstream_t* fos = get_ofstream(_os);
         if(!(fos->is_open() && fos->good()))
@@ -269,7 +269,8 @@ void toast::util::timing_manager::report(ostream_t* os) const
         }
     };
 
-    check_stream(os, "total timing report");
+    if(os == m_report)
+        check_stream(os, "total timing report");
 
     for(const auto& itr : *this)
         itr.timer().stop();

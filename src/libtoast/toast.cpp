@@ -61,11 +61,11 @@ void toast::init ( int argc, char *argv[] )
     auto _exit_func = [] (int errcode)
     {
         auto tman = toast::util::timing_manager::instance();
-        tman->report();
+        tman->report(std::cerr);
         std::stringstream ss;
         ss << "timing_report_err_" << errcode << ".out";
-        tman->set_output_stream(ss.str());
-        tman->report();
+        std::ofstream ferr(ss.str().c_str());
+        tman->report(ferr);
     };
 
     toast::signal_settings::set_exit_action(_exit_func);

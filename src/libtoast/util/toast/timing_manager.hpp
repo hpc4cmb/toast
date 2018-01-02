@@ -201,6 +201,7 @@ public:
     const_iterator  cend() const    { return m_timer_list.cend(); }
 
     void report() const;
+    void report(std::ostream& os) const { report(&os); }
     void set_output_stream(ostream_t&);
     void set_output_stream(const string_t&);
 

@@ -35,3 +35,5 @@ from .dist import (Comm, Data, distribute_uniform, distribute_discrete,
 from .op import Operator
 
 from .weather import Weather
+
+from .ctoast import raise_error

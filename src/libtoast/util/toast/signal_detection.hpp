@@ -16,7 +16,10 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 
+#include <mpi.h>
+
 #include <iostream>
+#include <cstdlib>
 #include <stdlib.h>  /* abort(), exit() */
 #include <set>
 #include <string>
@@ -242,7 +245,7 @@ inline void DisableSignalDetection();
 
 //----------------------------------------------------------------------------//
 
-inline void StackBackTrace(std::stringstream& ss)
+inline void StackBackTrace(std::ostream& ss)
 {
     typedef std::string::size_type          size_type;
 
@@ -339,21 +342,34 @@ inline void StackBackTrace(std::stringstream& ss)
 
 //----------------------------------------------------------------------------//
 
-inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
-                                     void* /* context */)
+inline void TerminationSignalMessage(int sig, siginfo_t* sinfo,
+                                     std::ostream& message)
 {
     sys_signal _sig = (sys_signal) (sig);
 
-    if(signal_settings::get_enabled().find(_sig) ==
-       signal_settings::get_enabled().end())
-        return;
+    //------------------------------------------------------------------------//
+    auto mpi_is_initialized = [] ()
+    {
+        int32_t _init = 0;
+        MPI_Initialized(&_init);
+        return (_init != 0) ? true : false;
+    };
+    //------------------------------------------------------------------------//
+    auto mpi_rank = [=] ()
+    {
+        int32_t _rank = 0;
+        if(mpi_is_initialized())
+            MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+        return std::max(_rank, (int32_t) 0);
+    };
+    //------------------------------------------------------------------------//
 
-    std::stringstream message;
-    message << "\n";
+    message << "\n" << "### ERROR ### ";
+    if(mpi_is_initialized())
+        message << " [ MPI rank : " << mpi_rank() << " ] ";
+    message << "Error code : " << sig;
     if(sinfo)
-        message << "### ERROR ### " << sig << " @ " << sinfo->si_addr;
-    else
-        message << "### ERROR ### " << sig;
+        message << " @ " << sinfo->si_addr;
     message << " : " << signal_settings::str(_sig);
 
     if(sig == SIGSEGV)
@@ -382,12 +398,27 @@ inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
     }
     catch(std::exception& e)
     {
-        std::cerr << "signal_settings::exit_action(" << sig << ") threw an exception"
-                  << std::endl;
+        std::cerr << "signal_settings::exit_action(" << sig
+                  << ") threw an exception" << std::endl;
         std::cerr << e.what() << std::endl;
     }
 
     StackBackTrace(message);
+}
+
+//----------------------------------------------------------------------------//
+
+inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
+                                     void* /* context */)
+{
+    sys_signal _sig = (sys_signal) (sig);
+
+    if(signal_settings::get_enabled().find(_sig) ==
+       signal_settings::get_enabled().end())
+        return;
+
+    std::stringstream message;
+    TerminationSignalMessage(sig, sinfo, message);
 
     if(signal_settings::enabled().find(sys_signal::sAbort) !=
        signal_settings::enabled().end())
@@ -400,7 +431,7 @@ inline void TerminationSignalHandler(int sig, siginfo_t* sinfo,
     }
 
     // throw an exception instead of ::abort() so it can be caught
-    // if the error can be ignored
+    // if the error can be ignored if desired
     throw std::runtime_error(message.str());
 }
 
