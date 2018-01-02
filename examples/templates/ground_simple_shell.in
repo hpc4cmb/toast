@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit
+set -v
+
 @EXTRA_INIT@
 
 echo -e "\n-----------------------------------------------------------------------"
@@ -24,7 +27,7 @@ fpfile="${outdir}/fp_${detpix}.pkl"
 fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py @$fpparfile \
+    @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --out "${outdir}/fp" --minpix $detpix
 fi
@@ -36,10 +39,10 @@ schparfile="@TOPDIR@/params/ground/schedule.par"
 schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
-    toast_ground_schedule.py @$schparfile \
-	 --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
-         --out "${schedulefile}" --patch @PATCH@ \
-         --stop @SCHEDULE_STOP@
+    @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
+        --out "${schedulefile}" --patch @PATCH@ \
+        --stop @SCHEDULE_STOP@
 fi
 
 # The executable script

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit
+set -v
+
 @EXTRA_INIT@
 
 echo -e "\n-----------------------------------------------------------------------"
@@ -22,7 +25,9 @@ detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
-    toast_fake_focalplane.py --minpix ${detpix} --out "${outdir}/fp"
+    @MPI_RUN@ -n 1 toast_fake_focalplane.py \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+        --minpix ${detpix} --out "${outdir}/fp"
 fi
 
 # The executable script

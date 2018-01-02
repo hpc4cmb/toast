@@ -10,6 +10,7 @@
 #SBATCH --perf=@VTUNE@
 
 set -o errexit
+set -v
 
 @EXTRA_INIT@
 

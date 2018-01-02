@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit
+set -v
+
 @EXTRA_INIT@
 
 echo -e "\n-----------------------------------------------------------------------"
@@ -24,15 +27,16 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
-    toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
+    @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_atacama" \
         --out "${outdir}/fp_atacama" --minpix $detpix
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
 if [ ! -e "${fpfile_pole}" ]; then
-    toast_fake_focalplane.py @$fpparfile \
-         --out "${outdir}/fp_pole" --minpix $detpix --fov 1
+    @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_pole" \
+        --out "${outdir}/fp_pole" --minpix $detpix --fov 1
 fi
 
 # Generate the schedule files if they do not already exist.
@@ -42,10 +46,10 @@ schparfile="@TOPDIR@/params/ground/schedule.par"
 schedulefile_atacama="${outdir}/schedule_atacama.txt"
 
 if [ ! -e "${schedulefile_atacama}" ]; then
-    toast_ground_schedule.py @$schparfile \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
-         --out "${schedulefile_atacama}" --patch @PATCH@ \
-         --stop @SCHEDULE_STOP@
+    @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
+        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
+        --out "${schedulefile_atacama}" --patch @PATCH@ \
+        --stop @SCHEDULE_STOP@
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -53,7 +57,7 @@ schparfile="@TOPDIR@/params/ground/schedule_pole.par"
 schedulefile_pole="${outdir}/schedule_pole.txt"
 
 if [ ! -e "${schedulefile_pole}" ]; then
-    toast_ground_schedule.py @$schparfile \
+    @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
          --stop @SCHEDULE_STOP@
