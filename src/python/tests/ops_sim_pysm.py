@@ -16,6 +16,7 @@ from ..map.pixels import *
 from ..map.rings import DistRings
 from ..map.pysm import PySMSky
 
+
 def setup_toast_observations(self, nside):
     self.outdir = "toast_test_output"
     if self.comm.rank == 0:
@@ -39,7 +40,7 @@ def setup_toast_observations(self, nside):
 
     self.dets = {
         'fake_0A' : np.array([axiscoef, 0.0, 0.0, angterm]),
-        }
+    }
 
     self.nside = nside
     self.totsamp = 12 * self.nside**2
@@ -71,6 +72,7 @@ def setup_toast_observations(self, nside):
 
         self.data.obs.append(ob)
 
+
 class OpSimPySMTest(MPITestCase):
 
     def setUp(self):
@@ -88,8 +90,8 @@ class OpSimPySMTest(MPITestCase):
         npix_local = int(np.ceil(npix / float(self.toastcomm.comm_world.size)))
         local_pixels = np.arange(
             self.toastcomm.comm_world.rank * npix_local,
-            min(self.toastcomm.comm_world.rank * npix_local + npix_local, npix)
-            )
+            min(self.toastcomm.comm_world.rank*npix_local + npix_local, npix)
+        )
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
@@ -107,7 +109,7 @@ class OpSimPySMTest(MPITestCase):
                 "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=local_pixels, nside=self.nside,
-                       pysm_sky_config=pysm_sky_config)
+                     pysm_sky_config=pysm_sky_config, units='uK_RJ')
         local_map = {} # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
 
@@ -115,10 +117,12 @@ class OpSimPySMTest(MPITestCase):
         # timestream values or we could make a binned map and look at those
         # values.
 
-        np.testing.assert_almost_equal(local_map["sky_1a"][0, :3],
+        np.testing.assert_almost_equal(
+            local_map["sky_1a"][0, :3],
             np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(local_map["sky_1b"][2, -3:],
+        np.testing.assert_almost_equal(
+            local_map["sky_1b"][2, -3:],
             np.array([1.57564944, -0.22345616, -3.55604102]))
 
         stop = MPI.Wtime()
@@ -129,8 +133,8 @@ class OpSimPySMTest(MPITestCase):
         start = MPI.Wtime()
 
         dist_rings = DistRings(self.toastcomm.comm_world,
-                            nside = self.nside,
-                            nnz = 3)
+                               nside = self.nside,
+                               nnz = 3)
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
@@ -148,7 +152,7 @@ class OpSimPySMTest(MPITestCase):
                 "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=dist_rings.local_pixels, nside=self.nside,
-                       pysm_sky_config=pysm_sky_config)
+                     pysm_sky_config=pysm_sky_config, units='uK_RJ')
         local_map = {} # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
 
@@ -156,16 +160,17 @@ class OpSimPySMTest(MPITestCase):
         # timestream values or we could make a binned map and look at those
         # values.
 
-        np.testing.assert_almost_equal(local_map["sky_1a"][0, :3],
+        np.testing.assert_almost_equal(
+            local_map["sky_1a"][0, :3],
             np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(local_map["sky_1b"][2, -3:],
+        np.testing.assert_almost_equal(
+            local_map["sky_1b"][2, -3:],
             np.array([1.57564944, -0.22345616, -3.55604102]))
 
         stop = MPI.Wtime()
         elapsed = stop - start
         self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
-
 
     def test_op_pysm_nosmooth(self):
         # expand the pointing into a low-res pointing matrix
@@ -181,22 +186,23 @@ class OpSimPySMTest(MPITestCase):
 
         subnpix, localsm = 64, np.arange(12)
         focalplane = {'fake_0A': {
-              'bandcenter_ghz': 22.5,
-              'bandwidth_ghz': 5,
-              'fmin': 1e-05,
-              'fwhm': 0.16666666666666666}}
+            'bandcenter_ghz': 22.5,
+            'bandwidth_ghz': 5,
+            'fmin': 1e-05,
+            'fwhm': 0.16666666666666666}}
         op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
-                                   out='signal',
-                                   pysm_model="a2,d7,f1,s3,c1",
-                                   focalplanes=[focalplane],
-                                   nside=self.nside,
-                                   subnpix=subnpix, localsm=localsm,
-                                   apply_beam=False, nest=False)
+                                out='signal',
+                                pysm_model="a2,d7,f1,s3,c1",
+                                focalplanes=[focalplane],
+                                nside=self.nside,
+                                subnpix=subnpix, localsm=localsm,
+                                apply_beam=False, nest=False, units='uK_RJ')
 
         op_sim_pysm.exec(self.data)
-        rescanned_tod = self.data.obs[0]["tod"].cache.reference("signal_fake_0A")
-        pix = self.data.obs[0]["tod"].cache.reference("pixels_fake_0A")
-        weights = self.data.obs[0]["tod"].cache.reference("weights_fake_0A")
+        tod = self.data.obs[0]["tod"]
+        rescanned_tod = tod.cache.reference("signal_fake_0A")
+        pix = tod.cache.reference("pixels_fake_0A")
+        weights = tod.cache.reference("weights_fake_0A")
 
         # compare with maps computes with PySM standalone running
         # the test_mpi.py script from the PySM repository
@@ -206,8 +212,9 @@ class OpSimPySMTest(MPITestCase):
         U = np.array([-6.20504973, 7.71503699, -6.17427374])
         expected = []
         for i, (qw, uw) in enumerate([(-1, 1), (1, 1), (1, -1)]):
-            expected.append(1. * I[i] + qw *0.70710678 * Q[i] + uw * 0.70710678 * U[i])
-        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected, decimal=4)
+            expected.append(1.*I[i] + qw*0.70710678*Q[i] + uw*0.70710678*U[i])
+        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
+                                             decimal=4)
 
 class OpSimPySMTestSmooth(MPITestCase):
 
@@ -221,17 +228,17 @@ class OpSimPySMTestSmooth(MPITestCase):
 
         subnpix, localsm = self.nside**2, np.arange(12)
         focalplane = {'fake_0A': {
-              'bandcenter_ghz': 22.5,
-              'bandwidth_ghz': 5,
-              #'fwhm': 30*0.16666666666666666}}
-              'fwhm': 10}}
+            'bandcenter_ghz': 22.5,
+            'bandwidth_ghz': 5,
+            #'fwhm': 30*0.16666666666666666}}
+            'fwhm': 10}}
         op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
-                                   out='signal',
-                                   pysm_model="a2,d7,f1,s3,c1",
-                                   focalplanes=[focalplane],
-                                   nside=self.nside,
-                                   subnpix=subnpix, localsm=localsm,
-                                   apply_beam=True, nest=False)
+                                out='signal',
+                                pysm_model="a2,d7,f1,s3,c1",
+                                focalplanes=[focalplane],
+                                nside=self.nside,
+                                subnpix=subnpix, localsm=localsm,
+                                apply_beam=True, nest=False, units='uK_RJ')
 
         op_sim_pysm.exec(self.data)
         rescanned_tod = self.data.obs[0]["tod"].cache.reference("signal_fake_0A")
@@ -241,5 +248,6 @@ class OpSimPySMTestSmooth(MPITestCase):
         U = np.array([-8.72476727,  8.57532387, -8.52495214])
         expected = []
         for i, (qw, uw) in enumerate([(-1, 1), (1, 1), (1, -1)]):
-            expected.append(1. * I[i] + qw *0.70710678 * Q[i] + uw * 0.70710678 * U[i])
-        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected, decimal=1)
+            expected.append(1.*I[i] + qw*0.70710678*Q[i] + uw*0.70710678*U[i])
+        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
+                                             decimal=1)

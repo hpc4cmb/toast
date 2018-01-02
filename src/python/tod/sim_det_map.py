@@ -257,15 +257,19 @@ class OpSimPySM(Operator):
             containing the pointing weights to use.
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
+        units(str): Output units.
+        debug(bool):  Verbose progress reports.
     """
     def __init__(self, comm=None,
                  out='signal', pysm_model='', focalplanes=None, nside=None,
-                 subnpix=None, localsm=None, apply_beam=False, nest=True):
+                 subnpix=None, localsm=None, apply_beam=False, nest=True,
+                 units='K_CMB', debug=False):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
         self._nest = nest
         self.comm = comm
+        self._debug = debug
         self.dist_rings = DistRings(comm,
                             nside = nside,
                             nnz = 3)
@@ -284,9 +288,10 @@ class OpSimPySM(Operator):
                      if each.startswith(component_model[0])][0]
             pysm_sky_config[full_component_name] = component_model
         self.pysm_sky = PySMSky(comm=self.comm,
-                local_pixels=self.dist_rings.local_pixels,
-                              nside=nside,
-                              pysm_sky_config=pysm_sky_config)
+                                local_pixels=self.dist_rings.local_pixels,
+                                nside=nside, pysm_sky_config=pysm_sky_config,
+                                units=units)
+
         self.nside = nside
         self.focalplanes = focalplanes
         self.npix = hp.nside2npix(nside)
@@ -319,7 +324,7 @@ class OpSimPySM(Operator):
         local_maps = dict()  # FIXME use Cache instead
         for det in local_dets:
             self.comm.Barrier()
-            if self.comm.rank == 0:
+            if self.comm.rank == 0 and self._debug:
                 print('Running PySM on {}'.format(det), flush=True)
             self.pysm_sky.exec(local_maps, out="sky",
                                bandpasses={"": bandpasses[det]})
@@ -332,29 +337,35 @@ class OpSimPySM(Operator):
                 # LibSharp also supports transforming multiple channels
                 # together each with own beam
                 self.comm.Barrier()
-                if self.comm.rank == 0:
-                    print('Initializing LibSharpSmooth on {}'.format(det), flush=True)
+                if self.comm.rank == 0 and self._debug:
+                    print('Initializing LibSharpSmooth on {}'.format(det),
+                          flush=True)
                 smooth = LibSharpSmooth(
                     self.comm, signal_map="sky", out="sky",
                     lmax=lmax, grid=self.dist_rings.libsharp_grid,
                     fwhm_deg=fwhm_deg[det], beam=None)
                 self.comm.Barrier()
-                if self.comm.rank == 0:
-                    print('Executing LibSharpSmooth on {}'.format(det), flush=True)
+                if self.comm.rank == 0 and self._debug:
+                    print('Executing LibSharpSmooth on {}'.format(det),
+                          flush=True)
                 smooth.exec(local_maps)
                 self.comm.Barrier()
-                if self.comm.rank == 0:
-                    print('LibSharpSmooth completed on {}'.format(det), flush=True)
+                if self.comm.rank == 0 and self._debug:
+                    print('LibSharpSmooth completed on {}'.format(det),
+                          flush=True)
 
             n_components = 3
 
             self.comm.Barrier()
-            if self.comm.rank == 0:
-                print('Assemble PySM map on rank0, shape of local map is {}'.format(local_maps["sky"].shape), flush=True)
-            full_map_rank0 = assemble_map_on_rank0(self.comm,
-                                     local_maps["sky"], self.dist_rings.local_pixels, n_components, self.npix)
+            if self.comm.rank == 0 and self._debug:
+                print('Assemble PySM map on rank0, shape of local map is {}'
+                      ''.format(local_maps["sky"].shape), flush=True)
+            full_map_rank0 = assemble_map_on_rank0(
+                self.comm, local_maps["sky"], self.dist_rings.local_pixels,
+                n_components, self.npix)
+
             self.comm.Barrier()
-            if self.comm.rank == 0:
+            if self.comm.rank == 0 and self._debug:
                 print('Communication completed', flush=True)
             if self.comm.rank == 0 and self._nest:
                 # PySM is RING, toast is NEST
@@ -362,11 +373,11 @@ class OpSimPySM(Operator):
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
 
             self.comm.Barrier()
-            if self.comm.rank == 0:
+            if self.comm.rank == 0 and self._debug:
                 print('Broadcasting the map to other processes', flush=True)
             self.distmap.broadcast_healpix_map(full_map_rank0)
             self.comm.Barrier()
-            if self.comm.rank == 0:
+            if self.comm.rank == 0 and self._debug:
                 print('Running OpSimScan', flush=True)
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
