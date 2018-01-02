@@ -1,4 +1,10 @@
 
+if(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set_property(GLOBAL PROPERTY Label "${DASHBOARD_LABEL}")
+else(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set_property(GLOBAL PROPERTY Label "Glob")
+endif(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+
 set(TRIGGER "None" CACHE STRING "Delay submit until TRIGGER == '(Any|Build|Test|Coverage|MemCheck|None)'")
 
 macro(include_if _TESTFILE)

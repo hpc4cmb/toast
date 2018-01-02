@@ -184,27 +184,9 @@ endmacro(SUBMIT KEY)
 
 
 # ---------------------------------------------------------------------------- #
-# -- Labels
-# ---------------------------------------------------------------------------- #
-function(add_label CTestLabels)
-    if("${CTestLabels}" STREQUAL "")
-        return()
-    endif("${CTestLabels}" STREQUAL "")     
-    get_property(_orig_label GLOBAL PROPERTY Label)
-    set(_labels ${_orig_label})
-    foreach(_label ${CTestLabels})
-        list(APPEND _labels ${_label})
-    endforeach(_label ${CTestLabels})
-    string(REPLACE ";" "-" _label "${_labels}")
-    set_property(GLOBAL PROPERTY Label ${_label})
-endfunction(add_label CTestLabels)
-
-
-# ---------------------------------------------------------------------------- #
 # -- Setup the test
 # ---------------------------------------------------------------------------- #
 macro(SETUP KEY)
-    add_label("${KEY}")
     if("${TRIGGER}" STREQUAL "Any" OR "${KEY}" STREQUAL "Build")
         message(STATUS "Key (${KEY}) triggered a fresh build...")
         clean_directories()

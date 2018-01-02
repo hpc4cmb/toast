@@ -232,7 +232,7 @@ foreach(_FILE ${_PYTHON_TEST_FILES})
 endforeach(_FILE ${_PYTHON_TEST_FILES})
 
 if(USE_SLURM AND SLURM_SALLOC_COMMAND)
-    set(SLURM_JOB_NAME --job-name='cxx_toast_test')
+    set(SLURM_JOB_NAME --job-name=cxx_toast_test)
 endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
 
 # ------------------------------------------------------------------------ #
@@ -242,7 +242,8 @@ add_test(NAME cxx_toast_test
     COMMAND ${SLURM_COMMAND} ${SLURM_JOB_NAME}
         ${CMAKE_BINARY_DIR}/ctest-wrapper.sh
         ${SLURM_COMMAND_RUN} ${CMAKE_BINARY_DIR}/toast_test)
-set_tests_properties(cxx_toast_test PROPERTIES 
+# set the properties
+set_tests_properties(cxx_toast_test PROPERTIES
     LABELS "UnitTest;CXX" TIMEOUT 7200)
 
 # ------------------------------------------------------------------------ #
@@ -254,14 +255,15 @@ foreach(_test_ext ${PYTHON_TEST_FILES})
         ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh @ONLY)
     # set the job name
     if(USE_SLURM AND SLURM_SALLOC_COMMAND)
-        set(SLURM_JOB_NAME --job-name='${_test_name}')
+        set(SLURM_JOB_NAME --job-name=${_test_name})
     endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
     # add the test
     add_test(NAME ${_test_name}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMAND ${SLURM_COMMAND} ${SLURM_JOB_NAME}
             ${SLURM_COMMAND_RUN} ${CMAKE_BINARY_DIR}/scripts/${_test_name}.sh)
-    set_tests_properties(${_test_name} PROPERTIES 
+    # set the properties
+    set_tests_properties(${_test_name} PROPERTIES
         LABELS "UnitTest;Python" TIMEOUT 7200)
 endforeach(_test_ext ${PYTHON_TEST_FILES})
 
@@ -269,7 +271,7 @@ endforeach(_test_ext ${PYTHON_TEST_FILES})
 # coverage
 if(USE_COVERAGE)
     if(USE_SLURM AND SLURM_SALLOC_COMMAND)
-        set(SLURM_JOB_NAME --job-name='pyc_coverage')
+        set(SLURM_JOB_NAME --job-name=pyc_coverage)
     endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
     add_test(NAME pyc_coverage
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -277,6 +279,7 @@ if(USE_COVERAGE)
             ${CMAKE_BINARY_DIR}/ctest-wrapper.sh
             ${PYTHON_EXECUTABLE}
             ${CMAKE_BINARY_DIR}/pyc_toast_test_coverage.py)
+    # set the properties
     set_tests_properties(pyc_coverage PROPERTIES 
         LABELS "Coverage;Python" TIMEOUT 7200)
 endif(USE_COVERAGE)

@@ -89,7 +89,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
     set(_test_name pyc_${_file_name}_example)
     # set the job name
     if(USE_SLURM AND SLURM_SALLOC_COMMAND)
-        set(SLURM_JOB_NAME --job-name='${_test_name}')
+        set(SLURM_JOB_NAME --job-name=${_test_name})
     endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
     # add the test
     add_test(NAME ${_test_name}
@@ -97,6 +97,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         COMMAND ${SLURM_COMMAND} ${SLURM_JOB_NAME}
             ${CMAKE_BINARY_DIR}/examples/ctest-wrapper.sh
             ${CMAKE_BINARY_DIR}/examples/${_file_name}.sh)
+    # set the properties
     set_tests_properties(${_test_name} PROPERTIES 
         LABELS "Examples;shell;tiny;${_TYPE};EXAMPLE_1_NODE" TIMEOUT 7200)
 endforeach(_TYPE ground ground_simple satellite)
@@ -152,7 +153,7 @@ foreach(_TYPE ${PROBLEM_TYPES})
         set(_test_name ${_TYPE}_${_SIZE}_${MACHINE})
         # set the job name
         if(USE_SLURM AND SLURM_SALLOC_COMMAND)
-            set(SLURM_JOB_NAME --job-name='${_test_name}')
+            set(SLURM_JOB_NAME --job-name=${_test_name})
         endif(USE_SLURM AND SLURM_SALLOC_COMMAND)
         # add the test
         add_test(NAME ${_test_name}
@@ -173,10 +174,11 @@ foreach(_TYPE ${PROBLEM_TYPES})
                 set(NODES_COUNT_${_NODES} 0)
             endif(NOT DEFINED NODES_COUNT_${_NODES})
             math(EXPR NODES_COUNT_${_NODES} "${NODES_COUNT_${_NODES}}+1")
+        # set the properties
         set_tests_properties(${_test_name} PROPERTIES LABELS "${_LABELS}" TIMEOUT 14400)
     endforeach(_SIZE ${PROBLEM_SIZES})
 endforeach(_TYPE ${PROBLEM_TYPES})
-   
+
 #------------------------------------------------------------------------------#
 # SLURM node scripts
 #------------------------------------------------------------------------------#

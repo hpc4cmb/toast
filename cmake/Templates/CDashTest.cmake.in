@@ -1,4 +1,10 @@
 
+if(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set_property(GLOBAL PROPERTY Label "${DASHBOARD_LABEL}")
+else(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set_property(GLOBAL PROPERTY Label "Test")
+endif(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+
 include("${CMAKE_CURRENT_LIST_DIR}/Init.cmake")
 
 setup(Test)

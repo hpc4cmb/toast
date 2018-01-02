@@ -1,4 +1,12 @@
 
+if(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set_property(GLOBAL PROPERTY Label "${DASHBOARD_LABEL}")
+else(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+    set(_label "${STAGES}")
+    string(REPLACE ";" "_" _label "${_label}")
+    set_property(GLOBAL PROPERTY Label "${_label}")
+endif(NOT "${DASHBOARD_LABEL}" STREQUAL "")
+
 if(NOT DEFINED TRIGGER)
     set(TRIGGER "Any" CACHE STRING "Delay submit until TRIGGER == '(Any|Build|Test|Coverage|MemCheck|None)'")
 endif(NOT DEFINED TRIGGER)
