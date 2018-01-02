@@ -19,6 +19,7 @@ except:
 from .. import qarray as qa
 from .. import timing as timing
 
+from ..ctoast import healpix_vec2ang, healpix_ang2vec
 from .tod import TOD
 from .interval import Interval
 from .noise import Noise
@@ -932,7 +933,8 @@ class TODGround(TOD):
             np.pi/2 - np.ones(my_nsamp)*self._el,
             my_az, np.zeros(my_nsamp), IAU=False)
         azel_orients = qa.rotate(my_azelquats, orient)
-        el_orients, az_orients = hp.vec2ang(azel_orients)
+        el_orients, az_orients = healpix_vec2ang(my_nsamp,
+                                                 azel_orients.ravel())
         del azel_orients
 
         ra_dirs = []
@@ -977,8 +979,8 @@ class TODGround(TOD):
         ra_orients = np.array(ra_orients)
         dec_orients = np.array(dec_orients)
 
-        radec_dirs = hp.ang2vec(np.pi/2 - dec_dirs, ra_dirs).T
-        radec_orients = hp.ang2vec(np.pi/2 - dec_orients, ra_orients).T
+        radec_dirs = healpix_ang2vec(my_nsamp, np.pi/2 - dec_dirs, ra_dirs).T
+        radec_orients = healpix_ang2vec(my_nsamp, np.pi/2 - dec_orients, ra_orients).T
 
         x = radec_orients[0]*radec_dirs[1] - radec_orients[1]*radec_dirs[0]
         y = radec_orients[2]*(radec_dirs[0]**2 + radec_dirs[1]**2) \
