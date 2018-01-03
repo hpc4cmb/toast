@@ -30,6 +30,7 @@ from toast import Weather
 #warnings.filterwarnings('error')
 #warnings.simplefilter('ignore', ImportWarning)
 #warnings.simplefilter('ignore', ResourceWarning)
+#warnings.simplefilter('ignore', DeprecationWarning)
 #warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 #warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
