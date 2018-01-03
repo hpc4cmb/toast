@@ -9,51 +9,78 @@ import collections
 import numpy as np
 import matplotlib.pyplot as plt
 
-types = ('wall', 'sys', 'user', 'cpu', 'perc')
+timing_types = ('wall', 'sys', 'user', 'cpu', 'perc')
+memory_types = ('total_peak_rss', 'total_current_rss', 'self_peak_rss', 'self_current_rss')
+
 concurrency = 1
 mpi_size = 1
 min_time = 0.01
 
-#=============================================================================#
+#==============================================================================#
 def nested_dict():
     return collections.defaultdict(nested_dict)
 
-#import matplotlib
-#matplotlib.use("qt4agg")
-#import matplotlib.pyplot as plt
 
-
-class timing_data():
+#==============================================================================#
+class memory_data():
 
     def __init__(self):
         self.data = nested_dict()
-        for key in types:
+        for key in memory_types:
             self.data[key] = []
 
     def append(self, _data):
         n = 0
-        for key in types:
+        for key in memory_types:
             self.data[key].append(_data[n])
             n += 1
 
     def __add__(self, rhs):
-        for key in types:
+        for key in memory_types:
             self.data[key].extend(rhs.data[key])
 
     def reset(self):
         self.data = nested_dict()
-        for key in types:
+        for key in memory_types:
             self.data[key] = []
 
     def __getitem__(self, key):
         return self.data[key]
 
 
-#=============================================================================#
+#==============================================================================#
+class timing_data():
+
+    def __init__(self):
+        self.data = nested_dict()
+        for key in timing_types:
+            self.data[key] = []
+
+    def append(self, _data):
+        n = 0
+        for key in timing_types:
+            self.data[key].append(_data[n])
+            n += 1
+
+    def __add__(self, rhs):
+        for key in timing_types:
+            self.data[key].extend(rhs.data[key])
+
+    def reset(self):
+        self.data = nested_dict()
+        for key in timing_types:
+            self.data[key] = []
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+
+#==============================================================================#
 class timing_function():
 
     def __init__(self):
         self.data = timing_data()
+        self.memory = memory_data()
         self.laps = 0
 
     def process(self, denom, obj, nlap):
@@ -61,9 +88,15 @@ class timing_function():
         _user = obj['user_elapsed'] / denom
         _sys = obj['system_elapsed'] / denom
         _cpu = obj['cpu_elapsed'] / denom
+        _tpeak = obj['rss_max']['peak'] / (1024.0 * 1.0e6)
+        _tcurr = obj['rss_max']['current'] / (1024.0 * 1.0e6)
+        _speak = obj['rss_self']['peak'] / (1024.0 * 1.0e6)
+        _scurr = obj['rss_self']['current'] / (1024.0 * 1.0e6)
         _perc = (_cpu / _wall) * 100.0 if _wall > 0.0 else 100.0
-        if _wall > min_time:
+        if _wall > min_time or _speak > 10 or _scurr > 10:
             self.data.append([_wall, _sys, _user, _cpu, _perc])
+        if abs(_speak) > 10 or abs(_scurr) > 10:
+            self.memory.append([_tpeak, _tcurr, _speak, _scurr])
         self.laps += nlap
 
     def __getitem__(self, key):
@@ -72,8 +105,7 @@ class timing_function():
     def length(self):
         return len(self.data['cpu'])
 
-
-#=============================================================================#
+#==============================================================================#
 def read(filename):
 
     print('Opening {}...'.format(filename))
@@ -120,8 +152,8 @@ def read(filename):
     return timing_functions
 
 
-#=============================================================================#
-def plot(filename, title, timing_data_dict):
+#==============================================================================#
+def plot_timing(filename, title, timing_data_dict):
 
     ntics = len(timing_data_dict)
     ytics = []
@@ -133,13 +165,13 @@ def plot(filename, title, timing_data_dict):
 
     avgs = nested_dict()
     stds = nested_dict()
-    for key in types:
+    for key in timing_types:
         avgs[key] = []
         stds[key] = []
 
     for func, obj in timing_data_dict.items():
         ytics.append('{} x [ {} counts ]'.format(func, obj.laps))
-        for key in types:
+        for key in timing_types:
             data = obj[key]
             avgs[key].append(np.mean(data))
             if len(data) > 1:
@@ -158,7 +190,7 @@ def plot(filename, title, timing_data_dict):
     f.subplots_adjust(left=0.05, right=0.75, bottom=0.05, top=0.90)
 
     ytics.reverse()
-    for key in types:
+    for key in timing_types:
         avgs[key].reverse()
         stds[key].reverse()
 
@@ -185,7 +217,81 @@ def plot(filename, title, timing_data_dict):
     plt.show()
 
 
-#=============================================================================#
+#==============================================================================#
+def plot_memory(filename, title, memory_data_dict):
+
+    ntics = len(memory_data_dict)
+    ytics = []
+
+    avgs = nested_dict()
+    stds = nested_dict()
+    for key in memory_types:
+        avgs[key] = []
+        stds[key] = []
+
+    for func, obj in memory_data_dict.items():
+        ytics.append('{} x [ {} counts ]'.format(func, obj.laps))
+        for key in memory_types:
+            data = obj.memory[key]
+            if len(data) == 0:
+                avgs[key].append(0.0)
+                stds[key].append(0.0)
+                continue
+            avgs[key].append(np.mean(data))
+            if len(data) > 1:
+                stds[key].append(np.std(data))
+            else:
+                stds[key].append(0.0)
+
+    # the x locations for the groups
+    ind = np.arange(ntics)
+    # the thickness of the bars: can also be len(x) sequence
+    thickness = 0.8
+
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    ax.yaxis.tick_right()
+    f.subplots_adjust(left=0.05, right=0.75, bottom=0.05, top=0.90)
+
+    ytics.reverse()
+    for key in memory_types:
+        if len(avgs[key]) == 0:
+            del avgs[key]
+            del stds[key]
+
+    for key in memory_types:
+        avgs[key].reverse()
+        stds[key].reverse()
+
+    iter_order = ['self_peak_rss', 'self_current_rss']
+    plots = []
+    lk = None
+    for key in iter_order:
+        data = avgs[key]
+        if len(data) == 0:
+            continue
+        err = stds[key]
+        p = None
+        if lk is None:
+            p = plt.barh(ind, data, thickness, xerr=err)
+        else:
+            p = plt.barh(ind, data, thickness, xerr=err, bottom=lk)
+        #lk = avgs[key]
+        plots.append(p)
+
+    if len(plots) == 0:
+        return
+
+    plt.grid()
+    plt.xlabel('Memory [MB]')
+    plt.title('Memory report for {}'.format(title))
+    plt.yticks(ind, ytics, ha='left')
+    plt.setp(ax.get_yticklabels(), fontsize='smaller')
+    plt.legend(plots, iter_order)
+    plt.show()
+
+
+#==============================================================================#
 def main(args):
     global concurrency
     global mpi_size
@@ -209,10 +315,11 @@ def main(args):
 
     for filename, data in file_data.items():
         print ('Plotting {}...'.format(filename))
-        plot(filename, file_title[filename], data)
+        plot_timing(filename, file_title[filename], data)
+        plot_memory(filename, file_title[filename], data)
 
 
-#=============================================================================#
+#==============================================================================#
 if __name__ == "__main__":
     try:
         main(sys.argv[1:])
