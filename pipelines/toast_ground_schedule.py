@@ -367,6 +367,8 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
                 if (rising and az_cross < np.pi) or \
                    (not rising and az_cross > np.pi):
                     azs_cross.append(az_cross)
+            if fp_radius == 0:
+                break
 
     if len(azs_cross) > 1:
         azs_cross = np.sort(azs_cross)

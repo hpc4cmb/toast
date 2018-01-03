@@ -18,6 +18,7 @@ except:
 from ..cache import Cache
 from .. import timing as timing
 
+
 def expand_pix(startpix, ringpix, local_npix, local_pix):
     """Turn first pixel index and number of pixel in full array of pixels
 
@@ -28,6 +29,7 @@ def expand_pix(startpix, ringpix, local_npix, local_pix):
     for start, num in zip(startpix, ringpix):
         local_pix[i:i+num] = np.arange(start, start+num)
         i += num
+
 
 def distribute_rings(nside, rank, n_mpi_processes):
     """Create a libsharp map distribution based on rings
@@ -64,24 +66,25 @@ def distribute_rings(nside, rank, n_mpi_processes):
 
     local_ring_indices = ring_indices_emisphere[rank::n_mpi_processes]
 
-    # to improve performance, simmetric rings north/south need to be in the same rank
+    # to improve performance, symmetric rings north/south need to be in the same rank
     # therefore we use symmetry to create the full ring indexing
 
     if local_ring_indices[-1] == 2 * nside:
         # has equator ring
         local_ring_indices = np.concatenate(
-          [local_ring_indices[:-1],
-           nrings - local_ring_indices[::-1] + 1]
+            [local_ring_indices[:-1],
+             nrings - local_ring_indices[::-1] + 1]
         )
     else:
         # does not have equator ring
         local_ring_indices = np.concatenate(
-          [local_ring_indices,
-           nrings - local_ring_indices[::-1] + 1]
+            [local_ring_indices,
+             nrings - local_ring_indices[::-1] + 1]
         )
 
     grid = libsharp.healpix_grid(nside, rings=local_ring_indices)
     return grid, local_ring_indices
+
 
 class DistRings(object):
     """
@@ -117,24 +120,24 @@ class DistRings(object):
         self._cache = Cache()
 
         self._libsharp_grid, self._local_ring_indices = distribute_rings(
-                self._nside, self._comm.rank, self._comm.size)
+            self._nside, self._comm.rank, self._comm.size)
         # returns start index of the ring and number of pixels
         startpix, ringpix, _, _, _ = hp.ringinfo(
-                self._nside, self._local_ring_indices.astype(np.int64))
+            self._nside, self._local_ring_indices.astype(np.int64))
 
         local_npix = self._libsharp_grid.local_size()
         self._local_pixels = self._cache.create(
-                "local_pixels", shape=(local_npix,), type=np.int64)
+            "local_pixels", shape=(local_npix, ), type=np.int64)
         expand_pix(startpix, ringpix, local_npix, self._local_pixels)
 
         self.data = self._cache.create(
-                "data", shape=(local_npix, self._nnz), type=self._dtype)
+            "data", shape=(local_npix, self._nnz), type=self._dtype)
 
     def __del__(self):
         if self.data is not None:
             del self.data
+        del self._local_pixels
         self._cache.clear()
-
 
     @property
     def comm(self):
