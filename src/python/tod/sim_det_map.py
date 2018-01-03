@@ -283,9 +283,9 @@ class OpSimPySM(Operator):
         ]
         pysm_sky_config = dict()
         for component_model in pysm_model.split(','):
-            full_component_name = \
-                    [each for each in pysm_sky_components
-                     if each.startswith(component_model[0])][0]
+            full_component_name = [
+                each for each in pysm_sky_components
+                if each.startswith(component_model[0])][0]
             pysm_sky_config[full_component_name] = component_model
         self.pysm_sky = PySMSky(comm=self.comm,
                                 local_pixels=self.dist_rings.local_pixels,
@@ -299,6 +299,13 @@ class OpSimPySM(Operator):
             comm=comm, size=self.npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
         self.apply_beam = apply_beam
+
+    def __del__(self):
+        # Ensure that the PySMSky member is destroyed first because
+        # it contains a reference to self.dist_rings.local_pixels
+        del self.pysm_sky
+        del self.dist_rings
+        del self.distmap
 
     def exec(self, data):
         autotimer = timing.auto_timer(type(self).__name__)
