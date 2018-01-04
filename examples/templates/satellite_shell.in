@@ -83,8 +83,12 @@ eval ${run} ${com} > ${LOG_OUT} 2>&1
 
 # if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
 shopt -s nullglob
-for i in ${outdir}/timing_report*.out
-do
-    echo -e "\n--> ${i}\n" >> ${LOG_OUT}
-    cat ${i} >> ${LOG_OUT}
-done
+if [ -x ${PWD}/generate_notes.sh ]; then
+    ${PWD}/generate_notes.sh ${outdir}
+else
+    for i in ${outdir}/timing_report*.out
+    do
+        echo -e "\n--> ${i}\n" >> ${LOG_OUT}
+        head -n 1000 ${i} >> ${LOG_OUT}
+    done
+fi

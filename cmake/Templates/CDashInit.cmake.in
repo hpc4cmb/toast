@@ -170,13 +170,27 @@ endmacro(CONFIGURE_CTEST_FILES)
 
 
 # ---------------------------------------------------------------------------- #
+# -- Read CTestNotes.cmake file
+# ---------------------------------------------------------------------------- #
+macro(READ_NOTES)
+    ## check
+    file(GLOB_RECURSE NOTE_FILES "${CTEST_BINARY_DIRECTORY}/*CTestNotes.cmake")
+    foreach(_FILE ${NOTE_FILES})
+        include("${_FILE}")
+    endforeach(_FILE ${NOTE_FILES})
+endmacro(READ_NOTES)
+
+
+# ---------------------------------------------------------------------------- #
 # -- Determine if submit time
 # ---------------------------------------------------------------------------- #
 macro(SUBMIT KEY)
     if("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
+        read_notes()
         ctest_submit(RETURN_VALUE ret ${ARGN})
     else("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
         if("${TRIGGER}" STREQUAL "${KEY}")
+            read_notes()
             ctest_submit(RETURN_VALUE ret ${ARGN})
         endif("${TRIGGER}" STREQUAL "${KEY}")
     endif("${TRIGGER}" STREQUAL "Any" OR "${TRIGGER}" STREQUAL "Submit")
