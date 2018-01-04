@@ -378,6 +378,7 @@ class OpMadam(Operator):
                 'pixels', np.int64, (nsamp*ndet, ))
 
             global_offset = 0
+            time_offset = 0
             for iobs, obs in enumerate(data.obs):
                 tod = obs['tod']
                 nlocal = tod.local_samples[1]
@@ -385,6 +386,9 @@ class OpMadam(Operator):
 
                 # Collect the timestamps for the valid intervals
                 timestamps = tod.local_times()
+                # Translate the time stamps to be monotonous
+                timestamps -= timestamps[0] - time_offset
+                time_offset = timestamps[-1] + 1
 
                 offset = global_offset
                 for istart, istop in period_ranges:
