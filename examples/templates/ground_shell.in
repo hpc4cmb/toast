@@ -68,6 +68,7 @@ com="${ex} @${parfile} \
 --atm_xstep @CELLSIZE@ \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
+--samplerate @SAMPLERATE@ \
 $@ \
 "
 

@@ -47,13 +47,13 @@ parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0,
 parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
                      help="Detector noise model f_min in Hz" )
 
-parser.add_argument( "--bandcenter_ghz", required=False, type=float, default=25,
+parser.add_argument( "--bandcenter_ghz", required=False, type=float,
                      help="Band center frequency [GHz]" )
 
 parser.add_argument( "--bandcenter_sigma", required=False, type=float, default=0,
                      help="Relative band center distribution width" )
 
-parser.add_argument( "--bandwidth_ghz", required=False, type=float, default=6,
+parser.add_argument( "--bandwidth_ghz", required=False, type=float,
                      help="Bandwidth [GHz]" )
 
 parser.add_argument( "--bandwidth_sigma", required=False, type=float, default=0,
@@ -106,10 +106,12 @@ for indx, d in enumerate(sorted(dets.keys())):
     dets[d]["fwhm_deg"] = fwhm \
                           * (1 + np.random.randn()*args.fwhm_sigma)
     dets[d]["fwhm"] = dets[d]["fwhm_deg"] # Support legacy code
-    dets[d]["bandcenter_ghz"] = args.bandcenter_ghz \
-                                * (1 + np.random.randn()*args.bandcenter_sigma)
-    dets[d]["bandwidth_ghz"] = args.bandwidth_ghz \
-                               * (1 + np.random.randn()*args.bandwidth_sigma)
+    if args.bandcenter_ghz:
+        dets[d]["bandcenter_ghz"] \
+            = args.bandcenter_ghz * (1+np.random.randn()*args.bandcenter_sigma)
+    if args.bandwidth_ghz:
+        dets[d]["bandwidth_ghz"] \
+            = args.bandwidth_ghz * (1+np.random.randn()*args.bandwidth_sigma)
     dets[d]["index"] = indx
 
 outfile = "{}_{}".format(args.out, npix)
