@@ -93,7 +93,11 @@ $@ \
 # Use 2 processes, each with 2 threads
 
 procs=2
-threads=2
+if [ "$(uname)" = "Darwin" ]; then
+    threads=$(($(sysctl -n hw.ncpu)/${procs}))
+else
+    threads=$(($(grep -c ^processor /proc/cpuinfo)/${procs}))
+fi
 
 export OMP_NUM_THREADS=${threads}
 
