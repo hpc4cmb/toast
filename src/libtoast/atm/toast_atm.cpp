@@ -895,9 +895,11 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
     } catch ( const std::exception& e ) {
         std::cerr << "WARNING: atm::observe failed with: " << e.what()
                   << std::endl;
+        for ( long i=0; i<nsamp; ++i ) tod[i] = 0;
     } catch ( ... ) {
         std::cerr << "WARNING: atm::observe failed with an unknown exception."
                   << std::endl;
+        for ( long i=0; i<nsamp; ++i ) tod[i] = 0;
     }
 
     return;

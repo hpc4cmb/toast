@@ -333,10 +333,12 @@ class OpSimAtmosphere(Operator):
                         print(prefix+'Loading the atmosphere for t = {} '
                               'from {}'.format(tmin-tmin_tot, fname),
                               flush=self._flush)
+                        cached = True
                     else:
                         print(prefix+'Simulating the atmosphere for t = {}'
                               ''.format(tmin-tmin_tot),
                               flush=self._flush)
+                        cached = False
 
                 atm_sim_simulate(sim, use_cache)
 
@@ -349,9 +351,12 @@ class OpSimAtmosphere(Operator):
                     comm.Barrier()
                     tstop = MPI.Wtime()
                     if comm.rank == 0 and tstop-tstart > 1:
-                        print(prefix+'OpSimAtmosphere: Simulated atmosphere in '
-                              '{:.2f} s'.format(tstop-tstart),
-                              flush=self._flush)
+                        if cached:
+                            op = 'Loaded'
+                        else:
+                            op = 'Simulated'
+                        print(prefix+'OpSimAtmosphere: {} atmosphere in {:.2f} s'
+                              ''.format(op, tstop-tstart), flush=self._flush)
                     tstart = tstop
 
                 if self._verbosity > 0:
@@ -484,6 +489,13 @@ class OpSimAtmosphere(Operator):
                     # Integrate detector signal
 
                     atm_sim_observe(sim, times[ind], az, el, atmdata, ngood, 0)
+
+                    if np.all(atmdata == 0):
+                        # Observing failed
+                        print(prefix+'OpSimAtmosphere: Observing FAILED. '
+                              'det = {}, rank = {}'.format(det, comm.rank),
+                              flush=self._flush)
+                        flag_ref[ind] = 255
 
                     if self._gain:
                         atmdata *= self._gain
