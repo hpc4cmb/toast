@@ -437,6 +437,8 @@ class OpSimAtmosphere(Operator):
                             common_ref[ind] & self._common_flag_mask == 0,
                             flag_ref[ind] & self._flag_mask == 0)
                         ngood = np.sum(good)
+                        if ngood == 0:
+                            continue
                         azelquat = tod.read_pntg(
                             detector=det, local_start=istart, n=nind,
                             azel=True)[good]

@@ -537,14 +537,18 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
 
     # create the TOD for this observation
 
-    tod = tt.TODGround(
-        comm.comm_group, detquats, totsamples,
-        detranks=comm.comm_group.size, firsttime=CES_start,
-        rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
-        site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
-        scanrate=args.scanrate, scan_accel=args.scan_accel,
-        CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
-        coord=args.coord, sampsizes=None)
+    try:
+        tod = tt.TODGround(
+            comm.comm_group, detquats, totsamples,
+            detranks=comm.comm_group.size, firsttime=CES_start,
+            rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
+            site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
+            scanrate=args.scanrate, scan_accel=args.scan_accel,
+            CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
+            coord=args.coord, sampsizes=None)
+    except RuntimeError as e:
+        raise RuntimeError('Failed to create TOD for {}-{}-{}: "{}"'
+                           ''.format(CES_name, scan, subscan, e))
 
     # Create the observation
 
@@ -1035,7 +1039,7 @@ def simulate_atmosphere(args, comm, data, mc, counter,
             nelem_sim_max=args.atm_nelem_sim_max,
             verbosity=int(args.debug), gangsize=args.atm_gangsize,
             z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
-            apply_flags=True, common_flag_mask=args.common_flag_mask,
+            apply_flags=False, common_flag_mask=args.common_flag_mask,
             cachedir=args.atm_cache, flush=args.flush,
             wind_time=args.atm_wind_time)
 

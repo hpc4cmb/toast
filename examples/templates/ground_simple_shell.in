@@ -64,6 +64,8 @@ com="${ex} @${parfile} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
+--samplerate @SAMPLERATE@ \
+--scanrate @SCANRATE@ \
 $@ \
 "
 

@@ -65,13 +65,15 @@ schparfile="@TOPDIR@/params/ground/schedule.par"
 
 schedulefile="${outdir}/schedule.txt"
 
+operational_days=$(( @NODES@ / @NODES_PER_GROUP@ ))
+
 if [ ! -e "${schedulefile}" ]; then
     echo "Running toast_ground_schedule.py..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile}" --patch @PATCH@ \
-         --stop @SCHEDULE_STOP@
+         --operational_days $operational_days
 fi
 
 # The executable script
@@ -101,6 +103,8 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --madam_iter_max @ITERMAX@ \
+--samplerate @SAMPLERATE@ \
+--scanrate @SCANRATE@ \
 $@ \
 "
 

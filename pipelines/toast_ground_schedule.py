@@ -66,7 +66,8 @@ def corner_coordinates(observer, corners):
 
 def attempt_scan(
         args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
-        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt):
+        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt,
+        ods):
     """ Attempt scanning the visible patches in order until success.
     """
     success = False
@@ -83,8 +84,8 @@ def attempt_scan(
                 name, tstep, stop_timestamp, sun_el_max, rising)
             if success:
                 t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
-                             fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                             name, el)
+                             fp_radius, observer, sun, moon, fout, fout_fmt,
+                             hits, name, el, ods)
                 break
         if success:
             break
@@ -94,7 +95,8 @@ def attempt_scan(
 
 def attempt_scan_pole(
         args, observer, visible, not_visible, tstart, fp_radius, el_max, el_min,
-        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt):
+        tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt,
+        ods):
     """ Attempt scanning the visible patches in order until success.
     """
     success = False
@@ -123,7 +125,7 @@ def attempt_scan_pole(
                 t = add_scan(
                     args, t, tstop, aztimes, azmins, azmaxs, False,
                     fp_radius, observer, sun, moon, fout, fout_fmt, hits,
-                    name, el, subscan=subscan)
+                    name, el, ods, subscan=subscan)
                 el += np.radians(args.pole_el_step)
                 success = True
         if success:
@@ -385,7 +387,8 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
 
 
 def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
-             observer, sun, moon, fout, fout_fmt, hits, name, el, subscan=-1):
+             observer, sun, moon, fout, fout_fmt, hits, name, el, ods,
+             subscan=-1):
     """ Make an entry for a CES in the schedule file.
     """
     ces_time = tstop - tstart
@@ -408,6 +411,17 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     t1 = tstart
     while t1 < tstop:
         subscan += 1
+        if args.operational_days:
+            # See if adding this scan would exceed the number of desired
+            # operational days
+            if subscan == 0:
+                tz = args.timezone / 24
+                od = int(to_MJD(tstart) + tz)
+                ods.add(od)
+            if len(ods) > args.operational_days:
+                # Prevent adding further entries to the schedule once
+                # the number of operational days is full
+                break
         t2 = min(t1 + ces_time, tstop)
         if tstop - t2 < ces_time / 10:
             # Append leftover scan to the last full subscan
@@ -558,6 +572,9 @@ def build_schedule(
     moon = ephem.Moon()
     tstep = 600
 
+    # Operational days
+    ods = set()
+
     while t < stop_timestamp:
         # Determine which patches are observable at time t.
 
@@ -598,12 +615,17 @@ def build_schedule(
 
         if args.pole_mode:
             success, t = attempt_scan_pole(
-                args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
-                tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
+                args, observer, visible, not_visible, t, fp_radius, el_max,
+                el_min, tstep, stop_timestamp, sun, moon, sun_el_max, hits,
+                fout, fout_fmt, ods)
         else:
             success, t = attempt_scan(
-                args, observer, visible, not_visible, t, fp_radius, el_max, el_min,
-                tstep, stop_timestamp, sun, moon, sun_el_max, hits, fout, fout_fmt)
+                args, observer, visible, not_visible, t, fp_radius, el_max,
+                el_min, tstep, stop_timestamp, sun, moon, sun_el_max, hits,
+                fout, fout_fmt, ods)
+
+        if args.operational_days and len(ods) > args.operational_days:
+            break
 
         if not success:
             if args.debug:
@@ -675,8 +697,15 @@ def parse_args():
                         required=False, default='2000-01-01 00:00:00',
                         help='UTC start time of the schedule')
     parser.add_argument('--stop',
-                        required=False, default='2000-01-02 00:00:00',
+                        required=False,
                         help='UTC stop time of the schedule')
+    parser.add_argument('--operational_days',
+                        required=False, type=np.int,
+                        help='Number of operational days to schedule '
+                        '(empty days do not count)')
+    parser.add_argument('--timezone', required=False, type=np.int, default=0,
+                        help='Offset to apply to MJD to separate operational '
+                        'days [hours]')
     parser.add_argument('--gap',
                         required=False, default=100, type=np.float,
                         help='Gap between CES:es [seconds]')
@@ -707,15 +736,35 @@ def parse_args():
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
-    try:
-        start_time = dateutil.parser.parse(args.start + ' +0000')
-        stop_time = dateutil.parser.parse(args.stop + ' +0000')
-    except:
+    if args.operational_days is None and args.stop is None:
+        raise RuntimeError('You must provide --stop or --operational_days')
+
+    stop_time = None
+    if args.start.endswith('Z'):
         start_time = dateutil.parser.parse(args.start)
-        stop_time = dateutil.parser.parse(args.stop)
+        if args.stop is not None:
+            if not args.stop.endswith('Z'):
+                raise RuntimeError('Either both or neither times must be '
+                                   'given in UTC')
+            stop_time = dateutil.parser.parse(args.stop)
+    else:
+        if args.timezone < 0:
+            tz = '-{:02}00'.format(-args.timezone)
+        else:
+            tz = '+{:02}00'.format(args.timezone)
+        start_time = dateutil.parser.parse(args.start + tz)
+        if args.stop is not None:
+            if args.stop.endswith('Z'):
+                raise RuntimeError('Either both or neither times must be '
+                                   'given in UTC')
+            stop_time = dateutil.parser.parse(args.stop + tz)
 
     start_timestamp = start_time.timestamp()
-    stop_timestamp = stop_time.timestamp()
+    if stop_time is None:
+        # Keep scheduling until the desired number of operational days is full.
+        stop_timestamp = 2**60
+    else:
+        stop_timestamp = stop_time.timestamp()
 
     return args, start_timestamp, stop_timestamp
 
