@@ -56,7 +56,7 @@ if [ ! -e "${fpfile_atacama}" ]; then
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-         --out "${outdir}/fp_atacama" --minpix $detpix
+         --out "${outdir}/fp_atacama" --minpix $detpix --fov 1
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
@@ -70,6 +70,8 @@ fi
 
 # Generate the schedule files if they do not already exist.
 
+operational_days=$(( @NODES@ / @NODES_PER_GROUP@ ))
+
 schparfile="@TOPDIR@/params/ground/schedule.par"
 schedulefile_atacama="${outdir}/schedule_atacama.txt"
 if [ ! -e "${schedulefile_atacama}" ]; then
@@ -78,7 +80,7 @@ if [ ! -e "${schedulefile_atacama}" ]; then
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_actcama" \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
-         --stop @SCHEDULE_STOP@
+         --operational_days $operational_days
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -89,7 +91,7 @@ if [ ! -e "${schedulefile_pole}" ]; then
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-         --stop @SCHEDULE_STOP@
+         --operational_days $operational_days
 fi
 
 # The executable script
@@ -120,6 +122,8 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --madam_iter_max @ITERMAX@ \
+--samplerate @SAMPLERATE@ \
+--scanrate @SCANRATE@ \
 $@ \
 "
 

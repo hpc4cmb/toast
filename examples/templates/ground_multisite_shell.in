@@ -29,7 +29,7 @@ fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_atacama" \
-        --out "${outdir}/fp_atacama" --minpix $detpix
+        --out "${outdir}/fp_atacama" --minpix $detpix --fov 1
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
@@ -49,7 +49,7 @@ if [ ! -e "${schedulefile_atacama}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
         --out "${schedulefile_atacama}" --patch @PATCH@ \
-        --start @SCHEDULE_START@ --stop @SCHEDULE_STOP@
+	--operational_days 1
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -60,7 +60,7 @@ if [ ! -e "${schedulefile_pole}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-         --start @SCHEDULE_START@ --stop @SCHEDULE_STOP@
+	 --operational_days 1
 fi
 
 # The executable script
@@ -89,6 +89,7 @@ com="${ex} @${parfile} \
 --atm_zstep @CELLSIZE@ \
 --groupsize 2 \
 --samplerate @SAMPLERATE@ \
+--scanrate @SCANRATE@ \
 $@ \
 "
 

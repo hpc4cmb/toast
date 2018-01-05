@@ -687,6 +687,12 @@ class TODGround(TOD):
 
         self._commonflags[istop:] |= self.TURNAROUND
 
+        if np.sum((self._commonflags & self.TURNAROUND) == 0) == 0:
+            raise RuntimeError(
+                'The entire TOD is flagged as turnaround. Samplerate too low '
+                '({} Hz) or scanrate too high ({} deg/s)?'
+                ''.format(rate, scanrate))
+
         if self._report_timing:
             mpicomm.Barrier()
             tstop = MPI.Wtime()

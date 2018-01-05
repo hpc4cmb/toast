@@ -42,7 +42,7 @@ if [ ! -e "${schedulefile}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
         --out "${schedulefile}" --patch @PATCH@ \
-        --stop @SCHEDULE_STOP@
+        --operational_days 1
 fi
 
 # The executable script
@@ -70,6 +70,7 @@ com="${ex} @${parfile} \
 --atm_ystep @CELLSIZE@ \
 --atm_zstep @CELLSIZE@ \
 --samplerate @SAMPLERATE@ \
+--scanrate @SCANRATE@ \
 $@ \
 "
 
