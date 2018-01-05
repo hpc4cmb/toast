@@ -93,3 +93,6 @@ __pycache__/
 *.swo
 
 *.json
+
+# Darwin Finder files
+*.DS_Store

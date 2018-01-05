@@ -10,11 +10,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 timing_types = ('wall', 'sys', 'user', 'cpu', 'perc')
-memory_types = ('total_peak_rss', 'total_current_rss', 'self_peak_rss', 'self_current_rss')
+memory_types = ('total_peak_rss', 'total_current_rss', 'self_peak_rss',
+    'self_current_rss')
 
 concurrency = 1
 mpi_size = 1
 min_time = 0.01
+min_memory = 5
+img_dpi = 75
+img_size = {'w': 1200, 'h': 800}
+
 
 #==============================================================================#
 def nested_dict():
@@ -93,9 +98,8 @@ class timing_function():
         _speak = obj['rss_self']['peak'] / (1024.0 * 1.0e6)
         _scurr = obj['rss_self']['current'] / (1024.0 * 1.0e6)
         _perc = (_cpu / _wall) * 100.0 if _wall > 0.0 else 100.0
-        if _wall > min_time or _speak > 10 or _scurr > 10:
+        if _wall > min_time or abs(_speak) > min_memory or abs(_scurr) > min_memory:
             self.data.append([_wall, _sys, _user, _cpu, _perc])
-        if abs(_speak) > 10 or abs(_scurr) > 10:
             self.memory.append([_tpeak, _tcurr, _speak, _scurr])
         self.laps += nlap
 
@@ -103,7 +107,8 @@ class timing_function():
         return self.data[key]
 
     def length(self):
-        return len(self.data['cpu'])
+        return max(len(self.data['cpu']), len(self.memory['self_peak_rss']))
+
 
 #==============================================================================#
 def read(filename):
@@ -137,7 +142,7 @@ def read(filename):
             indent = ""
             nlevel = int(data_2['timer.level'])
             for n in range(0, nlevel):
-                indent = ' {}'.format(indent)
+                indent = '|{}'.format(indent)
             tag = '{} {}'.format(indent, data_2['timer.tag'])
 
             if not tag in timing_functions:
@@ -153,7 +158,7 @@ def read(filename):
 
 
 #==============================================================================#
-def plot_timing(filename, title, timing_data_dict):
+def plot_timing(filename, title, timing_data_dict, disp=False):
 
     ntics = len(timing_data_dict)
     ytics = []
@@ -184,7 +189,8 @@ def plot_timing(filename, title, timing_data_dict):
     # the thickness of the bars: can also be len(x) sequence
     thickness = 0.8
 
-    f = plt.figure()
+    f = plt.figure(figsize=(img_size['w'] / img_dpi, img_size['h'] / img_dpi),
+                   dpi=img_dpi)
     ax = f.add_subplot(111)
     ax.yaxis.tick_right()
     f.subplots_adjust(left=0.05, right=0.75, bottom=0.05, top=0.90)
@@ -214,14 +220,24 @@ def plot_timing(filename, title, timing_data_dict):
     plt.yticks(ind, ytics, ha='left')
     plt.setp(ax.get_yticklabels(), fontsize='smaller')
     plt.legend(plots, iter_order)
-    plt.show()
+    imgfname = filename.replace('.json', '_timing.jpg')
+    plt.savefig(imgfname, dpi=img_dpi)
+    if disp:
+        plt.show()
+    else:
+        plt.close()
 
 
 #==============================================================================#
-def plot_memory(filename, title, memory_data_dict):
+def plot_memory(filename, title, memory_data_dict, disp=False):
 
     ntics = len(memory_data_dict)
     ytics = []
+
+    if ntics == 0:
+        print ('{} had no memory data less than the minimum memory ({} MB)'.format(
+            filename, min_memory))
+        return()
 
     avgs = nested_dict()
     stds = nested_dict()
@@ -248,7 +264,8 @@ def plot_memory(filename, title, memory_data_dict):
     # the thickness of the bars: can also be len(x) sequence
     thickness = 0.8
 
-    f = plt.figure()
+    f = plt.figure(figsize=(img_size['w'] / img_dpi, img_size['h'] / img_dpi),
+                   dpi=img_dpi)
     ax = f.add_subplot(111)
     ax.yaxis.tick_right()
     f.subplots_adjust(left=0.05, right=0.75, bottom=0.05, top=0.90)
@@ -288,7 +305,12 @@ def plot_memory(filename, title, memory_data_dict):
     plt.yticks(ind, ytics, ha='left')
     plt.setp(ax.get_yticklabels(), fontsize='smaller')
     plt.legend(plots, iter_order)
-    plt.show()
+    imgfname = filename.replace('.json', '_memory.jpg')
+    plt.savefig(imgfname, dpi=img_dpi)
+    if disp:
+        plt.show()
+    else:
+        plt.close()
 
 
 #==============================================================================#
@@ -298,6 +320,9 @@ def main(args):
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--files", nargs='*', help="File input")
+    parser.add_argument("-d", "--display", required=False, action='store_true',
+                        help="Display plot", dest='display_plot')
+    parser.set_defaults(display_plot=False)
 
     args = parser.parse_args()
     print('Files: {}'.format(args.files))
@@ -308,15 +333,15 @@ def main(args):
         print ('Reading {}...'.format(filename))
         file_data[filename] = read(filename)
         title = filename.replace('timing_report_', '')
-        title = title.replace('json', 'py')
+        title = title.replace('.json', '')
         title = '"{}"\n@ MPI procs = {}, Threads/proc = {}'.format(title, mpi_size,
                                                                 int(concurrency))
         file_title[filename] = title
 
     for filename, data in file_data.items():
         print ('Plotting {}...'.format(filename))
-        plot_timing(filename, file_title[filename], data)
-        plot_memory(filename, file_title[filename], data)
+        plot_timing(filename, file_title[filename], data, args.display_plot)
+        plot_memory(filename, file_title[filename], data, args.display_plot)
 
 
 #==============================================================================#

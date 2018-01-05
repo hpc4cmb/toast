@@ -48,21 +48,21 @@ inline bool mpi_is_initialized()
 
 //----------------------------------------------------------------------------//
 
-inline int32_t mpi_rank()
+inline int32_t mpi_rank(MPI_Comm comm = MPI_COMM_WORLD)
 {
     int32_t _rank = 0;
     if(mpi_is_initialized())
-        MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+        MPI_Comm_rank(comm, &_rank);
     return std::max(_rank, (int32_t) 0);
 }
 
 //----------------------------------------------------------------------------//
 
-inline int32_t mpi_size()
+inline int32_t mpi_size(MPI_Comm comm = MPI_COMM_WORLD)
 {
     int32_t _size = 1;
     if(mpi_is_initialized())
-        MPI_Comm_size(MPI_COMM_WORLD, &_size);
+        MPI_Comm_size(comm, &_size);
     return std::max(_size, (int32_t) 1);
 }
 
@@ -134,17 +134,18 @@ public:
     template <typename _Key, typename _Mapped>
     using uomap = std::unordered_map<_Key, _Mapped>;
 
-    typedef toast::util::timer                  toast_timer_t;
-    typedef toast_timer_t::string_t             string_t;
-    typedef timer_tuple                         timer_tuple_t;
-    typedef std::deque<timer_tuple_t>           timer_list_t;
-    typedef timer_list_t::iterator              iterator;
-    typedef timer_list_t::const_iterator        const_iterator;
-    typedef timer_list_t::size_type             size_type;
-    typedef uomap<uint64_t, toast_timer_t>      timer_map_t;
-    typedef toast_timer_t::ostream_t            ostream_t;
-    typedef toast_timer_t::ofstream_t           ofstream_t;
-    typedef toast::clock_type                   clock_type;
+    typedef toast::util::timer              toast_timer_t;
+    typedef toast_timer_t::string_t         string_t;
+    typedef timer_tuple                     timer_tuple_t;
+    typedef std::deque<timer_tuple_t>       timer_list_t;
+    typedef timer_list_t::iterator          iterator;
+    typedef timer_list_t::const_iterator    const_iterator;
+    typedef timer_list_t::size_type         size_type;
+    typedef uomap<uint64_t, toast_timer_t>  timer_map_t;
+    typedef toast_timer_t::ostream_t        ostream_t;
+    typedef toast_timer_t::ofstream_t       ofstream_t;
+    typedef toast::clock_type               clock_type;
+    typedef std::tuple<MPI_Comm, int32_t>   comm_group_t;
 
 public:
 	// Constructor and Destructors
@@ -156,7 +157,7 @@ public:
     static timing_manager* instance();
     static bool is_enabled() { return fgEnabled; }
     static void enable(bool val = true);
-    static void write_json(const string_t& _fname);
+    static void write_json(string_t _fname);
     static int32_t& max_depth() { return fgMaxDepth; }
 
 public:
@@ -207,6 +208,8 @@ public:
 
 protected:
     inline uint64_t string_hash(const string_t&) const;
+    string_t get_prefix() const;
+    static comm_group_t get_communicator_group();
 
 private:
     // Private functions

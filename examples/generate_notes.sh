@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -o errexit
-set -v
 
 # if no realpath command, then add function
 if ! eval command -v realpath &> /dev/null ; then
@@ -44,3 +43,10 @@ EOF
 
 done
 
+set +o errexit
+set +v
+
+PLOTS_SCRIPT=$(dirname ${BASH_SOURCE[0]})/generate_plots.sh
+if [ -x "${PLOTS_SCRIPT}" ]; then
+    eval ${PLOTS_SCRIPT} $@
+fi

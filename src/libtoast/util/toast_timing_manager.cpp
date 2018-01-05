@@ -53,8 +53,65 @@ void toast::util::timing_manager::enable(bool val)
 
 //============================================================================//
 // static function
-void toast::util::timing_manager::write_json(const string_t& _fname)
+toast::util::timing_manager::comm_group_t
+toast::util::timing_manager::get_communicator_group()
 {
+    int32_t max_concurrency = std::thread::hardware_concurrency();
+    // We want on-node communication only
+    const int32_t nthreads = toast::get_env<int32_t>("OMP_NUM_THREADS", 1);
+    int32_t max_processes = max_concurrency / nthreads;
+    int32_t mpi_node_default = mpi_size() / max_processes;
+    if(mpi_node_default < 1)
+        mpi_node_default = 1;
+    int32_t mpi_node_count = toast::get_env<int32_t>("TOAST_NODE_COUNT",
+                                                     mpi_node_default);
+    int32_t mpi_split_size = mpi_rank() / (mpi_size() / mpi_node_count);
+
+    // Split the communicator based on the number of nodes and use the
+    // original rank for ordering
+    MPI_Comm local_mpi_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, mpi_split_size, mpi_rank(), &local_mpi_comm);
+
+#if defined(DEBUG)
+    int32_t local_mpi_rank = mpi_rank(local_mpi_comm);
+    int32_t local_mpi_size = mpi_size(local_mpi_comm);
+    int32_t local_mpi_file = mpi_rank() / local_mpi_size;
+
+    printf("WORLD RANK/SIZE: %d/%d --> ROW RANK/SIZE: %d/%d\n",
+        mpi_rank(), mpi_size(), local_mpi_rank, local_mpi_size);
+
+    std::stringstream _info;
+    _info << mpi_rank() << " Rank      : " << mpi_rank() << std::endl;
+    _info << mpi_rank() << " Node      : " << mpi_node_count << std::endl;
+    _info << mpi_rank() << " Local Size: " << local_mpi_size << std::endl;
+    _info << mpi_rank() << " Local Rank: " << local_mpi_rank << std::endl;
+    _info << mpi_rank() << " Local File: " << local_mpi_file << std::endl;
+    std::cout << _info.str();
+#endif
+
+    return comm_group_t(local_mpi_comm, mpi_rank() / mpi_size(local_mpi_comm));
+}
+
+//============================================================================//
+// static function
+void toast::util::timing_manager::write_json(string_t _fname)
+{
+    const int32_t mpi_root = 0;
+    comm_group_t mpi_comm_group = get_communicator_group();
+    MPI_Comm& local_mpi_comm = std::get<0>(mpi_comm_group);
+    int32_t local_mpi_file = std::get<1>(mpi_comm_group);
+
+    {
+        std::stringstream _rss;
+        _rss << "_" << local_mpi_file;
+        _fname.insert(_fname.find_last_of("."), _rss.str());
+        // notify so if it takes too long, user knows why
+        std::stringstream _info;
+        _info << "[" << mpi_rank() << "] Writing serialization file: "
+              << _fname << std::endl;
+        std::cout << _info.str();
+    }
+
     // output stream
     std::stringstream fss;
 
@@ -70,7 +127,7 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     }
 
     // if another entry follows
-    if(mpi_rank()+1 < mpi_size())
+    if(mpi_rank(local_mpi_comm)+1 < mpi_size(local_mpi_comm))
         fss << ",";
 
     // the JSON output as a string
@@ -96,30 +153,29 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
 
     // now we need to gather the lengths of each serialization string
     int fss_len = fss_str.length();
-    const int mpi_root = 0;
     int* recvcounts = nullptr;
 
     // Only root has the received data
-    if (mpi_rank() == mpi_root)
-        recvcounts = (int*) malloc( mpi_size() * sizeof(int)) ;
+    if (mpi_rank(local_mpi_comm) == mpi_root)
+        recvcounts = (int*) malloc( mpi_size(local_mpi_comm) * sizeof(int)) ;
 
     MPI_Gather(&fss_len, 1, MPI_INT,
                recvcounts, 1, MPI_INT,
-               mpi_root, MPI_COMM_WORLD);
+               mpi_root, local_mpi_comm);
 
     // Figure out the total length of string, and displacements for each rank
     int fss_tot_len = 0;
     int* fss_tot = nullptr;
     char* totalstring = nullptr;
 
-    if (mpi_rank() == mpi_root)
+    if (mpi_rank(local_mpi_comm) == mpi_root)
     {
-        fss_tot = (int*) malloc( mpi_size() * sizeof(int) );
+        fss_tot = (int*) malloc( mpi_size(local_mpi_comm) * sizeof(int) );
 
         fss_tot[0] = 0;
         fss_tot_len += recvcounts[0]+1;
 
-        for(int32_t i = 1; i < mpi_size(); ++i)
+        for(int32_t i = 1; i < mpi_size(local_mpi_comm); ++i)
         {
             // plus one for space or \0 after words
             fss_tot_len += recvcounts[i]+1;
@@ -139,10 +195,9 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
     char* cfss = (char*) fss_str.c_str();
     MPI_Gatherv(cfss, fss_len, MPI_CHAR,
                 totalstring, recvcounts, fss_tot, MPI_CHAR,
-                mpi_root, MPI_COMM_WORLD);
+                mpi_root, local_mpi_comm);
 
-
-    if (mpi_rank() == mpi_root)
+    if (mpi_rank(local_mpi_comm) == mpi_root)
     {
         ofstream_t ofs;
         ofs.open(_fname);
@@ -154,6 +209,7 @@ void toast::util::timing_manager::write_json(const string_t& _fname)
         free(recvcounts);
     }
 
+    MPI_Comm_free(&local_mpi_comm);
 }
 
 //============================================================================//
@@ -189,6 +245,26 @@ toast::util::timing_manager::~timing_manager()
 
 //============================================================================//
 
+toast::util::timing_manager::string_t
+toast::util::timing_manager::get_prefix() const
+{
+    static string_t* _prefix = nullptr;
+    if(!_prefix)
+    {
+        // prefix spacing
+        static uint16_t width = 1;
+        if(mpi_size() > 9)
+            width = std::max(width, (uint16_t) ( log10(mpi_size()) + 1 ));
+        std::stringstream ss;
+        ss.fill('0');
+        ss << "|" << std::setw(width) << mpi_rank() << "> ";
+        _prefix = new string_t(ss.str());
+    }
+    return *_prefix;
+}
+
+//============================================================================//
+
 toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
                                                        const string_t& tag,
                                                        int32_t ncount,
@@ -217,11 +293,12 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
     }
 
     std::stringstream ss;
-    ss << "> " << "[" << tag << "] "; // designated as [cxx], [pyc], etc.
+    // designated as [cxx], [pyc], etc.
+    ss << get_prefix() << "[" << tag << "] ";
 
     // indent
     for(int64_t i = 0; i < ncount; ++i)
-        ss << "  ";
+        ss << "| ";
 
     ss << std::left << key;
     toast::util::timer::propose_output_width(ss.str().length());

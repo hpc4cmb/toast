@@ -7,7 +7,7 @@ set -v
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-env
+env | sort -d
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
@@ -61,6 +61,7 @@ parfile="@TOPDIR@/params/ground/ground_sim_simple.par"
 com="${ex} @${parfile} \
 --toast-output-dir "${outdir}" \
 --toast-timing-fname "timing_report_main" \
+--enable-timer-serialization \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
@@ -77,6 +78,7 @@ else
 fi
 
 export OMP_NUM_THREADS=${threads}
+export TOAST_NUM_THREADS=${OMP_NUM_THREADS}
 
 run="@MPI_RUN@ -n ${procs}"
 

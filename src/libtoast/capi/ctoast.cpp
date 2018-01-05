@@ -31,7 +31,9 @@ void ctoast_finalize ( )
 
 void ctoast_raise_error(int errcode)
 {
-    toast::TerminationSignalMessage(errcode, nullptr, std::cerr);
+    std::stringstream serr;
+    toast::TerminationSignalMessage(errcode, nullptr, serr);
+    std::cerr << serr.str() << std::endl;
 }
 
 //============================================================================//

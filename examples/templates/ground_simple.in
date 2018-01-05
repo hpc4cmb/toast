@@ -20,7 +20,7 @@ export HOME=${SCRATCH}
 
 echo -e "\n-----------------------------------------------------------------------"
 echo -e "ENVIRONMENT:\n"
-env
+env | sort -d
 echo -e "-----------------------------------------------------------------------\n"
 echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
@@ -92,6 +92,7 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 com="${ex} @${parfile} \
 --toast-output-dir "${outdir}" \
 --toast-timing-fname "timing_report_main" \
+--enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
@@ -114,6 +115,8 @@ procs=$(( nodes * node_proc ))
 export OMP_NUM_THREADS=${node_thread}
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
+export TOAST_NODE_COUNT=${nodes}
+export TOAST_NUM_THREADS=${OMP_NUM_THREADS}
 
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm

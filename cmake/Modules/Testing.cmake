@@ -78,9 +78,9 @@ configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/ctest-wrapper.sh.in
 # ------------------------------------------------------------------------ #
 # -- Function to create a temporary directory
 # ------------------------------------------------------------------------ #
-function(GET_TEMPORARY_DIRECTORY DIR_VAR DIR_BASE)
+function(GET_TEMPORARY_DIRECTORY DIR_VAR DIR_BASE DIR_MODEL)
     # create a root working directory
-    set(_TMP_ROOT "${CMAKE_BINARY_DIR}/cdash")
+    set(_TMP_ROOT "${CMAKE_BINARY_DIR}/cdash/${DIR_MODEL}")
     set(${DIR_VAR} "${_TMP_ROOT}" PARENT_SCOPE)
     return()
     execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${_TMP_ROOT}) 
@@ -170,7 +170,8 @@ endmacro(add_ctest_options VARIABLE )
 if(NOT DASHBOARD_MODE AND BUILD_TESTING)
     # get temporary directory for dashboard testing
     if(NOT DEFINED CMAKE_DASHBOARD_ROOT)
-        GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT "${CMAKE_PROJECT_NAME}-cdash")
+        GET_TEMPORARY_DIRECTORY(CMAKE_DASHBOARD_ROOT
+            "${CMAKE_PROJECT_NAME}-cdash" ${CTEST_MODEL})
     endif(NOT DEFINED CMAKE_DASHBOARD_ROOT)
     add_feature(CMAKE_DASHBOARD_ROOT "Dashboard directory")
     
