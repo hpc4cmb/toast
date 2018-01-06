@@ -67,6 +67,9 @@ __pycache__/
 /examples/*satellite*_shell.sh
 /examples/out_*
 /examples/data/
+/examples/*.out
+/examples/*.jpg
+/examples/*.png
 
 # Build directories when using ./cmake/platforms/...
 /build-*

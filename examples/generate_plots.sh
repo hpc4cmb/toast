@@ -21,13 +21,13 @@ do
         ${PWD}/timing_plot.py -f ${i}
     done
 
-    for i in ${outdir}/timing_report*.jpg
+    for i in ${outdir}/timing_report*.png
     do
         # show in log
         fname="$(basename $(dirname ${i}))/$(basename ${i})"
         cat << EOF
 <DartMeasurementFile name="${fname}"
-type="image/jpg">${i}</DartMeasurementFile>
+type="image/png">${i}</DartMeasurementFile>
 EOF
     done
 done

@@ -7,6 +7,10 @@ import argparse
 import traceback
 import collections
 import numpy as np
+
+_matplotlib_backend = 'agg'
+import matplotlib
+matplotlib.use(_matplotlib_backend)
 import matplotlib.pyplot as plt
 
 timing_types = ('wall', 'sys', 'user', 'cpu', 'perc')
@@ -220,7 +224,7 @@ def plot_timing(filename, title, timing_data_dict, disp=False):
     plt.yticks(ind, ytics, ha='left')
     plt.setp(ax.get_yticklabels(), fontsize='smaller')
     plt.legend(plots, iter_order)
-    imgfname = filename.replace('.json', '_timing.jpg')
+    imgfname = filename.replace('.json', '_timing.png')
     plt.savefig(imgfname, dpi=img_dpi)
     if disp:
         plt.show()
@@ -305,7 +309,7 @@ def plot_memory(filename, title, memory_data_dict, disp=False):
     plt.yticks(ind, ytics, ha='left')
     plt.setp(ax.get_yticklabels(), fontsize='smaller')
     plt.legend(plots, iter_order)
-    imgfname = filename.replace('.json', '_memory.jpg')
+    imgfname = filename.replace('.json', '_memory.png')
     plt.savefig(imgfname, dpi=img_dpi)
     if disp:
         plt.show()
