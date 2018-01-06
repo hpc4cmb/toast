@@ -49,11 +49,16 @@ namespace rss
     // because this is more intuitive
     namespace units
     {
-    const int64_t byte = 1;
+    const int64_t byte     = 1;
     const int64_t kilobyte = 1000*byte;
     const int64_t megabyte = 1000*kilobyte;
     const int64_t gigabyte = 1000*megabyte;
     const int64_t petabyte = 1000*gigabyte;
+    const double  Bi       = 1.0;
+    const double  KiB      = 1024.0 * Bi;
+    const double  MiB      = 1024.0 * KiB;
+    const double  GiB      = 1024.0 * MiB;
+    const double  PiB      = 1024.0 * PiB;
     }
 
     /**
@@ -67,9 +72,9 @@ namespace rss
         struct rusage rusage;
         getrusage( RUSAGE_SELF, &rusage );
 #if defined(__APPLE__) && defined(__MACH__)
-        return (int64_t) rusage.ru_maxrss * units::kilobyte;
+        return (int64_t) (rusage.ru_maxrss / units::KiB * units::kilobyte);
 #else
-        return (int64_t) rusage.ru_maxrss * units::megabyte;
+        return (int64_t) (rusage.ru_maxrss / units::KiB * units::megabyte);
 #endif
     }
 
@@ -88,7 +93,7 @@ namespace rss
         if(task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
                      (task_info_t) &info, &infoCount) != KERN_SUCCESS)
             return (int64_t) 0L;      /* Can't access? */
-        return (int64_t) info.resident_size * units::kilobyte;
+        return (int64_t) (info.resident_size / units::KiB * units::kilobyte);
 
 #else // Linux
         long rss = 0L;
@@ -101,7 +106,9 @@ namespace rss
             return (int64_t) 0L;
         }
         fclose(fp);
-        return (int64_t) rss * (int64_t) sysconf( _SC_PAGESIZE) * units::kilobyte;
+        return (int64_t) (rss * (int64_t) sysconf( _SC_PAGESIZE) *
+                          units::KiB *
+                          units::kilobyte);
 
 #endif
     }
@@ -194,14 +201,24 @@ namespace rss
             return *this;
         }
 
+        double current(int64_t _unit = units::megabyte) const
+        {
+            return static_cast<double>(m_curr_rss) / _unit;
+        }
+
+        double peak(int64_t _unit = units::megabyte) const
+        {
+            return static_cast<double>(m_peak_rss) / _unit;
+        }
+
         friend std::ostream& operator<<(std::ostream& os, const usage& m)
         {
             using std::setw;
             std::stringstream ss;
             ss.precision(1);
             int _w = 5;
-            double _curr = (m.m_curr_rss < 0) ? 0.0 : (m.m_curr_rss/1024.0);
-            double _peak = (m.m_peak_rss < 0) ? 0.0 : (m.m_peak_rss/1024.0);
+            double _curr = (m.m_curr_rss < 0) ? 0.0 : m.m_curr_rss;
+            double _peak = (m.m_peak_rss < 0) ? 0.0 : m.m_peak_rss;
             _curr /= units::megabyte;
             _peak /= units::megabyte;
 

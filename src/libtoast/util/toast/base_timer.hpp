@@ -13,6 +13,7 @@ a BSD-style license that can be found in the LICENSE file.
 #include "rss.hpp"
 #include <fstream>
 #include <string>
+#include <atomic>
 
 #include <cereal/cereal.hpp>
 #include <cereal/access.hpp>
@@ -26,13 +27,18 @@ a BSD-style license that can be found in the LICENSE file.
 namespace toast
 {
 
-enum class clock_type
+enum class timer_field
 {
     wall,
     user,
     system,
     cpu,
-    percent
+    percent,
+    total_curr,
+    total_peak,
+    self_curr,
+    self_peak
+
 };
 
 namespace util
@@ -64,8 +70,89 @@ public:
         ar( cereal::make_nvp("start", std::get<0>(m_data)),
             cereal::make_nvp("stop", std::get<1>(m_data)));
     }
+
 protected:
     data_type m_data;
+};
+
+//----------------------------------------------------------------------------//
+
+template <int N>
+uint64_t get_start(const base_timer_data& data)
+{
+    return std::get<N>(data.start().time_since_epoch().count().data);
+}
+
+//----------------------------------------------------------------------------//
+
+template <int N>
+uint64_t get_stop(const base_timer_data& data)
+{
+    return std::get<N>(data.stop().time_since_epoch().count().data);
+}
+
+//----------------------------------------------------------------------------//
+
+class base_timer_delta
+{
+public:
+    typedef uint64_t                                    uint_type;
+    typedef std::tuple<uint_type, uint_type, uint_type> data_type;
+    typedef std::tuple<uint64_t, uint64_t, uint64_t>    incr_type;
+    typedef base_timer_data                             op_type;
+
+public:
+    base_timer_delta()
+    : m_lap(0),
+      m_sum(data_type(0, 0, 0)),
+      m_sqr(data_type(0, 0, 0))
+    { }
+
+    base_timer_delta& operator+=(const op_type& data)
+    {
+        auto _data = incr_type(compute<0>(data),
+                               compute<1>(data),
+                               compute<2>(data));
+        compute_sum(_data);
+        //compute_sqr(_data);
+        m_lap += 1;
+
+        return *this;
+    }
+
+    template <int N> uint64_t get_sum() const { return std::get<N>(m_sum); }
+    template <int N> uint64_t get_sqr() const { return std::get<N>(m_sqr); }
+
+    template <int N> uint64_t compute(const op_type& data)
+    {
+        auto _ts = get_start<N>(data);
+        auto _te = get_stop<N>(data);
+        return (_te > _ts) ? (_te - _ts) : uint64_t(0);
+    }
+
+    inline
+    void compute_sum(const incr_type& rhs)
+    {
+        std::get<0>(m_sum) += std::get<0>(rhs);
+        std::get<1>(m_sum) += std::get<1>(rhs);
+        std::get<2>(m_sum) += std::get<2>(rhs);
+    }
+
+    inline
+    void compute_sqr(const incr_type& rhs)
+    {
+        std::get<0>(m_sum) += std::pow(std::get<0>(rhs), 2);
+        std::get<1>(m_sum) += std::pow(std::get<1>(rhs), 2);
+        std::get<2>(m_sum) += std::pow(std::get<2>(rhs), 2);
+    }
+
+    uint64_t size() const { return m_lap; }
+
+protected:
+    uint_type m_lap;
+    data_type m_sum;
+    data_type m_sqr;
+
 };
 
 //----------------------------------------------------------------------------//
@@ -90,7 +177,7 @@ public:
     typedef data_t::ratio_t                     ratio_t;
     typedef data_t::clock_t                     base_clock_t;
     typedef data_t::time_point_t                time_point_t;
-    typedef std::vector<data_t>                 data_list_t;
+    typedef base_timer_delta                    data_accum_t;
     typedef data_t::duration_t                  duration_t;
     typedef base_timer                          this_type;
     typedef uomap<const base_timer*, data_t>    data_map_t;
@@ -98,7 +185,8 @@ public:
 
 public:
     base_timer(uint16_t = 3, const string_t& =
-               "%w wall, %u user + %s system = %t CPU [seconds] (%p%)\n",
+               "%w wall, %u user + %s system = %t CPU [sec] (%p%)"
+               " : total rss %c | %m  : self rss %C | %M [MB]\n",
                ostream_t* = &std::cout);
     virtual ~base_timer();
 
@@ -115,7 +203,7 @@ public:
     double cpu_elapsed() const { return user_elapsed() + system_elapsed(); }
     double cpu_utilization() const { return cpu_elapsed() / real_elapsed() * 100.; }
     inline const char* clock_time() const;
-    inline size_type laps() const { return t_main_list.size(); }
+    inline size_type laps() const { return m_accum.size(); }
     inline void rss_init();
     inline void rss_record();
 
@@ -126,10 +214,10 @@ public:
     inline void report_average(ostream_t& os, bool endline = true) const;
 
 protected:
-    typedef std::pair<size_type, clock_type>    clockpos_t;
-    typedef std::pair<string_t,  clock_type>    clockstr_t;
-    typedef std::vector<clockstr_t>             str_list_t;
-    typedef std::vector<clockpos_t>             pos_list_t;
+    typedef std::pair<size_type, timer_field>   fieldpos_t;
+    typedef std::pair<string_t,  timer_field>   fieldstr_t;
+    typedef std::vector<fieldpos_t>             poslist_t;
+    typedef std::vector<fieldstr_t>             strlist_t;
 
 protected:
     void parse_format();
@@ -143,8 +231,8 @@ protected:
     // pointers
     ostream_t*              m_os;
     // lists
-    pos_list_t              m_format_positions;
-    mutable data_list_t     t_main_list;
+    poslist_t               m_format_positions;
+    mutable data_accum_t    m_accum;
     // strings
     string_t                m_format_string;
     string_t                m_output_format;
@@ -161,37 +249,36 @@ private:
     static mutex_map_t              w_mutex_map;
 
 protected:
-    template <int N> uint64_t get_min() const;
-    template <int N> uint64_t get_max() const;
-    template <int N> uint64_t get_sum() const;
-    template <int N> uint64_t get_start(size_t i) const;
-    template <int N> uint64_t get_stop(size_t i) const;
+    //template <int N> uint64_t get_min() const { return m_accum.get_min<N>(); }
+    //template <int N> uint64_t get_max() const { return m_accum.get_max<N>(); }
 
 public:
     template <typename Archive> void
     serialize(Archive& ar, const unsigned int /*version*/)
     {
-        ar(cereal::make_nvp("laps", t_main_list.size()),
+        ar(cereal::make_nvp("laps", m_accum.size()),
            // user clock elapsed
-           cereal::make_nvp("user_elapsed",     get_sum<0>()),
-           cereal::make_nvp("user_elapsed_min", get_min<0>()),
-           cereal::make_nvp("user_elapsed_max", get_max<0>()),
+           cereal::make_nvp("user_elapsed",     m_accum.get_sum<0>()),
+           //cereal::make_nvp("user_elapsed_sqr", m_accum.get_sqr<0>()),
+           //cereal::make_nvp("user_elapsed_min", m_accum.get_min<0>()),
+           //cereal::make_nvp("user_elapsed_max", m_accum.get_max<0>()),
            // system clock elapsed
-           cereal::make_nvp("system_elapsed",      get_sum<1>()),
-           cereal::make_nvp("system_elapsed_min",  get_min<1>()),
-           cereal::make_nvp("system_elapsed_max",  get_max<1>()),
+           cereal::make_nvp("system_elapsed",      m_accum.get_sum<1>()),
+           //cereal::make_nvp("system_elapsed_sqr",  m_accum.get_sqr<1>()),
+           //cereal::make_nvp("system_elapsed_min",  m_accum.get_min<1>()),
+           //cereal::make_nvp("system_elapsed_max",  m_accum.get_max<1>()),
            // wall clock elapsed
-           cereal::make_nvp("wall_elapsed",     get_sum<2>()),
-           cereal::make_nvp("wall_elapsed_min", get_min<2>()),
-           cereal::make_nvp("wall_elapsed_max", get_max<2>()),
+           cereal::make_nvp("wall_elapsed",     m_accum.get_sum<2>()),
+           //cereal::make_nvp("wall_elapsed_sqr", m_accum.get_sqr<2>()),
+           //cereal::make_nvp("wall_elapsed_min", m_accum.get_min<2>()),
+           //cereal::make_nvp("wall_elapsed_max", m_accum.get_max<2>()),
            // cpu elapsed
-           cereal::make_nvp("cpu_elapsed",     get_sum<3>()),
-           cereal::make_nvp("cpu_elapsed_min", get_min<3>()),
-           cereal::make_nvp("cpu_elapsed_max", get_max<3>()),
+           cereal::make_nvp("cpu_elapsed",
+                            m_accum.get_sum<0>() + m_accum.get_sum<1>()),
            // cpu utilization
-           cereal::make_nvp("cpu_util",     get_sum<4>()),
-           cereal::make_nvp("cpu_util_min", get_min<4>()),
-           cereal::make_nvp("cpu_util_max", get_max<4>()),
+           cereal::make_nvp("cpu_util",
+                            (m_accum.get_sum<0>() + m_accum.get_sum<1>())
+                            / m_accum.get_sum<2>()),
            // conversion to seconds
            cereal::make_nvp("to_seconds_ratio_num", ratio_t::num),
            cereal::make_nvp("to_seconds_ratio_den", ratio_t::den),
@@ -234,7 +321,7 @@ double base_timer::real_elapsed() const
     if(m_running)
         throw std::runtime_error("Error! base_timer::real_elapsed() - "
                                  "timer not stopped or no times recorded!");
-    return get_sum<2>() / static_cast<double>(ratio_t::den);
+    return m_accum.get_sum<2>() / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
 inline                                                          // System time
@@ -243,7 +330,7 @@ double base_timer::system_elapsed() const
     if(m_running)
         throw std::runtime_error("Error! base_timer::system_elapsed() - "
                                  "timer not stopped or no times recorded!");
-    return get_sum<1>() / static_cast<double>(ratio_t::den);
+    return m_accum.get_sum<1>() / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
 inline                                                          // CPU time
@@ -252,7 +339,7 @@ double base_timer::user_elapsed() const
     if(m_running)
         throw std::runtime_error("Error! base_timer::user_elapsed() - "
                                  "timer not stopped or no times recorded!");
-    return get_sum<0>() / static_cast<double>(ratio_t::den);
+    return m_accum.get_sum<0>() / static_cast<double>(ratio_t::den);
 }
 //----------------------------------------------------------------------------//
 inline
@@ -275,7 +362,7 @@ void base_timer::stop()
         rss_record();
         static mutex_t _mutex;
         auto_lock_t l(_mutex);
-        t_main_list.push_back(m_timer());
+        m_accum += m_timer();
         m_running = false;
     }
 }
@@ -322,142 +409,6 @@ base_timer::data_t& base_timer::m_timer() const
     if(f_data_map->find(this) == f_data_map->end())
         f_data_map->insert(std::make_pair(this, data_t()));
     return f_data_map->find(this)->second;
-}
-//----------------------------------------------------------------------------//
-template <int N> inline uint64_t
-base_timer::get_start(size_t i) const
-{
-    return std::get<N>(t_main_list[i].start().time_since_epoch().count().data);
-}
-//----------------------------------------------------------------------------//
-template <int N> inline uint64_t
-base_timer::get_stop(size_t i) const
-{
-    return std::get<N>(t_main_list[i].stop().time_since_epoch().count().data);
-}
-//----------------------------------------------------------------------------//
-template <int N> inline uint64_t
-base_timer::get_sum() const
-{
-    uint64_t _val = 0;
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<N>(i);
-        auto _te = get_stop<N>(i);
-        _val += (_te > _ts) ? (_te - _ts) : uint64_t(0);
-    }
-    return _val;
-}
-//----------------------------------------------------------------------------//
-template <int N> inline uint64_t
-base_timer::get_min() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::max();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<N>(i);
-        auto _te = get_stop<N>(i);
-        uint64_t diff = (_te > _ts) ? (_te - _ts) : uint64_t(0);
-        _val = std::min(_val, diff);
-    }
-    return _val;
-}
-//----------------------------------------------------------------------------//
-template <int N> inline uint64_t
-base_timer::get_max() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::min();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<N>(i);
-        auto _te = get_stop<N>(i);
-        uint64_t diff = (_te > _ts) ? (_te - _ts) : uint64_t(0);
-        _val = std::max(_val, diff);
-    }
-    return _val;
-}
-
-//============================================================================//
-//
-//  Partial specializations
-//
-//============================================================================//
-
-//----------------------------------------------------------------------------//
-// partial specialization of get_sum() for CPU time
-template <> inline uint64_t
-base_timer::get_sum<3>() const
-{
-    return get_sum<0>() + get_sum<1>();
-}
-//----------------------------------------------------------------------------//
-// partial specialization of get_min() for CPU time
-template <> inline uint64_t
-base_timer::get_min<3>() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::max();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<0>(i) + get_start<1>(i);
-        auto _te = get_stop<0>(i) + get_stop<0>(i);
-        uint64_t diff = (_te > _ts) ? (_te - _ts) : uint64_t(0);
-        _val = std::min(_val, diff);
-    }
-    return _val;
-}
-//----------------------------------------------------------------------------//
-// partial specialization of get_max() for CPU time
-template <> inline uint64_t
-base_timer::get_max<3>() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::min();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<0>(i) + get_start<1>(i);
-        auto _te = get_stop<0>(i) + get_stop<0>(i);
-        uint64_t diff = (_te > _ts) ? (_te - _ts) : uint64_t(0);
-        _val = std::max(_val, diff);
-    }
-    return _val;
-}
-//----------------------------------------------------------------------------//
-// partial specialization of get_sum() for CPU utilization
-template <> inline uint64_t
-base_timer::get_sum<4>() const
-{
-    return (100 * get_sum<3>()) / static_cast<double>(get_sum<2>());
-}
-//----------------------------------------------------------------------------//
-// partial specialization of get_min() for CPU utilization
-template <> inline uint64_t
-base_timer::get_min<4>() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::max();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<0>(i) + get_start<1>(i);
-        auto _te = get_stop<0>(i) + get_stop<0>(i);
-        uint64_t _tn = (_te > _ts) ? (100 * (_te - _ts)) : uint64_t(0);
-        auto _td = get_stop<2>(i) - get_start<2>(i);
-        _val = std::min(_val, _tn / _td );
-    }
-    return _val;
-}
-//----------------------------------------------------------------------------//
-// partial specialization of get_max() for CPU utilization
-template <> inline uint64_t
-base_timer::get_max<4>() const
-{
-    uint64_t _val = std::numeric_limits<uint64_t>::min();
-    for(unsigned i = 0; i < t_main_list.size(); ++i)
-    {
-        auto _ts = get_start<0>(i) + get_start<1>(i);
-        auto _te = get_stop<0>(i) + get_stop<0>(i);
-        uint64_t _tn = (_te > _ts) ? (100 * (_te - _ts)) : uint64_t(0);
-        auto _td = get_stop<2>(i) - get_start<2>(i);
-        _val = std::max(_val, _tn / _td );
-    }
-    return _val;
 }
 //----------------------------------------------------------------------------//
 

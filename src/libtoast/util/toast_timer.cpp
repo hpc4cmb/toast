@@ -37,12 +37,18 @@ CEREAL_CLASS_VERSION(toast::util::timer, TOAST_TIMER_VERSION)
 
 //============================================================================//
 
-thread_local uint64_t toast::util::timer::f_output_width = 20;
+thread_local uint64_t toast::util::timer::f_output_width = 10;
 
 //============================================================================//
 
 std::string toast::util::timer::default_format
-    =  " : %w wall, %u user + %s system = %t CPU [seconds] (%p%)";
+    =  " : %w wall, %u user + %s system = %t CPU [sec] (%p%)"
+       // bash expansion:
+       //   total_RSS_current, total_RSS_peak
+       //   self_RSS_current self_RSS_peak
+       " : RSS {tot,self}_{curr,peak}"
+       " : (%c|%m)"
+       " | (%C|%M) [MB]";
 
 //============================================================================//
 
@@ -57,17 +63,25 @@ void toast::util::timer::propose_output_width(uint64_t _w)
 
 //============================================================================//
 
-toast::util::timer::timer(uint16_t prec,
-                          std::string _begin, std::string _close)
+toast::util::timer::timer(const string_t& _begin,
+                          const string_t& _close,
+                          bool _use_static_width,
+                          uint16_t prec)
 : base_type(prec, _begin + default_format + _close),
+  m_use_static_width(_use_static_width),
   m_begin(_begin), m_close(_close)
 { }
 
 //============================================================================//
 
-toast::util::timer::timer(std::string _begin, std::string _close)
-: base_type(default_precision, _begin + default_format + _close),
-  m_begin(_begin), m_close(_close)
+toast::util::timer::timer(const string_t& _begin,
+                          const string_t& _end,
+                          const string_t& _fmt,
+                          bool _use_static_width,
+                          uint16_t prec)
+: base_type(prec, _begin + _fmt + _end),
+  m_use_static_width(_use_static_width),
+  m_begin(_begin), m_close(_end)
 { }
 
 //============================================================================//
@@ -80,10 +94,19 @@ toast::util::timer::~timer()
 void toast::util::timer::compose()
 {
     std::stringstream ss;
-    ss << std::setw(f_output_width + 2)
-       << std::left << m_begin
-       << std::right << default_format
-       << m_close;
+    if(m_use_static_width)
+    {
+        ss << std::setw(f_output_width + 2)
+           << std::left << m_begin
+           << std::right << default_format
+           << m_close;
+    }
+    else
+    {
+        ss << std::left << m_begin
+           << std::right << default_format
+           << m_close;
+    }
     m_format_string = ss.str();
 }
 

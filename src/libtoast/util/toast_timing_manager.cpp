@@ -299,12 +299,17 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
 
     // indent
     for(int64_t i = 0; i < ncount; ++i)
-        ss << "| ";
+    {
+        if(i+1 == ncount || i == 0)
+            ss << "|_";
+        else
+            ss << "|_";
+    }
 
     ss << std::left << key;
     toast::util::timer::propose_output_width(ss.str().length());
 
-    m_timer_map[ref] = toast_timer_t(3, ss.str(), string_t(""));
+    m_timer_map[ref] = toast_timer_t(ss.str(), string_t(""), true, 3);
 
     std::stringstream tag_ss;
     tag_ss << tag << "_" << std::left << key;
@@ -318,6 +323,14 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
 
 void toast::util::timing_manager::report() const
 {
+    if(mpi_rank() == 0)
+    {
+        std::stringstream _info;
+        _info << "[" << mpi_rank() << "] Reporting timing output..."
+              << std::endl;
+        std::cout << _info.str();
+    }
+
     for(int32_t i = 0; i < mpi_size(); ++i)
     {
         // blocking

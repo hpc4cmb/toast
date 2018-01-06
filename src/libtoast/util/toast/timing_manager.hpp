@@ -144,7 +144,7 @@ public:
     typedef uomap<uint64_t, toast_timer_t>  timer_map_t;
     typedef toast_timer_t::ostream_t        ostream_t;
     typedef toast_timer_t::ofstream_t       ofstream_t;
-    typedef toast::clock_type               clock_type;
+    typedef toast::timer_field              timer_field;
     typedef std::tuple<MPI_Comm, int32_t>   comm_group_t;
 
 public:

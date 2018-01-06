@@ -50,12 +50,10 @@ base_timer::base_timer(uint16_t prec, const string_t& fmt, std::ostream* os)
 : m_running(false),
   m_precision(prec),
   m_os(os),
-  m_format_positions(pos_list_t()),
+  m_format_positions(poslist_t()),
   m_format_string(fmt),
   m_output_format("")
-{
-    //this->start();
-}
+{ }
 
 //============================================================================//
 
@@ -79,14 +77,19 @@ void base_timer::parse_format()
 
     size_type npos = std::string::npos;
 
-    str_list_t fmts;
-    fmts.push_back(clockstr_t("%w", clock_type::wall    ));
-    fmts.push_back(clockstr_t("%u", clock_type::user    ));
-    fmts.push_back(clockstr_t("%s", clock_type::system  ));
-    fmts.push_back(clockstr_t("%t", clock_type::cpu     ));
-    fmts.push_back(clockstr_t("%p", clock_type::percent ));
+    strlist_t fmts;
+    fmts.push_back(fieldstr_t("%w", timer_field::wall          ));
+    fmts.push_back(fieldstr_t("%u", timer_field::user          ));
+    fmts.push_back(fieldstr_t("%s", timer_field::system        ));
+    fmts.push_back(fieldstr_t("%t", timer_field::cpu           ));
+    fmts.push_back(fieldstr_t("%p", timer_field::percent       ));
+    fmts.push_back(fieldstr_t("%c", timer_field::self_curr     ));
+    fmts.push_back(fieldstr_t("%m", timer_field::self_peak     ));
+    fmts.push_back(fieldstr_t("%C", timer_field::total_curr    ));
+    fmts.push_back(fieldstr_t("%M", timer_field::total_peak    ));
 
-    for(str_list_t::iterator itr = fmts.begin(); itr != fmts.end(); ++itr)
+
+    for(strlist_t::iterator itr = fmts.begin(); itr != fmts.end(); ++itr)
     {
         size_type pos = 0;
         // start at zero and look for all instances of string
@@ -94,11 +97,11 @@ void base_timer::parse_format()
         {
             // post-increment pos so we don't find same instance next
             // time around
-            m_format_positions.push_back(clockpos_t(pos++, itr->second));
+            m_format_positions.push_back(fieldpos_t(pos++, itr->second));
         }
     }
     std::sort(m_format_positions.begin(), m_format_positions.end(),
-              [] (const clockpos_t& lhs, const clockpos_t& rhs)
+              [] (const fieldpos_t& lhs, const fieldpos_t& rhs)
               { return lhs.first < rhs.first; });
 
 }
@@ -115,7 +118,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
 
     // for average reporting
     double div = 1.0;
-    if(avg && this->laps() > 0)
+    if(avg && this->laps() > 1)
         div = 1.0 / static_cast<double>(this->laps());
 
     double _real = real_elapsed();
@@ -134,6 +137,7 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     static uint16_t noff = 3;
     if(_cpu > 10.0)
         noff = std::max(noff, (uint16_t) ( log10(_cpu) + 2 ));
+    static uint16_t wrss = 6;
 
     // use stringstream so precision and fixed don't directly affect
     // ostream
@@ -157,31 +161,56 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
         // print the appropriate timing mechanism
         switch (m_format_positions.at(i).second)
         {
-            case clock_type::wall:
+            case timer_field::wall:
                 // the real elapsed time
                 ss << std::setw(noff+m_precision)
                    << (_real * div);
                 break;
-            case clock_type::user:
+            case timer_field::user:
                 // CPU time of non-system calls
                 ss << std::setw(noff+m_precision)
                    << (_user * div);
                 break;
-            case clock_type::system:
+            case timer_field::system:
                 // thread specific CPU time, e.g. thread creation overhead
                 ss << std::setw(noff+m_precision)
                    << (_system * div);
                 break;
-            case clock_type::cpu:
+            case timer_field::cpu:
                 // total CPU time
                 ss << std::setw(noff+m_precision)
                    << (_cpu * div);
                 break;
-            case clock_type::percent:
+            case timer_field::percent:
                 // percent CPU utilization
                 ss.precision(1);
                 ss << std::setw(5) << (_perc);
                 break;
+            case timer_field::total_curr:
+                // total RSS (current)
+                ss.precision(1);
+                ss << std::setw(wrss)
+                   << (m_rss_tot.current());
+                break;
+            case timer_field::total_peak:
+                // total RSS (peak)
+                ss.precision(1);
+                ss << std::setw(wrss)
+                   << (m_rss_tot.peak());
+                break;
+            case timer_field::self_curr:
+                // self RSS (current)
+                ss.precision(1);
+                ss << std::setw(wrss)
+                   << (m_rss_self.current());
+                break;
+            case timer_field::self_peak:
+                // self RSS (peak)
+                ss.precision(1);
+                ss << std::setw(wrss)
+                   << (m_rss_self.peak());
+                break;
+
         }
         // skip over %{w,u,s,t,p} field
         pos = m_format_positions.at(i).first+2;
@@ -192,8 +221,8 @@ void base_timer::report(std::ostream& os, bool endline, bool avg) const
     string_t substr = m_format_string.substr(pos, len);
     ss << substr;
 
-    ss << " [ total " << m_rss_tot << " ] [ self " << m_rss_self << " ]";
-    if(avg)
+    //ss << " [ total " << m_rss_tot << " ] [ self " << m_rss_self << " ]";
+    if(avg && this->laps() > 1)
         ss << " (average of " << this->laps() << " laps)";
     else if(this->laps() > 1)
         ss << " (total # of laps: " << this->laps() << ")";

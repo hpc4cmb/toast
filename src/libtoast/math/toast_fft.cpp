@@ -41,7 +41,6 @@ class r1d_fftw : public toast::fft::r1d {
             toast::fft::direction dir, double scale ) : 
             toast::fft::r1d ( length, n, type, dir, scale ) {
 
-            TOAST_AUTO_TIMER();
 
             int threads = 1;
 
@@ -114,7 +113,6 @@ class r1d_fftw : public toast::fft::r1d {
 
         void exec ( ) {
 
-            TOAST_AUTO_TIMER("@r1d_fftw");
 
             fftw_execute ( plan_ );
 
