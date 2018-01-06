@@ -726,7 +726,7 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
         double zatm_inv = 1. / zatm;
 
-#pragma omp parallel for schedule(static, 100)
+        //#pragma omp parallel for schedule(static, 100)
         for ( long i=0; i<nsamp; ++i ) {
 
             if (
@@ -825,14 +825,14 @@ void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
                 if ( x < xstart || x > xstart+delta_x ||
                      y < ystart || y > ystart+delta_y ||
                      z < zstart || z > zstart+delta_z ) {
-                    //std::ostringstream o;
-                    //o.precision( 16 );
-                    std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
-                              << std::endl
-                              << "x = " << x << std::endl
-                              << "y = " << y << std::endl
-                              << "z = " << z << std::endl;
-                    //throw std::runtime_error( o.str().c_str() );
+                    std::ostringstream o;
+                    o.precision( 16 );
+                    o << "atmsim::observe : (x,y,z) out of bounds: "
+                      << std::endl
+                      << "x = " << x << std::endl
+                      << "y = " << y << std::endl
+                      << "z = " << z << std::endl;
+                    throw std::runtime_error( o.str().c_str() );
                     if ( x < 0 ) x = xstart;
                     if ( x > xstart+delta_x ) x = xstart+delta_x;
                     if ( y < 0 ) y = ystart;
@@ -1597,22 +1597,24 @@ double toast::tatm::sim::interp( double x, double y, double z,
 
 #ifdef DEBUG
     if ( dx < 0 || dx > 1 || dy < 0 || dy > 1 || dz < 0 || dz > 1 ) {
-        //std::ostringstream o;
-        //o.precision( 16 );
-        std::cerr << "atmsim::interp : bad fractional step: " << std::endl
-                 << "x = " << x << std::endl
-                 << "y = " << y << std::endl
-                 << "z = " << z << std::endl
-                 << "dx = " << dx << std::endl
-                 << "dy = " << dy << std::endl
-                 << "dz = " << dz << std::endl;
-        //throw std::runtime_error( o.str().c_str() );
+        std::ostringstream o;
+        o.precision( 16 );
+        o << "atmsim::interp : bad fractional step: " << std::endl
+          << "x = " << x << std::endl
+          << "y = " << y << std::endl
+          << "z = " << z << std::endl
+          << "dx = " << dx << std::endl
+          << "dy = " << dy << std::endl
+          << "dz = " << dz << std::endl;
+        throw std::runtime_error( o.str().c_str() );
+        /*
         if ( dx < 0 ) dx = 0;
         if ( dx > 1 ) dx = 1;
         if ( dy < 0 ) dy = 0;
         if ( dy > 1 ) dy = 1;
         if ( dz < 0 ) dz = 0;
         if ( dz > 1 ) dz = 1;
+        */
     }
 #endif
 
@@ -1623,21 +1625,23 @@ double toast::tatm::sim::interp( double x, double y, double z,
 #ifdef DEBUG
         if ( ix < 0 || ix > nx-2 || iy < 0 || iy > ny-2
              || iz < 0 || iz > nz-2 ) {
-            //std::ostringstream o;
-            //o.precision( 16 );
-            std::cerr << "atmsim::interp : full index out of bounds at"
-                      << std::endl << "("
-                      << x << ", " << y << ", "<< z << ") = ("
-                      << ix << "/" << nx << ", "
-                      << iy << "/" << ny << ", "
-                      << iz << "/" << nz << ")";
-            //throw std::runtime_error( o.str().c_str() );
+            std::ostringstream o;
+            o.precision( 16 );
+            o << "atmsim::interp : full index out of bounds at"
+              << std::endl << "("
+              << x << ", " << y << ", "<< z << ") = ("
+              << ix << "/" << nx << ", "
+              << iy << "/" << ny << ", "
+              << iz << "/" << nz << ")";
+            throw std::runtime_error( o.str().c_str() );
+            /*
             if ( ix < 0 ) ix = 0;
             if ( ix > nx-2 ) ix = nx-2;
             if ( iy < 0 ) iy = 0;
             if ( iy > ny-2 ) iy = ny-2;
             if ( iz < 0 ) iz = 0;
             if ( iz > nz-2 ) iz = nz-2;
+            */
         }
 #endif
 
@@ -1698,25 +1702,25 @@ double toast::tatm::sim::interp( double x, double y, double z,
             i100 < 0 || i100 > imax ||
             i101 < 0 || i101 > imax ||
             i110 < 0 || i110 > imax ||
-            i111 < 0 || i111 > imax ) {
-            //std::ostringstream o;
-            //o.precision( 16 );
-            //o << "atmsim::observe : bad compressed index. "
-            std::cerr << "atmsim::observe : bad compressed index. "
-                      << "imax = " << imax << std::endl
-                      << "i000 = " << i000 << std::endl
-                      << "i001 = " << i001 << std::endl
-                      << "i010 = " << i010 << std::endl
-                      << "i011 = " << i011 << std::endl
-                      << "i100 = " << i100 << std::endl
-                      << "i101 = " << i101 << std::endl
-                      << "i110 = " << i110 << std::endl
-                      << "i111 = " << i111 << std::endl
-                      << "(x, y, z) = " << x << ", " << y << ", " << z << ")"
-                      << std::endl
-                      << "in_cone(x, y, z) = " << in_cone( x, y, z )
-                      << std::endl;
-            //throw std::runtime_error( o.str().c_str() );
+            i111 < 0 || i111 > imax || true) {
+            std::ostringstream o;
+            o.precision( 16 );
+            o << "atmsim::observe : bad compressed index. "
+              << "imax = " << imax << std::endl
+              << "i000 = " << i000 << std::endl
+              << "i001 = " << i001 << std::endl
+              << "i010 = " << i010 << std::endl
+              << "i011 = " << i011 << std::endl
+              << "i100 = " << i100 << std::endl
+              << "i101 = " << i101 << std::endl
+              << "i110 = " << i110 << std::endl
+              << "i111 = " << i111 << std::endl
+              << "(x, y, z) = " << x << ", " << y << ", " << z << ")"
+              << std::endl
+              << "in_cone(x, y, z) = " << in_cone( x, y, z )
+              << std::endl;
+            throw std::runtime_error( o.str().c_str() );
+            /*
             int good=0;
             if ( i000 >= 0 && i000 < imax ) {
                 good = i000;
@@ -1743,6 +1747,7 @@ double toast::tatm::sim::interp( double x, double y, double z,
             if ( i101 < 0 || i101 > imax ) i101 = good;
             if ( i110 < 0 || i110 > imax ) i110 = good;
             if ( i111 < 0 || i111 > imax ) i111 = good;
+            */
         }
 #endif
 
