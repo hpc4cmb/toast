@@ -1702,7 +1702,7 @@ double toast::tatm::sim::interp( double x, double y, double z,
             i100 < 0 || i100 > imax ||
             i101 < 0 || i101 > imax ||
             i110 < 0 || i110 > imax ||
-            i111 < 0 || i111 > imax || true) {
+            i111 < 0 || i111 > imax ) {
             std::ostringstream o;
             o.precision( 16 );
             o << "atmsim::observe : bad compressed index. "
