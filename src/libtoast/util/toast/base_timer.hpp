@@ -122,7 +122,9 @@ public:
 
     template <int N> uint64_t get_sum() const { return std::get<N>(m_sum); }
     template <int N> uint64_t get_sqr() const { return std::get<N>(m_sqr); }
+    uint64_t size() const { return m_lap; }
 
+protected:
     template <int N> uint64_t compute(const op_type& data)
     {
         auto _ts = get_start<N>(data);
@@ -145,8 +147,6 @@ public:
         std::get<1>(m_sum) += std::pow(std::get<1>(rhs), 2);
         std::get<2>(m_sum) += std::pow(std::get<2>(rhs), 2);
     }
-
-    uint64_t size() const { return m_lap; }
 
 protected:
     uint_type m_lap;
@@ -248,10 +248,6 @@ private:
     static thread_local data_map_t* f_data_map;
     static mutex_map_t              w_mutex_map;
 
-protected:
-    //template <int N> uint64_t get_min() const { return m_accum.get_min<N>(); }
-    //template <int N> uint64_t get_max() const { return m_accum.get_max<N>(); }
-
 public:
     template <typename Archive> void
     serialize(Archive& ar, const unsigned int /*version*/)
@@ -260,18 +256,12 @@ public:
            // user clock elapsed
            cereal::make_nvp("user_elapsed",     m_accum.get_sum<0>()),
            //cereal::make_nvp("user_elapsed_sqr", m_accum.get_sqr<0>()),
-           //cereal::make_nvp("user_elapsed_min", m_accum.get_min<0>()),
-           //cereal::make_nvp("user_elapsed_max", m_accum.get_max<0>()),
            // system clock elapsed
            cereal::make_nvp("system_elapsed",      m_accum.get_sum<1>()),
            //cereal::make_nvp("system_elapsed_sqr",  m_accum.get_sqr<1>()),
-           //cereal::make_nvp("system_elapsed_min",  m_accum.get_min<1>()),
-           //cereal::make_nvp("system_elapsed_max",  m_accum.get_max<1>()),
            // wall clock elapsed
            cereal::make_nvp("wall_elapsed",     m_accum.get_sum<2>()),
            //cereal::make_nvp("wall_elapsed_sqr", m_accum.get_sqr<2>()),
-           //cereal::make_nvp("wall_elapsed_min", m_accum.get_min<2>()),
-           //cereal::make_nvp("wall_elapsed_max", m_accum.get_max<2>()),
            // cpu elapsed
            cereal::make_nvp("cpu_elapsed",
                             m_accum.get_sum<0>() + m_accum.get_sum<1>()),

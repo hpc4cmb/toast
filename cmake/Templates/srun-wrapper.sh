@@ -44,23 +44,8 @@ do
     else
         chmod a+x ${i}
     fi
-    
-    for j in $(grep '^#SBATCH ' ${i} | sed 's/#SBATCH//g' | sed 's/  / /g')
-    do
-        if [ "${INCLUDE_OUTPUT}" -gt 0 -a ! -z "$(echo $j | grep 'output=')" ]
-        then
-            continue
-        fi
-        if [ ! -z "$(echo ${j} | grep '\--time=')" ]; then
-            TIME=$(convert_time ${j})
-            j="-t ${TIME}"
-        fi
-        SRUN_ARGS="${SRUN_ARGS} ${j}"
-    done
-
-    SRUN_ARGS="$(echo ${SRUN_ARGS} | sed 's/^ //g')"
 done
-
+#------------------------------------------------------------------------------#
 # set environment paths
 export LOG_OUT=/dev/stdout
 export PATH="${PROJECT_BIN_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@:@PATH@"
@@ -73,6 +58,6 @@ else
     export LD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@:@LD_LIBRARY_PATH@"
 fi
 
-echo -e "\nRunning \"${SLURM_SALLOC_COMMAND} ${SRUN_ARGS} ${ARGS}\"...\n"
+echo -e "\nRunning \"${ARGS}\"...\n"
 
-${SLURM_SALLOC_COMMAND} ${SRUN_ARGS} ${ARGS}
+eval ${ARGS}
