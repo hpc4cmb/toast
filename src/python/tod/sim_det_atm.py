@@ -312,6 +312,8 @@ class OpSimAtmosphere(Operator):
                     self._ystep, self._zstep, self._nelem_sim_max,
                     self._verbosity, comm, self._gangsize,
                     key1, key2, counter1, counter2, cachedir)
+                if sim == 0:
+                    raise RuntimeError(prefix+'Failed to allocate simulation')
 
                 if self._report_timing:
                     comm.Barrier()
@@ -340,7 +342,9 @@ class OpSimAtmosphere(Operator):
                               flush=self._flush)
                         cached = False
 
-                atm_sim_simulate(sim, use_cache)
+                err = atm_sim_simulate(sim, use_cache)
+                if err != 0:
+                    raise RuntimeError(prefix+'Simulation failed.')
 
                 # Advance the sample counter in case wind_time broke the
                 # observation in parts
@@ -385,7 +389,10 @@ class OpSimAtmosphere(Operator):
                     for i, t in enumerate(np.arange(tmin, tmax, tstep)):
                         if i % ntask != rank:
                             continue
-                        atm_sim_observe(sim, atmtimes+t, az, el, atmdata, nn, r)
+                        err = atm_sim_observe(sim, atmtimes+t, az, el, atmdata,
+                                              nn, r)
+                        if err != 0:
+                            raise RuntimeError(prefix+'Observation failed')
                         if self._gain:
                             atmdata *= self._gain
                         vmin = min(vmin, np.amin(atmdata))
@@ -488,13 +495,14 @@ class OpSimAtmosphere(Operator):
 
                     # Integrate detector signal
 
-                    atm_sim_observe(sim, times[ind], az, el, atmdata, ngood, 0)
-
-                    if np.all(atmdata == 0):
+                    err = atm_sim_observe(sim, times[ind], az, el, atmdata,
+                                          ngood, 0)
+                    if err != 0:
                         # Observing failed
                         print(prefix+'OpSimAtmosphere: Observing FAILED. '
                               'det = {}, rank = {}'.format(det, comm.rank),
                               flush=self._flush)
+                        atmdata[:] = 0
                         flag_ref[ind] = 255
 
                     if self._gain:
@@ -511,7 +519,9 @@ class OpSimAtmosphere(Operator):
 
                     del ref
 
-                atm_sim_free(sim)
+                err = atm_sim_free(sim)
+                if err != 0:
+                    raise RuntimeError(prefix+'Failed to free simulation.')
 
                 if self._report_timing:
                     comm.Barrier()

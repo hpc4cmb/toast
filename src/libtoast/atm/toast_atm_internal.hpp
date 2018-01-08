@@ -66,11 +66,11 @@ public :
 
     // we can simulate a number of realizations for the same CES
     // and distribution of parameters
-    void simulate( bool use_cache );
+    int simulate( bool use_cache );
 
     // ::observe can only be called after ::simulate and only with
     // compatible arguments.
-    void observe( double *t, double *az, double *el, double *tod,
+    int observe( double *t, double *az, double *el, double *tod,
                   long nsamp, double fixed_r=-1 );
 
     void print();

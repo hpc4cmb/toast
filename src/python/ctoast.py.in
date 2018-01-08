@@ -988,27 +988,24 @@ def atm_sim_alloc(
         zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, c_comm,
         gangsize, key1, key2, counter1, counter2, cdir)
 
-lib.ctoast_atm_sim_free.restype = None
+lib.ctoast_atm_sim_free.restype = ct.c_int
 lib.ctoast_atm_sim_free.argtypes = [ ct.POINTER(cATMSim) ]
 
 def atm_sim_free(sim):
-    lib.ctoast_atm_sim_free(sim)
-    return
+    return lib.ctoast_atm_sim_free(sim)
 
-lib.ctoast_atm_sim_simulate.restype = None
+lib.ctoast_atm_sim_simulate.restype = ct.c_int
 lib.ctoast_atm_sim_simulate.argtypes = [ ct.POINTER(cATMSim), ct.c_int ]
 
 def atm_sim_simulate(sim, use_cache):
-    lib.ctoast_atm_sim_simulate(sim, use_cache)
-    return
+    return lib.ctoast_atm_sim_simulate(sim, use_cache)
 
-lib.ctoast_atm_sim_observe.restype = None
+lib.ctoast_atm_sim_observe.restype = ct.c_int
 lib.ctoast_atm_sim_observe.argtypes = [
     ct.POINTER(cATMSim), npf64, npf64, npf64, npf64, ct.c_long, ct.c_double ]
 
 def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
-    lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
-    return
+    return lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
 
 lib.ctoast_atm_get_absorption_coefficient.restype = ct.c_double
 lib.ctoast_atm_get_absorption_coefficient.argtypes = [

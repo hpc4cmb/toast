@@ -274,11 +274,11 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
     int verbosity, MPI_Comm comm, int gangsize, uint64_t key1, uint64_t key2,
     uint64_t counter1, uint64_t counter2, char *cachedir );
 
-void ctoast_atm_sim_free ( ctoast_atm_sim * sim );
+int ctoast_atm_sim_free ( ctoast_atm_sim * sim );
 
-void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache );
+int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache );
 
-void ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
+int ctoast_atm_sim_observe( ctoast_atm_sim * sim, double *t, double *az,
     double *el, double *tod, long nsamp, double fixed_r );
 
 double ctoast_atm_get_absorption_coefficient(double altitude,
