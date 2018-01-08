@@ -104,6 +104,8 @@ fi
 
 export OMP_NUM_THREADS=${threads}
 export TOAST_NUM_THREADS=${OMP_NUM_THREADS}
+echo "OpenMP # threads: ${OMP_NUM_THREADS}"
+echo "TOAST # threads: ${TOAST_NUM_THREADS}"
 
 run="@MPI_RUN@ -n ${procs}"
 

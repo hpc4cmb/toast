@@ -120,6 +120,8 @@ export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 export TOAST_NODE_COUNT=${nodes}
 export TOAST_NUM_THREADS=${OMP_NUM_THREADS}
+echo "OpenMP # threads: ${OMP_NUM_THREADS}"
+echo "TOAST # threads: ${TOAST_NUM_THREADS}"
 
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm

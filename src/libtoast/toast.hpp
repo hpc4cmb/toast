@@ -61,7 +61,7 @@ namespace toast
         static thread_local uint32_t nthread = 0;
         if(nthread == 0)
             nthread = util::get_env<uint32_t>("TOAST_NUM_THREADS",
-                                              std::thread::hardware_concurrency());
+                                        std::thread::hardware_concurrency());
         return nthread;
     }
 
