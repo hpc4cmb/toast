@@ -11,6 +11,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <stdlib.h>
 
 namespace toast { namespace mpi_shmem {
@@ -59,9 +60,13 @@ namespace toast { namespace mpi_shmem {
 
                 if ( MPI_Win_allocate_shared(
                          nlocal_ * sizeof( T ), sizeof( T ), MPI_INFO_NULL, shmcomm_,
-                         &local_, &win_ ) )
-                    throw std::runtime_error( "Failed to allocate shared memory." );
-
+                         &local_, &win_ ) ) {
+                    std::ostringstream o;
+                    o << " Failed to allocate " << n / 1024. / 1024.
+                      << " MB of shared memory with " << ntasks_
+                      <<" tasks.";
+                    throw std::runtime_error( o.str().c_str() );
+                }
                 n_ = n;
 
                 // Get a pointer to the beginning of the shared memory

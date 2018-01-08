@@ -991,61 +991,80 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
 
 #ifdef HAVE_ELEMENTAL
     TOAST_AUTO_TIMER();
-    return reinterpret_cast < ctoast_atm_sim * > (
-        new toast::tatm::sim ( azmin, azmax, elmin, elmax, tmin, tmax,
-                              lmin_center, lmin_sigma, lmax_center,
-                              lmax_sigma, w_center, w_sigma, wdir_center,
-                              wdir_sigma, z0_center, z0_sigma, T0_center,
-                              T0_sigma, zatm, zmax, xstep, ystep, zstep,
-                              nelem_sim_max, verbosity, comm, gangsize,
-                              key1, key2, counter1, counter2, cachedir ) );
-#else
+    try {
+        return reinterpret_cast < ctoast_atm_sim * >
+            (new toast::tatm::sim ( azmin, azmax, elmin, elmax, tmin, tmax,
+                                    lmin_center, lmin_sigma, lmax_center,
+                                    lmax_sigma, w_center, w_sigma, wdir_center,
+                                    wdir_sigma, z0_center, z0_sigma, T0_center,
+                                    T0_sigma, zatm, zmax, xstep, ystep, zstep,
+                                    nelem_sim_max, verbosity, comm, gangsize,
+                                    key1, key2, counter1, counter2, cachedir ) );
+    } catch ( std::exception &e ){
+        std::cerr << "ERROR allocating atmosphere: " << e.what() << std::endl;
+    } catch ( ... ) {
+        std::cerr << "unknown ERROR allocating atmosphere. " << std::endl;
+    }
+#endif
     return NULL;
-#endif
 }
 
-void ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
+int ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
 #ifdef HAVE_ELEMENTAL
-    delete reinterpret_cast < toast::tatm::sim * > ( sim );
+    try {
+            delete reinterpret_cast < toast::tatm::sim * > ( sim );
+    } catch ( std::exception &e ){
+        std::cerr << "ERROR freeing atmosphere: " << e.what() << std::endl;
+        return -1;
+    } catch ( ... ) {
+        std::cerr << "unknown ERROR freeing atmosphere. " << std::endl;
+        return -1;
+    }
 #endif
-    return;
+    return 0;
 }
 
-void ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
+int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
 #ifdef HAVE_ELEMENTAL
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
+    int err;
     try {
-        sm->simulate( (use_cache != 0) );
+        err = sm->simulate( (use_cache != 0) );
     } catch ( std::exception &e ) {
         std::cerr << "ERROR simulating the atmosphere: " << e.what()
                   << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, -1);
+        return -1;
     } catch ( ... ) {
         std::cerr << "unknown ERROR simulating the atmosphere" << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, -1);
+        return -1;
     }
+    return err;
+#else
+    return -1;
 #endif
-    return;
 }
 
-void ctoast_atm_sim_observe(
+int ctoast_atm_sim_observe(
     ctoast_atm_sim * sim, double *t, double *az, double *el,
     double *tod, long nsamp, double fixed_r ) {
 #ifdef HAVE_ELEMENTAL
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
+    int err;
     try {
-        sm->observe( t, az, el, tod, nsamp, fixed_r );
+        err = sm->observe( t, az, el, tod, nsamp, fixed_r );
     } catch ( std::exception &e ) {
         std::cerr << "ERROR observing the atmosphere: " << e.what() << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, -1);
+        return -1;
     } catch ( ... ) {
         std::cerr << "unknown ERROR observing the atmosphere" << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, -1);
+        return -1;
     }
+    return err;
+#else
+    return -1;
 #endif
-    return;
 }
 
 double ctoast_atm_get_absorption_coefficient(double altitude,

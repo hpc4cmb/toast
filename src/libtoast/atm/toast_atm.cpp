@@ -393,9 +393,9 @@ void toast::tatm::sim::load_realization() {
 
         full_index = new mpi_shmem_long( nelem, comm );
         full_index->set( -1 );
-    } catch ( std::bad_alloc & e ) {
+    } catch ( ... ) {
         std::cerr << rank
-                  << " : Out of memory allocating element indices. nn = "
+                  << " : Failed to allocate element indices. nn = "
                   << nn << std::endl;
         throw;
     }
@@ -403,9 +403,9 @@ void toast::tatm::sim::load_realization() {
     try {
         realization = new mpi_shmem_double( nelem, comm );
         realization->set( 0 );
-    } catch ( std::bad_alloc & e ) {
+    } catch ( ... ) {
         std::cerr << rank
-                  << " : Out of memory allocating realization. nelem = "
+                  << " : Failed to allocate realization. nelem = "
                   << nelem << std::endl;
         throw;
     }
@@ -500,11 +500,11 @@ void toast::tatm::sim::save_realization() {
     return;
 }
 
-void toast::tatm::sim::simulate( bool use_cache ) {
+int toast::tatm::sim::simulate( bool use_cache ) {
 
     if ( use_cache ) load_realization();
 
-    if ( cached ) return;
+    if ( cached ) return 0;
 
     try {
         draw();
@@ -520,9 +520,9 @@ void toast::tatm::sim::simulate( bool use_cache ) {
         try {
             realization = new mpi_shmem_double( nelem, comm );
             realization->set( 0 );
-        } catch ( std::bad_alloc & e ) {
+        } catch ( ... ) {
             std::cerr << rank
-                      << " : Out of memory allocating realization. nelem = "
+                      << " : Failed to allocate realization. nelem = "
                       << nelem << std::endl;
             throw;
         }
@@ -599,7 +599,7 @@ void toast::tatm::sim::simulate( bool use_cache ) {
 
     if ( use_cache ) save_realization();
 
-    return;
+    return 0;
 }
 
 
@@ -709,200 +709,171 @@ void toast::tatm::sim::smooth() {
 }
 
 
-void toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
+int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 			       long nsamp, double fixed_r ) {
 
     if ( !cached ) {
         throw std::runtime_error( "There is no cached observation to observe" );
     }
 
-    try {
+    double t1 = MPI_Wtime();
 
-        double t1 = MPI_Wtime();
+    // For each sample, integrate along the line of sight by summing
+    // the atmosphere values. See Church (1995) Section 2.2, first equation.
+    // We omit the optical depth factor which is close to unity.
 
-        // For each sample, integrate along the line of sight by summing
-        // the atmosphere values. See Church (1995) Section 2.2, first equation.
-        // We omit the optical depth factor which is close to unity.
+    double zatm_inv = 1. / zatm;
 
-        double zatm_inv = 1. / zatm;
+    std::ostringstream o;
+    o.precision( 16 );
+    int error = 0;
 
-        //#pragma omp parallel for schedule(static, 100)
-        for ( long i=0; i<nsamp; ++i ) {
+    #pragma omp parallel for schedule(static, 100)
+    for ( long i=0; i<nsamp; ++i ) {
 
-            if (
-                (!(azmin <= az[i] && az[i] <= azmax) &&
-                 !(azmin <= az[i]-2*M_PI && az[i]-2*M_PI <= azmax))
-                || !(elmin <= el[i] && el[i] <= elmax) ) {
-                std::ostringstream o;
-                o.precision( 16 );
-                o << "atmsim::observe : observation out of bounds (az, el, t)"
-                  << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
-                  << ") allowed: (" << azmin << " - "<< azmax << ", "
-                  << elmin << " - "<< elmax << ", "
-                  << tmin << " - "<< tmax << ")"
-                  << std::endl;
-                throw std::runtime_error( o.str().c_str() );
-            }
+        #pragma omp flush(error)
+        if (error) continue;
 
-            double t_now = t[i] - tmin;
-            double az_now = az[i] - az0; // Relative to center of field
-            double el_now = el[i];
+        if ((!(azmin <= az[i] && az[i] <= azmax) &&
+             !(azmin <= az[i]-2*M_PI && az[i]-2*M_PI <= azmax))
+            || !(elmin <= el[i] && el[i] <= elmax) ) {
+            o.precision( 16 );
+            o << "atmsim::observe : observation out of bounds (az, el, t)"
+              << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
+              << ") allowed: (" << azmin << " - "<< azmax << ", "
+              << elmin << " - "<< elmax << ", "
+              << tmin << " - "<< tmax << ")"
+              << std::endl;
+            error = 1;
+            #pragma omp flush(error)
+            continue;
+        }
 
-            double xtel_now = wx*t_now;
-            double ytel_now = wy*t_now;
-            double ztel_now = wz*t_now;
+        double t_now = t[i] - tmin;
+        double az_now = az[i] - az0; // Relative to center of field
+        double el_now = el[i];
 
-            double sin_el = sin( el_now );
-            double sin_el_max = sin( elmax );
-            double cos_el = cos( el_now );
-            double sin_az = sin( az_now );
-            double cos_az = cos( az_now );
+        double xtel_now = wx*t_now;
+        double ytel_now = wy*t_now;
+        double ztel_now = wz*t_now;
 
-            // We want to choose rstart and rstep so that we exactly
-            // sample the volume at the center of the volume elements in
-            // the X (in scan) direction.
+        double sin_el = sin( el_now );
+        double sin_el_max = sin( elmax );
+        double cos_el = cos( el_now );
+        double sin_az = sin( az_now );
+        double cos_az = cos( az_now );
 
-            /*
-              double rstart = 10;
-              double dr = 1;
-              double dz = dr * sin_el;
-              double drproj = dr * cos_el;
-              double dx = drproj * cos_az;
-              double dxx = dx*cosel0 + dz*sinel0;
-              double rstep = xstep / dxx;
+        double r = 1.5 * xstep;
+        double rstep = xstep;
 
-              double r = rstart; // Start integration at a reasonable distance
+        std::vector<long> last_ind(3);
+        std::vector<double> last_nodes(8);
 
-              double z = r * sin_el;
-              double rproj = r * cos_el;
-              double x = xtel_now + rproj*cos_az;
-              double xx = x*cosel0 + z*sinel0;
-              long ix = (xx-xstart) * xstepinv;
-              double frac = (xx - (xstart + (double)ix*xstep)) * xstepinv;
-              frac += .5;
-              r += (1-frac) * rstep;
-            */
+        double val = 0;
+        if ( fixed_r > 0 ) r = fixed_r;
 
-            double r = 1.5 * xstep;
-            double rstep = xstep;
+        while ( true ) {
 
-            std::vector<long> last_ind(3);
-            std::vector<double> last_nodes(8);
+            // Coordinates at distance r. The scan is centered on the X-axis
 
-            double val = 0;
-            if ( fixed_r > 0 ) r = fixed_r;
+            // Check if the top of the focal plane hits zmax at
+            // this distance.  This way all lines-of-sight get
+            // integrated to the same distance
+            double zz = r * sin_el_max;
+            if ( zz >= zmax ) break;
 
-            while ( true ) {
+            // Horizontal coordinates
 
-                // Coordinates at distance r. The scan is centered on the X-axis
+            zz = r * sin_el;
+            double rproj = r * cos_el;
+            double xx = rproj * cos_az;
+            double yy = -rproj * sin_az;
 
-                // Check if the top of the focal plane hits zmax at
-                // this distance.  This way all lines-of-sight get
-                // integrated to the same distance
-                double zz = r * sin_el_max;
-                if ( zz >= zmax ) break;
+            // Rotate to scan frame
 
-                // Horizontal coordinates
+            double x = xx*cosel0 + zz*sinel0;
+            double y = yy;
+            double z = -xx*sinel0 + zz*cosel0;
 
-                zz = r * sin_el;
-                double rproj = r * cos_el;
-                double xx = rproj * cos_az;
-                double yy = -rproj * sin_az;
+            // Translate by the wind
 
-                // Rotate to scan frame
-
-                double x = xx*cosel0 + zz*sinel0;
-                double y = yy;
-                double z = -xx*sinel0 + zz*cosel0;
-
-                // Translate by the wind
-
-                x += xtel_now;
-                y += ytel_now;
-                z += ztel_now;
+            x += xtel_now;
+            y += ytel_now;
+            z += ztel_now;
 
 #ifdef DEBUG
-                if ( x < xstart || x > xstart+delta_x ||
-                     y < ystart || y > ystart+delta_y ||
-                     z < zstart || z > zstart+delta_z ) {
-                    std::ostringstream o;
-                    o.precision( 16 );
-                    o << "atmsim::observe : (x,y,z) out of bounds: "
-                      << std::endl
-                      << "x = " << x << std::endl
-                      << "y = " << y << std::endl
-                      << "z = " << z << std::endl;
-                    throw std::runtime_error( o.str().c_str() );
-                    if ( x < 0 ) x = xstart;
-                    if ( x > xstart+delta_x ) x = xstart+delta_x;
-                    if ( y < 0 ) y = ystart;
-                    if ( y > ystart+delta_y ) y = ystart+delta_y;
-                    if ( z < 0 ) z = xstart;
-                    if ( z > zstart+delta_z ) z = zstart+delta_z;
-                }
+            if ( x < xstart || x > xstart+delta_x ||
+                 y < ystart || y > ystart+delta_y ||
+                 z < zstart || z > zstart+delta_z ) {
+                o << "atmsim::observe : (x,y,z) out of bounds: "
+                  << std::endl
+                  << "x = " << x << std::endl
+                  << "y = " << y << std::endl
+                  << "z = " << z << std::endl;
+                error = 1;
+                #pragma omp flush (error)
+                break;
+            }
 #endif
-                // Combine atmospheric emission (via interpolation) with the
-                // ambient temperature
+            // Combine atmospheric emission (via interpolation) with the
+            // ambient temperature
 
-                double step_val;
-                try {
-                    step_val = interp( x, y, z, last_ind, last_nodes )
-                        * (1. - z * zatm_inv);
-                } catch ( const std::runtime_error& e ) {
-                    std::ostringstream o;
-                    o.precision( 16 );
-                    o << "atmsim::observe : interp failed at " << std::endl
-                      << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
-                      << std::endl
-                      << "xyz = (" << x << ", " << y << ", " << z << ")"
-                      << std::endl
-                      << "r = " << r << std::endl
-                      << "tele at (" << xtel_now << ", " << ytel_now << ", "
-                      << ztel_now << ")" << std::endl
-                      << "( t, az, el ) = " << "( " << t[i]-tmin << ", "
-                      << az_now*180/M_PI
-                      << " deg , " << el_now*180/M_PI << " deg) "
-                      << " in_cone(t) = " << in_cone( x, y, z, t_now )
-                      << " with "
-                      << std::endl << e.what() << std::endl;
-                    throw std::runtime_error( o.str().c_str() );
-                }
-
-                val += step_val;
-
-                // Prepare for the next step
-
-                r += rstep;
-
-                if ( fixed_r > 0 ) break;
-                //if ( fixed_r > 0 and r > fixed_r ) break;
+            double step_val;
+            try {
+                step_val = interp( x, y, z, last_ind, last_nodes )
+                    * (1. - z * zatm_inv);
+            } catch ( const std::runtime_error& e ) {
+                std::ostringstream o;
+                o << "atmsim::observe : interp failed at " << std::endl
+                  << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
+                  << std::endl
+                  << "xyz = (" << x << ", " << y << ", " << z << ")"
+                  << std::endl
+                  << "r = " << r << std::endl
+                  << "tele at (" << xtel_now << ", " << ytel_now << ", "
+                  << ztel_now << ")" << std::endl
+                  << "( t, az, el ) = " << "( " << t[i]-tmin << ", "
+                  << az_now*180/M_PI
+                  << " deg , " << el_now*180/M_PI << " deg) "
+                  << " in_cone(t) = " << in_cone( x, y, z, t_now )
+                  << " with "
+                  << std::endl << e.what() << std::endl;
+                error = 1;
+                #pragma omp flush(error)
+                break;
             }
 
-            tod[i] = val * rstep * T0;
+            val += step_val;
+
+            // Prepare for the next step
+
+            r += rstep;
+
+            if ( fixed_r > 0 ) break;
+            //if ( fixed_r > 0 and r > fixed_r ) break;
         }
 
-        double t2 = MPI_Wtime();
-
-        if ( rank == 0 && verbosity > 0 ) {
-            if ( fixed_r > 0 )
-                std::cerr << nsamp << " samples observed at r =  " << fixed_r
-                          << " in " << t2-t1 << " s." << std::endl;
-            else
-                std::cerr << nsamp << " samples observed in " << t2-t1 << " s."
-                          << std::endl;
-        }
-
-    } catch ( const std::exception& e ) {
-        std::cerr << "WARNING: atm::observe failed with: " << e.what()
-                  << std::endl;
-        for ( long i=0; i<nsamp; ++i ) tod[i] = 0;
-    } catch ( ... ) {
-        std::cerr << "WARNING: atm::observe failed with an unknown exception."
-                  << std::endl;
-        for ( long i=0; i<nsamp; ++i ) tod[i] = 0;
+        tod[i] = val * rstep * T0;
     }
 
-    return;
+    double t2 = MPI_Wtime();
+
+    if ( rank == 0 && verbosity > 0 ) {
+        if ( fixed_r > 0 )
+            std::cerr << nsamp << " samples observed at r =  " << fixed_r
+                      << " in " << t2-t1 << " s." << std::endl;
+        else
+            std::cerr << nsamp << " samples observed in " << t2-t1 << " s."
+                      << std::endl;
+    }
+
+    if ( error ) {
+        std::cerr << "WARNING: atm::observe failed with: \"" << o.str()
+                  << "\""<< std::endl;
+        return -1;
+    }
+
+    return 0;
 }
 
 
@@ -1039,7 +1010,11 @@ void toast::tatm::sim::get_volume() {
     z_max = -x*sinel0 + z*cosel0;
 
     // Cone width
-    delta_y_cone = maxdist * tan(delta_az / 2.) * 2.;
+    rproj = r * cos(elmin);
+    if ( delta_az > M_PI )
+        delta_y_cone = 2 * rproj;
+    else
+        delta_y_cone = 2 * rproj * cos( 0.5*(M_PI - delta_az) );
     //std::cerr << "delta_y_cone = " << delta_y_cone << std::endl;
 
     // Cone height
@@ -1330,9 +1305,9 @@ void toast::tatm::sim::compress_volume() {
         full_index->set( -1 );
 
         hit.resize( nn, false );
-    } catch ( std::bad_alloc & e ) {
+    } catch ( ... ) {
         std::cerr << rank
-                  << " : Out of memory allocating element indices. nn = "
+                  << " : Failed to allocate element indices. nn = "
                   << nn << std::endl;
         throw;
     }
@@ -1607,14 +1582,6 @@ double toast::tatm::sim::interp( double x, double y, double z,
           << "dy = " << dy << std::endl
           << "dz = " << dz << std::endl;
         throw std::runtime_error( o.str().c_str() );
-        /*
-        if ( dx < 0 ) dx = 0;
-        if ( dx > 1 ) dx = 1;
-        if ( dy < 0 ) dy = 0;
-        if ( dy > 1 ) dy = 1;
-        if ( dz < 0 ) dz = 0;
-        if ( dz > 1 ) dz = 1;
-        */
     }
 #endif
 
@@ -1634,14 +1601,6 @@ double toast::tatm::sim::interp( double x, double y, double z,
               << iy << "/" << ny << ", "
               << iz << "/" << nz << ")";
             throw std::runtime_error( o.str().c_str() );
-            /*
-            if ( ix < 0 ) ix = 0;
-            if ( ix > nx-2 ) ix = nx-2;
-            if ( iy < 0 ) iy = 0;
-            if ( iy > ny-2 ) iy = ny-2;
-            if ( iz < 0 ) iz = 0;
-            if ( iz > nz-2 ) iz = nz-2;
-            */
         }
 #endif
 
@@ -1720,34 +1679,6 @@ double toast::tatm::sim::interp( double x, double y, double z,
               << "in_cone(x, y, z) = " << in_cone( x, y, z )
               << std::endl;
             throw std::runtime_error( o.str().c_str() );
-            /*
-            int good=0;
-            if ( i000 >= 0 && i000 < imax ) {
-                good = i000;
-            } else if ( i001 >= 0 && i001 < imax ) {
-                good = i001;
-            } else if ( i010 >= 0 && i010 < imax ) {
-                good = i010;
-            } else if ( i011 >= 0 && i011 < imax ) {
-                good = i011;
-            } else if ( i100 >= 0 && i100 < imax ) {
-                good = i100;
-            } else if ( i101 >= 0 && i101 < imax ) {
-                good = i101;
-            } else if ( i110 >= 0 && i110 < imax ) {
-                good = i110;
-            } else if ( i111 >= 0 && i111 < imax ) {
-                good = i111;
-            }
-            if ( i000 < 0 || i000 > imax ) i000 = good;
-            if ( i001 < 0 || i001 > imax ) i001 = good;
-            if ( i010 < 0 || i010 > imax ) i010 = good;
-            if ( i011 < 0 || i011 > imax ) i011 = good;
-            if ( i100 < 0 || i100 > imax ) i100 = good;
-            if ( i101 < 0 || i101 > imax ) i101 = good;
-            if ( i110 < 0 || i110 > imax ) i110 = good;
-            if ( i111 < 0 || i111 > imax ) i111 = good;
-            */
         }
 #endif
 
