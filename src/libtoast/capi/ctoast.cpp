@@ -57,6 +57,31 @@ void ctoast_timers_toggle(int32_t val)
 }
 
 //----------------------------------------------------------------------------//
+ctoast_timer* ctoast_get_simple_timer(char* ckey, char* _cfmt)
+{
+#if defined(DISABLE_TIMERS)
+    return nullptr;
+#endif
+    std::string cfmt = const_cast<const char*>(_cfmt);
+    std::string fmt = (cfmt.empty())
+                      ? toast::util::timer::default_format
+                      : cfmt;
+    toast_timer_t* _t = new toast_timer_t(ckey, "", fmt);
+    return reinterpret_cast<ctoast_timer*>(_t);
+}
+
+//----------------------------------------------------------------------------//
+
+void ctoast_del_simple_timer(ctoast_timer* _ct)
+{
+#if defined(DISABLE_TIMERS)
+    return;
+#endif
+    toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
+    delete _t;
+}
+
+//----------------------------------------------------------------------------//
 
 ctoast_timer* ctoast_get_timer(char* ckey)
 {

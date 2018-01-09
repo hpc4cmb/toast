@@ -1108,7 +1108,8 @@ def main():
         print('Running with {} processes at {}'.format(
             comm.comm_world.size, str(datetime.now())), flush=True)
 
-    global_start = MPI.Wtime()
+    global_timer = timing.simple_timer('Total time')
+    global_timer.start()
 
     args, comm = parse_arguments(comm)
 
@@ -1188,10 +1189,9 @@ def main():
                 signalname_madam, flag_name, common_flag_name)
 
     comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - global_start
+    global_timer.stop()
     if comm.comm_world.rank == 0:
-        print('Total Time:  {:.2f} seconds'.format(elapsed), flush=True)
+        global_timer.report()
 
 if __name__ == '__main__':
     try:

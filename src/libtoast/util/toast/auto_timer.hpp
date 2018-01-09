@@ -21,7 +21,8 @@ public:
 
 public:
     // Constructor and Destructors
-    auto_timer(const std::string&, const int32_t& lineno);
+    auto_timer(const std::string&, const int32_t& lineno,
+               bool temp_disable = false);
     virtual ~auto_timer();
 
 private:
@@ -32,14 +33,17 @@ private:
     { return details::base_timer::get_instance_hash(); }
 
 private:
+    bool m_temp_disable;
     uint64_t m_hash;
     toast_timer_t* m_timer;
 };
 
 //----------------------------------------------------------------------------//
 inline auto_timer::auto_timer(const std::string& timer_tag,
-                              const int32_t& lineno)
-: m_hash(lineno),
+                              const int32_t& lineno,
+                              bool temp_disable)
+: m_temp_disable(temp_disable),
+  m_hash(lineno),
   m_timer(nullptr)
 {
     // for consistency, always increment hash keys
@@ -53,10 +57,16 @@ inline auto_timer::auto_timer(const std::string& timer_tag,
                                                      auto_timer::nhash());
     if(m_timer)
         m_timer->start();
+
+    if(m_temp_disable && timing_manager::instance()->is_enabled())
+        timing_manager::instance()->enable(false);
 }
 //----------------------------------------------------------------------------//
 inline auto_timer::~auto_timer()
 {
+    if(m_temp_disable && ! timing_manager::instance()->is_enabled())
+        timing_manager::instance()->enable(true);
+
     if(m_timer)
         m_timer->stop();
 

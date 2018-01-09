@@ -86,6 +86,19 @@ lib.ctoast_timers_toggle.argtypes = [ ct.c_int ]
 def timers_toggle(on_or_off):
     lib.ctoast_timers_toggle(on_or_off)
 
+lib.ctoast_get_simple_timer.restype = ct.POINTER(cTimer)
+lib.ctoast_get_simple_timer.argtypes = [ p_c_char, p_c_char ]
+
+def get_simple_timer(prefix, fmt = ""):
+    return lib.ctoast_get_simple_timer(convert_to_p_c_char(prefix),
+                                       convert_to_p_c_char(fmt));
+
+lib.ctoast_del_simple_timer.restype = None
+lib.ctoast_del_simple_timer.argtypes = [ ct.POINTER(cTimer) ]
+
+def delete_simple_timer(_ct):
+    lib.ctoast_del_simple_timer(_ct)
+
 lib.ctoast_get_timer.restype = ct.POINTER(cTimer)
 lib.ctoast_get_timer.argtypes = [ p_c_char ]
 

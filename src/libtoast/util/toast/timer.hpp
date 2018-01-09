@@ -51,31 +51,37 @@ class timer : public details::base_timer
 public:
     typedef base_timer                      base_type;
     typedef timer                           this_type;
-    typedef std::string                     str_t;
+    typedef std::string                     string_t;
 
 public:
-    timer(uint16_t prec = 3,
-          std::string begin = "[ ",
-          std::string close = " ]");
-    timer(std::string, std::string close = "");
+    timer(const string_t& _begin = "[ ",
+          const string_t& _close = " ]",
+          bool _use_static_width = true,
+          uint16_t prec = default_precision);
+    timer(const string_t& _begin,
+          const string_t& _close,
+          const string_t& _fmt,
+          bool _use_static_width = false,
+          uint16_t prec = default_precision);
     virtual ~timer();
 
 public:
-    static std::string default_format;
+    static string_t default_format;
     static uint16_t default_precision;
     static void propose_output_width(uint64_t);
 
 public:
     timer& stop_and_return() { this->stop(); return *this; }
-    str_t begin() const { return m_begin; }
-    str_t close() const { return m_close; }
+    string_t begin() const { return m_begin; }
+    string_t close() const { return m_close; }
 
 protected:
     virtual void compose() final;
 
 protected:
-    str_t m_begin;
-    str_t m_close;
+    bool     m_use_static_width;
+    string_t m_begin;
+    string_t m_close;
 
 private:
     static thread_local uint64_t f_output_width;

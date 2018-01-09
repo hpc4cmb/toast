@@ -78,7 +78,6 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata, int64_t * hits, double * invnpp ) {
 
-    TOAST_AUTO_TIMER();
 
     #pragma omp parallel default(shared)
     {
@@ -156,7 +155,6 @@ void toast::cov::accumulate_diagonal ( int64_t nsub, int64_t subsize, int64_t nn
 void toast::cov::accumulate_diagonal_hits ( int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp, 
     int64_t const * indx_submap, int64_t const * indx_pix, int64_t * hits ) {
 
-    TOAST_AUTO_TIMER();
 
     #pragma omp parallel default(shared)
     {
@@ -240,7 +238,6 @@ void toast::cov::accumulate_diagonal_invnpp ( int64_t nsub, int64_t subsize, int
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, int64_t * hits, double * invnpp ) {
 
-    TOAST_AUTO_TIMER();
 
     #pragma omp parallel default(shared)
     {
@@ -328,7 +325,6 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
     int64_t const * indx_submap, int64_t const * indx_pix, double const * weights, 
     double scale, double const * signal, double * zdata ) {
 
-    TOAST_AUTO_TIMER();
 
     #pragma omp parallel default(shared)
     {
@@ -363,7 +359,6 @@ void toast::cov::accumulate_zmap ( int64_t nsub, int64_t subsize, int64_t nnz, i
 void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double * data, double * cond, double threshold, int32_t do_invert, int32_t do_rcond ) {
 
-    TOAST_AUTO_TIMER();
 
     if ( ( do_invert == 0 ) && ( do_rcond == 0 ) ) {
         return;
@@ -550,7 +545,6 @@ void toast::cov::eigendecompose_diagonal ( int64_t nsub, int64_t subsize, int64_
 void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double * data1, double const * data2 ) {
 
-    TOAST_AUTO_TIMER();
 
     int64_t i, j, k;
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);
@@ -640,7 +634,6 @@ void toast::cov::multiply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
 void toast::cov::apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     double const * mat, double * vec ) {
 
-    TOAST_AUTO_TIMER();
 
     int64_t i, j, k;
     int64_t block = (int64_t)(nnz * (nnz+1) / 2);

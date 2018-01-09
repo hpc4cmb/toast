@@ -78,6 +78,48 @@ def ensure_directory_exists(file_path):
 
 
 #------------------------------------------------------------------------------#
+class simple_timer(object):
+    """Class that provides simple interface to C++ toast::util::timer"""
+
+    def __init__(self, key=None, obj=None):
+        if obj is not None:
+            self._ctimer = obj
+        else:
+            self._ctimer = ctoast.get_simple_timer(key)
+
+    def __del__(self):
+        if self._ctimer is not None:
+            ctoast.delete_simple_timer(self._ctimer)
+
+    def start(self):
+        if self._ctimer is not None:
+            ctoast.timer_start(self._ctimer)
+
+    def stop(self):
+        if self._ctimer is not None:
+            ctoast.timer_stop(self._ctimer)
+
+    def report(self):
+        if self._ctimer is not None:
+            ctoast.timer_report(self._ctimer)
+
+    def real_elapsed(self):
+        if self._ctimer is not None:
+            return ctoast.timer_real_elapsed(self._ctimer)
+        return 0.0
+
+    def system_elapsed(self):
+        if self._ctimer is not None:
+            return ctoast.timer_system_elapsed(self._ctimer)
+        return 0.0
+
+    def user_elapsed(self):
+        if self._ctimer is not None:
+            return ctoast.timer_user_elapsed(self._ctimer)
+        return 0.0
+
+
+#------------------------------------------------------------------------------#
 class timer(object):
     """Class that provides interface to C++ toast::util::timer"""
 

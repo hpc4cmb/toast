@@ -8,6 +8,7 @@ a BSD-style license that can be found in the LICENSE file.
 
 #include <unistd.h>
 #include <climits>
+#include <thread>
 
 #ifdef HAVE_ELEMENTAL
 #   include <El.hpp>
@@ -16,6 +17,10 @@ a BSD-style license that can be found in the LICENSE file.
 #ifdef USE_TBB
 #   include <tbb/tbb.h>
 #   include <tbb/task_scheduler_init.h>
+#endif
+
+#ifdef _OPENMP
+#   include <omp.h>
 #endif
 
 // Initialize MPI in a consistent way
@@ -31,6 +36,7 @@ void toast::init ( int argc, char *argv[] )
     int ret;
     int initialized;
     int threadprovided;
+    int rank;
 
     ret = MPI_Initialized( &initialized );
 
@@ -45,12 +51,28 @@ void toast::init ( int argc, char *argv[] )
 #   endif
     }
 
-    // Initialize the TBB task scheduler after MPI has been initialized
-#   if defined(USE_TBB)
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // THREADING
+    int32_t hw_threads = std::thread::hardware_concurrency();
+    int32_t omp_nthreads = toast::get_env<int32_t>("OMP_NUM_THREADS",
+                                                   hw_threads);
     // toast::get_num_threads checks for environment TOAST_NUM_THREADS
     // and if undefined it uses std::thread::hardware_conncurrency()
+    int32_t toast_nthreads = toast::get_num_threads();
+    // if TOAST_NUM_THREADS not defined, use OMP_NUM_THREADS
+    if(toast_nthreads == hw_threads && omp_nthreads != hw_threads)
+        toast_nthreads = omp_nthreads;
+
+    // Initialize the TBB task scheduler after MPI has been initialized
+#   if defined(USE_TBB)
+    // only create if doesn't exist already
     if(!tbb_scheduler)
-        tbb_scheduler = new tbb::task_scheduler_init(toast::get_num_threads());
+        tbb_scheduler = new tbb::task_scheduler_init(toast_nthreads);
+    // report
+    if(rank == 0)
+        std::cout << "TOAST number of threads (used by TBB): "
+                  << toast_nthreads << std::endl;
 #   endif
 
     toast::EnableSignalDetection();
@@ -71,6 +93,22 @@ void toast::init ( int argc, char *argv[] )
     };
 
     toast::signal_settings::set_exit_action(_exit_func);
+
+#if defined(_OPENMP)
+    if(rank == 0)
+    {
+        if(omp_nthreads < toast_nthreads)
+        {
+            std::cerr << "Warning! Overridding OMP_NUM_THREADS (= "
+                      << omp_nthreads << ") with "
+                      << "TOAST_NUM_THREADS (= " << toast_nthreads << ")..."
+                      << std::endl;
+            omp_nthreads = toast_nthreads;
+            omp_set_num_threads(toast_nthreads);
+        }
+        std::cout << "OpenMP number of threads: " << omp_nthreads << std::endl;
+    }
+#endif
 
     return;
 }
