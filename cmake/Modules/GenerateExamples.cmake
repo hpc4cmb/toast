@@ -158,49 +158,12 @@ foreach(_TYPE ${PROBLEM_TYPES})
         string(REGEX MATCHALL "([0-9]+)" _NODES "${_NODES}")    
         set(_FREQ "${FREQ_${_SIZE}}")
         string(TOLOWER "${_FREQ}" _LFREQ)
-        set(_LABELS  Examples ${_TYPE} ${MACHINE} ${_SIZE} ${_FREQ}
-            ${_TYPE}_${_SIZE} ${_TYPE}_${_LFREQ}
-            ${_TYPE}_${_NODES} ${_LFREQ}_${_NODES}
-            EXAMPLE_${_NODES}_NODE "slurm")
-            list(APPEND NODES_LIST ${_NODES})
-            if(NOT DEFINED NODES_COUNT_${_NODES})
-                set(NODES_COUNT_${_NODES} 0)
-            endif(NOT DEFINED NODES_COUNT_${_NODES})
-            math(EXPR NODES_COUNT_${_NODES} "${NODES_COUNT_${_NODES}}+1")
+        set(_LABELS Examples ${_TYPE} ${_SIZE} ${_FREQ} Slurm)
         # set the properties
-        set_tests_properties(${_test_name} PROPERTIES LABELS "${_LABELS}" TIMEOUT 14400)
+        set_tests_properties(${_test_name} PROPERTIES
+            LABELS "${_LABELS}" TIMEOUT 14400)
     endforeach(_SIZE ${PROBLEM_SIZES})
 endforeach(_TYPE ${PROBLEM_TYPES})
 
-#------------------------------------------------------------------------------#
-# SLURM node scripts
-#------------------------------------------------------------------------------#
-
-list(REMOVE_DUPLICATES NODES_LIST)
-numeric_sort(NODES_LIST ${NODES_LIST})
-set(_STR )
-foreach(_N ${NODES_LIST})
-    set(_C "${NODES_COUNT_${_N}}")
-    set(_STR "${_STR}${_N} ${NODES_COUNT_${_N}}\n")
-    math(EXPR _MIN_TOT "30*${_C}+45")
-    math(EXPR _MIN_REM "${_MIN_TOT}%60")
-    math(EXPR _HRS_TOT "(${_MIN_TOT}-${_MIN_REM})/60")
-    get_00(_MIN_REM "${_MIN_REM}")
-    get_00(_HRS_TOT "${_HRS_TOT}")
-    set(NODES ${_N})
-    set(TIME "${_HRS_TOT}:${_MIN_REM}:00")
-    set(JOB_NAME "example_${_N}_node")
-    set(FILENAME "example_${_N}_node.sh")
-    set(CTEST_PARAMS "-L EXAMPLE_${_N}_NODE -DTRIGGER=Test -DSTAGES='Build;Test' -S cdash/Stages.cmake -O ctest_${JOB_NAME}.log --output-on-failure")
-    set(QUEUE_ORIG "${QUEUE}")
-    set(QUEUE "debug")
-    if(_MIN_TOT GREATER 120)
-        set(QUEUE "regular")
-    endif(_MIN_TOT GREATER 120)
-    configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/CTestExample.sh.in
-        ${CMAKE_BINARY_DIR}/${FILENAME} @ONLY)
-    set(QUEUE "${QUEUE_ORIG}")
-endforeach(_N ${NODES_LIST})
-file(WRITE ${PROJECT_EXAMPLES_DIR}/nodes.cmake.out "${_STR}")
 
 #------------------------------------------------------------------------------#

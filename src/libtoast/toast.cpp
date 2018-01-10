@@ -54,14 +54,16 @@ void toast::init ( int argc, char *argv[] )
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     // THREADING
+    // default to number of cores
     int32_t hw_threads = std::thread::hardware_concurrency();
+    // get OMP_NUM_THREADS env variable
     int32_t omp_nthreads = toast::get_env<int32_t>("OMP_NUM_THREADS",
                                                    hw_threads);
     // toast::get_num_threads checks for environment TOAST_NUM_THREADS
     // and if undefined it uses std::thread::hardware_conncurrency()
     int32_t toast_nthreads = toast::get_num_threads();
     // if TOAST_NUM_THREADS not defined, use OMP_NUM_THREADS
-    if(toast_nthreads == hw_threads && omp_nthreads != hw_threads)
+    if(!std::getenv("TOAST_NUM_THREADS"))
         toast_nthreads = omp_nthreads;
 
     // Initialize the TBB task scheduler after MPI has been initialized
@@ -75,11 +77,15 @@ void toast::init ( int argc, char *argv[] )
                   << toast_nthreads << std::endl;
 #   endif
 
+    // Enable the signal detection
     toast::EnableSignalDetection();
 
+    // Verbose parameter (echo's signal detection info and possibly others
+    // in future)
     if(toast::get_env<int32_t>("TOAST_VERBOSE", 0) > 0)
         std::cout << toast::signal_settings::str() << std::endl;
 
+    // the function called when exiting with error code
     auto _exit_func = [] (int errcode)
     {
         auto tman = toast::util::timing_manager::instance();
@@ -92,21 +98,28 @@ void toast::init ( int argc, char *argv[] )
         tman->report(ferr);
     };
 
+    // set the exit function
     toast::signal_settings::set_exit_action(_exit_func);
 
 #if defined(_OPENMP)
-    if(rank == 0)
-    {
-        if(omp_nthreads < toast_nthreads)
-        {
+    // If TOAST_NUM_THREADS not defined, we use OMP_NUM_THREADS.
+    // However, if TOAST_NUM_THREADS is defined, we let it take precedence over
+    // OMP_NUM_THREADS since TOAST_NUM_THREADS is specific to our application
+    // and OMP_NUM_THREADS is may be used to set other libraries etc. using
+    // OpenMP
+    if(omp_nthreads < toast_nthreads) {
+        if(rank == 0) {
             std::cerr << "Warning! Overridding OMP_NUM_THREADS (= "
                       << omp_nthreads << ") with "
                       << "TOAST_NUM_THREADS (= " << toast_nthreads << ")..."
                       << std::endl;
-            omp_nthreads = toast_nthreads;
-            omp_set_num_threads(toast_nthreads);
         }
-        std::cout << "OpenMP number of threads: " << omp_nthreads << std::endl;
+        omp_nthreads = toast_nthreads;
+        omp_set_num_threads(toast_nthreads);
+    }
+    if(rank == 0) {
+        std::cout << "OpenMP number of threads: "
+                  << omp_nthreads << std::endl;
     }
 #endif
 
