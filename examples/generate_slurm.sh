@@ -25,6 +25,8 @@ fi
 : ${TYPES:="satellite ground ground_simple ground_multisite"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-knl cori-haswell edison"}
+: ${BUFFER_SIZE:=20GB}
+: ${BUFFER_POOL:=sm_pool}
 
 for TYPE in ${TYPES}; do
     for SIZE in ${SIZES}; do
@@ -41,6 +43,7 @@ for TYPE in ${TYPES}; do
                 -DMACHFILE=${MACHFILE} -DSIZEFILE=${SIZEFILE} \
                 -DTOPDIR="${TOPDIR}" -DACCOUNT=${ACCOUNT} -DTYPE=${TYPE} \
                 -DSIZE=${SIZE} -DMACHINE=${MACHINE} -DQUEUE=${QUEUE} $@ \
+                -DBUFFER_SIZE=${BUFFER_SIZE} -DBUFFER_POOL=${BUFFER_POOL} \
                 -P ${TOPDIR}/templates/config.cmake
         done
     done

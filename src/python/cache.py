@@ -11,6 +11,36 @@ import gc
 
 from .cbuffer import ToastBuffer
 
+import os
+import tempfile
+
+
+def get_buffer_directory():
+    _dir = None
+    try:
+        _dir = os.environ['TOAST_TMPDIR']
+    except:
+        _dir = '/tmp'
+    # ensure directory exists
+    if not os.path.exists(_dir) and _dir != '':
+        os.makedirs(_dir)
+    return _dir
+
+
+def get_use_fsbuffer():
+    """
+    Check environment for TOAST_NO_FSBUFFER=[0-9]. If TOAST_NO_FSBUFFER > 0,
+    disable using FsBuffer
+    """
+    _fsbuffer_disable = 0
+    try:
+        _fsbuffer_disable = int(os.environ['TOAST_NO_FSBUFFER'])
+    except:
+        _fsbuffer_disable = 0
+    if _fsbuffer_disable == 0:
+        return True
+    return False
+
 
 def numpy2toast(nptype):
     comptype = np.dtype(nptype)
@@ -67,6 +97,63 @@ def toast2numpy(tbtype):
     return nptype
 
 
+class FsBuffer(object):
+    """
+    File system buffer (used @ NERSC specifically for BurstBuffer)
+    """
+
+    temporary_directory = get_buffer_directory()
+
+
+    def __init__(self, obj, mode='TRANSIENT'):
+        self._buffer_file = tempfile.NamedTemporaryFile(prefix='toast-cache-',
+            dir=FsBuffer.temporary_directory, suffix='.cache', delete=False)
+        self._buffer_mode = mode
+        self.unload(obj)
+
+
+    def __del__(self):
+        self.close()
+        if self._buffer_mode == 'TRANSIENT':
+            os.remove(self._buffer_file.name)
+
+
+    def open(self, fmode='w+b'):
+        self._buffer_file = open(self._buffer_file.name, fmode)
+
+
+    def close(self):
+        self._buffer_file.close()
+
+
+    def load(self):
+        #print('Load from buffer "{}"...{}'.format(self._buffer_file.name, obj))
+        try:
+            obj = np.fromfile(self._buffer_file.name, dtype=self._buffer_type)
+        except:
+            print('File {} invalid (ndarray type: {})'.format(self._buffer_file.name,
+                self._buffer_type))
+            raise
+        return obj.reshape(self._buffer_shape)
+
+
+    def update(self, obj):
+        self.unload(obj)
+
+
+    def unload(self, obj):
+        #print('Unloading to buffer "{}"...{}'.format(self._buffer_file.name, obj))
+        self._buffer_type = obj.dtype
+        self._buffer_shape = obj.shape
+        self.open()
+        obj.tofile(self._buffer_file.name)
+        self.close()
+
+
+    def free(self):
+        self._buffer_obj = None
+
+
 class Cache(object):
     """
     Timestream data cache with explicit memory management.
@@ -76,10 +163,14 @@ class Cache(object):
             allocations in C.  Only used for testing.
     """
 
+    use_fsbuffer = get_use_fsbuffer()
+
     def __init__(self, pymem=False):
         self._pymem = pymem
         self._refs = {}
         self._aliases = {}
+        if Cache.use_fsbuffer:
+            self._buffers = {}
 
 
     def __del__(self):
@@ -89,16 +180,20 @@ class Cache(object):
             keylist = list(self._refs.keys())
             for k in keylist:
                 #gc.collect()
-                referrers = gc.get_referrers(self._refs[k])
+                #referrers = gc.get_referrers(self._refs[k])
                 #print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
                 #print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
                 if sys.getrefcount(self._refs[k]) > 2:
                     warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
                 del self._refs[k]
+                if Cache.use_fsbuffer:
+                    del self._buffers[k]
         self._refs.clear()
+        if Cache.use_fsbuffer:
+            self._buffers.clear()
 
 
-    def clear(self, pattern=None):
+    def clear(self, pattern=None, remove_fsbuffer=True):
         """
         Clear one or more buffers.
 
@@ -114,13 +209,17 @@ class Cache(object):
                 keylist = list(self._refs.keys())
                 for k in keylist:
                     #gc.collect()
-                    referrers = gc.get_referrers(self._refs[k])
+                    #referrers = gc.get_referrers(self._refs[k])
                     #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
                     #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
                     if sys.getrefcount(self._refs[k]) > 2:
                         warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
                     del self._refs[k]
+                    if Cache.use_fsbuffer and remove_fsbuffer:
+                        del self._buffers[k]
             self._refs.clear()
+            if Cache.use_fsbuffer and remove_fsbuffer:
+                self._buffers.clear()
         else:
             pat = re.compile(pattern)
             names = []
@@ -130,11 +229,27 @@ class Cache(object):
                     names.append(n)
                 del r
             for n in names:
-                self.destroy(n)
+                self.destroy(n, remove_fsbuffer=remove_fsbuffer)
         return
 
 
-    def create(self, name, type, shape):
+    def free(self, pattern=None):
+        """
+        Clear one or more buffers but keep the fsbuffer.
+
+        Args:
+            pattern (str): a regular expression to match against the buffer
+                names when determining what should be cleared.  If None,
+                then all buffers are cleared.
+        """
+        # only call clear with remove_fsbuffer=False if using FsBuffer
+        if Cache.use_fsbuffer:
+            self.clear(pattern, remove_fsbuffer=False)
+        # if not using FsBuffer then calling clear would actually remove
+        return
+
+
+    def create(self, name, type, shape, use_fsbuffer=True):
         """
         Create a named data buffer of the given type and shape.
 
@@ -152,6 +267,8 @@ class Cache(object):
 
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
+            if Cache.use_fsbuffer and use_fsbuffer:
+                self._buffers[name] = FsBuffer(self._refs[name])
         else:
             flatsize = 1
             for s in range(len(shape)):
@@ -159,11 +276,13 @@ class Cache(object):
                     raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
                 flatsize *= shape[s]
             self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
+            if Cache.use_fsbuffer and use_fsbuffer:
+                self._buffers[name] = FsBuffer(self._refs[name])
 
         return self._refs[name]
 
 
-    def put(self, name, data, replace=False):
+    def put(self, name, data, replace=False, use_fsbuffer=True):
         """
         Create a named data buffer to hold the provided data.
         If replace is True, existing buffer of the same name is first
@@ -189,12 +308,17 @@ class Cache(object):
             # of the supplied data in case it is a view of a subset
             # of the cache data.
             mydata = data.copy()
-            self.destroy(name)
+            self.destroy(name, remove_fsbuffer=True)
         else:
             mydata = data
 
-        ref = self.create(name, mydata.dtype, mydata.shape)
+        # never use_fsbuffer bc over-ridden below
+        ref = self.create(name, mydata.dtype, mydata.shape, use_fsbuffer=False)
         ref[:] = mydata
+        if Cache.use_fsbuffer and use_fsbuffer:
+            if name in self._buffers.keys():
+                del self._buffers[name]
+            self._buffers[name] = FsBuffer(ref)
 
         return ref
 
@@ -220,7 +344,7 @@ class Cache(object):
         self._aliases[alias] = name
 
 
-    def destroy(self, name):
+    def destroy(self, name, remove_fsbuffer=True):
         """
         Deallocate the specified buffer.
 
@@ -237,15 +361,22 @@ class Cache(object):
             return
 
         if name not in self._refs.keys():
-            raise RuntimeError("Data buffer {} does not exist".format(name))
+            if name in self._buffers.keys() and remove_fsbuffer:
+                del self._buffers[name]
+                return
+            else:
+                print('Reference Keys: {}'.format(self._refs.keys()))
+                print('Buffer Keys: {}'.format(self._buffers.keys()))
+                raise RuntimeError("Data buffer {} does not exist".format(name))
 
         # Remove aliases to the buffer
-        aliases_to_remove = []
-        for key, value in self._aliases.items():
-            if value == name:
-                aliases_to_remove.append( key )
-        for key in aliases_to_remove:
-            del self._aliases[key]
+        if Cache.use_fsbuffer and remove_fsbuffer:
+            aliases_to_remove = []
+            for key, value in self._aliases.items():
+                if value == name:
+                    aliases_to_remove.append( key )
+            for key in aliases_to_remove:
+                del self._aliases[key]
 
         # Remove actual buffer
         if not self._pymem:
@@ -254,7 +385,12 @@ class Cache(object):
             # print("destroy refcount for {} is ".format(name), sys.getrefcount(self._refs[name]) )
             if sys.getrefcount(self._refs[name]) > 2:
                 warnings.warn("Cache object {} has external references and will not be freed.".format(name), RuntimeWarning)
+        if Cache.use_fsbuffer and not remove_fsbuffer:
+            self._buffers[name].update(self._refs[name])
         del self._refs[name]
+        if Cache.use_fsbuffer and remove_fsbuffer:
+            del self._buffers[name]
+
         return
 
 
@@ -275,22 +411,30 @@ class Cache(object):
             check = True
         elif name in self._aliases.keys():
             check = True
+        elif Cache.use_fsbuffer and name in self._buffers.keys():
+            check = True
 
         if not return_ref:
             return check
         else:
-            if not check:
+            if not check and not name in self._buffers.keys():
                 return None
+            elif not check and Cache.use_fsbuffer and name in self._buffers.keys():
+                return self._buffers[name].load()
             else:
                 ref = None
                 if name in self._refs.keys():
                     ref = self._refs[name]
+                    if Cache.use_fsbuffer and ref is None:
+                        ref = self._buffers[name].load()
                 elif name in self._aliases.keys():
                     ref = self._refs[self._aliases[name]]
+                elif Cache.use_fsbuffer and name in self._buffers.keys():
+                    ref = self._buffers[name].load()
                 return ref
 
 
-    def reference(self, name):
+    def reference(self, name, free_alloc=False):
         """
         Return a numpy array pointing to the buffer.
 
@@ -308,7 +452,33 @@ class Cache(object):
         ref = self.exists(name, return_ref=True)
         if ref is None:
             raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
+        if Cache.use_fsbuffer and free_alloc and name in self._refs.keys():
+            self.destroy(name, remove_fsbuffer=False)
         return ref
+
+
+    def clone(self, name):
+        """
+        Return a clone (copy) of a numpy array pointing to the buffer.
+
+        The returned array will wrap a pointer to the raw buffer, but will
+        not claim ownership.  When the numpy array is garbage collected, it
+        will NOT attempt to free the memory (you must manually use the
+        destroy method).
+
+        Args:
+            name (str): the name of the buffer to return.
+
+        Returns:
+            (array): a numpy array wrapping the raw data buffer.
+        """
+        if Cache.use_fsbuffer and name in self._buffers.keys():
+            # always a copy
+            return self._buffers[name].load()
+        ref = self.exists(name, return_ref=True)
+        if ref is None:
+            raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
+        return ref.copy()
 
 
     def keys(self):

@@ -13,6 +13,9 @@ echo "PYTHON: $(which python)"
 echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
 echo ""
 
+: ${TMPDIR:=/tmp}
+export TOAST_TMPDIR=$(mktemp -d ${TMPDIR}/toast-XXXX)
+
 outdir="out_@SIZE@_ground_simple"
 mkdir -p "${outdir}"
 

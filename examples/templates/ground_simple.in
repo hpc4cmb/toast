@@ -7,6 +7,10 @@
 #SBATCH --time=@TIME@
 #SBATCH --job-name=@SIZE@-ground_simple
 #SBATCH --output=out_@SIZE@_ground_simple_@MACHINE@_%j.log
+#DW jobdw capacity=@BUFFER_SIZE@ access_mode=striped type=scratch pool=@BUFFER_POOL@
+
+export TOAST_TMPDIR=$(mktemp -d ${DW_JOB_STRIPED}/toast-XXXX)
+echo "TOAST_TMPDIR: ${TOAST_TMPDIR}"
 
 set -o errexit
 set -v

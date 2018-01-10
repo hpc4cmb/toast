@@ -42,6 +42,8 @@ fi
 : ${TYPES:="satellite ground ground_simple"}
 : ${SIZES:="tiny small medium large representative"}
 : ${MACHINES:="cori-knl cori-haswell edison"}
+: ${BUFFER_SIZE:=20GB}
+: ${BUFFER_POOL:=sm_pool}
 
 # if "tiny" is not in SIZES then disable "tiny" in SHELL_SIZES
 SHELL_SIZES="tiny"
