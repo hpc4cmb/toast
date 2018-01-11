@@ -353,7 +353,7 @@ if(USE_SSE)
 
     include(FindSSE)
 
-    GET_SSE_COMPILE_FLAGS(_CXX_FLAGS_EXTRA SSE_DEFINITIONS)
+    GET_SSE_COMPILE_FLAGS(SSE_FLAGS SSE_DEFINITIONS)
     foreach(_DEF ${SSE_DEFINITIONS})
         add_definitions(-D${_DEF})
     endforeach()
