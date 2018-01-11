@@ -206,10 +206,10 @@ FUNCTION(GET_SSE_COMPILE_FLAGS _FLAGS_VAR _DEFS_VAR)
             endif()
         endforeach()
 
-        if(APPLE AND USE_CLANG_ASSEMBLER)
+        if(APPLE)
             add(_FLAGS "-Wa,-W")
             add(_FLAGS "-Wa,-q")
-        endif(APPLE AND USE_CLANG_ASSEMBLER)
+        endif(APPLE)
 
         add_cxx_flags(SSE_CXX_FLAGS "${_FLAGS}")
     endif(CMAKE_CXX_COMPILER_IS_INTEL)
