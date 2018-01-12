@@ -17,8 +17,8 @@ RUN apt-get update \
 # Set up locales, to workaround a pip bug
 
 RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8 
-ENV LANGUAGE en_US:en 
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # We install everything directly into /usr so that we do
@@ -47,6 +47,13 @@ ENV PYTHONUSERBASE "/tmp"
 
 @pip_pkgs@
 
+# The conda TCL packages overwrite the system-installed regex.h.  So
+# now we force reinstall of the package that provides that
+
+RUN apt-get update \
+    && apt-get install -y --reinstall libc6-dev \
+    && rm -fr /var/lib/apt/lists/*
+
 # Install Intel tools to /opt/intel.  We assume that the build context already
 # contains a copy of the Intel tools, and we just copy it into the image.
 
@@ -66,8 +73,8 @@ RUN cp -a /opt/intel/mkl/lib/intel64/* /usr/lib/
 RUN mkdir ./rules
 ADD rules/patch_* ./rules/
 
-RUN mkdir -p /usr/lib/python3.6/site-packages
-ENV PYTHONPATH /usr/lib/python3.6/site-packages
+#RUN mkdir -p /usr/lib/python3.6/site-packages
+#ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
@@ -183,4 +190,3 @@ ENV HOME /home/toast
 
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
-
