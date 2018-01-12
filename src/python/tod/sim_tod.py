@@ -19,7 +19,7 @@ except:
 from .. import qarray as qa
 from .. import timing as timing
 
-from ..ctoast import healpix_vec2ang, healpix_ang2vec
+from ..healpix import ang2vec, vec2ang
 from .tod import TOD
 from .interval import Interval
 from .noise import Noise
@@ -616,6 +616,7 @@ class TODGround(TOD):
                                "".format(lasttime, CES_stop))
 
         self._firsttime = firsttime
+        self._lasttime = lasttime
         self._rate = rate
         self._site_lon = site_lon
         self._site_lat = site_lat
@@ -641,8 +642,8 @@ class TODGround(TOD):
         self._observer.lon = self._site_lon
         self._observer.lat = self._site_lat
         self._observer.elevation = self._site_alt # In meters
-        self._observer.epoch = "2000"
-        self._observer.temp = 0 # in Celcius
+        self._observer.epoch = ephem.J2000 # "2000"
+        #self._observer.epoch = -9786 # EOD
         self._observer.compute_pressure()
 
         self._min_az = None
@@ -730,6 +731,8 @@ class TODGround(TOD):
             tstart = tstop
 
         self.translate_pointing()
+
+        self.crop_vectors()
 
         if self._report_timing:
             mpicomm.Barrier()
@@ -914,13 +917,12 @@ class TODGround(TOD):
         return sizes, starts[:-1]
 
     def translate_pointing(self):
-        # Translate the azimuth and elevation into bore sight quaternions
-        # in the desired frame. Use two (az, el) pairs to measure the
-        # position angle
+        """ Translate Az/El into bore sight quaternions
 
+        Translate the azimuth and elevation into bore sight quaternions.
+
+        """
         autotimer = timing.auto_timer(type(self).__name__)
-        orient = XAXIS
-        sun = ephem.Sun()
 
         # At this point, all processes still have all of the scan
 
@@ -933,104 +935,115 @@ class TODGround(TOD):
         my_nsamp = max(0, my_stop-my_start)
         my_ind = slice(my_start, my_stop)
 
-        my_az = self._az[my_ind]
-
         my_azelquats = qa.from_angles(
             np.pi/2 - np.ones(my_nsamp)*self._el,
-            my_az, np.zeros(my_nsamp), IAU=False)
-        azel_orients = qa.rotate(my_azelquats, orient)
-        el_orients, az_orients = healpix_vec2ang(my_nsamp,
-                                                 azel_orients.ravel())
-        del azel_orients
-
-        ra_dirs = []
-        dec_dirs = []
-        ra_orients = []
-        dec_orients = []
-
-        commonflags = self._commonflags[my_ind].copy()
-
-        times = self.to_DJD(self.read_times(my_start, my_nsamp))
-
-        for i in range(my_nsamp):
-            el_orient, az_orient = el_orients[i], az_orients[i]
-
-            t = times[i]
-
-            self._observer.date = t
-            """
-            The sun angle is already handled by the schedule
-            sun.compute(self._observer)
-            if sun.alt > 0:
-                self._commonflags[i] |= self.SUN_UP
-
-                angle = my_az[i] - sun.az
-                if angle < -2*np.pi: angle += 2*np.pi
-                if angle > 2*np.pi: angle -= 2*np.pi
-
-                if angle / degree < self._sun_angle_min:
-                    commonflags[i] |= self.SUN_CLOSE
-            """
-
-            ra_dir, dec_dir = self._observer.radec_of(my_az[i], self._el)
-            ra_orient, dec_orient = self._observer.radec_of(az_orient, el_orient)
-
-            ra_dirs.append(ra_dir)
-            dec_dirs.append(dec_dir)
-            ra_orients.append(ra_orient)
-            dec_orients.append(dec_orient)
-
-        ra_dirs = np.array(ra_dirs)
-        dec_dirs = np.array(dec_dirs)
-        ra_orients = np.array(ra_orients)
-        dec_orients = np.array(dec_orients)
-
-        radec_dirs = healpix_ang2vec(my_nsamp, np.pi/2 - dec_dirs, ra_dirs).T
-        radec_orients = healpix_ang2vec(my_nsamp, np.pi/2 - dec_orients, ra_orients).T
-
-        x = radec_orients[0]*radec_dirs[1] - radec_orients[1]*radec_dirs[0]
-        y = radec_orients[2]*(radec_dirs[0]**2 + radec_dirs[1]**2) \
-            - radec_orients[0]*radec_dirs[2]*radec_dirs[0] \
-            - radec_orients[1]*radec_dirs[2]*radec_dirs[1]
-        pas = np.arctan2(x, y)
-
-        my_quats = self.radec2quat(ra_dirs, dec_dirs, pas)
-
+            self._az[my_ind], np.zeros(my_nsamp), IAU=False)
         azelquats = np.vstack(self._mpicomm.allgather(my_azelquats))
+        self._boresight_azel = azelquats
+
+        my_times = self.local_times()[my_ind]
+        azel2radec_times, azel2radec_quats = self._get_azel2radec_quats()
+        my_azel2radec_quats = qa.slerp(my_times, azel2radec_times, azel2radec_quats)
+        my_quats = qa.mult(my_azel2radec_quats, my_azelquats)
         del my_azelquats
 
         quats = np.vstack(self._mpicomm.allgather(my_quats))
+        self._boresight = quats
         del my_quats
 
-        # Crop the azimuth and common flags to match the returned quaternions
+        return
 
+    def crop_vectors(self):
+        """ Crop the TOD vectors.
+
+        Crop the TOD vectors to match the sample range assigned to this task.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
         offset, n = self.local_samples
         ind = slice(offset, offset+n)
 
         self._az = self.cache.put("az", self._az[ind])
         self._commonflags = self.cache.put(
-            "commonflags", self._commonflags[ind])
-        self._boresight_azel = self.cache.put(
-            "boresight_azel", azelquats[ind])
-        self._boresight = self.cache.put("boresight_radec", quats[ind])
+            "common_flags", self._commonflags[ind], replace=True)
+        self._boresight_azel = self.cache.put("boresight_azel",
+                                              self._boresight_azel[ind])
+        self._boresight = self.cache.put("boresight_radec",
+                                         self._boresight[ind])
 
         return
+
+    def _get_azel2radec_quats(self):
+        """ Construct a sparsely sampled vector of Az/El->Ra/Dec quaternions.
+
+        The interpolation times must be tied to the total observation so
+        that the results do not change when data is distributed in time
+        domain.
+
+        """
+        # One control point at least every 10 minutes.  Overkill but
+        # costs nothing.
+        autotimer = timing.auto_timer(type(self).__name__)
+        n = max(2, 1 + int((self._lasttime-self._firsttime) / 600))
+        times = np.linspace(self._firsttime, self._lasttime, n)
+        quats = np.zeros([n, 4])
+        for i, t in enumerate(times):
+            quats[i] = self._get_coord_quat(t)
+
+        return times, quats
+
+    def _get_coord_quat(self, t):
+        """ Get the Az/El -> Ra/Dec conversion quaternion for boresight.
+
+        We will apply atmospheric refraction and stellar aberration in
+        the detector frame.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
+        self._observer.date = self.to_DJD(t)
+        # Set pressure to zero to disable atmospheric refraction.
+        pressure = self._observer.pressure
+        self._observer.pressure = 0
+        # Rotate the X, Y and Z axes from horizontal to equatorial frame.
+        # Strictly speaking, two coordinate axes would suffice but the
+        # math is cleaner with three axes.
+        try:
+            xra, xdec = self._observer.radec_of(      0,       0, fixed=False)
+            yra, ydec = self._observer.radec_of(np.pi/2,       0, fixed=False)
+            zra, zdec = self._observer.radec_of(np.pi/2, np.pi/2, fixed=False)
+        except:
+            # Modified pyephem not available.
+            # We will have sub arc minute errors.
+            xra, xdec = self._observer.radec_of(      0,       0)
+            yra, ydec = self._observer.radec_of(np.pi/2,       0)
+            zra, zdec = self._observer.radec_of(np.pi/2, np.pi/2)
+        self._observer.pressure = pressure
+        # RA  = -phi
+        # Dec = pi/2 - theta
+        xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
+                                   -np.array([xra, yra, zra]))
+        # Solve for the quaternions from the transformed axes.
+        X = (xvec[1] + yvec[0]) / 4
+        Y = (xvec[2] + zvec[0]) / 4
+        Z = (yvec[2] + zvec[1]) / 4
+        d = np.sqrt(Y * Z / X) # Choose positive root
+        c = d * X / Y
+        b = X / c
+        a = (xvec[1]/2 - b*c) / d
+        # qarray has the scalar part as the last index
+        quat = np.array([b, c, d, a])
+
+        return quat
 
     def free_azel_quats(self):
         autotimer = timing.auto_timer(type(self).__name__)
         self._boresight_azel = None
-        #try:
         self.cache.destroy("boresight_azel")
-        #except:
-        #    pass
 
     def free_radec_quats(self):
         autotimer = timing.auto_timer(type(self).__name__)
         self._boresight = None
-        #try:
         self.cache.destroy("boresight_radec")
-        #except:
-        #    pass
 
     def radec2quat(self, ra, dec, pa):
         autotimer = timing.auto_timer(type(self).__name__)
@@ -1125,6 +1138,10 @@ class TODGround(TOD):
         return self._az[local_start:local_start+n]
 
     def _get_pntg(self, detector, start, n, azel=False):
+        # FIXME: this is where we will apply atmospheric refraction and
+        # stellar aberration corrections in the detector frame.  For
+        # simulations they will only matter if we want to simulate the
+        # error coming from ignoring them.
         autotimer = timing.auto_timer(type(self).__name__)
         boresight = self._get_boresight(start, n, azel=azel)
         detquat = self._fp[detector]
