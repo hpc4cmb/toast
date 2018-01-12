@@ -1008,20 +1008,20 @@ class TODGround(TOD):
         # Strictly speaking, two coordinate axes would suffice but the
         # math is cleaner with three axes.
         try:
-            xra, xdec = self._observer.radec_of(      0,       0, fixed=False)
-            yra, ydec = self._observer.radec_of(np.pi/2,       0, fixed=False)
-            zra, zdec = self._observer.radec_of(np.pi/2, np.pi/2, fixed=False)
+            xra, xdec = self._observer.radec_of(   np.pi,       0, fixed=False)
+            yra, ydec = self._observer.radec_of( np.pi/2,       0, fixed=False)
+            zra, zdec = self._observer.radec_of(       0, np.pi/2, fixed=False)
         except:
             # Modified pyephem not available.
             # We will have sub arc minute errors.
-            xra, xdec = self._observer.radec_of(      0,       0)
-            yra, ydec = self._observer.radec_of(np.pi/2,       0)
-            zra, zdec = self._observer.radec_of(np.pi/2, np.pi/2)
+            xra, xdec = self._observer.radec_of(   np.pi,       0)
+            yra, ydec = self._observer.radec_of( np.pi/2,       0)
+            zra, zdec = self._observer.radec_of(       0, np.pi/2)
         self._observer.pressure = pressure
-        # RA  = -phi
+        # RA  = phi
         # Dec = pi/2 - theta
         xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
-                                   -np.array([xra, yra, zra]))
+                                   np.array([xra, yra, zra]))
         # Solve for the quaternions from the transformed axes.
         X = (xvec[1] + yvec[0]) / 4
         Y = (xvec[2] + zvec[0]) / 4
@@ -1032,7 +1032,6 @@ class TODGround(TOD):
         a = (xvec[1]/2 - b*c) / d
         # qarray has the scalar part as the last index
         quat = np.array([b, c, d, a])
-
         return quat
 
     def free_azel_quats(self):
