@@ -465,7 +465,8 @@ class OpSimAtmosphere(Operator):
                     # angles for the simulation.
 
                     theta, phi, pa = qa.to_angles(azelquat)
-                    az = phi
+                    # Azimuth is measured in the opposite direction than longitude
+                    az = 2*np.pi - phi
                     el = np.pi/2 - theta
 
                     if np.ptp(az) < np.pi:
