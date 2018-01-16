@@ -935,9 +935,11 @@ class TODGround(TOD):
         my_nsamp = max(0, my_stop-my_start)
         my_ind = slice(my_start, my_stop)
 
+        # Remember that the azimuth is measured clockwise and the
+        # longitude counter-clockwise
         my_azelquats = qa.from_angles(
             np.pi/2 - np.ones(my_nsamp)*self._el,
-            self._az[my_ind], np.zeros(my_nsamp), IAU=False)
+            -self._az[my_ind], np.zeros(my_nsamp), IAU=False)
         azelquats = np.vstack(self._mpicomm.allgather(my_azelquats))
         self._boresight_azel = azelquats
 
@@ -1007,19 +1009,20 @@ class TODGround(TOD):
         # Rotate the X, Y and Z axes from horizontal to equatorial frame.
         # Strictly speaking, two coordinate axes would suffice but the
         # math is cleaner with three axes.
+        #
+        # PyEphem measures the azimuth East (clockwise) from North.
+        # The direction is standard but opposite to ISO spherical coordinates.
         try:
-            xra, xdec = self._observer.radec_of(   np.pi,       0, fixed=False)
-            yra, ydec = self._observer.radec_of( np.pi/2,       0, fixed=False)
+            xra, xdec = self._observer.radec_of(       0,       0, fixed=False)
+            yra, ydec = self._observer.radec_of(-np.pi/2,       0, fixed=False)
             zra, zdec = self._observer.radec_of(       0, np.pi/2, fixed=False)
         except:
             # Modified pyephem not available.
-            # We will have sub arc minute errors.
-            xra, xdec = self._observer.radec_of(   np.pi,       0)
-            yra, ydec = self._observer.radec_of( np.pi/2,       0)
+            # Translated pointing will include stellar aberration.
+            xra, xdec = self._observer.radec_of(       0,       0)
+            yra, ydec = self._observer.radec_of(-np.pi/2,       0)
             zra, zdec = self._observer.radec_of(       0, np.pi/2)
         self._observer.pressure = pressure
-        # RA  = phi
-        # Dec = pi/2 - theta
         xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
                                    np.array([xra, yra, zra]))
         # Solve for the quaternions from the transformed axes.

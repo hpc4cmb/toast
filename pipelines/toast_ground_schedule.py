@@ -53,6 +53,8 @@ def prioritize(visible, hits):
 
 def corner_coordinates(observer, corners):
     """ Return the corner coordinates in horizontal frame.
+
+    PyEphem measures the azimuth East (clockwise) from North.
     """
     azs = []
     els = []
