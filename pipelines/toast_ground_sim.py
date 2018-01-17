@@ -932,6 +932,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     start = MPI.Wtime()
     for obs in data.obs:
         tod = obs['tod']
+        todcomm = tod.mpicomm
         site_id = obs['site_id']
         weather = obs['weather']
         if 'focalplane' in obs:
@@ -944,24 +945,47 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         air_temperature = weather.air_temperature
         surface_pressure = weather.surface_pressure
         pwv = weather.pwv
-        absorption = toast.ctoast.atm_get_absorption_coefficient(
-            altitude, air_temperature, surface_pressure, pwv, freq)
+        # Use the entire processing group to sample the absorption
+        # coefficient as a function of frequency
+        ntask = todcomm.size
+        freqmin = 0
+        freqmax = 2 * freq
+        nfreq = 1001
+        freqstep = (freqmax - freqmin) / (nfreq - 1)
+        nfreq_task = int(nfreq // todcomm.size) + 1
+        my_ifreq_min = nfreq_task * todcomm.rank
+        my_ifreq_max = min(nfreq, nfreq_task*(todcomm.rank+1))
+        my_nfreq = my_ifreq_max - my_ifreq_min
+        if my_nfreq > 0:
+            my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max)*freqstep
+            my_absorption = np.zeros(my_nfreq)
+            err = toast.ctoast.atm_get_absorption_coefficient_vec(
+                altitude, air_temperature, surface_pressure, pwv,
+                my_freqs[0], my_freqs[-1], my_nfreq, my_absorption)
+            if err != 0:
+                raise RuntimeError(
+                    'Failed to get absorption coefficient vector')
+        else:
+            my_freqs = np.array([])
+            my_absorption = np.array([])
+        freqs = np.hstack(todcomm.allgather(my_freqs))
+        absorption = np.hstack(todcomm.allgather(my_absorption))
         #loading = toast.ctoast.atm_get_atmospheric_loading(
         #    altitude, pwv, freq)
         for det in tod.local_dets:
             try:
-                # Convolve top hat detector bandpass.
+                # Use detector bandpass from the focalplane
                 center = focalplane[det]['bandcenter_ghz']
                 width = focalplane[det]['bandwidth_ghz']
-                nstep = 101
-                freqs = np.linspace(center-width/2, center+width/2, nstep)
-                absorption_det = [
-                    toast.ctoast.atm_get_absorption_coefficient(
-                        altitude, air_temperature, surface_pressure, pwv, x)
-                    for x in freqs]
-                absorption_det = np.mean(absorption_det)
             except:
-                absorption_det = absorption
+                # Use default values for the entire focalplane
+                center = freq
+                width = .2 * freq
+            nstep = 101
+            # Interpolate the absorption coefficient to do a top hat
+            # integral across the bandpass
+            det_freqs = np.linspace(center-width/2, center+width/2, nstep)
+            absorption_det = np.mean(np.interp(det_freqs, freqs, absorption))
             cachename = '{}_{}'.format(totalname_freq, det)
             ref = tod.cache.reference(cachename)
             ref *= absorption_det

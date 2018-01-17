@@ -289,11 +289,23 @@ double ctoast_atm_get_absorption_coefficient(double altitude,
 					     double pressure,
 					     double pwv,
 					     double freq);
+int ctoast_atm_get_absorption_coefficient_vec(double altitude,
+					       double temperature,
+					       double pressure,
+					      double pwv,
+					      double freqmin, double freqmax,
+					      size_t nfreq, double *absorption);
 double ctoast_atm_get_atmospheric_loading(double altitude,
 					  double temperature,
 					  double pressure,
 					  double pwv,
 					  double freq);
+int ctoast_atm_get_atmospheric_loading_vec(double altitude,
+					  double temperature,
+					  double pressure,
+					  double pwv,
+					  double freqmin, double freqmax,
+					  size_t nfreq, double *loading);
 
 
 //--------------------------------------
