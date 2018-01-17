@@ -4,7 +4,7 @@ Installation
 ====================
 
 TOAST is written in C++ and python3 and depends on several commonly available
-packages.  It also has some optional functionality that is only enabled if 
+packages.  It also has some optional functionality that is only enabled if
 additional external libraries are available.
 
 
@@ -12,12 +12,12 @@ Compiled Dependencies
 --------------------------
 
 TOAST compilation requires a C++11 compatible compiler as well as a compatible
-MPI C++ compiler wrapper.  You must also have an FFT library and both FFTW and 
-Intel's MKL are supported by configure checks.  Additionally a BLAS/LAPACK 
+MPI C++ compiler wrapper.  You must also have an FFT library and both FFTW and
+Intel's MKL are supported by configure checks.  Additionally a BLAS/LAPACK
 installation is required.
 
 Several optional compiled dependencies will enable extra features in TOAST.
-If the `Elemental library <http://libelemental.org/>`_ is found at configure 
+If the `Elemental library <http://libelemental.org/>`_ is found at configure
 time then internal atmosphere simulation code will be enabled in the build.
 If the `MADAM destriping mapmaker <https://github.com/hpc4cmb/libmadam>`_ is
 available at runtime, then the python code will support calling that library.
@@ -82,7 +82,7 @@ Option #3
 ~~~~~~~~~~~~~~
 
 Use Anaconda.  Download and install Miniconda or the full Anaconda distribution.
-Make sure to install the Python3 version.  If you are starting from Miniconda, 
+Make sure to install the Python3 version.  If you are starting from Miniconda,
 install the dependencies that are available through conda::
 
     %> conda install -c conda-forge numpy scipy matplotlib mpi4py healpy pyephem
@@ -117,6 +117,4 @@ Testing the Installation
 After installation, you can run both the compiled and python unit tests.
 These tests will create an output directory in your current working directory::
 
-    %> python -c "import toast; toast.test()"
-
-
+    %> python -c "import toast.tests; toast.tests.run()"
