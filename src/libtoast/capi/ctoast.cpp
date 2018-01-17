@@ -141,8 +141,6 @@ void ctoast_timer_report(ctoast_timer* _ct)
 
     toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
     _t->report();
-    if(_t->laps() > 1)
-        _t->report_average();
 }
 
 //----------------------------------------------------------------------------//

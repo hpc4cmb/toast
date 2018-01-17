@@ -43,6 +43,10 @@ bool toast::util::timing_manager::fgEnabled = true;
 #endif
 
 //============================================================================//
+
+toast::util::timing_manager::mutex_t toast::util::timing_manager::f_mutex;
+
+//============================================================================//
 // static function
 void toast::util::timing_manager::enable(bool val)
 {
@@ -249,6 +253,9 @@ toast::util::timing_manager::~timing_manager()
 toast::util::timing_manager::string_t
 toast::util::timing_manager::get_prefix() const
 {
+    if(!mpi_is_initialized())
+        return "> ";
+
     static string_t* _prefix = nullptr;
     if(!_prefix)
     {
@@ -266,10 +273,11 @@ toast::util::timing_manager::get_prefix() const
 
 //============================================================================//
 
-toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
-                                                       const string_t& tag,
-                                                       int32_t ncount,
-                                                       int32_t nhash)
+toast::util::timer&
+toast::util::timing_manager::timer(const string_t& key,
+                                      const string_t& tag,
+                                      int32_t ncount,
+                                      int32_t nhash)
 {
 #if defined(DEBUG)
     if(key.find(" ") != string_t::npos)
@@ -281,6 +289,9 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
 #endif
 
     uint64_t ref = (string_hash(key) + string_hash(tag)) * (ncount+1) * (nhash+1);
+
+    // thread-safe
+    auto_lock_t lock(f_mutex);
 
     // if already exists, return it
     if(m_timer_map.find(ref) != m_timer_map.end())
@@ -300,10 +311,10 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
     // indent
     for(int64_t i = 0; i < ncount; ++i)
     {
-        if(i+1 == ncount || i == 0)
+        if(i+1 == ncount)
             ss << "|_";
         else
-            ss << "|_";
+            ss << "  ";
     }
 
     ss << std::left << key;
@@ -321,31 +332,38 @@ toast::util::timer& toast::util::timing_manager::timer(const string_t& key,
 
 //============================================================================//
 
-void toast::util::timing_manager::report() const
+void toast::util::timing_manager::report(bool no_min) const
 {
-    if(mpi_rank() == 0)
+    int32_t _default = (mpi_is_initialized()) ? 1 : 0;
+    int32_t _verbose = toast::get_env<int32_t>("TOAST_VERBOSE", _default);
+
+    if(mpi_rank() == 0 && _verbose > 0)
     {
         std::stringstream _info;
-        _info << "[" << mpi_rank() << "] Reporting timing output..."
-              << std::endl;
+        if(mpi_is_initialized())
+            _info << "[" << mpi_rank() << "] ";
+        _info << "Reporting timing output..." << std::endl;
         std::cout << _info.str();
     }
 
-    for(int32_t i = 0; i < mpi_size(); ++i)
+    int nitr = std::max(mpi_size(), 1);
+    for(int32_t i = 0; i < nitr; ++i)
     {
-        // blocking
+        // MPI blocking
         if(mpi_is_initialized())
+        {
             MPI_Barrier(MPI_COMM_WORLD);
-        // only 1 at a time
-        if( i != mpi_rank() )
-            continue;
-        report(m_report);
+            // only 1 at a time
+            if(i != mpi_rank() )
+                continue;
+        }
+        report(m_report, no_min);
     }
 }
 
 //============================================================================//
 
-void toast::util::timing_manager::report(ostream_t* os) const
+void toast::util::timing_manager::report(ostream_t* os, bool no_min) const
 {
     auto check_stream = [&] (ostream_t*& _os, const string_t& id)
     {
@@ -364,12 +382,13 @@ void toast::util::timing_manager::report(ostream_t* os) const
         check_stream(os, "total timing report");
 
     for(const auto& itr : *this)
-        itr.timer().stop();
+        const_cast<toast_timer_t&>(itr.timer()).stop();
 
-    *os << "> rank " << mpi_rank() << std::endl;
+    if(mpi_is_initialized())
+        *os << "> rank " << mpi_rank() << std::endl;
 
     for(const auto& itr : *this)
-        itr.timer().report(*os);
+        itr.timer().report(*os, true, no_min);
 
     os->flush();
 }

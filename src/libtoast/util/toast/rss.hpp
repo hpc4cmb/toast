@@ -4,6 +4,10 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
+/** \file rss.hpp
+ * Resident set size handler
+ *
+ */
 
 #ifndef rss_hpp_
 #define rss_hpp_
@@ -58,7 +62,7 @@ namespace rss
     const double  KiB      = 1024.0 * Bi;
     const double  MiB      = 1024.0 * KiB;
     const double  GiB      = 1024.0 * MiB;
-    const double  PiB      = 1024.0 * PiB;
+    const double  PiB      = 1024.0 * GiB;
     }
 
     /**
@@ -106,8 +110,7 @@ namespace rss
             return (int64_t) 0L;
         }
         fclose(fp);
-        return (int64_t) (rss * (int64_t) sysconf( _SC_PAGESIZE) *
-                          units::KiB *
+        return (int64_t) (rss * (int64_t) sysconf( _SC_PAGESIZE) / units::KiB *
                           units::kilobyte);
 
 #endif
@@ -176,6 +179,22 @@ namespace rss
         { return !(lhs < rhs); }
         bool operator()(const this_type& rhs) const
         { return *this < rhs; }
+
+        static usage max(const usage& lhs, const usage& rhs)
+        {
+            usage ret;
+            ret.m_curr_rss = std::max(lhs.m_curr_rss, rhs.m_curr_rss);
+            ret.m_peak_rss = std::max(lhs.m_peak_rss, rhs.m_peak_rss);
+            return ret;
+        }
+
+        static usage min(const usage& lhs, const usage& rhs)
+        {
+            usage ret;
+            ret.m_curr_rss = std::min(lhs.m_curr_rss, rhs.m_curr_rss);
+            ret.m_peak_rss = std::min(lhs.m_peak_rss, rhs.m_peak_rss);
+            return ret;
+        }
 
         friend this_type operator-(const this_type& lhs, const this_type& rhs)
         {

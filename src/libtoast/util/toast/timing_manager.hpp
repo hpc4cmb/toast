@@ -4,6 +4,10 @@ All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
+/** \file timing_manager.hpp
+ * Static singleton handler of auto-timers
+ *
+ */
 
 #ifndef timing_manager_hpp_
 #define timing_manager_hpp_
@@ -13,6 +17,9 @@ a BSD-style license that can be found in the LICENSE file.
 #include <unordered_map>
 #include <deque>
 #include <string>
+#include <thread>
+#include <mutex>
+
 #include "timer.hpp"
 
 #include <mpi.h>
@@ -82,17 +89,17 @@ inline int32_t get_max_threads()
 struct timer_tuple : public std::tuple<uint64_t, uint64_t, std::string,
                                        toast::util::timer&>
 {
-    typedef std::string                                     string_t;
-    typedef toast::util::timer                              toast_timer_t;
-    typedef uint64_t                                        first_type;
-    typedef uint64_t                                        second_type;
-    typedef string_t                                        third_type;
-    typedef toast_timer_t&                                  fourth_type;
+    typedef std::string                                 string_t;
+    typedef toast::util::timer                       toast_timer_t;
+    typedef uint64_t                                    first_type;
+    typedef uint64_t                                    second_type;
+    typedef string_t                                    third_type;
+    typedef toast_timer_t                                 fourth_type;
     typedef std::tuple<uint64_t, uint64_t, string_t,
-                       toast_timer_t&>                      base_type;
+                       toast_timer_t&>                    base_type;
 
     timer_tuple(const base_type& _data) : base_type(_data) { }
-    timer_tuple(first_type _b, second_type _s, third_type _t, fourth_type _f)
+    timer_tuple(first_type _b, second_type _s, third_type _t, fourth_type& _f)
     : base_type(_b, _s, _t, _f) { }
 
     timer_tuple& operator=(const base_type& rhs)
@@ -112,8 +119,8 @@ struct timer_tuple : public std::tuple<uint64_t, uint64_t, std::string,
     third_type tag() { return std::get<2>(*this); }
     const third_type tag() const { return std::get<2>(*this); }
 
-    fourth_type timer() { return std::get<3>(*this); }
-    const fourth_type timer() const { return std::get<3>(*this); }
+    fourth_type& timer() { return std::get<3>(*this); }
+    const fourth_type& timer() const { return std::get<3>(*this); }
 
     // serialization function
     template <typename Archive> void
@@ -124,6 +131,7 @@ struct timer_tuple : public std::tuple<uint64_t, uint64_t, std::string,
            cereal::make_nvp("timer.tag", std::get<2>(*this)),
            cereal::make_nvp("timer.ref", std::get<3>(*this)));
     }
+
 };
 
 //----------------------------------------------------------------------------//
@@ -146,6 +154,9 @@ public:
     typedef toast_timer_t::ofstream_t       ofstream_t;
     typedef toast::timer_field              timer_field;
     typedef std::tuple<MPI_Comm, int32_t>   comm_group_t;
+    typedef std::mutex                      mutex_t;
+    typedef uomap<uint64_t, mutex_t>        mutex_map_t;
+    typedef std::lock_guard<mutex_t>        auto_lock_t;
 
 public:
 	// Constructor and Destructors
@@ -201,20 +212,29 @@ public:
     const_iterator  end() const     { return m_timer_list.cend(); }
     const_iterator  cend() const    { return m_timer_list.cend(); }
 
-    void report() const;
-    void report(std::ostream& os) const { report(&os); }
+    void report(bool no_min = false) const;
+    void report(std::ostream& os, bool no_min = false) const { report(&os, no_min); }
     void set_output_stream(ostream_t&);
     void set_output_stream(const string_t&);
+    void print() { this->report(); }
+    void set_max_depth(int32_t d) { fgMaxDepth = d; }
+    int32_t get_max_depth() { return fgMaxDepth; }
+    void write_serialization(string_t _fname) const { write_json(_fname); }
 
 protected:
+    // protected functions
     inline uint64_t string_hash(const string_t&) const;
     string_t get_prefix() const;
+
+protected:
+    // protected static functions and vars
     static comm_group_t get_communicator_group();
+    static mutex_t  f_mutex;
 
 private:
     // Private functions
     ofstream_t* get_ofstream(ostream_t* m_os) const;
-    void report(ostream_t*) const;
+    void report(ostream_t*, bool no_min = false) const;
 
 private:
 	// Private variables
