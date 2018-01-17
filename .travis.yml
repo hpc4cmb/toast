@@ -193,10 +193,9 @@ install:
 # Configure, build, and run tests
 
 script:
-    - python -c "import toast; toast.test()"
+    - python -c "import toast.tests; toast.tests.run()"
 
 # Slack integration
 
 notifications:
     slack: c3cmb:7RR5xHHVvMAuw6g20ZuPhRD3
-

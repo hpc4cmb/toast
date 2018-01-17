@@ -146,7 +146,8 @@ import os
 import toast
 
 def run_tests():
-    return toast.test()
+    import toast.tests
+    return toast.tests.run()
 
 toast_path = os.path.abspath(toast.__file__)
 print('toast path: {}'.format(toast_path))

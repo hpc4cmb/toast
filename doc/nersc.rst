@@ -90,7 +90,7 @@ run our unittests, we first get an interactive compute node::
 
 and then run the tests::
 
-    %> srun python -c "import toast; toast.test()"
+    %> srun python -c "import toast.tests; toast.tests.run()"
 
 You should read through the many good NERSC webpages that describe how to use the
 different machines.  There are `pages for edison <http://www.nersc.gov/users/computational-systems/edison/running-jobs/>`_
@@ -110,4 +110,3 @@ toast python module will load MPI)::
     %> salloc
     %> srun python setup.py clean
     %> srun python setup.py install --prefix=${SCRATCH}/software/toast
-
