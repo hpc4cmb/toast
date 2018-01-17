@@ -1,4 +1,4 @@
-git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1 \
+git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1 \
     && cd libsharp \
     && patch -p1 < ../rules/patch_libsharp \
     && autoreconf \

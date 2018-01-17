@@ -162,7 +162,7 @@ before_install:
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip cython
     - pip install mpi4py
     # Install libsharp C
-    - git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1
+    - git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1
     - cd libsharp
     - autoreconf
     - ./configure --enable-mpi --enable-pic
