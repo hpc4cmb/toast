@@ -172,7 +172,7 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print("Create focalplane:  {:.2f} seconds".format(stop-start), 
+        print("Create focalplane:  {:.2f} seconds".format(stop-start),
             flush=True)
     start = stop
 
@@ -281,10 +281,14 @@ def main():
         curobs = data.obs[ob]
         tod = curobs["tod"]
 
+        # Get the global sample offset from the original distribution of
+        # intervals
+        obsoffset = obsrange[group_firstobs + ob].first
+
         # Constantly slewing precession axis
         degday = 360.0 / 365.25
         precquat = tt.slew_precession_axis(nsim=tod.local_samples[1],
-            firstsamp=tod.local_samples[0], samplerate=args.samplerate,
+            firstsamp=obsoffset, samplerate=args.samplerate,
             degday=degday)
 
         tod.set_prec_axis(qprec=precquat)
