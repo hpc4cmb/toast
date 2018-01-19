@@ -1118,10 +1118,9 @@ def sim_noise_sim_noise_timestream(
     noise = np.zeros(samples, dtype=np.float64)
 
     lib.ctoast_sim_noise_sim_noise_timestream(
-        realization, telescope, component,
-        obsindx, detindx, rate,
-        firstsamp, samples, oversample,
-        freq, psd, psd.size, noise)
+        realization, telescope, component, obsindx, detindx, rate, firstsamp,
+        samples, oversample, freq.astype(np.float64), psd.astype(np.float64),
+        psd.size, noise)
 
     return noise
 

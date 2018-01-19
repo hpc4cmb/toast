@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -14,6 +14,15 @@ from .. import timing as timing
 from .interval import Interval
 
 class TOD(object):
+
+    TIMESTAMP_NAME = 'timestamps'
+    COMMON_FLAG_NAME = 'common_flags'
+    VELOCITY_NAME = 'velocity'
+    POSITION_NAME = 'position'
+    SIGNAL_NAME = 'signal'
+    FLAG_NAME = 'flags'
+    POINTING_NAME = 'quat'
+
     """
     Base class for an object that provides detector pointing and
     timestreams for a single observation.
@@ -191,7 +200,7 @@ class TOD(object):
         """
         return self._dist_sizes[self._rank_samp]
 
-    def local_times(self, name=None):
+    def local_times(self, name=None, **kwargs):
         """ Timestamps covering locally stored data.
 
         Args:
@@ -199,20 +208,20 @@ class TOD(object):
         Returns:
             A cache reference to a timestamp vector.  If 'name' is None
             a default name 'timestamps' is used and the vector may be
-            constructed and cached using the 'read_timess' method.
+            constructed and cached using the 'read_times' method.
             If 'name' is given, then the times must already be cached.
 
         """
         if name is None:
-            cachename = 'timestamps'
+            cachename = self.TIMESTAMP_NAME
             if not self.cache.exists(cachename):
-                times = self.read_times()
+                times = self.read_times(**kwargs)
                 self.cache.put(cachename, times)
         else:
             cachename = name
         return self.cache.reference(cachename)
 
-    def local_signal(self, det, name=None):
+    def local_signal(self, det, name=None, **kwargs):
         """ Locally stored signal.
 
         Args:
@@ -226,15 +235,15 @@ class TOD(object):
 
         """
         if name is None:
-            cachename = 'signal_{}'.format(det)
+            cachename = '{}_{}'.format(self.SIGNAL_NAME, det)
             if not self.cache.exists(cachename):
-                signal = self.read(detector=det)
+                signal = self.read(detector=det, **kwargs)
                 self.cache.put(cachename, signal)
         else:
             cachename = '{}_{}'.format(name, det)
         return self.cache.reference(cachename)
 
-    def local_pointing(self, det, name=None):
+    def local_pointing(self, det, name=None, **kwargs):
         """ Locally stored pointing.
 
         Args:
@@ -248,36 +257,36 @@ class TOD(object):
 
         """
         if name is None:
-            cachename = 'quat_{}'.format(det)
+            cachename = '{}_{}'.format(self.POINTING_NAME, det)
             if not self.cache.exists(cachename):
-                quats = self.read_pntg(detector=det)
+                quats = self.read_pntg(detector=det, **kwargs)
                 self.cache.put(cachename, quats)
         else:
             cachename = '{}_{}'.format(name, det)
         return self.cache.reference(cachename)
 
-    def local_position(self, name=None):
+    def local_position(self, name=None, **kwargs):
         """ Locally stored position.
 
         Args:
             name (str):  Optional cache key to use.
         Returns:
             A cache reference to a position array.  If 'name' is None
-            a default name 'positino' is used and the array may be
+            a default name 'position' is used and the array may be
             constructed and cached using the 'read_position' method.
             If 'name' is given, then the position must already be cached.
 
         """
         if name is None:
-            cachename = 'position'
+            cachename = self.POSITION_NAME
             if not self.cache.exists(cachename):
-                pos = self.read_position()
+                pos = self.read_position(**kwargs)
                 self.cache.put(cachename, pos)
         else:
             cachename = name
         return self.cache.reference(cachename)
 
-    def local_velocity(self, name=None):
+    def local_velocity(self, name=None, **kwargs):
         """ Locally stored velocity.
 
         Args:
@@ -290,15 +299,15 @@ class TOD(object):
 
         """
         if name is None:
-            cachename = 'velocity'
+            cachename = self.VELOCITY_NAME
             if not self.cache.exists(cachename):
-                vel = self.read_velocity()
+                vel = self.read_velocity(**kwargs)
                 self.cache.put(cachename, vel)
         else:
             cachename = name
         return self.cache.reference(cachename)
 
-    def local_flags(self, det, name=None):
+    def local_flags(self, det, name=None, **kwargs):
         """ Locally stored flags.
 
         Args:
@@ -312,15 +321,15 @@ class TOD(object):
 
         """
         if name is None:
-            cachename = 'flags_{}'.format(det)
+            cachename = '{}_{}'.format(self.FLAG_NAME, det)
             if not self.cache.exists(cachename):
-                flags = self.read_flags(detector=det)
+                flags = self.read_flags(detector=det, **kwargs)
                 self.cache.put(cachename, flags)
         else:
             cachename = '{}_{}'.format(name, det)
         return self.cache.reference(cachename)
 
-    def local_common_flags(self, name=None):
+    def local_common_flags(self, name=None, **kwargs):
         """ Locally stored common flags.
 
         Args:
@@ -333,9 +342,9 @@ class TOD(object):
 
         """
         if name is None:
-            cachename = 'common_flags'
+            cachename = self.COMMON_FLAG_NAME
             if not self.cache.exists(cachename):
-                common_flags = self.read_common_flags()
+                common_flags = self.read_common_flags(**kwargs)
                 self.cache.put(cachename, common_flags)
         else:
             cachename = name
