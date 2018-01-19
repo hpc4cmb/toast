@@ -359,6 +359,10 @@ class TOD(object):
         offset, nsamp = self.local_samples
         local_intervals = []
         times = self.local_times()
+        if len(times) != nsamp:
+            raise RuntimeError(
+                'Length of cached timestamps does not match local samples. '
+                'Cannot produce local intervals.')
         for ival in intervals:
             if (ival.last >= offset and
                 ival.first < offset + nsamp):
