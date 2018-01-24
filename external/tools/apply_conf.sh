@@ -14,7 +14,7 @@ module_dir="${moddir}/toast-deps"
 
 if [ "x${docker}" = "xyes" ]; then
     compiled_prefix="/usr"
-    conda_prefix="/usr/local"
+    conda_prefix="/usr"
 fi
 
 # Create list of substitutions
@@ -27,7 +27,7 @@ while IFS='' read -r line || [[ -n "${line}" ]]; do
     if [ "${comment}" != "#" ]; then
 
         check=$(echo "${line}" | sed -e "s#.*=.*#=#")
-    
+
         if [ "x${check}" = "x=" ]; then
             # get the variable and its value
             var=$(echo ${line} | sed -e "s#\([^=]*\)=.*#\1#" | awk '{print $1}')
@@ -52,6 +52,3 @@ rm -f "${outfile}"
 while IFS='' read -r line || [[ -n "${line}" ]]; do
     echo "${line}" | eval sed ${confsub} >> "${outfile}"
 done < "${infile}"
-
-
-

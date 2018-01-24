@@ -7,7 +7,7 @@ export LOG_OUT=/dev/stdout
 export PATH="${PROJECT_BIN_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@:@PATH@"
 export PYTHONPATH="${PROJECT_PYC_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_PYTHONDIR@:@PYTHONPATH@"
 
-if [ "$(uname -s)" = "Darwin" ]; 
+if [ "$(uname -s)" = "Darwin" ];
 then
     export DYLD_LIBRARY_PATH="${PROJECT_LIB_PATH}:@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@:@DYLD_LIBRARY_PATH@"
 else
@@ -15,5 +15,4 @@ else
 fi
 
 # run test
-@PYTHON_EXECUTABLE@ -c "import toast ; toast.test('@_test_ext@')"
-
+@PYTHON_EXECUTABLE@ -c "import toast.tests ; toast.tests.run('@_test_ext@')"

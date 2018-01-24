@@ -141,8 +141,6 @@ void ctoast_timer_report(ctoast_timer* _ct)
 
     toast_timer_t* _t = reinterpret_cast<toast_timer_t*>(_ct);
     _t->report();
-    if(_t->laps() > 1)
-        _t->report_average();
 }
 
 //----------------------------------------------------------------------------//
@@ -1098,10 +1096,28 @@ double ctoast_atm_get_absorption_coefficient(double altitude,
                                              double freq) {
     double absorption = 0;
 #ifdef HAVE_AATM
+    TOAST_AUTO_TIMER();
     absorption = toast::tatm::get_absorption_coefficient(altitude, temperature,
                                                          pressure, pwv, freq);
 #endif
     return absorption;
+}
+
+int ctoast_atm_get_absorption_coefficient_vec(double altitude,
+                                              double temperature,
+                                              double pressure, double pwv,
+                                              double freqmin, double freqmax,
+                                              size_t nfreq,
+                                              double *absorption) {
+    int err = 1;
+#ifdef HAVE_AATM
+    TOAST_AUTO_TIMER();
+    err = toast::tatm::get_absorption_coefficient_vec(altitude, temperature,
+                                                      pressure, pwv,
+                                                      freqmin, freqmax, nfreq,
+                                                      absorption);
+#endif
+    return err;
 }
 
 double ctoast_atm_get_atmospheric_loading(double altitude, double temperature,
@@ -1109,11 +1125,27 @@ double ctoast_atm_get_atmospheric_loading(double altitude, double temperature,
                                           double freq) {
     double loading = 0;
 #ifdef HAVE_AATM
+    TOAST_AUTO_TIMER();
     loading = toast::tatm::get_atmospheric_loading(altitude, temperature,
                                                    pressure, pwv, freq);
                                                    
 #endif
     return loading;
+}
+
+int ctoast_atm_get_atmospheric_loading_vec(double altitude, double temperature,
+                                           double pressure, double pwv,
+                                           double freqmin, double freqmax,
+                                           size_t nfreq, double *loading) {
+    int err = 1;
+#ifdef HAVE_AATM
+    TOAST_AUTO_TIMER();
+    err = toast::tatm::get_atmospheric_loading_vec(altitude, temperature,
+                                                   pressure, pwv,
+                                                   freqmin, freqmax, nfreq,
+                                                   loading);
+#endif
+    return err;
 }
 
 //--------------------------------------

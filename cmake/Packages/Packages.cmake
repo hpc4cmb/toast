@@ -353,7 +353,7 @@ if(USE_SSE)
 
     include(FindSSE)
 
-    GET_SSE_COMPILE_FLAGS(_CXX_FLAGS_EXTRA SSE_DEFINITIONS)
+    GET_SSE_COMPILE_FLAGS(SSE_FLAGS SSE_DEFINITIONS)
     foreach(_DEF ${SSE_DEFINITIONS})
         add_definitions(-D${_DEF})
     endforeach()
@@ -388,3 +388,4 @@ endif(USE_ARCH OR USE_SSE)
 
 add_c_flags(CMAKE_C_FLAGS_EXTRA "${CMAKE_C_FLAGS_EXTRA}")
 add_cxx_flags(CMAKE_CXX_FLAGS_EXTRA "${CMAKE_CXX_FLAGS_EXTRA}")
+

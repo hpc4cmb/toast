@@ -97,10 +97,10 @@ class timing_function():
         _user = obj['user_elapsed'] / denom
         _sys = obj['system_elapsed'] / denom
         _cpu = obj['cpu_elapsed'] / denom
-        _tpeak = obj['rss_max']['peak'] / (1024.0 * 1.0e6)
-        _tcurr = obj['rss_max']['current'] / (1024.0 * 1.0e6)
-        _speak = obj['rss_self']['peak'] / (1024.0 * 1.0e6)
-        _scurr = obj['rss_self']['current'] / (1024.0 * 1.0e6)
+        _tpeak = obj['rss_max']['peak'] / (1.0e6)
+        _tcurr = obj['rss_max']['current'] / (1.0e6)
+        _speak = obj['rss_self']['peak'] / (1.0e6)
+        _scurr = obj['rss_self']['current'] / (1.0e6)
         _perc = (_cpu / _wall) * 100.0 if _wall > 0.0 else 100.0
         if _wall > min_time or abs(_speak) > min_memory or abs(_scurr) > min_memory:
             self.data.append([_wall, _sys, _user, _cpu, _perc])

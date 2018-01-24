@@ -22,7 +22,7 @@ public:
 public:
     // Constructor and Destructors
     auto_timer(const std::string&, const int32_t& lineno,
-               bool temp_disable = false);
+               const std::string& = "cxx", bool temp_disable = false);
     virtual ~auto_timer();
 
 private:
@@ -33,14 +33,16 @@ private:
     { return details::base_timer::get_instance_hash(); }
 
 private:
-    bool m_temp_disable;
-    uint64_t m_hash;
-    toast_timer_t* m_timer;
+    bool            m_temp_disable;
+    uint64_t        m_hash;
+    toast_timer_t*    m_timer;
+    toast_timer_t     m_temp_timer;
 };
 
 //----------------------------------------------------------------------------//
 inline auto_timer::auto_timer(const std::string& timer_tag,
                               const int32_t& lineno,
+                              const std::string& code_tag,
                               bool temp_disable)
 : m_temp_disable(temp_disable),
   m_hash(lineno),
@@ -51,12 +53,14 @@ inline auto_timer::auto_timer(const std::string& timer_tag,
     auto_timer::nhash() += m_hash;
 
     if(timing_manager::is_enabled() &&
-       (uint64_t) timing_manager::max_depth() > auto_timer::ncount() + 1)
-        m_timer = &timing_manager::instance()->timer(timer_tag, "cxx",
+       (uint64_t) timing_manager::max_depth() > auto_timer::ncount())
+    {
+        m_timer = &timing_manager::instance()->timer(timer_tag, code_tag,
                                                      auto_timer::ncount(),
                                                      auto_timer::nhash());
-    if(m_timer)
-        m_timer->start();
+
+        m_temp_timer.start();
+    }
 
     if(m_temp_disable && timing_manager::instance()->is_enabled())
         timing_manager::instance()->enable(false);
@@ -67,13 +71,16 @@ inline auto_timer::~auto_timer()
     if(m_temp_disable && ! timing_manager::instance()->is_enabled())
         timing_manager::instance()->enable(true);
 
-    if(m_timer)
-        m_timer->stop();
-
     // for consistency, always decrement hash keys
     if(auto_timer::ncount() > 0)
         --auto_timer::ncount();
     auto_timer::nhash() -= m_hash;
+
+    if(m_timer)
+    {
+        m_temp_timer.stop();
+        *m_timer += m_temp_timer;
+    }
 }
 //----------------------------------------------------------------------------//
 

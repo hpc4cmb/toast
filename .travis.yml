@@ -162,7 +162,7 @@ before_install:
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip cython
     - pip install mpi4py
     # Install libsharp C
-    - git clone https://github.com/zonca/libsharp --branch almxfl --single-branch --depth 1
+    - git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1
     - cd libsharp
     - autoreconf
     - ./configure --enable-mpi --enable-pic
@@ -193,10 +193,9 @@ install:
 # Configure, build, and run tests
 
 script:
-    - python -c "import toast; toast.test()"
+    - python -c "import toast.tests; toast.tests.run()"
 
 # Slack integration
 
 notifications:
     slack: c3cmb:7RR5xHHVvMAuw6g20ZuPhRD3
-

@@ -31,8 +31,7 @@ export OMP_PROC_BIND=spread
 
 run="srun -n ${NPROC} -N ${NODES} -c ${NODE_DEPTH} --cpu_bind=cores"
 
-com="python -c \"import toast; toast.test()\""
+com="python -c \"import toast.tests; toast.tests.run()\""
 
 echo "${run} ${com}"
 eval "${run} ${com}"
-

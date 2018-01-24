@@ -26,8 +26,16 @@ typedef mpi_shmem::mpi_shmem<long> mpi_shmem_long;
 #ifdef HAVE_AATM
 double get_absorption_coefficient(double altitude, double temperature,
                                   double pressure, double pwv, double freq);
+int get_absorption_coefficient_vec(double altitude, double temperature,
+                                   double pressure, double pwv,
+                                   double freqmin, double freqmax, size_t nfreq,
+                                   double *absorption);
 double get_atmospheric_loading(double altitude, double temperature,
                                double pressure, double pwv, double freq);
+int get_atmospheric_loading_vec(double altitude, double temperature,
+                                double pressure, double pwv,
+                                double freqmin, double freqmax, size_t nfreq,
+                                double *loading);
 #endif
 
 #ifdef HAVE_ELEMENTAL

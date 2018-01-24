@@ -165,18 +165,32 @@ macro(define_module)
     foreach(_ignore ${DEFMOD_EXCLUDE})
         # loop over the header extensions
         if(${MODULE_NAME}_HEADERS)
+            # loop over the header extensions
             foreach(_ext ${DEFMOD_HEADER_EXT})
                 list(REMOVE_ITEM ${MODULE_NAME}_HEADERS
                     ${${MODULE_NAME}_INCDIR}/${_ignore}${_ext})
             endforeach()
+            # remove specified with extension
+            list(REMOVE_ITEM ${MODULE_NAME}_HEADERS
+                ${${MODULE_NAME}_SRCDIR}/${_ignore})
+            # remove full path specified
+            list(REMOVE_ITEM ${MODULE_NAME}_HEADERS ${_ignore})
         endif()
-        # loop over the source extensions
+
+        # loop over sources
         if(${MODULE_NAME}_SOURCES)
+            # loop over the source extensions
             foreach(_ext ${DEFMOD_SOURCE_EXT})
                 list(REMOVE_ITEM ${MODULE_NAME}_SOURCES
                     ${${MODULE_NAME}_SRCDIR}/${_ignore}${_ext})
             endforeach()
+            # remove specified with extension
+            list(REMOVE_ITEM ${MODULE_NAME}_SOURCES
+                ${${MODULE_NAME}_SRCDIR}/${_ignore})
+            # remove full path specified
+            list(REMOVE_ITEM ${MODULE_NAME}_SOURCES ${_ignore})
         endif()
+
         list(FIND DEFMOD_NOTIFY_EXCLUDE ${_ignore} _notify)
         if(NOT _notify LESS 0)
            # Tell the user this file is not being compiled
@@ -214,3 +228,4 @@ macro(define_module)
     endif()
 
 endmacro()
+

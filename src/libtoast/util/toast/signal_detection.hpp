@@ -33,6 +33,8 @@
 #include <execinfo.h> // for StackBacktrace()
 #include <cxxabi.h>
 #include <deque>
+#include <cmath>
+#include <vector>
 
 // Define C++11
 #ifndef CXX11
@@ -48,13 +50,15 @@
 #   endif
 #endif
 
-#if (defined(__GNUC__) && !defined(__clang__)) // compatible compiler
+// compatible compiler
+#if (defined(__GNUC__) || defined(__clang__) || defined(_INTEL_COMPILER))
 #   if !defined(SIGNAL_COMPAT_COMPILER)
 #       define SIGNAL_COMPAT_COMPILER
 #   endif
 #endif
 
-#if (defined(__linux__) || defined(__MACH__)) // compatible operating system
+// compatible operating system
+#if (defined(__linux__) || defined(__MACH__))
 #   if !defined(SIGNAL_COMPAT_OS)
 #       define SIGNAL_COMPAT_OS
 #   endif

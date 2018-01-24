@@ -416,7 +416,7 @@ def rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2):
     ret = np.zeros(_nr * _nc, dtype=np.uint64)
     lib.ctoast_rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
-    
+
 lib.ctoast_rng_dist_uniform_01_mt.restype = None
 lib.ctoast_rng_dist_uniform_01_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
     npu64, npu64, npu64, npu64, npf64 ]
@@ -1028,6 +1028,17 @@ def atm_get_absorption_coefficient(altitude, temperature, pressure, pwv, freq):
     return lib.ctoast_atm_get_absorption_coefficient(altitude, temperature,
                                                      pressure, pwv, freq)
 
+lib.ctoast_atm_get_absorption_coefficient_vec.restype = ct.c_int
+lib.ctoast_atm_get_absorption_coefficient_vec.argtypes = [
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
+    ct.c_double, ct.c_size_t, npf64]
+
+def atm_get_absorption_coefficient_vec(altitude, temperature, pressure, pwv,
+                                       freqmin, freqmax, nfreq, absorption):
+    return lib.ctoast_atm_get_absorption_coefficient_vec(
+        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq,
+        absorption)
+
 lib.ctoast_atm_get_atmospheric_loading.restype = ct.c_double
 lib.ctoast_atm_get_atmospheric_loading.argtypes = [
     ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double]
@@ -1036,6 +1047,15 @@ def atm_get_atmospheric_loading(altitude, temperature, pressure, pwv, freq):
     return lib.ctoast_atm_get_atmospheric_loading(altitude, temperature,
                                                   pressure, pwv, freq)
 
+lib.ctoast_atm_get_atmospheric_loading_vec.restype = ct.c_int
+lib.ctoast_atm_get_atmospheric_loading_vec.argtypes = [
+    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
+    ct.c_double, ct.c_size_t, npf64]
+
+def atm_get_atmospheric_loading_vec(altitude, temperature, pressure, pwv,
+                                    freqmin, freqmax, nfreq, loading):
+    return lib.ctoast_atm_get_atmospheric_loading_vec(
+        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, loading)
 
 #--------------------------------------
 #  TOD sublibrary
@@ -1118,10 +1138,9 @@ def sim_noise_sim_noise_timestream(
     noise = np.zeros(samples, dtype=np.float64)
 
     lib.ctoast_sim_noise_sim_noise_timestream(
-        realization, telescope, component,
-        obsindx, detindx, rate,
-        firstsamp, samples, oversample,
-        freq, psd, psd.size, noise)
+        realization, telescope, component, obsindx, detindx, rate, firstsamp,
+        samples, oversample, freq.astype(np.float64), psd.astype(np.float64),
+        psd.size, noise)
 
     return noise
 

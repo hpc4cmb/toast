@@ -787,7 +787,7 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
             zz = r * sin_el;
             double rproj = r * cos_el;
             double xx = rproj * cos_az;
-            double yy = -rproj * sin_az;
+            double yy = rproj * sin_az;
 
             // Rotate to scan frame
 

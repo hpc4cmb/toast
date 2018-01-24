@@ -17,8 +17,8 @@ RUN apt-get update \
 # Set up locales, to workaround a pip bug
 
 RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8 
-ENV LANGUAGE en_US:en 
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # We install everything directly into /usr so that we do
@@ -47,13 +47,20 @@ ENV PYTHONUSERBASE "/tmp"
 
 @pip_pkgs@
 
+# The conda TCL packages overwrite the system-installed regex.h.  So
+# now we force reinstall of the package that provides that
+
+RUN apt-get update \
+    && apt-get install -y --reinstall libc6-dev \
+    && rm -fr /var/lib/apt/lists/*
+
 # Copy all patch files to current working directory
 
 RUN mkdir ./rules
 ADD rules/patch_* ./rules/
 
-RUN mkdir -p /usr/lib/python3.6/site-packages
-ENV PYTHONPATH /usr/lib/python3.6/site-packages
+#RUN mkdir -p /usr/lib/python3.6/site-packages
+#ENV PYTHONPATH /usr/lib/python3.6/site-packages
 
 # Install MPICH 3.2 which is compatible with the external
 # Cray MPICH which is prepended to LD_LIBRARY_PATH as part
@@ -131,7 +138,13 @@ RUN rm -rf ./rules
 
 # Precompile all python modules
 
-RUN python -m compileall -f "/usr/lib/python@PYVERSION@/site-packages"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/mpi4py"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/healpy"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/h5py"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/libsharp"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/tidas"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/pysm"
+RUN python -m compileall -q "/usr/lib/python@PYVERSION@/site-packages/toast"
 
 # Create a fake home directory so that packages can create
 # config files if needed
@@ -149,4 +162,3 @@ RUN python -c "import matplotlib.font_manager as fm; f = fm.FontManager"
 
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
-
