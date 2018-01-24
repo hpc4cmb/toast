@@ -65,3 +65,4 @@ foreach(LANG C CXX)
     unset(CMAKE_${LANG}_FLAGS CACHE)
     set(CMAKE_${LANG}_FLAGS "${CMAKE_${LANG}_FLAGS_INIT}")
 endforeach(LANG C CXX)
+

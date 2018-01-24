@@ -129,7 +129,7 @@ macro(add_ctest_options VARIABLE )
     set(_set_vars ${ARGN})
     foreach(_var ${_vars})
         STRING(REGEX MATCH "^USE_" _use_found "${_var}")
-        STRING(REGEX MATCH ".*(_ROOT|_LIBRARY|_INCLUDE_DIR)$"
+        STRING(REGEX MATCH ".*(_ROOT|_LIBRARY|_INCLUDE_DIR|_INCLUDE_PATH)$"
             _root_found "${_var}")
         STRING(REGEX MATCH "^(PREVIOUS_|CMAKE_|OSX_|DEFAULT_|EXTERNAL_|_)"
             _skip_prefix "${_var}")

@@ -1,10 +1,10 @@
 
 
 # - Include guard
-if(__genericoptions_isloaded)
-  return()
-endif()
-set(__genericoptions_isloaded YES)
+#if(__genericcmakeoptions_isloaded)
+#  return()
+#endif()
+#set(__genericcmakeoptions_isloaded YES)
 
 include(MacroUtilities)
 

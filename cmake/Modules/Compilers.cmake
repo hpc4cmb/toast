@@ -10,8 +10,16 @@
 #       CMAKE_C_COMPILER_IS_<TYPE>
 #       CMAKE_CXX_COMPILER_IS_<TYPE>
 #
-#
-#
+#   where TYPE is:
+#       - GNU
+#       - CLANG
+#       - INTEL
+#       - INTEL_ICC
+#       - INTEL_ICPC
+#       - PGI
+#       - XLC
+#       - HP_ACC
+#       - MIPS
 #
 
 # include guard
@@ -108,6 +116,9 @@ function(test_compile _LANG _VAR _FLAG)
         ${CMAKE_BINARY_DIR}/compile-testing
         ${CMAKE_BINARY_DIR}/compile-testing
         CompileTest
+        CMAKE_FLAGS
+            -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+            -DCMAKE_CXX_COMPILER:STRING=${CMAKE_CXX_COMPILER}
         OUTPUT_VARIABLE RET_OUT)
     # add flag if successful
     set(${_VAR} ${RET} PARENT_SCOPE)
@@ -164,6 +175,7 @@ macro(add_c_flags _VAR _FLAGS)
     # cache the flags to test
     set(CACHED_C_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
         "Possible C flags for ${_VAR}")
+    mark_as_advanced(CACHED_C_${_VAR}_TEST_FLAGS)
     # if flags were changed or not previously processed
     if(NOT "${CACHED_C_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_C_${_VAR}_GOOD_FLAGS)
@@ -189,6 +201,7 @@ macro(add_cxx_flags _VAR _FLAGS)
     # cache the flags to test
     set(CACHED_CXX_${_VAR}_TEST_FLAGS "${_FLAGS}" CACHE STRING
         "Possible C++ flags for ${_VAR}")
+    mark_as_advanced(CACHED_CXX_${_VAR}_TEST_FLAGS)
     # if flags were changed or not previously processed
     if(NOT "${CACHED_CXX_${_VAR}_TEST_FLAGS}" STREQUAL "${_FLAGS}" OR
             NOT DEFINED CACHED_CXX_${_VAR}_GOOD_FLAGS)
