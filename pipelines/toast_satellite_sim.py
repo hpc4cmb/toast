@@ -112,6 +112,15 @@ def main():
                         required=False, default=None,
                         help='Output TIDAS export path')
 
+    parser.add_argument('--input_map', required=False,
+                        help='Input map for signal')
+    parser.add_argument('--input_pysm_model', required=False,
+                        help='Comma separated models for on-the-fly PySM '
+                        'simulation, e.g. s3,d6,f1,a2"')
+    parser.add_argument('--apply_beam', required=False, action='store_true',
+                        help='Apply beam convolution to input map with gaussian '
+                        'beam parameters defined in focalplane')
+
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     autotimer = timing.auto_timer("@{}".format(timing.FILE()))
