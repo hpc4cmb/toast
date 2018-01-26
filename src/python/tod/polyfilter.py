@@ -1,17 +1,15 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import re
 
+from toast.ctoast import filter_polyfilter
+from toast.op import Operator
+
 import numpy as np
+import toast.timing as timing
 
-from ..op import Operator
-from ..dist import Comm, Data
-from .tod import TOD
-
-from ..ctoast import filter_polyfilter
-from .. import timing as timing
 
 class OpPolyFilter(Operator):
     """
@@ -67,15 +65,6 @@ class OpPolyFilter(Operator):
             data (toast.Data): The distributed data.
         """
         autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
         for obs in data.obs:
             tod = obs['tod']
@@ -122,4 +111,3 @@ class OpPolyFilter(Operator):
             del common_ref
 
         return
-
