@@ -95,6 +95,10 @@ def main():
     parser.add_argument( "--madampar", required=False, default=None,
         help="Madam parameter file" )
 
+    parser.add_argument('--flush',
+                        required=False, default=False, action='store_true',
+                        help='Flush every print statement.')
+
     parser.add_argument( "--MC_start", required=False, type=int, default=0,
         help="First Monte Carlo noise realization" )
     parser.add_argument( "--MC_count", required=False, type=int, default=1,
