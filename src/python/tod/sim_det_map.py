@@ -1,18 +1,17 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
-import numpy as np
 import healpy as hp
+import numpy as np
 
 from .. import qarray as qa
 from .. import timing as timing
-from .tod import TOD
-from ..op import Operator
+from ..ctoast import sim_map_scan_map
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
 from ..mpi import MPI
-from ..ctoast import sim_map_scan_map
+from ..op import Operator
+from .tod import TOD
 
 
 class OpSimGradient(Operator):
@@ -93,7 +92,7 @@ class OpSimGradient(Operator):
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64, (nsamp, ))
+                    tod.cache.create(cachename, np.float64, (nsamp,))
                 ref = tod.cache.reference(cachename)
                 ref[:] += z
                 del ref
@@ -111,7 +110,7 @@ class OpSimGradient(Operator):
         """
         autotimer = timing.auto_timer(type(self).__name__)
         range = self._max - self._min
-        pix = np.arange(0, 12*self._nside*self._nside, dtype=np.int64)
+        pix = np.arange(0, 12 * self._nside * self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
         z += 1.0
         z *= 0.5
@@ -136,6 +135,7 @@ class OpSimScan(Operator):
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
     """
+
     def __init__(self, distmap=None, pixels='pixels', weights='weights',
                  out='scan', dets=None):
         # We call the parent class constructor, which currently does nothing
@@ -184,16 +184,16 @@ class OpSimScan(Operator):
 
                 sm, lpix = self._map.global_to_local(pixels)
 
-                #f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
+                # f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
                 #     if (lpix[x] >= 0) else 0
                 #     for x in range(tod.local_samples[1]))
-                #maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
+                # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
                 sim_map_scan_map(sm, weights, lpix, self._map.data, maptod)
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64, (nsamp, ))
+                    tod.cache.create(cachename, np.float64, (nsamp,))
                 ref = tod.cache.reference(cachename)
                 ref[:] += maptod
 
@@ -225,7 +225,7 @@ def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
                                dtype=np.float64) if comm.rank == 0 else None
     local_map_buffer = np.zeros((n_components, npix),
                                    dtype=np.float64)
-    local_map_buffer[:,pixel_indices] = local_map
+    local_map_buffer[:, pixel_indices] = local_map
     comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
     return full_maps_rank0
 
@@ -260,10 +260,12 @@ class OpSimPySM(Operator):
         units(str): Output units.
         debug(bool):  Verbose progress reports.
     """
+
     def __init__(self, comm=None,
                  out='signal', pysm_model='', focalplanes=None, nside=None,
                  subnpix=None, localsm=None, apply_beam=False, nest=True,
                  units='K_CMB', debug=False):
+        autotimer = timing.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
@@ -271,8 +273,8 @@ class OpSimPySM(Operator):
         self.comm = comm
         self._debug = debug
         self.dist_rings = DistRings(comm,
-                            nside = nside,
-                            nnz = 3)
+                                    nside=nside,
+                                    nnz=3)
 
         pysm_sky_components = [
             'synchrotron',
@@ -318,12 +320,12 @@ class OpSimPySM(Operator):
             bandcenter, bandwidth, fwhm_deg[det] = \
                     extract_detector_parameters(det, self.focalplanes)
             bandpasses[det] = \
-                (np.linspace(bandcenter-bandwidth/2,
-                             bandcenter+bandwidth/2,
+                (np.linspace(bandcenter - bandwidth / 2,
+                             bandcenter + bandwidth / 2,
                              N_POINTS_BANDPASS),
                  np.ones(N_POINTS_BANDPASS))
 
-        lmax = 3*self.nside -1
+        lmax = 3 * self.nside - 1
 
         if self.comm.rank == 0:
             print('Collecting, Broadcasting map', flush=True)
@@ -392,4 +394,4 @@ class OpSimPySM(Operator):
         stop = MPI.Wtime()
         if self.comm.rank == 0:
             print('PySM Operator completed:  {:.2f} seconds'
-                  ''.format(stop-start), flush=True)
+                  ''.format(stop - start), flush=True)
