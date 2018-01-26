@@ -26,6 +26,71 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
+def get_submaps(args, comm, data):
+    """ Get a list of locally hit pixels and submaps on every process.
+
+    """
+    if args.input_pysm_model or args.input_map:
+        autotimer = timing.auto_timer()
+        if comm.comm_world.rank == 0:
+            print('Scanning local pixels', flush=args.flush)
+        start = MPI.Wtime()
+
+        # Prepare for using distpixels objects
+        nside = args.nside
+        subnside = 16
+        if subnside > nside:
+            subnside = nside
+        subnpix = 12 * subnside * subnside
+
+        # get locally hit pixels
+        lc = tm.OpLocalPixels()
+        localpix = lc.exec(data)
+        if localpix is None:
+            raise RuntimeError(
+                'Process {} has no hit pixels. Perhaps there are fewer '
+                'detectors than processes in the group?'.format(
+                    comm.comm_world.rank))
+
+        # find the locally hit submaps.
+        localsm = np.unique(np.floor_divide(localpix, subnpix))
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('Local submaps identified in {:.3f} s'.format(elapsed),
+                  flush=args.flush)
+    else:
+        localpix, localsm = None, None
+
+    return localpix, localsm, subnpix
+
+
+def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm):
+    """ Use PySM to simulate smoothed sky signal.
+
+    """
+    # Convolve a signal TOD from PySM
+    start = MPI.Wtime()
+    signalname = 'signal'
+    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+                               out=signalname,
+                               pysm_model=args.input_pysm_model,
+                               focalplanes=focalplanes,
+                               nside=args.nside,
+                               subnpix=subnpix, localsm=localsm,
+                               apply_beam=args.apply_beam)
+    op_sim_pysm.exec(data)
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('PySM took {:.2f} seconds'.format(stop-start),
+              flush=args.flush)
+
+    mem_counter.exec(data)
+
+    return signalname
+
 def main():
 
     if MPI.COMM_WORLD.rank == 0:
@@ -246,6 +311,8 @@ def main():
     noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
         fknee=fknee, alpha=alpha, NET=NET)
 
+    mem_counter = tt.OpMemoryCounter()
+
     # The distributed timestream data
 
     data = toast.Data(comm)
@@ -325,6 +392,12 @@ def main():
     if comm.comm_world.rank == 0:
         print("Pointing generation took {:.3f} s".format(elapsed), flush=True)
     start = stop
+
+    localpix, localsm, subnpix = get_submaps(args, comm, data)
+
+    if args.input_pysm_model:
+        signalname = simulate_sky_signal(args, comm, data, mem_counter,
+                                         [fp], subnpix, localsm)
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
