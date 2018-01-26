@@ -542,17 +542,17 @@ def main():
                     elapsed), flush=True)
             start = stop
 
-            # clear all noise data from the cache, so that we can generate
+            # clear all signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("noise_.*")
+            tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", realization=mc)
+            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="noise", signalname=signalname)
+            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -560,7 +560,7 @@ def main():
                 if args.tidas is not None:
                     from toast.tod.tidas import OpTidasExport
                     tidas_path = os.path.abspath(args.tidas)
-                    export = OpTidasExport(tidas_path, name="noise")
+                    export = OpTidasExport(tidas_path, name="tot_signal")
                     export.exec(data)
 
             comm.comm_world.barrier()
@@ -572,7 +572,7 @@ def main():
             start = stop
 
             zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(zmap=zmap, name="noise",
+            build_zmap = tm.OpAccumDiag(zmap=zmap, name="tot_signal",
                                         detweights=detweights)
             build_zmap.exec(data)
             zmap.allreduce()
@@ -654,17 +654,17 @@ def main():
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc+nmc):
-            # clear all noise data from the cache, so that we can generate
+            # clear all total signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("noise_.*")
+            tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", realization=mc)
+            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="noise", signalname=signalname)
+            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -691,7 +691,7 @@ def main():
                     handle.close()
 
             madam = tm.OpMadam(params=pars, detweights=detweights,
-                name="noise")
+                name="tot_signal")
             madam.exec(data)
 
             comm.comm_world.barrier()
