@@ -2,20 +2,19 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
-available = False
 try:
     import pysm
     available = True
-except:
+except ModuleNotFoundError:
     pysm = None
+    available = False
 
 from .. import timing as timing
 
 
 class PySMSky(object):
     """
-    Create a bandpass integrated sky map with PySM
+    Create a bandpass-integrated sky map with PySM
 
     Args:
         PySM input paths / parameters:  FIXME.
@@ -27,6 +26,7 @@ class PySMSky(object):
             If the named cache objects do not exist, then they are created.
         units (str): Output units.
     """
+
     def __init__(self, comm=None, pixels='pixels',
                  out='pysm', nside=None, pysm_sky_config=None, init_sky=True,
                  local_pixels=None, units='K_CMB'):

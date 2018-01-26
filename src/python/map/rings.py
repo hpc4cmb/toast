@@ -1,22 +1,20 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2017-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-available = False
 try:
     import libsharp
     available = True
-except:
+except ModuleNotFoundError:
     libsharp = None
+    available = False
 
-from ..cache import Cache
 from .. import timing as timing
+from ..cache import Cache
+from ..mpi import MPI
 
 
 def expand_pix(startpix, ringpix, local_npix, local_pix):
@@ -27,7 +25,7 @@ def expand_pix(startpix, ringpix, local_npix, local_pix):
     autotimer = timing.auto_timer()
     i = 0
     for start, num in zip(startpix, ringpix):
-        local_pix[i:i+num] = np.arange(start, start+num)
+        local_pix[i:i + num] = np.arange(start, start + num)
         i += num
 
 
@@ -62,7 +60,7 @@ def distribute_rings(nside, rank, n_mpi_processes):
     nrings = 4 * nside - 1  # four missing pixels
 
     # ring indices are 1-based
-    ring_indices_emisphere = np.arange(2*nside, dtype=np.int32) + 1
+    ring_indices_emisphere = np.arange(2 * nside, dtype=np.int32) + 1
 
     local_ring_indices = ring_indices_emisphere[rank::n_mpi_processes]
 
@@ -106,6 +104,7 @@ class DistRings(object):
         localpix (array): the list of local pixels (integers).
         nest (bool): nested pixel order flag
     """
+
     def __init__(self, comm=MPI.COMM_WORLD, nnz=1, dtype=np.float64,
                  nside=16):
         if libsharp is None:
@@ -127,7 +126,7 @@ class DistRings(object):
 
         local_npix = self._libsharp_grid.local_size()
         self._local_pixels = self._cache.create(
-            "local_pixels", shape=(local_npix, ), type=np.int64)
+            "local_pixels", shape=(local_npix,), type=np.int64)
         expand_pix(startpix, ringpix, local_npix, self._local_pixels)
 
         self.data = self._cache.create(
