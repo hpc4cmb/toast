@@ -24,8 +24,10 @@ mkdir -p "${outdir}"
 detpix=@DETPIX@
 
 fpfile="${outdir}/fp_${detpix}.pkl"
+fpparfile="@TOPDIR@/params/satellite/focalplane.par"
+
 if [ ! -e "${fpfile}" ]; then
-    @MPI_RUN@ -n 1 toast_fake_focalplane.py \
+    @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --minpix ${detpix} --out "${outdir}/fp"
 fi
