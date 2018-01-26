@@ -1,23 +1,19 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 
 from scipy.constants import degree
+from toast.ctoast import (
+    atm_sim_alloc, atm_sim_free, atm_sim_simulate, atm_sim_observe,
+    atm_get_absorption_coefficient, atm_get_atmospheric_loading)
+from toast.mpi import MPI
+from toast.op import Operator
 
 import numpy as np
-
-from .. import qarray as qa
-from .. import rng as rng
-from .. import timing as timing
-from ..ctoast import (atm_sim_alloc, atm_sim_free,
-                      atm_sim_simulate, atm_sim_observe,
-                      atm_get_absorption_coefficient,
-                      atm_get_atmospheric_loading)
-from ..mpi import MPI, MPI_Comm
-from ..op import Operator
-from .tod import TOD
+import toast.qarray as qa
+import toast.timing as timing
 
 
 class OpSimAtmosphere(Operator):
@@ -86,9 +82,7 @@ class OpSimAtmosphere(Operator):
             lmin_center=0.01, lmin_sigma=0.001,
             lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0,
             xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=10000,
-            verbosity=0, gangsize=-1, gain=1,
-            w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
-            z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
+            verbosity=0, gangsize=-1, gain=1, z0_center=2000, z0_sigma=0,
             apply_flags=False, common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
             wind_time=3600, cachedir='.', flush=False, freq=None):
@@ -114,18 +108,10 @@ class OpSimAtmosphere(Operator):
         self._gangsize = gangsize
         self._cachedir = cachedir
         self._flush = flush
-        self._freq = None
+        self._freq = freq
 
-        # FIXME: eventually these will come from the TOD object
-        # for each obs...
-        self._w_center = w_center
-        self._w_sigma = w_sigma
-        self._wdir_center = wdir_center
-        self._wdir_sigma = wdir_sigma
         self._z0_center = z0_center
         self._z0_sigma = z0_sigma
-        self._T0_center = T0_center
-        self._T0_sigma = T0_sigma
 
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
@@ -366,66 +352,8 @@ class OpSimAtmosphere(Operator):
                     tstart = tstop
 
                 if self._verbosity > 0:
-                    # Create snapshots of the atmosphere
-                    import matplotlib.pyplot as plt
-                    elstep = .01 * degree
-                    azstep = elstep * np.cos(0.5 * (elmin + elmax))
-                    azgrid = np.linspace(azmin, azmax,
-                                         (azmax - azmin) // azstep + 1)
-                    elgrid = np.linspace(elmin, elmax,
-                                         (elmax - elmin) // elstep + 1)
-                    AZ, EL = np.meshgrid(azgrid, elgrid)
-                    nn = AZ.size
-                    az = AZ.ravel()
-                    el = EL.ravel()
-                    atmdata = np.zeros(nn, dtype=np.float64)
-                    atmtimes = np.zeros(nn, dtype=np.float64)
-
-                    rank = comm.rank
-                    ntask = comm.size
-                    r = 0
-                    t = 0
-                    my_snapshots = []
-                    vmin = 1e30
-                    vmax = -1e30
-                    tstep = 60
-                    for i, t in enumerate(np.arange(tmin, tmax, tstep)):
-                        if i % ntask != rank:
-                            continue
-                        err = atm_sim_observe(sim, atmtimes + t, az, el,
-                                              atmdata, nn, r)
-                        if err != 0:
-                            raise RuntimeError(prefix + 'Observation failed')
-                        if self._gain:
-                            atmdata *= self._gain
-                        vmin = min(vmin, np.amin(atmdata))
-                        vmax = max(vmax, np.amax(atmdata))
-                        atmdata2d = atmdata.reshape(AZ.shape)
-                        my_snapshots.append((t, r, atmdata2d.copy()))
-
-                    vmin = comm.allreduce(vmin, op=MPI.MIN)
-                    vmax = comm.allreduce(vmax, op=MPI.MAX)
-
-                    for t, r, atmdata2d in my_snapshots:
-                        plt.figure(figsize=[12, 4])
-                        plt.imshow(
-                            atmdata2d, interpolation='nearest',
-                            origin='lower', extent=np.array(
-                                [0, (azmax - azmin)
-                                 * np.cos(0.5 * (elmin + elmax)),
-                                 elmin, elmax]) / degree,
-                            cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
-                        plt.colorbar()
-                        ax = plt.gca()
-                        ax.set_title(
-                            't = {:15.1f} s, r = {:15.1f} m'.format(t, r))
-                        ax.set_xlabel('az [deg]')
-                        ax.set_ylabel('el [deg]')
-                        ax.set_yticks([elmin / degree, elmax / degree])
-                        plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
-                            obsname, int(t), int(r)))
-                        plt.close()
-                    del my_snapshots
+                    self._plot_snapshots(sim, prefix, obsname, azmin, azmax,
+                                         elmin, elmax, tmin, tmax, comm)
 
                 nsamp = tod.local_samples[1]
 
@@ -539,6 +467,72 @@ class OpSimAtmosphere(Operator):
 
                 tmin = tmax
 
+        return
+
+    def _plot_snapshots(self, sim, prefix, obsname, azmin, azmax,
+                        elmin, elmax, tmin, tmax, comm):
+        """ Create snapshots of the atmosphere
+
+        """
+        import matplotlib.pyplot as plt
+        elstep = .01 * degree
+        azstep = elstep * np.cos(0.5 * (elmin + elmax))
+        azgrid = np.linspace(azmin, azmax,
+                             (azmax - azmin) // azstep + 1)
+        elgrid = np.linspace(elmin, elmax,
+                             (elmax - elmin) // elstep + 1)
+        AZ, EL = np.meshgrid(azgrid, elgrid)
+        nn = AZ.size
+        az = AZ.ravel()
+        el = EL.ravel()
+        atmdata = np.zeros(nn, dtype=np.float64)
+        atmtimes = np.zeros(nn, dtype=np.float64)
+
+        rank = comm.rank
+        ntask = comm.size
+        r = 0
+        t = 0
+        my_snapshots = []
+        vmin = 1e30
+        vmax = -1e30
+        tstep = 60
+        for i, t in enumerate(np.arange(tmin, tmax, tstep)):
+            if i % ntask != rank:
+                continue
+            err = atm_sim_observe(sim, atmtimes + t, az, el,
+                                  atmdata, nn, r)
+            if err != 0:
+                raise RuntimeError(prefix + 'Observation failed')
+            if self._gain:
+                atmdata *= self._gain
+            vmin = min(vmin, np.amin(atmdata))
+            vmax = max(vmax, np.amax(atmdata))
+            atmdata2d = atmdata.reshape(AZ.shape)
+            my_snapshots.append((t, r, atmdata2d.copy()))
+
+        vmin = comm.allreduce(vmin, op=MPI.MIN)
+        vmax = comm.allreduce(vmax, op=MPI.MAX)
+
+        for t, r, atmdata2d in my_snapshots:
+            plt.figure(figsize=[12, 4])
+            plt.imshow(
+                atmdata2d, interpolation='nearest',
+                origin='lower', extent=np.array(
+                    [0, (azmax - azmin)
+                     * np.cos(0.5 * (elmin + elmax)),
+                     elmin, elmax]) / degree,
+                cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
+            plt.colorbar()
+            ax = plt.gca()
+            ax.set_title(
+                't = {:15.1f} s, r = {:15.1f} m'.format(t, r))
+            ax.set_xlabel('az [deg]')
+            ax.set_ylabel('el [deg]')
+            ax.set_yticks([elmin / degree, elmax / degree])
+            plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
+                obsname, int(t), int(r)))
+            plt.close()
+        del my_snapshots
         return
 
     def _get_from_obs(self, name, obs):
