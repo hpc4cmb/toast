@@ -991,6 +991,7 @@ class TODGround(TOD):
         quats = np.zeros([n, 4])
         for i, t in enumerate(times):
             quats[i] = self._get_coord_quat(t)
+        quats = qa.norm(quats)
 
         return times, quats
 
