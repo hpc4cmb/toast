@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     libsharp = None
     available = False
 
-from .. import timing as timing
+import toast.timing as timing
 
 
 class LibSharpSmooth():
