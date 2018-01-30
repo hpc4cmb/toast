@@ -160,7 +160,7 @@ before_install:
     # Useful for debugging any issues with conda
     - conda info -a
     - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip cython
-    - pip install mpi4py
+    - pip install mpi4py timemory
     # Install libsharp C
     - git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1
     - cd libsharp

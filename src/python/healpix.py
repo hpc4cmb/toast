@@ -6,11 +6,11 @@
 import numpy as np
 
 from . import ctoast as ctoast
-from . import timing as timing
+import timemory
 
 
 def ang2vec(theta, phi):
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     n = len(theta)
     if len(phi) != n:
         raise RuntimeError("theta / phi vectors must have the same length")
@@ -22,7 +22,7 @@ def ang2vec(theta, phi):
 
 
 def vec2ang(vec):
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     n = None
     if vec.ndim == 1:
         n = 1
@@ -36,7 +36,7 @@ def vec2ang(vec):
 
 
 def vecs2angpa(vec):
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     n = None
     if vec.ndim == 1:
         n = 1
@@ -92,7 +92,7 @@ class Pixels(object):
     def vec2zphi(self, vec):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = None
         if vec.ndim == 1:
             n = 1
@@ -105,7 +105,7 @@ class Pixels(object):
     def theta2z(self, theta):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(theta)
         (region, z, rtz) = ctoast.healpix_pixels_theta2z(self.hpix, n, 
                             theta.flatten().astype(np.float64, copy=False))
@@ -114,7 +114,7 @@ class Pixels(object):
     def zphi2nest(self, phi, region, z, rtz):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(phi)
         if len(region) != n:
             raise RuntimeError("All inputs must be the same length")
@@ -132,7 +132,7 @@ class Pixels(object):
     def zphi2ring(self, phi, region, z, rtz):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(phi)
         if len(region) != n:
             raise RuntimeError("All inputs must be the same length")
@@ -150,7 +150,7 @@ class Pixels(object):
     def ang2nest(self, theta, phi):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(theta)
         if len(phi) != n:
             raise RuntimeError("All inputs must be the same length")
@@ -162,7 +162,7 @@ class Pixels(object):
     def ang2ring(self, theta, phi):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(theta)
         if len(phi) != n:
             raise RuntimeError("All inputs must be the same length")
@@ -174,7 +174,7 @@ class Pixels(object):
     def vec2nest(self, vec):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = None
         if vec.ndim == 1:
             n = 1
@@ -187,7 +187,7 @@ class Pixels(object):
     def vec2ring(self, vec):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = None
         if vec.ndim == 1:
             n = 1
@@ -200,7 +200,7 @@ class Pixels(object):
     def ring2nest(self, ringpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(ringpix)
         nestpix = ctoast.healpix_pixels_ring2nest(self.hpix, n, 
                         ringpix.flatten().astype(np.int64, copy=False))
@@ -209,7 +209,7 @@ class Pixels(object):
     def nest2ring(self, nestpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(nestpix)
         ringpix = ctoast.healpix_pixels_nest2ring(self.hpix, n, 
                         nestpix.flatten().astype(np.int64, copy=False))
@@ -218,7 +218,7 @@ class Pixels(object):
     def degrade_ring(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(inpix)
         outpix = ctoast.healpix_pixels_degrade_ring(self.hpix, factor, n, 
                         inpix.flatten().astype(np.int64, copy=False))
@@ -227,7 +227,7 @@ class Pixels(object):
     def degrade_nest(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(inpix)
         outpix = ctoast.healpix_pixels_degrade_nest(self.hpix, factor, n, 
                         inpix.flatten().astype(np.int64, copy=False))
@@ -236,7 +236,7 @@ class Pixels(object):
     def upgrade_ring(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(inpix)
         outpix = ctoast.healpix_pixels_upgrade_ring(self.hpix, factor, n, 
                         inpix.flatten().astype(np.int64, copy=False))
@@ -245,7 +245,7 @@ class Pixels(object):
     def upgrade_nest(self, factor, inpix):
         if self.hpix is None:
             raise RuntimeError("healpix Pixels class must be initialized with an NSIDE value")
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         n = len(inpix)
         outpix = ctoast.healpix_pixels_upgrade_nest(self.hpix, factor, n, 
                         inpix.flatten().astype(np.int64, copy=False))

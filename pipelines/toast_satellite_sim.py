@@ -22,7 +22,7 @@ import toast.tod as tt
 import toast.map as tm
 
 import toast.qarray as qa
-import toast.timing as timing
+import timemory
 
 from toast.vis import set_backend
 
@@ -112,9 +112,9 @@ def main():
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
 
-    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
+    autotimer = timemory.auto_timer("@{}".format(timemory.FILE()))
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -597,7 +597,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        tman = timing.timing_manager()
+        tman = timemory.timing_manager()
         tman.report()
         MPI.Finalize()
     except:
@@ -605,5 +605,5 @@ if __name__ == "__main__":
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
         print("".join(lines), flush=True)
-        toast.raise_error(6) # typical error code for SIGABRT
+        #toast.raise_error(6) # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)

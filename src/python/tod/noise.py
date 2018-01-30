@@ -8,7 +8,7 @@ noise.py implements the Noise class for storing noise PSDs.
 """
 
 import numpy as np
-from .. import timing as timing
+import timemory
 
 
 class Noise(object):

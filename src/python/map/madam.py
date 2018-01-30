@@ -18,7 +18,7 @@ from ..op import Operator
 from ..tod import TOD
 from ..cache import Cache
 
-from .. import timing as timing
+import timemory
 
 libmadam = None
 
@@ -221,7 +221,7 @@ class OpMadam(Operator):
             raise RuntimeError('OpMadam requires every supplied data object to '
                                'contain at least one observation')
 
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
 
         if comm is None:
             # Just use COMM_WORLD
@@ -249,7 +249,7 @@ class OpMadam(Operator):
         """ Destripe the buffered data
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
         fcomm = comm.py2f()
         if self._cached:
             # destripe
@@ -381,7 +381,7 @@ class OpMadam(Operator):
         """ Examine the data object.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
 
         nsamp = self._count_samples(data)
 
@@ -440,7 +440,7 @@ class OpMadam(Operator):
         """ Stage the timestamps and use them to build PSD inputs.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
             'timestamps', np.float64, (nsamp, ))
 
@@ -491,7 +491,7 @@ class OpMadam(Operator):
         """ Stage signal
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
             'signal', np.float64, (nsamp*ndet, ))
 
@@ -529,7 +529,7 @@ class OpMadam(Operator):
         """ Stage pixels
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
             'pixels', np.int64, (nsamp*ndet, ))
 
@@ -608,7 +608,7 @@ class OpMadam(Operator):
         """Now collect the pixel weights
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
 
         self._madam_pixweights = self._cache.create(
             'pixweights', np.float64, (nsamp*ndet*nnz, ))
@@ -663,7 +663,7 @@ class OpMadam(Operator):
         overhead only once per node.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
 
         nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
         nread = nodecomm.size
@@ -735,7 +735,7 @@ class OpMadam(Operator):
         and cache the destriped signal.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
+        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_timestamps = None
         self._cache.destroy('timestamps')
 

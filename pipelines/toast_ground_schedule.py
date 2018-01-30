@@ -15,7 +15,7 @@ import numpy as np
 import ephem
 from scipy.constants import degree
 
-import toast.timing as timing
+import timemory
 
 def to_JD(t):
     # Unix time stamp to Julian date
@@ -736,7 +736,7 @@ def parse_args():
                         required=False, default='schedule.txt',
                         help='Output filename')
 
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
 
     if args.operational_days is None and args.stop is None:
         raise RuntimeError('You must provide --stop or --operational_days')
@@ -990,7 +990,7 @@ def main():
 
     args, start_timestamp, stop_timestamp = parse_args()
 
-    autotimer = timing.auto_timer(timing.FILE())
+    autotimer = timemory.auto_timer(timemory.FILE())
 
     patches = parse_patches(args)
 
@@ -1003,5 +1003,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-    tman = timing.timing_manager()
+    tman = timemory.timing_manager()
     tman.report()

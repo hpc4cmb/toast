@@ -6,7 +6,7 @@
 import numpy as np
 
 from .. import qarray as qa
-from .. import timing as timing
+import timemory
 
 
 def hex_nring(npix):
@@ -31,7 +31,7 @@ def hex_row_col(npix, pix):
     The row is zero along the main vertex-vertex axis, and is positive
     or negative above / below this line of pixels.
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     if pix >= npix:
         raise ValueError("pixel value out of range")
     test = npix - 1
@@ -87,7 +87,7 @@ def hex_pol_angles_qu(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     pol = np.zeros(npix, dtype=np.float64)
     for pix in range(npix):
         # get the row / col of the pixel
@@ -115,7 +115,7 @@ def hex_pol_angles_radial(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     sixty = np.pi/3.0
     thirty = np.pi/6.0
     pol = np.zeros(npix, dtype=np.float64)
@@ -179,7 +179,7 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             dictionary of detector properties.
 
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nullquat = np.array([0,0,0,1], dtype=np.float64)
     sixty = np.pi/3.0
@@ -301,7 +301,7 @@ def rhomb_row_col(npix, pix):
     this function returnes the "row" and "column" of a pixel.  The column 
     starts at zero on the left hand side of a row.
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     if pix >= npix:
         raise ValueError("pixel value out of range")
     dim = rhomb_dim(npix)
@@ -333,7 +333,7 @@ def rhomb_pol_angles_qu(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     pol = np.zeros(npix, dtype=np.float64)
     for pix in range(npix):
         # get the row / col of the pixel
@@ -396,7 +396,7 @@ def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             dictionary of detector properties.
 
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nullquat = np.array([0,0,0,1], dtype=np.float64)
     rtthree = np.sqrt(3.0)

@@ -20,7 +20,7 @@ from ..tod import TOD
 from ..tod import Interval
 from ..tod import quat2angle
 
-from .. import timing as timing
+import timemory
 
 libconviqt = None
 
@@ -232,7 +232,7 @@ class OpSimConviqt(Operator):
         if libconviqt is None:
             raise RuntimeError("The conviqt library was not found")
 
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         #comm = data.comm
         # the global communicator

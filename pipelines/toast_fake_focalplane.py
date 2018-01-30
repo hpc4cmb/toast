@@ -14,7 +14,7 @@ import numpy as np
 from scipy.constants import degree
 
 import toast.tod as tt
-import toast.timing as timing
+import timemory
 
 parser = argparse.ArgumentParser(
     description="Simulate fake hexagonal focalplane.",
@@ -63,9 +63,9 @@ parser.add_argument( "--random_seed", required=False, type=np.int, default=12345
                      help="Random number generator seed for randomized detector"
                      " parameters" )
 
-args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
 
-autotimer = timing.auto_timer(timing.FILE())
+autotimer = timemory.auto_timer(timemory.FILE())
 
 # Make one big hexagon layout at the center of the focalplane.
 # Compute the number of pixels that is at least the number requested.
@@ -120,7 +120,7 @@ tt.plot_focalplane(dets, args.fov, args.fov, "{}.png".format(outfile))
 with open("{}.pkl".format(outfile), "wb") as p:
     pickle.dump(dets, p)
 
-tman = timing.timing_manager()
+tman = timemory.timing_manager()
 tman.report()
 
 tman.clear()

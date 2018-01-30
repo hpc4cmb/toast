@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     libsharp = None
     available = False
 
-import toast.timing as timing
+import timemory
 
 
 class LibSharpSmooth():
@@ -48,7 +48,7 @@ class LibSharpSmooth():
     def __init__(self, comm=None, signal_map="signal_map",
                  lmax=None, grid=None, fwhm_deg=None, beam=None,
                  out="smoothed_signal_map"):
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self.comm = comm
@@ -89,7 +89,7 @@ class LibSharpSmooth():
 
         if libsharp is None:
             raise RuntimeError('libsharp not available')
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         has_pol = len(data[self.signal_map]) > 1
 
         alm_sharp_I = libsharp.analysis(

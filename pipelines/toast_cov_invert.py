@@ -18,7 +18,7 @@ import healpy as hp
 
 import toast
 import toast.map as tm
-import toast.timing as timing
+import timemory
 
 def main():
 
@@ -34,9 +34,9 @@ def main():
     parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
     parser.add_argument( '--threshold', required=False, default=1e-3, type=np.float, help='Reciprocal condition number threshold' )
     
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
 
-    autotimer = timing.auto_timer(timing.FILE())
+    autotimer = timemory.auto_timer(timemory.FILE())
 
     # get options
 
@@ -129,6 +129,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    tman = timing.timing_manager()
+    tman = timemory.timing_manager()
     tman.report()
 

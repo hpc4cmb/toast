@@ -23,43 +23,6 @@ extern "C" {
 
 void ctoast_init ( int argc, char *argv[] );
 void ctoast_finalize ( );
-void ctoast_raise_error(int errcode);
-
-//--------------------------------------
-// Util sub-library
-//--------------------------------------
-
-struct ctoast_timer_;
-typedef struct ctoast_timer_ ctoast_timer;
-
-struct ctoast_timing_manager_;
-typedef struct ctoast_timing_manger_ ctoast_timing_manager;
-
-ctoast_timer* ctoast_get_simple_timer(char* ckey, char* cfmt);
-void ctoast_del_simple_timer(ctoast_timer*);
-
-int ctoast_timers_enabled();
-void ctoast_timers_toggle(int32_t val);
-ctoast_timer* ctoast_get_timer(char* ckey);
-ctoast_timer* ctoast_get_timer_at(int32_t i);
-void ctoast_timer_start(ctoast_timer*);
-void ctoast_timer_stop(ctoast_timer*);
-void ctoast_timer_report(ctoast_timer*);
-uint64_t ctoast_get_timer_instance_count();
-void ctoast_op_timer_instance_count(int32_t op, int32_t nhash);
-
-ctoast_timing_manager* ctoast_get_timing_manager();
-void ctoast_set_timing_output_file(char* cfname);
-void ctoast_serialize_timing_manager(char*);
-void ctoast_timing_manager_report();
-void ctoast_timing_manager_clear();
-void ctoast_timing_manager_set_max_depth(int32_t);
-int32_t ctoast_timing_manager_max_depth();
-size_t ctoast_timing_manager_size();
-
-double ctoast_timer_real_elapsed(ctoast_timer*);
-double ctoast_timer_system_elapsed(ctoast_timer*);
-double ctoast_timer_user_elapsed(ctoast_timer*);
 
 //--------------------------------------
 // Math sub-library

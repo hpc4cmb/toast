@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     pysm = None
     available = False
 
-from .. import timing as timing
+import timemory
 
 
 class PySMSky(object):
@@ -45,7 +45,7 @@ class PySMSky(object):
     def init_sky(self, pysm_sky_config):
         if pysm is None:
             raise RuntimeError('pysm not available')
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         initialized_sky_config = {}
         for name, model_id in pysm_sky_config.items():
             initialized_sky_config[name] = \
@@ -58,7 +58,7 @@ class PySMSky(object):
         if pysm is None:
             raise RuntimeError('pysm not available')
 
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         if self.sky is None:
             self.sky = self.init_sky(self.pysm_sky_config)
 

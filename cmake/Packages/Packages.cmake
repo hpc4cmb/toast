@@ -41,7 +41,6 @@ add_option(USE_WCSLIB "Use wcslib" OFF)
 add_option(USE_ELEMENTAL "Use Elemental" OFF)
 add_option(USE_AATM "Use aatm" ON)
 
-add_option(USE_TIMERS "Enable internal timers" ON)
 add_option(USE_COVERAGE "Enable compilation flags for GNU coverage tool (gcov)" OFF)
 
 
@@ -50,12 +49,6 @@ add_option(USE_COVERAGE "Enable compilation flags for GNU coverage tool (gcov)" 
 #        Definitions
 #
 ################################################################################
-# used as a definition in autotools compilation
-add_definitions(-DHAVE_CONFIG_H)
-
-if(NOT USE_TIMERS)
-    add_definitions(-DDISABLE_TIMERS)
-endif(NOT USE_TIMERS)
 
 if(USE_COVERAGE)
     include(Coverage)

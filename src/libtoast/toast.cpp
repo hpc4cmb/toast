@@ -77,6 +77,7 @@ void toast::init ( int argc, char *argv[] )
                   << toast_nthreads << std::endl;
 #   endif
 
+    /*
     // Enable the signal detection
     toast::EnableSignalDetection();
 
@@ -99,7 +100,7 @@ void toast::init ( int argc, char *argv[] )
     };
 
     // set the exit function
-    toast::signal_settings::set_exit_action(_exit_func);
+    toast::signal_settings::set_exit_action(_exit_func);*/
 
 #if defined(_OPENMP)
     // If TOAST_NUM_THREADS not defined, we use OMP_NUM_THREADS.

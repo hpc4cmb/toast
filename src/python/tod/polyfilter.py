@@ -8,7 +8,7 @@ from toast.ctoast import filter_polyfilter
 from toast.op import Operator
 
 import numpy as np
-import toast.timing as timing
+import timemory
 
 
 class OpPolyFilter(Operator):
@@ -64,7 +64,7 @@ class OpPolyFilter(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
 
         for obs in data.obs:
             tod = obs['tod']

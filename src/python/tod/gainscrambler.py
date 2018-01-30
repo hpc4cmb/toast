@@ -7,7 +7,7 @@ import re
 from toast.op import Operator
 
 import toast.rng as rng
-import toast.timing as timing
+import timemory
 
 
 class OpGainScrambler(Operator):
@@ -49,7 +49,7 @@ class OpGainScrambler(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
 
         for obs in data.obs:
             obsindx = 0

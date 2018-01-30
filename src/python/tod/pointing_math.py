@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from .. import qarray as qa
-from .. import timing as timing
+import timemory
 
 from scipy.constants import c
 
@@ -62,7 +62,7 @@ def quat2angle( quat, no_pa=False ):
     Returns:
         2- or 3-tuple of pointing angles
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     vec_dir = qa.rotate( quat, zaxis ).reshape((-1,3))
 
     dnorm = np.sqrt(np.sum(np.square(vec_dir),axis=1))
@@ -96,7 +96,7 @@ def aberrate( quat, vel, inplace=True ):
     Returns:
         Corrected quaternions either in the orinal container or a 2D ndarray.
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     vec = qa.rotate( quat, zaxis )
     abvec = np.cross( vec, vel[ind] )
     lens = np.linalg.norm( abvec, axis=1 )

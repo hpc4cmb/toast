@@ -43,7 +43,6 @@ include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123/conventional)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/math/Random123/features)
-include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/util)
 include_directories(${PROJECT_BINARY_DIR}/config)
 
 add_subdirectory(libtoast)

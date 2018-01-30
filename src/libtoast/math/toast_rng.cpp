@@ -5,7 +5,6 @@ a BSD-style license that can be found in the LICENSE file.
 */
 
 #include <toast_math_internal.hpp>
-#include <toast_util_internal.hpp>
 
 #include <cstring>
 #include <cmath>

@@ -13,7 +13,7 @@ from toast.op import Operator
 
 import numpy as np
 import toast.qarray as qa
-import toast.timing as timing
+import timemory
 
 
 class OpSimAtmosphere(Operator):
@@ -131,7 +131,7 @@ class OpSimAtmosphere(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         group = data.comm.group
         for obs in data.obs:
             try:

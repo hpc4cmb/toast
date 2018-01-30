@@ -8,7 +8,7 @@ import datetime
 import numpy as np
 
 from . import rng as rng
-from . import timing as timing
+import timemory
 
 
 class Weather(object):
@@ -96,7 +96,7 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         self.site = site
         self.realization = realization
         if time is not None:
@@ -126,7 +126,7 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         self._time = time
         self._date = datetime.datetime.utcfromtimestamp(self._time)
         self._doy = self._date.timetuple().tm_yday
@@ -149,7 +149,7 @@ class Weather(object):
         if self._year is None:
             raise RuntimeError('Weather object must be initialized by calling '
                                'set_time(time)')
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         # Set the RNG counters for this variable and time
         counter1 = self._varindex[name]
         counter2 = (self._year*366 + self._doy)*24 + self._hour
@@ -171,7 +171,7 @@ class Weather(object):
 
         """
         if self._ice_water is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._ice_water = self._draw('TQI')
         return self._ice_water
 
@@ -184,7 +184,7 @@ class Weather(object):
 
         """
         if self._liquid_water is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._liquid_water = self._draw('TQL')
         return self._liquid_water
 
@@ -197,7 +197,7 @@ class Weather(object):
 
         """
         if self._pwv is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._pwv = self._draw('TQV')
         return self._pwv
 
@@ -210,7 +210,7 @@ class Weather(object):
 
         """
         if self._humidity is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._humidity = self._draw('QV10M')
         return self._humidity
 
@@ -223,7 +223,7 @@ class Weather(object):
 
         """
         if self._surface_pressure is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._surface_pressure = self._draw('PS')
         return self._surface_pressure
 
@@ -236,7 +236,7 @@ class Weather(object):
 
         """
         if self._surface_temperature is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._surface_temperature = self._draw('TS')
         return self._surface_temperature
 
@@ -249,7 +249,7 @@ class Weather(object):
 
         """
         if self._air_temperature is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._air_temperature = self._draw('T10M')
         return self._air_temperature
 
@@ -262,7 +262,7 @@ class Weather(object):
 
         """
         if self._west_wind is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._west_wind = self._draw('U10M')
         return self._west_wind
 
@@ -275,6 +275,6 @@ class Weather(object):
 
         """
         if self._south_wind is None:
-            autotimer = timing.auto_timer(type(self).__name__)
+            autotimer = timemory.auto_timer(type(self).__name__)
             self._south_wind = self._draw('V10M')
         return self._south_wind

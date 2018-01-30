@@ -10,7 +10,7 @@ from .tod import TOD
 from .noise import Noise
 
 from ..op import Operator
-from .. import timing as timing
+import timemory
 
 
 class AnalyticNoise(Noise):
