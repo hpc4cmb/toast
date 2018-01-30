@@ -37,7 +37,6 @@ noinst_HEADERS = toast_test.hpp
 noinst_LTLIBRARIES = libtoast_test.la
 
 libtoast_test_la_SOURCES = \
-toast_test_timing.cpp \
 toast_test_qarray.cpp \
 toast_test_rng.cpp \
 toast_test_sf.cpp \

@@ -19,15 +19,6 @@ namespace toast { namespace test {
     int runner ( int argc, char *argv[] );
 }}
 
-class TOASTtimingTest : public ::testing::Test
-{
-public:
-    TOASTtimingTest () { }
-    ~TOASTtimingTest () { }
-    virtual void SetUp() { }
-    virtual void TearDown() { }
-};
-
 
 class TOASTqarrayTest : public ::testing::Test {
 
