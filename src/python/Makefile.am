@@ -46,7 +46,6 @@ qarray.py \
 op.py \
 healpix.py \
 vis.py \
-timing.py \
 weather.py
 
 
