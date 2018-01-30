@@ -26,6 +26,92 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
+def add_sky_signal(args, comm, data, totalname, signalname):
+    """ Add signalname to totalname in the obs tod
+
+    """
+    if signalname is not None:
+        autotimer = timing.auto_timer()
+        for obs in data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                cachename_in = '{}_{}'.format(signalname, det)
+                cachename_out = '{}_{}'.format(totalname, det)
+                ref_in = tod.cache.reference(cachename_in)
+                if tod.cache.exists(cachename_out):
+                    ref_out = tod.cache.reference(cachename_out)
+                    ref_out += ref_in
+                else:
+                    ref_out = tod.cache.put(cachename_out, ref_in)
+                del ref_in, ref_out
+
+    return
+
+def get_submaps(args, comm, data):
+    """ Get a list of locally hit pixels and submaps on every process.
+
+    """
+    if args.input_pysm_model or args.input_map:
+        autotimer = timing.auto_timer()
+        if comm.comm_world.rank == 0:
+            print('Scanning local pixels', flush=args.flush)
+        start = MPI.Wtime()
+
+        # Prepare for using distpixels objects
+        nside = args.nside
+        subnside = 16
+        if subnside > nside:
+            subnside = nside
+        subnpix = 12 * subnside * subnside
+
+        # get locally hit pixels
+        lc = tm.OpLocalPixels()
+        localpix = lc.exec(data)
+        if localpix is None:
+            raise RuntimeError(
+                'Process {} has no hit pixels. Perhaps there are fewer '
+                'detectors than processes in the group?'.format(
+                    comm.comm_world.rank))
+
+        # find the locally hit submaps.
+        localsm = np.unique(np.floor_divide(localpix, subnpix))
+
+        comm.comm_world.barrier()
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        if comm.comm_world.rank == 0:
+            print('Local submaps identified in {:.3f} s'.format(elapsed),
+                  flush=args.flush)
+    else:
+        localpix, localsm = None, None
+
+    return localpix, localsm, subnpix
+
+
+def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm):
+    """ Use PySM to simulate smoothed sky signal.
+
+    """
+    # Convolve a signal TOD from PySM
+    start = MPI.Wtime()
+    signalname = 'signal'
+    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+                               out=signalname,
+                               pysm_model=args.input_pysm_model,
+                               focalplanes=focalplanes,
+                               nside=args.nside,
+                               subnpix=subnpix, localsm=localsm,
+                               apply_beam=args.apply_beam)
+    op_sim_pysm.exec(data)
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('PySM took {:.2f} seconds'.format(stop-start),
+              flush=args.flush)
+
+    mem_counter.exec(data)
+
+    return signalname
+
 def main():
 
     if MPI.COMM_WORLD.rank == 0:
@@ -95,6 +181,10 @@ def main():
     parser.add_argument( "--madampar", required=False, default=None,
         help="Madam parameter file" )
 
+    parser.add_argument('--flush',
+                        required=False, default=False, action='store_true',
+                        help='Flush every print statement.')
+
     parser.add_argument( "--MC_start", required=False, type=int, default=0,
         help="First Monte Carlo noise realization" )
     parser.add_argument( "--MC_count", required=False, type=int, default=1,
@@ -111,6 +201,15 @@ def main():
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
+
+    parser.add_argument('--input_map', required=False,
+                        help='Input map for signal')
+    parser.add_argument('--input_pysm_model', required=False,
+                        help='Comma separated models for on-the-fly PySM '
+                        'simulation, e.g. s3,d6,f1,a2"')
+    parser.add_argument('--apply_beam', required=False, action='store_true',
+                        help='Apply beam convolution to input map with gaussian '
+                        'beam parameters defined in focalplane')
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
@@ -233,6 +332,8 @@ def main():
     noise = tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
         fknee=fknee, alpha=alpha, NET=NET)
 
+    mem_counter = tt.OpMemoryCounter()
+
     # The distributed timestream data
 
     data = toast.Data(comm)
@@ -312,6 +413,12 @@ def main():
     if comm.comm_world.rank == 0:
         print("Pointing generation took {:.3f} s".format(elapsed), flush=True)
     start = stop
+
+    localpix, localsm, subnpix = get_submaps(args, comm, data)
+
+    if args.input_pysm_model:
+        signalname = simulate_sky_signal(args, comm, data, mem_counter,
+                                         [fp], subnpix, localsm)
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -435,14 +542,17 @@ def main():
                     elapsed), flush=True)
             start = stop
 
-            # clear all noise data from the cache, so that we can generate
+            # clear all signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("noise_.*")
+            tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", realization=mc)
+            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
+
+            # add sky signal
+            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -450,7 +560,7 @@ def main():
                 if args.tidas is not None:
                     from toast.tod.tidas import OpTidasExport
                     tidas_path = os.path.abspath(args.tidas)
-                    export = OpTidasExport(tidas_path, name="noise")
+                    export = OpTidasExport(tidas_path, name="tot_signal")
                     export.exec(data)
 
             comm.comm_world.barrier()
@@ -462,7 +572,7 @@ def main():
             start = stop
 
             zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(zmap=zmap, name="noise",
+            build_zmap = tm.OpAccumDiag(zmap=zmap, name="tot_signal",
                                         detweights=detweights)
             build_zmap.exec(data)
             zmap.allreduce()
@@ -544,14 +654,17 @@ def main():
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc+nmc):
-            # clear all noise data from the cache, so that we can generate
+            # clear all total signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("noise_.*")
+            tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="noise", realization=mc)
+            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
+
+            # add sky signal
+            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -578,7 +691,7 @@ def main():
                     handle.close()
 
             madam = tm.OpMadam(params=pars, detweights=detweights,
-                name="noise")
+                name="tot_signal")
             madam.exec(data)
 
             comm.comm_world.barrier()
