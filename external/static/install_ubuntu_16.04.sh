@@ -53,7 +53,8 @@ sudo apt-get install -y curl procps build-essential gfortran git subversion \
     python3-scipy \
     python3-matplotlib \
     python3-yaml \
-    python3-h5py
+    python3-h5py \
+    cython3
 
 # ------------------- Set up install prefix ------------------------
 #
@@ -87,7 +88,7 @@ echo "export PATH=\"${PREFIX}/bin:${PATH}\"" >> "${ENV_FILE}"
 echo "export CPATH=\"${PREFIX}/include:${CPATH}\"" >> "${ENV_FILE}"
 echo "export LIBRARY_PATH=\"${PREFIX}/lib:${LIBRARY_PATH}\"" >> "${ENV_FILE}"
 echo "export LD_LIBRARY_PATH=\"${PREFIX}/lib:${LD_LIBRARY_PATH}\"" >> "${ENV_FILE}"
-echo "export PYTHONPATH=\"${PREFIX}/lib/python${PYSITE}:${PATH}\"" >> "${ENV_FILE}"
+echo "export PYTHONPATH=\"${PREFIX}/lib/python${PYSITE}/site-packages:${PYTHONPATH}\"" >> "${ENV_FILE}"
 echo "" >> "${ENV_FILE}"
 
 # Load this shell snippet now, to put the prefix into our search paths
@@ -107,9 +108,9 @@ echo "" >> "${ENV_FILE}"
 # also use a virtualenv or install these via anaconda if you were using
 # anaconda already to provide python3.
 
-pip3 install --target="${PREFIX}/lib/python${PYSITE}" healpy
+pip3 install --target="${PREFIX}/lib/python${PYSITE}/site-packages" healpy
 
-pip3 install --target="${PREFIX}/lib/python${PYSITE}" ephem
+pip3 install --target="${PREFIX}/lib/python${PYSITE}/site-packages" ephem
 
 # Install Latest mpi4py.  We want to build this ourselves so that it uses the
 # MPI version we have installed (MPICH or OpenMPI).  We also need a version
