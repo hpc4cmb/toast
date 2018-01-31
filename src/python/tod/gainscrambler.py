@@ -1,16 +1,13 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import re
 
-import numpy as np
+from toast.op import Operator
 
-from ..op import Operator
-from ..dist import Comm, Data
-from .tod import TOD
-from .. import rng as rng
-from .. import timing as timing
+import toast.rng as rng
+import toast.timing as timing
 
 
 class OpGainScrambler(Operator):
@@ -53,15 +50,6 @@ class OpGainScrambler(Operator):
             data (toast.Data): The distributed data.
         """
         autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
         for obs in data.obs:
             obsindx = 0
@@ -96,13 +84,13 @@ class OpGainScrambler(Operator):
                 counter2 = currently unused (0)
                 """
 
-                key1 = self._realization * 4294967296 + telescope * 65536 \
-                       + self._component
-                key2 = obsindx * 4294967296 + detindx 
+                key1 = (self._realization * 4294967296 + telescope * 65536
+                        + self._component)
+                key2 = obsindx * 4294967296 + detindx
                 counter1 = 0
                 counter2 = 0
 
-                rngdata = rng.random(1, sampler="gaussian", key=(key1, key2), 
+                rngdata = rng.random(1, sampler="gaussian", key=(key1, key2),
                                      counter=(counter1, counter2))
 
                 gain = self._center + rngdata[0] * self._sigma

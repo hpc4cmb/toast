@@ -1,15 +1,12 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-from scipy.constants import degree
+from toast.mpi import MPI
+from toast.op import Operator
 
-from ..op import Operator
-from ..dist import Comm, Data
-from .tod import TOD
-from ..mpi import MPI
-from .. import timing as timing
+import numpy as np
+import toast.timing as timing
 
 
 class OpGroundFilter(Operator):
@@ -62,13 +59,8 @@ class OpGroundFilter(Operator):
         autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
         # the communicator within the group
         cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
         # Each group loops over its own CES:es
 
@@ -76,20 +68,20 @@ class OpGroundFilter(Operator):
             tod = obs['tod']
 
             try:
-                (azmin, azmax, elmin, elmax) = tod.scan_range
+                (azmin, azmax, _, _) = tod.scan_range
                 az = tod.read_boresight_az()
             except Exception as e:
                 raise RuntimeError(
                     'Failed to get boresight azimuth from TOD.  Perhaps it is '
                     'not ground TOD? "{}"'.format(e))
 
-             # Cache the output common flags
+            # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
 
             # The azimuth vector is assumed to be arranged so that the
             # azimuth increases monotonously even across the zero meridian.
 
-            wbin = self._wbin * degree
+            wbin = np.radians(self._wbin)
             nbin = int((azmax - azmin) // wbin + 1)
             ibin = ((az - azmin) // wbin).astype(np.int)
 
@@ -134,4 +126,3 @@ class OpGroundFilter(Operator):
             del common_ref
 
         return
-

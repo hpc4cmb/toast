@@ -22,6 +22,7 @@ import healpy as hp
 import toast
 import toast.tod as tt
 import toast.map as tm
+import toast.todmap as ttm
 import toast.qarray as qa
 import toast.timing as timing
 from toast import Weather
@@ -779,7 +780,7 @@ def simulate_sky_signal(args, comm, data, counter, schedules, subnpix, localsm):
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
     signalname = 'signal'
-    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
                                focalplanes=[s[3] for s in schedules],

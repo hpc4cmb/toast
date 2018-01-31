@@ -108,10 +108,11 @@ install(DIRECTORY
     ${CMAKE_CURRENT_LIST_DIR}/map
     ${CMAKE_CURRENT_LIST_DIR}/tests
     ${CMAKE_CURRENT_LIST_DIR}/tod
+    ${CMAKE_CURRENT_LIST_DIR}/todmap
     DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
 
 # ensure all the python files are executable
-foreach(DIR fod map tests tod)
+foreach(DIR fod map tests tod todmap)
     file(GLOB _FILES ${CMAKE_CURRENT_LIST_DIR}/${DIR}/*.py)
     install(FILES ${_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME}/${DIR}
         #PERMISSIONS

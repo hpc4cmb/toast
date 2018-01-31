@@ -1,25 +1,19 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, MPI_Comm
-
 import os
 
+from scipy.constants import degree
+from toast.ctoast import (
+    atm_sim_alloc, atm_sim_free, atm_sim_simulate, atm_sim_observe,
+    atm_get_absorption_coefficient, atm_get_atmospheric_loading)
+from toast.mpi import MPI
+from toast.op import Operator
+
 import numpy as np
-from scipy.constants import degree, arcmin
-import healpy as hp
-
-from .. import qarray as qa
-from .tod import TOD
-from ..op import Operator
-from .. import timing as timing
-from .. import rng as rng
-
-from ..ctoast import (atm_sim_alloc, atm_sim_free,
-                      atm_sim_simulate, atm_sim_observe,
-                      atm_get_absorption_coefficient,
-                      atm_get_atmospheric_loading)
+import toast.qarray as qa
+import toast.timing as timing
 
 
 class OpSimAtmosphere(Operator):
@@ -82,14 +76,13 @@ class OpSimAtmosphere(Operator):
         flush (bool):  Flush all print statements
         freq (float):  Observing frequency in GHz.
     """
+
     def __init__(
             self, out='atm', realization=0, component=123456,
             lmin_center=0.01, lmin_sigma=0.001,
             lmax_center=10, lmax_sigma=10, zatm=40000.0, zmax=2000.0,
             xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=10000,
-            verbosity=0, gangsize=-1, gain=1,
-            w_center=10, w_sigma=1, wdir_center=0, wdir_sigma=100,
-            z0_center=2000, z0_sigma=0, T0_center=280, T0_sigma=10,
+            verbosity=0, gangsize=-1, gain=1, z0_center=2000, z0_sigma=0,
             apply_flags=False, common_flag_name=None, common_flag_mask=255,
             flag_name=None, flag_mask=255, report_timing=True,
             wind_time=3600, cachedir='.', flush=False, freq=None):
@@ -115,18 +108,10 @@ class OpSimAtmosphere(Operator):
         self._gangsize = gangsize
         self._cachedir = cachedir
         self._flush = flush
-        self._freq = None
+        self._freq = freq
 
-        # FIXME: eventually these will come from the TOD object
-        # for each obs...
-        self._w_center = w_center
-        self._w_sigma = w_sigma
-        self._wdir_center = wdir_center
-        self._wdir_sigma = wdir_sigma
         self._z0_center = z0_center
         self._z0_sigma = z0_sigma
-        self._T0_center = T0_center
-        self._T0_sigma = T0_sigma
 
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
@@ -151,7 +136,7 @@ class OpSimAtmosphere(Operator):
         for obs in data.obs:
             try:
                 obsname = obs['name']
-            except:
+            except Exception:
                 obsname = 'observation'
             prefix = '{} : {} : '.format(group, obsname)
             tod = self._get_from_obs('tod', obs)
@@ -181,8 +166,9 @@ class OpSimAtmosphere(Operator):
             counter1 = currently unused (0)
             counter2 = sample in stream (incremented internally in the atm code)
             """
-            key1 = self._realization*2**32 + telescope*2**16 + self._component
-            key2 = site*2**16 + obsindx
+            key1 = self._realization * 2 ** 32 + telescope * 2 ** 16 \
+                + self._component
+            key2 = site * 2 ** 16 + obsindx
             counter1 = 0
             counter2 = 0
 
@@ -202,8 +188,8 @@ class OpSimAtmosphere(Operator):
             else:
                 # The number of atmospheric realizations can be large.  Use
                 # sub-directories under cachedir.
-                subdir = str(int((obsindx % 1000) // 100 ))
-                subsubdir = str(int((obsindx % 100) // 10 ))
+                subdir = str(int((obsindx % 1000) // 100))
+                subsubdir = str(int((obsindx % 100) // 10))
                 subsubsubdir = str(obsindx % 10)
                 cachedir = os.path.join(self._cachedir, subdir, subsubdir,
                                         subsubsubdir)
@@ -215,7 +201,7 @@ class OpSimAtmosphere(Operator):
 
             comm.Barrier()
             if comm.rank == 0:
-                print(prefix+'Setting up atmosphere simulation',
+                print(prefix + 'Setting up atmosphere simulation',
                       flush=self._flush)
             comm.Barrier()
 
@@ -225,9 +211,10 @@ class OpSimAtmosphere(Operator):
             # Read the extent of the AZ/EL boresight pointing, and use that
             # to compute the range of angles needed for simulating the slab.
 
-            (min_az_bore, max_az_bore, min_el_bore, max_el_bore) = tod.scan_range
-            #print("boresight scan range = {}, {}, {}, {}".format(
-            #min_az_bore, max_az_bore, min_el_bore, max_el_bore))
+            (min_az_bore, max_az_bore, min_el_bore, max_el_bore
+             ) = tod.scan_range
+            # print("boresight scan range = {}, {}, {}, {}".format(
+            # min_az_bore, max_az_bore, min_el_bore, max_el_bore))
 
             # Use a fixed focal plane radius so that changing the actual
             # set of detectors will not affect the simulated atmosphere.
@@ -235,12 +222,12 @@ class OpSimAtmosphere(Operator):
             elfac = 1 / np.cos(max_el_bore + fp_radius)
             azmin = min_az_bore - fp_radius * elfac
             azmax = max_az_bore + fp_radius * elfac
-            if azmin < -2*np.pi:
-                azmin += 2*np.pi
-                azmax += 2*np.pi
-            elif azmax > 2*np.pi:
-                azmin -= 2*np.pi
-                azmax -= 2*np.pi
+            if azmin < -2 * np.pi:
+                azmin += 2 * np.pi
+                azmax += 2 * np.pi
+            elif azmax > 2 * np.pi:
+                azmin -= 2 * np.pi
+                azmax -= 2 * np.pi
             elmin = min_el_bore - fp_radius
             elmax = max_el_bore + fp_radius
 
@@ -249,7 +236,7 @@ class OpSimAtmosphere(Operator):
             elmin = comm.allreduce(elmin, op=MPI.MIN)
             elmax = comm.allreduce(elmax, op=MPI.MAX)
 
-            if elmin < 0 or elmax > np.pi/2:
+            if elmin < 0 or elmax > np.pi / 2:
                 raise RuntimeError(
                     'Error in CES elevation: elmin = {:.2f}, elmax = {:.2f}'
                     ''.format(elmin, elmax))
@@ -272,8 +259,8 @@ class OpSimAtmosphere(Operator):
                     istop = istart
                     while istop < times.size and times[istop] < tmax:
                         istop += 1
-                    while istop < times.size and \
-                          common_ref[istop] | tod.TURNAROUND == 0:
+                    while istop < times.size and (common_ref[istop]
+                                                  | tod.TURNAROUND == 0):
                         istop += 1
                     if istop < times.size:
                         tmax = times[istop]
@@ -292,14 +279,14 @@ class OpSimAtmosphere(Operator):
 
                 comm.Barrier()
                 if comm.rank == 0:
-                    print(prefix+'Instantiating the atmosphere for t = {}'
-                          ''.format(tmin-tmin_tot), flush=self._flush)
+                    print(prefix + 'Instantiating the atmosphere for t = {}'
+                          ''.format(tmin - tmin_tot), flush=self._flush)
                 comm.Barrier()
 
                 T0_center = weather.air_temperature
                 wx = weather.west_wind
                 wy = weather.south_wind
-                w_center = np.sqrt(wx**2 + wy**2)
+                w_center = np.sqrt(wx ** 2 + wy ** 2)
                 wdir_center = np.arctan2(wy, wx)
 
                 sim = atm_sim_alloc(
@@ -313,14 +300,14 @@ class OpSimAtmosphere(Operator):
                     self._verbosity, comm, self._gangsize,
                     key1, key2, counter1, counter2, cachedir)
                 if sim == 0:
-                    raise RuntimeError(prefix+'Failed to allocate simulation')
+                    raise RuntimeError(prefix + 'Failed to allocate simulation')
 
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()
-                    if comm.rank == 0 and tstop-tstart > 1:
-                        print(prefix+'OpSimAtmosphere: Initialized atmosphere '
-                              'in {:.2f} s'.format(tstop - tstart),
+                    if comm.rank == 0 and tstop - tstart > 1:
+                        print(prefix + 'OpSimAtmosphere: Initialized '
+                              'atmosphere in {:.2f} s'.format(tstop - tstart),
                               flush=self._flush)
                     tstart = tstop
 
@@ -332,19 +319,19 @@ class OpSimAtmosphere(Operator):
                         cachedir, '{}_{}_{}_{}_metadata.txt'.format(
                             key1, key2, counter1, counter2))
                     if use_cache and os.path.isfile(fname):
-                        print(prefix+'Loading the atmosphere for t = {} '
-                              'from {}'.format(tmin-tmin_tot, fname),
+                        print(prefix + 'Loading the atmosphere for t = {} '
+                              'from {}'.format(tmin - tmin_tot, fname),
                               flush=self._flush)
                         cached = True
                     else:
-                        print(prefix+'Simulating the atmosphere for t = {}'
-                              ''.format(tmin-tmin_tot),
+                        print(prefix + 'Simulating the atmosphere for t = {}'
+                              ''.format(tmin - tmin_tot),
                               flush=self._flush)
                         cached = False
 
                 err = atm_sim_simulate(sim, use_cache)
                 if err != 0:
-                    raise RuntimeError(prefix+'Simulation failed.')
+                    raise RuntimeError(prefix + 'Simulation failed.')
 
                 # Advance the sample counter in case wind_time broke the
                 # observation in parts
@@ -354,83 +341,29 @@ class OpSimAtmosphere(Operator):
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()
-                    if comm.rank == 0 and tstop-tstart > 1:
+                    if comm.rank == 0 and tstop - tstart > 1:
                         if cached:
                             op = 'Loaded'
                         else:
                             op = 'Simulated'
-                        print(prefix+'OpSimAtmosphere: {} atmosphere in {:.2f} s'
-                              ''.format(op, tstop-tstart), flush=self._flush)
+                        print(prefix + 'OpSimAtmosphere: {} atmosphere in '
+                              '{:.2f} s'.format(op, tstop - tstart),
+                              flush=self._flush)
                     tstart = tstop
 
                 if self._verbosity > 0:
-                    # Create snapshots of the atmosphere
-                    import matplotlib.pyplot as plt
-                    import sys
-                    elstep = .01 * degree
-                    azstep = elstep * np.cos(0.5*(elmin+elmax))
-                    azgrid = np.linspace( azmin, azmax, (azmax-azmin)//azstep+1 )
-                    elgrid = np.linspace( elmin, elmax, (elmax-elmin)//elstep+1 )
-                    AZ, EL = np.meshgrid( azgrid, elgrid )
-                    nn = AZ.size
-                    az = AZ.ravel()
-                    el = EL.ravel()
-                    atmdata = np.zeros(nn, dtype=np.float64)
-                    atmtimes = np.zeros(nn, dtype=np.float64)
+                    self._plot_snapshots(sim, prefix, obsname, azmin, azmax,
+                                         elmin, elmax, tmin, tmax, comm)
 
-                    rank = comm.rank
-                    ntask = comm.size
-                    r = 0
-                    t = 0
-                    my_snapshots = []
-                    vmin = 1e30
-                    vmax = -1e30
-                    tstep = 60
-                    for i, t in enumerate(np.arange(tmin, tmax, tstep)):
-                        if i % ntask != rank:
-                            continue
-                        err = atm_sim_observe(sim, atmtimes+t, az, el, atmdata,
-                                              nn, r)
-                        if err != 0:
-                            raise RuntimeError(prefix+'Observation failed')
-                        if self._gain:
-                            atmdata *= self._gain
-                        vmin = min(vmin, np.amin(atmdata))
-                        vmax = max(vmax, np.amax(atmdata))
-                        atmdata2d = atmdata.reshape(AZ.shape)
-                        my_snapshots.append((t, r, atmdata2d.copy()))
-
-                    vmin = comm.allreduce(vmin, op=MPI.MIN)
-                    vmax = comm.allreduce(vmax, op=MPI.MAX)
-
-                    for t, r, atmdata2d in my_snapshots:
-                        plt.figure(figsize=[12,4])
-                        plt.imshow(
-                            atmdata2d, interpolation='nearest',
-                            origin='lower', extent=np.array(
-                                [0, (azmax-azmin)*np.cos(0.5*(elmin+elmax)),
-                                 elmin, elmax])/degree,
-                            cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
-                        plt.colorbar()
-                        ax = plt.gca()
-                        ax.set_title(
-                            't = {:15.1f} s, r = {:15.1f} m'.format(t, r))
-                        ax.set_xlabel('az [deg]')
-                        ax.set_ylabel('el [deg]')
-                        ax.set_yticks([elmin/degree, elmax/degree])
-                        plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
-                            obsname, int(t), int(r)))
-                        plt.close()
-                    del my_snapshots
-
-                offset, nsamp = tod.local_samples
+                nsamp = tod.local_samples[1]
 
                 if self._report_timing:
                     comm.Barrier()
                     tstart = MPI.Wtime()
 
                 if comm.rank == 0:
-                    print(prefix+'Observing the atmosphere', flush=self._flush)
+                    print(prefix + 'Observing the atmosphere',
+                          flush=self._flush)
 
                 for det in tod.local_dets:
 
@@ -439,7 +372,7 @@ class OpSimAtmosphere(Operator):
                     if tod.cache.exists(cachename):
                         ref = tod.cache.reference(cachename)
                     else:
-                        ref = tod.cache.create(cachename, np.float64, (nsamp, ))
+                        ref = tod.cache.create(cachename, np.float64, (nsamp,))
 
                     # Cache the output flags
                     flag_ref = tod.local_flags(det, self._flag_name)
@@ -464,30 +397,30 @@ class OpSimAtmosphere(Operator):
                     # Convert Az/El quaternion of the detector back into
                     # angles for the simulation.
 
-                    theta, phi, pa = qa.to_angles(azelquat)
-                    # Azimuth is measured in the opposite direction than longitude
-                    az = 2*np.pi - phi
-                    el = np.pi/2 - theta
+                    theta, phi, _ = qa.to_angles(azelquat)
+                    # Azimuth is measured in the opposite direction
+                    # than longitude
+                    az = 2 * np.pi - phi
+                    el = np.pi / 2 - theta
 
                     if np.ptp(az) < np.pi:
                         azmin_det = np.amin(az)
                         azmax_det = np.amax(az)
                     else:
                         # Scanning across the zero azimuth.
-                        azmin_det = np.amin(az[az > np.pi]) - 2*np.pi
+                        azmin_det = np.amin(az[az > np.pi]) - 2 * np.pi
                         azmax_det = np.amax(az[az < np.pi])
                     elmin_det = np.amin(el)
                     elmax_det = np.amax(el)
                     if (
                             (not (azmin <= azmin_det and azmax_det <= azmax) and
-                             not (azmin <= azmin_det-2*np.pi
-                                  and azmax_det-2*np.pi <= azmax)
-                            )
+                             not (azmin <= azmin_det - 2 * np.pi
+                                  and azmax_det - 2 * np.pi <= azmax))
                             or
                             not (elmin <= elmin_det and elmin_det <= elmax)
                     ):
                         raise RuntimeError(
-                            prefix+'Detector Az/El: [{:.5f}, {:.5f}], '
+                            prefix + 'Detector Az/El: [{:.5f}, {:.5f}], '
                             '[{:.5f}, {:.5f}] is not contained in '
                             '[{:.5f}, {:.5f}], [{:.5f} {:.5f}]'
                             ''.format(
@@ -500,7 +433,7 @@ class OpSimAtmosphere(Operator):
                                           ngood, 0)
                     if err != 0:
                         # Observing failed
-                        print(prefix+'OpSimAtmosphere: Observing FAILED. '
+                        print(prefix + 'OpSimAtmosphere: Observing FAILED. '
                               'det = {}, rank = {}'.format(det, comm.rank),
                               flush=self._flush)
                         atmdata[:] = 0
@@ -522,17 +455,84 @@ class OpSimAtmosphere(Operator):
 
                 err = atm_sim_free(sim)
                 if err != 0:
-                    raise RuntimeError(prefix+'Failed to free simulation.')
+                    raise RuntimeError(prefix + 'Failed to free simulation.')
 
                 if self._report_timing:
                     comm.Barrier()
                     tstop = MPI.Wtime()
-                    if comm.rank == 0 and tstop-tstart > 1:
-                        print(prefix+'OpSimAtmosphere: Observed atmosphere in '
-                              '{:.2f} s'.format(tstop-tstart), flush=self._flush)
+                    if comm.rank == 0 and tstop - tstart > 1:
+                        print(prefix + 'OpSimAtmosphere: Observed atmosphere '
+                              'in {:.2f} s'.format(tstop - tstart),
+                              flush=self._flush)
 
                 tmin = tmax
 
+        return
+
+    def _plot_snapshots(self, sim, prefix, obsname, azmin, azmax,
+                        elmin, elmax, tmin, tmax, comm):
+        """ Create snapshots of the atmosphere
+
+        """
+        import matplotlib.pyplot as plt
+        elstep = .01 * degree
+        azstep = elstep * np.cos(0.5 * (elmin + elmax))
+        azgrid = np.linspace(azmin, azmax,
+                             (azmax - azmin) // azstep + 1)
+        elgrid = np.linspace(elmin, elmax,
+                             (elmax - elmin) // elstep + 1)
+        AZ, EL = np.meshgrid(azgrid, elgrid)
+        nn = AZ.size
+        az = AZ.ravel()
+        el = EL.ravel()
+        atmdata = np.zeros(nn, dtype=np.float64)
+        atmtimes = np.zeros(nn, dtype=np.float64)
+
+        rank = comm.rank
+        ntask = comm.size
+        r = 0
+        t = 0
+        my_snapshots = []
+        vmin = 1e30
+        vmax = -1e30
+        tstep = 60
+        for i, t in enumerate(np.arange(tmin, tmax, tstep)):
+            if i % ntask != rank:
+                continue
+            err = atm_sim_observe(sim, atmtimes + t, az, el,
+                                  atmdata, nn, r)
+            if err != 0:
+                raise RuntimeError(prefix + 'Observation failed')
+            if self._gain:
+                atmdata *= self._gain
+            vmin = min(vmin, np.amin(atmdata))
+            vmax = max(vmax, np.amax(atmdata))
+            atmdata2d = atmdata.reshape(AZ.shape)
+            my_snapshots.append((t, r, atmdata2d.copy()))
+
+        vmin = comm.allreduce(vmin, op=MPI.MIN)
+        vmax = comm.allreduce(vmax, op=MPI.MAX)
+
+        for t, r, atmdata2d in my_snapshots:
+            plt.figure(figsize=[12, 4])
+            plt.imshow(
+                atmdata2d, interpolation='nearest',
+                origin='lower', extent=np.array(
+                    [0, (azmax - azmin)
+                     * np.cos(0.5 * (elmin + elmax)),
+                     elmin, elmax]) / degree,
+                cmap=plt.get_cmap('Blues'), vmin=vmin, vmax=vmax)
+            plt.colorbar()
+            ax = plt.gca()
+            ax.set_title(
+                't = {:15.1f} s, r = {:15.1f} m'.format(t, r))
+            ax.set_xlabel('az [deg]')
+            ax.set_ylabel('el [deg]')
+            ax.set_yticks([elmin / degree, elmax / degree])
+            plt.savefig('atm_{}_t_{:04}_r_{:04}.png'.format(
+                obsname, int(t), int(r)))
+            plt.close()
+        del my_snapshots
         return
 
     def _get_from_obs(self, name, obs):
