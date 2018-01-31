@@ -14,7 +14,8 @@ from ..tod.sim_tod import *
 from ..tod.sim_det_map import *
 from ..map.pixels import *
 from ..map.rings import DistRings
-from ..map.pysm import PySMSky
+from ..map import PySMSky
+from ..todmap.pysm_operator import OpSimPySM
 
 
 def setup_toast_observations(self, nside):
