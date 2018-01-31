@@ -12,36 +12,27 @@ import gc
 from .cbuffer import ToastBuffer
 
 import os
-import tempfile
+from tempfile import NamedTemporaryFile as named_temp_file
+import timemory
 
 
-def get_buffer_directory():
-    _dir = None
+# ---------------------------------------------------------------------------- #
+# global values
+toast_cache_tmpdir = None
+
+
+# ---------------------------------------------------------------------------- #
+def get_toast_cache_verbosity():
+    import os
+    _verbose = 0
     try:
-        _dir = os.environ['TOAST_TMPDIR']
+        _verbose = int(os.environ['TOAST_CACHE_VERBOSE'])
     except:
-        _dir = '/tmp'
-    # ensure directory exists
-    if not os.path.exists(_dir) and _dir != '':
-        os.makedirs(_dir)
-    return _dir
+        pass
+    return _verbose
 
 
-def get_use_fsbuffer():
-    """
-    Check environment for TOAST_NO_FSBUFFER=[0-9]. If TOAST_NO_FSBUFFER > 0,
-    disable using FsBuffer
-    """
-    _fsbuffer_disable = 0
-    try:
-        _fsbuffer_disable = int(os.environ['TOAST_NO_FSBUFFER'])
-    except:
-        _fsbuffer_disable = 0
-    if _fsbuffer_disable == 0:
-        return True
-    return False
-
-
+# ---------------------------------------------------------------------------- #
 def numpy2toast(nptype):
     comptype = np.dtype(nptype)
     tbtype = None
@@ -70,6 +61,7 @@ def numpy2toast(nptype):
     return tbtype
 
 
+# ---------------------------------------------------------------------------- #
 def toast2numpy(tbtype):
     nptype = None
     if tbtype == "float64":
@@ -97,52 +89,332 @@ def toast2numpy(tbtype):
     return nptype
 
 
+# ---------------------------------------------------------------------------- #
+def get_buffer_directory():
+    """
+    The location of where the FsBuffer cache files are located
+    """
+    global toast_cache_tmpdir
+
+    # if set explicitly or set during first call of this function
+    if toast_cache_tmpdir is None:
+        toast_cache_tmpdir = '/tmp'
+        try:
+            toast_cache_tmpdir = os.environ['TOAST_TMPDIR']
+        except:
+            pass
+
+    # ensure directory exists
+    if not os.path.exists(toast_cache_tmpdir):
+        os.makedirs(toast_cache_tmpdir)
+
+    # return toast_cache_tmpdir
+    return toast_cache_tmpdir
+
+
+# ---------------------------------------------------------------------------- #
+class auto_disk_array(np.ndarray):
+    """
+    A special wrapper class around an np.ndarray that handles synchronization
+    between FsBuffer storage and memory
+    """
+    #
+    def __new__(cls, _input, _cache, _name, _incr=0):
+        # if input is FsBuffer object: load it
+        # else: use it
+        input_array = None
+        if isinstance(_input, FsBuffer):
+            # if FsBuffer object, load from memory
+            input_array = _input.load()
+            # ensure no FsBuffer object and reference object by deleting
+            # from Cache object
+            del _cache._fsbuffers[_name]
+
+        elif isinstance(_input, auto_disk_array):
+            # read message below
+            raise RuntimeError("Internal coding error! auto_disk_array (name " +
+                "== '{}') should not be created from another ".format(_name) +
+                "auto_disk_array instance. This very likely means that the " +
+                "auto_disk_array instance is stored somewhere in the Cache " +
+                "object -- which means garbage collection will not happen " +
+                "--> defeating the purpose of this class");
+
+        else:
+            # should be np.ndarray here
+            if not isinstance(_input, np.ndarray):
+                # this is a problem
+                raise RuntimeError("Trying to create an auto_disk_array from " +
+                    "{} which is not one of: [ {}, {}, {} ]".format(
+                    type(_input).__name__, "FsBuffer", "auto_disk_array", "np.ndarray"))
+            else:
+                # it is np.ndarray, it's good
+                input_array = _input
+
+        # make sure it is not None
+        assert(input_array is not None)
+
+        if get_toast_cache_verbosity() > 0:
+            if _name in _cache._auto_refs.keys():
+                print('Creating auto_disk_array[{}] (# {})'.format(_name,
+                    _cache._auto_refs[_name]+1))
+            else:
+                print('Creating auto_disk_array[{}] (# {})'.format(_name, 1))
+
+        # add to Cache._refs
+        if _name not in _cache._refs.keys():
+            input_array = _cache.create(_name, input_array.dtype, input_array.shape)
+
+        # input_array is an already formed np.ndarray instance
+        # --> cast to be our class type
+        obj = np.asarray(input_array).view(cls)
+
+        # add the new attribute to the created instance
+        obj._cache = _cache
+        obj._name = _name
+        obj._incr = _incr
+
+        # notify of creation
+        if get_toast_cache_verbosity() > 0:
+            print('--> Cache name: {}'.format(_name))
+
+        # insert into Cache._auto_refs if not already there
+        if not _name in _cache._auto_refs.keys():
+            _cache._auto_refs[_name] = 0
+
+        # increment the Cache._auto_refs
+        _cache._auto_refs[_name] += 1
+
+        # don't let it exist in FsBuffer dictionary simulateously
+        if _name in _cache._fsbuffers.keys():
+            del _cache._fsbuffers[_name]
+
+        # Finally, we must return the newly created object:
+        return obj
+
+
+    #
+    def __array_finalize__(self, obj):
+        """
+        Similar to __init__ but required by np.ndarray for proper sub-classing.
+        """
+        if obj is None:
+            return
+        self._cache = getattr(obj, '_cache', None)
+        self._name = getattr(obj, '_name', None)
+        self._incr = getattr(obj, '_incr', 0)
+
+
+        # increment the Cache._auto_refs
+        if self._cache is not None and self._name is not None:
+            # notify of creation
+            if get_toast_cache_verbosity() > 0:
+                _n = self._cache._auto_refs[self._name] + self._incr
+                print('--> {} [{}] (#{} - +{})'.format(timemory.FUNC(),
+                    self._name, _n, self._incr))
+
+            self._cache._auto_refs[self._name] += self._incr
+
+            # don't let it exist in FsBuffer dictionary simulateously
+            if self._name in self._cache._fsbuffers.keys():
+                del self._cache._fsbuffers[self._name]
+
+
+    #
+    def __del__(self):
+        """
+        This destructor will check if the auto_ref object should delete the
+        reference and put the array into a FsBuffer object or just do nothing
+        """
+        # if _cache._auto_refs no longer references these, ignore
+        if self._name in self._cache._auto_refs.keys():
+            if get_toast_cache_verbosity() > 0:
+                print('Deleting auto_disk_array[{}] (# {})'.format(self._name,
+                    self._cache._auto_refs[self._name]))
+
+            self._cache._auto_refs[self._name] -= 1
+
+            if self._cache._auto_refs[self._name] < 0:
+                raise RuntimeError('Cache object ["{}"]'.format(self._name) +
+                    ' in auto_disk_array has an unexpected _auto_ref count: ' +
+                    '{}'.format(self._cache._auto_refs[self._name]))
+
+            if self._cache._auto_refs[self._name] == 0:
+                if get_toast_cache_verbosity() > 0:
+                    print ('Deleting auto_disk_array({})...'.format(self._name))
+                # unload to FsBuffer object
+                self._cache._fsbuffers[self._name] = FsBuffer(self.base)
+                # remove from the Cache._refs
+                self._cache.destroy(self._name, remove_disk=False)
+                # remove from the Cache._auto_refs
+                del self._cache._auto_refs[self._name]
+
+
+    #
+    def __array_wrap__(self, out_arr, context=None):
+        # then just call the parent
+        obj = super(auto_disk_array, self).__array_wrap__(self, out_arr, context)
+        return auto_disk_array(np.asarray(obj).view(np.ndarray), self._cache, self._name)
+
+
+    """
+    #
+    def __copy__(self, *args, **kwargs):
+        if get_toast_cache_verbosity() > 0:
+            print('__copy__({}, {}, {})'.format(self._name, args, kwargs))
+        return super(auto_disk_array, self).__copy__(*args, **kwargs)
+    """
+
+
+    #
+    def __setitem__(self, *args, **kwargs):
+        if get_toast_cache_verbosity() > 0:
+            print('__setitem__({})'.format(self._name))
+        self._incr = 1
+        return super(auto_disk_array, self).__setitem__(*args, **kwargs)
+
+
+    # ensure the returned type is a auto_disk_array instance
+    # https://docs.scipy.org/doc/numpy/user/basics.subclassing.html (v1.14)
+    #
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        args = []
+        in_no = -1
+        in_caches = []
+        in_names = []
+        for i, input_ in enumerate(inputs):
+            if isinstance(input_, auto_disk_array):
+                if in_no < 0:
+                    in_no = i
+                args.append(input_.view(np.ndarray))
+                in_caches.append(input_._cache)
+                in_names.append(input_._name)
+            else:
+                args.append(input_)
+
+        outputs = kwargs.pop('out', None)
+        out_no = -1
+        out_caches = []
+        out_names = []
+        if outputs:
+            out_args = []
+            for j, output in enumerate(outputs):
+                if isinstance(output, auto_disk_array):
+                    if out_no < 0:
+                        out_no = j
+                    out_args.append(output.view(np.ndarray))
+                    out_caches.append(output._cache)
+                    out_names.append(output._name)
+                else:
+                    out_args.append(output)
+            kwargs['out'] = tuple(out_args)
+        else:
+            outputs = (None,) * ufunc.nout
+
+        _cache = None
+        _name = None
+        if not in_no < 0:
+            _cache = in_caches[in_no]
+            _name = in_caches[in_no]
+
+        if not out_no < 0:
+            _cache = out_caches[out_no]
+            _name = out_caches[out_no]
+
+        results = super(auto_disk_array, self).__array_ufunc__(ufunc, method,
+                                                               *args, **kwargs)
+
+        if results is NotImplemented:
+            return NotImplemented
+
+        if method == 'at':
+            if isinstance(inputs[0], auto_disk_array):
+                inputs[0]._cache = _cache
+                inputs[0]._name = _name
+                inputs[0]._incr = 0
+            return
+
+        if ufunc.nout == 1:
+            results = (results,)
+
+        results = tuple((np.asarray(result).view(auto_disk_array)
+                         #auto_disk_array(np.asarray(result).view(np.ndarray), _cache, _name, 1)
+                         if output is None else output)
+                         for result, output in zip(results, outputs))
+
+        if results and isinstance(results[0], auto_disk_array):
+            results[0]._cache = _cache
+            results[0]._name = _name
+            results[0]._incr = 1
+
+        return results[0] if len(results) == 1 else results
+
+
+# ---------------------------------------------------------------------------- #
 class FsBuffer(object):
     """
-    File system buffer (used @ NERSC specifically for BurstBuffer)
+    File system buffer (used @ NERSC specifically for BurstBuffer) but
+    can also use a temporary folder defined in TOAST_TMPDIR environment
+    variable or with toast.cache.toast_tmpdir. The latter overrides the former
     """
+    def __init__(self, obj):
+        """
+        Create a random temporary file for the FsBuffer object then
+        write to disk.
 
-    temporary_directory = get_buffer_directory()
-
-
-    def __init__(self, obj, mode='TRANSIENT'):
-        self._buffer_file = tempfile.NamedTemporaryFile(prefix='toast-cache-',
-            dir=FsBuffer.temporary_directory, suffix='.cache', delete=False)
-        self._buffer_mode = mode
+        NOTE: calling function in Cache responsible for deleting from Cache._refs
+        """
+        self._buffer_file = named_temp_file(prefix='toast-cache-',
+                                            dir=get_buffer_directory(),
+                                            suffix='.cache',
+                                            delete=False)
         self.unload(obj)
 
 
     def __del__(self):
+        """
+        Close the FsBuffer file and remove from OS
+        """
         self.close()
-        if self._buffer_mode == 'TRANSIENT':
-            os.remove(self._buffer_file.name)
+        os.remove(self._buffer_file.name)
 
 
     def open(self, fmode='w+b'):
+        """
+        Open the FsBuffer file
+        """
         self._buffer_file = open(self._buffer_file.name, fmode)
 
 
     def close(self):
+        """
+        Close the FsBuffer file
+        """
         self._buffer_file.close()
 
 
     def load(self):
-        #print('Load from buffer "{}"...{}'.format(self._buffer_file.name, obj))
+        """
+        Load the np.ndarray object into memory, i.e. read from file-system cache
+        """
+        if get_toast_cache_verbosity() > 0:
+            print('Load from buffer "{}"...'.format(self._buffer_file.name))
+
         try:
             obj = np.fromfile(self._buffer_file.name, dtype=self._buffer_type)
-        except:
-            print('File {} invalid (ndarray type: {})'.format(self._buffer_file.name,
-                self._buffer_type))
-            raise
+        except Exception as e:
+            raise RuntimeError('{}\nFile {} invalid (ndarray type: {})'.format(
+                e, self._buffer_file.name, self._buffer_type))
         return obj.reshape(self._buffer_shape)
 
 
-    def update(self, obj):
-        self.unload(obj)
-
-
     def unload(self, obj):
-        #print('Unloading to buffer "{}"...{}'.format(self._buffer_file.name, obj))
+        """
+        Unload the np.ndarray object from memory, i.e. put into file-system cache
+        """
+
+        if get_toast_cache_verbosity():
+            print('Unloading to buffer "{}"...'.format(self._buffer_file.name))
+
         self._buffer_type = obj.dtype
         self._buffer_shape = obj.shape
         self.open()
@@ -150,10 +422,14 @@ class FsBuffer(object):
         self.close()
 
 
-    def free(self):
-        self._buffer_obj = None
+    def update(self, obj):
+        """
+        Alias for unload. Used for overwriting with changes
+        """
+        self.unload(obj)
 
 
+# ---------------------------------------------------------------------------- #
 class Cache(object):
     """
     Timestream data cache with explicit memory management.
@@ -163,14 +439,15 @@ class Cache(object):
             allocations in C.  Only used for testing.
     """
 
-    use_fsbuffer = get_use_fsbuffer()
-
     def __init__(self, pymem=False):
         self._pymem = pymem
         self._refs = {}
         self._aliases = {}
-        if Cache.use_fsbuffer:
-            self._buffers = {}
+        # file-system buffer objects
+        self._fsbuffers = {}
+        # counter for auto_disk_array. Used to detect whether _refs object
+        # is a typical np.ndarray or an auto_disk_array object
+        self._auto_refs = {}
 
 
     def __del__(self):
@@ -179,21 +456,94 @@ class Cache(object):
         if not self._pymem:
             keylist = list(self._refs.keys())
             for k in keylist:
-                #gc.collect()
-                #referrers = gc.get_referrers(self._refs[k])
-                #print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
-                #print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
-                if sys.getrefcount(self._refs[k]) > 2:
-                    warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
+                self.check_ref_count(k)
                 del self._refs[k]
-                if Cache.use_fsbuffer:
-                    del self._buffers[k]
+            for k in list(self._fsbuffers.keys()):
+                del self._fsbuffers[k]
         self._refs.clear()
-        if Cache.use_fsbuffer:
-            self._buffers.clear()
+        self._fsbuffers.clear()
+        self._auto_refs.clear()
 
 
-    def clear(self, pattern=None, remove_fsbuffer=True):
+    def set_use_disk(self, name, use_disk=True):
+        """
+        Enable or disable the use of file-system cache.
+        """
+        if use_disk:
+            # enable FsBuffer storage
+            if name in self._auto_refs.keys():
+                # already set to using disk
+                pass
+            elif name in self._refs.keys():
+                # if currently in Cache._refs, create FsBuffer object
+                self._fsbuffers[name] = FsBuffer(self._refs[name])
+                # destroy reference in lieu of FsBuffer storage
+                self.destroy(name, remove_disk=False)
+            else:
+                if not name in self._fsbuffers.keys():
+                    # not already an fsbuffer object
+                    raise RuntimeError("Cache object named {} " + \
+                        "does not exist".format(name))
+        elif not use_disk:
+            # disable FsBuffer storage
+            if name in self._auto_refs.keys():
+                # we should not have an object in _fsbuffers and _refs
+                raise RuntimeError("Logic error! Cache object named {} " + \
+                    "already has disk-usage enabled".format(name))
+            elif name in self._fsbuffers.keys():
+                if not name in self._refs.keys():
+                    tmp = self._fsbuffers[name].load()
+                    del self._fsbuffers[name]
+                    ref = self.put(name, tmp, replace=True)
+                    del tmp
+                    del ref
+                else:
+                    # we should not have an object in _fsbuffers and _refs
+                    raise RuntimeError("Internal logic error! Cache object named {} " + \
+                        "exists in FsBuffer list and reference list".format(name))
+            else:
+                # doesn't exist
+                raise RuntimeError("Cache object named {} does not exist".format(name))
+
+
+    def move_to_disk(self, name):
+        """
+        Move an existing reference to file-system cache. Alias for
+        Cache.set_use_disk(name, use_disk=True)
+
+        Args:
+            name (str): the name of the buffer.
+        """
+        self.set_use_disk(name, use_disk=True)
+
+
+    def load_from_disk(self, name):
+        """
+        Load an existing FsBuffer object from the file-system cache. Alias for
+        Cache.set_use_disk(name, use_disk=False)
+
+        Args:
+            name (str): the name of the buffer.
+        """
+        self.set_use_disk(name, use_disk=False)
+
+
+    def check_ref_count(self, key):
+        """
+        Check the reference count of a key in self._refs
+
+        Args:
+            name (str): the name to assign to the buffer.
+        """
+        #referrers = gc.get_referrers(self._refs[key])
+        #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
+        #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+        if sys.getrefcount(self._refs[key]) > 2:
+            warnings.warn("Cache object {} has external references and will not be freed.".format(key),
+                RuntimeWarning)
+
+
+    def clear(self, pattern=None, remove_disk=True):
         """
         Clear one or more buffers.
 
@@ -205,21 +555,24 @@ class Cache(object):
         if pattern is None:
             # free all buffers
             self._aliases.clear()
+            _keep = {}
             if not self._pymem:
                 keylist = list(self._refs.keys())
                 for k in keylist:
-                    #gc.collect()
-                    #referrers = gc.get_referrers(self._refs[k])
-                    #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
-                    #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
-                    if sys.getrefcount(self._refs[k]) > 2:
-                        warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
-                    del self._refs[k]
-                    if Cache.use_fsbuffer and remove_fsbuffer:
-                        del self._buffers[k]
+                    if not remove_disk:
+                        if not k in self._auto_refs.keys():
+                            self.check_ref_count(k)
+                            del self._refs[k]
+                        else:
+                            _keep[k] = self._refs[k]
+                if remove_disk:
+                    for k in list(self._fsbuffers.keys()):
+                        del self._fsbuffers[k]
             self._refs.clear()
-            if Cache.use_fsbuffer and remove_fsbuffer:
-                self._buffers.clear()
+            self._refs = _keep
+            if remove_disk:
+                self._fsbuffers.clear()
+                self._auto_refs.clear()
         else:
             pat = re.compile(pattern)
             names = []
@@ -228,28 +581,30 @@ class Cache(object):
                 if mat is not None:
                     names.append(n)
                 del r
+            if remove_disk:
+                for n, r in self._fsbuffers.items():
+                    mat = pat.match(n)
+                    if mat is not None:
+                        names.append(n)
+                    del r
             for n in names:
-                self.destroy(n, remove_fsbuffer=remove_fsbuffer)
+                self.destroy(n, remove_disk)
         return
 
 
     def free(self, pattern=None):
         """
-        Clear one or more buffers but keep the fsbuffer.
+        Call clear on the buffers but don't delete disk copies
 
         Args:
             pattern (str): a regular expression to match against the buffer
                 names when determining what should be cleared.  If None,
                 then all buffers are cleared.
         """
-        # only call clear with remove_fsbuffer=False if using FsBuffer
-        if Cache.use_fsbuffer:
-            self.clear(pattern, remove_fsbuffer=False)
-        # if not using FsBuffer then calling clear would actually remove
-        return
+        self.clear(pattern, remove_disk=False)
 
 
-    def create(self, name, type, shape, use_fsbuffer=True):
+    def create(self, name, type, shape, use_disk=False):
         """
         Create a named data buffer of the given type and shape.
 
@@ -267,22 +622,24 @@ class Cache(object):
 
         if self._pymem:
             self._refs[name] = np.zeros(shape, dtype=type)
-            if Cache.use_fsbuffer and use_fsbuffer:
-                self._buffers[name] = FsBuffer(self._refs[name])
         else:
             flatsize = 1
             for s in range(len(shape)):
                 if shape[s] <= 0:
                     raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
                 flatsize *= shape[s]
-            self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
-            if Cache.use_fsbuffer and use_fsbuffer:
-                self._buffers[name] = FsBuffer(self._refs[name])
+            self._refs[name] = np.asarray( ToastBuffer(int(flatsize),
+                numpy2toast(type)) ).reshape(shape)
 
-        return self._refs[name]
+        ret = self._refs[name]
+
+        if use_disk:
+            return auto_disk_array(self._refs[name], self, name)
+
+        return ret
 
 
-    def put(self, name, data, replace=False, use_fsbuffer=True):
+    def put(self, name, data, replace=False):
         """
         Create a named data buffer to hold the provided data.
         If replace is True, existing buffer of the same name is first
@@ -308,17 +665,12 @@ class Cache(object):
             # of the supplied data in case it is a view of a subset
             # of the cache data.
             mydata = data.copy()
-            self.destroy(name, remove_fsbuffer=True)
+            self.destroy(name)
         else:
             mydata = data
 
-        # never use_fsbuffer bc over-ridden below
-        ref = self.create(name, mydata.dtype, mydata.shape, use_fsbuffer=False)
+        ref = self.create(name, mydata.dtype, mydata.shape, use_disk=False)
         ref[:] = mydata
-        if Cache.use_fsbuffer and use_fsbuffer:
-            if name in self._buffers.keys():
-                del self._buffers[name]
-            self._buffers[name] = FsBuffer(ref)
 
         return ref
 
@@ -344,7 +696,7 @@ class Cache(object):
         self._aliases[alias] = name
 
 
-    def destroy(self, name, remove_fsbuffer=True):
+    def destroy(self, name, remove_disk=True):
         """
         Deallocate the specified buffer.
 
@@ -360,41 +712,34 @@ class Cache(object):
             del self._aliases[name]
             return
 
-        if name not in self._refs.keys():
-            if name in self._buffers.keys() and remove_fsbuffer:
-                del self._buffers[name]
-                return
-            else:
-                print('Reference Keys: {}'.format(self._refs.keys()))
-                print('Buffer Keys: {}'.format(self._buffers.keys()))
-                raise RuntimeError("Data buffer {} does not exist".format(name))
+        if name not in self._refs.keys() and name not in self._fsbuffers.keys():
+            raise RuntimeError("Data buffer {} does not exist".format(name))
 
         # Remove aliases to the buffer
-        if Cache.use_fsbuffer and remove_fsbuffer:
-            aliases_to_remove = []
-            for key, value in self._aliases.items():
-                if value == name:
-                    aliases_to_remove.append( key )
-            for key in aliases_to_remove:
-                del self._aliases[key]
+        aliases_to_remove = []
+        for key, value in self._aliases.items():
+            if value == name:
+                aliases_to_remove.append( key )
+        for key in aliases_to_remove:
+            del self._aliases[key]
+
+        # check reference count
+        if not self._pymem and name in self._refs.keys():
+            self.check_ref_count(name)
 
         # Remove actual buffer
-        if not self._pymem:
-            # print("destroy referents for {} are ".format(name), gc.get_referents(self._refs[name]))
-            # print("destroy referrers for {} are ".format(name), gc.get_referrers(self._refs[name]))
-            # print("destroy refcount for {} is ".format(name), sys.getrefcount(self._refs[name]) )
-            if sys.getrefcount(self._refs[name]) > 2:
-                warnings.warn("Cache object {} has external references and will not be freed.".format(name), RuntimeWarning)
-        if Cache.use_fsbuffer and not remove_fsbuffer:
-            self._buffers[name].update(self._refs[name])
-        del self._refs[name]
-        if Cache.use_fsbuffer and remove_fsbuffer:
-            del self._buffers[name]
+        if name in self._refs.keys():
+            del self._refs[name]
+        if remove_disk:
+            if name in self._fsbuffers.keys():
+                del self._fsbuffers[name]
+            if name in self._auto_refs.keys():
+                del self._auto_refs[name]
 
         return
 
 
-    def exists(self, name, return_ref=False):
+    def exists(self, name, return_ref=False, use_disk=True):
         """
         Check whether a buffer exists.
 
@@ -407,34 +752,41 @@ class Cache(object):
         # Do the existence check first, to avoid creating extra
         # references if we are not returning a reference.
         check = False
-        if name in self._refs.keys():
+        if name in self._auto_refs.keys():
+            check = True
+        elif name in self._refs.keys():
             check = True
         elif name in self._aliases.keys():
             check = True
-        elif Cache.use_fsbuffer and name in self._buffers.keys():
+        elif use_disk and name in self._fsbuffers.keys():
             check = True
 
         if not return_ref:
             return check
         else:
-            if not check and not name in self._buffers.keys():
+            if not check:
                 return None
-            elif not check and Cache.use_fsbuffer and name in self._buffers.keys():
-                return self._buffers[name].load()
             else:
                 ref = None
-                if name in self._refs.keys():
+                if name in self._auto_refs.keys():
+                    # if it is in auto_refs, then we have another auto_ref
+                    # elsewhere, so create another auto_disk_array from
+                    # the base np.ndarray  in self._refs[name]
+                    ref = auto_disk_array(self._refs[name], self, name)
+                elif name in self._refs.keys():
                     ref = self._refs[name]
-                    if Cache.use_fsbuffer and ref is None:
-                        ref = self._buffers[name].load()
                 elif name in self._aliases.keys():
                     ref = self._refs[self._aliases[name]]
-                elif Cache.use_fsbuffer and name in self._buffers.keys():
-                    ref = self._buffers[name].load()
+                elif use_disk and name in self._fsbuffers.keys():
+                    # load a np.ndarray from the FsBuffer, let auto_disk_array
+                    # handle putting into _refs and deleting from _fsbuffers
+                    tmp = self._fsbuffers[name].load()
+                    del self._fsbuffers[name]
+                    ref = auto_disk_array(tmp, self, name)
                 return ref
 
 
-    def reference(self, name, free_alloc=False):
+    def reference(self, name):
         """
         Return a numpy array pointing to the buffer.
 
@@ -452,19 +804,12 @@ class Cache(object):
         ref = self.exists(name, return_ref=True)
         if ref is None:
             raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
-        if Cache.use_fsbuffer and free_alloc and name in self._refs.keys():
-            self.destroy(name, remove_fsbuffer=False)
         return ref
 
 
-    def clone(self, name):
+    def copy(self, name):
         """
-        Return a clone (copy) of a numpy array pointing to the buffer.
-
-        The returned array will wrap a pointer to the raw buffer, but will
-        not claim ownership.  When the numpy array is garbage collected, it
-        will NOT attempt to free the memory (you must manually use the
-        destroy method).
+        Return a copy of numpy array pointing to the buffer.
 
         Args:
             name (str): the name of the buffer to return.
@@ -472,13 +817,29 @@ class Cache(object):
         Returns:
             (array): a numpy array wrapping the raw data buffer.
         """
-        if Cache.use_fsbuffer and name in self._buffers.keys():
-            # always a copy
-            return self._buffers[name].load()
         ref = self.exists(name, return_ref=True)
         if ref is None:
             raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
+        # if we have an auto_disk_array instance from exists, then
+        # return a copy of the base np.ndarray
+        if isinstance(ref, auto_disk_array):
+            return ref.base.copy()
         return ref.copy()
+
+
+    def auto_reference_count(self, name):
+        """
+        Returns the number of auto_disk_arrays that exist for a specific buffer
+
+        Args:
+            name (str): the name of the buffer to return.
+
+        Returns:
+            (int): number of auto_disk_array objects using buffer
+        """
+        if name in self._auto_refs.keys():
+            return self._auto_refs[name]
+        return 0
 
 
     def keys(self):
@@ -490,8 +851,9 @@ class Cache(object):
         Returns:
             (list): List of key strings.
         """
-
-        return list(self._refs.keys())
+        _list = list(self._refs.keys())
+        _list.extend(list(self._fsbuffers.keys()))
+        return _list
 
 
     def aliases(self):
