@@ -7,8 +7,47 @@ import numpy as np
 
 from .. import timing as timing
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
+from ..tod import OpSimScan
 from ..mpi import MPI
 from ..op import Operator
+
+
+def extract_local_dets(data):
+    """Extracts the local detectors from the TOD objects
+
+    Some detectors could only appear in some observations, so we need
+    to loop through all observations and accumulate all detectors in
+    a set
+    """
+    autotimer = timing.auto_timer()
+    local_dets = set()
+    for obs in data.obs:
+        tod = obs['tod']
+        local_dets.update(tod.local_dets)
+    return local_dets
+
+
+def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
+    autotimer = timing.auto_timer()
+    full_maps_rank0 = np.zeros((n_components, npix),
+                               dtype=np.float64) if comm.rank == 0 else None
+    local_map_buffer = np.zeros((n_components, npix),
+                                   dtype=np.float64)
+    local_map_buffer[:, pixel_indices] = local_map
+    comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
+    return full_maps_rank0
+
+
+def extract_detector_parameters(det, focalplanes):
+    autotimer = timing.auto_timer()
+    for fp in focalplanes:
+        if det in fp:
+            if "fwhm" in fp[det]:
+                return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], \
+                    fp[det]["fwhm"]
+            else:
+                return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], -1
+    raise RuntimeError("Cannot find detector {} in any focalplane")
 
 class OpSimPySM(Operator):
     """
