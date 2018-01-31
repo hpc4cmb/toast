@@ -5,7 +5,7 @@ SUBDIRS =
 #  SUBDIRS += mpi4py
 #endif
 
-SUBDIRS += tod fod map tests
+SUBDIRS += tod fod map tests todmap
 
 HAVE_MPI4PY = 
 if HAVE_AM_MPI

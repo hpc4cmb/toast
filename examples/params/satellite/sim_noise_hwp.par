@@ -16,3 +16,7 @@
 4.0
 --nside
 512
+--input_pysm_model
+s3,d7,f1,a2,c2
+--apply_beam
+--flush
