@@ -8,28 +8,6 @@ include(MacroLibraryTargets)
 
 #------------------------------------------------------------------------------#
 
-# cereal options
-add_option(WITH_WERROR "Compile with '-Werror' C++ compiler flag" OFF NO_FEATURE)
-add_option(THREAD_SAFE "Compile Cereal with THREAD_SAFE option" ON NO_FEATURE)
-add_option(JUST_INSTALL_CEREAL "Skip testing of Cereal" ON NO_FEATURE)
-add_option(SKIP_PORTABILITY_TEST "Skip Cereal portability test" ON NO_FEATURE)
-
-set(DEV_WARNINGS ${CMAKE_SUPPRESS_DEVELOPER_WARNINGS})
-# this gets annoying
-set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL
-    "Suppress Warnings that are meant for the author of the CMakeLists.txt files"
-    FORCE)
-
-# add cereal
-add_subdirectory(cereal)
-
-set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ${DEV_WARNINGS} CACHE BOOL
-    "Suppress Warnings that are meant for the author of the CMakeLists.txt files"
-    FORCE)
-
-#------------------------------------------------------------------------------#
-
-include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/src/cereal/include)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/capi)
 include_directories(${PROJECT_SOURCE_DIR}/src/libtoast/fod)
