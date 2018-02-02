@@ -52,40 +52,36 @@ def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
-    if args.input_pysm_model or args.input_map:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print('Scanning local pixels', flush=args.flush)
-        start = MPI.Wtime()
+    autotimer = timing.auto_timer()
+    if comm.comm_world.rank == 0:
+        print('Scanning local pixels', flush=args.flush)
+    start = MPI.Wtime()
 
-        # Prepare for using distpixels objects
-        nside = args.nside
-        subnside = 16
-        if subnside > nside:
-            subnside = nside
-        subnpix = 12 * subnside * subnside
+    # Prepare for using distpixels objects
+    nside = args.nside
+    subnside = 16
+    if subnside > nside:
+        subnside = nside
+    subnpix = 12 * subnside * subnside
 
-        # get locally hit pixels
-        lc = tm.OpLocalPixels()
-        localpix = lc.exec(data)
-        if localpix is None:
-            raise RuntimeError(
-                'Process {} has no hit pixels. Perhaps there are fewer '
-                'detectors than processes in the group?'.format(
-                    comm.comm_world.rank))
+    # get locally hit pixels
+    lc = tm.OpLocalPixels()
+    localpix = lc.exec(data)
+    if localpix is None:
+        raise RuntimeError(
+            'Process {} has no hit pixels. Perhaps there are fewer '
+            'detectors than processes in the group?'.format(
+                comm.comm_world.rank))
 
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, subnpix))
+    # find the locally hit submaps.
+    localsm = np.unique(np.floor_divide(localpix, subnpix))
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Local submaps identified in {:.3f} s'.format(elapsed),
-                  flush=args.flush)
-    else:
-        localpix, localsm = None, None
-
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print('Local submaps identified in {:.3f} s'.format(elapsed),
+              flush=args.flush)
     return localpix, localsm, subnpix
 
 
