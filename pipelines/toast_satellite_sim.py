@@ -212,6 +212,19 @@ def main():
                         help='Apply beam convolution to input map with gaussian '
                         'beam parameters defined in focalplane')
 
+    parser.add_argument('--input_dipole', required=False,
+                        help='Simulate dipole, possible values are '
+                        'total, orbital, solar')
+    parser.add_argument('--input_dipole_solar_speed_kms', required=False,
+                        help='Solar system speed [Km/s]', type=float,
+                        default=369.0)
+    parser.add_argument('--input_dipole_solar_gal_lat_deg', required=False,
+                        help='Solar system speed galactic latitude [degrees]',
+                        type=float, default=48.26)
+    parser.add_argument('--input_dipole_solar_gal_lon_deg', required=False,
+                        help='Solar system speed galactic longitude[degrees]',
+                        type=float, default=263.99)
+
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     autotimer = timing.auto_timer("@{}".format(timing.FILE()))
@@ -420,6 +433,20 @@ def main():
     if args.input_pysm_model:
         signalname = simulate_sky_signal(args, comm, data, mem_counter,
                                          [fp], subnpix, localsm)
+
+    if args.input_dipole:
+        op_sim_dipole = tt.OpSimDipole(mode=args.input_dipole,
+                solar_speed=args.input_dipole_solar_speed_kms,
+                solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
+                solar_gal_lon=args.input_dipole_solar_gal_lon_deg,
+                out="tot_signal",
+                keep_quats=True,
+                keep_vel=False,
+                subtract=False,
+                coord="G",
+                freq=0,  # we could use frequency for quadrupole correction
+                flag_mask=255, common_flag_mask=255)
+        op_sim_dipole.exec(data)
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
