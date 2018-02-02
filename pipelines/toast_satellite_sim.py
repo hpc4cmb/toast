@@ -85,13 +85,12 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm):
+def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm, signalname):
     """ Use PySM to simulate smoothed sky signal.
 
     """
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
-    signalname = 'signal'
     op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
@@ -107,7 +106,6 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
 
     mem_counter.exec(data)
 
-    return signalname
 
 def main():
 
@@ -426,16 +424,18 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
+    signalname = "signal"
     if args.input_pysm_model:
-        signalname = simulate_sky_signal(args, comm, data, mem_counter,
-                                         [fp], subnpix, localsm)
+        simulate_sky_signal(args, comm, data, mem_counter,
+                                         [fp], subnpix, localsm, signalname=signalname)
 
     if args.input_dipole:
+        print("Simulating dipole")
         op_sim_dipole = tt.OpSimDipole(mode=args.input_dipole,
                 solar_speed=args.input_dipole_solar_speed_kms,
                 solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
                 solar_gal_lon=args.input_dipole_solar_gal_lon_deg,
-                out="tot_signal",
+                out=signalname,
                 keep_quats=True,
                 keep_vel=False,
                 subtract=False,
