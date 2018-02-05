@@ -208,6 +208,9 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
 
     return (tdata[offset:offset+samples], interp_freq, interp_psd)
 
+def array_dot(u, v):
+    """Dot product of each row of two 2D arrays"""
+    return np.sum(u * v, axis=1).reshape((-1,1))
 
 def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     """
@@ -248,16 +251,16 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
         solar_speed = np.sqrt(np.sum(solar * solar, axis=0))
 
-        vpar = ( np.sum(vel * vsol, axis=1).reshape((-1,1)) / solar_speed**2 ) * vsol
+        vpar = ( array_dot(vel, vsol) / solar_speed**2 ) * vsol
         vperp = vel - vpar
 
-        vdot = 1.0 / ( 1.0 + solar * vel * inv_light**2 )
+        vdot = 1.0 / ( 1.0 + array_dot(solar,vel) * inv_light**2 )
         invgamma = np.sqrt( 1.0 - (solar_speed * inv_light)**2 )
 
-        vpar = vdot * (vpar * solar)
-        vperp = vdot * vperp * invgamma
+        vpar += solar
+        vperp *= invgamma
 
-        v += vpar + vperp
+        v += vdot * (vpar + vperp)
     else:
         if solar is not None:
             v += np.tile(solar, nsamp).reshape((-1,3))
