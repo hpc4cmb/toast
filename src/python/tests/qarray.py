@@ -311,6 +311,14 @@ class QarrayTest(MPITestCase):
 
         np.testing.assert_array_almost_equal(check_pa, comp_pa, decimal=4)
 
+        # to_position test
+
+        check_theta, check_phi = qarray.to_position(quat)
+        check_theta2, check_phi2, check_pa = qarray.to_angles(quat, IAU=False)
+
+        np.testing.assert_array_almost_equal(check_theta, check_theta2, decimal=4)
+        np.testing.assert_array_almost_equal(check_phi, check_phi2, decimal=4)
+
     def test_depths(self):
         """Verify that qarray methods preserve the depths of their inputs
         """

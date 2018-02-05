@@ -416,3 +416,18 @@ def to_angles(q, IAU=False):
     if q.ndim == 1:
         theta, phi, psi = (theta[0], phi[0], psi[0])
     return (theta, phi, psi)
+
+def to_position(q):
+    autotimer = timing.auto_timer()
+    if not isinstance(q, np.ndarray):
+        q = np.array(q, dtype=np.float64)
+    nq = None
+    if q.ndim == 1:
+        nq = 1
+    else:
+        nq = q.shape[0]
+    theta, phi = ctoast.qarray_to_position(
+        nq, q.flatten().astype(np.float64, copy=False))
+    if q.ndim == 1:
+        theta, phi = (theta[0], phi[0])
+    return (theta, phi)
