@@ -1,4 +1,4 @@
-SUBDIRS = 
+SUBDIRS =
 
 # Initialize compile and linking flags
 
@@ -47,10 +47,10 @@ rng.py \
 fft.py \
 runner.py \
 tod.py \
+sim_focalplane.py \
 tidas.py \
 timing.py
 
 
 clean-local :
 	@rm -f *.pyc
-
