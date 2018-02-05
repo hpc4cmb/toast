@@ -210,7 +210,7 @@ def main():
                         help='Simulate dipole, possible values are '
                         'total, orbital, solar')
     parser.add_argument('--input_dipole_solar_speed_kms', required=False,
-                        help='Solar system speed [Km/s]', type=float,
+                        help='Solar system speed [km/s]', type=float,
                         default=369.0)
     parser.add_argument('--input_dipole_solar_gal_lat_deg', required=False,
                         help='Solar system speed galactic latitude [degrees]',
