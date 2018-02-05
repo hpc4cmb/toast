@@ -247,11 +247,9 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     if (vel is not None) and (solar is not None):
         # relativistic addition of velocities
 
-        vsol = np.tile(solar, nsamp).reshape((-1,3))
-
         solar_speed = np.sqrt(np.sum(solar * solar, axis=0))
 
-        vpar = ( array_dot(vel, vsol) / solar_speed**2 ) * vsol
+        vpar = ( array_dot(vel, solar) / solar_speed**2 ) * solar
         vperp = vel - vpar
 
         vdot = 1.0 / ( 1.0 + array_dot(solar,vel) * inv_light**2 )
