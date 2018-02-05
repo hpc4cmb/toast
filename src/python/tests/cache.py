@@ -222,6 +222,7 @@ class CacheTest(MPITestCase):
             name = 'test-{}'.format(k)
             self.assertTrue(self.cache.exists(name, use_disk=True))
             self.assertFalse(self.cache.exists(name, use_disk=False))
+            self.assertTrue(self.cache.auto_reference_count(name) == 0)
 
         # similar to clear but don't delete FsBuffer objects
         self.cache.free()
@@ -231,6 +232,7 @@ class CacheTest(MPITestCase):
             name = 'test-{}'.format(k)
             self.assertTrue(self.cache.exists(name, use_disk=True))
             self.assertFalse(self.cache.exists(name, use_disk=False))
+            self.assertTrue(self.cache.auto_reference_count(name) == 0)
 
         # call destroy but don't delete FsBuffer objects
         for k, v in self.types.items():
@@ -242,6 +244,7 @@ class CacheTest(MPITestCase):
             name = 'test-{}'.format(k)
             self.assertTrue(self.cache.exists(name, use_disk=True))
             self.assertFalse(self.cache.exists(name, use_disk=False))
+            self.assertTrue(self.cache.auto_reference_count(name) == 0)
 
         # actually delete the data
         self.cache.clear()
@@ -310,6 +313,8 @@ class CacheTest(MPITestCase):
     def test_fscache_size(self):
         start = MPI.Wtime()
 
+        import gc
+
         _size = 5000
         _name = 'test-array'
         _key = { 0 : 'initial-memory-usage',        # 0
@@ -336,6 +341,9 @@ class CacheTest(MPITestCase):
         self.cache.clear()
         self.cache._pymem = False
 
+        # tell garbage collection to collect all garbage
+        gc.collect()
+
         _base.record()
 
         #
@@ -346,6 +354,8 @@ class CacheTest(MPITestCase):
         # create a non-disk reference
         _ref = self.cache.create(_name, np.float64, [_size, _size], use_disk=False)
         del _ref
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 1. record the size of cache with standard reference
         #
@@ -353,6 +363,8 @@ class CacheTest(MPITestCase):
 
         # move to disk
         self.cache.move_to_disk(_name)
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 2. record the size of cache with FsBuffer reference
         #
@@ -360,6 +372,8 @@ class CacheTest(MPITestCase):
 
         # load from disk
         self.cache.load_from_disk(_name)
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 3. record the size of the cache with a loaded FsBuffer reference
         #
@@ -367,6 +381,8 @@ class CacheTest(MPITestCase):
 
         # clear the cache, RSS should
         self.cache.clear()
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 4. record the size of the cleared cache
         #
@@ -374,6 +390,8 @@ class CacheTest(MPITestCase):
 
         # create a auto_disk_array reference
         _ref = self.cache.create(_name, np.float64, [_size, _size], use_disk=True)
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 5. record the size with auto_disk_array (ref)
         #
@@ -381,6 +399,8 @@ class CacheTest(MPITestCase):
 
         # delete the auto_disk_array, this should move to FsBuffer
         del _ref
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 6. record the size with auto_disk_array (ref) --> FsBuffer
         #
@@ -388,6 +408,8 @@ class CacheTest(MPITestCase):
 
         # clear the cache
         self.cache.clear()
+        # tell garbage collection to collect all garbage
+        gc.collect()
         #
         # --> 7. record the final size
         #
@@ -397,10 +419,16 @@ class CacheTest(MPITestCase):
         # calculate the relative difference
         def relative_difference(_lhs, _rhs):
             _sum = _lhs + _rhs
-            # sum to less than KB == negligible
-            if _sum.current() < 0.001:
+            # sum to less than 500 KB == negligible
+            if _sum.current() < 0.5:
                 return 0.0
-            return abs(_lhs.current() - _rhs.current()) / (0.5 * _sum.current())
+            _diff = abs(_lhs.current() - _rhs.current()) / (0.5 * _sum.current())
+            print('abs({} - {}) / (0.5 * {}) = {}'.format(_lhs.current(),
+                                                          _rhs.current(),
+                                                          _sum.current(),
+                                                          _diff))
+            return _diff
+
 
         print('\nTotal memory summary:\n')
         for key, val in _rss.items():
@@ -414,14 +442,14 @@ class CacheTest(MPITestCase):
         for key, val in _rss.items():
             print('\t{:20} --> {}'.format(key, val))
 
-        epsilon = 1.0e-7 # ~ 10 bytes
+        epsilon = 1.0e-1 # ~ 100 KB (Python gc does annoying things
         #
         # --> Tests:
         #
         # regular reference should be less than FsBuffer references
         self.assertFalse(_rss[_key[1]].current() < _rss[_key[2]].current())
-        self.assertFalse(_rss[_key[1]].current() < _rss[_key[6]].current())
-        self.assertFalse(_rss[_key[1]].current() < _rss[_key[2]].current())
+        self.assertFalse(_rss[_key[3]].current() < _rss[_key[4]].current())
+        self.assertFalse(_rss[_key[5]].current() < _rss[_key[6]].current())
 
         # check approximately same size
         self.assertTrue(relative_difference(_rss[_key[1]], _rss[_key[3]]) < epsilon)
