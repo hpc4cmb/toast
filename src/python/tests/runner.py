@@ -39,6 +39,7 @@ from . import ops_madam as testopsmadam
 from . import map_satellite as testmapsatellite
 from . import map_ground as testmapground
 from . import binned as testbinned
+from . import sim_focalplane as testsimfocalplane
 
 from ..tod import tidas_available
 if tidas_available:
@@ -85,6 +86,7 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testqarray) )
         suite.addTest( loader.loadTestsFromModule(testtod) )
         suite.addTest( loader.loadTestsFromModule(testpsdmath) )
+        suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
         suite.addTest( loader.loadTestsFromModule(testintervals) )
         suite.addTest( loader.loadTestsFromModule(testopspmat) )
         suite.addTest( loader.loadTestsFromModule(testcov) )

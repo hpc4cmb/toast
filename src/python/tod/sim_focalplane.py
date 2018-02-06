@@ -1,12 +1,41 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
 import numpy as np
 
 from .. import qarray as qa
-import timemory
+
+
+def cartesian_to_quat(offsets):
+    """Convert cartesian angle offsets and rotation into quaternions.
+
+    Focalplane geometries are often described in terms of wafer locations or
+    separations given in simple X/Y angle offsets from a center point.
+    this helper function converts such parameters into a quaternion describing
+    the rotation.
+
+    Args:
+        offsets (list of arrays):  each item of the list has 3 elements for
+            the X / Y angle offsets in degrees and the rotation in degrees
+            about the Z axis.
+
+    Returns:
+        list: list of quaternions for each item in the input list.
+
+    """
+    centers = list()
+    zaxis = np.array([0,0,1], dtype=np.float64)
+    for off in offsets:
+        angrot = qa.rotation(zaxis, off[2]*np.pi/180.0)
+        wx = off[0]*np.pi/180.0
+        wy = off[1]*np.pi/180.0
+        wz = np.sqrt(1.0 - (wx*wx + wy*wy))
+        wdir = np.array([wx, wy, wz])
+        posrot = qa.from_vectors(zaxis, wdir)
+        centers.append(qa.mult(posrot, angrot))
+    return centers
 
 
 def hex_nring(npix):
@@ -26,12 +55,11 @@ def hex_nring(npix):
 
 def hex_row_col(npix, pix):
     """
-    For a hexagonal layout, indexed in a "spiral" scheme (see hex_layout), 
+    For a hexagonal layout, indexed in a "spiral" scheme (see hex_layout),
     this function returnes the "row" and "column" of a pixel.
     The row is zero along the main vertex-vertex axis, and is positive
     or negative above / below this line of pixels.
     """
-    autotimer = timemory.auto_timer()
     if pix >= npix:
         raise ValueError("pixel value out of range")
     test = npix - 1
@@ -62,10 +90,10 @@ def hex_row_col(npix, pix):
             col = coloff
         elif sector == 3:
             row = -steps
-            col = coloff 
+            col = coloff
         elif sector == 4:
             row = -ring
-            col = coloff + steps 
+            col = coloff + steps
         elif sector == 5:
             row = -ring + steps
             col = coloff + ring + steps
@@ -87,7 +115,6 @@ def hex_pol_angles_qu(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timemory.auto_timer()
     pol = np.zeros(npix, dtype=np.float64)
     for pix in range(npix):
         # get the row / col of the pixel
@@ -115,7 +142,6 @@ def hex_pol_angles_radial(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timemory.auto_timer()
     sixty = np.pi/3.0
     thirty = np.pi/6.0
     pol = np.zeros(npix, dtype=np.float64)
@@ -136,15 +162,15 @@ def hex_pol_angles_radial(npix, offset=0.0):
     return pol
 
 
-def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
+def hex_layout(npix, angwidth, prefix, suffix, pol,
     center=np.array([0,0,0,1], dtype=np.float64)):
     """
     Return detectors in a hexagon layout.
 
-    This maps the physical positions of pixels into angular positions 
-    from the hexagon center.  The X axis in the hexagon frame is along 
-    the vertex-to-opposite-vertex direction.  The Y axis is along 
-    flat-to-opposite-flat direction.  The origin is at the center of 
+    This maps the physical positions of pixels into angular positions
+    from the hexagon center.  The X axis in the hexagon frame is along
+    the vertex-to-opposite-vertex direction.  The Y axis is along
+    flat-to-opposite-flat direction.  The origin is at the center of
     the wafer.  For example::
 
         Y ^             O O O
@@ -154,23 +180,20 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
                         O O O
 
     Each pixel is numbered 1..npix and each detector is named by the
-    prefix, the pixel number, and the suffix.  The first pixel is at 
+    prefix, the pixel number, and the suffix.  The first pixel is at
     the center, and then the pixels are numbered moving outward in rings.
 
-    The extent of the hexagon is directly specified by the width and
-    angwidth parameters (the plate scale).  These, along with the npix 
-    parameter, constrain the packing locations of the pixel centers.
+    The extent of the hexagon is directly specified by the angwidth
+    parameter.  These, along with the npix parameter, constrain the packing
+    locations of the pixel centers.
 
     Args:
         npix (int): number of pixels packed onto wafer.
-        width (float): physical width (in mm) between flat sides.
         angwidth (float): the angle (in degrees) subtended by the width.
-        fwhm (float): the detector beam FWHM, useful for later 
-            visualization.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  The 
-            rotation is applied to the hexagon center prior to rotation 
+        pol (ndarray): 1D array of detector polarization angles.  The
+            rotation is applied to the hexagon center prior to rotation
             to the pixel location.
         center (ndarray): quaternion offset of the center of the layout.
 
@@ -179,7 +202,6 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             dictionary of detector properties.
 
     """
-    autotimer = timemory.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nullquat = np.array([0,0,0,1], dtype=np.float64)
     sixty = np.pi/3.0
@@ -188,8 +210,7 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
     angwidth = angwidth * np.pi / 180.0
 
     # compute the diameter (vertex to vertex width)
-    diameter = width / np.cos(thirty)
-    angdiameter = diameter * angwidth / width
+    angdiameter = angwidth / np.cos(thirty)
 
     # find the angular packing size of one detector
     test = npix - 1
@@ -244,7 +265,7 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             #        O   O (step 1)
             #       X O O O (step 0)
             #
-            # For a given ring, "R" (center is R=0), there are R steps along 
+            # For a given ring, "R" (center is R=0), there are R steps along
             # the sector edge.  The line from the origin to the opposite edge
             # that bisects this triangle has length R*sqrt(3)/2.  For each
             # equally-spaced step, we use the right triangle formed with this
@@ -265,7 +286,7 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             pixang = sectors * sixty + thirty + relang
 
             pixdist = 0.5 * pixdiam * float(ring) * np.sqrt(3) / np.cos(relang)
-            
+
             pixx = np.sin(pixdist) * np.cos(pixang)
             pixy = np.sin(pixdist) * np.sin(pixang)
             pixz = np.cos(pixdist)
@@ -277,7 +298,6 @@ def hex_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
 
         dprops = {}
         dprops["quat"] = qa.mult(center, qa.mult(pixrot, polrot))
-        dprops["fwhm"] = fwhm
 
         dets[dname] = dprops
 
@@ -298,10 +318,9 @@ def rhomb_dim(npix):
 def rhomb_row_col(npix, pix):
     """
     For a rhombus layout, indexed from top to bottom (see rhombus_layout),
-    this function returnes the "row" and "column" of a pixel.  The column 
+    this function returnes the "row" and "column" of a pixel.  The column
     starts at zero on the left hand side of a row.
     """
-    autotimer = timemory.auto_timer()
     if pix >= npix:
         raise ValueError("pixel value out of range")
     dim = rhomb_dim(npix)
@@ -333,12 +352,11 @@ def rhomb_pol_angles_qu(npix, offset=0.0):
         The detector polarization angles.
 
     """
-    autotimer = timemory.auto_timer()
     pol = np.zeros(npix, dtype=np.float64)
     for pix in range(npix):
         # get the row / col of the pixel
         row, col = rhomb_row_col(npix, pix)
-        if np.mod(row, 2) == 0:
+        if np.mod(col, 2) == 0:
             pol[pix] = 45.0 + offset
         else:
             pol[pix] = 0.0 + offset
@@ -346,19 +364,19 @@ def rhomb_pol_angles_qu(npix, offset=0.0):
 
 
 
-def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol, 
+def rhombus_layout(npix, angwidth, prefix, suffix, polang,
     center=np.array([0,0,0,1], dtype=np.float64)):
     """
     Return detectors in a rhombus layout.
 
     This particular rhombus geometry is essentially a third of a
-    hexagon.  In other words the aspect ratio of the rhombus is 
-    constrained to have the long dimension be sqrt(3) times the short 
+    hexagon.  In other words the aspect ratio of the rhombus is
+    constrained to have the long dimension be sqrt(3) times the short
     dimension.
 
-    This function maps the physical positions of pixels into angular 
-    positions from the rhombus center.  The X axis is along the short 
-    direction.  The Y axis is along longer direction.  The origin is 
+    This function maps the physical positions of pixels into angular
+    positions from the rhombus center.  The X axis is along the short
+    direction.  The Y axis is along longer direction.  The origin is
     at the center of the rhombus.  For example::
 
                           O
@@ -370,24 +388,22 @@ def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
                           O
 
     Each pixel is numbered 1..npix and each detector is named by the
-    prefix, the pixel number, and the suffix.  The first pixel is at the 
-    "top", and then the pixels are numbered moving downward and left to 
+    prefix, the pixel number, and the suffix.  The first pixel is at the
+    "top", and then the pixels are numbered moving downward and left to
     right.
 
-    The extent of the rhombus is directly specified by the width and
-    angwidth parameters (the plate scale).  These, along with the npix 
-    parameter, constrain the packing locations of the pixel centers.
+    The extent of the rhombus is directly specified by the angwidth parameter.
+    This, along with the npix parameter, constrain the packing locations of
+    the pixel centers.
 
     Args:
         npix (int): number of pixels packed onto wafer.
-        width (float): physical width (in mm) along the "short" dimension.
-        angwidth (float): the angle (in degrees) subtended by the width.
-        fwhm (float): the detector beam FWHM, useful for later 
-            visualization.
+        angwidth (float): the angle (in degrees) subtended by the short
+            dimension.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  The 
-            rotation is applied to the hexagon center prior to rotation 
+        polang (ndarray): 1D array of detector polarization angles.  The
+            rotation is applied to the hexagon center prior to rotation
             to the pixel location.
         center (ndarray): quaternion offset of the center of the layout.
 
@@ -396,7 +412,6 @@ def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
             dictionary of detector properties.
 
     """
-    autotimer = timemory.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nullquat = np.array([0,0,0,1], dtype=np.float64)
     rtthree = np.sqrt(3.0)
@@ -405,14 +420,13 @@ def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
     dim = rhomb_dim(npix)
 
     # compute the height
-    height = width * rtthree
-    angheight = height * angwidth / width
+    angheight = rtthree * angwidth
 
     # find the angular packing size of one detector
     pixdiam = angwidth / dim
 
     # convert pol vector to radians
-    pol *= np.pi / 180.0
+    pol = polang * np.pi / 180.0
 
     # number of digits for pixel indexing
 
@@ -450,29 +464,42 @@ def rhombus_layout(npix, width, angwidth, fwhm, prefix, suffix, pol,
 
         dprops = {}
         dprops["quat"] = qa.mult(center, qa.mult(pixrot, polrot))
-        dprops["fwhm"] = fwhm
 
         dets[dname] = dprops
 
     return dets
 
 
-def plot_focalplane(dets, width, height, outfile):
+def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
+    polcolor=None, labels=None):
     """
     Visualize a dictionary of detectors.
 
     This makes a simple plot of the detector positions on the projected
     focalplane.
 
-    To avoid python overhead in large MPI jobs, we place the matplotlib 
-    import inside this function, so that it is only imported when the 
+    To avoid python overhead in large MPI jobs, we place the matplotlib
+    import inside this function, so that it is only imported when the
     function is actually called.
 
+    If the detector dictionary contains a key "fwhm", that will be assumed
+    to be in arcminutes.  Otherwise a nominal value is used.
+
+    If the detector dictionary contains a key "viscolor", then that color
+    will be used.
+
     Args:
-        dets (dict): dictionary of detectors.
+        dets (dict): dictionary of detector quaternions.
         width (float): width of plot in degrees.
         height (float): height of plot in degrees.
         outfile (str): output PNG path.
+        fwhm (dict): dictionary of detector beam FWHM in arcminutes, used
+            to draw the circles to scale.
+        facecolor (dict): dictionary of color values for the face of each
+            detector circle.
+        polcolor (dict): dictionary of color values for the polarization
+            arrows.
+        labels (dict): plot this text in the center of each pixel.
 
     """
     import matplotlib
@@ -480,7 +507,15 @@ def plot_focalplane(dets, width, height, outfile):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig = plt.figure( figsize=(12,12), dpi=150 )
+    xfigsize = int(5 * width)
+    yfigsize = int(5 * height)
+    figdpi = 75
+
+    # Compute the font size to use for detector labels
+    fontpix = 0.2 * figdpi
+    fontpt = int(0.75 * fontpix)
+
+    fig = plt.figure(figsize=(xfigsize, yfigsize), dpi=figdpi)
     ax = fig.add_subplot(1, 1, 1)
 
     half_width = 0.5 * width
@@ -494,35 +529,55 @@ def plot_focalplane(dets, width, height, outfile):
     yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
     zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
-    for d in dets:
+    for d, quat in dets.items():
 
         # radius in degrees
-        detradius = 0.5 * dets[d]["fwhm"]
+        detradius = 0.5 * 5.0 / 60.0
+        if fwhm is not None:
+            detradius = 0.5 * fwhm[d] / 60.0
 
         # rotation from boresight
-        dir = qa.rotate(dets[d]["quat"], zaxis).flatten()
-        ang = np.arctan2(dir[1], dir[0])
+        rdir = qa.rotate(quat, zaxis).flatten()
+        ang = np.arctan2(rdir[1], rdir[0])
 
-        orient = qa.rotate(dets[d]["quat"], xaxis).flatten()
+        orient = qa.rotate(quat, xaxis).flatten()
         polang = np.arctan2(orient[1], orient[0])
 
-        mag = np.arccos(dir[2]) * 180.0 / np.pi
+        mag = np.arccos(rdir[2]) * 180.0 / np.pi
         xpos = mag * np.cos(ang)
         ypos = mag * np.sin(ang)
 
-        circ = plt.Circle((xpos, ypos), radius=detradius, fc="none", ec="k")
+        detface = "none"
+        if facecolor is not None:
+            detface = facecolor[d]
+
+        circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec="k")
         ax.add_artist(circ)
 
-        ascale = 2.5
+        ascale = 2.0
 
         xtail = xpos - ascale * detradius * np.cos(polang)
         ytail = ypos - ascale * detradius * np.sin(polang)
         dx = ascale * 2.0 * detradius * np.cos(polang)
-        dy = ascale * 2.0 * detradius * np.sin(polang)    
+        dy = ascale * 2.0 * detradius * np.sin(polang)
 
-        detcolor = "red"
-        ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius, head_width=0.5*detradius, head_length=0.5*detradius, fc=detcolor, ec=detcolor, length_includes_head=True)
+        detcolor = "black"
+        if polcolor is not None:
+            detcolor = polcolor[d]
+
+        ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius,
+            head_width=0.5*detradius, head_length=0.5*detradius, fc=detcolor,
+            ec=detcolor, length_includes_head=True)
+
+        if labels is not None:
+            xsgn = 1.0
+            if dx < 0.0:
+                xsgn = -1.0
+            labeloff = 0.05 * xsgn * fontpix * len(labels[d]) / figdpi
+            ax.text((xtail+1.1*dx+labeloff), (ytail+1.1*dy), labels[d],
+                color='k', fontsize=fontpt, horizontalalignment='center',
+                verticalalignment='center',
+                bbox=dict(fc='w', ec='none', pad=1, alpha=1.0))
 
     plt.savefig(outfile)
     return
-
