@@ -284,7 +284,7 @@ class auto_disk_array(np.ndarray):
         for i, input_ in enumerate(inputs):
             if isinstance(input_, auto_disk_array):
                 if in_no < 0:
-                    in_no = i
+                    in_no += 1
                 args.append(input_.view(np.ndarray))
                 in_caches.append(input_._cache)
                 in_names.append(input_._name)
@@ -300,7 +300,7 @@ class auto_disk_array(np.ndarray):
             for j, output in enumerate(outputs):
                 if isinstance(output, auto_disk_array):
                     if out_no < 0:
-                        out_no = j
+                        out_no += 1
                     out_args.append(output.view(np.ndarray))
                     out_caches.append(output._cache)
                     out_names.append(output._name)
