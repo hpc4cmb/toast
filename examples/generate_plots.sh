@@ -16,6 +16,11 @@ for j in $@
 do
     outdir=$(realpath ${j})
 
+    for i in ${outdir}/timing_report*.json		
+    do		
+        ${PWD}/timing_plot.py -f ${i}		
+    done
+    
     for i in ${outdir}/timing_report*.png
     do
         # show in log
