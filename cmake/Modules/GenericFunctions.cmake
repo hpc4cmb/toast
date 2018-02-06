@@ -158,10 +158,14 @@ macro(REMOVE_FILE _LIST _NAME)
 
 endmacro(REMOVE_FILE _LIST _NAME)
 
+################################################################################
+#   check a RESULT_VARIABLE from execute_process(...)
+################################################################################
+
 function(check_return _VAR)
-    if("${${_VAR}}" GREATER 0)
-        message(WARNING "Error code for ${_VAR} is greater than zero: ${${_VAR}}")
-    endif("${${_VAR}}" GREATER 0)
+    if(NOT "${${_VAR}}" EQUAL 0)
+        message(WARNING "Error code for ${_VAR} is non-zero: \"${${_VAR}}\"")
+    endif(NOT "${${_VAR}}" EQUAL 0)
 endfunction(check_return _VAR)
 
 ################################################################################
