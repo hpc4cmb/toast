@@ -4,8 +4,8 @@
 
 import healpy as hp
 import numpy as np
+import timemory
 
-from .. import timing as timing
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
 from ..tod import OpSimScan
 from ..mpi import MPI
@@ -19,7 +19,7 @@ def extract_local_dets(data):
     to loop through all observations and accumulate all detectors in
     a set
     """
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     local_dets = set()
     for obs in data.obs:
         tod = obs['tod']
@@ -28,7 +28,7 @@ def extract_local_dets(data):
 
 
 def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     full_maps_rank0 = np.zeros((n_components, npix),
                                dtype=np.float64) if comm.rank == 0 else None
     local_map_buffer = np.zeros((n_components, npix),
@@ -39,7 +39,7 @@ def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
 
 
 def extract_detector_parameters(det, focalplanes):
-    autotimer = timing.auto_timer()
+    autotimer = timemory.auto_timer()
     for fp in focalplanes:
         if det in fp:
             if "fwhm" in fp[det]:
@@ -72,7 +72,7 @@ class OpSimPySM(Operator):
                  out='signal', pysm_model='', focalplanes=None, nside=None,
                  subnpix=None, localsm=None, apply_beam=False, nest=True,
                  units='K_CMB', debug=False):
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
@@ -117,7 +117,7 @@ class OpSimPySM(Operator):
         del self.distmap
 
     def exec(self, data):
-        autotimer = timing.auto_timer(type(self).__name__)
+        autotimer = timemory.auto_timer(type(self).__name__)
         local_dets = extract_local_dets(data)
 
         bandpasses = {}
