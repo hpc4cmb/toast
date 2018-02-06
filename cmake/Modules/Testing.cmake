@@ -266,6 +266,10 @@ if(USE_COVERAGE)
         LABELS "Coverage;Python" TIMEOUT 7200)
 endif(USE_COVERAGE)
 
+
 # ------------------------------------------------------------------------ #
 # examples
-include(GenerateExamples)
+add_option(GENERATE_EXAMPLES "Generate TOAST examples for testing" ON)
+if(GENERATE_EXAMPLES)
+    include(GenerateExamples)
+endif(GENERATE_EXAMPLES)

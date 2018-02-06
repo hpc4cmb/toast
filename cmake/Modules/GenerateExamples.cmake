@@ -54,8 +54,13 @@ execute_process(COMMAND ${PROJECT_EXAMPLES_DIR}/cleanup.sh
     WORKING_DIRECTORY ${PROJECT_EXAMPLES_DIR}
     OUTPUT_FILE cleanup.log
     ERROR_FILE cleanup.log
-    RESULT_VARIABLE CLEAN_RET)
+    RESULT_VARIABLE CLEAN_RET
+    TIMEOUT 30)
 check_return(CLEAN_RET)
+# failed so don't proceed
+if(NOT "${CLEAN_RET}" EQUAL 0)
+    return()
+endif(NOT "${CLEAN_RET}" EQUAL 0)
 
 #------------------------------------------------------------------------------#
 
@@ -64,8 +69,13 @@ execute_process(COMMAND ${PROJECT_EXAMPLES_DIR}/fetch_data.sh
     WORKING_DIRECTORY ${PROJECT_EXAMPLES_DIR}
     OUTPUT_FILE fetch_data.log
     ERROR_FILE fetch_data.log
-    RESULT_VARIABLE FETCH_RET)
+    RESULT_VARIABLE FETCH_RET
+    TIMEOUT 5)
 check_return(FETCH_RET)
+# failed so don't proceed
+if(NOT "${FETCH_RET}" EQUAL 0)
+    return()
+endif(NOT "${FETCH_RET}" EQUAL 0)
 
 #------------------------------------------------------------------------------#
 
@@ -79,8 +89,13 @@ execute_process(COMMAND ${PROJECT_EXAMPLES_DIR}/generate_shell.sh
     WORKING_DIRECTORY ${PROJECT_EXAMPLES_DIR}
     OUTPUT_FILE generate_shell.log
     ERROR_FILE generate_shell.log
-    RESULT_VARIABLE GENERATE_SHELL_RET)
+    RESULT_VARIABLE GENERATE_SHELL_RET
+    TIMEOUT 30)
 check_return(GENERATE_SHELL_RET)
+# failed so don't proceed
+if(NOT "${GENERATE_SHELL_RET}" EQUAL 0)
+    return()
+endif(NOT "${GENERATE_SHELL_RET}" EQUAL 0)
 
 #------------------------------------------------------------------------------#
 # -- Add shell tests
