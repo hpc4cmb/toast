@@ -12,23 +12,24 @@ except ModuleNotFoundError:
     libsharp = None
     available = False
 
-import timemory
 from ..cache import Cache
 from ..mpi import MPI
+from .. import timing
 
 
+@timing.auto_timer
 def expand_pix(startpix, ringpix, local_npix, local_pix):
     """Turn first pixel index and number of pixel in full array of pixels
 
     to be optimized with cython
     """
-    autotimer = timemory.auto_timer()
     i = 0
     for start, num in zip(startpix, ringpix):
         local_pix[i:i + num] = np.arange(start, start + num)
         i += num
 
 
+@timing.auto_timer
 def distribute_rings(nside, rank, n_mpi_processes):
     """Create a libsharp map distribution based on rings
 
@@ -56,7 +57,6 @@ def distribute_rings(nside, rank, n_mpi_processes):
     """
     if libsharp is None:
         raise RuntimeError('libsharp not available')
-    autotimer = timemory.auto_timer()
     nrings = 4 * nside - 1  # four missing pixels
 
     # ring indices are 1-based

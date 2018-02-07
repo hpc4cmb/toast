@@ -24,8 +24,11 @@ import toast.tod as tt
 import toast.map as tm
 import toast.todmap as ttm
 import toast.qarray as qa
-import timemory
 from toast import Weather
+
+import toast.timing as timing
+
+from toast.control import parse_args
 
 #import warnings
 #warnings.filterwarnings('error')
@@ -244,7 +247,7 @@ def parse_arguments(comm):
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
+    args = parse_args(parser)
 
     if len(args.freq.split(',')) != 1:
         # Multi frequency run.  We don't support multiple copies of
@@ -289,6 +292,7 @@ def name2id(name, maxval=2**16):
     return value % maxval
 
 
+@timing.auto_timer
 def load_weather(args, comm, schedules):
     """ Load TOAST weather file(s) and attach them to the schedules.
 
@@ -297,7 +301,6 @@ def load_weather(args, comm, schedules):
         return
 
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
     if comm.comm_world.rank == 0:
         weathers = []
         weatherdict = {}
@@ -329,12 +332,12 @@ def load_weather(args, comm, schedules):
         print('Loading weather {:.3f} s'.format(stop-start), flush=args.flush)
 
 
+@timing.auto_timer
 def load_schedule(args, comm):
     """ Load the observing schedule(s).
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
     schedules = []
 
     if comm.comm_world.rank == 0:
@@ -391,6 +394,7 @@ def load_schedule(args, comm):
     return schedules
 
 
+@timing.auto_timer
 def get_focalplane_radius(args, focalplane, rmin=1.0):
     """ Find the furthest angular distance from the boresight
 
@@ -398,7 +402,6 @@ def get_focalplane_radius(args, focalplane, rmin=1.0):
     if args.focalplane_radius:
         return args.focalplane_radius
 
-    autotimer = timemory.auto_timer()
     xaxis, yxis, zaxis = np.eye(3)
     cosangs = []
     for det in focalplane:
@@ -411,12 +414,12 @@ def get_focalplane_radius(args, focalplane, rmin=1.0):
     return maxdist*1.001
 
 
+@timing.auto_timer
 def load_focalplanes(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     # Load focalplane information
 
@@ -458,6 +461,7 @@ def load_focalplanes(args, comm, schedules):
     return detweights
 
 
+@timing.auto_timer
 def get_analytic_noise(args, focalplane):
     """ Create a TOAST noise object.
 
@@ -465,7 +469,6 @@ def get_analytic_noise(args, focalplane):
     focalplane database.
 
     """
-    autotimer = timemory.auto_timer()
     detectors = sorted(focalplane.keys())
     fmin = {}
     fknee = {}
@@ -483,11 +486,11 @@ def get_analytic_noise(args, focalplane):
                             fknee=fknee, alpha=alpha, NET=NET)
 
 
+@timing.auto_timer
 def get_breaks(comm, all_ces, nces, args):
     """ List operational day limits in the list of CES:s.
 
     """
-    autotimer = timemory.auto_timer()
     breaks = []
     do_break = False
     for i in range(nces-1):
@@ -520,13 +523,13 @@ def get_breaks(comm, all_ces, nces, args):
     return breaks
 
 
+@timing.auto_timer
 def create_observation(args, comm, all_ces_tot, ices, noise):
     """ Create a TOAST observation.
 
     Create an observation for the CES scan defined by all_ces_tot[ices].
 
     """
-    autotimer = timemory.auto_timer()
     ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
 
     (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
@@ -582,12 +585,12 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     return obs
 
 
+@timing.auto_timer
 def create_observations(args, comm, schedules, counter):
     """ Create and distribute TOAST observations for every CES in schedules.
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     data = toast.Data(comm)
 
@@ -669,12 +672,12 @@ def create_observations(args, comm, schedules, counter):
     return data, telescope_data
 
 
+@timing.auto_timer
 def expand_pointing(args, comm, data, counter):
     """ Expand boresight pointing to every detector.
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     hwprpm = args.hwprpm
     hwpstep = None
@@ -710,12 +713,12 @@ def expand_pointing(args, comm, data, counter):
     return
 
 
+@timing.auto_timer
 def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
     if not args.skip_bin or args.input_map:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
         start = MPI.Wtime()
@@ -751,12 +754,12 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
+@timing.auto_timer
 def add_sky_signal(args, comm, data, totalname_freq, signalname):
     """ Add previously simulated sky signal to the atmospheric noise.
 
     """
     if signalname is not None:
-        autotimer = timemory.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
@@ -798,6 +801,7 @@ def simulate_sky_signal(args, comm, data, counter, schedules, subnpix, localsm):
     return signalname
 
 
+@timing.auto_timer
 def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
     """ Scan sky signal from a map.
 
@@ -805,7 +809,6 @@ def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
     signalname = None
 
     if args.input_map:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning input map', flush=args.flush)
         start = MPI.Wtime()
@@ -852,13 +855,13 @@ def setup_sigcopy(args, comm):
     return totalname, totalname_freq
 
 
+@timing.auto_timer
 def setup_madam(args, comm):
     """ Create a Madam parameter dictionary.
 
     Initialize the Madam parameters from the command line arguments.
 
     """
-    autotimer = timemory.auto_timer()
     pars = {}
 
     cross = args.nside // 2
@@ -915,6 +918,7 @@ def setup_madam(args, comm):
     return pars
 
 
+@timing.auto_timer
 def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     """ Scale atmospheric fluctuations by frequency.
 
@@ -929,7 +933,6 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     if args.skip_atmosphere:
         return
 
-    autotimer = timemory.auto_timer()
     start = MPI.Wtime()
     for obs in data.obs:
         tod = obs['tod']
@@ -1001,6 +1004,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     return
 
 
+@timing.auto_timer
 def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     """ Update atmospheric noise weights.
 
@@ -1013,7 +1017,6 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
 
     """
     if args.weather:
-        autotimer = timemory.auto_timer()
         start = MPI.Wtime()
         for obs in data.obs:
             tod = obs['tod']
@@ -1039,10 +1042,10 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     return
 
 
+@timing.auto_timer
 def simulate_atmosphere(args, comm, data, mc, counter,
                         totalname):
     if not args.skip_atmosphere:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating atmosphere', flush=args.flush)
             if args.atm_cache and not os.path.isdir(args.atm_cache):
@@ -1081,6 +1084,7 @@ def simulate_atmosphere(args, comm, data, mc, counter,
     return
 
 
+@timing.auto_timer
 def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
     """ Copy the atmospheric signal.
 
@@ -1089,7 +1093,6 @@ def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
 
     """
     if totalname != totalname_freq:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Copying atmosphere from {} to {}'.format(
                 totalname, totalname_freq), flush=args.flush)
@@ -1099,9 +1102,9 @@ def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
     return
 
 
+@timing.auto_timer
 def simulate_noise(args, comm, data, mc, counter, totalname_freq):
     if not args.skip_noise:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Simulating noise', flush=args.flush)
         start = MPI.Wtime()
@@ -1119,9 +1122,9 @@ def simulate_noise(args, comm, data, mc, counter, totalname_freq):
     return
 
 
+@timing.auto_timer
 def scramble_gains(args, comm, data, mc, counter, totalname_freq):
     if args.gain_sigma:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scrambling gains', flush=args.flush)
         start = MPI.Wtime()
@@ -1151,9 +1154,9 @@ def setup_output(args, comm, mc, freq):
     return outpath
 
 
+@timing.auto_timer
 def apply_polyfilter(args, comm, data, counter, totalname_freq):
     if args.polyorder:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1172,9 +1175,9 @@ def apply_polyfilter(args, comm, data, counter, totalname_freq):
     return
 
 
+@timing.auto_timer
 def apply_groundfilter(args, comm, data, counter, totalname_freq):
     if args.wbin_ground:
-        autotimer = timemory.auto_timer()
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
         start = MPI.Wtime()
@@ -1193,10 +1196,10 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
     return
 
 
+@timing.auto_timer
 def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
-    autotimer = timemory.auto_timer()
     from toast.tod.tidas import OpTidasExport
     tidas_path = os.path.abspath(args.tidas)
     comm.comm_world.Barrier()
@@ -1217,11 +1220,11 @@ def output_tidas(args, comm, data, totalname):
     return
 
 
+@timing.auto_timer
 def get_time_communicators(comm, data):
     """ Split the world communicator by time.
 
     """
-    autotimer = timemory.auto_timer()
     time_comms = [('all', comm.comm_world)]
 
     # A process will only have data for one season and one day.  If more
@@ -1249,6 +1252,7 @@ def get_time_communicators(comm, data):
     return time_comms
 
 
+@timing.auto_timer
 def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
                 counter, mc, firstmc, outpath, detweights, totalname_madam,
                 first_call=True, extra_prefix=None):
@@ -1260,7 +1264,6 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
     if comm.comm_world.rank == 0:
         print('Making maps', flush=args.flush)
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     pars = copy.deepcopy(madampars)
     pars['path_output'] = outpath
@@ -1363,12 +1366,10 @@ def main():
         print('Running with {} processes at {}'.format(
             comm.comm_world.size, str(datetime.now())), flush=True)
 
-    global_timer = timemory.simple_timer("Total time")
+    global_timer = timing.timer("Total time")
     global_timer.start()
 
     args, comm = parse_arguments(comm)
-
-    autotimer = timemory.auto_timer("@{}".format(timemory.FILE()))
 
     # Initialize madam parameters
 
@@ -1495,8 +1496,10 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-        tman = timemory.timing_manager()
-        tman.report()
+        from toast.control import timing_enabled
+        if timing_enabled:
+            tman = timing.timing_manager()
+            tman.report()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
         if MPI.COMM_WORLD.size == 1:

@@ -7,6 +7,8 @@
 # This script creates CES schedule file that can be used as input
 # to toast_ground_sim.py
 
+from toast.mpi import MPI
+
 import argparse
 from datetime import datetime
 import dateutil.parser
@@ -15,7 +17,10 @@ import numpy as np
 import ephem
 from scipy.constants import degree
 
-import timemory
+import toast.timing as timing
+
+from toast.control import parse_args
+
 
 def to_JD(t):
     # Unix time stamp to Julian date
@@ -522,6 +527,7 @@ def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
     return visible, not_visible
 
 
+@timing.auto_timer
 def build_schedule(
         args, start_timestamp, stop_timestamp,
         sun_el_max, sun_avoidance_angle,
@@ -642,7 +648,8 @@ def build_schedule(
     return
 
 
-def parse_args():
+@timing.auto_timer
+def parse_arguments():
 
     parser = argparse.ArgumentParser(
         description='Generate ground observation schedule.',
@@ -736,7 +743,7 @@ def parse_args():
                         required=False, default='schedule.txt',
                         help='Output filename')
 
-    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
+    args = parse_args(parser)
 
     if args.operational_days is None and args.stop is None:
         raise RuntimeError('You must provide --stop or --operational_days')
@@ -937,6 +944,7 @@ def parse_patch_center_and_width(args, parts):
     return corners
 
 
+@timing.auto_timer
 def parse_patches(args):
     # Parse the patch definitions
 
@@ -987,21 +995,32 @@ def parse_patches(args):
 
 
 def main():
+    # Guard against multiple processes trying to run this
+    if MPI.COMM_WORLD.rank == 0:
+        args, start_timestamp, stop_timestamp = parse_arguments()
 
-    args, start_timestamp, stop_timestamp = parse_args()
+        patches = parse_patches(args)
 
-    autotimer = timemory.auto_timer(timemory.FILE())
-
-    patches = parse_patches(args)
-
-    build_schedule(
-        args, start_timestamp, stop_timestamp,
-        args.sun_el_max*degree, args.sun_avoidance_angle*degree,
-        args.sun_angle_min*degree, args.moon_angle_min*degree,
-        args.el_min*degree, args.el_max*degree, args.fp_radius*degree, patches)
+        build_schedule(
+            args, start_timestamp, stop_timestamp,
+            args.sun_el_max*degree, args.sun_avoidance_angle*degree,
+            args.sun_angle_min*degree, args.moon_angle_min*degree,
+            args.el_min*degree, args.el_max*degree, args.fp_radius*degree,
+            patches)
 
 
 if __name__ == '__main__':
-    main()
-    tman = timemory.timing_manager()
-    tman.report()
+    try:
+        main()
+        from toast.control import timing_enabled
+        if timing_enabled:
+            tman = timing.timing_manager()
+            tman.report()
+        MPI.Finalize()
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
+        print("".join(lines), flush=True)
+        #toast.raise_error(6) # typical error code for SIGABRT
+        MPI.COMM_WORLD.Abort(6)

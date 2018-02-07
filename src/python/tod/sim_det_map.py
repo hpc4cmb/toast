@@ -6,10 +6,14 @@ import healpy as hp
 import numpy as np
 
 from .. import qarray as qa
-import timemory
+
 from ..ctoast import sim_map_scan_map
+
 from ..mpi import MPI
+
 from ..op import Operator
+
+from .. import timing
 
 
 class OpSimGradient(Operator):
@@ -42,6 +46,8 @@ class OpSimGradient(Operator):
         self._common_flag_mask = common_flag_mask
         self._keep_quats = keep_quats
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Create the gradient timestreams.
@@ -53,7 +59,6 @@ class OpSimGradient(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         comm = data.comm
 
         zaxis = np.array([0, 0, 1], dtype=np.float64)
@@ -106,7 +111,6 @@ class OpSimGradient(Operator):
         """
         (array): Return the underlying signal map (full map on all processes).
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         range = self._max - self._min
         pix = np.arange(0, 12 * self._nside * self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
@@ -144,6 +148,8 @@ class OpSimScan(Operator):
         self._out = out
         self._dets = dets
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Create the timestreams by scanning from the map.
@@ -154,7 +160,6 @@ class OpSimScan(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world

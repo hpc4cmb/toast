@@ -4,15 +4,15 @@
 
 from ctypes.util import find_library
 
-from toast.cache import Cache
-from toast.mpi import MPI
-from toast.op import Operator
-
 import ctypes as ct
 import healpy as hp
 import numpy as np
 import numpy.ctypeslib as npc
-import timemory
+
+from ..cache import Cache
+from ..mpi import MPI
+from ..op import Operator
+from .. import timing
 
 libmadam = None
 
@@ -204,6 +204,8 @@ class OpMadam(Operator):
             s += '{};'.format(d)
         return s
 
+
+    @timing.auto_timer
     def exec(self, data, comm=None):
         """
         Copy data to Madam-compatible buffers and make a map.
@@ -217,8 +219,6 @@ class OpMadam(Operator):
         if len(data.obs) == 0:
             raise RuntimeError('OpMadam requires every supplied data object to '
                                'contain at least one observation')
-
-        auto_timer = timemory.auto_timer(type(self).__name__)
 
         if comm is None:
             # Just use COMM_WORLD
@@ -241,12 +241,13 @@ class OpMadam(Operator):
 
         return
 
+
+    @timing.auto_timer
     def _destripe(self, comm, parstring, ndet, detstring, nsamp, nnz, periods,
                   psdinfo):
         """ Destripe the buffered data
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
         fcomm = comm.py2f()
         if self._cached:
             # destripe
@@ -273,6 +274,7 @@ class OpMadam(Operator):
             if self._mcmode:
                 self._cached = True
         return
+
 
     def _count_samples(self, data):
         """ Loop over the observations and count the number of samples.
@@ -304,6 +306,7 @@ class OpMadam(Operator):
             tod = data.obs[0]['tod']
             nsamp = tod.local_samples[1]
         return nsamp
+
 
     def _get_period_ranges(self, comm, data, detectors, nsamp):
         """ Collect the ranges of every observation.
@@ -371,12 +374,12 @@ class OpMadam(Operator):
 
         return obs_period_ranges, psdfreqs, periods
 
+
+    @timing.auto_timer
     def _prepare(self, data, comm):
         """ Examine the data object.
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
-
         nsamp = self._count_samples(data)
 
         # Determine the detectors and the pointing matrix non-zeros
@@ -430,11 +433,12 @@ class OpMadam(Operator):
         return (parstring, detstring, nsamp, ndet, nnz, nnz_full, nnz_stride,
                 periods, obs_period_ranges, psdfreqs, detectors, nside)
 
+
+    @timing.auto_timer
     def _stage_time(self, data, detectors, nsamp, obs_period_ranges):
         """ Stage the timestamps and use them to build PSD inputs.
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
             'timestamps', np.float64, (nsamp,))
 
@@ -479,11 +483,12 @@ class OpMadam(Operator):
 
         return psds
 
+
+    @timing.auto_timer
     def _stage_signal(self, data, detectors, nsamp, ndet, obs_period_ranges):
         """ Stage signal
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
             'signal', np.float64, (nsamp * ndet,))
 
@@ -515,12 +520,13 @@ class OpMadam(Operator):
 
         return
 
+
+    @timing.auto_timer
     def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges,
                       nside):
         """ Stage pixels
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
             'pixels', np.int64, (nsamp * ndet,))
 
@@ -592,13 +598,13 @@ class OpMadam(Operator):
 
         return pixels_dtype
 
+
+    @timing.auto_timer
     def _stage_pixweights(self, data, detectors, nsamp, ndet, nnz, nnz_full,
                           nnz_stride, obs_period_ranges):
         """Now collect the pixel weights
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
-
         self._madam_pixweights = self._cache.create(
             'pixweights', np.float64, (nsamp * ndet * nnz,))
 
@@ -638,6 +644,8 @@ class OpMadam(Operator):
 
         return weight_dtype
 
+
+    @timing.auto_timer
     def _stage_data(self, data, comm, nsamp, ndet, nnz, nnz_full, nnz_stride,
                     obs_period_ranges, psdfreqs, detectors, nside):
         """ create madam-compatible buffers
@@ -651,7 +659,6 @@ class OpMadam(Operator):
         overhead only once per node.
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
 
         if self._conserve_memory:
             nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
@@ -719,6 +726,8 @@ class OpMadam(Operator):
 
         return psdinfo, pixels_dtype, weight_dtype
 
+
+    @timing.auto_timer
     def _unstage_data(self, comm, data, nsamp, nnz, nnz_full,
                       obs_period_ranges, detectors, pixels_dtype, nside,
                       weight_dtype):
@@ -726,7 +735,6 @@ class OpMadam(Operator):
         and cache the destriped signal.
 
         """
-        auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_timestamps = None
         self._cache.destroy('timestamps')
 

@@ -2,11 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
-from toast.op import Operator
-
 import numpy as np
-import timemory
+
+from ..mpi import MPI
+from ..op import Operator
+
+from .. import timing
 
 
 class OpGroundFilter(Operator):
@@ -49,6 +50,8 @@ class OpGroundFilter(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Apply the ground filter to the signal.
@@ -56,7 +59,6 @@ class OpGroundFilter(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the communicator within the group

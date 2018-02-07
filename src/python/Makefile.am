@@ -1,4 +1,4 @@
-SUBDIRS = 
+SUBDIRS =
 
 #if HAVE_AM_MPI
 #else
@@ -7,7 +7,7 @@ SUBDIRS =
 
 SUBDIRS += tod fod map tests todmap
 
-HAVE_MPI4PY = 
+HAVE_MPI4PY =
 if HAVE_AM_MPI
   HAVE_MPI4PY += 1
 endif
@@ -46,7 +46,9 @@ qarray.py \
 op.py \
 healpix.py \
 vis.py \
-weather.py
+weather.py \
+timing.py \
+control.py
 
 
 toast_LTLIBRARIES = cbuffer.la
@@ -84,4 +86,3 @@ CLEANFILES = ctoast.py _version.py mpi.py
 
 clean-local :
 	@rm -f *.pyc *.pyo
-

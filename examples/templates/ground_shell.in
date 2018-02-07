@@ -28,8 +28,10 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-        --out "${outdir}/fp" --minpix $detpix
+        --out "${outdir}/fp" --minpix $detpix \
+        --toast-timing-enable \
+        --toast-timing-outdir "${outdir}" \
+        --toast-timing-outfile "timing_fp"
 fi
 
 # Generate the schedule file if it does not already exist.
@@ -40,9 +42,11 @@ schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
         --out "${schedulefile}" --patch @PATCH@ \
-        --operational_days 1
+        --operational_days 1 \
+        --toast-timing-enable \
+        --toast-timing-outdir "${outdir}" \
+        --toast-timing-outfile "timing_schedule"
 fi
 
 # The executable script
@@ -59,9 +63,10 @@ parfile="@TOPDIR@/params/ground/ground_sim.par"
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
+--toast-timing-enable \
+--toast-timing-enable-serialization \
+--toast-timing-outdir "${outdir}" \
+--toast-timing-outfile "timing_main" \
 --fp ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \

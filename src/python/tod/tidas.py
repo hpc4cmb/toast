@@ -11,7 +11,8 @@ import re
 import numpy as np
 
 from .. import qarray as qa
-import timemory
+
+from .. import timing
 
 from ..dist import Data, distribute_discrete
 from ..op import Operator
@@ -77,6 +78,7 @@ def create_tidas_schema(detlist, typestr, units):
     return schm
 
 
+@timing.auto_timer
 def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
     """
     Create a single TIDAS block that represents an observation.
@@ -114,7 +116,6 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
         raise RuntimeError("tidas is not available")
         return
 
-    autotimer = timemory.auto_timer()
     # The root block
     root = vol.root()
 
@@ -145,6 +146,7 @@ def create_tidas_obs(vol, parent, name, groups=None, intervals=None):
     return
 
 
+@timing.auto_timer
 def decode_tidas_quats(props):
     """
     Read detector quaternions from a TIDAS property dictionary.
@@ -160,7 +162,6 @@ def decode_tidas_quats(props):
         a dictionary of detectors and their quaternions, each stored as a 4
         element numpy array.
     """
-    autotimer = timemory.auto_timer()
     quatpat = re.compile(r"(.*)_{}([XYZW])".format(STR_QUAT))
     loc = {"X":0, "Y":1, "Z":2, "W":3}
     quats = {}
@@ -178,6 +179,7 @@ def decode_tidas_quats(props):
     return quats
 
 
+@timing.auto_timer
 def encode_tidas_quats(detquats, props=None):
     """
     Append detector quaternions to a dictionary.
@@ -198,7 +200,6 @@ def encode_tidas_quats(detquats, props=None):
     Returns (dict):
         a dictionary of detector quaternion values appended to the input.
     """
-    autotimer = timemory.auto_timer()
     ret = props
     if ret is None:
         ret = {}
@@ -384,12 +385,12 @@ class TODTidas(TOD):
         return dict(self._detquats)
 
 
+    @timing.auto_timer
     def _read_cache_helper(self, prefix, comps, start, n, usecache):
         """
         Helper function to read multi-component data, pack into an
         array, optionally cache it, and return.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # Number of components we have
         ncomp = len(comps)
 
@@ -584,6 +585,7 @@ class TODTidas(TOD):
         return
 
 
+@timing.auto_timer
 def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
     distintervals=None):
     """
@@ -625,7 +627,6 @@ def load_tidas(comm, path, mode="r", detranks=1, detbreaks=None, detgroup=None,
     if not available:
         raise RuntimeError("tidas is not available")
         return None
-    autotimer = timemory.auto_timer()
     # the global communicator
     cworld = comm.comm_world
     # the communicator within the group
@@ -779,6 +780,7 @@ class OpTidasExport(Operator):
         super().__init__()
 
 
+    @timing.auto_timer
     def exec(self, data):
         """
         Export data to a TIDAS volume.
@@ -793,7 +795,6 @@ class OpTidasExport(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level toast communicator
         comm = data.comm
         # the global communicator
@@ -909,7 +910,7 @@ class OpTidasExport(Operator):
                 distintervals = None
                 if self._usedist:
                     distintervals = STR_DISTINTR
-                tidastod = TODTidas(tod.mpicomm, vol, blockpath, 
+                tidastod = TODTidas(tod.mpicomm, vol, blockpath,
                     detranks=detranks, detgroup=STR_DETGROUP,
                     distintervals=distintervals)
                 blk = tidastod.block

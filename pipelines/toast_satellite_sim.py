@@ -20,18 +20,23 @@ import numpy as np
 import toast
 import toast.tod as tt
 import toast.map as tm
+import toast.todmap as ttm
 
 import toast.qarray as qa
-import timemory
+
+import toast.timing as timing
 
 from toast.vis import set_backend
 
+from toast.control import parse_args
+
+
+@timing.auto_timer
 def add_sky_signal(args, comm, data, totalname, signalname):
     """ Add signalname to totalname in the obs tod
 
     """
     if signalname is not None:
-        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs['tod']
             for det in tod.local_dets:
@@ -47,12 +52,13 @@ def add_sky_signal(args, comm, data, totalname, signalname):
 
     return
 
+
+@timing.auto_timer
 def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
     if args.input_pysm_model or args.input_map:
-        autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
         start = MPI.Wtime()
@@ -88,6 +94,7 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
+@timing.auto_timer
 def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm):
     """ Use PySM to simulate smoothed sky signal.
 
@@ -95,7 +102,7 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
     signalname = 'signal'
-    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
                                focalplanes=focalplanes,
@@ -112,6 +119,8 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
 
     return signalname
 
+
+@timing.auto_timer
 def main():
 
     if MPI.COMM_WORLD.rank == 0:
@@ -211,9 +220,7 @@ def main():
                         help='Apply beam convolution to input map with gaussian '
                         'beam parameters defined in focalplane')
 
-    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
-
-    autotimer = timemory.auto_timer("@{}".format(timemory.FILE()))
+    args = parse_args(parser)
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -528,6 +535,7 @@ def main():
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc+nmc):
+
             # create output directory for this realization
             outpath = "{}_{:03d}".format(args.outdir, mc)
             if comm.comm_world.rank == 0:
@@ -710,8 +718,10 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        tman = timemory.timing_manager()
-        tman.report()
+        from toast.control import timing_enabled
+        if timing_enabled:
+            tman = timing.timing_manager()
+            tman.report()
         MPI.Finalize()
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()

@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -8,13 +8,14 @@ import numpy as np
 import healpy as hp
 
 from .. import qarray as qa
-import timemory
 
 from .tod import TOD
 
 from ..op import Operator
 
 from .tod_math import dipole
+
+from .. import timing
 
 
 class OpSimDipole(Operator):
@@ -41,20 +42,20 @@ class OpSimDipole(Operator):
             otherwise add it (default).
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen 
+        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen
             2009 (see arXiv:0911.1955)
-        solar_speed (float): the amplitude of the solarsystem barycenter 
-            velocity with respect to the CMB in Km/s.  The default value is 
+        solar_speed (float): the amplitude of the solarsystem barycenter
+            velocity with respect to the CMB in Km/s.  The default value is
             based on http://arxiv.org/abs/0803.0732.
-        solar_gal_lat (float): the latitude in degrees in galactic 
-            coordinates for the direction of motion of the solarsystem with 
+        solar_gal_lat (float): the latitude in degrees in galactic
+            coordinates for the direction of motion of the solarsystem with
             respect to the CMB rest frame.
-        solar_gal_lon (float): the longitude in degrees in galactic 
-            coordinates for the direction of motion of the solarsystem with 
+        solar_gal_lon (float): the longitude in degrees in galactic
+            coordinates for the direction of motion of the solarsystem with
             respect to the CMB rest frame.
         freq (float): optional observing frequency in Hz (not GHz).
     """
-    def __init__(self, mode='total', coord='C', subtract=False, out='dipole', 
+    def __init__(self, mode='total', coord='C', subtract=False, out='dipole',
                  cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26,
                  solar_gal_lon=263.99, freq=0, keep_quats=False, keep_vel=False,
                  flag_mask=255, common_flag_mask=255):
@@ -89,18 +90,18 @@ class OpSimDipole(Operator):
         super().__init__()
 
 
+    @timing.auto_timer
     def exec(self, data):
         """
         Create the timestreams.
 
         This loops over all observations and detectors and uses the pointing,
-        the telescope motion, and the solar system motion to compute the 
+        the telescope motion, and the solar system motion to compute the
         observed dipole.
 
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world
@@ -143,7 +144,7 @@ class OpSimDipole(Operator):
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
                     tod.cache.create(cachename, np.float64, (nsamp, ))
-                
+
                 ref = tod.cache.reference(cachename)
                 if self._subtract:
                     ref[:] -= dipoletod

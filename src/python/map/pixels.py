@@ -16,7 +16,8 @@ from ..tod import TOD
 
 from ..cache import Cache
 
-import timemory
+from .. import timing
+
 
 class OpLocalPixels(Operator):
     """
@@ -38,6 +39,8 @@ class OpLocalPixels(Operator):
         self._pixmax = pixmax
         self._no_hitmap = no_hitmap
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Iterate over all observations and detectors and compute
@@ -58,7 +61,6 @@ class OpLocalPixels(Operator):
         # the communicator with all processes with
         # the same rank within their group
         crank = comm.comm_rank
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         # initialize the local pixel set
         local = None
@@ -249,6 +251,7 @@ class DistPixels(object):
         return self._nest
 
 
+    @timing.auto_timer
     def global_to_local(self, gl):
         """
         Convert global pixel indices into the local submap and pixel.
@@ -271,6 +274,7 @@ class DistPixels(object):
         return (lsm, pix)
 
 
+    @timing.auto_timer
     def duplicate(self):
         """
         Perform a deep copy of the distributed data.
@@ -301,6 +305,7 @@ class DistPixels(object):
         return nsub
 
 
+    @timing.auto_timer
     def allreduce(self, comm_bytes=None):
         """
         Perform a buffered allreduce of the pixel domain data.
@@ -363,6 +368,7 @@ class DistPixels(object):
         return
 
 
+    @timing.auto_timer
     def read_healpix_fits(self, path, comm_bytes=None):
         """
         Read and broadcast a HEALPix FITS table.
@@ -379,7 +385,6 @@ class DistPixels(object):
         if comm_bytes is None:
             comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         # we make the assumption that FITS binary tables are still stored in
         # blocks of 2880 bytes just like always...
@@ -475,6 +480,7 @@ class DistPixels(object):
         return
 
 
+    @timing.auto_timer
     def broadcast_healpix_map(self, fdata, comm_bytes=None):
         if comm_bytes is None:
             comm_bytes = self._commsize
@@ -545,6 +551,7 @@ class DistPixels(object):
         return
 
 
+    @timing.auto_timer
     def write_healpix_fits(self, path, comm_bytes=None):
         """
         Write data to a HEALPix format FITS table.
@@ -561,7 +568,6 @@ class DistPixels(object):
         if comm_bytes is None:
             comm_bytes = self._commsize
 
-        autotimer = timemory.auto_timer(type(self).__name__)
         # We will reduce some number of whole submaps at a time.
         # Find the number of submaps that fit into the requested
         # communication size.

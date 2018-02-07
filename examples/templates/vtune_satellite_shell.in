@@ -26,8 +26,10 @@ detpix=@DETPIX@
 fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-        --minpix ${detpix} --out "${outdir}/fp"
+        --minpix ${detpix} --out "${outdir}/fp" \
+        --toast-timing-enable \
+        --toast-timing-outdir "${outdir}" \
+        --toast-timing-outfile "timing_fp"
 fi
 
 # The executable script
@@ -56,9 +58,10 @@ groupsize=1
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
+--toast-timing-enable \
+--toast-timing-enable-serialization \
+--toast-timing-outdir "${outdir}" \
+--toast-timing-outfile "timing_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --nside ${nside} \

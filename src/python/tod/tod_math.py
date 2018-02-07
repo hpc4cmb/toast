@@ -13,11 +13,13 @@ import scipy.sparse as sp
 from .. import rng as rng
 from .. import qarray as qa
 from .. import fft as fft
-import timemory
+
+from .. import timing
 
 from ..op import Operator
 
 
+@timing.auto_timer
 def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     """
     Interpolate the gains to TOI samples and apply them.
@@ -36,7 +38,6 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     Returns:
         calibrated timestream.
     """
-    autotimer = timemory.auto_timer()
     if len(gaintimes) == 1:
         g = gains
     else:
@@ -59,6 +60,7 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     return toi_out
 
 
+@timing.auto_timer
 def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
                          rate, firstsamp, samples, oversample, freq, psd,
                          altfft=False):
@@ -102,7 +104,6 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
         the timestream array, the interpolated PSD frequencies, and
             the interpolated PSD values.
     """
-    autotimer = timemory.auto_timer()
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
@@ -209,6 +210,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     return (tdata[offset:offset+samples], interp_freq, interp_psd)
 
 
+@timing.auto_timer
 def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     """
     Compute a dipole timestream.
@@ -232,7 +234,6 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     Returns:
         (array):  detector dipole timestream.
     """
-    autotimer = timemory.auto_timer()
     zaxis = np.array([0,0,1], dtype=np.float64)
     nsamp = pntg.shape[0]
 
@@ -312,6 +313,8 @@ class OpCacheCopy(Operator):
         self._out = output
         self._force = force
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Copy timestreams.
@@ -322,7 +325,6 @@ class OpCacheCopy(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:
@@ -352,6 +354,8 @@ class OpCacheClear(Operator):
 
         self._name = name
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Clear timestreams.
@@ -362,7 +366,6 @@ class OpCacheClear(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:

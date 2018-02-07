@@ -4,14 +4,15 @@
 
 import healpy as hp
 import numpy as np
-import timemory
 
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
 from ..tod import OpSimScan
 from ..mpi import MPI
 from ..op import Operator
+from .. import timing
 
 
+@timing.auto_timer
 def extract_local_dets(data):
     """Extracts the local detectors from the TOD objects
 
@@ -19,7 +20,6 @@ def extract_local_dets(data):
     to loop through all observations and accumulate all detectors in
     a set
     """
-    autotimer = timemory.auto_timer()
     local_dets = set()
     for obs in data.obs:
         tod = obs['tod']
@@ -27,8 +27,8 @@ def extract_local_dets(data):
     return local_dets
 
 
+@timing.auto_timer
 def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
-    autotimer = timemory.auto_timer()
     full_maps_rank0 = np.zeros((n_components, npix),
                                dtype=np.float64) if comm.rank == 0 else None
     local_map_buffer = np.zeros((n_components, npix),
@@ -38,8 +38,8 @@ def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
     return full_maps_rank0
 
 
+@timing.auto_timer
 def extract_detector_parameters(det, focalplanes):
-    autotimer = timemory.auto_timer()
     for fp in focalplanes:
         if det in fp:
             if "fwhm" in fp[det]:
@@ -48,6 +48,7 @@ def extract_detector_parameters(det, focalplanes):
             else:
                 return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], -1
     raise RuntimeError("Cannot find detector {} in any focalplane")
+
 
 class OpSimPySM(Operator):
     """
@@ -68,11 +69,11 @@ class OpSimPySM(Operator):
         debug(bool):  Verbose progress reports.
     """
 
+    @timing.auto_timer
     def __init__(self, comm=None,
                  out='signal', pysm_model='', focalplanes=None, nside=None,
                  subnpix=None, localsm=None, apply_beam=False, nest=True,
                  units='K_CMB', debug=False):
-        autotimer = timemory.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self._out = out
@@ -116,8 +117,8 @@ class OpSimPySM(Operator):
         del self.dist_rings
         del self.distmap
 
+    @timing.auto_timer
     def exec(self, data):
-        autotimer = timemory.auto_timer(type(self).__name__)
         local_dets = extract_local_dets(data)
 
         bandpasses = {}

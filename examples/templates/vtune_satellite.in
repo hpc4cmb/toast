@@ -52,9 +52,10 @@ fpfile="${outdir}/fp_${detpix}.pkl"
 if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py \
-        --disable-timer-serialization \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-        --minpix ${detpix} --out "${outdir}/fp"
+        --minpix ${detpix} --out "${outdir}/fp" \
+        --toast-timing-enable \
+        --toast-timing-outdir "${outdir}" \
+        --toast-timing-outfile "timing_fp"
 fi
 
 # The executable script
@@ -74,7 +75,7 @@ groupnodes=@GROUPNODES@
 
 # Data distribution parameters.  We are distributing by detector,
 # so if our number of processes in a group is larger than the number
-# of detectors this is bad.  In that case, set the group size to 
+# of detectors this is bad.  In that case, set the group size to
 # one, so we have many more groups, each assigned
 
 if [ ${node_proc} -gt ${detpix} ]; then
@@ -86,9 +87,10 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
+--toast-timing-enable \
+--toast-timing-enable-serialization \
+--toast-timing-outdir "${outdir}" \
+--toast-timing-outfile "timing_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
 --numobs ${nobs} \
@@ -151,4 +153,3 @@ do
 done
 
 echo End slurm script at $(date)
-

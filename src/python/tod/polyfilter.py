@@ -4,11 +4,12 @@
 
 import re
 
-from toast.ctoast import filter_polyfilter
-from toast.op import Operator
-
 import numpy as np
-import timemory
+
+from ..ctoast import filter_polyfilter
+from ..op import Operator
+
+from .. import timing
 
 
 class OpPolyFilter(Operator):
@@ -57,6 +58,8 @@ class OpPolyFilter(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Apply the polynomial filter to the signal.
@@ -64,7 +67,6 @@ class OpPolyFilter(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         for obs in data.obs:
             tod = obs['tod']

@@ -23,24 +23,19 @@ from .op import Operator
 
 from .weather import Weather
 
-import timemory
+from . import timing
 
-#------------------------------------------------------------------------------#
 # enable TiMemory signal detection
-timemory.enable_signal_detection()
+timing.enable_signal_detection()
 
-
-#------------------------------------------------------------------------------#
 # create an exit action function for TiMemory signal detection
 def exit_action(errcode):
-    tman = timemory.timing_manager()
-    timemory.report(no_min=True)
+    tman = timing.timing_manager()
+    timing.report(no_min=True)
     fname = 'toast_error_{}.out'.format(errcode)
     f = open(fname, 'w')
     f.write('{}\n'.format(tman))
     f.close()
 
-
-#------------------------------------------------------------------------------#
 # set the exit action function
-timemory.set_exit_action(exit_action)
+timing.set_exit_action(exit_action)

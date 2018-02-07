@@ -17,7 +17,8 @@ except:
     ephem = None
 
 from .. import qarray as qa
-import timemory
+
+from .. import timing
 
 from ..healpix import ang2vec, vec2ang
 from .tod import TOD
@@ -31,6 +32,7 @@ from ..op import Operator
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
+@timing.auto_timer
 def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     """
     Generate quaternions for constantly slewing precession axis.
@@ -51,7 +53,6 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
         Array of quaternions stored as an ndarray of
         shape (nsim, 4).
     """
-    autotimer = timemory.auto_timer()
     # this is the increment in radians per sample
     angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
 
@@ -84,6 +85,7 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     return satquat
 
 
+@timing.auto_timer
 def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
                        spinperiod=1.0, spinangle=85.0, precperiod=0.0,
                        precangle=0.0):
@@ -119,7 +121,6 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
         Array of quaternions stored as an ndarray of
         shape (nsim, 4).
     """
-    autotimer = timemory.auto_timer()
     if spinperiod > 0.0:
         spinrate = 1.0 / (60.0 * spinperiod)
     else:
@@ -288,8 +289,9 @@ class TODHpixSpiral(TOD):
         raise RuntimeError("cannot write timestamps to simulated data streams")
         return
 
+
+    @timing.auto_timer
     def _get_boresight(self, start, n):
-        autotimer = timemory.auto_timer(type(self).__name__)
         # compute the absolute sample offset
         start_abs = self.local_samples[0] + start
 
@@ -332,8 +334,9 @@ class TODHpixSpiral(TOD):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
 
+
+    @timing.auto_timer
     def _get_pntg(self, detector, start, n):
-        autotimer = timemory.auto_timer(type(self).__name__)
         detquat = np.asarray(self._fp[detector])
         boresight = self._get_boresight(start, n)
         data = qa.mult(boresight, detquat)
@@ -582,13 +585,13 @@ class TODGround(TOD):
     SUN_UP = 8
     SUN_CLOSE = 16
 
+    @timing.auto_timer
     def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0,
                  site_lon=0, site_lat=0, site_alt=0, azmin=0, azmax=0, el=0,
                  scanrate=1, scan_accel=0.1,
                  CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
                  sampsizes=None, sampbreaks=None, coord="C",
                  report_timing=True, **kwargs):
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         if samples < 1:
             raise RuntimeError(
@@ -741,9 +744,8 @@ class TODGround(TOD):
                 print("TODGround: Translated scan pointing in {:.2f} s"
                       "".format(tstop - tstart), flush=True)
 
+    @timing.auto_timer
     def __del__(self):
-        autotimer = timemory.auto_timer(type(self).__name__)
-
         try:
             del self._boresight_azel
         except:
@@ -786,12 +788,12 @@ class TODGround(TOD):
         """
         return self._min_az, self._max_az, self._min_el, self._max_el
 
+    @timing.auto_timer
     def simulate_scan(self, samples):
         # simulate the scanning with turnarounds. Regardless of firsttime,
         # we must simulate from the beginning of the CES.
         # Generate matching common flags.
         # Sets self._boresight.
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         self._az = np.zeros(samples)
         self._commonflags = np.zeros(samples, dtype=np.uint8)
@@ -916,13 +918,13 @@ class TODGround(TOD):
 
         return sizes, starts[:-1]
 
+    @timing.auto_timer
     def translate_pointing(self):
         """ Translate Az/El into bore sight quaternions
 
         Translate the azimuth and elevation into bore sight quaternions.
 
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         # At this point, all processes still have all of the scan
 
@@ -955,13 +957,13 @@ class TODGround(TOD):
 
         return
 
+    @timing.auto_timer
     def crop_vectors(self):
         """ Crop the TOD vectors.
 
         Crop the TOD vectors to match the sample range assigned to this task.
 
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         offset, n = self.local_samples
         ind = slice(offset, offset+n)
 
@@ -975,6 +977,7 @@ class TODGround(TOD):
 
         return
 
+    @timing.auto_timer
     def _get_azel2radec_quats(self):
         """ Construct a sparsely sampled vector of Az/El->Ra/Dec quaternions.
 
@@ -985,7 +988,6 @@ class TODGround(TOD):
         """
         # One control point at least every 10 minutes.  Overkill but
         # costs nothing.
-        autotimer = timemory.auto_timer(type(self).__name__)
         n = max(2, 1 + int((self._lasttime-self._firsttime) / 600))
         times = np.linspace(self._firsttime, self._lasttime, n)
         quats = np.zeros([n, 4])
@@ -995,6 +997,7 @@ class TODGround(TOD):
 
         return times, quats
 
+    @timing.auto_timer
     def _get_coord_quat(self, t):
         """ Get the Az/El -> Ra/Dec conversion quaternion for boresight.
 
@@ -1002,7 +1005,6 @@ class TODGround(TOD):
         the detector frame.
 
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         self._observer.date = self.to_DJD(t)
         # Set pressure to zero to disable atmospheric refraction.
         pressure = self._observer.pressure
@@ -1038,19 +1040,18 @@ class TODGround(TOD):
         quat = np.array([b, c, d, a])
         return quat
 
+    @timing.auto_timer
     def free_azel_quats(self):
-        autotimer = timemory.auto_timer(type(self).__name__)
         self._boresight_azel = None
         self.cache.destroy("boresight_azel")
 
+    @timing.auto_timer
     def free_radec_quats(self):
-        autotimer = timemory.auto_timer(type(self).__name__)
         self._boresight = None
         self.cache.destroy("boresight_radec")
 
+    @timing.auto_timer
     def radec2quat(self, ra, dec, pa):
-        autotimer = timemory.auto_timer(type(self).__name__)
-
         qR = qa.rotation(ZAXIS, ra+np.pi/2)
         qD = qa.rotation(XAXIS, np.pi/2-dec)
         qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
@@ -1093,8 +1094,8 @@ class TODGround(TOD):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
+    @timing.auto_timer
     def _get_times(self, start, n):
-        autotimer = timemory.auto_timer(type(self).__name__)
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         return start_time + np.arange(n) / self._rate
@@ -1117,6 +1118,7 @@ class TODGround(TOD):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
 
+    @timing.auto_timer
     def read_boresight_az(self, local_start=0, n=0):
         """
         Read the boresight azimuth.
@@ -1129,7 +1131,6 @@ class TODGround(TOD):
         Returns:
             (array): a numpy array containing the timestamps.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -1140,12 +1141,12 @@ class TODGround(TOD):
                 local_start, local_start+n-1))
         return self._az[local_start:local_start+n]
 
+    @timing.auto_timer
     def _get_pntg(self, detector, start, n, azel=False):
         # FIXME: this is where we will apply atmospheric refraction and
         # stellar aberration corrections in the detector frame.  For
         # simulations they will only matter if we want to simulate the
         # error coming from ignoring them.
-        autotimer = timemory.auto_timer(type(self).__name__)
         boresight = self._get_boresight(start, n, azel=azel)
         detquat = self._fp[detector]
         return qa.mult(boresight, detquat)
@@ -1154,12 +1155,12 @@ class TODGround(TOD):
         raise RuntimeError("cannot write data to simulated pointing")
         return
 
+    @timing.auto_timer
     def _get_position(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        autotimer = timemory.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
@@ -1171,12 +1172,12 @@ class TODGround(TOD):
         raise RuntimeError("cannot write data to simulated position")
         return
 
+    @timing.auto_timer
     def _get_velocity(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        autotimer = timemory.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
         x = self._earthspeed * np.cos(ang)

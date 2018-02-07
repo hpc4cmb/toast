@@ -10,8 +10,11 @@ import numpy as np
 
 from ..dist import distribute_samples
 from ..cache import Cache
-import timemory
+
+from .. import timing
+
 from .interval import Interval
+
 
 class TOD(object):
 
@@ -521,6 +524,7 @@ class TOD(object):
 
     # Read and write the common timestamps
 
+    @timing.auto_timer
     def read_times(self, local_start=0, n=0, **kwargs):
         """
         Read timestamps.
@@ -536,7 +540,6 @@ class TOD(object):
         Returns:
             (array): a numpy array containing the timestamps.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -547,6 +550,7 @@ class TOD(object):
                              "".format(local_start, local_start+n-1))
         return self._get_times(local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_times(self, local_start=0, stamps=None, **kwargs):
         """
         Write timestamps.
@@ -559,7 +563,6 @@ class TOD(object):
                 assigned sample.
             stamps (array): the array of timestamps to write.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if stamps is None:
             raise ValueError("you must specify the vector of time stamps")
         if self.local_samples[1] <= 0:
@@ -575,6 +578,7 @@ class TOD(object):
 
     # Read and write telescope boresight pointing
 
+    @timing.auto_timer
     def read_boresight(self, local_start=0, n=0, **kwargs):
         """
         Read boresight quaternion pointing.
@@ -589,7 +593,6 @@ class TOD(object):
         Returns:
             A 2D array of shape (n, 4)
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -601,6 +604,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_boresight(local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_boresight(self, local_start=0, data=None, **kwargs):
         """
         Write boresight quaternion pointing.
@@ -612,7 +616,6 @@ class TOD(object):
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if len(data.shape) != 2:
             raise ValueError("data should be a 2D array")
         if data.shape[1] != 4:
@@ -628,6 +631,7 @@ class TOD(object):
 
     # Read and write detector data
 
+    @timing.auto_timer
     def read(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector data.
@@ -643,7 +647,6 @@ class TOD(object):
         Returns:
             An array containing the data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -659,6 +662,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get(detector, local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector data.
@@ -671,7 +675,6 @@ class TOD(object):
                 assigned sample.
             data (array): the data array.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -691,6 +694,7 @@ class TOD(object):
 
     # Read and write detector quaternion pointing
 
+    @timing.auto_timer
     def read_pntg(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector quaternion pointing.
@@ -706,7 +710,6 @@ class TOD(object):
         Returns:
             A 2D array of shape (n, 4)
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -722,6 +725,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_pntg(detector, local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
         """
         Write detector quaternion pointing.
@@ -734,7 +738,6 @@ class TOD(object):
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -756,6 +759,7 @@ class TOD(object):
 
     # Read and write detector flags
 
+    @timing.auto_timer
     def read_flags(self, detector=None, local_start=0, n=0, **kwargs):
         """
         Read detector flags.
@@ -771,7 +775,6 @@ class TOD(object):
         Returns:
             An array containing the detector flags.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -788,6 +791,7 @@ class TOD(object):
         return self._get_flags(detector, local_start, n, **kwargs)
 
 
+    @timing.auto_timer
     def read_common_flags(self, local_start=0, n=0, **kwargs):
         """
         Read common flags.
@@ -803,7 +807,6 @@ class TOD(object):
         Returns:
             (array): a numpy array containing the flags.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if self.local_samples[1] <= 0:
             raise RuntimeError("cannot read common flags- process has no "
                                "assigned local samples")
@@ -815,6 +818,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_common_flags(local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_common_flags(self, local_start=0, flags=None, **kwargs):
         """
         Write common flags.
@@ -827,7 +831,6 @@ class TOD(object):
                 assigned sample.
             flags (array): array containing the flags to write.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if flags is None:
             raise ValueError("flags must be specified")
         if self.local_samples[1] <= 0:
@@ -842,6 +845,7 @@ class TOD(object):
         self._put_common_flags(local_start, flags, **kwargs)
         return
 
+    @timing.auto_timer
     def write_flags(self, detector=None, local_start=0, flags=None,
                         **kwargs):
         """
@@ -855,7 +859,6 @@ class TOD(object):
                 assigned sample.
             flags (array): the detector flags.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -875,6 +878,7 @@ class TOD(object):
 
     # Read and write telescope position
 
+    @timing.auto_timer
     def read_position(self, local_start=0, n=0, **kwargs):
         """
         Read telescope position.
@@ -891,7 +895,6 @@ class TOD(object):
             (array): a 2D numpy array containing the x,y,z coordinates at each
                 sample.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -903,6 +906,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_position(local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_position(self, local_start=0, pos=None, **kwargs):
         """
         Write telescope position.
@@ -915,7 +919,6 @@ class TOD(object):
                 assigned sample.
             pos (array): the 2D array of x,y,z coordinates at each sample.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if pos is None:
             raise ValueError("you must specify the array of coordinates")
         if self.local_samples[1] <= 0:
@@ -931,6 +934,7 @@ class TOD(object):
 
     # Read and write telescope velocity
 
+    @timing.auto_timer
     def read_velocity(self, local_start=0, n=0, **kwargs):
         """
         Read telescope velocity.
@@ -947,7 +951,6 @@ class TOD(object):
             (array): a 2D numpy array containing the x,y,z velocity components
                 at each sample.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -959,6 +962,7 @@ class TOD(object):
                 "".format(local_start, local_start+n-1))
         return self._get_velocity(local_start, n, **kwargs)
 
+    @timing.auto_timer
     def write_velocity(self, local_start=0, vel=None, **kwargs):
         """
         Write telescope velocity.
@@ -972,7 +976,6 @@ class TOD(object):
             vel (array): the 2D array of x,y,z velocity components at each
                 sample.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         if vel is None:
             raise ValueError("you must specify the array of velocities.")
         if self.local_samples[1] <= 0:

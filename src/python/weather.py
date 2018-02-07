@@ -8,7 +8,8 @@ import datetime
 import numpy as np
 
 from . import rng as rng
-import timemory
+
+from . import timing
 
 
 class Weather(object):
@@ -87,6 +88,8 @@ class Weather(object):
 
         return
 
+
+    @timing.auto_timer
     def set(self, site, realization, time=None):
         """ Set the weather object state.
 
@@ -96,7 +99,6 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         self.site = site
         self.realization = realization
         if time is not None:
@@ -104,6 +106,7 @@ class Weather(object):
         else:
             self._reset_vars()
         return
+
 
     def _reset_vars(self):
         """ Reset the cached random variables.
@@ -119,6 +122,8 @@ class Weather(object):
         self._west_wind = None
         self._south_wind = None
 
+
+    @timing.auto_timer
     def set_time(self, time):
         """ Set the observing time.
 
@@ -126,7 +131,6 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         self._time = time
         self._date = datetime.datetime.utcfromtimestamp(self._time)
         self._doy = self._date.timetuple().tm_yday
@@ -137,6 +141,8 @@ class Weather(object):
         self._reset_vars()
         return
 
+
+    @timing.auto_timer
     def _draw(self, name):
         """ Return a random parameter value.
 
@@ -149,7 +155,6 @@ class Weather(object):
         if self._year is None:
             raise RuntimeError('Weather object must be initialized by calling '
                                'set_time(time)')
-        autotimer = timemory.auto_timer(type(self).__name__)
         # Set the RNG counters for this variable and time
         counter1 = self._varindex[name]
         counter2 = (self._year*366 + self._doy)*24 + self._hour
@@ -162,7 +167,9 @@ class Weather(object):
 
         return np.interp(x, self._prob, cdf)
 
+
     @property
+    @timing.auto_timer
     def ice_water(self):
         """ Total precipitable ice water [kg/m^2] (also [mm]).
 
@@ -171,11 +178,12 @@ class Weather(object):
 
         """
         if self._ice_water is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._ice_water = self._draw('TQI')
         return self._ice_water
 
+
     @property
+    @timing.auto_timer
     def liquid_water(self):
         """ Total precipitable liquid water [kg/m^2] (also [mm]).
 
@@ -184,11 +192,12 @@ class Weather(object):
 
         """
         if self._liquid_water is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._liquid_water = self._draw('TQL')
         return self._liquid_water
 
+
     @property
+    @timing.auto_timer
     def pwv(self):
         """ Total precipitable water vapor [kg/m^2] (also [mm]).
 
@@ -197,11 +206,12 @@ class Weather(object):
 
         """
         if self._pwv is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._pwv = self._draw('TQV')
         return self._pwv
 
+
     @property
+    @timing.auto_timer
     def humidity(self):
         """ 10-meter specific humidity [kg/kg]
 
@@ -210,11 +220,12 @@ class Weather(object):
 
         """
         if self._humidity is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._humidity = self._draw('QV10M')
         return self._humidity
 
+
     @property
+    @timing.auto_timer
     def surface_pressure(self):
         """ Surface pressure [Pa].
 
@@ -223,11 +234,12 @@ class Weather(object):
 
         """
         if self._surface_pressure is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._surface_pressure = self._draw('PS')
         return self._surface_pressure
 
+
     @property
+    @timing.auto_timer
     def surface_temperature(self):
         """ Surface skin temperature [K].
 
@@ -236,11 +248,12 @@ class Weather(object):
 
         """
         if self._surface_temperature is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._surface_temperature = self._draw('TS')
         return self._surface_temperature
 
+
     @property
+    @timing.auto_timer
     def air_temperature(self):
         """ 10-meter air temperature [K].
 
@@ -249,11 +262,12 @@ class Weather(object):
 
         """
         if self._air_temperature is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._air_temperature = self._draw('T10M')
         return self._air_temperature
 
+
     @property
+    @timing.auto_timer
     def west_wind(self):
         """ 10-meter eastward wind [m/s].
 
@@ -262,11 +276,12 @@ class Weather(object):
 
         """
         if self._west_wind is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._west_wind = self._draw('U10M')
         return self._west_wind
 
+
     @property
+    @timing.auto_timer
     def south_wind(self):
         """ 10-meter northward wind [m/s].
 
@@ -275,6 +290,5 @@ class Weather(object):
 
         """
         if self._south_wind is None:
-            autotimer = timemory.auto_timer(type(self).__name__)
             self._south_wind = self._draw('V10M')
         return self._south_wind

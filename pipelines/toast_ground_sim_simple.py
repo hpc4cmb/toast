@@ -22,7 +22,11 @@ import toast
 import toast.tod as tt
 import toast.map as tm
 import toast.qarray as qa
-import timemory
+
+import toast.timing as timing
+
+from toast.control import parse_args
+
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -145,7 +149,7 @@ def parse_arguments(comm):
                         required=False, default=None,
                         help='Output TIDAS export path')
 
-    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
+    args = parse_args(parser)
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -169,9 +173,9 @@ def parse_arguments(comm):
     return args, comm
 
 
+@timing.auto_timer
 def load_schedule(args, comm):
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
     if comm.comm_world.rank == 0:
         fn = args.schedule
         if not os.path.isfile(fn):
@@ -230,9 +234,9 @@ def load_schedule(args, comm):
     return site, all_ces
 
 
+@timing.auto_timer
 def load_fp(args, comm):
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     fp = None
 
@@ -313,6 +317,7 @@ def load_fp(args, comm):
     return fp, detweights
 
 
+@timing.auto_timer
 def create_observations(args, comm, fp, all_ces, site):
     """ Simulate constant elevation scans.
 
@@ -322,7 +327,6 @@ def create_observations(args, comm, fp, all_ces, site):
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     data = toast.Data(comm)
 
@@ -457,12 +461,12 @@ def create_observations(args, comm, fp, all_ces, site):
     return data
 
 
+@timing.auto_timer
 def expand_pointing(args, comm, data):
     """ Expand the bore sight pointing to every detector.
 
     """
     start = MPI.Wtime()
-    autotimer = timemory.auto_timer()
 
     hwprpm = args.hwprpm
     hwpstep = None
@@ -497,6 +501,7 @@ def expand_pointing(args, comm, data):
     return
 
 
+@timing.auto_timer
 def get_submaps(args, comm, data):
     """ Determine submap distribution
 
@@ -505,7 +510,6 @@ def get_submaps(args, comm, data):
         if comm.comm_world.rank == 0:
             print('Scanning local pixels', flush=args.flush)
         start = MPI.Wtime()
-        autotimer = timemory.auto_timer()
 
         # Prepare for using distpixels objects
         nside = args.nside
@@ -538,6 +542,7 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
+@timing.auto_timer
 def scan_signal(args, comm, data, localsm, subnpix):
     """ Scan time-ordered signal from a map.
 
@@ -548,7 +553,6 @@ def scan_signal(args, comm, data, localsm, subnpix):
         if comm.comm_world.rank == 0:
             print('Scanning input map', flush=args.flush)
         start = MPI.Wtime()
-        autotimer = timemory.auto_timer()
 
         npix = 12*args.nside**2
 
@@ -591,6 +595,7 @@ def setup_sigcopy(args, comm, signalname):
     return signalname_madam, sigcopy_madam, sigclear
 
 
+@timing.auto_timer
 def build_npp(args, comm, data, localsm, subnpix, detweights,
               flag_name, common_flag_name):
     """ Build pixel-pixel noise covariance matrices.
@@ -602,7 +607,6 @@ def build_npp(args, comm, data, localsm, subnpix, detweights,
             print('Preparing distributed map', flush=args.flush)
         start0 = MPI.Wtime()
         start = start0
-        autotimer = timemory.auto_timer()
 
         npix = 12*args.nside**2
 
@@ -811,6 +815,7 @@ def build_npp(args, comm, data, localsm, subnpix, detweights,
     return invnpp, zmap, invnpp_group, zmap_group, flag_name, common_flag_name
 
 
+@timing.auto_timer
 def setup_madam(args, comm):
     """ Prepare to run Madam on the stored TOD.
 
@@ -818,8 +823,6 @@ def setup_madam(args, comm):
     pars = None
 
     if args.madam:
-        autotimer = timemory.auto_timer()
-
         # Set up MADAM map making.
 
         pars = {}
@@ -889,6 +892,7 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
     return
 
 
+@timing.auto_timer
 def bin_maps(args, comm, data, rootname,
              zmap, invnpp, zmap_group, invnpp_group, detweights, totalname_freq,
              flag_name, common_flag_name, outpath):
@@ -900,7 +904,6 @@ def bin_maps(args, comm, data, rootname,
             print('Binning unfiltered maps', flush=args.flush)
         start0 = MPI.Wtime()
         start = start0
-        autotimer = timemory.auto_timer()
 
         # Bin a map using the toast facilities
 
@@ -988,12 +991,12 @@ def bin_maps(args, comm, data, rootname,
     return
 
 
+@timing.auto_timer
 def apply_polyfilter(args, comm, data, totalname_freq):
     if args.polyorder:
         if comm.comm_world.rank == 0:
             print('Polyfiltering signal', flush=args.flush)
         start = MPI.Wtime()
-        autotimer = timemory.auto_timer()
         common_flag_name = 'common_flags'
         flag_name = 'flags'
         polyfilter = tt.OpPolyFilter(
@@ -1012,12 +1015,12 @@ def apply_polyfilter(args, comm, data, totalname_freq):
     return
 
 
+@timing.auto_timer
 def apply_groundfilter(args, comm, data, totalname_freq):
     if args.wbin_ground:
         if comm.comm_world.rank == 0:
             print('Ground filtering signal', flush=args.flush)
         start = MPI.Wtime()
-        autotimer = timemory.auto_timer()
         common_flag_name = 'common_flags'
         flag_name = 'flags'
         groundfilter = tt.OpGroundFilter(
@@ -1044,10 +1047,10 @@ def clear_signal(args, comm, data, sigclear):
     return
 
 
+@timing.auto_timer
 def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     if args.tidas is None:
         return
-    autotimer = timemory.auto_timer()
     from toast.tod.tidas import OpTidasExport
     tidas_path = os.path.abspath(args.tidas)
     comm.comm_world.Barrier()
@@ -1056,8 +1059,8 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname, 
-        common_flag_name=common_flag_name, 
+    export = OpTidasExport(tidas_path, name=totalname,
+        common_flag_name=common_flag_name,
         flag_name=flag_name, usedist=True)
     export.exec(data)
 
@@ -1070,13 +1073,13 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     return
 
 
+@timing.auto_timer
 def apply_madam(args, comm, data, madampars, outpath,
                 detweights, totalname_madam, flag_name, common_flag_name):
     if args.madam:
         if comm.comm_world.rank == 0:
             print('Destriping signal', flush=args.flush)
         start = MPI.Wtime()
-        autotimer = timemory.auto_timer()
 
         # create output directory for this realization
         madampars['path_output'] = outpath
@@ -1108,12 +1111,10 @@ def main():
         print('Running with {} processes at {}'.format(
             comm.comm_world.size, str(datetime.now())), flush=True)
 
-    global_timer = timemory.simple_timer('Total time')
+    global_timer = timing.timer('Total time')
     global_timer.start()
 
     args, comm = parse_arguments(comm)
-
-    autotimer = timemory.auto_timer("@{}".format(timemory.FILE()))
 
     # Load and broadcast the schedule file
 
@@ -1193,11 +1194,14 @@ def main():
     if comm.comm_world.rank == 0:
         global_timer.report()
 
+
 if __name__ == '__main__':
     try:
         main()
-        tman = timemory.timing_manager()
-        tman.report()
+        from toast.control import timing_enabled
+        if timing_enabled:
+            tman = timing.timing_manager()
+            tman.report()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
         if MPI.COMM_WORLD.size == 1:

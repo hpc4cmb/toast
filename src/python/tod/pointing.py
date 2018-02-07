@@ -14,8 +14,8 @@ from ..dist import Comm, Data
 from .tod import TOD
 
 from .. import ctoast as ct
-import timemory
 
+from .. import timing
 
 
 def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights,
@@ -175,6 +175,8 @@ class OpPointingHpix(Operator):
         """
         return self._mode
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Create pixels and weights.
@@ -186,7 +188,6 @@ class OpPointingHpix(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

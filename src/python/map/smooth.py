@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     libsharp = None
     available = False
 
-import timemory
+from .. import timing
 
 
 class LibSharpSmooth():
@@ -44,11 +44,10 @@ class LibSharpSmooth():
             1 column (I only) or 3 columns (different beam for
             polarization) beam as a function of ell
     """
-
+    @timing.auto_timer
     def __init__(self, comm=None, signal_map="signal_map",
                  lmax=None, grid=None, fwhm_deg=None, beam=None,
                  out="smoothed_signal_map"):
-        autotimer = timemory.auto_timer(type(self).__name__)
         # We call the parent class constructor, which currently does nothing
         super().__init__()
         self.comm = comm
@@ -76,6 +75,8 @@ class LibSharpSmooth():
         else:
             self.beam = beam
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Create the timestreams...
@@ -89,7 +90,6 @@ class LibSharpSmooth():
 
         if libsharp is None:
             raise RuntimeError('libsharp not available')
-        autotimer = timemory.auto_timer(type(self).__name__)
         has_pol = len(data[self.signal_map]) > 1
 
         alm_sharp_I = libsharp.analysis(

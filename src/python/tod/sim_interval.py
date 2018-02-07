@@ -1,15 +1,13 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
 import numpy as np
 
 from ..dist import distribute_uniform
-import timemory
 
 from .interval import Interval
-
 
 
 def regular_intervals(n, start, first, rate, duration, gap):
@@ -17,7 +15,7 @@ def regular_intervals(n, start, first, rate, duration, gap):
     Function to generate regular intervals.
 
     This creates a list of intervals, given a start time/sample and time
-    span for the interval and the gap in time between intervals.  The 
+    span for the interval and the gap in time between intervals.  The
     length of the interval and the gap are rounded to the nearest sample
     and all intervals in the list are created using those lengths.
 
@@ -35,7 +33,6 @@ def regular_intervals(n, start, first, rate, duration, gap):
     Returns:
         (list): a list of Interval objects.
     """
-    autotimer = timemory.auto_timer()
     invrate = 1.0 / rate
 
     # Compute the whole number of samples that fit within the
@@ -59,6 +56,3 @@ def regular_intervals(n, start, first, rate, duration, gap):
         intervals.append(Interval(start=istart, stop=istop, first=ifirst, last=ilast))
 
     return intervals
-
-
-

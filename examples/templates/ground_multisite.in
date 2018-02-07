@@ -54,18 +54,20 @@ fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --disable-timer-serialization \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
-         --out "${outdir}/fp_atacama" --minpix $detpix --fov 1
+         --out "${outdir}/fp_atacama" --minpix $detpix --fov 1 \
+         --toast-timing-enable \
+         --toast-timing-outdir "${outdir}" \
+         --toast-timing-outfile "timing_fp_atacama"
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
 if [ ! -e "${fpfile_pole}" ]; then
     echo "Running toast_fake_focalplane.py (pole)..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --disable-timer-serialization \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_pole" \
-         --out "${outdir}/fp_pole" --minpix $detpix --fov 1
+         --out "${outdir}/fp_pole" --minpix $detpix --fov 1 \
+         --toast-timing-enable \
+         --toast-timing-outdir "${outdir}" \
+         --toast-timing-outfile "timing_fp_pole"
 fi
 
 # Generate the schedule files if they do not already exist.
@@ -77,10 +79,11 @@ schedulefile_atacama="${outdir}/schedule_atacama.txt"
 if [ ! -e "${schedulefile_atacama}" ]; then
     echo "Running toast_ground_schedule.py (atacama)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --disable-timer-serialization \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_actcama" \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
-         --operational_days $operational_days
+         --operational_days $operational_days \
+         --toast-timing-enable \
+         --toast-timing-outdir "${outdir}" \
+         --toast-timing-outfile "timing_schedule_atacama"
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -88,10 +91,11 @@ schedulefile_pole="${outdir}/schedule_pole.txt"
 if [ ! -e "${schedulefile_pole}" ]; then
     echo "Running toast_ground_schedule.py (pole)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --disable-timer-serialization \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-         --operational_days $operational_days
+         --operational_days $operational_days \
+         --toast-timing-enable \
+         --toast-timing-outdir "${outdir}" \
+         --toast-timing-outfile "timing_schedule_pole"
 fi
 
 # The executable script
@@ -110,9 +114,10 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
+--toast-timing-enable \
+--toast-timing-enable-serialization \
+--toast-timing-outdir "${outdir}" \
+--toast-timing-outfile "timing_main" \
 --groupsize ${groupsize} \
 --fp ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \

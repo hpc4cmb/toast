@@ -11,7 +11,9 @@ from ..op import Operator
 from .pixels import DistPixels
 
 from .. import ctoast as ctoast
-import timemory
+
+from .. import timing
+
 
 class OpAccumDiag(Operator):
     """
@@ -156,6 +158,7 @@ class OpAccumDiag(Operator):
         super().__init__()
 
 
+    @timing.auto_timer
     def exec(self, data):
         """
         Iterate over all observations and detectors and accumulate.
@@ -163,7 +166,6 @@ class OpAccumDiag(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator
@@ -265,6 +267,7 @@ class OpAccumDiag(Operator):
         return
 
 
+@timing.auto_timer
 def covariance_invert(npp, threshold, rcond=None):
     """
     Invert a diagonal noise covariance.
@@ -276,16 +279,18 @@ def covariance_invert(npp, threshold, rcond=None):
     Args:
         npp (DistPixels): The distributed covariance.
         threshold (float): The condition number threshold to apply.
-        rcond (DistPixels): (Optional) The distributed inverse condition number map to fill.
+        rcond (DistPixels): (Optional) The distributed inverse condition number
+            map to fill.
     """
-    autotimer = timemory.auto_timer(timemory.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     if rcond is not None:
         if rcond.size != npp.size:
-            raise RuntimeError("covariance matrix and condition number map must have same number of pixels")
+            raise RuntimeError("covariance matrix and condition number map "
+                "must have same number of pixels")
         if rcond.submap != npp.submap:
-            raise RuntimeError("covariance matrix and condition number map must have same submap size")
+            raise RuntimeError("covariance matrix and condition number map "
+                "must have same submap size")
         if rcond.nnz != 1:
             raise RuntimeError("condition number map should have NNZ = 1")
         do_rcond = 1
@@ -300,6 +305,7 @@ def covariance_invert(npp, threshold, rcond=None):
     return
 
 
+@timing.auto_timer
 def covariance_multiply(npp1, npp2):
     """
     Multiply two diagonal noise covariances.
@@ -312,11 +318,11 @@ def covariance_multiply(npp1, npp2):
         npp1 (3D array): The first distributed covariance.
         npp2 (3D array): The second distributed covariance.
     """
-    autotimer = timemory.auto_timer(timemory.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp1.nnz) - 1) / 2 ) + 0.5 )
 
     if npp1.size != npp2.size:
-        raise RuntimeError("covariance matrices must have same number of pixels")
+        raise RuntimeError("covariance matrices must have same number of "
+            "pixels")
     if npp1.submap != npp2.submap:
         raise RuntimeError("covariance matrices must have same submap size")
     if npp1.nnz != npp2.nnz:
@@ -327,6 +333,7 @@ def covariance_multiply(npp1, npp2):
     return
 
 
+@timing.auto_timer
 def covariance_apply(npp, m):
     """
     Multiply a map by a diagonal noise covariance.
@@ -338,20 +345,23 @@ def covariance_apply(npp, m):
         npp (DistPixels): The distributed covariance.
         m (DistPixels): The distributed map.
     """
-    autotimer = timemory.auto_timer(timemory.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     if m.size != npp.size:
-        raise RuntimeError("covariance matrix and map must have same number of pixels")
+        raise RuntimeError("covariance matrix and map must have same number "
+            "of pixels")
     if m.submap != npp.submap:
-        raise RuntimeError("covariance matrix and map must have same submap size")
+        raise RuntimeError("covariance matrix and map must have same submap "
+            "size")
     if m.nnz != mapnnz:
-        raise RuntimeError("covariance matrix and map have incompatible NNZ values")
+        raise RuntimeError("covariance matrix and map have incompatible NNZ "
+            "values")
 
     ctoast.cov_apply_diagonal(npp.nsubmap, npp.submap, mapnnz, npp.data, m.data)
     return
 
 
+@timing.auto_timer
 def covariance_rcond(npp):
     """
     Compute the inverse condition number map.
@@ -365,7 +375,6 @@ def covariance_rcond(npp):
     Returns:
         rcond (DistPixels): The distributed inverse condition number map.
     """
-    autotimer = timemory.auto_timer(timemory.FILE(use_dirname = True))
     mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
 
     rcond = DistPixels(comm=npp.comm, size=npp.size, nnz=1, dtype=np.float64,

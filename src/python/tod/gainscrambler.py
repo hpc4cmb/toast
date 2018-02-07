@@ -4,10 +4,10 @@
 
 import re
 
-from toast.op import Operator
+from ..op import Operator
 
-import toast.rng as rng
-import timemory
+from .. import rng
+from .. import timing
 
 
 class OpGainScrambler(Operator):
@@ -42,6 +42,8 @@ class OpGainScrambler(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Scramble the gains.
@@ -49,7 +51,6 @@ class OpGainScrambler(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
 
         for obs in data.obs:
             obsindx = 0

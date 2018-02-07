@@ -6,7 +6,8 @@
 import numpy as np
 
 from ..op import Operator
-import timemory
+
+from .. import timing
 
 
 class Interval(object):
@@ -127,6 +128,8 @@ class OpFlagGaps(Operator):
         self._intervals = intervals
         super().__init__()
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Flag samples between valid intervals.
@@ -137,7 +140,6 @@ class OpFlagGaps(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator

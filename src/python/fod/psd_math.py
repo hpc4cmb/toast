@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -9,9 +9,13 @@ import os
 import numpy as np
 
 from ..ctoast import fod_autosums
-import timemory
 
-def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=None):
+from .. import timing
+
+
+@timing.auto_timer
+def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
+    comm=None):
     """
     Compute the sample autocovariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
@@ -23,10 +27,10 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
         signal (float):  Regularly sampled signal vector.
         flags (float):  Signal quality flags.
         lagmax (int):  Largest sample separation to evaluate.
-        stationary_period (float):  Length of a stationary interval in units of the times vector. 
+        stationary_period (float):  Length of a stationary interval in units of
+            the times vector.
         fsample (float):  The sampling frequency in Hz
     """
-    autotimer = timemory.auto_timer()
     if comm is None:
         rank = 0
         ntask = 1
@@ -74,7 +78,8 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
             extended_flags[-lagmax:] = comm.recv(source=rank+1, tag=1)
             extended_times[-lagmax:] = comm.recv(source=rank+1, tag=2)
 
-    realization = ((extended_times - time_start) / stationary_period).astype(np.int64)
+    realization = ((extended_times - time_start) \
+        / stationary_period).astype(np.int64)
 
     # Set flagged elements to zero
 
@@ -110,7 +115,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
     nreal_task = np.int(np.ceil(nreal/ntask))
 
     for ireal in range(nreal):
-        
+
         owner = ireal // nreal_task
 
         if ireal in autocovs:
@@ -133,7 +138,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
     my_psds = []
 
     for ireal in my_autocovs.keys():
-        
+
         autocov_hits, autocov = my_autocovs[ireal]
 
         good = autocov_hits != 0
@@ -153,7 +158,7 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample, comm=N
 
         psd = np.abs(np.fft.rfft( autocov ))
         psdfreq = np.fft.rfftfreq( len(autocov), d=1/fsample )
-        
+
         # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
 

@@ -4,16 +4,21 @@
 
 import os
 
+import numpy as np
+
 from scipy.constants import degree
-from toast.ctoast import (
+
+from ..ctoast import (
     atm_sim_alloc, atm_sim_free, atm_sim_simulate, atm_sim_observe,
     atm_get_absorption_coefficient, atm_get_atmospheric_loading)
-from toast.mpi import MPI
-from toast.op import Operator
 
-import numpy as np
-import toast.qarray as qa
-import timemory
+from ..mpi import MPI
+
+from ..op import Operator
+
+from .. import qarray as qa
+
+from .. import timing
 
 
 class OpSimAtmosphere(Operator):
@@ -121,6 +126,8 @@ class OpSimAtmosphere(Operator):
         self._report_timing = report_timing
         self._wind_time = wind_time
 
+
+    @timing.auto_timer
     def exec(self, data):
         """
         Generate atmosphere timestreams.
@@ -131,7 +138,6 @@ class OpSimAtmosphere(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
         group = data.comm.group
         for obs in data.obs:
             try:
