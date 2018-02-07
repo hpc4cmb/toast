@@ -582,7 +582,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     return obs
 
 
-def create_observations(args, comm, schedules, counter):
+def create_observations(args, comm, schedules, mem_counter):
     """ Create and distribute TOAST observations for every CES in schedules.
 
     """
@@ -646,7 +646,7 @@ def create_observations(args, comm, schedules, counter):
         raise RuntimeError('Too many tasks. Every MPI task must '
                            'be assigned to at least one observation.')
 
-    counter.exec(data)
+    mem_counter.exec(data)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
@@ -669,7 +669,7 @@ def create_observations(args, comm, schedules, counter):
     return data, telescope_data
 
 
-def expand_pointing(args, comm, data, counter):
+def expand_pointing(args, comm, data, mem_counter):
     """ Expand boresight pointing to every detector.
 
     """
@@ -706,7 +706,7 @@ def expand_pointing(args, comm, data, counter):
         print('Pointing generation took {:.3f} s'.format(stop-start),
               flush=args.flush)
 
-    counter.exec(data)
+    mem_counter.exec(data)
     return
 
 
@@ -773,7 +773,7 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
     return
 
 
-def simulate_sky_signal(args, comm, data, counter, schedules, subnpix, localsm):
+def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, localsm):
     """ Use PySM to simulate smoothed sky signal.
 
     """
@@ -793,12 +793,12 @@ def simulate_sky_signal(args, comm, data, counter, schedules, subnpix, localsm):
         print('PySM took {:.2f} seconds'.format(stop-start),
               flush=args.flush)
 
-    counter.exec(data)
+    mem_counter.exec(data)
 
     return signalname
 
 
-def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
+def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
     """ Scan sky signal from a map.
 
     """
@@ -819,7 +819,7 @@ def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
         distmap = tm.DistPixels(
             comm=comm.comm_world, size=npix, nnz=3,
             dtype=np.float32, submap=subnpix, local=localsm)
-        counter._objects.append(distmap)
+        mem_counter._objects.append(distmap)
         distmap.read_healpix_fits(args.input_map)
         scansim = tt.OpSimScan(distmap=distmap, out='signal')
         scansim.exec(data)
@@ -830,7 +830,7 @@ def scan_sky_signal(args, comm, data, counter, localsm, subnpix):
                   ''.format(stop-start), flush=args.flush)
         signalname = 'signal'
 
-        counter.exec(data)
+        mem_counter.exec(data)
 
     return signalname
 
@@ -1039,7 +1039,7 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     return
 
 
-def simulate_atmosphere(args, comm, data, mc, counter,
+def simulate_atmosphere(args, comm, data, mc, mem_counter,
                         totalname):
     if not args.skip_atmosphere:
         autotimer = timing.auto_timer()
@@ -1076,12 +1076,12 @@ def simulate_atmosphere(args, comm, data, mc, counter,
             print('Atmosphere simulation took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
+        mem_counter.exec(data)
 
     return
 
 
-def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
+def copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq):
     """ Copy the atmospheric signal.
 
     Make a copy of the atmosphere so we can scramble the gains and apply
@@ -1095,11 +1095,11 @@ def copy_atmosphere(args, comm, data, counter, totalname, totalname_freq):
                 totalname, totalname_freq), flush=args.flush)
         cachecopy = tt.OpCacheCopy(totalname, totalname_freq, force=True)
         cachecopy.exec(data)
-        counter.exec(data)
+        mem_counter.exec(data)
     return
 
 
-def simulate_noise(args, comm, data, mc, counter, totalname_freq):
+def simulate_noise(args, comm, data, mc, mem_counter, totalname_freq):
     if not args.skip_noise:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -1115,11 +1115,11 @@ def simulate_noise(args, comm, data, mc, counter, totalname_freq):
             print('Noise simulation took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
+        mem_counter.exec(data)
     return
 
 
-def scramble_gains(args, comm, data, mc, counter, totalname_freq):
+def scramble_gains(args, comm, data, mc, mem_counter, totalname_freq):
     if args.gain_sigma:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -1136,7 +1136,7 @@ def scramble_gains(args, comm, data, mc, counter, totalname_freq):
             print('Gain scrambling took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
+        mem_counter.exec(data)
     return
 
 
@@ -1151,7 +1151,7 @@ def setup_output(args, comm, mc, freq):
     return outpath
 
 
-def apply_polyfilter(args, comm, data, counter, totalname_freq):
+def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
     if args.polyorder:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -1168,11 +1168,11 @@ def apply_polyfilter(args, comm, data, counter, totalname_freq):
             print('Polynomial filtering took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
+        mem_counter.exec(data)
     return
 
 
-def apply_groundfilter(args, comm, data, counter, totalname_freq):
+def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
     if args.wbin_ground:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
@@ -1189,7 +1189,7 @@ def apply_groundfilter(args, comm, data, counter, totalname_freq):
             print('Ground filtering took {:.3f} s'.format(stop-start),
                   flush=args.flush)
 
-        counter.exec(data)
+        mem_counter.exec(data)
     return
 
 
@@ -1250,7 +1250,7 @@ def get_time_communicators(comm, data):
 
 
 def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
-                counter, mc, firstmc, outpath, detweights, totalname_madam,
+                mem_counter, mc, firstmc, outpath, detweights, totalname_madam,
                 first_call=True, extra_prefix=None):
     """ Use libmadam to bin and optionally destripe data.
 
@@ -1348,7 +1348,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
     if comm.comm_world.rank == 0:
         print('Madam took {:.3f} s'.format(stop-start), flush=args.flush)
 
-    counter.exec(data)
+    mem_counter.exec(data)
 
     return
 
@@ -1389,9 +1389,9 @@ def main():
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
-    counter = tt.OpMemoryCounter()
+    mem_counter = tt.OpMemoryCounter()
 
-    data, telescope_data = create_observations(args, comm, schedules, counter)
+    data, telescope_data = create_observations(args, comm, schedules, mem_counter)
 
     # Split the communicator for day and season mapmaking
 
@@ -1400,17 +1400,17 @@ def main():
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
 
-    expand_pointing(args, comm, data, counter)
+    expand_pointing(args, comm, data, mem_counter)
 
     # Prepare auxiliary information for distributed map objects
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
-        signalname = simulate_sky_signal(args, comm, data, counter,
+        signalname = simulate_sky_signal(args, comm, data, mem_counter,
                                          schedules, subnpix, localsm)
     else:
-        signalname = scan_sky_signal(args, comm, data, counter, localsm,
+        signalname = scan_sky_signal(args, comm, data, mem_counter, localsm,
                                      subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
@@ -1427,7 +1427,7 @@ def main():
 
     for mc in range(firstmc, firstmc+nmc):
 
-        simulate_atmosphere(args, comm, data, mc, counter, totalname)
+        simulate_atmosphere(args, comm, data, mc, mem_counter, totalname)
 
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
@@ -1438,7 +1438,7 @@ def main():
                 print('Processing frequency {}GHz {} / {}, MC = {}'
                       ''.format(freq, ifreq+1, nfreq, mc), flush=args.flush)
 
-            copy_atmosphere(args, comm, data, counter, totalname, totalname_freq)
+            copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq)
 
             scale_atmosphere_by_frequency(args, comm, data, freq,
                                           totalname_freq, mc)
@@ -1449,10 +1449,10 @@ def main():
 
             mcoffset = ifreq * 1000000
 
-            simulate_noise(args, comm, data, mc+mcoffset, counter,
+            simulate_noise(args, comm, data, mc+mcoffset, mem_counter,
                            totalname_freq)
 
-            scramble_gains(args, comm, data, mc+mcoffset, counter,
+            scramble_gains(args, comm, data, mc+mcoffset, mem_counter,
                            totalname_freq)
 
             if (mc == firstmc) and (ifreq == 0):
@@ -1465,7 +1465,7 @@ def main():
             # Bin and destripe maps
 
             apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                        madampars, counter, mc+mcoffset, firstmc, outpath,
+                        madampars, mem_counter, mc+mcoffset, firstmc, outpath,
                         detweights, totalname_freq,
                         first_call=True)
 
@@ -1473,18 +1473,18 @@ def main():
 
                 # Filter signal
 
-                apply_polyfilter(args, comm, data, counter, totalname_freq)
+                apply_polyfilter(args, comm, data, mem_counter, totalname_freq)
 
-                apply_groundfilter(args, comm, data, counter, totalname_freq)
+                apply_groundfilter(args, comm, data, mem_counter, totalname_freq)
 
                 # Bin maps
 
                 apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                            madampars, counter, mc+mcoffset, firstmc, outpath,
+                            madampars, mem_counter, mc+mcoffset, firstmc, outpath,
                             detweights, totalname_freq, first_call=False,
                             extra_prefix='filtered')
 
-    counter.exec(data)
+    mem_counter.exec(data)
 
     comm.comm_world.barrier()
     global_timer.stop()
