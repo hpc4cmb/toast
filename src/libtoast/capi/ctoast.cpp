@@ -619,6 +619,13 @@ void ctoast_qarray_to_angles ( size_t n, double const * quat, double * theta,
     return;
 }
 
+void ctoast_qarray_to_position ( size_t n, double const * quat, double * theta,
+                                 double * phi ) {
+    TOAST_AUTO_TIMER();
+    toast::qarray::to_position(n, quat, theta, phi );
+    return;
+}
+
 // FFT
 
 toast::fft::plan_type ctoast::convert_from_c ( ctoast_fft_plan_type in ) {
@@ -1128,7 +1135,7 @@ double ctoast_atm_get_atmospheric_loading(double altitude, double temperature,
     TOAST_AUTO_TIMER();
     loading = toast::tatm::get_atmospheric_loading(altitude, temperature,
                                                    pressure, pwv, freq);
-                                                   
+
 #endif
     return loading;
 }
