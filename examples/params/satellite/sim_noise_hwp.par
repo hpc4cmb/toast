@@ -20,3 +20,11 @@
 s3,d7,f1,a2,c2
 --apply_beam
 --flush
+--input_dipole
+total
+--input_dipole_solar_speed_kms
+369
+--input_dipole_solar_gal_lat_deg
+48.26
+--input_dipole_solar_gal_lon_deg
+263.99
