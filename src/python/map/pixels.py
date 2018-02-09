@@ -108,10 +108,7 @@ class OpLocalPixels(Operator):
                     hitmap[pixels - pixmin] = True
                     del pixels
 
-            local = []
-            for pixel, hit in enumerate(hitmap):
-                if hit:
-                    local.append(pixel + pixmin)
+            local = np.nonzero(hitmap)[0] + pixmin
 
         return np.array(local)
 
