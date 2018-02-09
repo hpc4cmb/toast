@@ -65,27 +65,6 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm, signalname):
-    """ Use PySM to simulate smoothed sky signal.
-
-    """
-    # Convolve a signal TOD from PySM
-    start = MPI.Wtime()
-    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
-                               out=signalname,
-                               pysm_model=args.input_pysm_model,
-                               focalplanes=focalplanes,
-                               nside=args.nside,
-                               subnpix=subnpix, localsm=localsm,
-                               apply_beam=args.apply_beam)
-    op_sim_pysm.exec(data)
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print('PySM took {:.2f} seconds'.format(stop-start),
-              flush=args.flush)
-
-    mem_counter.exec(data)
-
 
 def main():
 
@@ -406,8 +385,21 @@ def main():
 
     signalname = "signal"
     if args.input_pysm_model:
-        simulate_sky_signal(args, comm, data, mem_counter,
-                                         [fp], subnpix, localsm, signalname=signalname)
+        start = MPI.Wtime()
+        op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
+                                   out=signalname,
+                                   pysm_model=args.input_pysm_model,
+                                   focalplanes=[fp],
+                                   nside=args.nside,
+                                   subnpix=subnpix, localsm=localsm,
+                                   apply_beam=args.apply_beam)
+        op_sim_pysm.exec(data)
+        stop = MPI.Wtime()
+        if comm.comm_world.rank == 0:
+            print('PySM took {:.2f} seconds'.format(stop-start),
+                  flush=args.flush)
+
+    mem_counter.exec(data)
 
     if args.input_dipole:
         print("Simulating dipole")
