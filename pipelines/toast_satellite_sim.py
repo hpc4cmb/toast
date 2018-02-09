@@ -660,7 +660,7 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            data.add_tods(input_name=signalname, output_name="tot_signal")
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
