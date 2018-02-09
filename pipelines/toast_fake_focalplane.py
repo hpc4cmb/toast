@@ -27,47 +27,47 @@ def main():
         fromfile_prefix_chars='@')
 
     parser.add_argument( "--minpix", required=False, type=int, default=100,
-                         help="minimum number of pixels to use" )
+        help="minimum number of pixels to use" )
 
     parser.add_argument( "--out", required=False, default="fp_fake",
-                         help="Root name of output pickle file" )
+        help="Root name of output pickle file" )
 
     parser.add_argument( "--fwhm", required=False, type=float, default=5.0,
-                         help="beam FWHM in arcmin" )
+        help="beam FWHM in arcmin" )
 
     parser.add_argument( "--fwhm_sigma", required=False, type=float, default=0,
-                         help="Relative beam FWHM distribution width" )
+        help="Relative beam FWHM distribution width" )
 
     parser.add_argument( "--fov", required=False, type=float, default=5.0,
-                         help="Field of View in degrees" )
+        help="Field of View in degrees" )
 
-    parser.add_argument( "--psd_fknee", required=False, type=float, default=0.05,
-                         help="Detector noise model f_knee in Hz" )
+    parser.add_argument( "--psd_fknee", required=False, type=float,
+        default=0.05, help="Detector noise model f_knee in Hz" )
 
-    parser.add_argument( "--psd_NET", required=False, type=float, default=60.0e-6,
-                         help="Detector noise model NET in K*sqrt(sec)" )
+    parser.add_argument( "--psd_NET", required=False, type=float,
+        default=60.0e-6, help="Detector noise model NET in K*sqrt(sec)" )
 
-    parser.add_argument( "--psd_alpha", required=False, type=float, default=1.0,
-                         help="Detector noise model slope" )
+    parser.add_argument( "--psd_alpha", required=False, type=float,
+        default=1.0, help="Detector noise model slope" )
 
-    parser.add_argument( "--psd_fmin", required=False, type=float, default=1.0e-5,
-                         help="Detector noise model f_min in Hz" )
+    parser.add_argument( "--psd_fmin", required=False, type=float,
+        default=1.0e-5, help="Detector noise model f_min in Hz" )
 
     parser.add_argument( "--bandcenter_ghz", required=False, type=float,
-                         help="Band center frequency [GHz]" )
+        help="Band center frequency [GHz]" )
 
-    parser.add_argument( "--bandcenter_sigma", required=False, type=float, default=0,
-                         help="Relative band center distribution width" )
+    parser.add_argument( "--bandcenter_sigma", required=False, type=float,
+        default=0, help="Relative band center distribution width" )
 
     parser.add_argument( "--bandwidth_ghz", required=False, type=float,
-                         help="Bandwidth [GHz]" )
+        help="Bandwidth [GHz]" )
 
-    parser.add_argument( "--bandwidth_sigma", required=False, type=float, default=0,
-                         help="Relative bandwidth distribution width" )
+    parser.add_argument( "--bandwidth_sigma", required=False, type=float,
+        default=0, help="Relative bandwidth distribution width" )
 
-    parser.add_argument( "--random_seed", required=False, type=np.int, default=123456,
-                         help="Random number generator seed for randomized detector"
-                         " parameters" )
+    parser.add_argument( "--random_seed", required=False, type=np.int,
+        default=123456, help="Random number generator seed for randomized "
+        "detector parameters" )
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
