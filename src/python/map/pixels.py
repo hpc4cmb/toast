@@ -110,7 +110,16 @@ class OpLocalPixels(Operator):
 
             local = np.nonzero(hitmap)[0] + pixmin
 
+        if local is None:
+            raise RuntimeError(
+                'Process {} has no hit pixels. Perhaps there are fewer '
+                'detectors than processes in the group?'.format(
+                    data.comm.comm_world.rank))
+
         return np.array(local)
+
+    def compute_local_submaps(self, localpix, subnpix):
+        return np.unique(np.floor_divide(localpix, subnpix))
 
 
 class DistPixels(object):
