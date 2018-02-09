@@ -27,26 +27,6 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
-def add_sky_signal(args, comm, data, totalname, signalname):
-    """ Add signalname to totalname in the obs tod
-
-    """
-    if signalname is not None:
-        autotimer = timing.auto_timer()
-        for obs in data.obs:
-            tod = obs['tod']
-            for det in tod.local_dets:
-                cachename_in = '{}_{}'.format(signalname, det)
-                cachename_out = '{}_{}'.format(totalname, det)
-                ref_in = tod.cache.reference(cachename_in)
-                if tod.cache.exists(cachename_out):
-                    ref_out = tod.cache.reference(cachename_out)
-                    ref_out += ref_in
-                else:
-                    ref_out = tod.cache.put(cachename_out, ref_in)
-                del ref_in, ref_out
-
-    return
 
 def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
@@ -576,7 +556,7 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            data.add_tods(input_name=signalname, output_name="tot_signal")
 
             if mc == firstmc:
                 # For the first realization, optionally export the
