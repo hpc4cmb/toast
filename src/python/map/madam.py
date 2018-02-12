@@ -344,11 +344,11 @@ class OpMadam(Operator):
 
             for ival in local_intervals:
                 local_start = ival.first
-                local_stop = ival.last
-                if local_stop - local_start + 1 < norder:
+                local_stop = ival.last + 1
+                if local_stop - local_start < norder:
                     continue
-                period_lengths.append(local_stop - local_start + 1)
-                period_ranges.append((local_start, local_stop + 1))
+                period_lengths.append(local_stop - local_start)
+                period_ranges.append((local_start, local_stop))
             obs_period_ranges.append(period_ranges)
 
         nsamp_tot_full = comm.allreduce(nsamp, op=MPI.SUM)
@@ -438,7 +438,7 @@ class OpMadam(Operator):
         self._madam_timestamps = self._cache.create(
             'timestamps', np.float64, (nsamp,))
 
-        global_offset = 0
+        offset = 0
         time_offset = 0
         psds = {}
         for iobs, obs in enumerate(data.obs):
@@ -446,12 +446,11 @@ class OpMadam(Operator):
             period_ranges = obs_period_ranges[iobs]
 
             # Collect the timestamps for the valid intervals
-            timestamps = tod.local_times()
+            timestamps = tod.local_times().copy()
             # Translate the time stamps to be monotonous
             timestamps -= timestamps[0] - time_offset
             time_offset = timestamps[-1] + 1
 
-            offset = global_offset
             for istart, istop in period_ranges:
                 nn = istop - istart
                 ind = slice(offset, offset + nn)
@@ -474,8 +473,6 @@ class OpMadam(Operator):
                         else:
                             if not np.allclose(psds[det][-1][1], psd):
                                 psds[det] += [(timestamps[0], psd)]
-
-            global_offset = offset
 
         return psds
 
