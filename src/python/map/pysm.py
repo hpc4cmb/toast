@@ -41,6 +41,7 @@ class PySMSky(object):
         self._units = units
 
         self.pysm_sky_config = pysm_sky_config
+        self.pysm_precomputed_cmb = pysm_precomputed_cmb
         self.sky = self.init_sky(
                        self.pysm_sky_config, self.pysm_precomputed_cmb
                    ) if init_sky else None
@@ -50,20 +51,23 @@ class PySMSky(object):
             raise RuntimeError('pysm not available')
         autotimer = timing.auto_timer(type(self).__name__)
         initialized_sky_config = {}
+        if pysm_precomputed_cmb is not None:
+            cmb = \
+                {
+                    'model': 'pre_computed',
+                    'nside': self._nside,
+                    'pixel_indices': self._local_pixels
+                }
+            cmb['A_I'], cmb['A_Q'], cmb['A_U'] = pysm.read_map(
+                    pysm_precomputed_cmb, self._nside, field=(0,1,2),
+                    pixel_indices=self._local_pixels, mpi_comm=self._comm)
+            initialized_sky_config["cmb"] = [cmb]
+            # remove cmb from the pysm string
+            pysm_sky_config.pop("cmb", None)
         for name, model_id in pysm_sky_config.items():
             initialized_sky_config[name] = \
                 pysm.nominal.models(model_id, self._nside, self._local_pixels,
                                     mpi_comm=self._comm)
-        if pysm_precomputed_cmb is not None:
-            assert "cmb" not in pysm_sky_config, "Cannot specify a CMB model " \
-                "in the PySM string and also a precomputed CMB"
-            initialized_sky_config["cmb"] =
-                [{
-                    'model': 'pre_computed',
-                    'nside': self._nside,
-                    'pixel_indices':self._local_pixels
-                }]
-            initialized_sky_config["cmb"]['A_I'], initialized_sky_config["cmb"]['A_Q'], initialized_sky_config["cmb"]['A_U'] = pysm.read_map(pysm_precomputed_cmb, self._nside, field=(0,1,2), pixel_indices=self._local_pixels, mpi_comm=self._comm),
         return pysm.Sky(initialized_sky_config, mpi_comm=self._comm)
 
     def exec(self, local_map, out, bandpasses=None):

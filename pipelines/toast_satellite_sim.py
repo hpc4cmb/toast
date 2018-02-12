@@ -205,7 +205,7 @@ def main():
                         'simulation, e.g. s3,d6,f1,a2"')
     parser.add_argument('--input_pysm_precomputed_cmb', required=False,
                         help='Precomputed CMB map for PySM '
-                        'input_pysm_model should NOT include a CMB model"')
+                        'it overrides any model defined in input_pysm_model"')
     parser.add_argument('--apply_beam', required=False, action='store_true',
                         help='Apply beam convolution to input map with gaussian '
                         'beam parameters defined in focalplane')
