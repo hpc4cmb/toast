@@ -28,7 +28,8 @@ class PySMSky(object):
     """
 
     def __init__(self, comm=None, pixels='pixels',
-                 out='pysm', nside=None, pysm_sky_config=None, init_sky=True,
+                 out='pysm', nside=None, pysm_sky_config=None, pysm_precomputed_cmb=None,
+                 init_sky=True,
                  local_pixels=None, units='K_CMB'):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -40,9 +41,11 @@ class PySMSky(object):
         self._units = units
 
         self.pysm_sky_config = pysm_sky_config
-        self.sky = self.init_sky(self.pysm_sky_config) if init_sky else None
+        self.sky = self.init_sky(
+                       self.pysm_sky_config, self.pysm_precomputed_cmb
+                   ) if init_sky else None
 
-    def init_sky(self, pysm_sky_config):
+    def init_sky(self, pysm_sky_config, pysm_precomputed_cmb):
         if pysm is None:
             raise RuntimeError('pysm not available')
         autotimer = timing.auto_timer(type(self).__name__)
@@ -51,6 +54,16 @@ class PySMSky(object):
             initialized_sky_config[name] = \
                 pysm.nominal.models(model_id, self._nside, self._local_pixels,
                                     mpi_comm=self._comm)
+        if pysm_precomputed_cmb is not None:
+            assert "cmb" not in pysm_sky_config, "Cannot specify a CMB model " \
+                "in the PySM string and also a precomputed CMB"
+            initialized_sky_config["cmb"] =
+                [{
+                    'model': 'pre_computed',
+                    'nside': self._nside,
+                    'pixel_indices':self._local_pixels
+                }]
+            initialized_sky_config["cmb"]['A_I'], initialized_sky_config["cmb"]['A_Q'], initialized_sky_config["cmb"]['A_U'] = pysm.read_map(pysm_precomputed_cmb, self._nside, field=(0,1,2), pixel_indices=self._local_pixels, mpi_comm=self._comm),
         return pysm.Sky(initialized_sky_config, mpi_comm=self._comm)
 
     def exec(self, local_map, out, bandpasses=None):
@@ -60,7 +73,9 @@ class PySMSky(object):
 
         autotimer = timing.auto_timer(type(self).__name__)
         if self.sky is None:
-            self.sky = self.init_sky(self.pysm_sky_config)
+            self.sky = self.init_sky(
+                           self.pysm_sky_config, self.pysm_precomputed_cmb
+                       ) if init_sky else None
 
         pysm_instrument_config = {
             'beams': None,
