@@ -27,84 +27,8 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
-def add_sky_signal(args, comm, data, totalname, signalname):
-    """ Add signalname to totalname in the obs tod
-
-    """
-    if signalname is not None:
-        autotimer = timing.auto_timer()
-        for obs in data.obs:
-            tod = obs['tod']
-            for det in tod.local_dets:
-                cachename_in = '{}_{}'.format(signalname, det)
-                cachename_out = '{}_{}'.format(totalname, det)
-                ref_in = tod.cache.reference(cachename_in)
-                if tod.cache.exists(cachename_out):
-                    ref_out = tod.cache.reference(cachename_out)
-                    ref_out += ref_in
-                else:
-                    ref_out = tod.cache.put(cachename_out, ref_in)
-                del ref_in, ref_out
-
-    return
-
-def get_submaps(args, comm, data):
-    """ Get a list of locally hit pixels and submaps on every process.
-
-    """
-    autotimer = timing.auto_timer()
-    if comm.comm_world.rank == 0:
-        print('Scanning local pixels', flush=args.flush)
-    start = MPI.Wtime()
-
-    # Prepare for using distpixels objects
-    nside = args.nside
-    subnside = 16
-    if subnside > nside:
-        subnside = nside
-    subnpix = 12 * subnside * subnside
-
-    # get locally hit pixels
-    lc = tm.OpLocalPixels()
-    localpix = lc.exec(data)
-    if localpix is None:
-        raise RuntimeError(
-            'Process {} has no hit pixels. Perhaps there are fewer '
-            'detectors than processes in the group?'.format(
-                comm.comm_world.rank))
-
-    # find the locally hit submaps.
-    localsm = np.unique(np.floor_divide(localpix, subnpix))
-
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print('Local submaps identified in {:.3f} s'.format(elapsed),
-              flush=args.flush)
-    return localpix, localsm, subnpix
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm, signalname):
-    """ Use PySM to simulate smoothed sky signal.
-
-    """
-    # Convolve a signal TOD from PySM
-    start = MPI.Wtime()
-    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
-                               out=signalname,
-                               pysm_model=args.input_pysm_model,
-                               focalplanes=focalplanes,
-                               nside=args.nside,
-                               subnpix=subnpix, localsm=localsm,
-                               apply_beam=args.apply_beam)
-    op_sim_pysm.exec(data)
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print('PySM took {:.2f} seconds'.format(stop-start),
-              flush=args.flush)
-
-    mem_counter.exec(data)
 
 
 def main():
@@ -422,12 +346,45 @@ def main():
         print("Pointing generation took {:.3f} s".format(elapsed), flush=True)
     start = stop
 
-    localpix, localsm, subnpix = get_submaps(args, comm, data)
+    if comm.comm_world.rank == 0:
+        print('Scanning local pixels', flush=args.flush)
+    start = MPI.Wtime()
+
+    # Prepare for using distpixels objects
+    subnside = 16 if args.nside > 16 else args.nside
+    subnpix = 12 * subnside * subnside
+
+    # get locally hit pixels
+    lc = tm.OpLocalPixels()
+    localpix = lc.exec(data)
+
+    # find the locally hit submaps.
+    local_submaps = lc.compute_local_submaps(localpix, subnpix)
+
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print('Local submaps identified in {:.3f} s'.format(elapsed),
+              flush=args.flush)
 
     signalname = "signal"
     if args.input_pysm_model:
-        simulate_sky_signal(args, comm, data, mem_counter,
-                                         [fp], subnpix, localsm, signalname=signalname)
+        start = MPI.Wtime()
+        op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
+                                   out=signalname,
+                                   pysm_model=args.input_pysm_model,
+                                   focalplanes=[fp],
+                                   nside=args.nside,
+                                   subnpix=subnpix, local_submaps=local_submaps,
+                                   apply_beam=args.apply_beam)
+        op_sim_pysm.exec(data)
+        stop = MPI.Wtime()
+        if comm.comm_world.rank == 0:
+            print('PySM took {:.2f} seconds'.format(stop-start),
+                  flush=args.flush)
+
+    mem_counter.exec(data)
 
     if args.input_dipole:
         print("Simulating dipole")
@@ -462,17 +419,17 @@ def main():
         localpix = lc.exec(data)
 
         # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, subnpix))
+        local_submaps = np.unique(np.floor_divide(localpix, subnpix))
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
         invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
-            dtype=np.float64, submap=subnpix, local=localsm)
+            dtype=np.float64, submap=subnpix, local=local_submaps)
         hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
-            dtype=np.int64, submap=subnpix, local=localsm)
+            dtype=np.int64, submap=subnpix, local=local_submaps)
         zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
-            dtype=np.float64, submap=subnpix, local=localsm)
+            dtype=np.float64, submap=subnpix, local=local_submaps)
 
         # compute the hits and covariance once, since the pointing and noise
         # weights are fixed.
@@ -576,7 +533,7 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            data.add_tods(input_name=signalname, output_name="tot_signal")
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -688,7 +645,7 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            data.add_tods(input_name=signalname, output_name="tot_signal")
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

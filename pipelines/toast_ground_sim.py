@@ -751,28 +751,6 @@ def get_submaps(args, comm, data):
     return localpix, localsm, subnpix
 
 
-def add_sky_signal(args, comm, data, totalname_freq, signalname):
-    """ Add previously simulated sky signal to the atmospheric noise.
-
-    """
-    if signalname is not None:
-        autotimer = timing.auto_timer()
-        for obs in data.obs:
-            tod = obs['tod']
-            for det in tod.local_dets:
-                cachename_in = '{}_{}'.format(signalname, det)
-                cachename_out = '{}_{}'.format(totalname_freq, det)
-                ref_in = tod.cache.reference(cachename_in)
-                if tod.cache.exists(cachename_out):
-                    ref_out = tod.cache.reference(cachename_out)
-                    ref_out += ref_in
-                else:
-                    ref_out = tod.cache.put(cachename_out, ref_in)
-                del ref_in, ref_out
-
-    return
-
-
 def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, localsm):
     """ Use PySM to simulate smoothed sky signal.
 
@@ -1445,7 +1423,7 @@ def main():
 
             update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
-            add_sky_signal(args, comm, data, totalname_freq, signalname)
+            data.add_tods(input_name=signalname, output_name=totalname_freq)
 
             mcoffset = ifreq * 1000000
 

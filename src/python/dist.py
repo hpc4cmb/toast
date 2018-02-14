@@ -9,6 +9,7 @@ import os
 import numpy as np
 import numpy.testing as nt
 
+from . import timing
 
 class Comm(object):
     """
@@ -398,6 +399,22 @@ class Data(object):
             ob.clear()
         return
 
+    def add_tods(self, input_name, output_name):
+        """ Add input_name to output_name in the obs tod
+
+        """
+        autotimer = timing.auto_timer()
+        for obs in self.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                cachename_in = '{}_{}'.format(input_name, det)
+                cachename_out = '{}_{}'.format(output_name, det)
+                ref_in = tod.cache.reference(cachename_in)
+                if tod.cache.exists(cachename_out):
+                    ref_out = tod.cache.reference(cachename_out)
+                    ref_out += ref_in
+                else:
+                    ref_out = tod.cache.put(cachename_out, ref_in)
 
     def info(self, handle, flag_mask=255, common_flag_mask=255,
              intervals='intervals'):
