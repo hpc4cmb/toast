@@ -364,10 +364,14 @@ class TOD(object):
                 'Length of cached timestamps does not match local samples. '
                 'Cannot produce local intervals.')
         for ival in intervals:
+            previous_last = None
             if (ival.last >= offset and
                 ival.first < offset + nsamp):
                 local_first = max(0, ival.first-offset)
+                if previous_last is not None and previous_last >= local_first:
+                    raise RuntimeError('Provided intervals overlap')
                 local_last = min(nsamp-1, ival.last-offset)
+                previous_last = local_last
                 local_start = times[local_first]
                 local_stop = times[local_last]
                 local_intervals.append(

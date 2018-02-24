@@ -29,7 +29,7 @@ SIZES="tiny"
 for i in mpirun mpiexec lamexec srun
 do
     if command -v ${i} &> /dev/null; then
-        MPI_RUN=$(which ${i})
+        MPI_RUN=${i}
         break
     fi
 done

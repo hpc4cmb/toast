@@ -566,7 +566,7 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
             detcolor = polcolor[d]
 
         ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius,
-            head_width=0.5*detradius, head_length=0.5*detradius, fc=detcolor,
+            head_width=0.3*detradius, head_length=0.3*detradius, fc=detcolor,
             ec=detcolor, length_includes_head=True)
 
         if labels is not None:
@@ -580,4 +580,5 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
                 bbox=dict(fc='w', ec='none', pad=1, alpha=1.0))
 
     plt.savefig(outfile)
+    plt.close()
     return

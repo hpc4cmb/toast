@@ -127,7 +127,7 @@ class TextTOD(toast.tod.TOD):
         return
 
     def _get_flags(self, detector, start, n):
-        return (np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8))
+        return np.zeros(n, dtype=np.uint8)
 
     def _put_det_flags(self, detector, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
