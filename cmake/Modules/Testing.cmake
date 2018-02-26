@@ -110,8 +110,10 @@ execute_process(COMMAND git branch --contains
     OUTPUT_VARIABLE CMAKE_SOURCE_BRANCH
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REPLACE "* " "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
 string(REPLACE "*" "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
-string(REPLACE " " "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
+# removes things such as : '(HEAD detached at 3109eab) master' -> 'master'
+string(REGEX REPLACE "(\\\(.*\\\) )" "" CMAKE_SOURCE_BRANCH "${CMAKE_SOURCE_BRANCH}")
 
 
 # ------------------------------------------------------------------------ #
@@ -129,7 +131,7 @@ macro(add_ctest_options VARIABLE )
     set(_set_vars ${ARGN})
     foreach(_var ${_vars})
         STRING(REGEX MATCH "^USE_" _use_found "${_var}")
-        STRING(REGEX MATCH ".*(_ROOT|_LIBRARY|_INCLUDE_DIR|_INCLUDE_PATH)$"
+        STRING(REGEX MATCH ".*(_ROOT|_LIBRARY|_INCLUDE_DIR|_INCLUDE_PATH|_EXECUTABLE)$"
             _root_found "${_var}")
         STRING(REGEX MATCH "^(PREVIOUS_|CMAKE_|OSX_|DEFAULT_|EXTERNAL_|_)"
             _skip_prefix "${_var}")

@@ -24,6 +24,7 @@ matrix:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+            - cmake
       env:
         - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++)"
     # GCC 4.9
@@ -72,6 +73,7 @@ matrix:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+            - cmake
       env:
         - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5)"
     # GCC 6
@@ -96,6 +98,7 @@ matrix:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+            - cmake
       env:
         - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6)"
     # GCC 7
@@ -120,6 +123,7 @@ matrix:
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
+            - cmake
       env:
         - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7)"
 
@@ -179,23 +183,20 @@ before_install:
     - python setup.py install
     - cd ..
 
-# Skip this
 
 install:
     # build
-    - ./autogen.sh
-    - export CFLAGS="-O3 -g -fPIC -pthread -std=c99"
-    - export CXXFLAGS="-O3 -g -fPIC -pthread"
-    - ./configure --prefix=$HOME/miniconda
-    - make
-    - make install
+    - export CC=${MPICH_CC}
+    - export CXX=${MPICH_CXX}
+    - mkdir build-toast
+    - cd build-toast
+    - cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=${HOME}/miniconda
+      -DBUILD_TESTING=ON -DCTEST_SITE=travis -DCTEST_LOCAL_CHECKOUT=ON
+      -DCTEST_MODEL=Continuous -DGENERATE_EXAMPLES=OFF -DUSE_ARCH=ON
+      -DUSE_SSE=ON -DUSE_TBB=OFF -DUSE_OPENMP=ON ${PWD}/..
+    - ctest -DSTAGES="Build;Test" -DTRIGGER=Test -S cdash/Stages.cmake -L UnitTest
 
-# Configure, build, and run tests
-
-script:
-    - python -c "import toast.tests; toast.tests.run()"
 
 # Slack integration
-
 notifications:
     slack: c3cmb:7RR5xHHVvMAuw6g20ZuPhRD3
