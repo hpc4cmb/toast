@@ -105,7 +105,8 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
                                focalplanes=focalplanes,
                                nside=args.nside,
                                subnpix=subnpix, localsm=localsm,
-                               apply_beam=args.apply_beam)
+                               apply_beam=args.apply_beam,
+                               debug=args.debug)
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
