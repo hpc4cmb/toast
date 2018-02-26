@@ -44,7 +44,7 @@ def extract_detector_parameters(det, focalplanes):
         if det in fp:
             if "fwhm" in fp[det]:
                 return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], \
-                    fp[det]["fwhm"]
+                    fp[det]["fwhm"] / 60
             else:
                 return fp[det]["bandcenter_ghz"], fp[det]["bandwidth_ghz"], -1
     raise RuntimeError("Cannot find detector {} in any focalplane")
