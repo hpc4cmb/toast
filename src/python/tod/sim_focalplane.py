@@ -206,6 +206,8 @@ def hex_layout(npix, angwidth, prefix, suffix, pol,
     nullquat = np.array([0,0,0,1], dtype=np.float64)
     sixty = np.pi/3.0
     thirty = np.pi/6.0
+    rtthree = np.sqrt(3.0)
+    rtthreebytwo = 0.5 * rtthree
 
     angwidth = angwidth * np.pi / 180.0
 
@@ -272,7 +274,7 @@ def hex_layout(npix, angwidth, prefix, suffix, pol,
             # bisection line to compute the angle and radius within this sector.
 
             # the distance from the origin to the midpoint of the opposite side.
-            midline = 0.5 * np.sqrt(3) * float(ring)
+            midline = rtthreebytwo * float(ring)
 
             # the distance along the opposite edge from the midpoint (positive
             # or negative)
@@ -285,7 +287,7 @@ def hex_layout(npix, angwidth, prefix, suffix, pol,
             # within the final sector.
             pixang = sectors * sixty + thirty + relang
 
-            pixdist = 0.5 * pixdiam * float(ring) * np.sqrt(3) / np.cos(relang)
+            pixdist = rtthreebytwo * pixdiam * float(ring) / np.cos(relang)
 
             pixx = np.sin(pixdist) * np.cos(pixang)
             pixy = np.sin(pixdist) * np.sin(pixang)
