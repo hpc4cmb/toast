@@ -94,7 +94,7 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
     op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
-                               pysm_precomputed_cmb=args.input_pysm_precomputed_cmb,
+                               pysm_precomputed_cmb_K_CMB=args.input_pysm_precomputed_cmb_K_CMB,
                                focalplanes=focalplanes,
                                nside=args.nside,
                                subnpix=subnpix, localsm=localsm,
@@ -203,8 +203,8 @@ def main():
     parser.add_argument('--input_pysm_model', required=False,
                         help='Comma separated models for on-the-fly PySM '
                         'simulation, e.g. s3,d6,f1,a2"')
-    parser.add_argument('--input_pysm_precomputed_cmb', required=False,
-                        help='Precomputed CMB map for PySM '
+    parser.add_argument('--input_pysm_precomputed_cmb_K_CMB', required=False,
+                        help='Precomputed CMB map for PySM in K_CMB'
                         'it overrides any model defined in input_pysm_model"')
     parser.add_argument('--apply_beam', required=False, action='store_true',
                         help='Apply beam convolution to input map with gaussian '

@@ -9,6 +9,7 @@ except ModuleNotFoundError:
     pysm = None
     available = False
 
+import numpy as np
 from .. import timing as timing
 
 
@@ -28,7 +29,7 @@ class PySMSky(object):
     """
 
     def __init__(self, comm=None, pixels='pixels',
-                 out='pysm', nside=None, pysm_sky_config=None, pysm_precomputed_cmb=None,
+                 out='pysm', nside=None, pysm_sky_config=None, pysm_precomputed_cmb_K_CMB=None,
                  init_sky=True,
                  local_pixels=None, units='K_CMB'):
         # We call the parent class constructor, which currently does nothing
@@ -41,26 +42,27 @@ class PySMSky(object):
         self._units = units
 
         self.pysm_sky_config = pysm_sky_config
-        self.pysm_precomputed_cmb = pysm_precomputed_cmb
+        self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.sky = self.init_sky(
-                       self.pysm_sky_config, self.pysm_precomputed_cmb
+                       self.pysm_sky_config, self.pysm_precomputed_cmb_K_CMB
                    ) if init_sky else None
 
-    def init_sky(self, pysm_sky_config, pysm_precomputed_cmb):
+    def init_sky(self, pysm_sky_config, pysm_precomputed_cmb_K_CMB):
         if pysm is None:
             raise RuntimeError('pysm not available')
         autotimer = timing.auto_timer(type(self).__name__)
         initialized_sky_config = {}
-        if pysm_precomputed_cmb is not None:
+        if pysm_precomputed_cmb_K_CMB is not None:
             cmb = \
                 {
                     'model': 'pre_computed',
                     'nside': self._nside,
                     'pixel_indices': self._local_pixels
                 }
-            cmb['A_I'], cmb['A_Q'], cmb['A_U'] = pysm.read_map(
-                    pysm_precomputed_cmb, self._nside, field=(0,1,2),
-                    pixel_indices=self._local_pixels, mpi_comm=self._comm)
+            # PySM expects uK_CMB
+            cmb['A_I'], cmb['A_Q'], cmb['A_U'] = np.array(pysm.read_map(
+                    pysm_precomputed_cmb_K_CMB, self._nside, field=(0,1,2),
+                    pixel_indices=self._local_pixels, mpi_comm=self._comm)) * 1e6
             initialized_sky_config["cmb"] = [cmb]
             # remove cmb from the pysm string
             pysm_sky_config.pop("cmb", None)
@@ -78,7 +80,7 @@ class PySMSky(object):
         autotimer = timing.auto_timer(type(self).__name__)
         if self.sky is None:
             self.sky = self.init_sky(
-                           self.pysm_sky_config, self.pysm_precomputed_cmb
+                           self.pysm_sky_config, self.pysm_precomputed_cmb_K_CMB
                        ) if init_sky else None
 
         pysm_instrument_config = {
