@@ -39,11 +39,18 @@ def add_sky_signal(args, comm, data, totalname, signalname):
                 cachename_in = '{}_{}'.format(signalname, det)
                 cachename_out = '{}_{}'.format(totalname, det)
                 ref_in = tod.cache.reference(cachename_in)
+                if comm.comm_world.rank == 0 and args.debug:
+                    print('add_sky_signal', signalname, 'to', totalname, flush=args.flush)
+                    print(signalname, 'min max', ref_in.min(), ref_in.max())
                 if tod.cache.exists(cachename_out):
                     ref_out = tod.cache.reference(cachename_out)
+                    if comm.comm_world.rank == 0 and args.debug:
+                        print(totalname, 'min max', ref_out.min(), ref_out.max())
                     ref_out += ref_in
                 else:
                     ref_out = tod.cache.put(cachename_out, ref_in)
+                if comm.comm_world.rank == 0 and args.debug:
+                    print('final', 'min max', ref_out.min(), ref_out.max())
                 del ref_in, ref_out
 
     return
@@ -104,6 +111,11 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
     if comm.comm_world.rank == 0:
         print('PySM took {:.2f} seconds'.format(stop-start),
               flush=args.flush)
+        tod = data.obs[0]['tod']
+        for det in tod.local_dets:
+            ref = tod.cache.reference(signalname + "_" + det)
+            print('PySM signal first observation min max', det, ref.min(), ref.max())
+            del ref
 
     mem_counter.exec(data)
 

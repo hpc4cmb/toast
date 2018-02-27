@@ -193,6 +193,7 @@ class OpSimPySM(Operator):
 
             self.comm.Barrier()
             if self.comm.rank == 0 and self._debug:
+                print('PySM map min and max pixel value', hp.ma(full_map_rank0).min(), hp.ma(full_map_rank0).max(), flush=True)
                 print('Broadcasting the map to other processes', flush=True)
             self.distmap.broadcast_healpix_map(full_map_rank0)
             self.comm.Barrier()
@@ -200,6 +201,10 @@ class OpSimPySM(Operator):
                 print('Running OpSimScan', flush=True)
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
+            if self.comm.rank == 0 and self._debug:
+                tod = data.obs[0]["tod"]
+                sig = tod.cache.reference(self._out + "_" + det)
+                print('Rank 0 timeline min max after smoothing', sig.min(), sig.max(), flush=True)
 
         stop = MPI.Wtime()
         if self.comm.rank == 0:
