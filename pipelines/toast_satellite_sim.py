@@ -703,7 +703,9 @@ def main():
         for mc in range(firstmc, firstmc+nmc):
             # clear all total signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("tot_signal_.*")
+            for obs in data.obs:
+                tod = obs['tod']
+                tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
