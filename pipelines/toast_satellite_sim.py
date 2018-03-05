@@ -443,12 +443,15 @@ def main():
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     signalname = "signal"
+    has_signal = False
     if args.input_pysm_model:
+        has_signal = True
         simulate_sky_signal(args, comm, data, mem_counter,
                                          [fp], subnpix, localsm, signalname=signalname)
 
     if args.input_dipole:
         print("Simulating dipole")
+        has_signal = True
         op_sim_dipole = tt.OpSimDipole(mode=args.input_dipole,
                 solar_speed=args.input_dipole_solar_speed_kms,
                 solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
@@ -602,7 +605,8 @@ def main():
             start = stop
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            if has_signal:
+                add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -726,7 +730,8 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            if has_signal:
+                add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
