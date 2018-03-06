@@ -288,7 +288,7 @@ class CovarianceTest(MPITestCase):
 
         # Matrices that failed the rcond test are set to zero
         nonzero = (np.absolute(invnpp.data) > 1.0e-12)
-        if np.sum(nonzero) == 0:
+        if np.sum(invnpp.data) == 0:
             raise Exception('All matrices failed the rcond test.')
 
         nt.assert_almost_equal(invnpp.data[nonzero], check.data[nonzero])

@@ -164,13 +164,16 @@ class OpSimDipoleTest(MPITestCase):
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.npix, nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm, nest=False)
+        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.npix,
+            nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm, nest=False)
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(comm=self.toastcomm.comm_group, size=self.npix, nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm, nest=False)
+        zmap = DistPixels(comm=self.toastcomm.comm_group, size=self.npix,
+            nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm, nest=False)
         zmap.data.fill(0.0)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm, nest=False)
+        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.npix,
+            nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm, nest=False)
         hits.data.fill(0)
 
         # accumulate the inverse covariance and noise weighted map.  
@@ -182,7 +185,8 @@ class OpSimDipoleTest(MPITestCase):
         for d in tod.local_dets:
             detweights[d] = 1.0
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="dipole")
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
+            hits=hits, zmap=zmap, name="dipole")
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()

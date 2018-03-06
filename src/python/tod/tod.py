@@ -124,7 +124,7 @@ class TOD(object):
                     print("WARNING: sample rank {} has no data assigned "
                     "in TOD.".format(r))
 
-        self.cache = Cache()
+        self.cache = Cache(use_fscache=False)
 
     def __del__(self):
         self.cache.clear()

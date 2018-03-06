@@ -371,7 +371,7 @@ class CacheTest(MPITestCase):
         _rss['move-to-disk'].record()
 
         # load from disk
-        self.cache.load_from_disk(_name)
+        _ref = self.cache.load_from_disk(_name)
         # tell garbage collection to collect all garbage
         gc.collect()
         #
@@ -379,7 +379,9 @@ class CacheTest(MPITestCase):
         #
         _rss['load-from-disk'].record()
 
-        # clear the cache, RSS should
+        # delete the auto_disk_array, this should move to FsBuffer
+        del _ref
+        # clear the cache, RSS should remove all FsBuffers
         self.cache.clear()
         # tell garbage collection to collect all garbage
         gc.collect()
@@ -415,7 +417,7 @@ class CacheTest(MPITestCase):
         #
         _rss['final'].record()
 
-
+        # -------------------------------------------------------------------- #
         # calculate the relative difference
         def relative_difference(_lhs, _rhs):
             _sum = _lhs + _rhs
@@ -423,12 +425,43 @@ class CacheTest(MPITestCase):
             if _sum.current() < 0.5:
                 return 0.0
             _diff = abs(_lhs.current() - _rhs.current()) / (0.5 * _sum.current())
-            print('abs({} - {}) / (0.5 * {}) = {}'.format(_lhs.current(),
-                                                          _rhs.current(),
-                                                          _sum.current(),
-                                                          _diff))
+            print('\tabs({} - {}) / (0.5 * {}) = {}'.format(_lhs.current(),
+                                                            _rhs.current(),
+                                                            _sum.current(),
+                                                            _diff))
             return _diff
 
+        # -------------------------------------------------------------------- #
+        # calculate the absolute difference
+        def absolute_difference(_lhs, _rhs):
+            _sum = _lhs + _rhs
+            # sum to less than 500 KB == negligible
+            if _sum.current() < 0.5:
+                return 0.0
+            _diff = abs(_lhs.current() - _rhs.current())
+            print('\tabs({} - {}) = {}'.format(_lhs.current(),
+                                               _rhs.current(),
+                                               _diff))
+            return _diff
+
+        # -------------------------------------------------------------------- #
+        # check both relative and absolute difference
+        def check_difference(_lhs, _rhs, _rel_eps, _abs_eps):
+            _rel = relative_difference(_lhs, _rhs)
+            _abs = absolute_difference(_lhs, _rhs)
+            print('difference: lhs={} vs. rhs={}'.format(_lhs.current(),
+                                                         _rhs.current()))
+            print('\trelative difference: {}'.format(_rel))
+            print('\tabsolute difference: {}'.format(_abs))
+            if not _rel < _rel_eps and not _abs < _abs_eps:
+                print ('\tFailure! relative > {} and absolute > {}'.format(_rel_eps, _abs_eps))
+                return False
+            else:
+                if not _rel < _rel_eps:
+                    print ('\tWarning! relative difference > {}'.format(_rel_eps))
+                if not _abs < _abs_eps:
+                    print ('\tWarning! absolute difference > {}'.format(_abs_eps))
+            return True
 
         print('\nTotal memory summary:\n')
         for key, val in _rss.items():
@@ -442,7 +475,12 @@ class CacheTest(MPITestCase):
         for key, val in _rss.items():
             print('\t{:20} --> {}'.format(key, val))
 
-        epsilon = 1.0e-1 # ~ 100 KB (Python gc does annoying things
+        relative_epsilon = 1.0e-1 # ~ 100 KB (Python gc does annoying things)
+        absolute_epsilon = 25 # ~ 25 MB is negligible to 200 MB, e.g.:
+        #   relative = abs(0.004 - 17.152) / (0.5 * 17.156) = 1.99906738167405
+        #   ^^^^^^^^^^^ seen on Cori [KNL] on 3/4/2018 - J. Madsen ^^^^^^^^^^^
+        #
+
         #
         # --> Tests:
         #
@@ -452,10 +490,14 @@ class CacheTest(MPITestCase):
         self.assertFalse(_rss[_key[5]].current() < _rss[_key[6]].current())
 
         # check approximately same size
-        self.assertTrue(relative_difference(_rss[_key[1]], _rss[_key[3]]) < epsilon)
-        self.assertTrue(relative_difference(_rss[_key[2]], _rss[_key[6]]) < epsilon)
-        self.assertTrue(relative_difference(_rss[_key[3]], _rss[_key[5]]) < epsilon)
-        self.assertTrue(relative_difference(_rss[_key[4]], _rss[_key[7]]) < epsilon)
+        self.assertTrue(check_difference(_rss[_key[1]], _rss[_key[3]],
+                                         relative_epsilon, absolute_epsilon))
+        self.assertTrue(check_difference(_rss[_key[2]], _rss[_key[6]],
+                                         relative_epsilon, absolute_epsilon))
+        self.assertTrue(check_difference(_rss[_key[3]], _rss[_key[5]],
+                                         relative_epsilon, absolute_epsilon))
+        self.assertTrue(check_difference(_rss[_key[4]], _rss[_key[7]],
+                                         relative_epsilon, absolute_epsilon))
 
         stop = MPI.Wtime()
         elapsed = stop - start

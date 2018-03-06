@@ -26,7 +26,7 @@ matrix:
             - pkg-config
             - cmake
       env:
-        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++)"
+        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++) && export TOAST_USE_FSCACHE=1"
     # GCC 4.9
     - os: linux
       dist: trusty
@@ -50,7 +50,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9)"
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export TOAST_USE_FSCACHE=0"
     # GCC 5
     - os: linux
       dist: trusty
@@ -75,7 +75,7 @@ matrix:
             - pkg-config
             - cmake
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5)"
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export TOAST_USE_FSCACHE=1"
     # GCC 6
     - os: linux
       dist: trusty
@@ -100,7 +100,7 @@ matrix:
             - pkg-config
             - cmake
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6)"
+        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6) && export TOAST_USE_FSCACHE=0"
     # GCC 7
     - os: linux
       dist: trusty
@@ -125,7 +125,7 @@ matrix:
             - pkg-config
             - cmake
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7)"
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export TOAST_USE_FSCACHE=1"
 
 # The versions to test
 python:
@@ -197,7 +197,10 @@ install:
       -DUSE_FFTW=ON ${PWD}/..
     - ctest -DTRIGGER=None -S cdash/Build.cmake -VV
 
+
 script:
+    - export TOAST_TMPDIR=${HOME}/toast-tmp
+    - mkdir -p ${TOAST_TMPDIR}
     - ctest -DTRIGGER=Test -S cdash/Test.cmake -L UnitTest -VV -A
 
 
