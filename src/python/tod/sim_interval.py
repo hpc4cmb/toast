@@ -40,8 +40,8 @@ def regular_intervals(n, start, first, rate, duration, gap):
 
     # Compute the whole number of samples that fit within the
     # requested time span (rounded to nearest sample).
-    totsamples = int(0.5 + (duration + gap) * rate) + 1
-    dursamples = int(0.5 + duration * rate) + 1
+    totsamples = int(0.5 + (duration + gap) * rate)
+    dursamples = int(0.5 + duration * rate)
     gapsamples = totsamples - dursamples
 
     # Compute the actual time span for this number of samples
