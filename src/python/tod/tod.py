@@ -124,7 +124,7 @@ class TOD(object):
                     print("WARNING: sample rank {} has no data assigned "
                     "in TOD.".format(r))
 
-        self.cache = Cache(use_fscache=False)
+        self.cache = Cache()
 
     def __del__(self):
         self.cache.clear()
@@ -1067,9 +1067,9 @@ class TODCache(TOD):
             self.cache.create(cachedata, np.float64, (self.local_samples[1],))
 
         n = data.shape[0]
-        refdata = self.cache.reference(cachedata)[start:start+n]
-
-        refdata[:] = data
+        #refdata = self.cache.reference(cachedata)[start:start+n]
+        #refdata[:] = data
+        self.cache.reference(cachedata)[start:start+n] = data
         return
 
     def _get_boresight(self, start, n):
@@ -1107,8 +1107,9 @@ class TODCache(TOD):
         cachepntg = "{}{}".format(self._pref_detpntg, detector)
         if not self.cache.exists(cachepntg):
             self.cache.create(cachepntg, np.float64, (self.local_samples[1],4))
-        pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
-        pntgref[:] = data
+        #pntgref = self.cache.reference(cachepntg)[start:(start+data.shape[0]),:]
+        #pntgref[:] = data
+        self.cache.reference(cachepntg)[start:(start+data.shape[0]),:] = data
         return
 
     def _get_flags(self, detector, start, n):
@@ -1132,9 +1133,9 @@ class TODCache(TOD):
             self.cache.create(cacheflags, np.uint8, (self.local_samples[1],))
 
         n = flags.shape[0]
-        refflags = self.cache.reference(cacheflags)[start:start+n]
-
-        refflags[:] = flags
+        #refflags = self.cache.reference(cacheflags)[start:start+n]
+        #refflags[:] = flags
+        self.cache.reference(cacheflags)[start:start+n] = flags
         return
 
     def _get_common_flags(self, start, n):
@@ -1147,8 +1148,9 @@ class TODCache(TOD):
         if not self.cache.exists(self._common):
             self.cache.create(self._common, np.uint8, (self.local_samples[1],))
         n = flags.shape[0]
-        comref = self.cache.reference(self._common)[start:start+n]
-        comref[:] = flags
+        #comref = self.cache.reference(self._common)[start:start+n]
+        #comref[:] = flags
+        self.cache.reference(self._common)[start:start+n] = flags
         return
 
     def _get_times(self, start, n):
@@ -1162,8 +1164,9 @@ class TODCache(TOD):
             self.cache.create(self._stamps, np.float64,
                               (self.local_samples[1],))
         n = stamps.shape[0]
-        ref = self.cache.reference(self._stamps)[start:start+n]
-        ref[:] = stamps
+        #ref = self.cache.reference(self._stamps)[start:start+n]
+        #ref[:] = stamps
+        self.cache.reference(self._stamps)[start:start+n] = stamps
         return
 
     def _get_position(self, start, n):
@@ -1176,8 +1179,9 @@ class TODCache(TOD):
         if not self.cache.exists(self._pos):
             self.cache.create(self._pos, np.float64, (self.local_samples[1], 3))
         n = pos.shape[0]
-        ref = self.cache.reference(self._pos)[start:start+n, :]
-        ref[:, :] = pos
+        #ref = self.cache.reference(self._pos)[start:start+n, :]
+        #ref[:, :] = pos
+        self.cache.reference(self._pos)[start:start+n, :] = pos
         return
 
     def _get_velocity(self, start, n):
@@ -1190,6 +1194,7 @@ class TODCache(TOD):
         if not self.cache.exists(self._vel):
             self.cache.create(self._vel, np.float64, (self.local_samples[1], 3))
         n = vel.shape[0]
-        ref = self.cache.reference(self._vel)[start:start+n, :]
-        ref[:, :] = vel
+        #ref = self.cache.reference(self._vel)[start:start+n, :]
+        #ref[:, :] = vel
+        self.cache.reference(self._vel)[start:start+n, :] = vel
         return

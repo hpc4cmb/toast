@@ -99,3 +99,7 @@ __pycache__/
 
 # Darwin Finder files
 *.DS_Store
+
+# temporary working directories
+/doc-*
+/miscellaneous

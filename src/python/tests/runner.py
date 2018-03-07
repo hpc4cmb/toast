@@ -51,7 +51,9 @@ if libsharp_available:
     from . import ops_sim_pysm as testopspysm
     from . import smooth as testsmooth
 
+import timemory
 
+@timemory.util.timer('TOAST test timing', add_args=True)
 def test(name=None):
     # We run tests with COMM_WORLD
     comm = MPI.COMM_WORLD

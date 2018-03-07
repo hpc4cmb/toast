@@ -14,12 +14,12 @@ from .cbuffer import ToastBuffer
 import os
 from tempfile import NamedTemporaryFile as named_temp_file
 import timemory
-from .mpi import MPI
-import traceback
 
 # ---------------------------------------------------------------------------- #
 # traceback
 def print_traceback():
+    import traceback
+    from .mpi import MPI
     print('')
     lines = traceback.format_stack(limit=7)
     lines = [ "{}> {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
@@ -34,21 +34,48 @@ toast_cache_tmpdir = None
 
 # ---------------------------------------------------------------------------- #
 def get_cache_verbosity():
-    _verbose = 0
-    try:
-        _verbose = int(os.environ['TOAST_CACHE_VERBOSE'])
-    except:
-        pass
+    """
+    Environment:
+        name (str) = TOAST_CACHE_VERBOSE
+        value (int) >= 0, increase for larger amounts of verbosity
+    """
+    _verbose = None
+    # only check once
+    if _verbose is not None:
+        return _verbose
+    else:
+        _verbose = 0
+        try:
+            _verbose = int(os.environ['TOAST_CACHE_VERBOSE'])
+        except:
+            pass
     return _verbose
 
 
 # ---------------------------------------------------------------------------- #
 def get_fscache_default_behavior():
-    _enable = 0
-    try:
-        _enable = int(os.environ['TOAST_USE_FSCACHE'])
-    except:
-        pass
+    """
+    The file-system caching behavior: all Cache arrays exist in memory
+    only when there are no references to the array (have not been garbage-collected).
+    When the array has been garbage collected, the array is pushed to the
+    file-system and only reloaded when a reference to the array is requested
+
+    Environment:
+        name (str) = TOAST_USE_FSCACHE
+        value (int) >= 0
+            - disable file-system caching as default storage behavior if zero
+            - enable file-system caching as default storage behavior if > zero
+    """
+    _enable = None
+    # only check once
+    if _enable is not None:
+        return True if _enable > 0 else False
+    else:
+        _enable = 0
+        try:
+            _enable = int(os.environ['TOAST_USE_FSCACHE'])
+        except:
+            pass
     return True if _enable > 0 else False
 
 
@@ -139,7 +166,7 @@ class auto_disk_array(np.ndarray):
     between FsBuffer storage and memory
     """
     # ------------------------------------------------------------------------ #
-    def __new__(cls, _input, _cache, _name, _incr=0):
+    def __new__(cls, _input, _cache, _name, _incr=0, parent=None):
         # if input is FsBuffer object: load it
         # else: use it
         input_array = None
@@ -173,9 +200,38 @@ class auto_disk_array(np.ndarray):
         # make sure it is not None
         assert(input_array is not None)
 
-        # add to Cache._refs
-        if _name not in _cache._refs.keys():
-            input_array = _cache.create(_name, input_array.dtype, input_array.shape)
+        # notify of creation
+        if get_cache_verbosity() > 0:
+            print('--> Creating auto_disk_array[{}] (#{}) [{}={}] from {}@{}:{}'.format(_name,
+                _cache.auto_reference_count(_name)+1, type(input_array).__name__,
+                input_array.copy(),
+                timemory.FUNC(4), timemory.FILE(5), timemory.LINE(4)))
+
+        if parent is None:
+            # don't let it exist in FsBuffer dictionary simulateously
+            if _name in _cache._fsbuffers.keys():
+                input_array = _cache._fsbuffers[_name].load()
+                del _cache._fsbuffers[_name]
+
+            # add to Cache._refs
+            if _name not in _cache._refs.keys():
+                _shape = input_array.shape
+                _type = input_array.dtype
+                if _cache._pymem:
+                    _cache._refs[_name] = np.zeros(_shape, dtype=_type)
+                else:
+                    _flatsize = 1
+                    for s in range(len(_shape)):
+                        if _shape[s] <= 0:
+                            raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
+                        _flatsize *= _shape[s]
+                    _cache._refs[_name] = np.asarray(ToastBuffer(int(_flatsize),
+                        numpy2toast(_type)) ).reshape(_shape)
+                _cache._refs[_name] = input_array
+            # already in Cache._refs
+            else:
+                if not input_array is _cache._refs[_name]:
+                    _cache._refs[_name] = input_array
 
         # input_array is an already formed np.ndarray instance
         # --> cast to be our class type
@@ -186,24 +242,15 @@ class auto_disk_array(np.ndarray):
         obj._name = _name
         obj._incr = _incr
         obj._base = input_array
-
-        # notify of creation
-        if get_cache_verbosity() > 0:
-            _b = 4
-            print('--> Creating auto_disk_array[{}] (#{}) [data={}] from {}@{}:{}'.format(_name,
-                _cache.auto_reference_count(_name)+1, obj.copy(),
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+        obj._parent = parent
 
         # insert into Cache._auto_refs if not already there
         if not _name in _cache._auto_refs.keys():
             _cache._auto_refs[_name] = 0
 
         # increment the Cache._auto_refs
-        _cache._auto_refs[_name] += 1
-
-        # don't let it exist in FsBuffer dictionary simulateously
-        if _name in _cache._fsbuffers.keys():
-            del _cache._fsbuffers[_name]
+        if parent is None:
+            _cache._auto_refs[_name] += 1
 
         # Finally, we must return the newly created object:
         return obj
@@ -220,41 +267,27 @@ class auto_disk_array(np.ndarray):
         self._name = getattr(obj, '_name', None)
         self._incr = getattr(obj, '_incr', 1)
         self._base = getattr(obj, '_base', obj)
-
+        self._parent = getattr(obj, '_parent', None)
 
         if get_cache_verbosity() > 0:
-            _b = 2
-            if isinstance(obj, auto_disk_array) and self.base is not None:
+            if isinstance(obj, np.ndarray):
                 print('--> Finalizing auto_disk_array with "{}" [data={}] from {}@{}:{}'.format(
                     type(obj).__name__, obj.copy(),
-                    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b) ))
+                    timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2) ))
 
-            elif isinstance(obj, np.ndarray) and self.base is not None:
-                print('--> Finalizing auto_disk_array with "{}" [data={}] from {}@{}:{}'.format(
-                    type(obj).__name__, obj.copy(),
-                    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b) ))
-            #
-            elif isinstance(obj, np.ndarray) and not isinstance(obj, auto_disk_array) :
-                print('--> Finalizing auto_disk_array with "{}" [data={}] from {}@{}:{}'.format(
-                    type(obj).__name__, obj.copy(),
-                    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b) ))
             else:
                 print('--> Finalizing auto_disk_array with "{}" [data={}] from {}@{}:{}'.format(
                     type(obj).__name__, 'unknown',
-                    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b) ))
+                    timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2) ))
 
         # increment the Cache._auto_refs
-        if self._cache is not None and self._name is not None:
+        if self._parent is None and self._cache is not None and self._name is not None:
             # notify of creation
             if get_cache_verbosity() > 0:
                 _n = self._cache.auto_reference_count(self._name) + self._incr
-                _b = 2
-                print('--> Finalizing auto_disk_array[{}] (#{}) [zero={}] from {}@{}:{}'.format(
-                    self._name, _n, 0,
-                    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
-                #print('--> {} [{}] (#{} - +{}) from {}@{}:{}'.format(timemory.FUNC(),
-                #    self._name, _n, self._incr,
-                #    timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+                print('--> Finalizing auto_disk_array[{}] (#{}) from {}@{}:{}'.format(
+                    self._name, _n,
+                    timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
 
             if self._incr > 0:
                 # insert into Cache._auto_refs if not already there
@@ -268,9 +301,8 @@ class auto_disk_array(np.ndarray):
                 self._cache.auto_reference_count(self._name) > 0):
                 del self._cache._fsbuffers[self._name]
                 if get_cache_verbosity() > 0:
-                    print('--> Deleted FsBuffer for auto_disk_array[{}] (#{}) [zero={}]'.format(
-                        self._name, self._cache.auto_reference_count(self._name),
-                        0 ))
+                    print('--> Deleted FsBuffer for auto_disk_array[{}] (#{})'.format(
+                        self._name, self._cache.auto_reference_count(self._name) ))
 
 
     # ------------------------------------------------------------------------ #
@@ -280,10 +312,10 @@ class auto_disk_array(np.ndarray):
         reference and put the array into a FsBuffer object or just do nothing
         """
         # if _cache._auto_refs no longer references these, ignore
-        if self._name in self._cache._auto_refs.keys():
+        if self._parent is None and self._name in self._cache._auto_refs.keys():
             if get_cache_verbosity() > 0:
-                print('Deleting auto_disk_array[{}] (#{}) [zero={}]'.format(self._name,
-                    self._cache.auto_reference_count(self._name), 0 ))
+                print('Deleting auto_disk_array[{}] (#{})'.format(self._name,
+                    self._cache.auto_reference_count(self._name) ))
 
             if self._cache._auto_refs[self._name] > 0:
                 self._cache._auto_refs[self._name] -= 1
@@ -307,32 +339,35 @@ class auto_disk_array(np.ndarray):
     # ------------------------------------------------------------------------ #
     def __str__(self):
         self._base = self.base
+        _copy = 0
+        if self.base is not None:
+            _copy = self.base.copy()
         return '{}(name="{}", incr={}, dtype={}, shape={}) = {}'.format(type(self).__name__,
-            self._name, self._incr, self.dtype, self.shape, self.base.copy())
+            self._name, self._incr, self.dtype, self.shape, _copy)
 
 
     # ------------------------------------------------------------------------ #
     def __array__(self, idtype):
         if get_cache_verbosity() > 0:
-            _b = 2
             print('__array__({}) from {}@{}:{}'.format(self._name,
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
 
         if idtype == self.dtype:
             return self
         else:
-            return self.base.copy()
+            return self.base.__array__(idtype)
+
 
     # ------------------------------------------------------------------------ #
     def __array_wrap__(self, out_arr, context=None):
         if get_cache_verbosity() > 0:
-            _b = 2
             print('__array_wrap__({}) from {}@{}:{}'.format(self._name,
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
 
         # then just call the parent
         obj = self.base.__array_wrap__(out_arr, context)
-        return auto_disk_array(np.asarray(obj).view(np.ndarray), self._cache, self._name)
+        return auto_disk_array(np.asarray(obj).view(np.ndarray),
+                               self._cache, self._name)
 
 
     # ------------------------------------------------------------------------ #
@@ -348,37 +383,59 @@ class auto_disk_array(np.ndarray):
 
 
     # ------------------------------------------------------------------------ #
+    def __repr__(self, *args, **kwargs):
+        if get_cache_verbosity() > 0:
+            print('__repr__({}) from {}@{}:{}'.format(self,
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
+        return super(auto_disk_array, self).__repr__(*args, **kwargs)
+
+
+    # ------------------------------------------------------------------------ #
     def __setitem__(self, *args, **kwargs):
         if get_cache_verbosity() > 0:
-            _b = 2
-            print('__setitem__({}) from {}@{}:{}'.format(self,
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+            print('__setitem__({}) = (args={}, kwargs={}) from {}@{}:{}'.format(self,
+                args, kwargs,
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
+        self._base = self.base
+        if self.base is None:
+            return
         self._incr = 1
         self.base.__setitem__(*args, **kwargs)
 
 
     # ------------------------------------------------------------------------ #
-    def __repr__(self, *args, **kwargs):
-        if get_cache_verbosity() > 0:
-            _b = 2
-            print('__repr__({}) from {}@{}:{}'.format(self,
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
-        return super(auto_disk_array, self).__repr__(*args, **kwargs)
-
-
-    # ------------------------------------------------------------------------ #
     def __getitem__(self, *args, **kwargs):
         if get_cache_verbosity() > 0:
-            _b = 2
-            print('__getitem__({}) from {}@{}:{}'.format(self,
-                timemory.FUNC(_b), timemory.FILE(_b+1), timemory.LINE(_b)))
+            print('__getitem__({}) = (args={}, kwargs={}) from {}@{}:{}'.format(self,
+                args, kwargs,
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
+
+        self._base = self.base
 
         if self.base is None:
             return None
 
         self._incr = 1
         return self.base.__getitem__(*args, **kwargs)
+        """
+        ret = None
+        _parent = self._parent
+        while _parent is not None:
+            if isinstance(_parent, auto_disk_array):
+                _parent = _parent._parent
+        if _parent is not None:
+            ret = _parent.base.__getitem__(*args, **kwargs)
+        else:
+            ret = self.base.__getitem__(*args, **kwargs)
 
+        if isinstance(ret, np.ndarray) and ret.dtype == self.dtype:
+            self._incr = 0
+            _ret = auto_disk_array(ret, self._cache, self._name, 1, parent=_parent)
+            return _ret
+        else:
+            self._incr = 1
+            return ret
+        """
 
     # ------------------------------------------------------------------------ #
     # ensure the returned type is a auto_disk_array instance
@@ -394,15 +451,12 @@ class auto_disk_array(np.ndarray):
                 self._dtype = _arr.dtype
                 self._shape = _arr.shape
 
-        if get_cache_verbosity() > 0:
+        if get_cache_verbosity() > 1:
             print('ufunc: "{}", method: "{}"'.format(ufunc.__name__, method))
             print_traceback()
-            _b = 2
             print('__array_ufunc__[{}] (# {}) from {}@{}:{}'.format(self._name,
                 self._cache.auto_reference_count(self._name),
-                timemory.FUNC(_b),
-                timemory.FILE(_b+1),
-                timemory.LINE(_b)))
+                timemory.FUNC(2), timemory.FILE(3), timemory.LINE(2)))
 
         args = []
         in_no = -1
@@ -419,11 +473,11 @@ class auto_disk_array(np.ndarray):
 
                 if get_cache_verbosity() > 0:
                     if isinstance(_input, auto_disk_array):
-                        print('Input {} : {}(dtype={}, shape={}) [zero={}]'.format(
-                            i, type(_input).__name__, _input.dtype, _input.shape, 0 ))
+                        print('Input {} : {}(dtype={}, shape={})'.format(
+                            i, type(_input).__name__, _input.dtype, _input.shape ))
                     elif isinstance(_input, np.ndarray):
-                        print('Input {} : {}(dtype={}, shape={}) [zero={}]'.format(
-                            i, type(_input).__name__, _input.dtype, _input.shape, 0 ))
+                        print('Input {} : {}(dtype={}, shape={})'.format(
+                            i, type(_input).__name__, _input.dtype, _input.shape ))
                     else:
                         print('Input {} : {} == {}'.format(i, type(_input).__name__), _input)
         except:
@@ -445,11 +499,11 @@ class auto_disk_array(np.ndarray):
 
                 if get_cache_verbosity() > 0:
                     if isinstance(_output, auto_disk_array):
-                        print('Output {} : {}(dtype={}, shape={}) [zero={}]'.format(
-                            j, type(_output).__name__, _output.dtype, _output.shape, 0 ))
+                        print('Output {} : {}(dtype={}, shape={})'.format(
+                            j, type(_output).__name__, _output.dtype, _output.shape ))
                     elif isinstance(_output, np.ndarray):
-                        print('Output {} : {}(dtype={}, shape={}) [zero={}]'.format(
-                            j, type(_output).__name__, _output.dtype, _output.shape, 0 ))
+                        print('Output {} : {}(dtype={}, shape={})'.format(
+                            j, type(_output).__name__, _output.dtype, _output.shape ))
                     else:
                         print('Output {} : {} == {}'.format(j, type(_output).__name__), _output)
             kwargs['out'] = tuple(out_args)
@@ -502,11 +556,11 @@ class auto_disk_array(np.ndarray):
 
             if get_cache_verbosity() > 0:
                 if isinstance(_result, auto_disk_array):
-                    print('Result : {}(dtype={}, shape={}) [zero={}]'.format(
-                        type(_result).__name__, _result.dtype, _result.shape, 0 ))
+                    print('Result : {}(dtype={}, shape={})'.format(
+                        type(_result).__name__, _result.dtype, _result.shape ))
                 elif isinstance(_result, np.ndarray):
-                    print('Result : {}(dtype={}, shape={}) [zero={}]'.format(
-                        type(_result).__name__, _result.dtype, _result.shape, 0 ))
+                    print('Result : {}(dtype={}, shape={})'.format(
+                        type(_result).__name__, _result.dtype, _result.shape ))
                 else:
                     print('Result : {} is {}'.format(type(_result).__name__, _result))
         else:
@@ -748,11 +802,7 @@ class Cache(object):
                 return auto_disk_array(self._refs[ref_name], self, ref_name, 1)
             elif ref_name in self._fsbuffers.keys():
                 if not ref_name in self._refs.keys():
-                    tmp = self._fsbuffers[ref_name].load()
-                    del self._fsbuffers[ref_name]
-                    ref = self.put(ref_name, tmp, replace=True)
-                    del tmp
-                    return ref
+                    return auto_disk_array(self._fsbuffers[ref_name], self, ref_name, 1)
                 else:
                     # we should not have an object in _fsbuffers and _refs
                     raise RuntimeError("Internal logic error! Cache object named {} " + \
@@ -921,7 +971,7 @@ class Cache(object):
         ret = self._refs[name]
 
         if use_disk:
-            return auto_disk_array(self._refs[name], self, name)
+            return auto_disk_array(self._refs[name], self, name, 1)
 
         return ret
 
@@ -1085,9 +1135,7 @@ class Cache(object):
                         if ref_name in self._auto_refs.keys():
                             ref = auto_disk_array(self._refs[ref_name], self, ref_name)
                         elif ref_name in self._fsbuffers.keys():
-                            tmp = self._fsbuffers[ref_name].load()
-                            del self._fsbuffers[ref_name]
-                            ref = auto_disk_array(tmp, self, ref_name, 1)
+                            ref = auto_disk_array(self._fsbuffers[ref_name], self, ref_name, 1)
                         else:
                             ref = self._refs[ref_name]
                     else:
@@ -1095,9 +1143,7 @@ class Cache(object):
                 elif use_disk and name in self._fsbuffers.keys():
                     # load a np.ndarray from the FsBuffer, let auto_disk_array
                     # handle putting into _refs and deleting from _fsbuffers
-                    tmp = self._fsbuffers[name].load()
-                    del self._fsbuffers[name]
-                    ref = auto_disk_array(tmp, self, name)
+                    ref = auto_disk_array(self._fsbuffers[name], self, name)
                 return ref
 
 
