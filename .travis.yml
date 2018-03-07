@@ -199,7 +199,7 @@ install:
 
 
 script:
-    - export TOAST_CACHE_VERBOSE=${TOAST_USE_FSCACHE}
+    - export TOAST_CACHE_VERBOSE=0
     - export TOAST_TMPDIR=${HOME}/toast-tmp
     - mkdir -p ${TOAST_TMPDIR}
     - ctest -DTRIGGER=Test -S cdash/Test.cmake -L '(UnitTest|shell)' -VV -A
