@@ -274,7 +274,7 @@ class OpPointingHpix(Operator):
                     pixelsref = tod.cache.reference(pixelsname)
                 else:
                     pixelsref = tod.cache.create(pixelsname, np.int64,
-                                                 (nsamp, ))
+                                                 (nsamp, ), use_disk=False)
 
                 if tod.cache.exists(weightsname):
                     weightsref = tod.cache.reference(weightsname)
