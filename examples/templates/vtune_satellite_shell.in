@@ -14,7 +14,7 @@ echo "PYTHON VERSION: $(python --version &> /dev/stdout)"
 echo ""
 
 : ${TMPDIR:=/tmp}
-export TOAST_TMPDIR=$(mktemp -d ${TMPDIR}/toast-XXXX)
+export TOAST_TMPDIR=$(mktemp -d ${TMPDIR}/toast-XXXXXX)
 
 outdir="out_@SIZE@_satellite"
 mkdir -p "${outdir}"

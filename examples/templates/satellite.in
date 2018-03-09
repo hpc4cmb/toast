@@ -9,7 +9,12 @@
 #SBATCH --output=out_@SIZE@_satellite_@MACHINE@_%j.log
 #DW jobdw capacity=@BUFFER_SIZE@ access_mode=striped type=scratch pool=@BUFFER_POOL@
 
-export TOAST_TMPDIR=$(mktemp -d ${DW_JOB_STRIPED}/toast-XXXX)
+: ${DW_JOB_STRIPED:=/tmp}
+TOAST_TMPDIR_RET=1
+export TOAST_TMPDIR=$(mktemp -d ${DW_JOB_STRIPED}/toast-XXXXXX && TOAST_TMPDIR_RET=0)
+if [ "${TOAST_TMPDIR_RET}" -gt 0 ]; then
+    export TOAST_TMPDIR=$(mktemp -d ${PWD}/toast-XXXXXX)
+fi
 echo "TOAST_TMPDIR: ${TOAST_TMPDIR}"
 
 set -o errexit
