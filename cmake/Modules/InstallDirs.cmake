@@ -80,7 +80,7 @@ if(NOT "${PYTHON_VERSION_STRING}" STREQUAL "")
 endif(NOT "${PYTHON_VERSION_STRING}" STREQUAL "")
 set(CMAKE_INSTALL_PYTHONDIR
     "${CMAKE_INSTALL_LIBDIR_DEFAULT}/python${PYTHON_SHORT_VERSION}/site-packages"
-    CACHE PATH "CMake python install directory" FORCE)
+    CACHE PATH "CMake python install directory")
 
 # ---------------------------------------------------------------------------- #
 #   Add the cmake full directory variable
