@@ -7,6 +7,7 @@
 #SBATCH --time=@TIME@
 #SBATCH --job-name=@SIZE@-ground
 #SBATCH --output=out_@SIZE@_ground_@MACHINE@_%j.log
+#@SHIFTER_SBATCH@ --image=@SHIFTER_IMAGE@
 #DW jobdw capacity=@BUFFER_SIZE@ access_mode=striped type=scratch pool=@BUFFER_POOL@
 
 : ${DW_JOB_STRIPED:=/tmp}
@@ -62,7 +63,7 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
-    srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
+    srun -n 1 -N 1 @SHIFTER@ toast_fake_focalplane.py @$fpparfile \
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
          --out "${outdir}/fp" --minpix $detpix
@@ -78,7 +79,7 @@ operational_days=$(( @NODES@ / @NODES_PER_GROUP@ ))
 
 if [ ! -e "${schedulefile}" ]; then
     echo "Running toast_ground_schedule.py..."
-    srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
+    srun -n 1 -N 1 @SHIFTER@ toast_ground_schedule.py @$schparfile \
          --disable-timer-serialization \
          --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
          --out "${schedulefile}" --patch @PATCH@ \
@@ -87,7 +88,11 @@ fi
 
 # The executable script
 
-ex=$(which toast_ground_sim.py)
+if [ -z "@SHIFTER@" ]; then
+    ex=$(which toast_ground_sim.py)
+else
+    ex=toast_ground_sim.py
+fi
 echo "Using ${ex}"
 
 # Scan strategy parameters from a file
@@ -141,7 +146,7 @@ echo "TOAST # threads: ${TOAST_NUM_THREADS}"
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm
 
-run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth}"
+run="srun --cpu_bind=cores -n ${procs} -N ${nodes} -c ${node_depth} @SHIFTER@"
 
 echo Calling srun at $(date)
 

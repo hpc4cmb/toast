@@ -126,7 +126,16 @@ endif(NOT USE_SLURM OR "${MACHINE}" STREQUAL "")
 machine_defined()
 valid_machine()
 
-include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})    
+set(SHIFTER "")
+set(SHIFTER_SBATCH "")
+set(SHIFTER_IMAGE "" CACHE STRING "Shifter image in SLURM examples")
+add_feature(SHIFTER_IMAGE "Use a shifter image in the SLURM examples")
+if(NOT "${SHIFTER_IMAGE}" STREQUAL "")
+    set(SHIFTER "shifter")
+    set(SHIFTER_SBATCH "SBATCH")
+endif(NOT "${SHIFTER_IMAGE}" STREQUAL "")
+
+include(${CMAKE_SOURCE_DIR}/examples/templates/machines/${MACHINE})
 set(ENV{MACHINES} "${MACHINE}")
 
 set(PATH_INFO_FILE ctest-path-info.sh)
@@ -149,6 +158,8 @@ configure_file(${CMAKE_SOURCE_DIR}/cmake/Templates/${SRUN_WRAPPER}
 message(STATUS "Generating SLURM examples for ${MACHINE}...")
 execute_process(COMMAND ${PROJECT_EXAMPLES_DIR}/generate_slurm.sh
         -DACCOUNT=${ACCOUNT} -DTIME=${TIME} -DQUEUE=${QUEUE}
+        -DSHIFTER=${SHIFTER} -DSHIFTER_SBATCH=${SHIFTER_SBATCH}
+        -DSHIFTER_IMAGE=${SHIFTER_IMAGE}
         -DREADFILE=${PROJECT_EXAMPLES_DIR}/read.cmake
     WORKING_DIRECTORY ${PROJECT_EXAMPLES_DIR}
     OUTPUT_FILE generate_slurm.log
