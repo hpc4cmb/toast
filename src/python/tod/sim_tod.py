@@ -1022,13 +1022,12 @@ class TODGround(TOD):
             xra, xdec = self._observer.radec_of(       0,       0, fixed=False)
             yra, ydec = self._observer.radec_of(-np.pi/2,       0, fixed=False)
             zra, zdec = self._observer.radec_of(       0, np.pi/2, fixed=False)
-        except:
+        except Exception as e:
             # Modified pyephem not available.
             # Translated pointing will include stellar aberration.
             xra, xdec = self._observer.radec_of(       0,       0)
             yra, ydec = self._observer.radec_of(-np.pi/2,       0)
             zra, zdec = self._observer.radec_of(       0, np.pi/2)
-            testra, testdec = self._observer.radec_of(testaz, testel)
         self._observer.pressure = pressure
         xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
                                    np.array([xra, yra, zra]))
