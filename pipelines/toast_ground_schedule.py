@@ -38,7 +38,7 @@ class Patch(object):
         self.alternate = alternate
         # Use the site latitude to infer the lowest elevation that all
         # corners cross.
-        self.site_lat = np.radians(np.float(site_lat))
+        self.site_lat = site_lat
         for corner in corners:
             el_max = (corner._dec + (np.pi / 2 - self.site_lat)) % (np.pi / 2)
             if el_max < self.el_max0:
@@ -146,9 +146,10 @@ def attempt_scan(
                 el, patch, t, fp_radius, observer, sun, not_visible,
                 tstep, stop_timestamp, sun_el_max, rising)
             if success:
-                t = add_scan(args, t, tstop, aztimes, azmins, azmaxs, rising,
-                             fp_radius, observer, sun, moon, fout, fout_fmt,
-                             patch, el, ods)
+                t, _ = add_scan(
+                    args, t, tstop, aztimes, azmins, azmaxs, rising,
+                    fp_radius, observer, sun, moon, fout, fout_fmt,
+                    patch, el, ods)
                 patch.step_azel()
                 break
         if success:
@@ -182,8 +183,7 @@ def attempt_scan_pole(
                 if success:
                     # Still the same scan
                     patch.hits -= 1
-                    subscan += 1
-                t = add_scan(
+                t, subscan = add_scan(
                     args, t, tstop, aztimes, azmins, azmaxs, False,
                     fp_radius, observer, sun, moon, fout, fout_fmt, patch,
                     el, ods, subscan=subscan)
@@ -455,7 +455,7 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     """ Make an entry for a CES in the schedule file.
     """
     ces_time = tstop - tstart
-    if ces_time > args.ces_max_time and not args.pole_mode:
+    if ces_time > args.ces_max_time:  # and not args.pole_mode:
         nsub = np.int(np.ceil(ces_time / args.ces_max_time))
         ces_time /= nsub
     aztimes = np.array(aztimes)
@@ -536,11 +536,11 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     # Advance the time
     tstop += args.gap
 
-    return tstop
+    return tstop, subscan
 
 
-def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
-                sun_avoidance_angle, moon_angle_min):
+def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
+                sun_avoidance_elevation, moon_avoidance_angle):
     """ Determine which patches are visible.
     """
     visible = []
@@ -555,10 +555,10 @@ def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
-            if sun.alt > sun_avoidance_angle:
-                # Sun is high enough to apply sun_angle_min check
+            if sun.alt > sun_avoidance_elevation:
+                # Sun is high enough to apply sun_avoidance_angle check
                 angle = ephem.separation(sun, corner)
-                if angle < sun_angle_min:
+                if angle < sun_avoidance_angle:
                     # Patch is too close to the Sun
                     not_visible.append((
                         patch.name,
@@ -567,7 +567,7 @@ def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
                     break
             if moon.alt > 0:
                 angle = ephem.separation(moon, corner)
-                if angle < moon_angle_min:
+                if angle < moon_avoidance_angle:
                     # Patch is too close to the Moon
                     not_visible.append((
                         patch.name,
@@ -584,10 +584,15 @@ def get_visible(observer, sun, moon, patches, el_min, sun_angle_min,
 
 
 def build_schedule(
-        args, start_timestamp, stop_timestamp,
-        sun_el_max, sun_avoidance_angle,
-        sun_angle_min, moon_angle_min,
-        el_min, el_max, fp_radius, patches):
+        args, start_timestamp, stop_timestamp, patches, observer, sun, moon):
+
+    sun_el_max = args.sun_el_max * degree
+    sun_avoidance_angle = args.sun_avoidance_angle * degree
+    sun_avoidance_elevation = args.sun_avoidance_elevation * degree
+    moon_avoidance_angle = args.moon_avoidance_angle * degree
+    el_min = args.el_min * degree
+    el_max = args.el_max * degree
+    fp_radius = args.fp_radius * degree
 
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
@@ -596,12 +601,12 @@ def build_schedule(
         os.makedirs(dir_out)
     fout = open(fname_out, 'w')
 
-    fout.write('#{:15} {:15} {:15} {:15} {:15}\n'.format(
+    fout.write('#{:15} {:15} {:>15} {:>15} {:>15}\n'.format(
         'Site', 'Telescope',
-        'Latitude [deg]', 'Longitude [deg]', 'Altitude [m]'))
-    fout.write(' {:15} {:15} {:15} {:15} {:15.6f}\n'.format(
-        args.site_name, args.telescope,
-        args.site_lat, args.site_lon, args.site_alt))
+        'Latitude [deg]', 'Longitude [deg]', 'Elevation [m]'))
+    fout.write(' {:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n'.format(
+        args.site_name, args.telescope, np.degrees(observer.lat),
+        np.degrees(observer.lon), observer.elevation))
 
     fout_fmt0 = '#{:20} {:20} {:14} {:14} ' \
                 '{:15} {:8} {:8} {:8} {:5} ' \
@@ -623,17 +628,7 @@ def build_schedule(
             'Moon el1', 'Moon az1', 'Moon el2', 'Moon az2', 'Phase',
             'Pass', 'Sub'))
 
-    observer = ephem.Observer()
-    observer.lon = args.site_lon
-    observer.lat = args.site_lat
-    observer.elevation = args.site_alt  # In meters
-    observer.epoch = '2000'
-    observer.temp = 0  # in Celcius
-    observer.compute_pressure()
-
     t = start_timestamp
-    sun = ephem.Sun()
-    moon = ephem.Moon()
     tstep = 600
 
     # Operational days
@@ -666,8 +661,8 @@ def build_schedule(
         moon.compute(observer)
 
         visible, not_visible = get_visible(
-            observer, sun, moon, patches, el_min, sun_angle_min,
-            sun_avoidance_angle, moon_angle_min)
+            observer, sun, moon, patches, el_min, sun_avoidance_angle,
+            sun_avoidance_elevation, moon_avoidance_angle)
 
         if len(visible) == 0:
             if args.debug:
@@ -758,15 +753,15 @@ def parse_args():
     parser.add_argument('--fp_radius',
                         required=False, default=0, type=np.float,
                         help='Focal plane radius [deg]')
-    parser.add_argument('--sun_avoidance_angle',
+    parser.add_argument('--sun_avoidance_elevation',
                         required=False, default=-15, type=np.float,
                         help='Solar elevation above which to apply '
-                        'sun_angle_min [deg]')
-    parser.add_argument('--sun_angle_min',
+                        'sun_avoidance_angle [deg]')
+    parser.add_argument('--sun_avoidance_angle',
                         required=False, default=30, type=np.float,
                         help='Minimum distance between the Sun and '
                         'the bore sight [deg]')
-    parser.add_argument('--moon_angle_min',
+    parser.add_argument('--moon_avoidance_angle',
                         required=False, default=20, type=np.float,
                         help='Minimum distance between the Moon and '
                         'the bore sight [deg]')
@@ -1018,7 +1013,7 @@ def parse_patch_center_and_width(args, parts):
     return corners
 
 
-def parse_patches(args):
+def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
     # Parse the patch definitions
 
     patches = []
@@ -1039,16 +1034,46 @@ def parse_patches(args):
         patches.append(Patch(
             name, weight, corners, el_min=args.el_min * degree,
             el_max=args.el_max * degree, el_step=args.el_step * degree,
-            alternate=args.alternate, site_lat=args.site_lat))
+            alternate=args.alternate, site_lat=observer.lat))
 
     if args.debug:
         import matplotlib.pyplot as plt
         import healpy as hp
+        plt.style.use('classic')
         plt.figure(figsize=[18, 12])
         for iplot, coord in enumerate('CEG'):
-            hp.mollview(np.zeros(12), coord=coord, cbar=False,
+            hp.mollview(np.zeros(12) + hp.UNSEEN, coord=coord, cbar=False,
                         title='Patch locations', sub=[2, 2, 1 + iplot])
             hp.graticule(30)
+            # Plot sun and moon avoidance circle
+            sunlon, sunlat = [], []
+            moonlon, moonlat = [], []
+            sun_avoidance_angle = args.sun_avoidance_angle * degree
+            moon_avoidance_angle = args.moon_avoidance_angle * degree
+            for lon, lat, sso, angle_min, color in [
+                (sunlon, sunlat, sun, sun_avoidance_angle, 'moccasin'),
+                (moonlon, moonlat, moon, moon_avoidance_angle, 'deepskyblue')]:
+                for t in range(np.int(start_timestamp), np.int(stop_timestamp),
+                               np.int(86400 * 1)):
+                    observer.date = to_DJD(t)
+                    sso.compute(observer)
+                    lon.append(sso.a_ra / degree)
+                    lat.append(sso.a_dec / degree)
+                    if angle_min <= 0:
+                        continue
+                    # plot a circle around the location
+                    clon, clat = [], []
+                    phi = sso.a_ra
+                    theta = sso.a_dec
+                    r = angle_min
+                    for ang in np.linspace(0, 2 * np.pi, 36):
+                        dtheta = np.cos(ang) * r
+                        dphi = np.sin(ang) * r / np.cos(theta + dtheta)
+                        clon.append((phi + dphi) / degree)
+                        clat.append((theta + dtheta) / degree)
+                    hp.projplot(clon, clat, '-', color=color,
+                                threshold=1, lonlat=True, coord='C', lw=1)
+            # Plot patches
             for patch in patches:
                 lon = [corner._ra / degree for corner in patch.corners]
                 lat = [corner._dec / degree for corner in patch.corners]
@@ -1060,6 +1085,16 @@ def parse_patches(args):
                             lw=2)
                 hp.projtext(lon[0], lat[0], patch.name, lonlat=True, coord='C',
                             fontsize=14)
+            # Plot Sun and Moon trajectory
+            hp.projplot(sunlon, sunlat, '-', color='darkorange',
+                        threshold=1, lonlat=True, coord='C', lw=2)
+            hp.projtext(sunlon[0], sunlat[0], 'Sun', color='orange',
+                        lonlat=True, coord='C', fontsize=14)
+            hp.projplot(moonlon, moonlat, '-', color='blue',
+                        threshold=1, lonlat=True, coord='C', lw=1)
+            hp.projtext(moonlon[0], moonlat[0], 'Moon', color='blue',
+                        lonlat=True, coord='C', fontsize=14)
+
         plt.savefig('patches.png')
         plt.close()
 
@@ -1076,14 +1111,24 @@ def main():
 
     autotimer = timing.auto_timer(timing.FILE())
 
-    patches = parse_patches(args)
+    observer = ephem.Observer()
+    observer.lon = args.site_lon
+    observer.lat = args.site_lat
+    observer.elevation = args.site_alt  # In meters
+    observer.epoch = '2000'
+    observer.temp = 0  # in Celcius
+    observer.compute_pressure()
+
+    sun = ephem.Sun()
+    moon = ephem.Moon()
+
+    patches = parse_patches(args, observer, sun, moon,
+                            start_timestamp, stop_timestamp)
 
     build_schedule(
-        args, start_timestamp, stop_timestamp,
-        args.sun_el_max * degree, args.sun_avoidance_angle * degree,
-        args.sun_angle_min * degree, args.moon_angle_min * degree,
-        args.el_min * degree, args.el_max * degree, args.fp_radius * degree,
-        patches)
+        args, start_timestamp, stop_timestamp, patches, observer, sun, moon)
+
+    del autotimer
 
 
 if __name__ == '__main__':
