@@ -4,6 +4,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+if 'TOAST_STARTUP_DELAY' in os.environ:
+    import numpy as np
+    import time
+    delay = np.float(os.environ['TOAST_STARTUP_DELAY'])
+    wait = np.random.rand() * delay
+    print('Sleeping for {} seconds before importing TOAST'.format(wait),
+          flush=True)
+    time.sleep(wait)
+
 from toast.mpi import MPI
 
 import argparse
@@ -512,6 +522,18 @@ def get_breaks(comm, all_ces, nces, args):
                 breaks.append(nces + i + 1)
 
     nbreak = len(breaks)
+    if nbreak < comm.ngroups-1:
+        if comm.comm_world.rank == 0:
+            print('WARNING: there are more process groups than observing days. '
+                  'Will try distributing by observation.', flush=True)
+        breaks = []
+        for i in range(nces-1):
+            scan1 = all_ces[i][4]
+            scan2 = all_ces[i+1][4]
+            if scan1 != scan2:
+                breaks.append(nces + i + 1)
+        nbreak = len(breaks)
+
     if nbreak != comm.ngroups-1:
         raise RuntimeError(
             'Number of observing days ({}) does not match number of process '
