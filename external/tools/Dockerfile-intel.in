@@ -1,4 +1,4 @@
-FROM ubuntu:17.04 as builder
+FROM ubuntu:17.10 as builder
 
 MAINTAINER Theodore Kisner <tskisner@lbl.gov>
 
