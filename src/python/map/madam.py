@@ -351,6 +351,8 @@ class OpMadam(Operator):
                 period_ranges.append((local_start, local_stop))
             obs_period_ranges.append(period_ranges)
 
+        # Update the number of samples based on the valid intervals
+
         nsamp_tot_full = comm.allreduce(nsamp, op=MPI.SUM)
         nperiod = len(period_lengths)
         period_lengths = np.array(period_lengths, dtype=np.int64)
@@ -369,7 +371,7 @@ class OpMadam(Operator):
         for i, n in enumerate(period_lengths[:-1]):
             periods[i + 1] = periods[i] + n
 
-        return obs_period_ranges, psdfreqs, periods
+        return obs_period_ranges, psdfreqs, periods, nsamp
 
     def _prepare(self, data, comm):
         """ Examine the data object.
@@ -424,7 +426,7 @@ class OpMadam(Operator):
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
 
-        obs_period_ranges, psdfreqs, periods = self._get_period_ranges(
+        obs_period_ranges, psdfreqs, periods, nsamp = self._get_period_ranges(
             comm, data, detectors, nsamp)
 
         return (parstring, detstring, nsamp, ndet, nnz, nnz_full, nnz_stride,
@@ -483,6 +485,7 @@ class OpMadam(Operator):
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
             'signal', np.float64, (nsamp * ndet,))
+        self._madam_signal[:] = np.nan
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
@@ -520,6 +523,7 @@ class OpMadam(Operator):
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
             'pixels', np.int64, (nsamp * ndet,))
+        self._madam_pixels[:] = -1
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
@@ -598,6 +602,7 @@ class OpMadam(Operator):
 
         self._madam_pixweights = self._cache.create(
             'pixweights', np.float64, (nsamp * ndet * nnz,))
+        self._madam_pixweights[:] = 0
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
