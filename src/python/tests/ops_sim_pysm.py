@@ -232,7 +232,7 @@ class OpSimPySMTestSmooth(MPITestCase):
             'bandcenter_ghz': 22.5,
             'bandwidth_ghz': 5,
             #'fwhm': 30*0.16666666666666666}}
-            'fwhm': 10}}
+            'fwhm': 600}} # fwhm is in arcmin
         op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
                                 out='signal',
                                 pysm_model="a2,d7,f1,s3,c1",
