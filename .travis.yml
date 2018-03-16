@@ -175,7 +175,6 @@ before_install:
     - cd ../..
     # Install PySM
     - pip install https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
-    - cd ..
 
 # Skip this
 
