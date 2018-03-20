@@ -17,7 +17,7 @@
 --nside
 512
 --input_pysm_model
-s3,d7,f1,a2,c2
+s3,d7,f1,a2,c1
 --apply_beam
 --flush
 --input_dipole
@@ -28,5 +28,3 @@ total
 48.26
 --input_dipole_solar_gal_lon_deg
 263.99
---input_pysm_precomputed_cmb_K_CMB
-/home/zonca/zonca/p/software/PySM_public/pysm/template/lensed_cmb.fits
