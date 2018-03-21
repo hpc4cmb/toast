@@ -9,6 +9,14 @@ sed -i "s/mpirun -n 1//g" tiny*
 sed -i 's/eval \${run} \${com}.*$/eval \${run} \${com}/' tiny*
 # 2 procs, 1 thread each
 sed -i 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
-wget http://portal.nersc.gov/project/cmb/toast_data/ref_out_tiny_satellite.tgz
-tar xzf ref_out_tiny_satellite.tgz
-bash tiny_satellite_shell.sh && python check_maps.py
+
+: ${TYPES:="satellite ground ground_simple ground_multisite"}
+exit_status=0
+
+for TYPE in $TYPES
+do
+    wget http://portal.nersc.gov/project/cmb/toast_data/ref_out_tiny_${TYPE}.tgz
+    tar xzf ref_out_tiny_${TYPE}.tgz
+    bash tiny_${TYPE}_shell.sh && python check_maps.py $TYPE; (( exit_status = exit_status || $? ))
+done
+exit $exit_status
