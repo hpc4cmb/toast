@@ -1,6 +1,6 @@
 bash generate_shell.sh
 # nside
-sed -i "s/512/64/g" tiny*
+sed -i "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
 # duration
 sed -i "s/24/1/g" tiny*
 # fake focalplane disable mpi
