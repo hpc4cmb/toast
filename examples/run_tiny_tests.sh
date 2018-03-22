@@ -2,6 +2,8 @@ bash fetch_data.sh
 bash generate_shell.sh
 # nside
 sed -i "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
+# zip -> skip_atmo in ground
+sed -i "s/zip/skip_atmosphere/" params/ground/*par
 # duration
 sed -i "s/24/1/g" tiny*
 # fake focalplane disable mpi
