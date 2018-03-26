@@ -111,11 +111,13 @@ class OpMadam(Operator):
         dets (iterable):  List of detectors to map. If left as None, all
             available detectors are mapped.
         mcmode (bool): If true, the operator is constructed in
-             Monte Carlo mode and Madam will cache auxiliary information
-             such as pixel matrices and noise filter.
+            Monte Carlo mode and Madam will cache auxiliary information
+            such as pixel matrices and noise filter.
         noise (str): Keyword to use when retrieving the noise object
-             from the observation.
+            from the observation.
         conserve_memory(bool): Stagger the Madam buffer staging on node.
+        translate_timestamps(bool): Translate timestamps to enforce
+            monotonity.
     """
 
     def __init__(self, params={}, detweights=None,
@@ -125,7 +127,7 @@ class OpMadam(Operator):
                  apply_flags=True, purge=False, dets=None, mcmode=False,
                  purge_tod=False, purge_pixels=False, purge_weights=False,
                  purge_flags=False, noise='noise', intervals='intervals',
-                 conserve_memory=True):
+                 conserve_memory=True, translate_timestamps=True):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -175,6 +177,7 @@ class OpMadam(Operator):
         self._madam_pixweights = None
         self._madam_signal = None
         self._conserve_memory = conserve_memory
+        self._translate_timestamps = translate_timestamps
 
     def __del__(self):
         if self._cached:
@@ -449,9 +452,10 @@ class OpMadam(Operator):
 
             # Collect the timestamps for the valid intervals
             timestamps = tod.local_times().copy()
-            # Translate the time stamps to be monotonous
-            timestamps -= timestamps[0] - time_offset
-            time_offset = timestamps[-1] + 1
+            if self._translate_timestamps:
+                # Translate the time stamps to be monotonous
+                timestamps -= timestamps[0] - time_offset
+                time_offset = timestamps[-1] + 1
 
             for istart, istop in period_ranges:
                 nn = istop - istart
