@@ -51,7 +51,7 @@ to $PREFIX/modulefiles.
 
 For normal installs, simply run the install script.  This installs the
 software and modulefile, as well as a module version file named
-".version_$VERSION" in the module install directory.  You can manually
+`.version_$VERSION` in the module install directory.  You can manually
 move this into place if and when you want to make that the default
 version.  You can run the install script from an alternate build 
 directory.  
@@ -88,3 +88,46 @@ do::
 
     $> ln -s .version_$VERSION .version
 
+## Push the Docker container to Docker Hub
+
+It is recommended to tag the container with the hash of the toast git repository.
+In the following snippets, I assume that username is the same on
+local machine, Github, DockerHub and NERSC.
+Build it with:
+
+    docker build . -t $USER/toast:$(git rev-parse --short HEAD)
+
+Then, login to <https://hub.docker.com> with your Github credentials and create a new
+repository named `toast`, then push the image you just built to DockerHub:
+
+    docker login
+    docker push $USER/toast:$(git rev-parse --short HEAD)
+
+## Use the Docker container at NERSC with shifter
+
+See the [NERSC documentation about shifter](http://www.nersc.gov/users/software/using-shifter-and-docker/using-shifter-at-nersc/).
+
+First login to Edison or Cori and pull the image from Docker Hub:
+
+    shifterimg pull $USER/toast:xxxxxx
+
+This is going to take a few minutes. Then you can test this by
+launching one of the toast examples. Just add:
+
+    #SBATCH --image=docker:YOURUSERNAME/toast:xxxxx
+
+In the SLURM header to set the image.
+Then prepend `shifter` to all running commands (after `srun` and all its options).
+In more detail add `shifter` in these 2 locations:
+
+    srun -n 1 -N 1 shifter toast_fake_focalplane.py
+
+and:
+
+    # The commandline
+    com="shifter ${ex} @${parfile} \
+
+Also, the script calls `which toast_satellite_sim.py` or equivalent to get the path
+of the script, we need to run it inside the container by replacing it with:
+
+    shifter which toast_satellite_sim.py
