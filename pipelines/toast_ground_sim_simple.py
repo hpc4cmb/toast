@@ -4,7 +4,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import os
 import sys
@@ -1056,8 +1056,8 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname, 
-        common_flag_name=common_flag_name, 
+    export = OpTidasExport(tidas_path, name=totalname,
+        common_flag_name=common_flag_name,
         flag_name=flag_name, usedist=True)
     export.exec(data)
 
@@ -1224,3 +1224,4 @@ if __name__ == '__main__':
         print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
         toast.raise_error(6) # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
+    finalize()

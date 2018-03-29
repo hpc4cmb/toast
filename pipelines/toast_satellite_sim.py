@@ -4,7 +4,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import os
 import sys
@@ -748,3 +748,4 @@ if __name__ == "__main__":
         print("".join(lines), flush=True)
         toast.raise_error(6) # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
+    finalize()

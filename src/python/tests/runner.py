@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
+from ..mpi import MPI, finalize
 
 import os
 import sys
@@ -122,6 +122,8 @@ def test(name=None):
         _ret = mpirunner.run(suite)
         if not _ret.wasSuccessful():
             ret += 1
+
+    finalize()
 
     if ret > 0:
         sys.exit(ret)

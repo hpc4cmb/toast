@@ -7,7 +7,7 @@
 # This generates a focalplane pickle file compatible with the
 # example pipelines.
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import pickle
 import argparse
@@ -141,3 +141,4 @@ if __name__ == "__main__":
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
         print("".join(lines), flush=True)
+    finalize()

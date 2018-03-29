@@ -14,7 +14,7 @@ if 'TOAST_STARTUP_DELAY' in os.environ:
     #      flush=True)
     time.sleep(wait)
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import argparse
 import copy
@@ -1556,3 +1556,4 @@ if __name__ == '__main__':
         print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
         toast.raise_error(6) # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
+    finalize()
