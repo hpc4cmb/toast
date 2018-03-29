@@ -30,22 +30,42 @@ from ..tod import tidas as tt
 class TidasTest(MPITestCase):
 
     def setUp(self):
+        # Note: self.comm is set by the test infrastructure
+        self.worldsize = self.comm.size
+        self.groupsize = None
+        self.ngroup = None
+        if (self.worldsize >= 2):
+            self.groupsize = int( self.worldsize / 2 )
+            self.ngroup = 2
+        else:
+            self.groupsize = 1
+            self.ngroup = 1
+        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
+
+        self.mygroup = self.toastcomm.group
+
         self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
+
         self.outvol = os.path.join(self.outdir, "test_tidas")
         self.export = os.path.join(self.outdir, "export_tidas")
         self.rate = 20.0
 
         # Properties of the observations
-        self.nobs = 6
-        self.obslen = 3600.0
-        self.obsgap = 600.0
+        self.nobs = 8
 
-        self.obstotalsamp = int(0.5 + (self.obslen + self.obsgap)
-            * self.rate) + 1
-        self.obssamp = int(0.5 + self.obslen * self.rate) + 1
+        dist_obs = distribute_uniform(self.nobs, self.ngroup)
+        self.myobs_first = dist_obs[self.mygroup][0]
+        self.myobs_n = dist_obs[self.mygroup][1]
+
+        self.obslen = 90.0
+        self.obsgap = 10.0
+
+        self.obstotalsamp = int((self.obslen + self.obsgap)
+            * self.rate)
+        self.obssamp = int(self.obslen * self.rate)
         self.obsgapsamp = self.obstotalsamp - self.obssamp
 
         self.obstotal = (self.obstotalsamp - 1) / self.rate
@@ -53,7 +73,7 @@ class TidasTest(MPITestCase):
         self.obsgap = (self.obsgapsamp - 1) / self.rate
 
         # Properties of the intervals within an observation
-        self.nsub = 5
+        self.nsub = 12
         self.subtotsamp = self.obssamp // self.nsub
         self.subgapsamp = 0
         self.subsamp = self.subtotsamp - self.subgapsamp
@@ -84,10 +104,10 @@ class TidasTest(MPITestCase):
     def meta_setup(self):
         ret = tds.Dictionary()
         ret.put_string("string", "blahblahblah")
-        ret.put_float64("double", -123456789.0123)
+        ret.put_float64("double", -1.234567890123e9)
         ret.put_float32("float", -123456.0)
-        ret.put_int8("int8", -100)
-        ret.put_uint8("uint8", 100)
+        ret.put_int8("int8", -1)
+        ret.put_uint8("uint8", 1)
         ret.put_int16("int16", -10000)
         ret.put_uint16("uint16", 10000)
         ret.put_int32("int32", -1000000000)
@@ -99,8 +119,8 @@ class TidasTest(MPITestCase):
 
     def meta_verify(self, dct):
         nt.assert_equal(dct.get_string("string"), "blahblahblah")
-        nt.assert_equal(dct.get_int8("int8"), -100)
-        nt.assert_equal(dct.get_uint8("uint8"), 100)
+        nt.assert_equal(dct.get_int8("int8"), -1)
+        nt.assert_equal(dct.get_uint8("uint8"), 1)
         nt.assert_equal(dct.get_int16("int16"), -10000)
         nt.assert_equal(dct.get_uint16("uint16"), 10000)
         nt.assert_equal(dct.get_int32("int32"), -1000000000)
@@ -108,7 +128,7 @@ class TidasTest(MPITestCase):
         nt.assert_equal(dct.get_int64("int64"), -100000000000)
         nt.assert_equal(dct.get_uint64("uint64"), 100000000000)
         nt.assert_almost_equal(dct.get_float32("float"), -123456.0)
-        nt.assert_almost_equal(dct.get_float64("double"), -123456789.0123)
+        nt.assert_almost_equal(dct.get_float64("double"), -1.234567890123e9)
         return
 
 
@@ -162,8 +182,7 @@ class TidasTest(MPITestCase):
         return qa.from_angles(theta, phi, pa)
 
 
-    def obs_init(self, vol, parent, name, start, first):
-
+    def obs_create(self, vol, parent, name, start, first):
         # fake metadata
         props = self.meta_setup()
         props = tt.encode_tidas_quats(self.detquats, props=props)
@@ -182,91 +201,78 @@ class TidasTest(MPITestCase):
             })
 
         # write the intervals that will be used for data distribution
-        comm = vol.comm()
-        if comm.rank == 0:
-            obs.intervals_get("chunks").write(ilist)
+        it = obs.intervals_get("chunks")
+        it.write(ilist)
 
-        vol.meta_sync()
+        return
 
+
+    def obs_init(self, obscomm, vol, parent, name, start, first):
         # instantiate a TOD for this observation
-
-        tod = tt.TODTidas(comm, vol, "{}/{}".format(parent, name),
+        tod = tt.TODTidas(obscomm, vol, "{}/{}".format(parent, name),
             detgroup="detectors", distintervals="chunks")
 
-        # Now write the data.  For this test, we simple write the detector
+        # Now write the data.  For this test, we simply write the detector
         # index (as a float) to the detector timestream.  We also flag every
         # other sample.  For the boresight pointing, we create a fake spiral
         # pattern.
 
-        if comm.rank == 0:
-            # number of samples
-            n = tod.total_samples
+        detranks, sampranks = tod.grid_size
+        rankdet, ranksamp = tod.grid_ranks
+        blk = tod.block
 
-            # Write some simple timestamps
+        off = tod.local_samples[0]
+        n = tod.local_samples[1]
+
+        # We use this for both the common and all the detector
+        # flags just to check write/read roundtrip.
+        flags = np.zeros(n, dtype=np.uint8)
+        flags[::2] = 1
+
+        if rankdet == 0:
+            # Processes along the first row of the process grid write
+            # their slice of the timestamps.
             incr = 1.0 / self.rate
             stamps = np.arange(n, dtype=np.float64)
             stamps *= incr
-            stamps += start
+            stamps += start + (off * incr)
 
-            tod.write_times(stamps=stamps)
+            for p in range(sampranks):
+                if p == ranksamp:
+                    tod.write_times(stamps=stamps)
+                tod.grid_comm_row.barrier()
 
-            # boresight
-            boresight = self.create_bore(n, (0,n))
-            tod.write_boresight(data=boresight)
+            # Same with the boresight
+            boresight = self.create_bore(tod.total_samples, tod.local_samples)
 
-            # flags.  We use this for both the common and all the detector
-            # flags just to check write/read roundtrip.
-            flags = np.zeros(n, dtype=np.uint8)
-            flags[::2] = 1
+            for p in range(sampranks):
+                if p == ranksamp:
+                    tod.write_boresight(data=boresight)
+                tod.grid_comm_row.barrier()
 
-            tod.write_common_flags(flags=flags)
+            # Now the common flags
+            for p in range(sampranks):
+                if p == ranksamp:
+                    tod.write_common_flags(flags=flags)
+                tod.grid_comm_row.barrier()
 
-            # detector data
-            fakedata = np.empty(n, dtype=np.float64)
-            for d in tod.detectors:
-                # get unique detector index and convert to float
-                indx = float(tod.detindx[d])
-                # write this to all local elements
-                fakedata[:] = indx
-                tod.write(detector=d, data=fakedata)
-                # write detector flags
-                tod.write_flags(detector=d, flags=flags)
+        tod.mpicomm.barrier()
 
-        # FIXME: consider doing this in parallel once either TIDAS supports
-        # that or there is a toast-specific workaround to serialize I/O to a
-        # single HDF5 file.
-        #
-        # # number of local samples
-        # nlocal = tod.local_samples[1]
+        # Detector data- serialize for now
+        for p in range(tod.mpicomm.size):
+            if p == tod.mpicomm.rank:
+                fakedata = np.empty(n, dtype=np.float64)
+                for d in tod.local_dets:
+                    # get unique detector index and convert to float
+                    indx = float(tod.detindx[d])
+                    # write this to all local elements
+                    fakedata[:] = indx
+                    tod.write(detector=d, data=fakedata)
+                    # write detector flags
+                    tod.write_flags(detector=d, flags=flags)
+            tod.mpicomm.barrier()
 
-        # # Write some simple timestamps
-        # stamps = np.arange(nlocal, dtype=np.float64)
-        # stamps /= self.rate
-        # stamps += start + (tod.local_samples[0] / self.rate)
-
-        # tod.write_times(stamps=stamps)
-
-        # # boresight
-        # boresight = self.create_bore(tod.total_samples, tod.local_samples)
-        # tod.write_boresight(boresight)
-
-        # # flags.  We use this for both the common and all the detector
-        # # flags just to check write/read roundtrip.
-        # flags = np.zeros(nlocal, dtype=np.uint8)
-        # flags[::2] = 1
-
-        # tod.write_common_flags(flags=flags)
-
-        # # detector data
-        # fakedata = np.empty(nlocal, dtype=np.float64)
-        # for d in range(len(self.dets)):
-        #     # get unique detector index and convert to float
-        #     indx = float(tod.detindx[d])
-        #     # write this to all local elements
-        #     fakedata[:] = indx
-        #     tod.write(detector=self.dets[d], data=fakedata)
-        #     # write detector flags
-        #     tod.write_det_flags(detector=self.dets[d], flags=flags)
+        del tod
 
         return
 
@@ -341,45 +347,63 @@ class TidasTest(MPITestCase):
                 shutil.rmtree(path)
         self.comm.barrier()
 
-        vol = MPIVolume(self.comm, path, tds.BackendType.hdf5,
+        # Create the volume on the world communicator
+        vol = MPIVolume(self.toastcomm.comm_world, path, tds.BackendType.hdf5,
             tds.CompressionType.none, dict())
 
         # Usually for real data we will have a hierarchy of blocks
         # (year, month, season, etc).  For this test we just add generic
         # observations to the root block.
-        for ob in range(self.nobs):
+
+        # One process from each group creates the observations
+        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
             obsname = "obs_{:02d}".format(ob)
             start = ob * self.obstotal
             first = ob * self.obstotalsamp
-            self.obs_init(vol, "", obsname, start, first)
+            if self.toastcomm.comm_group.rank == 0:
+                self.obs_create(vol, "", obsname, start, first)
+
+        vol.meta_sync()
+
+        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
+            obsname = "obs_{:02d}".format(ob)
+            start = ob * self.obstotal
+            first = ob * self.obstotalsamp
+            self.obs_init(self.toastcomm.comm_group, vol, "", obsname, start,
+                first)
+
+        vol.meta_sync()
+
+        del vol
 
         return
 
 
     def volume_verify(self, path):
-        vol = MPIVolume(self.comm, path, tds.AccessMode.read)
+        vol = MPIVolume(self.toastcomm.comm_world, path, tds.AccessMode.read)
         root = vol.root()
-        for ob in range(self.nobs):
+        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
             obsname = "obs_{:02d}".format(ob)
             obs = root.block_get(obsname)
             start = ob * self.obstotal
             first = ob * self.obstotalsamp
-            tod = tt.TODTidas(self.comm, vol, "/{}".format(obsname),
-                detgroup="detectors", distintervals="chunks")
+            tod = tt.TODTidas(self.toastcomm.comm_group, vol,
+                "/{}".format(obsname), detgroup="detectors",
+                distintervals="chunks")
             self.obs_verify(tod, start, first)
         del vol
         return
 
-    #
-    # def test_io(self):
-    #     start = MPI.Wtime()
-    #
-    #     self.volume_init(self.outvol)
-    #     self.volume_verify(self.outvol)
-    #
-    #     stop = MPI.Wtime()
-    #     elapsed = stop - start
-    #     #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
+
+    def test_io(self):
+        start = MPI.Wtime()
+
+        self.volume_init(self.outvol)
+        self.volume_verify(self.outvol)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
 
 
     def test_export(self):
@@ -387,16 +411,7 @@ class TidasTest(MPITestCase):
 
         self.volume_init(self.outvol)
 
-        worldsize = self.comm.size
-        if (worldsize >= 2):
-            groupsize = int( worldsize / 2 )
-            ngroup = 2
-        else:
-            groupsize = 1
-            ngroup = 1
-        toastcomm = Comm(self.comm, groupsize=groupsize)
-
-        distdata = tt.load_tidas(toastcomm, self.outvol, mode="r",
+        distdata = tt.load_tidas(self.toastcomm, self.outvol, mode="w",
             distintervals="chunks")
 
         if self.comm.rank == 0:
@@ -409,8 +424,7 @@ class TidasTest(MPITestCase):
 
         self.volume_verify(self.export)
 
-        assert(False)
-
         stop = MPI.Wtime()
         elapsed = stop - start
+
         #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
