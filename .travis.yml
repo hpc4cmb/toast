@@ -26,7 +26,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++)"
+        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++) && export FC=$(which gfortran)"
     # GCC 4.9
     - os: linux
       dist: trusty
@@ -51,7 +51,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9)"
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9)"
     # GCC 5
     - os: linux
       dist: trusty
@@ -76,7 +76,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5)"
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5)"
     # GCC 6
     - os: linux
       dist: trusty
@@ -101,7 +101,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6)"
+        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6) && export FC=$(which gfortran-6)"
     # GCC 7
     - os: linux
       dist: trusty
@@ -126,7 +126,7 @@ matrix:
             - libatlas-base-dev
             - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7)"
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7)"
 
 # The versions to test
 python:
@@ -145,6 +145,9 @@ before_install:
     - export MPICXX=$(which mpicxx)
     - export MPICH_CC=${CC}
     - export MPICH_CXX=${CXX}
+    # F90 required by libmadam
+    - export MPIFC=$(which mpif90)
+    - export MPICH_FC=${FC}
     # explicitly set the C and C++ compilers to MPICH compilers for autotools
     - export CC=$(which mpicc)
     - export CXX=$(which mpicxx)
@@ -180,6 +183,16 @@ before_install:
     - cd ../..
     # Install PySM
     - pip install https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
+    # Install libmadam
+    - git clone https://github.com/hpc4cmb/libmadam.git --single-branch --depth 1
+    - cd libmadam
+    - ./autogen.sh
+    - export FCFLAGS="-O0 -g -fbounds-check -fPIC"
+    - export CFLAGS="-O0 -g -fPIC"
+    - ./configure --prefix=$HOME/miniconda
+    - make
+    - make install
+    - cd ..
 
 # Skip this
 
