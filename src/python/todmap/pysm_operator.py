@@ -69,7 +69,8 @@ class OpSimPySM(Operator):
     """
 
     def __init__(self, comm=None,
-                 out='signal', pysm_model='', focalplanes=None, nside=None,
+                 out='signal', pysm_model='', pysm_precomputed_cmb=None,
+                 focalplanes=None, nside=None,
                  subnpix=None, localsm=None, apply_beam=False, nest=True,
                  units='K_CMB', debug=False):
         autotimer = timemory.auto_timer(type(self).__name__)
@@ -79,6 +80,7 @@ class OpSimPySM(Operator):
         self._nest = nest
         self.comm = comm
         self._debug = debug
+        self.pysm_precomputed_cmb = pysm_precomputed_cmb
         self.dist_rings = DistRings(comm,
                                     nside=nside,
                                     nnz=3)
@@ -99,6 +101,7 @@ class OpSimPySM(Operator):
         self.pysm_sky = PySMSky(comm=self.comm,
                                 local_pixels=self.dist_rings.local_pixels,
                                 nside=nside, pysm_sky_config=pysm_sky_config,
+                                pysm_precomputed_cmb=self.pysm_precomputed_cmb,
                                 units=units)
 
         self.nside = nside

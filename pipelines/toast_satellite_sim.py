@@ -20,9 +20,10 @@ import numpy as np
 import toast
 import toast.tod as tt
 import toast.map as tm
+import toast.todmap as ttm
 
 import toast.qarray as qa
-import timemory
+import toast.timing as timing
 
 from toast.vis import set_backend
 
@@ -51,53 +52,49 @@ def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
-    if args.input_pysm_model or args.input_map:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print('Scanning local pixels', flush=args.flush)
-        start = MPI.Wtime()
+    autotimer = timing.auto_timer()
+    if comm.comm_world.rank == 0:
+        print('Scanning local pixels', flush=args.flush)
+    start = MPI.Wtime()
 
-        # Prepare for using distpixels objects
-        nside = args.nside
-        subnside = 16
-        if subnside > nside:
-            subnside = nside
-        subnpix = 12 * subnside * subnside
+    # Prepare for using distpixels objects
+    nside = args.nside
+    subnside = 16
+    if subnside > nside:
+        subnside = nside
+    subnpix = 12 * subnside * subnside
 
-        # get locally hit pixels
-        lc = tm.OpLocalPixels()
-        localpix = lc.exec(data)
-        if localpix is None:
-            raise RuntimeError(
-                'Process {} has no hit pixels. Perhaps there are fewer '
-                'detectors than processes in the group?'.format(
-                    comm.comm_world.rank))
+    # get locally hit pixels
+    lc = tm.OpLocalPixels()
+    localpix = lc.exec(data)
+    if localpix is None:
+        raise RuntimeError(
+            'Process {} has no hit pixels. Perhaps there are fewer '
+            'detectors than processes in the group?'.format(
+                comm.comm_world.rank))
 
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, subnpix))
+    # find the locally hit submaps.
+    localsm = np.unique(np.floor_divide(localpix, subnpix))
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print('Local submaps identified in {:.3f} s'.format(elapsed),
-                  flush=args.flush)
-    else:
-        localpix, localsm = None, None
-
+    comm.comm_world.barrier()
+    stop = MPI.Wtime()
+    elapsed = stop - start
+    if comm.comm_world.rank == 0:
+        print('Local submaps identified in {:.3f} s'.format(elapsed),
+              flush=args.flush)
     return localpix, localsm, subnpix
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm):
+def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, localsm, signalname):
     """ Use PySM to simulate smoothed sky signal.
 
     """
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
-    signalname = 'signal'
-    op_sim_pysm = tt.OpSimPySM(comm=comm.comm_rank,
+    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
+                               pysm_precomputed_cmb=args.input_pysm_precomputed_cmb,
                                focalplanes=focalplanes,
                                nside=args.nside,
                                subnpix=subnpix, localsm=localsm,
@@ -110,7 +107,6 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
 
     mem_counter.exec(data)
 
-    return signalname
 
 def main():
 
@@ -207,13 +203,28 @@ def main():
     parser.add_argument('--input_pysm_model', required=False,
                         help='Comma separated models for on-the-fly PySM '
                         'simulation, e.g. s3,d6,f1,a2"')
+    parser.add_argument('--input_pysm_precomputed_cmb', required=False,
+                        help='Precomputed CMB map for PySM '
+                        'it overrides any model defined in input_pysm_model"')
     parser.add_argument('--apply_beam', required=False, action='store_true',
                         help='Apply beam convolution to input map with gaussian '
                         'beam parameters defined in focalplane')
+    parser.add_argument('--input_dipole', required=False,
+                        help='Simulate dipole, possible values are '
+                        'total, orbital, solar')
+    parser.add_argument('--input_dipole_solar_speed_kms', required=False,
+                        help='Solar system speed [km/s]', type=float,
+                        default=369.0)
+    parser.add_argument('--input_dipole_solar_gal_lat_deg', required=False,
+                        help='Solar system speed galactic latitude [degrees]',
+                        type=float, default=48.26)
+    parser.add_argument('--input_dipole_solar_gal_lon_deg', required=False,
+                        help='Solar system speed galactic longitude[degrees]',
+                        type=float, default=263.99)
 
-    args = timemory.add_arguments_and_parse(parser, timemory.FILE(noquotes=True))
+    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
-    autotimer = timemory.auto_timer("@{}".format(timemory.FILE()))
+    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -416,9 +427,25 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
+    signalname = "signal"
     if args.input_pysm_model:
-        signalname = simulate_sky_signal(args, comm, data, mem_counter,
-                                         [fp], subnpix, localsm)
+        simulate_sky_signal(args, comm, data, mem_counter,
+                                         [fp], subnpix, localsm, signalname=signalname)
+
+    if args.input_dipole:
+        print("Simulating dipole")
+        op_sim_dipole = tt.OpSimDipole(mode=args.input_dipole,
+                solar_speed=args.input_dipole_solar_speed_kms,
+                solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
+                solar_gal_lon=args.input_dipole_solar_gal_lon_deg,
+                out=signalname,
+                keep_quats=True,
+                keep_vel=False,
+                subtract=False,
+                coord="G",
+                freq=0,  # we could use frequency for quadrupole correction
+                flag_mask=255, common_flag_mask=255)
+        op_sim_dipole.exec(data)
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -710,7 +737,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        tman = timemory.timing_manager()
+        tman = timing.timing_manager()
         tman.report()
         MPI.Finalize()
     except:

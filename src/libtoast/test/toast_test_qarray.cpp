@@ -429,6 +429,28 @@ TEST_F( TOASTqarrayTest, thetaphipa ) {
         ASSERT_NEAR( pa[i], check_pa[i], 1.0e-6 );
     }
 
+    qarray::to_position ( n, quat, check_theta, check_phi );
+
+    for ( size_t i = 0; i < n; ++i ) {
+        ASSERT_NEAR( theta[i], check_theta[i], 1.0e-6 );
+
+        check = check_phi[i];
+        if ( check < 0.0 ) {
+            check += toast::TWOPI;
+        }
+        if ( check >= toast::TWOPI ) {
+            check -= toast::TWOPI;
+        }
+        if ( ::fabs( check ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+        if ( ::fabs( check - toast::TWOPI ) < 2.0 * std::numeric_limits<float>::epsilon() ) {
+            check = 0.0;
+        }
+
+        ASSERT_NEAR( phi[i], check, 1.0e-6 );
+    }
+
     // Now run tests in IAU convention...
 
     for ( size_t i = 0; i < n_theta; ++i ) {

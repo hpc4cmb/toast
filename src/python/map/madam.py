@@ -111,11 +111,13 @@ class OpMadam(Operator):
         dets (iterable):  List of detectors to map. If left as None, all
             available detectors are mapped.
         mcmode (bool): If true, the operator is constructed in
-             Monte Carlo mode and Madam will cache auxiliary information
-             such as pixel matrices and noise filter.
+            Monte Carlo mode and Madam will cache auxiliary information
+            such as pixel matrices and noise filter.
         noise (str): Keyword to use when retrieving the noise object
-             from the observation.
+            from the observation.
         conserve_memory(bool): Stagger the Madam buffer staging on node.
+        translate_timestamps(bool): Translate timestamps to enforce
+            monotonity.
     """
 
     def __init__(self, params={}, detweights=None,
@@ -125,7 +127,7 @@ class OpMadam(Operator):
                  apply_flags=True, purge=False, dets=None, mcmode=False,
                  purge_tod=False, purge_pixels=False, purge_weights=False,
                  purge_flags=False, noise='noise', intervals='intervals',
-                 conserve_memory=True):
+                 conserve_memory=True, translate_timestamps=True):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -175,6 +177,7 @@ class OpMadam(Operator):
         self._madam_pixweights = None
         self._madam_signal = None
         self._conserve_memory = conserve_memory
+        self._translate_timestamps = translate_timestamps
 
     def __del__(self):
         if self._cached:
@@ -344,12 +347,14 @@ class OpMadam(Operator):
 
             for ival in local_intervals:
                 local_start = ival.first
-                local_stop = ival.last
-                if local_stop - local_start + 1 < norder:
+                local_stop = ival.last + 1
+                if local_stop - local_start < norder:
                     continue
-                period_lengths.append(local_stop - local_start + 1)
-                period_ranges.append((local_start, local_stop + 1))
+                period_lengths.append(local_stop - local_start)
+                period_ranges.append((local_start, local_stop))
             obs_period_ranges.append(period_ranges)
+
+        # Update the number of samples based on the valid intervals
 
         nsamp_tot_full = comm.allreduce(nsamp, op=MPI.SUM)
         nperiod = len(period_lengths)
@@ -369,7 +374,7 @@ class OpMadam(Operator):
         for i, n in enumerate(period_lengths[:-1]):
             periods[i + 1] = periods[i] + n
 
-        return obs_period_ranges, psdfreqs, periods
+        return obs_period_ranges, psdfreqs, periods, nsamp
 
     def _prepare(self, data, comm):
         """ Examine the data object.
@@ -424,7 +429,7 @@ class OpMadam(Operator):
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
 
-        obs_period_ranges, psdfreqs, periods = self._get_period_ranges(
+        obs_period_ranges, psdfreqs, periods, nsamp = self._get_period_ranges(
             comm, data, detectors, nsamp)
 
         return (parstring, detstring, nsamp, ndet, nnz, nnz_full, nnz_stride,
@@ -438,7 +443,7 @@ class OpMadam(Operator):
         self._madam_timestamps = self._cache.create(
             'timestamps', np.float64, (nsamp,))
 
-        global_offset = 0
+        offset = 0
         time_offset = 0
         psds = {}
         for iobs, obs in enumerate(data.obs):
@@ -446,12 +451,12 @@ class OpMadam(Operator):
             period_ranges = obs_period_ranges[iobs]
 
             # Collect the timestamps for the valid intervals
-            timestamps = tod.local_times()
-            # Translate the time stamps to be monotonous
-            timestamps -= timestamps[0] - time_offset
-            time_offset = timestamps[-1] + 1
+            timestamps = tod.local_times().copy()
+            if self._translate_timestamps:
+                # Translate the time stamps to be monotonous
+                timestamps -= timestamps[0] - time_offset
+                time_offset = timestamps[-1] + 1
 
-            offset = global_offset
             for istart, istop in period_ranges:
                 nn = istop - istart
                 ind = slice(offset, offset + nn)
@@ -475,8 +480,6 @@ class OpMadam(Operator):
                             if not np.allclose(psds[det][-1][1], psd):
                                 psds[det] += [(timestamps[0], psd)]
 
-            global_offset = offset
-
         return psds
 
     def _stage_signal(self, data, detectors, nsamp, ndet, obs_period_ranges):
@@ -486,6 +489,7 @@ class OpMadam(Operator):
         auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
             'signal', np.float64, (nsamp * ndet,))
+        self._madam_signal[:] = np.nan
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
@@ -523,6 +527,7 @@ class OpMadam(Operator):
         auto_timer = timemory.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
             'pixels', np.int64, (nsamp * ndet,))
+        self._madam_pixels[:] = -1
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
@@ -601,6 +606,7 @@ class OpMadam(Operator):
 
         self._madam_pixweights = self._cache.create(
             'pixweights', np.float64, (nsamp * ndet * nnz,))
+        self._madam_pixweights[:] = 0
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):

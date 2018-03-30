@@ -17,11 +17,11 @@ C
 80
 --sun_el_max
 90
---sun_avoidance_angle
+--sun_avoidance_elevation
 0
---sun_angle_min
+--sun_avoidance_angle
 30
---moon_angle_min
+--moon_avoidance_angle
 10
 --start
 2016-06-01 00:00:00

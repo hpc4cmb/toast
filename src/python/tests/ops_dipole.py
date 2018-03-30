@@ -108,6 +108,39 @@ class OpSimDipoleTest(MPITestCase):
         self.print_in_turns("dipole function test took {:.3f} s".format(elapsed))
 
 
+    def test_dipole_func_total(self):
+        start = MPI.Wtime()
+
+        # Verify that we get the right magnitude if we are pointed at the velocity
+        # maximum.
+
+        quat = np.array(
+        [[ 0.5213338 , 0.47771442,-0.5213338 , 0.47771442],
+         [ 0.52143458, 0.47770023,-0.52123302, 0.4777286 ],
+         [ 0.52153535, 0.47768602,-0.52113222, 0.47774277],
+         [ 0.52163611, 0.4776718 ,-0.52103142, 0.47775692],
+         [ 0.52173686, 0.47765757,-0.52093061, 0.47777106]])
+
+        v_sat = np.array(
+        [[  1.82378638e-15,  2.97846918e+01,  0.00000000e+00],
+         [ -1.48252084e-07,  2.97846918e+01,  0.00000000e+00],
+         [ -2.96504176e-07,  2.97846918e+01,  0.00000000e+00],
+         [ -4.44756262e-07,  2.97846918e+01,  0.00000000e+00],
+         [ -5.93008348e-07,  2.97846918e+01,  0.00000000e+00]])
+
+        v_sol = np.array([ -25.7213418,  -244.31203375,  275.33805175])
+
+        dtod = dipole(quat, vel=v_sat, solar=v_sol, cmb=2.725)
+        # computed with github.com/zonca/dipole
+        expected = np.array([0.00196249,  0.00196203,  0.00196157,  0.00196111,  0.00196065])
+        nt.assert_allclose(dtod, expected, rtol=1e-5)
+
+        stop = MPI.Wtime()
+        elapsed = stop - start
+        self.print_in_turns("dipole function test took {:.3f} s".format(elapsed))
+
+
+
     def test_sim(self):
         start = MPI.Wtime()
 

@@ -475,6 +475,16 @@ def qarray_to_angles(n, quat, IAU=False):
     lib.ctoast_qarray_to_angles(n, qc, theta, phi, pa, iau)
     return (theta, phi, pa)
 
+lib.ctoast_qarray_to_position.restype = None
+lib.ctoast_qarray_to_position.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+
+def qarray_to_position(n, quat):
+    theta = np.zeros(n, dtype=np.float64)
+    phi = np.zeros(n, dtype=np.float64)
+    qc = np.require(quat, requirements=["C"])
+    lib.ctoast_qarray_to_position(n, qc, theta, phi)
+    return (theta, phi)
+
 # FFT
 
 class cFFTR1D(ct.Structure):

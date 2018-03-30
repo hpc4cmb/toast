@@ -991,6 +991,11 @@ class TODGround(TOD):
         quats = np.zeros([n, 4])
         for i, t in enumerate(times):
             quats[i] = self._get_coord_quat(t)
+            # Make sure we have a consistent branch in the quaternions.
+            # Otherwise we'll get interpolation issues.
+            if i > 0 and (np.sum(np.abs(quats[i-1]+quats[i]))
+                          < np.sum(np.abs(quats[i-1]-quats[i]))):
+                quats[i] *= -1
         quats = qa.norm(quats)
 
         return times, quats
@@ -1017,7 +1022,7 @@ class TODGround(TOD):
             xra, xdec = self._observer.radec_of(       0,       0, fixed=False)
             yra, ydec = self._observer.radec_of(-np.pi/2,       0, fixed=False)
             zra, zdec = self._observer.radec_of(       0, np.pi/2, fixed=False)
-        except:
+        except Exception as e:
             # Modified pyephem not available.
             # Translated pointing will include stellar aberration.
             xra, xdec = self._observer.radec_of(       0,       0)
@@ -1026,16 +1031,42 @@ class TODGround(TOD):
         self._observer.pressure = pressure
         xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
                                    np.array([xra, yra, zra]))
+        # Orthonormalize for numerical stability
+        xvec /= np.sqrt(np.dot(xvec, xvec))
+        yvec -= np.dot(xvec, yvec) * xvec
+        yvec /= np.sqrt(np.dot(yvec, yvec))
+        zvec -= np.dot(xvec, zvec) * xvec + np.dot(yvec, zvec) * yvec
+        zvec /= np.sqrt(np.dot(zvec, zvec))
         # Solve for the quaternions from the transformed axes.
         X = (xvec[1] + yvec[0]) / 4
         Y = (xvec[2] + zvec[0]) / 4
         Z = (yvec[2] + zvec[1]) / 4
-        d = np.sqrt(Y * Z / X) # Choose positive root
+        """
+        if np.abs(X) < 1e-6 and np.abs(Y) < 1e-6:
+            # Avoid dividing with small numbers
+            c = .5 * np.sqrt(1 - xvec[0] + yvec[1] - zvec[2])
+            d = np.sqrt(c**2 + .5 * (zvec[2] - yvec[1]))
+            b = np.sqrt(.5 * (1 - zvec[2]) - c**2)
+            a = np.sqrt(1 - b**2 - c**2 - d**2)
+        else:
+        """
+        d = np.sqrt(np.abs(Y * Z / X)) # Choose positive root
         c = d * X / Y
         b = X / c
         a = (xvec[1]/2 - b*c) / d
         # qarray has the scalar part as the last index
-        quat = np.array([b, c, d, a])
+        quat = qa.norm(np.array([b, c, d, a]))
+        # DEBUG begin
+        errors = np.array([
+            np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
+            np.dot(qa.rotate(quat, [0, 1, 0]), yvec),
+            np.dot(qa.rotate(quat, [0, 0, 1]), zvec)])
+        errors[errors > 1] = 1
+        errors = np.degrees(np.arccos(errors))
+        if np.any(errors > 1) or np.any(np.isnan(errors)):
+            raise RuntimeError('Quaternion is not right: ({}), ({} {} {})'
+                               ''.format(errors, X, Y, Z))
+        # DEBUG end
         return quat
 
     def free_azel_quats(self):

@@ -6,14 +6,12 @@
 import numpy as np
 import scipy.constants as constants
 
-import scipy.fftpack as sft
 import scipy.interpolate as si
-import scipy.sparse as sp
 
 from .. import rng as rng
 from .. import qarray as qa
 from .. import fft as fft
-import timemory
+from .. import timing as timing
 
 from ..op import Operator
 
@@ -36,7 +34,7 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     Returns:
         calibrated timestream.
     """
-    autotimer = timemory.auto_timer()
+    autotimer = timing.auto_timer()
     if len(gaintimes) == 1:
         g = gains
     else:
@@ -102,14 +100,14 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
         the timestream array, the interpolated PSD frequencies, and
             the interpolated PSD values.
     """
-    autotimer = timemory.auto_timer()
+    autotimer = timing.auto_timer()
     fftlen = 2
     while fftlen <= (oversample * samples):
         fftlen *= 2
     npsd = fftlen // 2 + 1
     norm = rate * float(npsd - 1)
 
-    interp_freq = np.fft.rfftfreq(fftlen, 1/rate)
+    interp_freq = np.fft.rfftfreq(fftlen, 1 / rate)
     if interp_freq.size != npsd:
         raise RuntimeError("interpolated PSD frequencies do not have expected "
                            "length")
@@ -130,7 +128,7 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
                            "allow for interpolation")
 
     nyquist = rate / 2
-    if np.abs((freq[-1]-nyquist)/nyquist) > .01:
+    if np.abs((freq[-1] - nyquist) / nyquist) > .01:
         raise RuntimeError(
             "last frequency element does not match Nyquist "
             "frequency for given sample rate: {} != {}".format(
@@ -165,8 +163,8 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     counter1 = 0
     counter2 = firstsamp * oversample
 
-    rngdata = rng.random(2*npsd, sampler="gaussian", key=(key1, key2),
-        counter=(counter1, counter2))
+    rngdata = rng.random(2 * npsd, sampler="gaussian", key=(key1, key2),
+                         counter=(counter1, counter2))
 
     # pack data differently depending on the FFT implementation
 
@@ -174,13 +172,13 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
     if altfft:
         fdata = np.zeros(fftlen, dtype=np.float64)
         fdata[:npsd] = rngdata[:npsd]
-        fdata[-1:npsd-1:-1] = rngdata[npsd+1:2*npsd-1]
+        fdata[-1:npsd - 1:-1] = rngdata[npsd + 1:2 * npsd - 1]
         # Nyquist frequency imaginary part is already excluded
         # from the data vector in this packing scheme...
 
         # scale by PSD
         fdata[0:npsd] *= scale
-        fdata[-1:npsd-1:-1] *= scale[1:npsd-1]
+        fdata[-1:npsd - 1:-1] *= scale[1:npsd - 1]
 
         # inverse FFT
         tdata = fft.r1d_backward(fdata)
@@ -201,12 +199,17 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
 
     offset = (fftlen - samples) // 2
 
-    DC = np.mean(tdata[offset:offset+samples])
-    tdata[offset:offset+samples] -= DC
+    DC = np.mean(tdata[offset:offset + samples])
+    tdata[offset:offset + samples] -= DC
 
     # return the timestream and interpolated PSD for debugging.
 
-    return (tdata[offset:offset+samples], interp_freq, interp_psd)
+    return (tdata[offset:offset + samples], interp_freq, interp_psd)
+
+
+def array_dot(u, v):
+    """Dot product of each row of two 2D arrays"""
+    return np.sum(u * v, axis=1).reshape((-1, 1))
 
 
 def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
@@ -232,51 +235,44 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
     Returns:
         (array):  detector dipole timestream.
     """
-    autotimer = timemory.auto_timer()
-    zaxis = np.array([0,0,1], dtype=np.float64)
+    autotimer = timing.auto_timer()
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
     nsamp = pntg.shape[0]
 
     inv_light = 1.0e3 / constants.speed_of_light
 
-    # accumulate velocity components
-    v = np.zeros((nsamp, 3), dtype=np.float64)
-
     if (vel is not None) and (solar is not None):
         # relativistic addition of velocities
 
-        vsol = np.tile(solar, nsamp).reshape((-1,3))
-
         solar_speed = np.sqrt(np.sum(solar * solar, axis=0))
 
-        vpar = ( np.sum(vel * vsol, axis=1).reshape((-1,1)) / solar_speed**2 ) * vsol
+        vpar = (array_dot(vel, solar) / solar_speed**2) * solar
         vperp = vel - vpar
 
-        vdot = 1.0 / ( 1.0 + solar * vel * inv_light**2 )
-        invgamma = np.sqrt( 1.0 - (solar_speed * inv_light)**2 )
+        vdot = 1.0 / (1.0 + array_dot(solar, vel) * inv_light**2)
+        invgamma = np.sqrt(1.0 - (solar_speed * inv_light)**2)
 
-        vpar = vdot * (vpar * solar)
-        vperp = vdot * vperp * invgamma
+        vpar += solar
+        vperp *= invgamma
 
-        v += vpar + vperp
-    else:
-        if solar is not None:
-            v += np.tile(solar, nsamp).reshape((-1,3))
-        if vel is not None:
-            v += vel
+        v = vdot * (vpar + vperp)
+    elif solar is not None:
+        v = np.tile(solar, nsamp).reshape((-1, 3))
+    elif vel is not None:
+        v = vel.copy()
 
-    speed = np.sqrt(np.sum(v * v, axis=1)).reshape((-1,1))
-    v[:] /= speed[:]
+    speed = np.sqrt(array_dot(v, v))
+    v /= speed
 
     beta = inv_light * speed.flatten()
 
     dir = qa.rotate(pntg, zaxis)
-    #dir = qa.rotate(pntg, np.tile(zaxis, nsamp).reshape((-1,3)))
 
     dipoletod = None
     if freq == 0:
         inv_gamma = np.sqrt(1.0 - beta**2)
         num = 1.0 - beta * np.sum(v * dir, axis=1)
-        dipoletod = cmb * ( inv_gamma / num - 1.0 )
+        dipoletod = cmb * (inv_gamma / num - 1.0)
     else:
         # Use frequency for quadrupole correction
         fx = constants.h * freq / (constants.k * cmb)
@@ -322,7 +318,7 @@ class OpCacheCopy(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:
@@ -362,7 +358,7 @@ class OpCacheClear(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timemory.auto_timer(type(self).__name__)
+        autotimer = timing.auto_timer(type(self).__name__)
         comm = data.comm
 
         for obs in data.obs:
