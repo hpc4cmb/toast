@@ -183,7 +183,7 @@ before_install:
     - cd ../..
     # Install PySM
     - pip install https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
-    # Install libmadam
+    # Install libmadam from github master
     - git clone https://github.com/hpc4cmb/libmadam.git --single-branch --depth 1
     - cd libmadam
     - ./autogen.sh
