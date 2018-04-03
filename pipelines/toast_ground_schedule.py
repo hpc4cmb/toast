@@ -40,7 +40,7 @@ class Patch(object):
         # corners cross.
         self.site_lat = site_lat
         for corner in corners:
-            el_max = (corner._dec + (np.pi / 2 - self.site_lat)) % (np.pi / 2)
+            el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
             if el_max < self.el_max0:
                 self.el_max0 = el_max
         self.el_max = self.el_max0
@@ -107,7 +107,7 @@ def prioritize(visible):
     """
     for i in range(len(visible) - 1):
         for j in range(i + 1, len(visible)):
-            if visible[i].hit * visible[j].weight < (visible[j].hit
+            if visible[i].hits * visible[j].weight < (visible[j].hits
                                                      * visible[i].weight):
                 visible[i], visible[j] = visible[j], visible[i]
 
@@ -795,7 +795,17 @@ def parse_args():
                         help='Maximum length of a CES [seconds]')
     parser.add_argument('--debug',
                         required=False, default=False, action='store_true',
-                        help='Write diagnostics')
+                        help='Write diagnostics, including patch plots.')
+    parser.add_argument('--polmap',
+                        required=False,
+                        help='Include polarization from map in the plotted '
+                        'patches when --debug')
+    parser.add_argument('--polmin',
+                        required=False, type=np.float,
+                        help='Lower plotting range for polarization map')
+    parser.add_argument('--polmax',
+                        required=False, type=np.float,
+                        help='Upper plotting range for polarization map')
     parser.add_argument('--pole_mode',
                         required=False, default=False, action='store_true',
                         help='Pole scheduling mode (no drift scan)')
@@ -1035,26 +1045,55 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             name, weight, corners, el_min=args.el_min * degree,
             el_max=args.el_max * degree, el_step=args.el_step * degree,
             alternate=args.alternate, site_lat=observer.lat))
+        print('Highest possible observing elevation: {:.2f} degrees'.format(
+            patches[-1].el_max0 / degree))
 
     if args.debug:
         import matplotlib.pyplot as plt
         import healpy as hp
+        polmap = None
+        if args.polmap:
+            polmap = hp.read_map(args.polmap, [1, 2])
+            bad = polmap[0] == hp.UNSEEN
+            polmap = np.sqrt(polmap[0] ** 2 + polmap[1] ** 2) * 1e6
+            polmap[bad] = hp.UNSEEN
         plt.style.use('classic')
-        plt.figure(figsize=[18, 12])
+        plt.figure(figsize=[20, 4])
+        plt.subplots_adjust(left=.1, right=.9)
+        patch_color = 'white'
+        sun_color = 'lime'
+        sun_avoidance_color = 'dimgray'
+        moon_color = 'aqua'
+        moon_avoidance_color = 'dimgray'
+        alpha = 0.5
+        avoidance_alpha = 0.05
+        sun_step = np.int(86400 * 1)
+        moon_step = np.int(86400 * .1)
         for iplot, coord in enumerate('CEG'):
-            hp.mollview(np.zeros(12) + hp.UNSEEN, coord=coord, cbar=False,
-                        title='Patch locations', sub=[2, 2, 1 + iplot])
-            hp.graticule(30)
+            scoord = {'C': 'Equatorial', 'E': 'Ecliptic',
+                      'G': 'Galactic'}[coord]
+            title = scoord  # + ' patch locations'
+            if polmap is None:
+                hp.mollview(np.zeros(12) + hp.UNSEEN, coord=coord, cbar=False,
+                            title=title, sub=[1, 3, 1 + iplot])
+            else:
+                hp.mollview(polmap, coord='G' + coord, cbar=True, unit='$\mu$K',
+                            min=args.polmin, max=args.polmax, norm='log',
+                            cmap='hot', title=title, sub=[1, 3, 1 + iplot],
+                            notext=True, format='%.1f', xsize=1600)
+            hp.graticule(30, verbose=False)
             # Plot sun and moon avoidance circle
             sunlon, sunlat = [], []
             moonlon, moonlat = [], []
             sun_avoidance_angle = args.sun_avoidance_angle * degree
             moon_avoidance_angle = args.moon_avoidance_angle * degree
-            for lon, lat, sso, angle_min, color in [
-                (sunlon, sunlat, sun, sun_avoidance_angle, 'moccasin'),
-                (moonlon, moonlat, moon, moon_avoidance_angle, 'deepskyblue')]:
-                for t in range(np.int(start_timestamp), np.int(stop_timestamp),
-                               np.int(86400 * 1)):
+            for lon, lat, sso, angle_min, color, step in [
+                (sunlon, sunlat, sun, sun_avoidance_angle,
+                 sun_avoidance_color, sun_step),
+                (moonlon, moonlat, moon, moon_avoidance_angle,
+                 moon_avoidance_color, moon_step)]:
+                for t in range(np.int(start_timestamp),
+                               np.int(stop_timestamp), step):
                     observer.date = to_DJD(t)
                     sso.compute(observer)
                     lon.append(sso.a_ra / degree)
@@ -1072,7 +1111,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                         clon.append((phi + dphi) / degree)
                         clat.append((theta + dtheta) / degree)
                     hp.projplot(clon, clat, '-', color=color,
-                                threshold=1, lonlat=True, coord='C', lw=1)
+                                alpha=avoidance_alpha, lw=2,
+                                threshold=1, lonlat=True, coord='C')
             # Plot patches
             for patch in patches:
                 lon = [corner._ra / degree for corner in patch.corners]
@@ -1081,19 +1121,21 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 lat.append(lat[0])
                 print('{} corners:\n lon = {}\n lat= {}'.format(
                     patch.name, lon, lat), flush=True)
-                hp.projplot(lon, lat, 'r-', threshold=1, lonlat=True, coord='C',
-                            lw=2)
-                hp.projtext(lon[0], lat[0], patch.name, lonlat=True, coord='C',
-                            fontsize=14)
+                hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C',
+                            color=patch_color, lw=2, alpha=alpha)
+                it = np.argmax(lat)
+                hp.projtext(lon[it], lat[it], patch.name, lonlat=True,
+                            coord='C', color=patch_color, fontsize=14,
+                            alpha=alpha)
             # Plot Sun and Moon trajectory
-            hp.projplot(sunlon, sunlat, '-', color='darkorange',
+            hp.projplot(sunlon, sunlat, '-', color=sun_color, alpha=alpha,
                         threshold=1, lonlat=True, coord='C', lw=2)
-            hp.projtext(sunlon[0], sunlat[0], 'Sun', color='orange',
-                        lonlat=True, coord='C', fontsize=14)
-            hp.projplot(moonlon, moonlat, '-', color='blue',
+            hp.projtext(sunlon[0], sunlat[0], 'Sun', color=sun_color,
+                        lonlat=True, coord='C', fontsize=14, alpha=alpha)
+            hp.projplot(moonlon, moonlat, '-', color=moon_color, alpha=alpha,
                         threshold=1, lonlat=True, coord='C', lw=1)
-            hp.projtext(moonlon[0], moonlat[0], 'Moon', color='blue',
-                        lonlat=True, coord='C', fontsize=14)
+            hp.projtext(moonlon[0], moonlat[0], 'Moon', color=moon_color,
+                        lonlat=True, coord='C', fontsize=14, alpha=alpha)
 
         plt.savefig('patches.png')
         plt.close()
