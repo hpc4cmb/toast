@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import os
 
@@ -33,7 +33,7 @@ def main():
     parser.add_argument( '--rcond', required=False, default=None, help='Optionally write the inverse condition number map to this file.' )
     parser.add_argument( '--single', required=False, default=False, action='store_true', help='Write the output in single precision.' )
     parser.add_argument( '--threshold', required=False, default=1e-3, type=np.float, help='Reciprocal condition number threshold' )
-    
+
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     autotimer = timing.auto_timer(timing.FILE())
@@ -131,4 +131,4 @@ if __name__ == "__main__":
     main()
     tman = timing.timing_manager()
     tman.report()
-
+    finalize()

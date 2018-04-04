@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
+from toast.mpi import MPI, finalize
 
 import os
 
@@ -33,7 +33,7 @@ def main():
     parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
     parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
     parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
-    
+
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
     autotimer = timing.auto_timer(timing.FILE())
@@ -109,4 +109,4 @@ if __name__ == "__main__":
     main()
     tman = timing.timing_manager()
     tman.report()
-
+    finalize()
