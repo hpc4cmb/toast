@@ -1030,8 +1030,10 @@ class OpTidasExport(Operator):
             # Now each process can write their unique data slice.
 
             # FIXME:  Although every write should be guarded by a mutex
-            # lock, this does not seem to work in practice.  Instead, we
-            # will serialize writes over the process grid.
+            # lock, this does not seem to work in practice- there is a bug
+            # in the MPILock class when applied to HDF5 calls (despite
+            # extensive unit tests).  For now, we will serialize writes over
+            # the process grid.
 
             for p in range(tod.mpicomm.size):
                 if tod.mpicomm.rank == p:
@@ -1053,6 +1055,24 @@ class OpTidasExport(Operator):
                         tidastod.write_flags(detector=det, flags=ref)
                         del ref
                 tod.mpicomm.barrier()
+
+            # for det in tod.local_dets:
+            #     ref = None
+            #     if self._cachename is not None:
+            #         ref = tod.cache.reference("{}_{}"\
+            #             .format(self._cachename, det))
+            #     else:
+            #         ref = tod.read(detector=det)
+            #     tidastod.write(detector=det, data=ref)
+            #     del ref
+            #     ref = None
+            #     if self._cacheflag is not None:
+            #         ref = tod.cache.reference(
+            #             "{}_{}".format(self._cacheflag, det))
+            #     else:
+            #         ref = tod.read_flags(detector=det)
+            #     tidastod.write_flags(detector=det, flags=ref)
+            #     del ref
 
             del tidastod
 

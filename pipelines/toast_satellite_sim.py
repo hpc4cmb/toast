@@ -579,8 +579,24 @@ def main():
             nse = tt.OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
 
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Noise simulation {:04d} took {:.3f} s".format(mc,
+                    elapsed), flush=True)
+            start = stop
+
             # add sky signal
             add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+
+            comm.comm_world.barrier()
+            stop = MPI.Wtime()
+            elapsed = stop - start
+            if comm.comm_world.rank == 0:
+                print("  Add sky signal {:04d} took {:.3f} s".format(mc,
+                    elapsed), flush=True)
+            start = stop
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -591,13 +607,15 @@ def main():
                     export = OpTidasExport(tidas_path, name="tot_signal")
                     export.exec(data)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print("  Noise simulation {:04d} took {:.3f} s".format(mc,
-                    elapsed), flush=True)
-            start = stop
+                    comm.comm_world.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_world.rank == 0:
+                        print("  Tidas export took {:.3f} s"\
+                            .format(elapsed), flush=True)
+                    start = stop
+
+
 
             zmap.data.fill(0.0)
             build_zmap = tm.OpAccumDiag(zmap=zmap, name="tot_signal",
@@ -740,7 +758,6 @@ if __name__ == "__main__":
         main()
         tman = timing.timing_manager()
         tman.report()
-        MPI.Finalize()
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
