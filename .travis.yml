@@ -23,6 +23,7 @@ matrix:
             - libmpich-dev
             - mpich
             - fftw3-dev
+            - cfitsio-dev
             - libatlas-base-dev
             - pkg-config
       env:
@@ -48,6 +49,7 @@ matrix:
             - libmpich-dev
             - mpich
             - fftw3-dev
+            - cfitsio-dev
             - libatlas-base-dev
             - pkg-config
       env:
@@ -73,6 +75,7 @@ matrix:
             - libmpich-dev
             - mpich
             - fftw3-dev
+            - cfitsio-dev
             - libatlas-base-dev
             - pkg-config
       env:
@@ -98,6 +101,7 @@ matrix:
             - libmpich-dev
             - mpich
             - fftw3-dev
+            - cfitsio-dev
             - libatlas-base-dev
             - pkg-config
       env:
@@ -123,6 +127,7 @@ matrix:
             - libmpich-dev
             - mpich
             - fftw3-dev
+            - cfitsio-dev
             - libatlas-base-dev
             - pkg-config
       env:
