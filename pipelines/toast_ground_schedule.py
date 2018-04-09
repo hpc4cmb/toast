@@ -108,22 +108,29 @@ def prioritize(visible):
     for i in range(len(visible) - 1):
         for j in range(i + 1, len(visible)):
             if visible[i].hits * visible[j].weight < (visible[j].hits
-                                                     * visible[i].weight):
+                                                      * visible[i].weight):
                 visible[i], visible[j] = visible[j], visible[i]
 
     return
 
 
-def corner_coordinates(observer, corners):
+def corner_coordinates(observer, corners, unwind=False):
     """ Return the corner coordinates in horizontal frame.
 
     PyEphem measures the azimuth East (clockwise) from North.
     """
     azs = []
     els = []
+    az0 = None
     for corner in corners:
-        corner.compute(observer)
-        azs.append(corner.az)
+        if observer is not None:
+            corner.compute(observer)
+        if unwind:
+            if az0 is None:
+                az0 = corner.az
+            azs.append(unwind_angle(az0, corner.az))
+        else:
+            azs.append(corner.az)
         els.append(corner.alt)
 
     return np.array(azs), np.array(els)
@@ -263,6 +270,7 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
     tstop = t
     to_cross = np.ones(len(patch.corners), dtype=np.bool)
     azmins, azmaxs, aztimes = [], [], []
+    scan_started = False
     while True:
         tstop += tstep / 10
         if tstop > stop_timestamp or tstop - t > 86400:
@@ -276,6 +284,11 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
                                 ''.format(sun.alt / degree, rising)))
             break
         azs, els = corner_coordinates(observer, patch.corners)
+        has_extent = current_extent(azmins, azmaxs, aztimes, patch.corners,
+                                    fp_radius, el, azs, els, rising, tstop)
+        if has_extent:
+            scan_started = True
+
         if rising:
             good = azs <= np.pi
             to_cross[np.logical_and(els > el + fp_radius, good)] = False
@@ -283,9 +296,8 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
             good = azs >= np.pi
             to_cross[np.logical_and(els < el - fp_radius, good)] = False
 
-        current_extent(azmins, azmaxs, aztimes, patch.corners, fp_radius, el,
-                       azs, els, rising, tstop)
-
+        # If we are alternating rising and setting scans, reject patches
+        # that appear on the wrong side of the sky.
         if np.any(np.array(azmins) < patch.az_min):
             success = False
             break
@@ -295,19 +307,25 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
             success = True
             break
 
+        if scan_started and not has_extent:
+            # The patch went out of view before all corners
+            # could cross the elevation line.
+            success = False
+            break
+
     return success, azmins, azmaxs, aztimes, tstop
 
 
-def unwind_angle(alpha, beta):
+def unwind_angle(alpha, beta, multiple=2 * np.pi):
     """ Minimize absolute difference between alpha and beta.
 
     Minimize the absolute difference by adding a multiple of
     2*pi to beta to match alpha.
     """
-    while np.abs(alpha - beta - 2 * np.pi) < np.abs(alpha - beta):
-        beta += 2 * np.pi
-    while np.abs(alpha - beta + 2 * np.pi) < np.abs(alpha - beta):
-        beta -= 2 * np.pi
+    while np.abs(alpha - beta - multiple) < np.abs(alpha - beta):
+        beta += multiple
+    while np.abs(alpha - beta + multiple) < np.abs(alpha - beta):
+        beta -= multiple
     return beta
 
 
@@ -421,33 +439,71 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
         j = (i + 1) % len(corners)
         for el0 in [el - fp_radius, el, el + fp_radius]:
             if (els[i] - el0) * (els[j] - el0) < 0:
+                # The corners are on opposite sides of the elevation line
                 az1 = azs[i]
                 az2 = azs[j]
                 el1 = els[i] - el0
                 el2 = els[j] - el0
-                if az2 - az1 > np.pi:
-                    az1 += 2 * np.pi
-                if az1 - az2 > np.pi:
-                    az2 += 2 * np.pi
+                az2 = unwind_angle(az1, az2)
                 az_cross = (az1 + el1 * (az2 - az1) / (el1 - el2)) % (2 * np.pi)
-                if (rising and az_cross < np.pi) or \
-                   (not rising and az_cross > np.pi):
-                    azs_cross.append(az_cross)
+                azs_cross.append(az_cross)
             if fp_radius == 0:
                 break
+    if len(azs_cross) == 0:
+        return False
+
+    azs_cross = np.array(azs_cross)
+    if rising:
+        good = azs_cross < np.pi
+    else:
+        good = azs_cross > np.pi
+    ngood = np.sum(good)
+    if ngood == 0:
+        return False
+    elif ngood > 1:
+        azs_cross = azs_cross[good]
+
+    # Unwind the crossing azimuths to minimize the scatter
+    azs_cross = np.sort(azs_cross)
+    if azs_cross.size > 1:
+        ptps = []
+        for i in range(azs_cross.size):
+            azs_cross_alt = azs_cross.copy()
+            azs_cross_alt[:i] += 2 * np.pi
+            ptps.append(np.ptp(azs_cross_alt))
+        i = np.argmin(ptps)
+        if i > 0:
+            azs_cross[:i] += 2 * np.pi
+            azs_cross = np.sort(azs_cross)
 
     if len(azs_cross) > 1:
-        azs_cross = np.sort(azs_cross)
-        azmin = azs_cross[0]
-        azmax = azs_cross[-1]
+        azmin = azs_cross[0] % (2 * np.pi)
+        azmax = azs_cross[-1] % (2 * np.pi)
         if azmax - azmin > np.pi:
             # Patch crosses the zero meridian
             azmin, azmax = azmax, azmin
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
+        """
+        if azmin > azmax:
+            import pdb
+            import matplotlib.pyplot as plt
+            import healpy as hp
+            plt.figure()
+            plt.plot(azs / degree, els / degree, 'r-o')
+            plt.gca().axhline(el / degree, color='k')
+            plt.plot(np.degrees([azmin, azmax]), np.degrees([el, el]), 'bo')
+            # hp.mollview(np.zeros(12))
+            hp.graticule(30)
+            hp.projplot(azs / degree, els / degree, threshold=1, lonlat=True,
+                        coord='c', color='r', lw=2)
+            plt.show()
+            pdb.set_trace()
+        """
+        return True
 
-    return
+    return False
 
 
 def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
@@ -471,7 +527,7 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     patch.hits += 1
-    t1 = tstart
+    t1 = np.amin(aztimes)
     while t1 < tstop:
         subscan += 1
         if args.operational_days:
@@ -539,6 +595,64 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     return tstop, subscan
 
 
+def in_patch(patch, obj):
+    """
+    Determine if the object (e.g. Sun or Moon) is inside the patch by
+    using a ray casting algorithm.  The ray is cast along a constant
+    meridian to follow a great circle.
+    """
+    az0 = obj.az
+    # Get corner coordinates, assuming they were already computed
+    azs, els = corner_coordinates(None, patch.corners)
+    els_cross = []
+    for i in range(len(patch.corners)):
+        az1 = azs[i]
+        el1 = els[i]
+        j = (i + 1) % len(patch.corners)
+        az2 = unwind_angle(az1, azs[j])
+        el2 = els[j]
+        azmean = .5 * (az1 + az2)
+        az0 = unwind_angle(azmean, np.float(obj.az), np.pi)
+        if (az1 - az0) * (az2 - az0) > 0:
+            # the constant meridian is not between the two corners
+            continue
+        el_cross = (el1 + (az1 - az0) * (el2 - el1) / (az1 - az2))
+        if np.abs(obj.az - (az0 % (2 * np.pi))) < 1e-3:
+            els_cross.append(el_cross)
+        elif el_cross > 0:
+            els_cross.append(np.pi - el_cross)
+        else:
+            els_cross.append(-np.pi - el_cross)
+
+    els_cross = np.array(els_cross)
+    if els_cross.size < 2:
+        return False
+
+    # Unwind the crossing elevations to minimize the scatter
+    els_cross = np.sort(els_cross)
+    if els_cross.size > 1:
+        ptps = []
+        for i in range(els_cross.size):
+            els_cross_alt = els_cross.copy()
+            els_cross_alt[:i] += 2 * np.pi
+            ptps.append(np.ptp(els_cross_alt))
+        i = np.argmin(ptps)
+        if i > 0:
+            els_cross[:i] += 2 * np.pi
+            els_cross = np.sort(els_cross)
+    el_mean = np.mean(els_cross)
+    el0 = unwind_angle(el_mean, np.float(obj.alt))
+
+    ncross = np.sum(els_cross > el0)
+
+    if ncross % 2 == 0:
+        # Even number of crossings means that the object is outside
+        # of the patch
+        return False
+
+    return True
+
+
 def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
                 sun_avoidance_elevation, moon_avoidance_angle):
     """ Determine which patches are visible.
@@ -549,9 +663,16 @@ def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
         # below the horizon
+        for corner in patch.corners:
+            corner.compute(observer)
+        if sun_avoidance_angle >= 0 and in_patch(patch, sun):
+            not_visible.append((patch.name, 'Sun in patch'))
+            continue
+        if moon_avoidance_angle >= 0 and in_patch(patch, moon):
+            not_visible.append((patch.name, 'Moon in patch'))
+            continue
         in_view = False
         for i, corner in enumerate(patch.corners):
-            corner.compute(observer)
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
@@ -860,17 +981,17 @@ def parse_patch_explicit(args, parts):
     corners = []
     print('Explicit-corners format ', end='')
     name = parts[0]
-    i = 0
-    while i < len(parts):
-        print(' ({}, {})'.format(parts[2], parts[3]), end='')
+    i = 2
+    while i + 1 < len(parts):
+        print(' ({}, {})'.format(parts[i], parts[i + 1]), end='')
         try:
             # Assume coordinates in degrees
-            lon = float(parts[i + 2]) * degree
-            lat = float(parts[i + 3]) * degree
+            lon = float(parts[i]) * degree
+            lat = float(parts[i + 1]) * degree
         except ValueError:
             # Failed simple interpreration, assume pyEphem strings
-            lon = parts[i + 2]
-            lat = parts[i + 3]
+            lon = parts[i]
+            lat = parts[i + 1]
         i += 2
         if args.patch_coord == 'C':
             corner = ephem.Equatorial(lon, lat, epoch='2000')
