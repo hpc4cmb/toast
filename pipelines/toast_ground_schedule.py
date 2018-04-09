@@ -14,6 +14,7 @@ import argparse
 import dateutil.parser
 import ephem
 from scipy.constants import degree
+import healpy as hp
 
 import numpy as np
 import toast.timing as timing
@@ -595,6 +596,25 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     return tstop, subscan
 
 
+def patch_area(patch, observer, nside=32):
+    """
+    Perform a rough measurement of the sky fraction under the patch
+    """
+    npix = 12 * nside ** 2
+    hitmap = np.zeros(npix)
+    for corner in patch.corners:
+        corner.compute(observer)
+    for pix in range(npix):
+        lon, lat = hp.pix2ang(nside, pix, lonlat=True)
+        center = ephem.FixedBody()
+        center._ra = lon * degree
+        center._dec = lat * degree
+        center.compute(observer)
+        hitmap[pix] = in_patch(patch, center)
+
+    return np.sum(hitmap) / hitmap.size
+
+
 def in_patch(patch, obj):
     """
     Determine if the object (e.g. Sun or Moon) is inside the patch by
@@ -1171,7 +1191,6 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
 
     if args.debug:
         import matplotlib.pyplot as plt
-        import healpy as hp
         polmap = None
         if args.polmap:
             polmap = hp.read_map(args.polmap, [1, 2])
@@ -1245,7 +1264,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C',
                             color=patch_color, lw=2, alpha=alpha)
                 it = np.argmax(lat)
-                hp.projtext(lon[it], lat[it], patch.name, lonlat=True,
+                area = patch_area(patch, observer)
+                title = '{} {:.2f}%'.format(patch.name, 100 * area)
+                hp.projtext(lon[it], lat[it], title, lonlat=True,
                             coord='C', color=patch_color, fontsize=14,
                             alpha=alpha)
             # Plot Sun and Moon trajectory
