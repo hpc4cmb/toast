@@ -81,6 +81,7 @@ ENV_FILE="${PREFIX}/etc/toast_env.sh"
 
 # What is the name of our python site-packages directory?
 PYSITE=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+mkdir -p "${PREFIX}/lib/python${PYSITE}/site-packages"
 
 echo "# Load TOAST dependencies into the environment" > "${ENV_FILE}"
 

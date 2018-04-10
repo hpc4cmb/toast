@@ -109,14 +109,14 @@ echo "" >> "${ENV_FILE}"
 # also use a virtualenv or install these via anaconda if you were using
 # anaconda already to provide python3.
 
-pip3 install --system --target="${PREFIX}/lib/python${PYSITE}/site-packages" ephem
+pip3 install --no-cache-dir --system --target="${PREFIX}/lib/python${PYSITE}/site-packages" ephem
 
 # Install Healpix
 
  curl -SL https://github.com/tskisner/healpix-autotools/releases/download/v3.31.4/healpix-autotools-3.31.4.tar.bz2 \
     | tar -xjf - \
     && cd healpix-autotools-3.31.4 \
-    && CC="gcc" CXX="g++" FC="gfortran" \
+    && CC="gcc" CXX="g++" FC="gfortran" PYTHON="/usr/bin/python3" \
     CFLAGS="-O3 -fPIC -pthread -std=gnu99" CXXFLAGS="-O3 -fPIC -pthread -std=c++98" FCFLAGS="-O3 -fPIC -pthread" \
     ./configure  --with-cfitsio="/usr" --prefix="${PREFIX}" \
     && make && make install \
