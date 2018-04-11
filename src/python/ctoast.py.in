@@ -595,13 +595,13 @@ def qarray_from_rotmat(rotmat):
     return q
 
 lib.ctoast_qarray_from_vectors.restype = None
-lib.ctoast_qarray_from_vectors.argtypes = [ npf64, npf64, npf64 ]
+lib.ctoast_qarray_from_vectors.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
 
-def qarray_from_vectors(vec1, vec2):
-    q = np.zeros(4, dtype=np.float64)
+def qarray_from_vectors(n, vec1, vec2):
+    q = np.zeros(4*n, dtype=np.float64)
     vc1 = np.require(vec1, requirements=["C"])
     vc2 = np.require(vec2, requirements=["C"])
-    lib.ctoast_qarray_from_vectors(vc1, vc2, q)
+    lib.ctoast_qarray_from_vectors(n, vc1, vc2, q)
     return q
 
 lib.ctoast_qarray_from_angles.restype = None

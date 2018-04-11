@@ -74,12 +74,7 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
                               np.zeros((nsim, 1))), axis=1)
 
-    # Speed this up later, if needed, to avoid explicit loop.
-    satquat = np.empty((nsim, 4), dtype=np.float64)
-    for i in range(nsim):
-        satquat[i][:] = qa.from_vectors(zaxis, sataxis[i])
-
-    return satquat
+    return qa.from_vectors(np.tile(zaxis, nsim).reshape(-1, 3), sataxis)
 
 
 def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,

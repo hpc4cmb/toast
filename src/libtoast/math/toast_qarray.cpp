@@ -637,23 +637,38 @@ void toast::qarray::from_rotmat ( const double * rotmat, double * q ) {
 
 // Creates the quaternion from two normalized vectors.
 
-void toast::qarray::from_vectors ( double const * vec1, double const * vec2, double * q ) {
-    double dotprod = vec1[0] * vec2[0] + vec1[1] * vec2[1] + vec1[2] * vec2[2];
-    double vec1prod = vec1[0] * vec1[0] + vec1[1] * vec1[1] + vec1[2] * vec1[2];
-    double vec2prod = vec2[0] * vec2[0] + vec2[1] * vec2[1] + vec2[2] * vec2[2];
+void toast::qarray::from_vectors ( size_t n, double const * vec1,
+    double const * vec2, double * q ) {
 
-    // shortcut for coincident vectors
-    if ( ::fabs ( dotprod - 1.0 ) < 1.0e-12 ) {
-        q[0] = 0.0;
-        q[1] = 0.0;
-        q[2] = 0.0;
-        q[3] = 1.0;
-    } else {
-        q[0] = vec1[1] * vec2[2] - vec1[2] * vec2[1];
-        q[1] = vec1[2] * vec2[0] - vec1[0] * vec2[2];
-        q[2] = vec1[0] * vec2[1] - vec1[1] * vec2[0];
-        q[3] = ::sqrt ( vec1prod * vec2prod ) + dotprod;
-        toast::qarray::normalize_inplace ( 1, 4, 4, q );
+    size_t vf;
+    size_t qf;
+    double dotprod;
+    double vec1prod;
+    double vec2prod;
+
+    for ( size_t i = 0; i < n; ++i ) {
+        vf = 3 * i;
+        qf = 4 * i;
+        dotprod = vec1[vf] * vec2[vf] + vec1[vf + 1] * vec2[vf + 1] +
+            vec1[vf + 2] * vec2[vf + 2];
+        vec1prod = vec1[vf] * vec1[vf] + vec1[vf + 1] * vec1[vf + 1] +
+            vec1[vf + 2] * vec1[vf + 2];
+        vec2prod = vec2[vf] * vec2[vf] + vec2[vf + 1] * vec2[vf + 1] +
+            vec2[vf + 2] * vec2[vf + 2];
+
+        // shortcut for coincident vectors
+        if ( ::fabs ( dotprod - 1.0 ) < 1.0e-12 ) {
+            q[qf] = 0.0;
+            q[qf + 1] = 0.0;
+            q[qf + 2] = 0.0;
+            q[qf + 3] = 1.0;
+        } else {
+            q[qf] = vec1[vf + 1] * vec2[vf + 2] - vec1[vf + 2] * vec2[vf + 1];
+            q[qf + 1] = vec1[vf + 2] * vec2[vf] - vec1[vf] * vec2[vf + 2];
+            q[qf + 2] = vec1[vf] * vec2[vf + 1] - vec1[vf + 1] * vec2[vf];
+            q[qf + 3] = ::sqrt ( vec1prod * vec2prod ) + dotprod;
+            toast::qarray::normalize_inplace ( 1, 4, 4, &(q[qf]) );
+        }
     }
 
     return;
