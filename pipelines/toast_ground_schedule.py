@@ -106,12 +106,12 @@ def to_DJD(t):
 def prioritize(visible):
     """ Order visible targets by priority and number of scans.
     """
-    for i in range(len(visible) - 1):
-        for j in range(i + 1, len(visible)):
-            if visible[i].hits * visible[j].weight < (visible[j].hits
-                                                      * visible[i].weight):
-                visible[i], visible[j] = visible[j], visible[i]
-
+    for i in range(len(visible)):
+        for j in range(len(visible) - i - 1):
+            weight1 = (visible[j].hits + 1) * visible[j].weight
+            weight2 = (visible[j + 1].hits + 1) * visible[j + 1].weight
+            if weight1 > weight2:
+                visible[j], visible[j + 1] = visible[j + 1], visible[j]
     return
 
 
@@ -696,8 +696,9 @@ def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
-            if sun.alt > sun_avoidance_elevation:
-                # Sun is high enough to apply sun_avoidance_angle check
+            # if sun.alt > sun_avoidance_elevation:
+            #    # Sun is high enough to apply sun_avoidance_angle check
+            if sun_avoidance_angle > 0:
                 angle = ephem.separation(sun, corner)
                 if angle < sun_avoidance_angle:
                     # Patch is too close to the Sun
@@ -706,7 +707,8 @@ def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
                         'Too close to Sun {:.2f}'.format(angle / degree)))
                     in_view = False
                     break
-            if moon.alt > 0:
+            # if moon.alt > 0:
+            if moon_avoidance_angle > 0:
                 angle = ephem.separation(moon, corner)
                 if angle < moon_avoidance_angle:
                     # Patch is too close to the Moon
