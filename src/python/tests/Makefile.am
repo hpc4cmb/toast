@@ -47,6 +47,7 @@ rng.py \
 fft.py \
 runner.py \
 tod.py \
+tod_satellite.py \
 sim_focalplane.py \
 tidas.py \
 timing.py

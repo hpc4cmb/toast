@@ -643,7 +643,7 @@ void toast::qarray::from_vectors ( double const * vec1, double const * vec2, dou
     double vec2prod = vec2[0] * vec2[0] + vec2[1] * vec2[1] + vec2[2] * vec2[2];
 
     // shortcut for coincident vectors
-    if ( ::fabs ( dotprod ) < 1.0e-12 ) {
+    if ( ::fabs ( dotprod - 1.0 ) < 1.0e-12 ) {
         q[0] = 0.0;
         q[1] = 0.0;
         q[2] = 0.0;

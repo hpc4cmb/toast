@@ -360,6 +360,7 @@ def main():
             comm.comm_group,
             detquats,
             obsrange[ob].samples,
+            firstsamp=obsrange[ob].first,
             firsttime=obsrange[ob].start,
             rate=args.samplerate,
             spinperiod=args.spinperiod,
@@ -401,8 +402,8 @@ def main():
         # Constantly slewing precession axis
         degday = 360.0 / 365.25
         precquat = tt.slew_precession_axis(nsim=tod.local_samples[1],
-            firstsamp=obsoffset, samplerate=args.samplerate,
-            degday=degday)
+            firstsamp=(obsoffset + tod.local_samples[0]),
+            samplerate=args.samplerate, degday=degday)
 
         tod.set_prec_axis(qprec=precquat)
 
