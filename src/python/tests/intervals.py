@@ -38,7 +38,7 @@ class IntervalTest(MPITestCase):
         intrvls = regular_intervals(self.nint, self.start, self.first,
                                     self.rate, self.duration, self.gap)
 
-        goodsamp = self.nint * ( int(0.5 + self.duration * self.rate) + 1 )
+        goodsamp = self.nint * ( int(self.duration * self.rate) + 1 )
 
         check = 0
 
