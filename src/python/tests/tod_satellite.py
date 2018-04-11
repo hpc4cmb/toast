@@ -109,13 +109,6 @@ class TODSatelliteTest(MPITestCase):
             p = pix.vec2ring(v)
             pdata[p] += 1
             vlast = v[-1]
-            # print("obs {}:  {} -->".format(ob, v[0]))
-            # print("obs {}:      {}".format(ob, v[-6]))
-            # print("obs {}:      {}".format(ob, v[-5]))
-            # print("obs {}:      {}".format(ob, v[-4]))
-            # print("obs {}:      {}".format(ob, v[-3]))
-            # print("obs {}:      {}".format(ob, v[-2]))
-            # print("obs {}:      {}".format(ob, v[-1]))
 
         import matplotlib.pyplot as plt
         hitsfile = os.path.join(self.outdir, 'tod_satellite_hits.fits')
@@ -210,13 +203,6 @@ class TODSatelliteTest(MPITestCase):
             p = pix.vec2ring(v)
             pdata[p] += 1
             vlast = v[-1]
-            print("obs {}:  {} -->".format(ob, v[0]))
-            print("obs {}:      {}".format(ob, v[-6]))
-            print("obs {}:      {}".format(ob, v[-5]))
-            print("obs {}:      {}".format(ob, v[-4]))
-            print("obs {}:      {}".format(ob, v[-3]))
-            print("obs {}:      {}".format(ob, v[-2]))
-            print("obs {}:      {}".format(ob, v[-1]))
 
         import matplotlib.pyplot as plt
         hitsfile = os.path.join(self.outdir, 'tod_satellite_classhits.fits')
