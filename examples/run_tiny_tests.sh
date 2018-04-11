@@ -18,6 +18,7 @@ exit_status=0
 
 for TYPE in $TYPES
 do
+    echo ">>>>>>>>>> Running test for $TYPE"
     wget http://portal.nersc.gov/project/cmb/toast_data/ref_out_tiny_${TYPE}.tgz
     tar xzf ref_out_tiny_${TYPE}.tgz
     bash tiny_${TYPE}_shell.sh && python check_maps.py $TYPE; (( exit_status = exit_status || $? ))
