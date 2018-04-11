@@ -40,21 +40,18 @@ def regular_intervals(n, start, first, rate, duration, gap):
 
     # Compute the whole number of samples that fit within the
     # requested time span (rounded to nearest sample).
-    totsamples = int(0.5 + (duration + gap) * rate) + 1
-    dursamples = int(0.5 + duration * rate) + 1
-    gapsamples = totsamples - dursamples
-
-    # Compute the actual time span for this number of samples
-    tottime = (totsamples - 1) * invrate
-    durtime = (dursamples - 1) * invrate
-    gaptime = tottime - durtime
+    totsamples = int(0.5 + (duration + gap) * rate)
+    dursamples = int(0.5 + duration * rate)
 
     intervals = []
 
     for i in range(n):
         ifirst = first + i * totsamples
         ilast = ifirst + dursamples - 1
-        istart = start + i * tottime
+        # The time span between interval starts (the first sample of one interval
+        # to the first sample of the next) includes the one extra sample time.
+        istart = start + i * (totsamples * invrate)
+        # The stop time is the timestamp of the last valid sample (thus the -1).
         istop = istart + (dursamples - 1) * invrate
         intervals.append(Interval(start=istart, stop=istop, first=ifirst, last=ilast))
 
