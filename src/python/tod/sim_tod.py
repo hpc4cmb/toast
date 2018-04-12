@@ -52,6 +52,8 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
         shape (nsim, 4).
     """
     autotimer = timing.auto_timer()
+    zaxis = np.array([0.0, 0.0, 1.0])
+
     # this is the increment in radians per sample
     angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
 
@@ -62,7 +64,8 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
 
     satang = np.arange(nsim, dtype=np.float64)
     satang *= angincr
-    satang += angincr * firstsamp + (np.pi / 2)
+    satang += angincr * firstsamp
+    #satang += angincr * firstsamp + (np.pi / 2)
 
     cang = np.cos(satang)
     sang = np.sin(satang)
@@ -71,17 +74,7 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
                               np.zeros((nsim, 1))), axis=1)
 
-    # the rotation about the axis is always pi/2
-    csatrot = np.cos(0.25 * np.pi)
-    ssatrot = np.sin(0.25 * np.pi)
-
-    # now construct the axis-angle quaternions for the precession
-    # axis
-    sataxis = np.multiply(np.repeat(ssatrot, nsim).reshape(-1,1), sataxis)
-    satquat = np.concatenate((sataxis, np.repeat(csatrot, nsim).reshape(-1,1)),
-                             axis=1)
-
-    return satquat
+    return qa.from_vectors(np.tile(zaxis, nsim).reshape(-1, 3), sataxis)
 
 
 def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
@@ -97,6 +90,9 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
 
     Args:
         nsim (int) : The number of samples to simulate.
+        firstsamp (int): The offset in samples from the start
+            of rotation.
+        samplerate (float): The sampling rate in Hz.
         qprec (ndarray): If None (the default), then the
             precession axis will be fixed along the
             X axis.  If a 1D array of size 4 is given,
@@ -105,7 +101,6 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
             precession axis.  If a 2D array of shape
             (nsim, 4) is given, this is the time-varying
             rotation of the Z axis to the precession axis.
-        samplerate (float): The sampling rate in Hz.
         spinperiod (float): The period (in minutes) of the
             rotation about the spin axis.
         spinangle (float): The opening angle (in degrees)
@@ -371,6 +366,8 @@ class TODSatellite(TOD):
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
         samples (int):  The total number of samples.
+        firstsamp (int): The offset in samples from the start
+            of the mission.
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         spinperiod (float): The period (in minutes) of the
@@ -384,13 +381,14 @@ class TODSatellite(TOD):
         All other keyword arguments are passed to the parent constructor.
 
     """
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0,
-                 spinperiod=1.0, spinangle=85.0, precperiod=0.0, precangle=0.0,
-                 **kwargs):
+    def __init__(self, mpicomm, detectors, samples, firstsamp=0, firsttime=0.0,
+        rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0,
+        precangle=0.0, **kwargs):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
 
+        self._firstsamp = firstsamp
         self._firsttime = firsttime
         self._rate = rate
         self._spinperiod = spinperiod
@@ -440,7 +438,8 @@ class TODSatellite(TOD):
 
         # generate and cache the boresight pointing
         self._boresight = satellite_scanning(
-            nsim=self.local_samples[1], firstsamp=self.local_samples[0],
+            nsim=self.local_samples[1],
+            firstsamp=(self._firstsamp + self.local_samples[0]),
             qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod,
             spinangle=self._spinangle, precperiod=self._precperiod,
             precangle=self._precangle)

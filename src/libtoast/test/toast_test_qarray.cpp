@@ -1,6 +1,6 @@
 /*
 Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
+All rights reserved.  Use of this source code is governed by
 a BSD-style license that can be found in the LICENSE file.
 */
 
@@ -327,7 +327,7 @@ TEST_F( TOASTqarrayTest, fromvectors ) {
     double v1[3] = { 1.0, 0.0, 0.0 };
     double v2[3] = { ::cos(ang), ::sin(ang), 0.0 };
 
-    qarray::from_vectors ( v1, v2, result );
+    qarray::from_vectors ( 1, v1, v2, result );
 
     for ( size_t i = 0; i < 4; ++i ) {
         EXPECT_FLOAT_EQ( check[i], result[i] );
@@ -397,9 +397,9 @@ TEST_F( TOASTqarrayTest, thetaphipa ) {
 
         ASSERT_NEAR( check, phi[i], 1.0e-6 );
 
-        check = ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0], 
-                - ( orient[0] * dir[2] * dir[0] ) 
-                - ( orient[1] * dir[2] * dir[1] ) 
+        check = ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0],
+                - ( orient[0] * dir[2] * dir[0] )
+                - ( orient[1] * dir[2] * dir[1] )
                 + ( orient[2] * ( dir[0] * dir[0] + dir[1] * dir[1] ) ) );
 
         ASSERT_NEAR( check, pa[i], 1.0e-6 );
@@ -491,9 +491,9 @@ TEST_F( TOASTqarrayTest, thetaphipa ) {
 
         ASSERT_NEAR( check, phi[i], 1.0e-6 );
 
-        check = - ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0], 
-                - ( orient[0] * dir[2] * dir[0] ) 
-                - ( orient[1] * dir[2] * dir[1] ) 
+        check = - ::atan2 ( orient[0] * dir[1] - orient[1] * dir[0],
+                - ( orient[0] * dir[2] * dir[0] )
+                - ( orient[1] * dir[2] * dir[1] )
                 + ( orient[2] * ( dir[0] * dir[0] + dir[1] * dir[1] ) ) );
 
         if ( ::fabs ( ::fabs ( check - pa[i] ) - toast::TWOPI ) < std::numeric_limits<float>::epsilon() ) {
@@ -529,5 +529,3 @@ TEST_F( TOASTqarrayTest, thetaphipa ) {
         ASSERT_NEAR( pa[i], check_pa[i], 1.0e-6 );
     }
 }
-
-

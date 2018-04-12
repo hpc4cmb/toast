@@ -366,11 +366,31 @@ def from_vectors(v1, v2):
         v1 = np.array(v1, dtype=np.float64)
     if not isinstance(v2, np.ndarray):
         v2 = np.array(v2, dtype=np.float64)
-    if v1.ndim != 1 or v2.ndim != 1:
-        raise ValueError('from_vectors is not vectorized')
-    return ctoast.qarray_from_vectors(
+
+    nv1 = None
+    if v1.ndim == 1:
+        nv1 = 1
+    else:
+        nv1 = v1.shape[0]
+
+    nv2 = None
+    if v2.ndim == 1:
+        nv2 = 1
+    else:
+        nv2 = v2.shape[0]
+
+    if nv1 != nv2:
+        raise ValueError("Length of input vectors must be the same")
+
+    q = ctoast.qarray_from_vectors(nv1,
         v1.flatten().astype(np.float64, copy=False),
         v2.flatten().astype(np.float64, copy=False))
+
+    if nv1 > 1:
+        q = q.reshape((-1, 4))
+    else:
+        q = q.flatten()
+    return q
 
 
 def from_angles(theta, phi, pa, IAU=False):

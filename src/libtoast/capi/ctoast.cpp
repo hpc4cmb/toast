@@ -597,10 +597,10 @@ void ctoast_qarray_from_rotmat ( const double * rotmat, double * q ) {
     return;
 }
 
-void ctoast_qarray_from_vectors ( double const * vec1, double const * vec2,
-                                  double * q ) {
+void ctoast_qarray_from_vectors ( size_t n, double const * vec1,
+    double const * vec2, double * q ) {
     TOAST_AUTO_TIMER();
-    toast::qarray::from_vectors(vec1, vec2, q );
+    toast::qarray::from_vectors(n, vec1, vec2, q );
     return;
 }
 

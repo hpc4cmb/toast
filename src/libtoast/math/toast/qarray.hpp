@@ -48,7 +48,8 @@ namespace toast { namespace qarray {
 
     void from_rotmat ( const double * rotmat, double * q );
 
-    void from_vectors ( double const * vec1, double const * vec2, double * q );
+    void from_vectors ( size_t n, double const * vec1, double const * vec2,
+        double * q );
 
     void from_angles ( size_t n, double const * theta, double const * phi,
         double * const pa, double * quat, bool IAU = false );
