@@ -17,8 +17,6 @@ C
 80
 --sun_el_max
 90
---sun_avoidance_elevation
-0
 --sun_avoidance_angle
 30
 --moon_avoidance_angle

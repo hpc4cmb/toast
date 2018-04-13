@@ -14,15 +14,29 @@ import argparse
 import dateutil.parser
 import ephem
 from scipy.constants import degree
-import healpy as hp
 
+import healpy as hp
 import numpy as np
 import toast.timing as timing
+
+
+class TooClose(Exception):
+    pass
+
+
+class SunTooClose(TooClose):
+    pass
+
+
+class MoonTooClose(TooClose):
+    pass
 
 
 class Patch(object):
 
     hits = 0
+    rising_hits = 0
+    setting_hits = 0
     step = -1
     az_min = 0
 
@@ -49,6 +63,7 @@ class Patch(object):
         self.step_azel()
 
     def step_azel(self):
+        autotimer = timing.auto_timer()
         self.step += 1
         if self.el_step > 0 and self.alternate:
             # alternate between rising and setting scans
@@ -77,6 +92,8 @@ class Patch(object):
                 self.el_min += self.el_step
                 if self.el_min > self.el_max0:
                     self.el_min = self.el_min0
+        del autotimer
+        return
 
     def reset(self):
         self.step += 1
@@ -103,15 +120,35 @@ def to_DJD(t):
     return to_JD(t) - 2415020
 
 
+def patch_is_rising(patch):
+    rising = True
+    for corner in patch.corners:
+        if corner.alt > 0 and corner.az > np.pi:
+            # The patch is setting
+            rising = False
+            break
+    return rising
+
+
 def prioritize(visible):
     """ Order visible targets by priority and number of scans.
     """
+    autotimer = timing.auto_timer()
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
-            weight1 = (visible[j].hits + 1) * visible[j].weight
-            weight2 = (visible[j + 1].hits + 1) * visible[j + 1].weight
+            if patch_is_rising(visible[j]):
+                hits1 = visible[j].rising_hits
+            else:
+                hits1 = visible[j].setting_hits
+            if patch_is_rising(visible[j + 1]):
+                hits2 = visible[j + 1].rising_hits
+            else:
+                hits2 = visible[j + 1].setting_hits
+            weight1 = (hits1 + 1) * visible[j].weight
+            weight2 = (hits2 + 1) * visible[j + 1].weight
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
+    del autotimer
     return
 
 
@@ -120,6 +157,7 @@ def corner_coordinates(observer, corners, unwind=False):
 
     PyEphem measures the azimuth East (clockwise) from North.
     """
+    autotimer = timing.auto_timer()
     azs = []
     els = []
     az0 = None
@@ -133,7 +171,7 @@ def corner_coordinates(observer, corners, unwind=False):
         else:
             azs.append(corner.az)
         els.append(corner.alt)
-
+    del autotimer
     return np.array(azs), np.array(els)
 
 
@@ -142,6 +180,7 @@ def attempt_scan(
         stop_timestamp, sun, moon, sun_el_max, fout, fout_fmt, ods):
     """ Attempt scanning the visible patches in order until success.
     """
+    autotimer = timing.auto_timer()
     success = False
     for patch in visible:
         for rising in [True, False]:
@@ -154,16 +193,54 @@ def attempt_scan(
                 el, patch, t, fp_radius, observer, sun, not_visible,
                 tstep, stop_timestamp, sun_el_max, rising)
             if success:
-                t, _ = add_scan(
-                    args, t, tstop, aztimes, azmins, azmaxs, rising,
-                    fp_radius, observer, sun, moon, fout, fout_fmt,
-                    patch, el, ods)
-                patch.step_azel()
-                break
+                try:
+                    t, _ = add_scan(
+                        args, t, tstop, aztimes, azmins, azmaxs, rising,
+                        fp_radius, observer, sun, moon, fout, fout_fmt,
+                        patch, el, ods)
+                    patch.step_azel()
+                    break
+                except TooClose:
+                    success = False
+                    break
         if success:
             break
-
+    del autotimer
     return success, t
+
+
+def check_sso(observer, az1, az2, el, sso, angle, tstart, tstop):
+    """
+    Check if a solar system object (SSO) enters within "angle" of
+    the constant elevation scan.
+    """
+    autotimer = timing.auto_timer()
+    nt = np.int(max(3, (tstop - tstart) / 60))
+    if az1 > az2:
+        az2 += 360
+    half_width = .5 * (az2 - az1) * np.cos(np.radians(el))
+    azmean = .5 * (az1 + az2)
+    for t in np.linspace(tstart, tstop, nt):
+        observer.date = to_DJD(t)
+        sso.compute(observer)
+        sso_az = (np.degrees(sso.az) - azmean) % 360
+        if sso_az > 180:
+            sso_az -= 360
+        sso_el = np.degrees(sso.alt)
+        # Rotate the coordinates so that the scan center is along the X-axis
+        sso_az *= np.cos(np.radians(sso_el))
+        sso_el -= el
+        if sso_el > -angle and sso_el < angle:
+            # Add the margin to the test width
+            test_width = half_width + np.sqrt(angle ** 2 - sso_el ** 2)
+            if sso_az > -test_width and sso_az < test_width:
+                # import pdb
+                # print(az1, az2, el, np.degrees([sso.az, sso.alt]))
+                # print(half_width, test_width, sso_el, sso_az)
+                # pdb.set_trace()
+                return True
+    del autotimer
+    return False
 
 
 def attempt_scan_pole(
@@ -171,6 +248,7 @@ def attempt_scan_pole(
         tstep, stop_timestamp, sun, moon, sun_el_max, fout, fout_fmt, ods):
     """ Attempt scanning the visible patches in order until success.
     """
+    autotimer = timing.auto_timer()
     success = False
     for patch in visible:
         observer.date = to_DJD(tstart)
@@ -204,13 +282,14 @@ def attempt_scan_pole(
         day1 = int(to_MJD(tstart))
         while int(to_MJD(tstop)) == day1:
             tstop += 60.
-
+    del autotimer
     return success, tstop
 
 
 def get_constant_elevation(observer, patch, rising, fp_radius, not_visible):
     """ Determine the elevation at which to scan.
     """
+    autotimer = timing.auto_timer()
     azs, els = corner_coordinates(observer, patch.corners)
     el = None
     if rising:
@@ -237,7 +316,7 @@ def get_constant_elevation(observer, patch, rising, fp_radius, not_visible):
                 patch.name, 'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
                     el / degree, patch.el_max / degree, rising)))
             el = None
-
+    del autotimer
     return el
 
 
@@ -245,6 +324,7 @@ def get_constant_elevation_pole(observer, patch, fp_radius, el_min, el_max,
                                 not_visible):
     """ Determine the elevation at which to scan.
     """
+    autotimer = timing.auto_timer()
     _, els = corner_coordinates(observer, patch.corners)
     el = np.amin(els) - fp_radius
 
@@ -258,7 +338,7 @@ def get_constant_elevation_pole(observer, patch, fp_radius, el_min, el_max,
             patch.name, 'el > el_max ({:.2f} > {:.2f})'.format(
                 el / degree, el_max / degree)))
         el = None
-
+    del autotimer
     return el
 
 
@@ -266,6 +346,7 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
                tstep, stop_timestamp, sun_el_max, rising):
     """ Attempt scanning the patch specified by corners at elevation el.
     """
+    autotimer = timing.auto_timer()
     success = False
     # and now track when all corners are past the elevation
     tstop = t
@@ -279,11 +360,13 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
                                 ''.format(rising)))
             break
         observer.date = to_DJD(tstop)
-        sun.compute(observer)
-        if sun.alt > sun_el_max:
-            not_visible.append((patch.name, 'Sun too high {:.2f} rising = {}'
-                                ''.format(sun.alt / degree, rising)))
-            break
+        if sun_el_max < np.pi / 2:
+            sun.compute(observer)
+            if sun.alt > sun_el_max:
+                not_visible.append(
+                    (patch.name, 'Sun too high {:.2f} rising = {}'
+                     ''.format(np.degrees(sun.alt), rising)))
+                break
         azs, els = corner_coordinates(observer, patch.corners)
         has_extent = current_extent(azmins, azmaxs, aztimes, patch.corners,
                                     fp_radius, el, azs, els, rising, tstop)
@@ -299,7 +382,8 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
 
         # If we are alternating rising and setting scans, reject patches
         # that appear on the wrong side of the sky.
-        if np.any(np.array(azmins) < patch.az_min):
+        if patch.az_min > 0 and np.any((np.array(azmins) % (2 * np.pi))
+                                       < patch.az_min):
             success = False
             break
 
@@ -313,7 +397,7 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
             # could cross the elevation line.
             success = False
             break
-
+    del autotimer
     return success, azmins, azmaxs, aztimes, tstop
 
 
@@ -337,6 +421,7 @@ def scan_patch_pole(args, el, patch, t, fp_radius, observer, sun, not_visible,
     The pole scheduling mode will not wait for the patch to drift across.
     It simply attempts to scan for the required time: args.pole_ces_time.
     """
+    autotimer = timing.auto_timer()
     success = False
     tstop = t
     azmins, azmaxs, aztimes = [], [], []
@@ -368,7 +453,7 @@ def scan_patch_pole(args, el, patch, t, fp_radius, observer, sun, not_visible,
         current_extent_pole(
             azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els,
             tstop)
-
+    del autotimer
     return success, azmins, azmaxs, aztimes, tstop
 
 
@@ -378,6 +463,7 @@ def current_extent_pole(
 
     Pole scheduling does not care if the patch is "rising" or "setting".
     """
+    autotimer = timing.auto_timer()
     azs_cross = []
     for i in range(len(corners)):
         if np.abs(els[i] - el) < fp_radius:
@@ -422,7 +508,7 @@ def current_extent_pole(
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
-
+    del autotimer
     return
 
 
@@ -435,6 +521,7 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
     line between the corners.
 
     """
+    autotimer = timing.auto_timer()
     azs_cross = []
     for i in range(len(corners)):
         j = (i + 1) % len(corners)
@@ -467,15 +554,12 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
     # Unwind the crossing azimuths to minimize the scatter
     azs_cross = np.sort(azs_cross)
     if azs_cross.size > 1:
-        ptps = []
-        for i in range(azs_cross.size):
-            azs_cross_alt = azs_cross.copy()
-            azs_cross_alt[:i] += 2 * np.pi
-            ptps.append(np.ptp(azs_cross_alt))
+        ptp0 = azs_cross[-1] - azs_cross[0]
+        ptps = azs_cross[:-1] + 2 * np.pi - azs_cross[1:]
+        ptps = np.hstack([ptp0, ptps])
         i = np.argmin(ptps)
-        if i > 0:
-            azs_cross[:i] += 2 * np.pi
-            azs_cross = np.sort(azs_cross)
+        azs_cross[:i] += 2 * np.pi
+        np.roll(azs_cross, i)
 
     if len(azs_cross) > 1:
         azmin = azs_cross[0] % (2 * np.pi)
@@ -486,24 +570,8 @@ def current_extent(azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els,
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
-        """
-        if azmin > azmax:
-            import pdb
-            import matplotlib.pyplot as plt
-            import healpy as hp
-            plt.figure()
-            plt.plot(azs / degree, els / degree, 'r-o')
-            plt.gca().axhline(el / degree, color='k')
-            plt.plot(np.degrees([azmin, azmax]), np.degrees([el, el]), 'bo')
-            # hp.mollview(np.zeros(12))
-            hp.graticule(30)
-            hp.projplot(azs / degree, els / degree, threshold=1, lonlat=True,
-                        coord='c', color='r', lw=2)
-            plt.show()
-            pdb.set_trace()
-        """
         return True
-
+    del autotimer
     return False
 
 
@@ -511,6 +579,7 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
              observer, sun, moon, fout, fout_fmt, patch, el, ods, subscan=-1):
     """ Make an entry for a CES in the schedule file.
     """
+    autotimer = timing.auto_timer()
     ces_time = tstop - tstart
     if ces_time > args.ces_max_time:  # and not args.pole_mode:
         nsub = np.int(np.ceil(ces_time / args.ces_max_time))
@@ -518,9 +587,11 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
     azmaxs = np.array(azmaxs)
+    azmaxs[0] = unwind_angle(azmins[0], azmaxs[0])
     for i in range(1, azmins.size):
         azmins[i] = unwind_angle(azmins[0], azmins[i])
         azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
+        azmaxs[i] = unwind_angle(azmins[i], azmaxs[i])
     # for i in range(azmins.size-1):
     #    if azmins[i+1] - azmins[i] > np.pi:
     #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
@@ -528,7 +599,12 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
     #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
     rising_string = 'R' if rising else 'S'
     patch.hits += 1
+    if rising:
+        patch.rising_hits += 1
+    else:
+        patch.setting_hits += 1
     t1 = np.amin(aztimes)
+    entries = []
     while t1 < tstop:
         subscan += 1
         if args.operational_days:
@@ -560,8 +636,8 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
             azmax = np.amin(azmaxs[ind])
         # Add the focal plane radius to the scan width
         fp_radius_eff = fp_radius / np.cos(el)
-        azmin = (azmin - fp_radius_eff) % (2 * np.pi)
-        azmax = (azmax + fp_radius_eff) % (2 * np.pi)
+        azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
+        azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
         ces_start = datetime.utcfromtimestamp(t1).strftime(
             '%Y-%m-%d %H:%M:%S %Z')
         ces_stop = datetime.utcfromtimestamp(t2).strftime(
@@ -578,21 +654,41 @@ def add_scan(args, tstart, tstop, aztimes, azmins, azmaxs, rising, fp_radius,
         moon.compute(observer)
         sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
         moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+        # It is possible that the Sun or the Moon gets too close to the
+        # scan, even if they are far enough from the actual patch.
+        if check_sso(observer, azmin, azmax, el / degree, sun,
+                     args.sun_avoidance_angle, t1, t2):
+            if args.debug:
+                print('Sun too close', flush=True)
+            raise SunTooClose
+        if check_sso(observer, azmin, azmax, el / degree, moon,
+                     args.moon_avoidance_angle, t1, t2):
+            if args.debug:
+                print('Moon too close', flush=True)
+            raise MoonTooClose
         moon_phase2 = moon.phase
         # Create an entry in the schedule
-        fout.write(
+        entries.append(
             fout_fmt.format(
                 ces_start, ces_stop, to_MJD(t1), to_MJD(t2),
                 patch.name,
-                azmin / degree, azmax / degree, el / degree,
+                azmin, azmax, el / degree,
                 rising_string,
                 sun_el1, sun_az1, sun_el2, sun_az2,
                 moon_el1, moon_az1, moon_el2, moon_az2,
                 0.005 * (moon_phase1 + moon_phase2), patch.hits, subscan))
         t1 = t2 + args.gap_small
+
+    # Write the entries
+    for entry in entries:
+        if args.debug:
+            print(entry)
+        fout.write(entry)
+    fout.flush()
+
     # Advance the time
     tstop += args.gap
-
+    del autotimer
     return tstop, subscan
 
 
@@ -600,6 +696,7 @@ def patch_area(patch, observer, nside=32):
     """
     Perform a rough measurement of the sky fraction under the patch
     """
+    autotimer = timing.auto_timer()
     npix = 12 * nside ** 2
     hitmap = np.zeros(npix)
     for corner in patch.corners:
@@ -611,7 +708,7 @@ def patch_area(patch, observer, nside=32):
         center._dec = lat * degree
         center.compute(observer)
         hitmap[pix] = in_patch(patch, center)
-
+    del autotimer
     return np.sum(hitmap) / hitmap.size
 
 
@@ -621,6 +718,7 @@ def in_patch(patch, obj):
     using a ray casting algorithm.  The ray is cast along a constant
     meridian to follow a great circle.
     """
+    autotimer = timing.auto_timer()
     az0 = obj.az
     # Get corner coordinates, assuming they were already computed
     azs, els = corner_coordinates(None, patch.corners)
@@ -669,70 +767,64 @@ def in_patch(patch, obj):
         # Even number of crossings means that the object is outside
         # of the patch
         return False
-
+    del autotimer
     return True
 
 
-def get_visible(observer, sun, moon, patches, el_min, sun_avoidance_angle,
-                sun_avoidance_elevation, moon_avoidance_angle):
+def get_visible(args, observer, sun, moon, patches, el_min):
     """ Determine which patches are visible.
     """
+    autotimer = timing.auto_timer()
     visible = []
     not_visible = []
     for patch in patches:
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
         # below the horizon
-        for corner in patch.corners:
-            corner.compute(observer)
-        if sun_avoidance_angle >= 0 and in_patch(patch, sun):
-            not_visible.append((patch.name, 'Sun in patch'))
-            continue
-        if moon_avoidance_angle >= 0 and in_patch(patch, moon):
-            not_visible.append((patch.name, 'Moon in patch'))
-            continue
         in_view = False
         for i, corner in enumerate(patch.corners):
+            corner.compute(observer)
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
-            # if sun.alt > sun_avoidance_elevation:
-            #    # Sun is high enough to apply sun_avoidance_angle check
-            if sun_avoidance_angle > 0:
-                angle = ephem.separation(sun, corner)
-                if angle < sun_avoidance_angle:
+            if args.sun_avoidance_angle > 0:
+                angle = np.degrees(ephem.separation(sun, corner))
+                if angle < args.sun_avoidance_angle:
                     # Patch is too close to the Sun
                     not_visible.append((
                         patch.name,
-                        'Too close to Sun {:.2f}'.format(angle / degree)))
+                        'Too close to Sun {:.2f}'.format(angle)))
                     in_view = False
                     break
-            # if moon.alt > 0:
-            if moon_avoidance_angle > 0:
-                angle = ephem.separation(moon, corner)
-                if angle < moon_avoidance_angle:
+            if args.moon_avoidance_angle > 0:
+                angle = np.degrees(ephem.separation(moon, corner))
+                if angle < args.moon_avoidance_angle:
                     # Patch is too close to the Moon
                     not_visible.append((
                         patch.name,
-                        'Too close to Moon {:.2f}'.format(angle / degree)))
+                        'Too close to Moon {:.2f}'.format(angle)))
                     in_view = False
                     break
             if i == len(patch.corners) - 1 and not in_view:
                 not_visible.append((
                     patch.name, 'Below the horizon.'))
         if in_view:
+            # Finally, check that the Sun or the Moon are not inside the patch
+            if args.moon_avoidance_angle >= 0 and in_patch(patch, moon):
+                not_visible.append((patch.name, 'Moon in patch'))
+                continue
+            if args.sun_avoidance_angle >= 0 and in_patch(patch, sun):
+                not_visible.append((patch.name, 'Sun in patch'))
+                continue
             visible.append(patch)
-
+    del autotimer
     return visible, not_visible
 
 
 def build_schedule(
         args, start_timestamp, stop_timestamp, patches, observer, sun, moon):
-
+    autotimer = timing.auto_timer()
     sun_el_max = args.sun_el_max * degree
-    sun_avoidance_angle = args.sun_avoidance_angle * degree
-    sun_avoidance_elevation = args.sun_avoidance_elevation * degree
-    moon_avoidance_angle = args.moon_avoidance_angle * degree
     el_min = args.el_min * degree
     el_max = args.el_max * degree
     fp_radius = args.fp_radius * degree
@@ -740,7 +832,7 @@ def build_schedule(
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
     if not os.path.isdir(dir_out):
-        print('Creating output directory: {}'.format(dir_out))
+        print('Creating output directory: {}'.format(dir_out), flush=True)
         os.makedirs(dir_out)
     fout = open(fname_out, 'w')
 
@@ -804,15 +896,14 @@ def build_schedule(
         moon.compute(observer)
 
         visible, not_visible = get_visible(
-            observer, sun, moon, patches, el_min, sun_avoidance_angle,
-            sun_avoidance_elevation, moon_avoidance_angle)
+            args, observer, sun, moon, patches, el_min)
 
         if len(visible) == 0:
             if args.debug:
                 tstring = datetime.utcfromtimestamp(t).strftime(
                     '%Y-%m-%d %H:%M:%S %Z')
                 print('No patches visible at {}: {}'.format(
-                    tstring, not_visible))
+                    tstring, not_visible), flush=True)
             t += tstep
             continue
 
@@ -848,12 +939,12 @@ def build_schedule(
             last_successful = t
 
     fout.close()
-
+    del autotimer
     return
 
 
 def parse_args():
-
+    autotimer = timing.auto_timer()
     parser = argparse.ArgumentParser(
         description='Generate ground observation schedule.',
         fromfile_prefix_chars='@')
@@ -896,10 +987,6 @@ def parse_args():
     parser.add_argument('--fp_radius',
                         required=False, default=0, type=np.float,
                         help='Focal plane radius [deg]')
-    parser.add_argument('--sun_avoidance_elevation',
-                        required=False, default=-15, type=np.float,
-                        help='Solar elevation above which to apply '
-                        'sun_avoidance_angle [deg]')
     parser.add_argument('--sun_avoidance_angle',
                         required=False, default=30, type=np.float,
                         help='Minimum distance between the Sun and '
@@ -993,19 +1080,20 @@ def parse_args():
         stop_timestamp = 2 ** 60
     else:
         stop_timestamp = stop_time.timestamp()
-
+    del autotimer
     return args, start_timestamp, stop_timestamp
 
 
 def parse_patch_explicit(args, parts):
     """ Parse an explicit patch definition line
     """
+    autotimer = timing.auto_timer()
     corners = []
-    print('Explicit-corners format ', end='')
+    print('Explicit-corners format ', end='', flush=True)
     name = parts[0]
     i = 2
     while i + 1 < len(parts):
-        print(' ({}, {})'.format(parts[i], parts[i + 1]), end='')
+        print(' ({}, {})'.format(parts[i], parts[i + 1]), end='', flush=True)
         try:
             # Assume coordinates in degrees
             lon = float(parts[i]) * degree
@@ -1033,15 +1121,16 @@ def parse_patch_explicit(args, parts):
         patch_corner._ra = corner.ra
         patch_corner._dec = corner.dec
         corners.append(patch_corner)
-
+    del autotimer
     return corners
 
 
 def parse_patch_rectangular(args, parts):
     """ Parse a rectangular patch definition line
     """
+    autotimer = timing.auto_timer()
     corners = []
-    print('Rectangular format ', end='')
+    print('Rectangular format ', end='', flush=True)
     name = parts[0]
     try:
         # Assume coordinates in degrees
@@ -1085,7 +1174,7 @@ def parse_patch_rectangular(args, parts):
         patch_corner._ra = corner.ra
         patch_corner._dec = corner.dec
         corners.append(patch_corner)
-
+    del autotimer
     return corners
 
 
@@ -1094,6 +1183,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
 
     Add one side of a rectangle with enough interpolation points.
     """
+    autotimer = timing.auto_timer()
     step = 5 * degree
     corners_temp.append(ephem.Equatorial(corner1))
     lon1 = corner1.ra
@@ -1120,15 +1210,16 @@ def add_side(corner1, corner2, corners_temp, coordconv):
                     ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
     else:
         raise RuntimeError('add_side: both latitude and longitude change')
-
+    del autotimer
     return
 
 
 def parse_patch_center_and_width(args, parts):
     """ Parse center-and-width patch definition
     """
+    autotimer = timing.auto_timer()
     corners = []
-    print('Center-and-width format ', end='')
+    print('Center-and-width format ', end='', flush=True)
     try:
         # Assume coordinates in degrees
         lon = float(parts[2]) * degree
@@ -1162,13 +1253,13 @@ def parse_patch_center_and_width(args, parts):
         patch_corner._ra = phi + delta_phi
         patch_corner._dec = theta + delta_theta
         corners.append(patch_corner)
-
+    del autotimer
     return corners
 
 
 def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
     # Parse the patch definitions
-
+    autotimer = timing.auto_timer()
     patches = []
     total_weight = 0
     for patch_def in args.patch:
@@ -1176,7 +1267,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         name = parts[0]
         weight = float(parts[1])
         total_weight += weight
-        print('Adding patch "{}" {} '.format(name, weight), end='')
+        print('Adding patch "{}" {} '.format(name, weight), end='', flush=True)
         if len(parts[2:]) == 3:
             corners = parse_patch_center_and_width(args, parts)
         elif len(parts[2:]) == 4:
@@ -1189,7 +1280,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             el_max=args.el_max * degree, el_step=args.el_step * degree,
             alternate=args.alternate, site_lat=observer.lat))
         print('Highest possible observing elevation: {:.2f} degrees'.format(
-            patches[-1].el_max0 / degree))
+            patches[-1].el_max0 / degree), flush=True)
 
     if args.debug:
         import matplotlib.pyplot as plt
@@ -1287,15 +1378,14 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
     # Normalize the weights
     for i in range(len(patches)):
         patches[i].weight /= total_weight
-
+    del autotimer
     return patches
 
 
 def main():
+    autotimer = timing.auto_timer(timing.FILE())
 
     args, start_timestamp, stop_timestamp = parse_args()
-
-    autotimer = timing.auto_timer(timing.FILE())
 
     observer = ephem.Observer()
     observer.lon = args.site_lon

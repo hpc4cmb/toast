@@ -4,49 +4,47 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-if 'TOAST_STARTUP_DELAY' in os.environ:
-    import numpy as np
-    import time
-    delay = np.float(os.environ['TOAST_STARTUP_DELAY'])
-    wait = np.random.rand() * delay
-    #print('Sleeping for {} seconds before importing TOAST'.format(wait),
-    #      flush=True)
-    time.sleep(wait)
-
-from toast.mpi import MPI, finalize
-
-import argparse
 import copy
 from datetime import datetime
-import dateutil.parser
 import os
 import pickle
 import re
 import sys
 import traceback
 
-import numpy as np
-import healpy as hp
-
+import argparse
+import dateutil.parser
+from toast import Weather
 import toast
-import toast.tod as tt
+from toast.mpi import MPI, finalize
+
+import healpy as hp
+import numpy as np
 import toast.map as tm
-import toast.todmap as ttm
 import toast.qarray as qa
 import toast.timing as timing
-from toast import Weather
+import toast.tod as tt
+import toast.todmap as ttm
 
-#import warnings
-#warnings.filterwarnings('error')
-#warnings.simplefilter('ignore', ImportWarning)
-#warnings.simplefilter('ignore', ResourceWarning)
-#warnings.simplefilter('ignore', DeprecationWarning)
-#warnings.filterwarnings("ignore", message="numpy.dtype size changed")
-#warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+if 'TOAST_STARTUP_DELAY' in os.environ:
+    import numpy as np
+    import time
+    delay = np.float(os.environ['TOAST_STARTUP_DELAY'])
+    wait = np.random.rand() * delay
+    # print('Sleeping for {} seconds before importing TOAST'.format(wait),
+    #      flush=True)
+    time.sleep(wait)
 
+# import warnings
+# warnings.filterwarnings('error')
+# warnings.simplefilter('ignore', ImportWarning)
+# warnings.simplefilter('ignore', ResourceWarning)
+# warnings.simplefilter('ignore', DeprecationWarning)
+# warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+# warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
+
 
 def parse_arguments(comm):
 
@@ -113,8 +111,8 @@ def parse_arguments(comm):
                         help='Comma separated models for on-the-fly PySM '
                         'simulation, e.g. s3,d6,f1,a2"')
     parser.add_argument('--apply_beam', required=False, action='store_true',
-                        help='Apply beam convolution to input map with gaussian '
-                        'beam parameters defined in focalplane')
+                        help='Apply beam convolution to input map with '
+                        'gaussian beam parameters defined in focalplane')
 
     parser.add_argument('--skip_atmosphere',
                         required=False, default=False, action='store_true',
@@ -292,7 +290,7 @@ def parse_arguments(comm):
     return args, comm
 
 
-def name2id(name, maxval=2**16):
+def name2id(name, maxval=2 ** 16):
     """ Map a name into an index.
 
     """
@@ -321,7 +319,7 @@ def load_weather(args, comm, schedules):
                 start1 = MPI.Wtime()
                 weatherdict[fname] = Weather(fname)
                 stop1 = MPI.Wtime()
-                print('Load {}: {:.2f} seconds'.format(fname, stop1-start1),
+                print('Load {}: {:.2f} seconds'.format(fname, stop1 - start1),
                       flush=args.flush)
             weathers.append(weatherdict[fname])
     else:
@@ -339,7 +337,9 @@ def load_weather(args, comm, schedules):
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Loading weather {:.3f} s'.format(stop-start), flush=args.flush)
+        print('Loading weather {:.3f} s'.format(stop - start), flush=args.flush)
+    del autotimer
+    return
 
 
 def load_schedule(args, comm):
@@ -351,7 +351,7 @@ def load_schedule(args, comm):
     schedules = []
 
     if comm.comm_world.rank == 0:
-        for ischedule, fn in enumerate(args.schedule.split(',')):
+        for fn in args.schedule.split(','):
             if not os.path.isfile(fn):
                 raise RuntimeError('No such schedule file: {}'.format(fn))
             start1 = MPI.Wtime()
@@ -379,9 +379,10 @@ def load_schedule(args, comm):
                     # changed later and could even be in the schedule file.
                     season = int(start_date.split('-')[0])
                     try:
-                        start_time = dateutil.parser.parse(start_time+' +0000')
-                        stop_time = dateutil.parser.parse(stop_time+' +0000')
-                    except:
+                        start_time = dateutil.parser.parse(start_time
+                                                           + ' +0000')
+                        stop_time = dateutil.parser.parse(stop_time + ' +0000')
+                    except Exception:
                         start_time = dateutil.parser.parse(start_time)
                         stop_time = dateutil.parser.parse(stop_time)
                     start_timestamp = start_time.timestamp()
@@ -392,15 +393,16 @@ def load_schedule(args, comm):
                         float(el), season, start_date])
             schedules.append([site, all_ces])
             stop1 = MPI.Wtime()
-            print('Load {}: {:.2f} seconds'.format(fn, stop1-start1),
+            print('Load {}: {:.2f} seconds'.format(fn, stop1 - start1),
                   flush=args.flush)
 
     schedules = comm.comm_world.bcast(schedules)
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Loading schedule {:.3f} s'.format(stop-start), flush=args.flush)
-
+        print('Loading schedule {:.3f} s'.format(stop - start),
+              flush=args.flush)
+    del autotimer
     return schedules
 
 
@@ -412,16 +414,15 @@ def get_focalplane_radius(args, focalplane, rmin=1.0):
         return args.focalplane_radius
 
     autotimer = timing.auto_timer()
-    xaxis, yxis, zaxis = np.eye(3)
     cosangs = []
     for det in focalplane:
         quat = focalplane[det]['quat']
-        vec = qa.rotate(quat, zaxis)
-        cosangs.append(np.dot(zaxis, vec))
+        vec = qa.rotate(quat, ZAXIS)
+        cosangs.append(np.dot(ZAXIS, vec))
     mincos = np.amin(cosangs)
     maxdist = max(np.degrees(np.arccos(mincos)), rmin)
-
-    return maxdist*1.001
+    del autotimer
+    return maxdist * 1.001
 
 
 def load_focalplanes(args, comm, schedules):
@@ -440,7 +441,7 @@ def load_focalplanes(args, comm, schedules):
             with open(fpfile, 'rb') as picklefile:
                 focalplane = pickle.load(picklefile)
                 stop1 = MPI.Wtime()
-                print('Load {}:  {:.2f} seconds'.format(fpfile, stop1-start1),
+                print('Load {}:  {:.2f} seconds'.format(fpfile, stop1 - start1),
                       flush=args.flush)
                 focalplanes.append(focalplane)
                 start1 = stop1
@@ -465,9 +466,9 @@ def load_focalplanes(args, comm, schedules):
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Load focalplane(s):  {:.2f} seconds'.format(stop-start),
+        print('Load focalplane(s):  {:.2f} seconds'.format(stop - start),
               flush=args.flush)
-
+    del autotimer
     return detweights
 
 
@@ -491,7 +492,7 @@ def get_analytic_noise(args, focalplane):
         fknee[d] = focalplane[d]['fknee']
         alpha[d] = focalplane[d]['alpha']
         NET[d] = focalplane[d]['NET']
-
+    del autotimer
     return tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
                             fknee=fknee, alpha=alpha, NET=NET)
 
@@ -502,14 +503,16 @@ def get_breaks(comm, all_ces, nces, args):
     """
     autotimer = timing.auto_timer()
     breaks = []
+    if args.skip_daymaps:
+        return breaks
     do_break = False
-    for i in range(nces-1):
+    for i in range(nces - 1):
         # If current and next CES are on different days, insert a break
         tz = args.timezone / 24
-        start1 = all_ces[i][3] # MJD start
-        start2 = all_ces[i+1][3] # MJD start
+        start1 = all_ces[i][3]  # MJD start
+        start2 = all_ces[i + 1][3]  # MJD start
         scan1 = all_ces[i][4]
-        scan2 = all_ces[i+1][4]
+        scan2 = all_ces[i + 1][4]
         if scan1 != scan2 and do_break:
             breaks.append(nces + i + 1)
             do_break = False
@@ -525,23 +528,23 @@ def get_breaks(comm, all_ces, nces, args):
                 breaks.append(nces + i + 1)
 
     nbreak = len(breaks)
-    if nbreak < comm.ngroups-1:
+    if nbreak < comm.ngroups - 1:
         if comm.comm_world.rank == 0:
             print('WARNING: there are more process groups than observing days. '
                   'Will try distributing by observation.', flush=True)
         breaks = []
-        for i in range(nces-1):
+        for i in range(nces - 1):
             scan1 = all_ces[i][4]
-            scan2 = all_ces[i+1][4]
+            scan2 = all_ces[i + 1][4]
             if scan1 != scan2:
                 breaks.append(nces + i + 1)
         nbreak = len(breaks)
 
-    if nbreak != comm.ngroups-1:
+    if nbreak != comm.ngroups - 1:
         raise RuntimeError(
             'Number of observing days ({}) does not match number of process '
-            'groups ({}).'.format(nbreak+1, comm.ngroups))
-
+            'groups ({}).'.format(nbreak + 1, comm.ngroups))
+    del autotimer
     return breaks
 
 
@@ -557,7 +560,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
      azmin, azmax, el, season, date) = ces
 
-    site_name, telescope, site_lat, site_lon, site_alt = site
+    _, _, site_lat, site_lon, site_alt = site
 
     totsamples = int((CES_stop - CES_start) * args.samplerate)
 
@@ -603,7 +606,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     obs['date'] = date
     obs['MJD'] = mjdstart
     obs['focalplane'] = fp
-
+    del autotimer
     return obs
 
 
@@ -677,7 +680,7 @@ def create_observations(args, comm, schedules, mem_counter):
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print('Simulated scans in {:.2f} seconds'
-              ''.format(stop-start), flush=args.flush)
+              ''.format(stop - start), flush=args.flush)
 
     # Split the data object for each telescope for separate mapmaking.
     # We could also split by site.
@@ -690,7 +693,7 @@ def create_observations(args, comm, schedules, mem_counter):
     else:
         telescope_data = []
     telescope_data.insert(0, ('all', data))
-
+    del autotimer
     return data, telescope_data
 
 
@@ -706,8 +709,6 @@ def expand_pointing(args, comm, data, mem_counter):
     if args.hwpstep is not None:
         hwpstep = float(args.hwpstep)
     hwpsteptime = args.hwpsteptime
-
-    npix = 12 * args.nside**2
 
     if comm.comm_world.rank == 0:
         print('Expanding pointing', flush=args.flush)
@@ -728,10 +729,11 @@ def expand_pointing(args, comm, data, mem_counter):
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Pointing generation took {:.3f} s'.format(stop-start),
+        print('Pointing generation took {:.3f} s'.format(stop - start),
               flush=args.flush)
 
     mem_counter.exec(data)
+    del autotimer
     return
 
 
@@ -772,11 +774,11 @@ def get_submaps(args, comm, data):
                   flush=args.flush)
     else:
         localpix, localsm = None, None
-
+    del autotimer
     return localpix, localsm, subnpix
 
 
-def add_sky_signal(args, comm, data, totalname_freq, signalname):
+def add_sky_signal(data, totalname_freq, signalname):
     """ Add previously simulated sky signal to the atmospheric noise.
 
     """
@@ -794,32 +796,31 @@ def add_sky_signal(args, comm, data, totalname_freq, signalname):
                 else:
                     ref_out = tod.cache.put(cachename_out, ref_in)
                 del ref_in, ref_out
-
+        del autotimer
     return
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, localsm):
+def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix,
+                        localsm):
     """ Use PySM to simulate smoothed sky signal.
 
     """
+    autotimer = timing.auto_timer()
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
     signalname = 'signal'
-    op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
-                               out=signalname,
-                               pysm_model=args.input_pysm_model,
-                               focalplanes=[s[3] for s in schedules],
-                               nside=args.nside,
-                               subnpix=subnpix, localsm=localsm,
-                               apply_beam=args.apply_beam)
+    op_sim_pysm = ttm.OpSimPySM(
+        comm=comm.comm_rank, out=signalname, pysm_model=args.input_pysm_model,
+        focalplanes=[s[3] for s in schedules], nside=args.nside,
+        subnpix=subnpix, localsm=localsm, apply_beam=args.apply_beam)
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('PySM took {:.2f} seconds'.format(stop-start),
+        print('PySM took {:.2f} seconds'.format(stop - start),
               flush=args.flush)
 
     mem_counter.exec(data)
-
+    del autotimer
     return signalname
 
 
@@ -835,10 +836,10 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
             print('Scanning input map', flush=args.flush)
         start = MPI.Wtime()
 
-        npix = 12*args.nside**2
+        npix = 12 * args.nside ** 2
 
         # Scan the sky signal
-        if  comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
+        if comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
             raise RuntimeError(
                 'Input map does not exist: {}'.format(args.input_map))
         distmap = tm.DistPixels(
@@ -852,15 +853,16 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
             print('Read and sampled input map:  {:.2f} seconds'
-                  ''.format(stop-start), flush=args.flush)
+                  ''.format(stop - start), flush=args.flush)
         signalname = 'signal'
 
         mem_counter.exec(data)
+        del autotimer
 
     return signalname
 
 
-def setup_sigcopy(args, comm):
+def setup_sigcopy(args):
     """ Determine if an extra copy of the atmospheric signal is needed.
 
     When we simulate multichroic focal planes, the frequency-independent
@@ -877,7 +879,7 @@ def setup_sigcopy(args, comm):
     return totalname, totalname_freq
 
 
-def setup_madam(args, comm):
+def setup_madam(args):
     """ Create a Madam parameter dictionary.
 
     Initialize the Madam parameters from the command line arguments.
@@ -940,7 +942,7 @@ def setup_madam(args, comm):
     pars['fsample'] = args.samplerate
     pars['iter_max'] = args.madam_iter_max
     pars['file_root'] = args.madam_prefix
-
+    del autotimer
     return pars
 
 
@@ -977,17 +979,17 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         pwv = weather.pwv
         # Use the entire processing group to sample the absorption
         # coefficient as a function of frequency
-        ntask = todcomm.size
         freqmin = 0
         freqmax = 2 * freq
         nfreq = 1001
         freqstep = (freqmax - freqmin) / (nfreq - 1)
         nfreq_task = int(nfreq // todcomm.size) + 1
         my_ifreq_min = nfreq_task * todcomm.rank
-        my_ifreq_max = min(nfreq, nfreq_task*(todcomm.rank+1))
+        my_ifreq_max = min(nfreq, nfreq_task * (todcomm.rank + 1))
         my_nfreq = my_ifreq_max - my_ifreq_min
         if my_nfreq > 0:
-            my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max)*freqstep
+            my_freqs = freqmin + np.arange(my_ifreq_min,
+                                           my_ifreq_max) * freqstep
             my_absorption = np.zeros(my_nfreq)
             err = toast.ctoast.atm_get_absorption_coefficient_vec(
                 altitude, air_temperature, surface_pressure, pwv,
@@ -1000,21 +1002,22 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
             my_absorption = np.array([])
         freqs = np.hstack(todcomm.allgather(my_freqs))
         absorption = np.hstack(todcomm.allgather(my_absorption))
-        #loading = toast.ctoast.atm_get_atmospheric_loading(
+        # loading = toast.ctoast.atm_get_atmospheric_loading(
         #    altitude, pwv, freq)
         for det in tod.local_dets:
             try:
                 # Use detector bandpass from the focalplane
                 center = focalplane[det]['bandcenter_ghz']
                 width = focalplane[det]['bandwidth_ghz']
-            except:
+            except Exception:
                 # Use default values for the entire focalplane
                 center = freq
                 width = .2 * freq
             nstep = 101
             # Interpolate the absorption coefficient to do a top hat
             # integral across the bandpass
-            det_freqs = np.linspace(center-width/2, center+width/2, nstep)
+            det_freqs = np.linspace(center - width / 2, center + width / 2,
+                                    nstep)
             absorption_det = np.mean(np.interp(det_freqs, freqs, absorption))
             cachename = '{}_{}'.format(totalname_freq, det)
             ref = tod.cache.reference(cachename)
@@ -1024,9 +1027,9 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Atmosphere scaling took {:.3f} s'.format(stop-start),
+        print('Atmosphere scaling took {:.3f} s'.format(stop - start),
               flush=args.flush)
-
+    del autotimer
     return
 
 
@@ -1045,7 +1048,6 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
         autotimer = timing.auto_timer()
         start = MPI.Wtime()
         for obs in data.obs:
-            tod = obs['tod']
             site_id = obs['site_id']
             weather = obs['weather']
             start_time = obs['start_time']
@@ -1058,9 +1060,9 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Atmosphere weighting took {:.3f} s'.format(stop-start),
+            print('Atmosphere weighting took {:.3f} s'.format(stop - start),
                   flush=args.flush)
-
+        del autotimer
     else:
         for obs in data.obs:
             obs['noise_scale'] = 1.
@@ -1102,11 +1104,11 @@ def simulate_atmosphere(args, comm, data, mc, mem_counter,
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Atmosphere simulation took {:.3f} s'.format(stop-start),
+            print('Atmosphere simulation took {:.3f} s'.format(stop - start),
                   flush=args.flush)
 
         mem_counter.exec(data)
-
+        del autotimer
     return
 
 
@@ -1125,6 +1127,7 @@ def copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq):
         cachecopy = tt.OpCacheCopy(totalname, totalname_freq, force=True)
         cachecopy.exec(data)
         mem_counter.exec(data)
+        del autotimer
     return
 
 
@@ -1141,10 +1144,11 @@ def simulate_noise(args, comm, data, mc, mem_counter, totalname_freq):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Noise simulation took {:.3f} s'.format(stop-start),
+            print('Noise simulation took {:.3f} s'.format(stop - start),
                   flush=args.flush)
 
         mem_counter.exec(data)
+        del autotimer
     return
 
 
@@ -1162,10 +1166,11 @@ def scramble_gains(args, comm, data, mc, mem_counter, totalname_freq):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Gain scrambling took {:.3f} s'.format(stop-start),
+            print('Gain scrambling took {:.3f} s'.format(stop - start),
                   flush=args.flush)
 
         mem_counter.exec(data)
+        del autotimer
     return
 
 
@@ -1194,10 +1199,11 @@ def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Polynomial filtering took {:.3f} s'.format(stop-start),
+            print('Polynomial filtering took {:.3f} s'.format(stop - start),
                   flush=args.flush)
 
         mem_counter.exec(data)
+        del autotimer
     return
 
 
@@ -1215,10 +1221,11 @@ def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Ground filtering took {:.3f} s'.format(stop-start),
+            print('Ground filtering took {:.3f} s'.format(stop - start),
                   flush=args.flush)
 
         mem_counter.exec(data)
+        del autotimer
     return
 
 
@@ -1242,7 +1249,8 @@ def output_tidas(args, comm, data, totalname):
     if comm.comm_world.rank == 0:
         print('Wrote simulated TOD to {}:{} in {:.2f} s'
               ''.format(tidas_path, totalname,
-                        stop-start), flush=args.flush)
+                        stop - start), flush=args.flush)
+    del autotimer
     return
 
 
@@ -1275,6 +1283,7 @@ def get_time_communicators(comm, data):
         day_comm = comm.comm_world.Split(my_day, comm.comm_world.rank)
         time_comms.append((my_date, day_comm))
 
+    del autotimer
     return time_comms
 
 
@@ -1369,7 +1378,8 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
             stop1 = MPI.Wtime()
             if time_comm.rank == 0:
                 print('Mapping {} took {:.3f} s'.format(
-                    madam.params['file_root'], stop1-start1), flush=args.flush)
+                    madam.params['file_root'], stop1 - start1),
+                    flush=args.flush)
             if len(time_name.split('-')) == 3 and first_call:
                 # Restore destriping parameters
                 pars['kfirst'] = kfirst_save
@@ -1379,10 +1389,10 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Madam took {:.3f} s'.format(stop-start), flush=args.flush)
+        print('Madam took {:.3f} s'.format(stop - start), flush=args.flush)
 
     mem_counter.exec(data)
-
+    del autotimer
     return
 
 
@@ -1405,7 +1415,7 @@ def main():
 
     # Initialize madam parameters
 
-    madampars = setup_madam(args, comm)
+    madampars = setup_madam(args)
 
     # Load and broadcast the schedule file
 
@@ -1424,7 +1434,8 @@ def main():
 
     mem_counter = tt.OpMemoryCounter()
 
-    data, telescope_data = create_observations(args, comm, schedules, mem_counter)
+    data, telescope_data = create_observations(args, comm, schedules,
+                                               mem_counter)
 
     # Split the communicator for day and season mapmaking
 
@@ -1437,7 +1448,7 @@ def main():
 
     # Prepare auxiliary information for distributed map objects
 
-    localpix, localsm, subnpix = get_submaps(args, comm, data)
+    _, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
         signalname = simulate_sky_signal(args, comm, data, mem_counter,
@@ -1448,7 +1459,7 @@ def main():
 
     # Set up objects to take copies of the TOD at appropriate times
 
-    totalname, totalname_freq = setup_sigcopy(args, comm)
+    totalname, totalname_freq = setup_sigcopy(args)
 
     # Loop over Monte Carlos
 
@@ -1458,7 +1469,7 @@ def main():
     freqs = [float(freq) for freq in args.freq.split(',')]
     nfreq = len(freqs)
 
-    for mc in range(firstmc, firstmc+nmc):
+    for mc in range(firstmc, firstmc + nmc):
 
         simulate_atmosphere(args, comm, data, mc, mem_counter, totalname)
 
@@ -1469,23 +1480,24 @@ def main():
 
             if comm.comm_world.rank == 0:
                 print('Processing frequency {}GHz {} / {}, MC = {}'
-                      ''.format(freq, ifreq+1, nfreq, mc), flush=args.flush)
+                      ''.format(freq, ifreq + 1, nfreq, mc), flush=args.flush)
 
-            copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq)
+            copy_atmosphere(args, comm, data, mem_counter, totalname,
+                            totalname_freq)
 
             scale_atmosphere_by_frequency(args, comm, data, freq,
                                           totalname_freq, mc)
 
             update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
-            add_sky_signal(args, comm, data, totalname_freq, signalname)
+            add_sky_signal(data, totalname_freq, signalname)
 
             mcoffset = ifreq * 1000000
 
-            simulate_noise(args, comm, data, mc+mcoffset, mem_counter,
+            simulate_noise(args, comm, data, mc + mcoffset, mem_counter,
                            totalname_freq)
 
-            scramble_gains(args, comm, data, mc+mcoffset, mem_counter,
+            scramble_gains(args, comm, data, mc + mcoffset, mem_counter,
                            totalname_freq)
 
             if (mc == firstmc) and (ifreq == 0):
@@ -1498,7 +1510,7 @@ def main():
             # Bin and destripe maps
 
             apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                        madampars, mem_counter, mc+mcoffset, firstmc, outpath,
+                        madampars, mem_counter, mc + mcoffset, firstmc, outpath,
                         detweights, totalname_freq,
                         first_call=True)
 
@@ -1508,14 +1520,15 @@ def main():
 
                 apply_polyfilter(args, comm, data, mem_counter, totalname_freq)
 
-                apply_groundfilter(args, comm, data, mem_counter, totalname_freq)
+                apply_groundfilter(args, comm, data, mem_counter,
+                                   totalname_freq)
 
                 # Bin maps
 
                 apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                            madampars, mem_counter, mc+mcoffset, firstmc, outpath,
-                            detweights, totalname_freq, first_call=False,
-                            extra_prefix='filtered')
+                            madampars, mem_counter, mc + mcoffset, firstmc,
+                            outpath, detweights, totalname_freq,
+                            first_call=False, extra_prefix='filtered')
 
     mem_counter.exec(data)
 
@@ -1524,10 +1537,19 @@ def main():
     if comm.comm_world.rank == 0:
         global_timer.report()
 
+    del autotimer
+    return
+
 
 if __name__ == '__main__':
+
+
     try:
+
+
         main()
+
+
         tman = timing.timing_manager()
         tman.report()
     except Exception as e:
@@ -1554,6 +1576,6 @@ if __name__ == '__main__':
         print('*** format_tb:')
         print(repr(traceback.format_tb(exc_traceback)))
         print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
-        toast.raise_error(6) # typical error code for SIGABRT
+        toast.raise_error(6)  # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
     finalize()
