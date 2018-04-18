@@ -21,6 +21,7 @@ matrix:
             - libtool
             - libhdf5-dev
             - libmpich-dev
+            - mpich
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
@@ -45,6 +46,7 @@ matrix:
             - libtool
             - libhdf5-dev
             - libmpich-dev
+            - mpich
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
@@ -69,6 +71,7 @@ matrix:
             - libtool
             - libhdf5-dev
             - libmpich-dev
+            - mpich
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
@@ -93,6 +96,7 @@ matrix:
             - libtool
             - libhdf5-dev
             - libmpich-dev
+            - mpich
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
@@ -117,6 +121,7 @@ matrix:
             - libtool
             - libhdf5-dev
             - libmpich-dev
+            - mpich
             - fftw3-dev
             - libatlas-base-dev
             - pkg-config
@@ -191,6 +196,7 @@ install:
 
 script:
     - python -c "import toast.tests; toast.tests.run()"
+    - cd examples/; bash run_tiny_tests.sh
 
 # Slack integration
 

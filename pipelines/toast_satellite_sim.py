@@ -39,11 +39,18 @@ def add_sky_signal(args, comm, data, totalname, signalname):
                 cachename_in = '{}_{}'.format(signalname, det)
                 cachename_out = '{}_{}'.format(totalname, det)
                 ref_in = tod.cache.reference(cachename_in)
+                if comm.comm_world.rank == 0 and args.debug:
+                    print('add_sky_signal', signalname, 'to', totalname, flush=args.flush)
+                    print(signalname, 'min max', ref_in.min(), ref_in.max())
                 if tod.cache.exists(cachename_out):
                     ref_out = tod.cache.reference(cachename_out)
+                    if comm.comm_world.rank == 0 and args.debug:
+                        print(totalname, 'min max', ref_out.min(), ref_out.max())
                     ref_out += ref_in
                 else:
                     ref_out = tod.cache.put(cachename_out, ref_in)
+                if comm.comm_world.rank == 0 and args.debug:
+                    print('final', 'min max', ref_out.min(), ref_out.max())
                 del ref_in, ref_out
 
     return
@@ -94,16 +101,22 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
     op_sim_pysm = ttm.OpSimPySM(comm=comm.comm_rank,
                                out=signalname,
                                pysm_model=args.input_pysm_model,
-                               pysm_precomputed_cmb=args.input_pysm_precomputed_cmb,
+                               pysm_precomputed_cmb_K_CMB=args.input_pysm_precomputed_cmb_K_CMB,
                                focalplanes=focalplanes,
                                nside=args.nside,
                                subnpix=subnpix, localsm=localsm,
-                               apply_beam=args.apply_beam)
+                               apply_beam=args.apply_beam,
+                               debug=args.debug)
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print('PySM took {:.2f} seconds'.format(stop-start),
               flush=args.flush)
+        tod = data.obs[0]['tod']
+        for det in tod.local_dets:
+            ref = tod.cache.reference(signalname + "_" + det)
+            print('PySM signal first observation min max', det, ref.min(), ref.max())
+            del ref
 
     mem_counter.exec(data)
 
@@ -203,8 +216,8 @@ def main():
     parser.add_argument('--input_pysm_model', required=False,
                         help='Comma separated models for on-the-fly PySM '
                         'simulation, e.g. s3,d6,f1,a2"')
-    parser.add_argument('--input_pysm_precomputed_cmb', required=False,
-                        help='Precomputed CMB map for PySM '
+    parser.add_argument('--input_pysm_precomputed_cmb_K_CMB', required=False,
+                        help='Precomputed CMB map for PySM in K_CMB'
                         'it overrides any model defined in input_pysm_model"')
     parser.add_argument('--apply_beam', required=False, action='store_true',
                         help='Apply beam convolution to input map with gaussian '
@@ -430,12 +443,15 @@ def main():
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
     signalname = "signal"
+    has_signal = False
     if args.input_pysm_model:
+        has_signal = True
         simulate_sky_signal(args, comm, data, mem_counter,
                                          [fp], subnpix, localsm, signalname=signalname)
 
     if args.input_dipole:
         print("Simulating dipole")
+        has_signal = True
         op_sim_dipole = tt.OpSimDipole(mode=args.input_dipole,
                 solar_speed=args.input_dipole_solar_speed_kms,
                 solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
@@ -589,7 +605,8 @@ def main():
             start = stop
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            if has_signal:
+                add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
@@ -703,7 +720,9 @@ def main():
         for mc in range(firstmc, firstmc+nmc):
             # clear all total signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("tot_signal_.*")
+            for obs in data.obs:
+                tod = obs['tod']
+                tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
@@ -711,7 +730,8 @@ def main():
             nse.exec(data)
 
             # add sky signal
-            add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+            if has_signal:
+                add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()
