@@ -1044,7 +1044,7 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     we do not have their relative calibration.
 
     """
-    if args.weather:
+    if args.weather and not args.skip_atmosphere:
         autotimer = timing.auto_timer()
         start = MPI.Wtime()
         for obs in data.obs:
