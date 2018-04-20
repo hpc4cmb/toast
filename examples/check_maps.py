@@ -8,7 +8,10 @@ run_type = sys.argv[1]
 folder = "out_tiny_{}/".format(run_type)
 ref = "ref_" + folder
 
-for filename in glob.iglob(ref + "/**/*.fits", recursive=True):
+# recursive glob requires Python 3.5
+filenames = glob.glob(ref + "/**/*.fits", recursive=True)
+assert len(filenames) > 0, "No FITS files in the reference folder"
+for filename in filenames:
 
     print("Compare", filename)
 
