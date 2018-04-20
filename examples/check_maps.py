@@ -1,20 +1,21 @@
+import glob
+import sys
+
 import healpy as hp
-import numpy as np
 
-folder = "out_tiny_satellite/"
-ref = "ref_out_tiny_satellite/"
+run_type = sys.argv[1]
 
-h = hp.read_map(folder + "out_hits.fits")
-h_ref = hp.read_map(ref + "out_hits.fits")
+folder = "out_tiny_{}/".format(run_type)
+ref = "ref_" + folder
 
-assert h.sum() == h_ref.sum(), "Total hits wrong"
-assert np.sum(np.abs(h - h_ref))==0, "Hitmaps differ"
+for filename in glob.iglob(ref + "/**/*.fits", recursive=True):
 
-m = hp.read_map(folder + "out_000/binned.fits")
-m_ref = hp.read_map(ref + "out_000/binned.fits")
+    print("Compare", filename)
 
-m_diff_std = (m - m_ref).std()
+    m = hp.read_map(filename.replace(ref, folder), verbose=False)
+    m_ref = hp.read_map(filename, verbose=False)
+    m_diff_std = (m - m_ref).std()
 
-assert m_diff_std < 1e-7, "Maps differ, std {}".format(m_diff_std)
+    assert m_diff_std < 1e-7, "Maps differ, std {}".format(m_diff_std)
 
 print("Test passed")
