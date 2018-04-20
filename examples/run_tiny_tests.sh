@@ -2,8 +2,9 @@ bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
 # nside
 sed -i "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
+sed -i "/zip/d" params/ground/ground_sim_simple.par
 # zip -> skip_atmo in ground
-sed -i "s/zip/skip_atmosphere/" params/ground/*par
+sed -i "s/zip/skip_atmosphere/" params/ground/ground_sim.par params/ground/ground_sim_multisite.par
 # just make 30 madam iterations in ground, we don't test destriped maps
 # make sure that file doesn't contain madam_iter_max already so we
 # avoid applying this twice
