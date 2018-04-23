@@ -461,7 +461,7 @@ def main():
                 keep_quats=True,
                 keep_vel=False,
                 subtract=False,
-                coord="G",
+                coord="E",
                 freq=0,  # we could use frequency for quadrupole correction
                 flag_mask=255, common_flag_mask=255)
         op_sim_dipole.exec(data)
