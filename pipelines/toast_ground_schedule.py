@@ -1356,6 +1356,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     patch.name, lon, lat), flush=True)
                 hp.projplot(lon, lat, '-', threshold=1, lonlat=True, coord='C',
                             color=patch_color, lw=2, alpha=alpha)
+                if len(patches) > 10:
+                    continue
+                # label the patch
                 it = np.argmax(lat)
                 area = patch_area(patch, observer)
                 title = '{} {:.2f}%'.format(patch.name, 100 * area)
