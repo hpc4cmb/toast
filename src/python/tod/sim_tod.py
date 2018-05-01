@@ -30,8 +30,12 @@ from ..op import Operator
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
+# FIXME: Once the global package control interface is added,
+# move this to that unified location.
+tod_buffer_length = 1048576
 
-def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
+
+def slew_precession_axis(result, firstsamp=0, samplerate=100.0, degday=1.0):
     """
     Generate quaternions for constantly slewing precession axis.
 
@@ -41,15 +45,12 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     scanning simulations.
 
     Args:
-        nsim (int): The number of samples to simulate.
+        result (array): The quaternion array to fill.
         firstsamp (int): The offset in samples from the start
             of rotation.
         samplerate (float): The sampling rate in Hz.
         degday (float): The rotation rate in degrees per day.
 
-    Returns:
-        Array of quaternions stored as an ndarray of
-        shape (nsim, 4).
     """
     autotimer = timing.auto_timer()
     zaxis = np.array([0.0, 0.0, 1.0])
@@ -57,27 +58,44 @@ def slew_precession_axis(nsim=1000, firstsamp=0, samplerate=100.0, degday=1.0):
     # this is the increment in radians per sample
     angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
 
+    if (result.shape[1] != 4):
+        raise RuntimeError("Result array has wrong dimensions")
+
+    nsim = result.shape[0]
+
     # Compute the time-varying quaternions representing the rotation
     # from the coordinate frame to the precession axis frame.  The
     # angle of rotation is fixed (PI/2), but the axis starts at the Y
     # coordinate axis and sweeps.
 
-    satang = np.arange(nsim, dtype=np.float64)
-    satang *= angincr
-    satang += angincr * firstsamp
-    #satang += angincr * firstsamp + (np.pi / 2)
+    buf_off = 0
+    buf_n = tod_buffer_length
+    while buf_off < nsim:
+        if buf_off + buf_n > nsim:
+            buf_n = nsim - buf_off
+        bslice = slice(buf_off, buf_off + buf_n)
 
-    cang = np.cos(satang)
-    sang = np.sin(satang)
+        satang = np.arange(buf_n, dtype=np.float64)
+        satang *= angincr
+        satang += angincr * (buf_off + firstsamp)
+        #satang += angincr * firstsamp + (np.pi / 2)
 
-    # this is the time-varying rotation axis
-    sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
-                              np.zeros((nsim, 1))), axis=1)
+        cang = np.cos(satang)
+        sang = np.sin(satang)
 
-    return qa.from_vectors(np.tile(zaxis, nsim).reshape(-1, 3), sataxis)
+        # this is the time-varying rotation axis
+        sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
+                                  np.zeros((buf_n, 1))), axis=1)
+
+        result[bslice,:] = qa.from_vectors(\
+            np.tile(zaxis, buf_n).reshape(-1, 3), sataxis)
+
+        buf_off += buf_n
+
+    return
 
 
-def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
+def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
                        spinperiod=1.0, spinangle=85.0, precperiod=0.0,
                        precangle=0.0):
     """
@@ -89,7 +107,7 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
     boresight.
 
     Args:
-        nsim (int) : The number of samples to simulate.
+        result (array): The quaternion array to fill.
         firstsamp (int): The offset in samples from the start
             of rotation.
         samplerate (float): The sampling rate in Hz.
@@ -110,9 +128,6 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
         precangle (float): The opening angle (in degrees)
             of the spin axis from the precession axis.
 
-    Returns:
-        Array of quaternions stored as an ndarray of
-        shape (nsim, 4).
     """
     autotimer = timing.auto_timer()
     if spinperiod > 0.0:
@@ -131,83 +146,86 @@ def satellite_scanning(nsim=1000, firstsamp=0, samplerate=100.0, qprec=None,
     yaxis = np.array([0,1,0], dtype=np.float64)
     zaxis = np.array([0,0,1], dtype=np.float64)
 
-    satrot = None
-    if qprec is None:
-        # in this case, we just have a fixed precession axis, pointing
-        # along the ecliptic X axis.
-        satrot = np.tile(
-            qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi/2),
-            nsim).reshape(-1, 4)
-    elif qprec.flatten().shape[0] == 4:
-        # we have a fixed precession axis.
-        satrot = np.tile(qprec, nsim).reshape(-1,4)
-    elif qprec.shape == (nsim, 4):
-        # we have full vector of quaternions
-        satrot = qprec
-    else:
-        raise RuntimeError("qprec has wrong dimensions")
+    if (result.shape[1] != 4):
+        raise RuntimeError("Result array has wrong dimensions")
+    nsim = result.shape[0]
 
-    # Time-varying rotation about precession axis.
-    # Increment per sample is
-    # (2pi radians) X (precrate) / (samplerate)
-    # Construct quaternion from axis / angle form.
+    if qprec is not None:
+        if (qprec.shape[0] != nsim) or (qprec.shape[1] != 4):
+            raise RuntimeError("qprec array has wrong dimensions")
 
-    #print("satrot = ", satrot[-1])
+    buf_off = 0
+    buf_n = tod_buffer_length
+    while buf_off < nsim:
+        if buf_off + buf_n > nsim:
+            buf_n = nsim - buf_off
+        bslice = slice(buf_off, buf_off + buf_n)
 
-    precang = np.arange(nsim, dtype=np.float64)
-    precang += float(firstsamp)
-    precang *= 2.0 * np.pi * precrate / samplerate
-    #print("precang = ", precang[-1])
+        satrot = np.empty((buf_n, 4), np.float64)
+        if qprec is None:
+            # in this case, we just have a fixed precession axis, pointing
+            # along the ecliptic X axis.
+            satrot[:,:] = np.tile(
+                qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi/2),
+                buf_n).reshape(-1, 4)
+        elif qprec.flatten().shape[0] == 4:
+            # we have a fixed precession axis.
+            satrot[:,:] = np.tile(qprec.flatten(), buf_n).reshape(-1,4)
+        else:
+            # we have full vector of quaternions
+            satrot[:,:] = qprec[bslice,:]
 
-    cang = np.cos(0.5 * precang)
-    sang = np.sin(0.5 * precang)
+        # Time-varying rotation about precession axis.
+        # Increment per sample is
+        # (2pi radians) X (precrate) / (samplerate)
+        # Construct quaternion from axis / angle form.
 
-    precaxis = np.multiply(sang.reshape(-1, 1),
-                           np.tile(zaxis, nsim).reshape(-1, 3))
-    #print("precaxis = ", precaxis[-1])
+        #print("satrot = ", satrot[-1])
 
-    precrot = np.concatenate((precaxis, cang.reshape(-1, 1)), axis=1)
-    #print("precrot = ", precrot[-1])
+        precang = np.arange(buf_n, dtype=np.float64)
+        precang += float(buf_off + firstsamp)
+        precang *= 2.0 * np.pi * precrate / samplerate
+        #print("precang = ", precang[-1])
 
-    # Rotation which performs the precession opening angle
+        cang = np.cos(0.5 * precang)
+        sang = np.sin(0.5 * precang)
 
-    precopen = qa.rotation(np.array([1.0, 0.0, 0.0]), precangle)
-    #print("precopen = ", precopen)
+        precaxis = np.multiply(sang.reshape(-1, 1),
+                               np.tile(zaxis, buf_n).reshape(-1, 3))
 
-    # Time-varying rotation about spin axis.  Increment
-    # per sample is
-    # (2pi radians) X (spinrate) / (samplerate)
-    # Construct quaternion from axis / angle form.
+        precrot = np.concatenate((precaxis, cang.reshape(-1, 1)), axis=1)
 
-    spinang = np.arange(nsim, dtype=np.float64)
-    spinang += float(firstsamp)
-    spinang *= 2.0 * np.pi * spinrate / samplerate
-    #print("spinang = ", spinang[-1])
+        # Rotation which performs the precession opening angle
+        precopen = qa.rotation(np.array([1.0, 0.0, 0.0]), precangle)
 
-    cang = np.cos(0.5 * spinang)
-    sang = np.sin(0.5 * spinang)
+        # Time-varying rotation about spin axis.  Increment
+        # per sample is
+        # (2pi radians) X (spinrate) / (samplerate)
+        # Construct quaternion from axis / angle form.
 
-    spinaxis = np.multiply(sang.reshape(-1, 1),
-                           np.tile(zaxis, nsim).reshape(-1, 3))
-    #print("spinaxis = ", spinaxis[-1])
+        spinang = np.arange(buf_n, dtype=np.float64)
+        spinang += float(buf_off + firstsamp)
+        spinang *= 2.0 * np.pi * spinrate / samplerate
 
-    spinrot = np.concatenate((spinaxis, cang.reshape(-1, 1)), axis=1)
-    #print("spinrot = ", spinrot[-1])
+        cang = np.cos(0.5 * spinang)
+        sang = np.sin(0.5 * spinang)
 
-    # Rotation which performs the spin axis opening angle
+        spinaxis = np.multiply(sang.reshape(-1, 1),
+                               np.tile(zaxis, buf_n).reshape(-1, 3))
 
-    spinopen = qa.rotation(np.array([1.0, 0.0, 0.0]), spinangle)
-    #print("spinopen = ", spinopen)
+        spinrot = np.concatenate((spinaxis, cang.reshape(-1, 1)), axis=1)
 
-    # compose final rotation
+        # Rotation which performs the spin axis opening angle
 
-    boresight = qa.mult(satrot,
-                        qa.mult(precrot,
-                                qa.mult(precopen,
-                                        qa.mult(spinrot, spinopen))))
-    #print("boresight = ", boresight[-1])
+        spinopen = qa.rotation(np.array([1.0, 0.0, 0.0]), spinangle)
 
-    return boresight
+        # compose final rotation
+
+        result[bslice,:] = qa.mult(satrot, qa.mult(precrot, qa.mult(precopen,
+                                   qa.mult(spinrot, spinopen))))
+        buf_off += buf_n
+
+    return result
 
 
 class TODHpixSpiral(TOD):
@@ -437,12 +455,15 @@ class TODSatellite(TOD):
                     "precession quaternion has incorrect dimensions")
 
         # generate and cache the boresight pointing
-        self._boresight = satellite_scanning(
-            nsim=self.local_samples[1],
+        nsim = self.local_samples[1]
+        self._boresight = np.empty(4*nsim, dtype=np.float64).reshape(-1, 4)
+        satellite_scanning(self._boresight,
             firstsamp=(self._firstsamp + self.local_samples[0]),
             qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod,
             spinangle=self._spinangle, precperiod=self._precperiod,
             precangle=self._precangle)
+        return
+
 
     def detoffset(self):
         return {d : np.asarray(self._fp[d]) for d in self._detlist}

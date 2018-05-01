@@ -16,6 +16,9 @@ from .tod import TOD
 from .. import ctoast as ct
 from .. import timing as timing
 
+# FIXME: Once the global package control interface is added,
+# move this to that unified location.
+tod_buffer_length = 1048576
 
 
 def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights,
@@ -258,10 +261,6 @@ class OpPointingHpix(Operator):
                 if self._cal is not None:
                     cal = self._cal[det]
 
-                # We are not modifying these data, so we can use the raw
-                # reference here, which might point to Cache memory.
-                pdata = tod.local_pointing(det)
-
                 # Create cache objects and use that memory directly
 
                 pixelsname = "{}_{}".format(self._pixels, det)
@@ -282,17 +281,45 @@ class OpPointingHpix(Operator):
                     weightsref = tod.cache.create(weightsname, np.float64,
                         (nsamp, self._nnz))
 
-                healpix_pointing_matrix(self.hpix, self._nest, self._mode,
-                    pdata, pixelsref, weightsref, hwpang=hwpang, flags=common,
-                    eps=eps, cal=cal)
+                pdata = None
+                if self._keep_quats:
+                    # We are keeping the detector quaternions, so cache
+                    # them now for the full sample range.
+                    pdata = tod.local_pointing(det)
+
+                buf_off = 0
+                buf_n = tod_buffer_length
+                while buf_off < nsamp:
+                    if buf_off + buf_n > nsamp:
+                        buf_n = nsamp - buf_off
+                    bslice = slice(buf_off, buf_off + buf_n)
+
+                    detp = None
+                    if pdata is None:
+                        # Read and discard
+                        detp = tod.read_pntg(detector=det, local_start=buf_off,
+                                             n=buf_n)
+                    else:
+                        # Use cached version
+                        detp = pdata[bslice,:]
+
+                    hslice = None
+                    if hwpang is not None:
+                        hslice = hwpang[bslice]
+
+                    fslice = None
+                    if common is not None:
+                        fslice = common[bslice]
+
+                    healpix_pointing_matrix(self.hpix, self._nest, self._mode,
+                        detp, pixelsref[bslice],
+                        weightsref[bslice,:], hwpang=hslice,
+                        flags=fslice, eps=eps, cal=cal)
+                    buf_off += buf_n
 
                 del pixelsref
                 del weightsref
                 del pdata
-
-                if not self._keep_quats:
-                    cachename = 'quat_{}'.format(det)
-                    tod.cache.destroy(cachename)
 
             del common
 

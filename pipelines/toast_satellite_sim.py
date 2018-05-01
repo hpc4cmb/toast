@@ -8,6 +8,7 @@ from toast.mpi import MPI, finalize
 
 import os
 import sys
+import time
 
 import re
 import argparse
@@ -118,6 +119,8 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
             ref = tod.cache.reference(signalname + "_" + det)
             print('PySM signal first observation min max', det, ref.min(), ref.max())
             del ref
+
+    del op_sim_pysm
 
     mem_counter.exec(data)
 
@@ -415,11 +418,14 @@ def main():
 
         # Constantly slewing precession axis
         degday = 360.0 / 365.25
-        precquat = tt.slew_precession_axis(nsim=tod.local_samples[1],
+        precquat = np.empty(4*tod.local_samples[1],
+                            dtype=np.float64).reshape((-1,4))
+        tt.slew_precession_axis(precquat,
             firstsamp=(obsoffset + tod.local_samples[0]),
             samplerate=args.samplerate, degday=degday)
 
         tod.set_prec_axis(qprec=precquat)
+        del precquat
 
     stop = MPI.Wtime()
     elapsed = stop - start
@@ -458,13 +464,14 @@ def main():
                 solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
                 solar_gal_lon=args.input_dipole_solar_gal_lon_deg,
                 out=signalname,
-                keep_quats=True,
+                keep_quats=False,
                 keep_vel=False,
                 subtract=False,
                 coord="E",
                 freq=0,  # we could use frequency for quadrupole correction
                 flag_mask=255, common_flag_mask=255)
         op_sim_dipole.exec(data)
+        del op_sim_dipole
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping

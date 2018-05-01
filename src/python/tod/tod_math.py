@@ -266,18 +266,18 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
     beta = inv_light * speed.flatten()
 
-    dir = qa.rotate(pntg, zaxis)
+    direct = qa.rotate(pntg, zaxis)
 
     dipoletod = None
     if freq == 0:
         inv_gamma = np.sqrt(1.0 - beta**2)
-        num = 1.0 - beta * np.sum(v * dir, axis=1)
+        num = 1.0 - beta * np.sum(v * direct, axis=1)
         dipoletod = cmb * (inv_gamma / num - 1.0)
     else:
         # Use frequency for quadrupole correction
         fx = constants.h * freq / (constants.k * cmb)
         fcor = (fx / 2) * (np.exp(fx) + 1) / (np.exp(fx) - 1)
-        bt = beta * np.sum(v * dir, axis=1)
+        bt = beta * np.sum(v * direct, axis=1)
         dipoletod = cmb * (bt + fcor * bt**2)
 
     return dipoletod

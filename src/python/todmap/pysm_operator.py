@@ -138,7 +138,7 @@ class OpSimPySM(Operator):
 
         lmax = 3 * self.nside - 1
 
-        if self.comm.rank == 0:
+        if self.comm.rank == 0 and self._debug:
             print('Collecting, Broadcasting map', flush=True)
         start = MPI.Wtime()
         local_maps = dict()  # FIXME use Cache instead
