@@ -82,6 +82,14 @@ def parse_arguments(comm):
                         help='Minimum azimuthal distance between the Sun and '
                         'the bore sight [deg]')
 
+    parser.add_argument('--conserve_memory', dest='conserve_memory',
+                        required=False, action='store_true',
+                        help='Conserve memory')
+    parser.add_argument('--no_conserve_memory', dest='conserve_memory',
+                        required=False, action='store_false',
+                        help='Do not conserve memory')
+    parser.set_defaults(conserve_memory=True)
+
     parser.add_argument('--polyorder',
                         required=False, type=np.int,
                         help='Polynomial order for the polyfilter')
@@ -1335,10 +1343,9 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
     else:
         madam_intervals = 'intervals'
     madam = tm.OpMadam(
-        params=pars, detweights=detweights,
-        name=totalname_madam,
-        common_flag_mask=args.common_flag_mask,
-        purge_tod=False, intervals=madam_intervals)
+        params=pars, detweights=detweights, name=totalname_madam,
+        common_flag_mask=args.common_flag_mask, purge_tod=False,
+        intervals=madam_intervals, conserve_memory=args.conserve_memory)
 
     if 'info' in madam.params:
         info = madam.params['info']
