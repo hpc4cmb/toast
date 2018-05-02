@@ -40,7 +40,8 @@ class TODSatelliteTest(MPITestCase):
         slewrate = 1.0 / (24.0*3600.0)
         degday = 360.0 / 365.0
 
-        qprec = slew_precession_axis(nsim=366, firstsamp=0,
+        qprec = np.empty(4 * 366, dtype=np.float64).reshape((-1, 4))
+        slew_precession_axis(qprec, firstsamp=0,
             samplerate=slewrate, degday=degday)
 
         zaxis = np.array([0.0, 0.0, 1.0])
@@ -98,10 +99,12 @@ class TODSatelliteTest(MPITestCase):
             if ob == nobs - 1:
                 nsim += 1
 
-            qprec = slew_precession_axis(nsim=nsim, firstsamp=firstsamp,
+            qprec = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
+            slew_precession_axis(qprec, firstsamp=firstsamp,
                 samplerate=samplerate, degday=degday)
 
-            boresight = satellite_scanning(nsim=nsim, firstsamp=firstsamp,
+            boresight = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
+            satellite_scanning(boresight, firstsamp=firstsamp,
                 samplerate=samplerate, qprec=qprec, spinperiod=spinperiod,
                 spinangle=spinangle, precperiod=precperiod, precangle=precangle)
 
@@ -192,7 +195,8 @@ class TODSatelliteTest(MPITestCase):
                 precangle=precangle
             )
 
-            qprec = slew_precession_axis(nsim=nsim, firstsamp=firstsamp,
+            qprec = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
+            slew_precession_axis(qprec, firstsamp=firstsamp,
                 samplerate=samplerate, degday=degday)
 
             tod.set_prec_axis(qprec=qprec)

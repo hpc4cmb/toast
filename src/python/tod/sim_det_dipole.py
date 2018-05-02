@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -15,6 +15,10 @@ from .tod import TOD
 from ..op import Operator
 
 from .tod_math import dipole
+
+# FIXME: Once the global package control interface is added,
+# move this to that unified location.
+tod_buffer_length = 1048576
 
 
 class OpSimDipole(Operator):
@@ -41,20 +45,20 @@ class OpSimDipole(Operator):
             otherwise add it (default).
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen 
+        cmb (float): CMB monopole in Kelvin.  Default value from Fixsen
             2009 (see arXiv:0911.1955)
-        solar_speed (float): the amplitude of the solarsystem barycenter 
-            velocity with respect to the CMB in Km/s.  The default value is 
+        solar_speed (float): the amplitude of the solarsystem barycenter
+            velocity with respect to the CMB in Km/s.  The default value is
             based on http://arxiv.org/abs/0803.0732.
-        solar_gal_lat (float): the latitude in degrees in galactic 
-            coordinates for the direction of motion of the solarsystem with 
+        solar_gal_lat (float): the latitude in degrees in galactic
+            coordinates for the direction of motion of the solarsystem with
             respect to the CMB rest frame.
-        solar_gal_lon (float): the longitude in degrees in galactic 
-            coordinates for the direction of motion of the solarsystem with 
+        solar_gal_lon (float): the longitude in degrees in galactic
+            coordinates for the direction of motion of the solarsystem with
             respect to the CMB rest frame.
         freq (float): optional observing frequency in Hz (not GHz).
     """
-    def __init__(self, mode='total', coord='C', subtract=False, out='dipole', 
+    def __init__(self, mode='total', coord='C', subtract=False, out='dipole',
                  cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26,
                  solar_gal_lon=263.99, freq=0, keep_quats=False, keep_vel=False,
                  flag_mask=255, common_flag_mask=255):
@@ -94,7 +98,7 @@ class OpSimDipole(Operator):
         Create the timestreams.
 
         This loops over all observations and detectors and uses the pointing,
-        the telescope motion, and the solar system motion to compute the 
+        the telescope motion, and the solar system motion to compute the
         observed dipole.
 
         Args:
@@ -122,8 +126,12 @@ class OpSimDipole(Operator):
 
             if (self._mode == 'solar') or (self._mode == 'total'):
                 sol = self._solar_vel
+
             if (self._mode == 'orbital') or (self._mode == 'total'):
-                vel = tod.local_velocity()
+                if self._keep_vel:
+                    vel = tod.local_velocity()
+                else:
+                    vel = tod.read_velocity()
 
             common = tod.local_common_flags() & self._common_flag_mask
 
@@ -133,32 +141,53 @@ class OpSimDipole(Operator):
                 totflags = (flags | common)
                 del flags
 
-                pdata = tod.local_pointing(det).copy()
-                pdata[(totflags != 0), :] = nullquat
+                pdata = None
+                if self._keep_quats:
+                    # We are keeping the detector quaternions, so cache
+                    # them now for the full sample range.
+                    pdata = tod.local_pointing(det)
 
-                dipoletod = dipole(pdata, vel=vel, solar=sol, cmb=self._cmb,
-                                   freq=self._freq)
-                del pdata
-
+                # Set up output cache
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
                     tod.cache.create(cachename, np.float64, (nsamp, ))
-                
                 ref = tod.cache.reference(cachename)
-                if self._subtract:
-                    ref[:] -= dipoletod
-                else:
-                    ref[:] += dipoletod
+
+                buf_off = 0
+                buf_n = tod_buffer_length
+                while buf_off < nsamp:
+                    if buf_off + buf_n > nsamp:
+                        buf_n = nsamp - buf_off
+                    bslice = slice(buf_off, buf_off + buf_n)
+
+                    detp = None
+                    if pdata is None:
+                        # Read and discard
+                        detp = tod.read_pntg(detector=det, local_start=buf_off,
+                                             n=buf_n)
+                    else:
+                        # Use cached version
+                        detp = pdata[bslice,:]
+
+                    # Make sure that flagged pointing is well defined
+                    detp[(totflags[bslice] != 0), :] = nullquat
+
+                    vslice = None
+                    if vel is not None:
+                        vslice = vel[bslice]
+
+                    dipoletod = dipole(detp, vel=vslice, solar=sol,
+                                       cmb=self._cmb, freq=self._freq)
+                    if self._subtract:
+                        ref[bslice] -= dipoletod
+                    else:
+                        ref[bslice] += dipoletod
+                    buf_off += buf_n
+
+                del pdata
                 del ref
 
-                if not self._keep_quats:
-                    cachename = 'quat_{}'.format(det)
-                    tod.cache.destroy(cachename)
-
+            del vel
             del common
-
-            if vel is not None and not self._keep_vel:
-                del vel
-                tod.cache.destroy('velocity')
 
         return
