@@ -172,7 +172,11 @@ class OpSimDipole(Operator):
                     # Make sure that flagged pointing is well defined
                     detp[(totflags[bslice] != 0), :] = nullquat
 
-                    dipoletod = dipole(detp, vel=vel[bslice], solar=sol,
+                    vslice = None
+                    if vel is not None:
+                        vslice = vel[bslice]
+
+                    dipoletod = dipole(detp, vel=vslice, solar=sol,
                                        cmb=self._cmb, freq=self._freq)
                     if self._subtract:
                         ref[bslice] -= dipoletod

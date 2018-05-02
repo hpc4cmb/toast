@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -96,29 +96,32 @@ class MapSatelliteTest(MPITestCase):
             # create the TOD for this observation
 
             tod = TODSatellite(
-                self.toastcomm.comm_group, 
-                self.dets, 
-                self.totsamp, 
-                firsttime=0.0, 
-                rate=self.rate, 
+                self.toastcomm.comm_group,
+                self.dets,
+                self.totsamp,
+                firsttime=0.0,
+                rate=self.rate,
                 spinperiod=self.spinperiod,
                 spinangle=self.spinangle,
-                precperiod=self.precperiod, 
-                precangle=self.precangle, 
+                precperiod=self.precperiod,
+                precangle=self.precangle,
                 sampsizes=chunks)
 
-            precquat = slew_precession_axis(nsim=self.totsamp, firstsamp=0, samplerate=self.rate, degday=1.0)
+            precquat = np.empty(4 * self.totsamp,
+                                dtype=np.float64).reshape((-1, 4))
+            slew_precession_axis(precquat, firstsamp=0, samplerate=self.rate,
+                                 degday=1.0)
 
             tod.set_prec_axis(qprec=precquat)
 
             # add analytic noise model with white noise
 
             nse = AnalyticNoise(
-                rate=self.rates, 
+                rate=self.rates,
                 fmin=self.fmins,
                 detectors=self.detnames,
-                fknee=self.fknee, 
-                alpha=self.alpha, 
+                fknee=self.fknee,
+                alpha=self.alpha,
                 NET=self.netd)
 
             ob = {}
@@ -140,7 +143,10 @@ class MapSatelliteTest(MPITestCase):
 
         zaxis = np.array([0,0,1], dtype=np.float64)
 
-        borequat = satellite_scanning(nsim=1000, qprec=None, samplerate=100.0, spinperiod=1.0, spinangle=0.0, precperiod=20.0, precangle=0.0)
+        borequat = np.empty(4*nsim, dtype=np.float64).reshape((-1, 4))
+        satellite_scanning(borequat, qprec=None, samplerate=100.0,
+                           spinperiod=1.0, spinangle=0.0, precperiod=20.0,
+                           precangle=0.0)
 
         data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1,3))
 
@@ -348,7 +354,7 @@ class MapSatelliteTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
@@ -445,7 +451,7 @@ class MapSatelliteTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
@@ -543,7 +549,7 @@ class MapSatelliteTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
@@ -591,7 +597,7 @@ class MapSatelliteTest(MPITestCase):
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
-                
+
                 hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
                 hits = hp.read_map(hitsfile, nest=True)
 
@@ -617,4 +623,3 @@ class MapSatelliteTest(MPITestCase):
 
         else:
             print("libmadam not available, skipping tests")
-
