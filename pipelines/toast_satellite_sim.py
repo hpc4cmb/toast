@@ -106,7 +106,8 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
                                nside=args.nside,
                                subnpix=subnpix, localsm=localsm,
                                apply_beam=args.apply_beam,
-                               debug=args.debug)
+                               debug=args.debug,
+                               coord="E")
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
@@ -460,7 +461,7 @@ def main():
                 keep_quats=True,
                 keep_vel=False,
                 subtract=False,
-                coord="G",
+                coord="E",
                 freq=0,  # we could use frequency for quadrupole correction
                 flag_mask=255, common_flag_mask=255)
         op_sim_dipole.exec(data)
