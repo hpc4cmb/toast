@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
@@ -34,12 +34,6 @@ coordmat_J2000radec2ecl = np.array([
 quat_equ2ecl = qa.from_rotmat(coordmat_J2000radec2ecl)
 
 # Ecliptic coordinates (geocentric) to galactic
-"""
-hidra_coordmat_J2000ecl2gal = np.array([
-    -0.054875539726, -0.993821383539822, -0.0964765917707235,
-    0.494109453312, -0.110990693318438, 0.862285865675557,
-    -0.867666135858, -0.000351593779850279, 0.497147214682437]).reshape([3, 3])
-"""
 # (use the same rotation as HEALPix, to avoid confusion)
 coordmat_J2000ecl2gal = np.array([
     -0.054882486, -0.993821033, -0.096476249,
@@ -70,12 +64,12 @@ def quat2angle( quat, no_pa=False ):
     phi = np.arctan2(vec_dir[:,1], vec_dir[:,0])
     phi[phi < 0] += 2 * np.pi
 
-    if no_pa: 
+    if no_pa:
         return theta, phi
 
     vec_dir = vec_dir.T
     vec_orient = qa.rotate( quat, xaxis ).reshape((-1,3)).T
-        
+
     ypa = vec_orient[0]*vec_dir[1] - vec_orient[1]*vec_dir[0]
     xpa = -vec_orient[0]*vec_dir[2]*vec_dir[0] - vec_orient[1]*vec_dir[2]*vec_dir[1] \
           + vec_orient[2]*(vec_dir[0]**2 + vec_dir[1]**2)
@@ -107,6 +101,5 @@ def aberrate( quat, vel, inplace=True ):
     if inplace:
         quat[:] = qa.mult( abquat, quat )
         return
-    
-    return qa.mult( abquat, quat )
 
+    return qa.mult( abquat, quat )

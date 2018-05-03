@@ -812,7 +812,8 @@ def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix,
     op_sim_pysm = ttm.OpSimPySM(
         comm=comm.comm_rank, out=signalname, pysm_model=args.input_pysm_model,
         focalplanes=[s[3] for s in schedules], nside=args.nside,
-        subnpix=subnpix, localsm=localsm, apply_beam=args.apply_beam)
+        subnpix=subnpix, localsm=localsm, apply_beam=args.apply_beam,
+        coord=args.coord)
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
