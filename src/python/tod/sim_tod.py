@@ -23,7 +23,7 @@ from ..healpix import ang2vec, vec2ang
 from .tod import TOD
 from .interval import Interval
 from .noise import Noise
-from .pointing_math import quat_equ2ecl, quat_equ2gal
+from .pointing_math import (quat_equ2ecl, quat_equ2gal, quat_ecl2gal)
 
 from ..op import Operator
 
@@ -396,12 +396,14 @@ class TODSatellite(TOD):
             rotation about the precession axis.
         precangle (float): The opening angle (in degrees)
             of the spin axis from the precession axis.
+        coord (str):  Sky coordinate system.  One of
+            C (Equatorial), E (Ecliptic) or G (Galactic)
         All other keyword arguments are passed to the parent constructor.
 
     """
     def __init__(self, mpicomm, detectors, samples, firstsamp=0, firsttime=0.0,
         rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0,
-        precangle=0.0, **kwargs):
+        precangle=0.0, coord="E", **kwargs):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -413,6 +415,7 @@ class TODSatellite(TOD):
         self._spinangle = spinangle
         self._precperiod = precperiod
         self._precangle = precangle
+        self._coord = coord
         self._boresight = None
 
         props = {
@@ -462,6 +465,19 @@ class TODSatellite(TOD):
             qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod,
             spinangle=self._spinangle, precperiod=self._precperiod,
             precangle=self._precangle)
+
+        # Satellite pointing is expressed normally in Ecliptic coordinates.
+        # convert coordinate systems in the boresight frame if necessary.
+        if self._coord != "E":
+            # Add the coordinate system rotation
+            if self._coord == "G":
+                self._boresight = qa.mult(quat_ecl2gal, self._boresight)
+            elif self._coord == "C":
+                rot = qa.inv(quat_equ2ecl)
+                self._boresight = qa.mult(rot, self._boresight)
+            else:
+                raise RuntimeError(
+                    "Unknown coordinate system: {}".format(self._coord))
         return
 
 

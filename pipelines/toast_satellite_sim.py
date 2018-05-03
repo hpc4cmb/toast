@@ -108,7 +108,7 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
                                subnpix=subnpix, localsm=localsm,
                                apply_beam=args.apply_beam,
                                debug=args.debug,
-                               coord="E")
+                               coord=args.coord)
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
@@ -183,6 +183,9 @@ def main():
         help="Healpix NSIDE" )
     parser.add_argument( "--subnside", required=False, type=int, default=4,
         help="Distributed pixel sub-map NSIDE" )
+
+    parser.add_argument('--coord', required=False, default='E',
+        help='Sky coordinate system [C,E,G]')
 
     parser.add_argument( "--baseline", required=False, type=float,
         default=60.0, help="Destriping baseline length (seconds)" )
@@ -377,6 +380,7 @@ def main():
             comm.comm_group,
             detquats,
             obsrange[ob].samples,
+            coord=args.coord,
             firstsamp=obsrange[ob].first,
             firsttime=obsrange[ob].start,
             rate=args.samplerate,
@@ -454,7 +458,7 @@ def main():
     if args.input_pysm_model:
         has_signal = True
         simulate_sky_signal(args, comm, data, mem_counter,
-                                         [fp], subnpix, localsm, signalname=signalname)
+                            [fp], subnpix, localsm, signalname=signalname)
 
     if args.input_dipole:
         print("Simulating dipole")
@@ -467,7 +471,7 @@ def main():
                 keep_quats=False,
                 keep_vel=False,
                 subtract=False,
-                coord="E",
+                coord=args.coord,
                 freq=0,  # we could use frequency for quadrupole correction
                 flag_mask=255, common_flag_mask=255)
         op_sim_dipole.exec(data)
