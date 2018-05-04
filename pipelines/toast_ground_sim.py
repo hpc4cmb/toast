@@ -1330,7 +1330,7 @@ def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
             print('No Madam outputs requested.  Skipping.', flush=args.flush)
         return
 
-    if args.madam_noisefilter:
+    if args.madam_noisefilter or not pars['kfirst']:
         madam_intervals = None
     else:
         madam_intervals = 'intervals'
