@@ -267,6 +267,11 @@ def prioritize(args, visible):
             weight2 = (hits2 + 1) * visible[j + 1].weight
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
+    if args.debug:
+        print('Prioritized list of viewable patches: ', end='')
+        for patch in visible:
+            print('{}, '.format(patch.name), end='')
+        print(flush=True)
     del autotimer
     return
 
@@ -282,11 +287,11 @@ def attempt_scan(
         for rising in [True, False]:
             observer.date = to_DJD(t)
             el = get_constant_elevation(
-                observer, patch, rising, fp_radius, not_visible)
+                args, observer, patch, rising, fp_radius, not_visible)
             if el is None:
                 continue
             success, azmins, azmaxs, aztimes, tstop = scan_patch(
-                el, patch, t, fp_radius, observer, sun, not_visible,
+                args, el, patch, t, fp_radius, observer, sun, not_visible,
                 tstep, stop_timestamp, sun_el_max, rising)
             if success:
                 try:
@@ -350,7 +355,7 @@ def attempt_scan_pole(
         observer.date = to_DJD(tstart)
         # In pole scheduling, first elevation is just below the patch
         el = get_constant_elevation_pole(
-            observer, patch, fp_radius, el_min, el_max, not_visible)
+            args, observer, patch, fp_radius, el_min, el_max, not_visible)
         if el is None:
             continue
         pole_success = True
@@ -382,7 +387,8 @@ def attempt_scan_pole(
     return success, tstop
 
 
-def get_constant_elevation(observer, patch, rising, fp_radius, not_visible):
+def get_constant_elevation(args, observer, patch, rising, fp_radius,
+                           not_visible):
     """ Determine the elevation at which to scan.
     """
     autotimer = timing.auto_timer()
@@ -412,12 +418,14 @@ def get_constant_elevation(observer, patch, rising, fp_radius, not_visible):
                 patch.name, 'el > el_max ({:.2f} > {:.2f}) rising = {}'.format(
                     el / degree, patch.el_max / degree, rising)))
             el = None
+    if el is None and args.debug:
+        print('NOT VISIBLE: {}'.format(not_visible[-1]))
     del autotimer
     return el
 
 
-def get_constant_elevation_pole(observer, patch, fp_radius, el_min, el_max,
-                                not_visible):
+def get_constant_elevation_pole(args, observer, patch, fp_radius, el_min,
+                                el_max, not_visible):
     """ Determine the elevation at which to scan.
     """
     autotimer = timing.auto_timer()
@@ -434,11 +442,13 @@ def get_constant_elevation_pole(observer, patch, fp_radius, el_min, el_max,
             patch.name, 'el > el_max ({:.2f} > {:.2f})'.format(
                 el / degree, el_max / degree)))
         el = None
+    if el is None and args.debug:
+        print('NOT VISIBLE: {}'.format(not_visible[-1]))
     del autotimer
     return el
 
 
-def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
+def scan_patch(args, el, patch, t, fp_radius, observer, sun, not_visible,
                tstep, stop_timestamp, sun_el_max, rising):
     """ Attempt scanning the patch specified by corners at elevation el.
     """
@@ -454,6 +464,8 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
         if tstop > stop_timestamp or tstop - t > 86400:
             not_visible.append((patch.name, 'Ran out of time rising = {}'
                                 ''.format(rising)))
+            if args.debug:
+                print('NOT VISIBLE: {}'.format(not_visible[-1]))
             break
         observer.date = to_DJD(tstop)
         if sun_el_max < np.pi / 2:
@@ -462,6 +474,8 @@ def scan_patch(el, patch, t, fp_radius, observer, sun, not_visible,
                 not_visible.append(
                     (patch.name, 'Sun too high {:.2f} rising = {}'
                      ''.format(np.degrees(sun.alt), rising)))
+                if args.debug:
+                    print('NOT VISIBLE: {}'.format(not_visible[-1]))
                 break
         azs, els = patch.corner_coordinates(observer)
         has_extent = current_extent(azmins, azmaxs, aztimes, patch.corners,
@@ -530,20 +544,28 @@ def scan_patch_pole(args, el, patch, t, fp_radius, observer, sun, not_visible,
             else:
                 not_visible.append((patch.name, 'No overlap at {:.2f}'
                                     ''.format(el / degree)))
+                if args.debug:
+                    print('NOT VISIBLE: {}'.format(not_visible[-1]))
             break
         if tstop > stop_timestamp or tstop - t > 86400:
             not_visible.append((patch.name, 'Ran out of time'))
+            if args.debug:
+                print('NOT VISIBLE: {}'.format(not_visible[-1]))
             break
         observer.date = to_DJD(tstop)
         sun.compute(observer)
         if sun.alt > sun_el_max:
             not_visible.append((patch.name, 'Sun too high {:.2f}'
                                 ''.format(sun.alt / degree)))
+            if args.debug:
+                print('NOT VISIBLE: {}'.format(not_visible[-1]))
             break
         azs, els = patch.corner_coordinates(observer)
         if np.amax(els) + fp_radius < el:
             not_visible.append((patch.name, 'Patch below {:.2f}'
                                 ''.format(el / degree)))
+            if args.debug:
+                print('NOT VISIBLE: {}'.format(not_visible[-1]))
             break
         radius = max(np.radians(1), fp_radius)
         current_extent_pole(
@@ -810,13 +832,25 @@ def get_visible(args, observer, sun, moon, patches, el_min):
     autotimer = timing.auto_timer()
     visible = []
     not_visible = []
+    # DEBUG begin
+    # import healpy as hp
+    # import matplotlib.pyplot as plt
+    # hp.mollview(np.zeros(12) + hp.UNSEEN, coord='C', cbar=False)
+    # DEBUG end
     for patch in patches:
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
         # below the horizon
         in_view = False
+        patch_el_max = -1000
+        patch_el_min = 1000
+        # lons, lats = [], []  # DEBUG
         for i, corner in enumerate(patch.corners):
             corner.compute(observer)
+            patch_el_min = min(patch_el_min, corner.alt)
+            patch_el_max = max(patch_el_max, corner.alt)
+            # lons.append(corner.az)  # DEBUG
+            # lats.append(corner.alt)  # DEBUG
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
@@ -841,18 +875,41 @@ def get_visible(args, observer, sun, moon, patches, el_min):
                         break
             if i == len(patch.corners) - 1 and not in_view:
                 not_visible.append((
-                    patch.name, 'Below the horizon.'))
+                    patch.name,
+                    'Below el_min = {:.2f} at el = {:.2f}..{:.2f}.'.format(
+                        np.degrees(el_min), np.degrees(patch_el_min),
+                        np.degrees(patch_el_max))))
+        # DEBUG begin
+        # if patch.name in ['north', 'south']:
+        #    color, lw = 'red', 4
+        # else:
+        #    color, lw = 'black', 2
+        # hp.projplot(np.degrees(lons), np.degrees(lats), '-', threshold=1,
+        #            lonlat=True, coord='C', color=color, lw=lw)
+        # DEBUG end
         if in_view:
             if not args.delay_sso_check:
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
                 if args.moon_avoidance_angle >= 0 and patch.in_patch(moon):
                     not_visible.append((patch.name, 'Moon in patch'))
-                    continue
+                    in_view = False
                 if args.sun_avoidance_angle >= 0 and patch.in_patch(sun):
                     not_visible.append((patch.name, 'Sun in patch'))
-                    continue
+                    in_view = False
+        if in_view:
             visible.append(patch)
+            if args.debug:
+                print('In view: {}. el = {:.2f}..{:.2f}'.format(
+                    patch.name, np.degrees(patch_el_min),
+                    np.degrees(patch_el_max)), flush=True)
+        else:
+            if args.debug:
+                print('NOT VISIBLE: {}'.format(not_visible[-1]))
+    # DEBUG begin
+    # import pdb
+    # pdb.set_trace()
+    # DEBUG end
     del autotimer
     return visible, not_visible
 
@@ -1246,7 +1303,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
     Add one side of a rectangle with enough interpolation points.
     """
     autotimer = timing.auto_timer()
-    step = 5 * degree
+    step = np.radians(1)
     corners_temp.append(ephem.Equatorial(corner1))
     lon1 = corner1.ra
     lon2 = corner2.ra
@@ -1254,22 +1311,22 @@ def add_side(corner1, corner2, corners_temp, coordconv):
     lat2 = corner2.dec
     if lon1 == lon2:
         lon = lon1
-        ninterp = int(np.abs(lat2 - lat1) // step)
-        if ninterp > 0:
-            interp_step = (lat2 - lat1) / (ninterp + 1)
-            for iinterp in range(ninterp):
-                lat = lat1 + iinterp * interp_step
-                corners_temp.append(
-                    ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
+        if lat1 < lat2:
+            lat_step = step
+        else:
+            lat_step = -step
+        for lat in np.arange(lat1, lat2, lat_step):
+            corners_temp.append(
+                ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
     elif lat1 == lat2:
         lat = lat1
-        ninterp = int(np.abs(lon2 - lon1) // step)
-        if ninterp > 0:
-            interp_step = (lon2 - lon1) / (ninterp + 1)
-            for iinterp in range(ninterp):
-                lon = lon1 + iinterp * interp_step
-                corners_temp.append(
-                    ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
+        if lon1 < lon2:
+            lon_step = step / np.cos(lat)
+        else:
+            lon_step = -step / np.cos(lat)
+        for lon in np.arange(lon1, lon2, lon_step):
+            corners_temp.append(
+                ephem.Equatorial(coordconv(lon, lat, epoch='2000')))
     else:
         raise RuntimeError('add_side: both latitude and longitude change')
     del autotimer
@@ -1330,6 +1387,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         weight = float(parts[1])
         if np.isnan(weight):
             raise RuntimeError('Patch has NaN priority: {}'.format(patch_def))
+        if weight == 0:
+            raise RuntimeError('Patch has zero priority: {}'.format(patch_def))
         print('Adding patch "{}" {} '.format(name, weight), end='', flush=True)
         if len(parts[2:]) == 3:
             corners = parse_patch_center_and_width(args, parts)

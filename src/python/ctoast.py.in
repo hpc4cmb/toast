@@ -1226,6 +1226,18 @@ def fod_autosums(x, good, lagmax):
     return (sums, hits)
 
 
+lib.ctoast_fod_crosssums.restype = None
+lib.ctoast_fod_crosssums.argtypes = [ ct.c_longlong, npf64, npf64, npi8,
+    ct.c_longlong, npf64, npi64 ]
+
+def fod_crosssums(x, y, good, lagmax):
+    n = len(x)
+    sums = np.zeros(lagmax, dtype=np.float64)
+    hits = np.zeros(lagmax, dtype=np.int64)
+    lib.ctoast_fod_crosssums(n, x, y, good, lagmax, sums, hits)
+    return (sums, hits)
+
+
 #--------------------------------------
 #  MAP sublibrary
 #--------------------------------------

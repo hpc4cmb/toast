@@ -1,7 +1,7 @@
 /*
-Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
-a BSD-style license that can be found in the LICENSE file.
+ Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+ All rights reserved.  Use of this source code is governed by
+ a BSD-style license that can be found in the LICENSE file.
 */
 
 #ifndef TOAST_FOD_HPP
@@ -14,10 +14,13 @@ a BSD-style license that can be found in the LICENSE file.
 
 namespace toast { namespace fod {
 
-    void autosums ( int64_t n, double const * x, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits );
+void autosums(int64_t n, const double * x, const uint8_t * good, int64_t lagmax,
+		double * sums, int64_t * hits);
+
+void crosssums(int64_t n, const double * x, const double * y,
+		const uint8_t * good, int64_t lagmax, double * sums, int64_t * hits);
 
 } }
 
 
 #endif
-

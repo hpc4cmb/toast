@@ -347,6 +347,8 @@ void ctoast_sim_noise_sim_noise_timestream (
 
 void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits );
 
+void ctoast_fod_crosssums ( int64_t n, double const * x, double const * y, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits );
+
 //--------------------------------------
 // Map sub-library
 //--------------------------------------
