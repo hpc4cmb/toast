@@ -1238,6 +1238,12 @@ void ctoast_fod_autosums ( int64_t n, double const * x, uint8_t const * good, in
     return;
 }
 
+void ctoast_fod_crosssums ( int64_t n, double const * x, double const * y, uint8_t const * good, int64_t lagmax, double * sums, int64_t * hits ) {
+    TOAST_AUTO_TIMER();
+    toast::fod::crosssums ( n, x, y, good, lagmax, sums, hits );
+    return;
+}
+
 
 //--------------------------------------
 // Map sub-library
