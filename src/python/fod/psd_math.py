@@ -2,8 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-
 import numpy as np
 
 from .. import timing as timing
@@ -118,33 +116,30 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
     extended_signal1[extended_flags != 0] = 0
     if signal2 is not None:
-        extended_signal1[extended_flags != 0] = 0
+        extended_signal2[extended_flags != 0] = 0
 
     covs = {}
 
     for ireal in range(realization[0], realization[-1] + 1):
 
-        # Evaluate the autocovariance
+        # Evaluate the covariance
 
         realflg = realization == ireal
 
-        flg = extended_flags[realflg]
-        good = np.zeros(len(flg), dtype=np.int8)
-        good[flg == 0] = 1
+        good = extended_flags[realflg] == 0
         ngood = np.sum(good)
         if ngood == 0:
             continue
 
         sig1 = extended_signal1[realflg].copy()
-        sig1 -= np.mean(sig1)
-        if signal2 is not None:
-            sig2 = extended_signal2[realflg].copy()
-            sig2 -= np.mean(sig2)
-
+        sig1[good] -= np.mean(sig1[good])
         if signal2 is None:
-            (cov, cov_hits) = fod_autosums(sig1, good, lagmax)
+            (cov, cov_hits) = fod_autosums(sig1, good.astype(np.int8), lagmax)
         else:
-            (cov, cov_hits) = fod_crosssums(sig1, sig2, good, lagmax)
+            sig2 = extended_signal2[realflg].copy()
+            sig2[good] -= np.mean(sig2[good])
+            (cov, cov_hits) = fod_crosssums(sig1, sig2, good.astype(np.int8),
+                                            lagmax)
 
         covs[ireal] = (cov_hits, cov)
 
@@ -178,10 +173,10 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
     for ireal in my_covs.keys():
 
-        cov_hits, autocov = my_covs[ireal]
+        cov_hits, cov = my_covs[ireal]
 
         good = cov_hits != 0
-        autocov[good] /= cov_hits[good]
+        cov[good] /= cov_hits[good]
 
         # Interpolate any empty bins
 
@@ -189,17 +184,17 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
             bad = cov_hits == 0
             good = np.logical_not(bad)
             lag = np.arange(lagmax)
-            autocov[bad] = np.interp(lag[bad], lag[good], autocov[good])
+            cov[bad] = np.interp(lag[bad], lag[good], autocov[good])
 
         # Fourier transform for the PSD.  We symmetrize the sample
         # autocovariance so that the FFT is real-valued.  Notice that
         # we are not forcing the PSD to be positive:  each bin is a
         # noisy estimate of the true PSD.
 
-        autocov = np.hstack([autocov, autocov[:0:-1]])
+        cov = np.hstack([cov, cov[:0:-1]])
 
-        psd = np.fft.rfft(autocov).real
-        psdfreq = np.fft.rfftfreq(len(autocov), d=1 / fsample)
+        psd = np.fft.rfft(cov).real
+        psdfreq = np.fft.rfftfreq(len(cov), d=1 / fsample)
 
         # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
