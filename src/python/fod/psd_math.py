@@ -156,7 +156,7 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
             cov_hits, cov = covs[ireal]
         else:
             cov_hits = np.zeros(lagmax, dtype=np.int64)
-            autocov = np.zeros(lagmax, dtype=np.float64)
+            cov = np.zeros(lagmax, dtype=np.float64)
 
         cov_hits_total = np.zeros(lagmax, dtype=np.int64)
         cov_total = np.zeros(lagmax, dtype=np.float64)
@@ -184,7 +184,7 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
             bad = cov_hits == 0
             good = np.logical_not(bad)
             lag = np.arange(lagmax)
-            cov[bad] = np.interp(lag[bad], lag[good], autocov[good])
+            cov[bad] = np.interp(lag[bad], lag[good], cov[good])
 
         # Fourier transform for the PSD.  We symmetrize the sample
         # autocovariance so that the FFT is real-valued.  Notice that
