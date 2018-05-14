@@ -166,7 +166,8 @@ def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signa
         for det in local_dets:
             skyfile = largs.skyfile.replace('DETECTOR', det)
             beamfile = pattern.replace('DETECTOR', det)
-            epsilon = 1.
+            # polarization leakage
+            epsilon = 0.
             # Getting the right polarization angle can be a sensitive matter.
             # Dxx beams are always defined without psi_uv or psi_pol rotation
             # but some Pxx beams may require psi_pol to be removed and psi_uv
