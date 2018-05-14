@@ -28,6 +28,20 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
+def extract_local_dets(data):
+    """Extracts the local detectors from the TOD objects
+
+    Some detectors could only appear in some observations, so we need
+    to loop through all observations and accumulate all detectors in
+    a set
+    """
+    autotimer = timing.auto_timer()
+    local_dets = set()
+    for obs in data.obs:
+        tod = obs['tod']
+        local_dets.update(tod.local_dets)
+    return local_dets
+
 def add_sky_signal(args, comm, data, totalname, signalname):
     """ Add signalname to totalname in the obs tod
 
@@ -124,6 +138,64 @@ def simulate_sky_signal(args, comm, data, mem_counter, focalplanes, subnpix, loc
 
     mem_counter.exec(data)
 
+def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signalname):
+    # Convolve a signal TOD from PySM
+    start = MPI.Wtime()
+
+    # Use local arguments for development FIXME
+    largs = dict(conviqt_lmax=128, conviqt_beammax=64,
+            conviqt_input_skyfile_fwhm_arcmin=0.0,
+            conviqt_order=11, conviqt_remove_monopole=False,
+            conviqt_remove_dipole=False)
+
+    largs.update(dict(
+        conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/beam_DETECTOR_alm.fits",
+        skyfile="/home/zonca/zonca/p/issues/201805_conviqt/equat_line_sky_alm.fits"
+    ))
+    # Allow dot notation access for dict, FIXME remove this
+    from types import SimpleNamespace
+    largs = SimpleNamespace(**largs)
+
+    # Prepare the detectordata list
+
+    local_dets = extract_local_dets(data)
+
+    for pattern in largs.conviqt_beamfile.split(','):
+        detectordata = []
+        for det in local_dets:
+            skyfile = largs.skyfile.replace('DETECTOR', det)
+            beamfile = pattern.replace('DETECTOR', det)
+            epsilon = 1.
+            # Getting the right polarization angle can be a sensitive matter.
+            # Dxx beams are always defined without psi_uv or psi_pol rotation
+            # but some Pxx beams may require psi_pol to be removed and psi_uv
+            # left in.
+            # Beam is in the polarization basis.
+            # No extra rotations are needed
+            psipol = 0.
+            detectordata.append((det, skyfile, beamfile, epsilon, psipol))
+
+            if comm.comm_world.rank == 0:
+                print('Convolving {} with {}'.format(skyfile, beamfile),
+                      flush=True)
+
+    op_conviqt = tt.OpSimConviqt(
+            largs.conviqt_lmax, largs.conviqt_beammax, detectordata,
+            pol=True, fwhm=largs.conviqt_input_skyfile_fwhm_arcmin, order=largs.conviqt_order, calibrate=True,
+            dxx=True, out='signal', apply_flags=False,
+            remove_monopole=largs.conviqt_remove_monopole,
+            remove_dipole=largs.conviqt_remove_dipole)
+    op_conviqt.exec(data)
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('libConviqt took {:.2f} seconds'.format(stop-start),
+              flush=args.flush)
+        tod = data.obs[0]['tod']
+        for det in tod.local_dets:
+            ref = tod.cache.reference(signalname + "_" + det)
+            print('libConviqt signal first observation min max', det, ref.min(), ref.max())
+            del ref
+
 
 def main():
 
@@ -178,6 +250,8 @@ def main():
         help="Output directory" )
     parser.add_argument( "--debug", required=False, default=False,
         action="store_true", help="Write diagnostics" )
+    parser.add_argument( "--run_conviqt", required=False, default=False,
+        action="store_true", help="Run libconviqt" )
 
     parser.add_argument( "--nside", required=False, type=int, default=64,
         help="Healpix NSIDE" )
@@ -455,10 +529,16 @@ def main():
 
     signalname = "signal"
     has_signal = False
+    if args.input_pysm_model and args.run_conviqt:
+        raise RuntimeError("Specify either PySM or Conviqt for signal generation")
     if args.input_pysm_model:
         has_signal = True
         simulate_sky_signal(args, comm, data, mem_counter,
                             [fp], subnpix, localsm, signalname=signalname)
+    elif args.run_conviqt:
+        has_signal = True
+        simulate_sky_signal_conviqt(args, comm, data, mem_counter,
+                                    [fp], signalname=signalname)
 
     if args.input_dipole:
         print("Simulating dipole")
