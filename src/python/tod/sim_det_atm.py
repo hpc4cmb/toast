@@ -474,6 +474,8 @@ class OpSimAtmosphere(Operator):
         """ Create snapshots of the atmosphere
 
         """
+        from ..vis import set_backend
+        set_backend()
         import matplotlib.pyplot as plt
         elstep = .01 * degree
         azstep = elstep * np.cos(0.5 * (elmin + elmax))

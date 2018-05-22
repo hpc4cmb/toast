@@ -171,3 +171,45 @@ class OpFlagGaps(Operator):
             commonflags[:] |= gapflags
 
         return
+
+
+def intervals_to_chunklist(intervals, nsamp, startsamp=0):
+    """Create a list of contiguous sample chunks from intervals.
+
+    Given a list of (possibly discontinuous) intervals, construct a
+    list of contiguous chunks of samples.  The chunks are defined between
+    the starting points of each interval.  An additional chunk at the
+    beginning and end are
+
+    Args:
+        intervals (list): sorted list of Interval objects.
+        nsamp (int): the number of samples to consider.
+        startsamp (int): the first sample to consider.
+
+    Returns:
+        (list): list of sample chunks.
+
+    """
+    chunks = list()
+    previous = None
+    for it in intervals:
+        if it.last < startsamp:
+            continue
+        if it.first >= (startsamp + nsamp):
+            continue
+        if previous is None:
+            # We are at the first interval which overlaps our
+            # sample range.
+            if it.first <= startsamp:
+                previous = startsamp
+            else:
+                chunks.append(it.first - startsamp)
+                previous = it.first
+        else:
+            chunks.append(it.first - previous)
+            previous = it.first
+    # Handle final chunk
+    sm = np.sum(chunks)
+    if sm < nsamp:
+        chunks.append(nsamp - sm)
+    return chunks

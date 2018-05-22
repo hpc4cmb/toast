@@ -1,0 +1,56 @@
+diff -urN bzip2-1.0.6.orig/Makefile-toast bzip2-1.0.6/Makefile-toast
+--- bzip2-1.0.6.orig/Makefile-toast	1969-12-31 16:00:00.000000000 -0800
++++ bzip2-1.0.6/Makefile-toast	2018-05-25 09:17:50.357697978 -0700
+@@ -0,0 +1,52 @@
++
++# This Makefile builds a shared version of the library,
++# for use as a TOAST dependency.
++
++# ------------------------------------------------------------------
++# This file is part of bzip2/libbzip2, a program and library for
++# lossless, block-sorting data compression.
++#
++# bzip2/libbzip2 version 1.0.6 of 6 September 2010
++# Copyright (C) 1996-2010 Julian Seward <jseward@bzip.org>
++#
++# Please read the WARNING, DISCLAIMER and PATENTS sections in the 
++# README file.
++#
++# This program is released under the terms of the license contained
++# in the file LICENSE.
++# ------------------------------------------------------------------
++
++SHELL=/bin/bash
++
++OBJS= blocksort.o  \
++      huffman.o    \
++      crctable.o   \
++      randtable.o  \
++      compress.o   \
++      decompress.o \
++      bzlib.o
++
++all: $(OBJS)
++	$(CC) -shared -Wl,-soname -Wl,libbz2.so.1.0 -o libbz2.so.1.0.6 $(OBJS)
++	$(CC) $(CFLAGS) -o bzip2-shared bzip2.c libbz2.so.1.0.6
++	rm -f libbz2.so.1.0
++	ln -s libbz2.so.1.0.6 libbz2.so.1.0
++	ln -s libbz2.so.1.0 libbz2.so
++
++clean: 
++	rm -f $(OBJS) bzip2.o libbz2.so* bzip2-shared
++
++blocksort.o: blocksort.c
++	$(CC) $(CFLAGS) -c blocksort.c
++huffman.o: huffman.c
++	$(CC) $(CFLAGS) -c huffman.c
++crctable.o: crctable.c
++	$(CC) $(CFLAGS) -c crctable.c
++randtable.o: randtable.c
++	$(CC) $(CFLAGS) -c randtable.c
++compress.o: compress.c
++	$(CC) $(CFLAGS) -c compress.c
++decompress.o: decompress.c
++	$(CC) $(CFLAGS) -c decompress.c
++bzlib.o: bzlib.c
++	$(CC) $(CFLAGS) -c bzlib.c

@@ -47,3 +47,4 @@ from .conviqt import OpSimConviqt
 
 from .tidas import available as tidas_available
 
+from .spt3g import available as spt3g_available

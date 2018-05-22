@@ -47,6 +47,10 @@ from ..tod import tidas_available
 if tidas_available:
     from . import tidas as testtidas
 
+from ..tod import spt3g_available
+if spt3g_available:
+    from . import spt3g as testspt3g
+
 from ..map import libsharp_available
 if libsharp_available:
     from . import ops_sim_pysm as testopspysm
@@ -106,6 +110,8 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testbinned) )
         if tidas_available:
             suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if spt3g_available:
+            suite.addTest( loader.loadTestsFromModule(testspt3g) )
         if libsharp_available:
             suite.addTest( loader.loadTestsFromModule(testopspysm) )
             suite.addTest( loader.loadTestsFromModule(testsmooth) )

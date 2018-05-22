@@ -31,6 +31,9 @@ LDFLAGS = -lpthread -fopenmp
 
 CROSS =
 
+# Parallel builds
+MAKEJ = 4
+
 # Miniconda install
 
 INTEL_CONDA = no
@@ -40,7 +43,7 @@ PYVERSION = 3.6
 # For BLAS/LAPACK, we use our own openblas
 
 BLAS = -lopenblas
-LAPACK = 
+LAPACK =
 
 # Boost toolchain name
 
@@ -50,4 +53,3 @@ BOOSTCHAIN = gcc
 
 CHGRP = hpcosmo
 CHMOD = a+rX,g-w,o-w
-

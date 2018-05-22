@@ -104,17 +104,13 @@ fi
 
 @healpix@
 
+# Install libbz2
+
+@bzip2@
+
 # Install Boost
 
 @boost@
-
-# Install libmadam
-
-@madam@
-
-# Install conviqt
-
-@conviqt@
 
 # Install elemental
 
@@ -128,21 +124,33 @@ fi
 
 @h5py@
 
-# Install TIDAS
+# Install aatm
 
-@tidas@
+@aatm@
+
+# Install conviqt
+
+@conviqt@
 
 # Install libsharp
 
 @libsharp@
 
+# Install libmadam
+
+@madam@
+
+# Install SPT3G
+
+@spt3g@
+
+# Install TIDAS
+
+@tidas@
+
 # Install PySM
 
 @pysm@
-
-# Install aatm
-
-@aatm@
 
 # Install PyMPIT for environment testing
 

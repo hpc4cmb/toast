@@ -6,6 +6,6 @@ curl -SL https://github.com/hpc4cmb/libmadam/releases/download/0.2.9/libmadam-0.
     ./configure @CROSS@ --with-cfitsio="@AUX_PREFIX@" \
     --with-blas="@BLAS@" --with-lapack="@LAPACK@" \
     --with-fftw="@AUX_PREFIX@" --prefix="@AUX_PREFIX@" \
-    && make -j 4 && make install \
+    && make -j @MAKEJ@ && make install \
     && cd .. \
     && rm -rf libmadam*

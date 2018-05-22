@@ -9,6 +9,6 @@ curl -SL https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
     LDFLAGS="-L@AUX_PREFIX@/lib" \
     ./configure @CROSS@ \
     --prefix="@AUX_PREFIX@" \
-    && make -j 4 && make install \
+    && make -j @MAKEJ@ && make install \
     && cd .. \
     && rm -rf aatm*

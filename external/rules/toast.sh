@@ -11,5 +11,5 @@ git clone https://github.com/hpc4cmb/toast.git \
     --with-elemental=/usr \
     --with-tbb=no \
     --prefix=/usr \
-    && make && make install \
-    && cd .. 
+    && make -j @MAKEJ@ && make install \
+    && cd ..

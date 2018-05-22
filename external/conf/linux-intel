@@ -32,6 +32,10 @@ LDFLAGS = -lpthread -liomp5
 
 CROSS =
 
+# Parallel builds
+MAKEJ = 4
+
+
 # Miniconda install
 
 INTEL_CONDA = yes
@@ -50,4 +54,4 @@ BOOSTCHAIN = intel-linux
 # Group and permissions to set
 
 CHGRP =
-CHMOD = 
+CHMOD =
