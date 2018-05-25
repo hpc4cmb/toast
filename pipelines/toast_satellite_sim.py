@@ -303,15 +303,17 @@ def main():
     stop = MPI.Wtime()
     elapsed = stop - start
     if comm.comm_world.rank == 0:
-        print("Create focalplane:  {:.2f} seconds".format(stop-start),
-            flush=True)
+        print("Create focalplane ({} dets):  {:.2f} seconds"\
+            .format(len(fp.keys()), stop-start), flush=True)
     start = stop
 
     if args.debug:
         if comm.comm_world.rank == 0:
             outfile = "{}_focalplane.png".format(args.outdir)
             set_backend()
-            tt.plot_focalplane(fp, 10.0, 10.0, outfile)
+            dquats = { x : fp[x]["quat"] for x in fp.keys() }
+            dfwhm = { x : fp[x]["fwhm"] for x in fp.keys() }
+            tt.plot_focalplane(dquats, 10.0, 10.0, outfile, fwhm=dfwhm)
 
     # Since we are simulating noise timestreams, we want
     # them to be contiguous and reproducible over the whole
