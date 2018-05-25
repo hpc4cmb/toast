@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ctypes.util import find_library
+import os
 
 from toast.cache import Cache
 from toast.mpi import MPI
@@ -425,6 +426,10 @@ class OpMadam(Operator):
         nside = int(self.params['nside_map'])
 
         parstring = self._dict2parstring(self.params)
+
+        if comm.rank == 0 and ('path_output' in self.params and
+                               not os.path.isdir(self.params['path_output'])):
+            os.makedirs(self.params['path_output'])
 
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
