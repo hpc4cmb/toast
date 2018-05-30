@@ -7,17 +7,20 @@
 # This script creates a CES schedule file that can be used as input
 # to toast_ground_sim.py
 
+import argparse
 from datetime import datetime
 import os
 
-import argparse
 import dateutil.parser
 import ephem
 from scipy.constants import degree
 
 import healpy as hp
 import numpy as np
+import toast.qarray as qa
 import toast.timing as timing
+
+XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 class TooClose(Exception):
@@ -310,36 +313,56 @@ def attempt_scan(
     return success, t
 
 
+def from_angles(az, el):
+    elquat = qa.rotation(YAXIS, np.radians(90 - el))
+    azquat = qa.rotation(ZAXIS, np.radians(az))
+    return qa.mult(azquat, elquat)
+
+
+def unwind_quat(quat1, quat2):
+    if np.sum(np.abs(quat1 - quat2)) > np.sum(np.abs(quat1 + quat2)):
+        return -quat2
+    else:
+        return quat2
+
+
 def check_sso(observer, az1, az2, el, sso, angle, tstart, tstop):
     """
     Check if a solar system object (SSO) enters within "angle" of
     the constant elevation scan.
     """
     autotimer = timing.auto_timer()
-    nt = np.int(max(3, (tstop - tstart) / 60))
-    if az1 > az2:
+    if az2 < az1:
         az2 += 360
-    half_width = .5 * (az2 - az1) * np.cos(np.radians(el))
-    azmean = .5 * (az1 + az2)
-    for t in np.linspace(tstart, tstop, nt):
-        observer.date = to_DJD(t)
+    naz = max(3, np.int(.25 * (az2 - az1) * np.cos(np.radians(el))))
+    quats = []
+    for az in np.linspace(az1, az2, naz):
+        quats.append(from_angles(az % 360, el))
+    vecs = qa.rotate(quats, ZAXIS)
+
+    tstart = to_DJD(tstart)
+    tstop = to_DJD(tstop)
+    t1 = tstart
+    # Test every hour separately
+    while t1 < tstop:
+        t2 = min(tstop, t1 + 1 / 24)
+        observer.date = t1
         sso.compute(observer)
-        sso_az = (np.degrees(sso.az) - azmean) % 360
-        if sso_az > 180:
-            sso_az -= 360
-        sso_el = np.degrees(sso.alt)
-        # Rotate the coordinates so that the scan center is along the X-axis
-        sso_az *= np.cos(np.radians(sso_el))
-        sso_el -= el
-        if sso_el > -angle and sso_el < angle:
-            # Add the margin to the test width
-            test_width = half_width + np.sqrt(angle ** 2 - sso_el ** 2)
-            if sso_az > -test_width and sso_az < test_width:
-                # import pdb
-                # print(az1, az2, el, np.degrees([sso.az, sso.alt]))
-                # print(half_width, test_width, sso_el, sso_az)
-                # pdb.set_trace()
-                return True
+        sun_az1, sun_el1 = np.degrees(sso.az), np.degrees(sso.alt)
+        observer.date = t2
+        sso.compute(observer)
+        sun_az2, sun_el2 = np.degrees(sso.az), np.degrees(sso.alt)
+        sun_quat1 = from_angles(sun_az1, sun_el1)
+        sun_quat2 = from_angles(sun_az2, sun_el2)
+        sun_quat2 = unwind_quat(sun_quat1, sun_quat2)
+        t = np.linspace(0, 1, 10)
+        sun_quats = qa.slerp(t, [0, 1], [sun_quat1, sun_quat2])
+        sun_vecs = qa.rotate(sun_quats, ZAXIS).T
+        dpmax = np.amax(np.dot(vecs, sun_vecs))
+        min_dist = np.degrees(np.arccos(dpmax))
+        if min_dist < angle:
+            return True
+        t1 = t2
     del autotimer
     return False
 
