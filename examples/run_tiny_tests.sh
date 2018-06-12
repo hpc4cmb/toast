@@ -19,27 +19,27 @@ TOASTDATACOMMIT=7577fc879001714a13a42a5b499857b0468744e5
 bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
 # nside
-sed -i "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
-sed -i "/zip/d" params/ground/ground_sim_simple.par
+sed -i.bak "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
+sed -i.bak "/zip/d" params/ground/ground_sim_simple.par
 # zip -> skip_atmo in ground
-sed -i "s/zip/skip_atmosphere/" params/ground/ground_sim.par params/ground/ground_sim_multisite.par
+sed -i.bak "s/zip/skip_atmosphere/" params/ground/ground_sim.par params/ground/ground_sim_multisite.par
 # just make 30 madam iterations in ground, we don't test destriped maps
 # make sure that file doesn't contain madam_iter_max already so we
 # avoid applying this twice
 for file in params/ground/*par
 do
     if ! grep -q "madam_iter_max" $file; then
-        sed -i "s/--madam/--madam_iter_max\n30\n--madam/" $file
+        sed -i.bak "s/--madam/--madam_iter_max\n30\n--madam/" $file
     fi
 done
 # duration
-sed -i "s/24/1/g" tiny*
+sed -i.bak "s/24/1/g" tiny*
 # fake focalplane disable mpi
-sed -i "s/mpirun -n 1//g" tiny*
+sed -i.bak "s/mpirun -n 1//g" tiny*
 # write log to stdout
-sed -i 's/eval \${run} \${com}.*$/eval \${run} \${com}/' tiny*
+sed -i.bak 's/eval \${run} \${com}.*$/eval \${run} \${com}/' tiny*
 # 2 procs, 1 thread each
-sed -i 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
+sed -i.bak 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
 
 : ${TYPES:="satellite ground ground_simple ground_multisite"}
 exit_status=0
