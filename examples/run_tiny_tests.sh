@@ -1,3 +1,21 @@
+#!/bin/sh
+
+# How to update the test maps
+
+# If a change in the TOAST code results in different maps for one of more of the integration tests
+# it is necessary to update them. How to do it:
+
+# * run `run_tiny_tests.sh` on your machine, you can set the `TYPES` environment variable to run only a subset of the tests
+# * this will download the current expected test results and untar them in `ref_out_tiny_${TYPE} folders
+# * the script will produce outputs in `out_tiny_${TYPE}`
+# * compare interactively the results in the 2 folders and make sure the differences are expected
+# * now remove all the unnecessary files from `out_tiny_${TYPE}` so that it only contains the files in `ref_out_tiny_${TYPE}`
+# * tar the `ref` folder to tgz and upload to: https://github.com/hpc4cmb/toast-test-data/tree/master/examples
+# * updated `TOASTDATACOMMIT` below to the latest commit
+# * run `run_tiny_tests.sh` again and check that the test passes
+
+TOASTDATACOMMIT=7577fc879001714a13a42a5b499857b0468744e5
+
 bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
 # nside
@@ -29,7 +47,9 @@ exit_status=0
 for TYPE in $TYPES
 do
     echo ">>>>>>>>>> Running test for $TYPE"
-    wget --output-document=ref_out_tiny_${TYPE}.tgz https://github.com/hpc4cmb/toast-test-data/blob/master/examples/ref_out_tiny_${TYPE}.tgz?raw=true
+    # uncomment this to automatically pickup the latest version
+    # wget --output-document=ref_out_tiny_${TYPE}.tgz https://github.com/hpc4cmb/toast-test-data/blob/master/examples/ref_out_tiny_${TYPE}.tgz?raw=true > /dev/null 2>&1
+    wget --output-document=ref_out_tiny_${TYPE}.tgz https://github.com/hpc4cmb/toast-test-data/tree/${TOASTDATACOMMIT}/examples/ref_out_tiny_${TYPE}.tgz?raw=true > /dev/null 2>&1
     tar xzf ref_out_tiny_${TYPE}.tgz > /dev/null 2>&1
     bash tiny_${TYPE}_shell.sh && python check_maps.py $TYPE; (( exit_status = exit_status || $? ))
 done
