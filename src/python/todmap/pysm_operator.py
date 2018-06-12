@@ -189,7 +189,7 @@ class OpSimPySM(Operator):
                 print('Communication completed', flush=True)
             if self.comm.rank == 0 and self.coord != "G":
                 # PySM is always in Galactic, make rotation to Ecliptic or Equatorial
-                rot = hp.Rotator(coord = [self.coord, "G"])
+                rot = hp.Rotator(coord = ["G", self.coord])
                 # this requires healpy 1.12
                 full_map_rank0 = rot.rotate_map(full_map_rank0)
             if self.comm.rank == 0 and self._nest:
