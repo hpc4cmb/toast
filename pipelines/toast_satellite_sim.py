@@ -142,38 +142,17 @@ def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signa
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
 
-    # Use local arguments for development FIXME
-    largs = dict(conviqt_lmax=128, conviqt_beammax=64,
-            conviqt_input_skyfile_fwhm_arcmin=0.0,
-            conviqt_order=11, conviqt_remove_monopole=False,
-            conviqt_remove_dipole=False)
-
-    largs.update(dict(
-        conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/beam_DETECTOR_alm.fits",
-        #conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/mb_lfi_30_27_x_rescaled.alm",
-        skyfile="/home/zonca/zonca/p/issues/201805_conviqt/equat_line_sky_alm.fits"
-    ))
-    # Allow dot notation access for dict, FIXME remove this
-    from types import SimpleNamespace
-    largs = SimpleNamespace(**largs)
-
     # Prepare the detectordata list
 
     local_dets = extract_local_dets(data)
 
-    for pattern in largs.conviqt_beamfile.split(','):
+    for pattern in args.conviqt_beamfile_alm.split(','):
         detectordata = []
         for det in local_dets:
-            skyfile = largs.skyfile.replace('DETECTOR', det)
+            skyfile = args.conviqt_input_alm.replace('DETECTOR', det)
             beamfile = pattern.replace('DETECTOR', det)
             # polarization leakage
             epsilon = 0.
-            # Getting the right polarization angle can be a sensitive matter.
-            # Dxx beams are always defined without psi_uv or psi_pol rotation
-            # but some Pxx beams may require psi_pol to be removed and psi_uv
-            # left in.
-            # Beam is in the polarization basis.
-            # No extra rotations are needed
             psipol = 0. if det.endswith("A") else np.pi/2
             detectordata.append((det, skyfile, beamfile, epsilon, psipol))
 
@@ -182,11 +161,11 @@ def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signa
                       flush=True)
 
     op_conviqt = tt.OpSimConviqt(
-            largs.conviqt_lmax, largs.conviqt_beammax, detectordata,
-            pol=True, fwhm=largs.conviqt_input_skyfile_fwhm_arcmin, order=largs.conviqt_order, calibrate=True,
+            args.conviqt_lmax, args.conviqt_beammax, detectordata,
+            pol=True, fwhm=args.conviqt_input_skyfile_fwhm_arcmin, order=args.conviqt_order, calibrate=True,
             dxx=True, out='signal', apply_flags=False,
-            remove_monopole=largs.conviqt_remove_monopole,
-            remove_dipole=largs.conviqt_remove_dipole)
+            remove_monopole=args.conviqt_remove_monopole,
+            remove_dipole=args.conviqt_remove_dipole)
     op_conviqt.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
@@ -252,8 +231,6 @@ def main():
         help="Output directory" )
     parser.add_argument( "--debug", required=False, default=False,
         action="store_true", help="Write diagnostics" )
-    parser.add_argument( "--run_conviqt", required=False, default=False,
-        action="store_true", help="Run libconviqt" )
 
     parser.add_argument( "--nside", required=False, type=int, default=64,
         help="Healpix NSIDE" )
@@ -318,6 +295,32 @@ def main():
     parser.add_argument('--input_dipole_solar_gal_lon_deg', required=False,
                         help='Solar system speed galactic longitude[degrees]',
                         type=float, default=263.99)
+
+    # Conviqt beam convolution
+
+    parser.add_argument( "--run_conviqt", required=False, default=False,
+        action="store_true", help="Convolve map with full beam alms" )
+    parser.add_argument( "--conviqt_beamfile_alm", required=False, default="beam_DETECTOR_alm.fits",
+        help="Full beam alms filename, they should be defined in the same reference frame"
+        "both for A and B detectors, i.e. no rotation, not even for the polarization angle is"
+        "performed by TOAST."
+        "DETECTOR in the filename is replaced with each name of the detector" )
+    parser.add_argument( "--conviqt_input_alm", required=False, default="input_sky_DETECTOR_alm.fits",
+        help="Alms of the input sky, it could be unique or one per detector"
+        "DETECTOR in the filename is replaced with each name of the detector" )
+    parser.add_argument( "--conviqt_lmax", required=False,
+        type=int, help="lmax for Conviqt, it could be less than what available in the beam alms" )
+    parser.add_argument( "--conviqt_beammax", required=False,
+        type=int, help="mmax for Conviqt, it could be less than what available in the beam alms" )
+    parser.add_argument( "--conviqt_input_skyfile_fwhm_arcmin", required=False, default=0.0,
+        type=float, help="width of a symmetric gaussian beam [in arcmin]"
+        "already present in the in input sky alm (will be deconvolved away)")
+    parser.add_argument( "--conviqt_order", required=False, default=11,
+        type=int, help="Conviqt convolution order, leave the default value unless you know better")
+    parser.add_argument( "--conviqt_remove_monopole", required=False, default=False,
+        action="store_true", help="Instruct Conviqt to remove the monopole")
+    parser.add_argument( "--conviqt_remove_dipole", required=False, default=False,
+        action="store_true", help="Instruct Conviqt to remove the dipole")
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
