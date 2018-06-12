@@ -174,7 +174,7 @@ def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signa
             # left in.
             # Beam is in the polarization basis.
             # No extra rotations are needed
-            psipol = 0.
+            psipol = 0. if det.endswith("A") else np.pi/2
             detectordata.append((det, skyfile, beamfile, epsilon, psipol))
 
             if comm.comm_world.rank == 0:
