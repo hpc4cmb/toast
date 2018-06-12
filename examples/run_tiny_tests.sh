@@ -41,6 +41,8 @@ sed -i.bak 's/eval \${run} \${com}.*$/eval \${run} \${com}/' tiny*
 # 2 procs, 1 thread each
 sed -i.bak 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
 
+find . -name "*.bak" -delete
+
 : ${TYPES:="satellite ground ground_simple ground_multisite"}
 exit_status=0
 
