@@ -149,8 +149,8 @@ def simulate_sky_signal_conviqt(args, comm, data, mem_counter, focalplanes,signa
             conviqt_remove_dipole=False)
 
     largs.update(dict(
-        #conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/test_beams_20180514/10deg_beam_fake_0A_alm.fits",
-        conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/mb_lfi_30_27_x_rescaled.alm",
+        conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/beam_DETECTOR_alm.fits",
+        #conviqt_beamfile="/home/zonca/zonca/p/issues/201805_conviqt/mb_lfi_30_27_x_rescaled.alm",
         skyfile="/home/zonca/zonca/p/issues/201805_conviqt/equat_line_sky_alm.fits"
     ))
     # Allow dot notation access for dict, FIXME remove this
