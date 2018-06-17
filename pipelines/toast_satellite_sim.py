@@ -311,7 +311,7 @@ def main():
             gain = {}
             with fits.open(args.gain) as f:
                 for ext in f[1:]:
-                    gain[ext.name] = {k:ext.data[k] for k in ["TIME", "GAIN"]}
+                    gain[ext.name.upper()] = {k:ext.data[k] for k in ["TIME", "GAIN"]}
 
     if args.gain is not None:
         gain = comm.comm_world.bcast(gain, root=0)

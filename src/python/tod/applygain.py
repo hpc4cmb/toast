@@ -51,7 +51,7 @@ class OpApplyGain(Operator):
                 ref = tod.local_signal(det, self._name)
                 obs_times = tod.read_times()
 
-                calibrate(obs_times, ref, self._gains[det]["TIME"], self._gains[det]["GAIN"], order=0, inplace=True)
+                calibrate(obs_times, ref, self._gain[det.upper()]["TIME"], self._gain[det.upper()]["GAIN"], order=0, inplace=True)
 
                 del ref
 
