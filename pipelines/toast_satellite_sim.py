@@ -17,6 +17,7 @@ import traceback
 import pickle
 
 import numpy as np
+from astropy.io import fits
 
 import toast
 import toast.tod as tt
@@ -279,6 +280,7 @@ def main():
     start = MPI.Wtime()
 
     fp = None
+    gain = None
 
     # Load focalplane information
 
@@ -298,6 +300,16 @@ def main():
         else:
             with open(args.fp, "rb") as p:
                 fp = pickle.load(p)
+
+        if args.gain is not None:
+            gain = {}
+            with fits.open(args.gain) as f:
+                for ext in f[1:]:
+                    gain[ext.name] = {k:ext.data[k] for k in ["TIME", "GAIN"]}
+
+    if args.gain is not None:
+        gain = comm.comm_world.bcast(gain, root=0)
+
     fp = comm.comm_world.bcast(fp, root=0)
 
     stop = MPI.Wtime()
@@ -630,6 +642,10 @@ def main():
                     elapsed), flush=True)
             start = stop
 
+            if gain is not None:
+                op_apply_gain = OpApplyGain(gain)
+                op_apply_gain.exec(data)
+
             if mc == firstmc:
                 # For the first realization, optionally export the
                 # timestream data to a TIDAS volume.
@@ -746,6 +762,10 @@ def main():
             # add sky signal
             if has_signal:
                 add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+
+            if gain is not None:
+                op_apply_gain = OpApplyGain(gain)
+                op_apply_gain.exec(data)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

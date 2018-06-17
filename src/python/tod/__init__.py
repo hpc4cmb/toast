@@ -36,6 +36,7 @@ from ..ctoast import filter_polyfilter
 from .polyfilter import OpPolyFilter
 from .groundfilter import OpGroundFilter
 from .gainscrambler import OpGainScrambler
+from .applygain import OpApplyGain
 from .memorycounter import OpMemoryCounter
 
 from .pointing_math import quat2angle, aberrate
