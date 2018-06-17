@@ -215,6 +215,12 @@ def main():
         "(float).  For optional plotting, the key \"color\" can specify a "
         "valid matplotlib color string." )
 
+    parser.add_argument( "--gain", required=False, default=None,
+        help= "Calibrate the input timelines with a set of gains"
+        "FITS file containing one extension for each detector "
+        "named after the detector."
+        "Each extension has a TIME and a GAIN column.")
+
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
