@@ -53,6 +53,8 @@ class OpApplyGain(Operator):
 
                 calibrate(obs_times, ref, self._gain[det.upper()]["TIME"], self._gain[det.upper()]["GAIN"], order=0, inplace=True)
 
+                assert np.isnan(ref).sum() == 0, "The signal timestream includes NaN"
+
                 del ref
 
         return
