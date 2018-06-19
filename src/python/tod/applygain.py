@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import re
+import numpy as np
 
 from toast.op import Operator
 
