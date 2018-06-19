@@ -649,7 +649,7 @@ def main():
             start = stop
 
             if gain is not None:
-                op_apply_gain = tt.OpApplyGain(gain)
+                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
 
             if mc == firstmc:
@@ -770,7 +770,7 @@ def main():
                 add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
 
             if gain is not None:
-                op_apply_gain = tt.OpApplyGain(gain)
+                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
 
             comm.comm_world.barrier()
