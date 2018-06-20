@@ -435,26 +435,21 @@ class TOD3G(TOD):
         frsize = self._frame_sizes[frame]
         frfirst = self._frame_sample_offs[frame]
         memoff = None
-        nmem = None
         froff = None
         nfr = None
         # Does this frame overlap with any of our data?
         if (frfirst <= locallast) and (frfirst + frsize >= localfirst):
             # compute offsets into our local data and the frame
             memoff = frfirst - localfirst
+            froff = 0
+            nfr = frsize
             if memoff < 0:
+                nfr = frsize + memoff
+                froff = -memoff
                 memoff = 0
-            nmem = frsize
-            if memoff + nmem > self.local_samples[1]:
-                nmem = self.local_samples[1] - memoff
-            froff = localfirst - frfirst
-            if froff < 0:
-                froff = 0
-            nfr = self.local_samples[1]
-            if froff + nfr > frsize:
-                nfr = frsize - froff
-            #print("proc {}:  frame indices {}:{} -> frame local {}:{} == cache local {}:{}".format(self.mpicomm.rank, frfirst, frfirst+frsize-1, froff, froff+nfr-1, memoff, memoff+nmem-1), flush=True)
-        return (memoff, nmem, froff, nfr)
+            if memoff + nfr > self.local_samples[1]:
+                nfr = self.local_samples[1] - memoff
+        return (memoff, froff, nfr)
 
 
     def _import_frames(self):
@@ -478,34 +473,36 @@ class TOD3G(TOD):
                     obs = False
                     continue
                 fdata = self.mpicomm.bcast(fdata, root=0)
-                memoff, nmem, froff, nfr = self._frame_indices(foff + reloff -1)
+                # The "-1" here skips the observation frame in the reloff
+                # counting.
+                memoff, froff, nfr = self._frame_indices(foff + reloff - 1)
                 if memoff is not None:
                     # Timestamps
                     name = "{}-{}".format(CACHE_PREF, STR_TIME)
                     ref = self.cache.reference(name)
                     # convert from nanoseconds to floating point seconds
                     ntime = np.array(fdata[STR_TIME][froff:froff+nfr])
-                    ref[memoff:memoff+nmem] = 1.0e-9 * ntime.astype(np.float64)
+                    ref[memoff:memoff+nfr] = 1.0e-9 * ntime.astype(np.float64)
                     del ref
                     del ntime
 
                     # Boresight quaternions
                     name = "{}-{}".format(CACHE_PREF, STR_BORE)
                     ref = self.cache.reference(name)
-                    ref[memoff:memoff+nmem,:] = \
+                    ref[memoff:memoff+nfr,:] = \
                         np.array(fdata[STR_BORE][4*froff:4*(froff+nfr)]).reshape((-1, 4))
                     del ref
                     if self._have_azel:
                         name = "{}-{}".format(CACHE_PREF, STR_BOREAZEL)
                         ref = self.cache.reference(name)
-                        ref[memoff:memoff+nmem,:] = \
+                        ref[memoff:memoff+nfr,:] = \
                             np.array(fdata[STR_BOREAZEL][4*froff:4*(froff+nfr)]).reshape((-1, 4))
                         del ref
 
                     # Common flags
                     name = "{}-{}".format(CACHE_PREF, STR_COMMON)
                     ref = self.cache.reference(name)
-                    ref[memoff:memoff+nmem] = \
+                    ref[memoff:memoff+nfr] = \
                         np.array(fdata[STR_COMMON][froff:froff+nfr], dtype=np.uint8)
                     del ref
 
@@ -513,13 +510,13 @@ class TOD3G(TOD):
 
                     name = "{}-{}".format(CACHE_PREF, STR_POS)
                     ref = self.cache.reference(name)
-                    ref[memoff:memoff+nmem,:] = \
+                    ref[memoff:memoff+nfr,:] = \
                         np.array(fdata[STR_POS][3*froff:3*(froff+nfr)]).reshape((-1, 3))
                     del ref
 
                     name = "{}-{}".format(CACHE_PREF, STR_VEL)
                     ref = self.cache.reference(name)
-                    ref[memoff:memoff+nmem,:] = \
+                    ref[memoff:memoff+nfr,:] = \
                         np.array(fdata[STR_VEL][3*froff:3*(froff+nfr)]).reshape((-1, 3))
                     del ref
 
@@ -529,11 +526,11 @@ class TOD3G(TOD):
                     for d in self.local_dets:
                         name = "{}-{}_{}".format(CACHE_PREF, STR_DET, d)
                         ref = self.cache.reference(name)
-                        ref[memoff:memoff+nmem] = detmap[d][froff:froff+nfr]
+                        ref[memoff:memoff+nfr] = detmap[d][froff:froff+nfr]
                         del ref
                         name = "{}-{}_{}".format(CACHE_PREF, STR_FLAG, d)
                         ref = self.cache.reference(name)
-                        ref[memoff:memoff+nmem] = \
+                        ref[memoff:memoff+nfr] = \
                             np.array(flagmap[d][froff:froff+nfr],
                             dtype=np.uint8)
                         del ref
@@ -575,7 +572,11 @@ class TOD3G(TOD):
                 if self.mpicomm.rank == 0:
                     fdata = c3g.G3Frame(c3g.G3FrameType.Scan)
 
-                memoff, nmem, froff, nfr = self._frame_indices(foff + fr)
+                memoff, froff, nfr = self._frame_indices(foff + fr)
+
+                # For a given timestream, the gather is done across the
+                # process row which contains the specific detector, or across
+                # the first process row for common telescope data.
 
                 # Gather timestamps
 
@@ -584,24 +585,38 @@ class TOD3G(TOD):
                 if rankdet == 0:
                     # Only the first row of the process grid does this.
                     if memoff is not None:
-                        data = oldtod.read_times(local_start=memoff, n=nmem)
-                alldata = self.mpicomm.gather(data, root=0)
+                        data = oldtod.read_times(local_start=memoff, n=nfr)
+                    else:
+                        data = np.zeros(0, dtype=np.float64)
 
-                if self.mpicomm.rank == 0:
-                    alldata = np.concatenate([ x for x in alldata if x is not None ])
-                    # convert to integer nanoseconds
-                    alldata *= 1.0e9
-                    idata = alldata.astype(np.int64)
-                    # FIXME: there *must* be a better way to instantiate a vector of
-                    # G3 timestamps...
-                    g3times = list()
-                    for t in range(len(idata)):
-                        g3times.append(c3g.G3Time(idata[t]))
-                    fdata[STR_TIME] = c3g.G3VectorTime(g3times)
-                    del g3times
-                    del idata
-                del data
-                del alldata
+                    if ranksamp == 0:
+                        # allocate receive buffer
+                        alldata = np.zeros(self._frame_sizes[fr],
+                            dtype=np.float64)
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv times".format(foff + fr), flush=True)
+
+                    self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                    if ranksamp == 0:
+                        # convert to integer nanoseconds
+                        alldata *= 1.0e9
+                        idata = alldata.astype(np.int64)
+                        # FIXME: there *must* be a better way to instantiate a vector of
+                        # G3 timestamps...
+                        g3times = list()
+                        for t in range(len(idata)):
+                            g3times.append(c3g.G3Time(idata[t]))
+                        fdata[STR_TIME] = c3g.G3VectorTime(g3times)
+                        del g3times
+                        del idata
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv times DONE".format(foff + fr), flush=True)
+
+                    del data
+                    del alldata
 
                 # Gather boresight data
 
@@ -610,13 +625,28 @@ class TOD3G(TOD):
                 if rankdet == 0:
                     # Only the first row of the process grid does this.
                     if memoff is not None:
-                        data = oldtod.read_boresight(local_start=memoff, n=nmem)
-                alldata = self.mpicomm.gather(data, root=0)
-                if self.mpicomm.rank == 0:
-                    alldata = np.concatenate([ x for x in alldata if x is not None ])
-                    fdata[STR_BORE] = c3g.G3VectorDouble(alldata.flatten())
-                del data
-                del alldata
+                        data = oldtod.read_boresight(local_start=memoff, n=nfr)
+                    else:
+                        data = np.zeros(0, dtype=np.float64)
+
+                    if ranksamp == 0:
+                        # allocate receive buffer
+                        alldata = np.zeros(4 * self._frame_sizes[foff + fr],
+                            dtype=np.float64)
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv boresight radec".format(foff + fr), flush=True)
+
+                    self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                    if ranksamp == 0:
+                        fdata[STR_BORE] = c3g.G3VectorDouble(alldata.flatten())
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv boresight radec DONE".format(foff + fr), flush=True)
+
+                    del data
+                    del alldata
 
                 if self._have_azel:
                     data = None
@@ -624,13 +654,30 @@ class TOD3G(TOD):
                     if rankdet == 0:
                         # Only the first row of the process grid does this.
                         if memoff is not None:
-                            data = oldtod.read_boresight_azel(local_start=memoff, n=nmem)
-                    alldata = self.mpicomm.gather(data, root=0)
-                    if self.mpicomm.rank == 0:
-                        alldata = np.concatenate([ x for x in alldata if x is not None ])
-                        fdata[STR_BOREAZEL] = c3g.G3VectorDouble(alldata.flatten())
-                    del data
-                    del alldata
+                            data = oldtod.read_boresight_azel(
+                                local_start=memoff, n=nfr)
+                        else:
+                            data = np.zeros(0, dtype=np.float64)
+
+                        if ranksamp == 0:
+                            # allocate receive buffer
+                            alldata = np.zeros(4 * self._frame_sizes[foff + fr],
+                                dtype=np.float64)
+
+                        # if ranksamp == 0:
+                        #     print("frame {} gatherv boresight azel".format(foff + fr), flush=True)
+
+                        self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                        if ranksamp == 0:
+                            fdata[STR_BOREAZEL] = \
+                                c3g.G3VectorDouble(alldata.flatten())
+
+                        # if ranksamp == 0:
+                        #     print("frame {} gatherv boresight azel DONE".format(foff + fr), flush=True)
+
+                        del data
+                        del alldata
 
                 # Gather common flags
 
@@ -640,17 +687,34 @@ class TOD3G(TOD):
                     # Only the first row of the process grid does this.
                     if memoff is not None:
                         if self._export_cachecomm is not None:
-                            data = oldtod.cache.reference(self._export_cachecomm)[memoff:memoff+nmem]
+                            data = oldtod.cache.reference(
+                                self._export_cachecomm)[memoff:memoff+nfr]
                         else:
-                            data = oldtod.read_common_flags(local_start=memoff, n=nmem)
-                alldata = self.mpicomm.gather(data, root=0)
-                if self.mpicomm.rank == 0:
-                    alldata = np.concatenate([ x for x in alldata if x is not None ])
-                    # The bindings of G3Vector seem to only work with lists...
-                    fdata[STR_COMMON] = \
-                        c3g.G3VectorInt(alldata.astype(np.int32).tolist())
-                del data
-                del alldata
+                            data = oldtod.read_common_flags(
+                                local_start=memoff, n=nfr)
+                    else:
+                        data = np.zeros(0, dtype=np.uint8)
+
+                    if ranksamp == 0:
+                        # allocate receive buffer
+                        alldata = np.zeros(self._frame_sizes[foff + fr],
+                            dtype=np.uint8)
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv common flags".format(foff + fr), flush=True)
+
+                    self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                    if ranksamp == 0:
+                        # The bindings of G3Vector seem to only work with lists...
+                        fdata[STR_COMMON] = \
+                            c3g.G3VectorInt(alldata.astype(np.int32).tolist())
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv common flags DONE".format(foff + fr), flush=True)
+
+                    del data
+                    del alldata
 
                 # Telescope position and velocity
 
@@ -659,76 +723,171 @@ class TOD3G(TOD):
                 if rankdet == 0:
                     # Only the first row of the process grid does this.
                     if memoff is not None:
-                        data = oldtod.read_position(local_start=memoff, n=nmem)
-                alldata = self.mpicomm.gather(data, root=0)
-                if self.mpicomm.rank == 0:
-                    alldata = np.concatenate([ x for x in alldata if x is not None ])
-                    fdata[STR_POS] = c3g.G3VectorDouble(alldata.flatten())
-                del data
-                del alldata
+                        data = oldtod.read_position(local_start=memoff, n=nfr)
+                    else:
+                        data = np.zeros(0, dtype=np.float64)
+
+                    if ranksamp == 0:
+                        # allocate receive buffer
+                        alldata = np.zeros(3 * self._frame_sizes[foff + fr],
+                            dtype=np.float64)
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv pos".format(foff + fr), flush=True)
+
+                    self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                    if ranksamp == 0:
+                        fdata[STR_POS] = c3g.G3VectorDouble(alldata.flatten())
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv pos DONE".format(foff + fr), flush=True)
+
+                    del data
+                    del alldata
 
                 data = None
                 alldata = None
                 if rankdet == 0:
                     # Only the first row of the process grid does this.
                     if memoff is not None:
-                        data = oldtod.read_velocity(local_start=memoff, n=nmem)
-                alldata = self.mpicomm.gather(data, root=0)
-                if self.mpicomm.rank == 0:
-                    alldata = np.concatenate([ x for x in alldata if x is not None ])
-                    fdata[STR_VEL] = c3g.G3VectorDouble(alldata.flatten())
-                del data
-                del alldata
+                        data = oldtod.read_velocity(local_start=memoff, n=nfr)
+                    else:
+                        data = np.zeros(0, dtype=np.float64)
 
-                # Now go through all detectors and add the data and flags to the frame.
+                    if ranksamp == 0:
+                        # allocate receive buffer
+                        alldata = np.zeros(3 * self._frame_sizes[foff + fr],
+                            dtype=np.float64)
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv vel".format(foff + fr), flush=True)
+
+                    self.grid_comm_row.Gatherv(data, alldata, root=0)
+
+                    if ranksamp == 0:
+                        fdata[STR_VEL] = c3g.G3VectorDouble(alldata.flatten())
+
+                    # if ranksamp == 0:
+                    #     print("frame {} gatherv vel DONE".format(foff + fr), flush=True)
+
+                    del data
+                    del alldata
+
+                self.mpicomm.barrier()
+
+                # Now go through all detectors and add the data and flags to
+                # the frame.  Pre-allocate and reuse the data buffers.
 
                 detmap = c3g.G3TimestreamMap()
                 flagmap = c3g.G3MapVectorInt()
 
+                data = None
+                flags = None
+                if nfr is None:
+                    data = np.zeros(0, dtype=np.float64)
+                    flags = np.zeros(0, dtype=np.uint8)
+                else:
+                    data = np.zeros(nfr, dtype=np.float64)
+                    flags = np.zeros(nfr, dtype=np.uint8)
+
+                alldata = None
+                allflags = None
+                if ranksamp == 0:
+                    alldata = np.zeros(self._frame_sizes[foff + fr],
+                        dtype=np.float64)
+                    allflags = np.zeros(self._frame_sizes[foff + fr],
+                        dtype=np.uint8)
+
+                dindx = 0
                 for det in self.detectors:
-                    data = None
-                    alldata = None
-                    if (det in self.local_dets) and memoff is not None:
-                        if self._export_cachename is not None:
-                            cname = "{}_{}".format(self._export_cachename, det)
-                            data = oldtod.cache.reference(cname)[memoff:memoff+nmem]
-                        else:
-                            data = oldtod.read(detector=det, local_start=memoff, n=nmem)
-                    alldata = self.mpicomm.gather(data, root=0)
+                    # For each detector, processes which have the detector
+                    # in their local_dets should be in the same process row.
+                    # We do the gather over just this process row.  Then the
+                    # first process in the row sends the data to rank zero in
+                    # the full communicator for insertion into the frame.
+                    gatherproc = 0
+
+                    # if self.mpicomm.rank == 0:
+                    #     print("frame {} gatherv det {}".format(foff + fr, det), flush=True)
+
+                    if (det in self.local_dets):
+                        # We are in the process row working on this detector.
+                        if memoff is not None:
+                            # We have some data
+                            if self._export_cachename is not None:
+                                cname = "{}_{}".format(self._export_cachename,
+                                    det)
+                                data[:] = oldtod.cache.reference(
+                                    cname)[memoff:memoff+nfr]
+                            else:
+                                data[:] = oldtod.read(detector=det,
+                                    local_start=memoff, n=nfr)
+                            if self._export_cacheflag is not None:
+                                cname = "{}_{}".format(self._export_cacheflag,
+                                    det)
+                                flags[:] = oldtod.cache.reference(
+                                    cname)[memoff:memoff+nfr]
+                            else:
+                                flags[:] = oldtod.read_flags(detector=det,
+                                    local_start=memoff, n=nfr)
+
+                        if ranksamp == 0:
+                            # We are the one doing the gathering
+                            gatherproc = self.mpicomm.rank
+
+                        self.grid_comm_row.Gatherv(data, alldata, root=0)
+                        self.grid_comm_row.Gatherv(flags, allflags, root=0)
+
+                    # All processes find out which one did the gather
+                    gatherproc = self.mpicomm.allreduce(gatherproc, MPI.SUM)
+
+                    if gatherproc != 0:
+                        # Data not yet on rank 0
+                        if self.mpicomm.rank == 0:
+                            # Receive data from the first process in this row
+                            self.mpicomm.Recv(alldata, source=gatherproc,
+                                tag=dindx)
+                            self.mpicomm.Recv(allflags, source=gatherproc,
+                                tag=(len(self.detectors)+dindx) )
+                        elif (self.mpicomm.rank == gatherproc):
+                            # Send our data
+                            self.mpicomm.Send(alldata, 0, tag=dindx)
+                            self.mpicomm.Send(allflags, 0,
+                                tag=(len(self.detectors)+dindx) )
+
                     if self.mpicomm.rank == 0:
-                        alldata = [ x for x in alldata if x is not None ]
+                        #print("frame {} gatherv det {} DONE".format(foff + fr, det), flush=True)
                         if self._units is None:
-                            # We do this, since we can't use G3TimestreamUnits.None
-                            # in python ("None" is interpreted as python None).
-                            detmap[det] = c3g.G3Timestream(np.concatenate(alldata))
+                            # We do this conditional, since we can't use
+                            # G3TimestreamUnits.None in python ("None" is
+                            # interpreted as python None).
+                            detmap[det] = c3g.G3Timestream(alldata)
                         else:
                             detmap[det] = \
-                                c3g.G3Timestream(np.concatenate(alldata), self._units)
-                    del data
-                    del alldata
-                    data = None
-                    alldata = None
-                    if (det in self.local_dets) and memoff is not None:
-                        if self._export_cacheflag is not None:
-                            cname = "{}_{}".format(self._export_cacheflag, det)
-                            data = oldtod.cache.reference(cname)[memoff:memoff+nmem]
-                        else:
-                            data = oldtod.read_flags(detector=det, local_start=memoff, n=nmem)
-                    alldata = self.mpicomm.gather(data, root=0)
-                    if self.mpicomm.rank == 0:
-                        alldata = np.concatenate([ x for x in alldata if x is not None ])
-                        # The bindings of G3Vector seem to only work with lists...
-                        # Also there is no vectormap for unsigned char, so we have
-                        # to use int...
+                                c3g.G3Timestream(alldata, self._units)
+                        # The bindings of G3Vector seem to only work with
+                        # lists...  Also there is no vectormap for unsigned
+                        # char, so we have to use int...
                         flagmap[det] = \
-                            c3g.G3VectorInt(alldata.astype(np.int32).tolist())
-                    del data
-                    del alldata
+                            c3g.G3VectorInt(allflags.astype(np.int32).tolist())
+
+                    self.mpicomm.barrier()
+                    dindx += 1
+
+                del data
+                del alldata
+                del flags
+                del allflags
 
                 if self.mpicomm.rank == 0:
                     fdata[STR_DET] = detmap
                     fdata[STR_FLAG] = flagmap
                     writer(fdata)
+
+            if self.mpicomm.rank == 0:
+                # Close writer
+                del writer
 
         return
 
@@ -961,7 +1120,15 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
 
     # Distribute observations based on number of samples
     dweight = [ obsweight[x] for x in obslist ]
+    if cworld.rank == 0:
+        print("dweight = ",dweight, flush=True)
+    cworld.barrier()
+
     distobs = distribute_discrete(dweight, comm.ngroups)
+
+    if cworld.rank == 0:
+        print("distobs = ",distobs, flush=True)
+    cworld.barrier()
 
     # Distributed data
 
@@ -975,6 +1142,8 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
         opath = os.path.join(path, obslist[ob])
         fr = os.path.join(opath, "{}_{:08d}.g3".format(prefix, 0))
         obs, props, dets, nsamp = read_spt3g_obs(fr)
+        if cgroup.rank == 0:
+            print("group {} creating TOD {}".format(comm.group, opath), flush=True)
         obs["tod"] = todclass(cgroup, detranks, path=opath, prefix=prefix,
             **kwargs)
         data.obs.append(obs)

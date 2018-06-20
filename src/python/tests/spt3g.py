@@ -28,6 +28,7 @@ from ..tod import spt3g as s3g
 class Spt3gTest(MPITestCase):
 
     def setUp(self):
+        print("rank {} spt3g setUp".format(self.comm.rank), flush=True)
         # Reset the frame file size for these tests, so that we can test
         # boundary effects.
         self._original_framefile = s3g.TARGET_FRAMEFILE_SIZE
@@ -45,12 +46,19 @@ class Spt3gTest(MPITestCase):
             self.ngroup = 1
         self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
 
+        print("rank {} created toastcomm".format(self.comm.rank), flush=True)
+
         self.mygroup = self.toastcomm.group
+
+        print("rank {} in group {}".format(self.comm.rank, self.mygroup), flush=True)
 
         self.outdir = "toast_test_output"
         if self.comm.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
+
+        self.comm.barrier()
+        print("rank {} done mkdir".format(self.comm.rank), flush=True)
 
         self.datawrite = os.path.join(self.outdir, "test_3g")
         self.dataexport = os.path.join(self.outdir, "export_3g")
@@ -62,6 +70,8 @@ class Spt3gTest(MPITestCase):
         dist_obs = distribute_uniform(self.nobs, self.ngroup)
         self.myobs_first = dist_obs[self.mygroup][0]
         self.myobs_n = dist_obs[self.mygroup][1]
+
+        print("rank {} obs {} ... {}".format(self.comm.rank, self.myobs_first, self.myobs_first + self.myobs_n), flush=True)
 
         self.obslen = 90.0
         self.obsgap = 10.0
@@ -307,6 +317,8 @@ class Spt3gTest(MPITestCase):
     def test_io(self):
         start = MPI.Wtime()
 
+        print("rank {} enter test_io".format(self.comm.rank), flush=True)
+
         origdata = self.data_init(self.datawrite, "test")
 
         if self.comm.rank == 0:
@@ -318,10 +330,19 @@ class Spt3gTest(MPITestCase):
             use_todchunks=True)
         dumper.exec(origdata)
 
+        print("{}: Done with export 1".format(self.comm.rank), flush=True)
+        self.comm.barrier()
+
         self.data_verify(self.datawrite, "test")
+
+        print("{}: Done with verify 1".format(self.comm.rank), flush=True)
+        self.comm.barrier()
 
         loaddata = s3g.load_spt3g(self.toastcomm,
             self.toastcomm.comm_group.size, self.datawrite, "test", s3g.TOD3G)
+
+        print("{}: Done with load".format(self.comm.rank), flush=True)
+        self.comm.barrier()
 
         if self.comm.rank == 0:
             if os.path.isdir(self.dataexport):
@@ -332,7 +353,15 @@ class Spt3gTest(MPITestCase):
             use_todchunks=True)
         exporter.exec(loaddata)
 
+        print("{}: Done with export 2".format(self.comm.rank), flush=True)
+        self.comm.barrier()
+
         self.data_verify(self.dataexport, "test")
+
+        print("{}: Done with verify 2".format(self.comm.rank), flush=True)
+        self.comm.barrier()
+
+        assert(False)
 
         stop = MPI.Wtime()
         elapsed = stop - start

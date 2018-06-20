@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -32,9 +32,22 @@ class IntervalTest(MPITestCase):
         self.nint = 3
 
 
+    def test_tochunks(self):
+        intrvls = regular_intervals(self.nint, self.start, self.first,
+            self.rate, self.duration, self.gap)
+        totsamp = self.nint * ( int(self.duration * self.rate) + 1 ) \
+            + (self.nint - 1) * ( int(self.gap * self.rate) + 1 )
+        sizes = intervals_to_chunklist(intrvls, totsamp,
+            startsamp=self.first+10)
+        for it in intrvls:
+            print(it.first," ",it.last," ",it.start," ",it.stop)
+        print(sizes)
+        nt.assert_equal(np.sum(sizes), totsamp)
+
+
     def test_regular(self):
         start = MPI.Wtime()
-        
+
         intrvls = regular_intervals(self.nint, self.start, self.first,
                                     self.rate, self.duration, self.gap)
 
@@ -51,4 +64,3 @@ class IntervalTest(MPITestCase):
         stop = MPI.Wtime()
         elapsed = stop - start
         #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
-

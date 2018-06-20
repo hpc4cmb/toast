@@ -83,6 +83,8 @@ def test(name=None):
     mpirunner = MPITestRunner(verbosity=2)
     suite = unittest.TestSuite()
 
+    print("rank {} created test runner".format(comm.rank), flush=True)
+
     if name is None:
         suite.addTest( loader.loadTestsFromModule(testcbuffer) )
         suite.addTest( loader.loadTestsFromModule(testcache) )
@@ -122,11 +124,13 @@ def test(name=None):
         else:
             modname = "toast.tests.{}".format(name)
             suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
+            print("rank {} loaded test {}".format(comm.rank, name), flush=True)
 
     ret = 0
     with warnings.catch_warnings(record=True) as w:
         # Cause all toast warnings to be shown.
         warnings.simplefilter("always", UserWarning)
+        print("rank {} running suites".format(comm.rank), flush=True)
         _ret = mpirunner.run(suite)
         if not _ret.wasSuccessful():
             ret += 1

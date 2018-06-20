@@ -729,11 +729,15 @@ class TODTidas(TOD):
             # First process timestamps
 
             stamps = oldtod.read_times()
-            rowdata = self.grid_comm_row.gather(stamps, root=0)
+
+            full = None
+            if ranksamp == 0:
+                # allocate receive buffer
+                full = np.empty(self.total_samples, dtype=np.float64, order="C")
+
+            self.grid_comm_row.Gatherv(stamps, full, root=0)
 
             if ranksamp == 0:
-                full = np.empty(self.total_samples, dtype=np.float64, order="C")
-                np.concatenate(rowdata, out=full)
                 self._dgrp.write_times(0, full)
                 if self._export_dist is not None:
                     # Optionally setup intervals for future data distribution.
@@ -748,9 +752,7 @@ class TODTidas(TOD):
                     intr.write(ilist)
                     del ilist
                     del intr
-
                 del full
-            del rowdata
 
             # Next the boresight data. Serialize the writing
             for rs in range(sampranks):

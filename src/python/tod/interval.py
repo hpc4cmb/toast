@@ -179,7 +179,8 @@ def intervals_to_chunklist(intervals, nsamp, startsamp=0):
     Given a list of (possibly discontinuous) intervals, construct a
     list of contiguous chunks of samples.  The chunks are defined between
     the starting points of each interval.  An additional chunk at the
-    beginning and end are
+    beginning and end are added if necessary so that the sum of chunks
+    equals the total number of samples.
 
     Args:
         intervals (list): sorted list of Interval objects.
@@ -209,6 +210,7 @@ def intervals_to_chunklist(intervals, nsamp, startsamp=0):
             chunks.append(it.first - previous)
             previous = it.first
     # Handle final chunk
+    chunks.append(intervals[-1].last - previous + 1)
     sm = np.sum(chunks)
     if sm < nsamp:
         chunks.append(nsamp - sm)

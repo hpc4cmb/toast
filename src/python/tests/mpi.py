@@ -1,5 +1,5 @@
 # Copyright (c) 2015 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -31,7 +31,7 @@ class NoopStream(object):
     """
     def write(self, *args):
         pass
-    
+
     def writeln(self, *args):
         pass
 
@@ -283,7 +283,7 @@ class MPITestRunner(TextTestRunner):
     """
     A test runner class that collects output from all processes.
     """
-    def __init__(self, stream=sys.stderr, descriptions=True, verbosity=1,
+    def __init__(self, stream=sys.stdout, descriptions=True, verbosity=1,
                  failfast=False, buffer=False):
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.rank
@@ -293,8 +293,9 @@ class MPITestRunner(TextTestRunner):
         else:
             self.stream = stream
             #self.stream = NoopStream()
-        TextTestRunner.__init__(self, self.stream, descriptions, verbosity,
-                                failfast=failfast, buffer=buffer)
+        TextTestRunner.__init__(self, stream=self.stream,
+            descriptions=descriptions, verbosity=verbosity,
+            failfast=failfast, buffer=buffer)
         self.verbosity = verbosity
 
     def _make_result(self):
@@ -302,8 +303,8 @@ class MPITestRunner(TextTestRunner):
         Creates a TestResult object which will be used to store
         information about the executed tests.
         """
-        return MPITestResult(self.comm, self.stream, self.descriptions, 
-            self.verbosity)
+        return MPITestResult(self.comm, self.stream,
+            descriptions=self.descriptions, verbosity=self.verbosity)
 
 
     def run(self, test):
@@ -375,6 +376,3 @@ class MPITestRunner(TextTestRunner):
             pass
 
         return result
-
-
-
