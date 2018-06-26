@@ -568,8 +568,10 @@ def main():
 
     detweights = {}
     for d in detectors:
+        detweights[d] = 1.0
         net = fp[d]["NET"]
-        detweights[d] = 1.0 / (args.samplerate * net * net)
+        if net > 0:
+            detweights[d] /= (args.samplerate * net * net)
 
     if not args.madam:
         if comm.comm_world.rank == 0:
