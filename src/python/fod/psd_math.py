@@ -180,11 +180,19 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
         # Interpolate any empty bins
 
-        if np.any(cov_hits == 0) and np.any(cov_hits != 0):
+        if not np.all(good) and np.any(good):
             bad = cov_hits == 0
-            good = np.logical_not(bad)
-            lag = np.arange(lagmax)
-            cov[bad] = np.interp(lag[bad], lag[good], cov[good])
+            # The last bins should be left empty
+            i = cov.size - 1
+            while cov_hits[i] == 0:
+                cov[i] = 0
+                bad[i] = False
+                i -= 1
+            nbad = np.sum(bad)
+            if nbad > 0:
+                good = np.logical_not(bad)
+                lag = np.arange(lagmax)
+                cov[bad] = np.interp(lag[bad], lag[good], cov[good])
 
         # Fourier transform for the PSD.  We symmetrize the sample
         # autocovariance so that the FFT is real-valued.  Notice that
