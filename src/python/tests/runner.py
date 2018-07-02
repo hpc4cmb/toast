@@ -12,7 +12,6 @@ import warnings
 from .._version import __version__
 
 from .mpi import MPITestRunner
-from .mpi import MPITestInfo
 
 from ..vis import set_backend
 
@@ -53,7 +52,7 @@ if libsharp_available:
     from . import smooth as testsmooth
 
 
-def test(name=None):
+def test(name=None, verbosity=2):
     # We run tests with COMM_WORLD
     comm = MPI.COMM_WORLD
 
@@ -76,7 +75,7 @@ def test(name=None):
     # Run python tests.
 
     loader = unittest.TestLoader()
-    mpirunner = MPITestRunner(verbosity=2)
+    mpirunner = MPITestRunner(comm, verbosity=verbosity, warnings="ignore")
     suite = unittest.TestSuite()
 
     if name is None:
@@ -104,8 +103,8 @@ def test(name=None):
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
-        if tidas_available:
-            suite.addTest( loader.loadTestsFromModule(testtidas) )
+        # if tidas_available:
+        #     suite.addTest( loader.loadTestsFromModule(testtidas) )
         if libsharp_available:
             suite.addTest( loader.loadTestsFromModule(testopspysm) )
             suite.addTest( loader.loadTestsFromModule(testsmooth) )
@@ -118,12 +117,9 @@ def test(name=None):
             suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
 
     ret = 0
-    with warnings.catch_warnings(record=True) as w:
-        # Cause all toast warnings to be shown.
-        warnings.simplefilter("always", UserWarning)
-        _ret = mpirunner.run(suite)
-        if not _ret.wasSuccessful():
-            ret += 1
+    _ret = mpirunner.run(suite)
+    if not _ret.wasSuccessful():
+        ret += 1
 
     finalize()
 

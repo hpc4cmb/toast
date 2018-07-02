@@ -44,7 +44,7 @@ class Comm(object):
 
         self._ngroups = int(self._wsize / self._gsize)
         if self._ngroups*self._gsize != self._wsize:
-            raise RuntimeError('Requested group size ')
+            raise RuntimeError("Requested group size ")
         self._group = int(self._wrank / self._gsize)
 
         self._grank = self._wrank % self._gsize
@@ -188,7 +188,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
         all_breaks = np.sort(all_breaks)
         if all_breaks.size + 1 > groups:
             raise RuntimeError(
-                'Cannot divide {} chunks to {} groups with {} breaks.'.format(
+                "Cannot divide {} chunks to {} groups with {} breaks.".format(
                     chunks.size, groups, all_breaks.size))
 
     at_break = False
@@ -239,8 +239,8 @@ def distribute_uniform(totalsize, groups, breaks=None):
         all_breaks = np.sort(all_breaks)
         if len(all_breaks) > groups-1:
             raise RuntimeError(
-                'Cannot distribute {} chunks with {} breaks over {} groups'
-                ''.format(totalsize, len(all_breaks), groups))
+                "Cannot distribute {} chunks with {} breaks over {} groups"
+                "".format(totalsize, len(all_breaks), groups))
         groupcounts = []
         groupsizes = []
         offset = 0
@@ -400,7 +400,7 @@ class Data(object):
 
 
     def info(self, handle, flag_mask=255, common_flag_mask=255,
-             intervals='intervals'):
+             intervals=None):
         """
         Print information about the distributed data to the
         specified file handle.  Only the rank 0 process writes.
@@ -419,20 +419,31 @@ class Data(object):
             handle.write("Data distributed over {} processes in {} groups\n"
                          "".format(self._comm.world_size, self._comm.ngroups))
 
+        def _get_optional(k, dt):
+            if k in dt:
+                return dt[k]
+            else:
+                return None
+
         for ob in self.obs:
-            id = ob['id']
-            tod = ob['tod']
-            base = ob['baselines']
-            nse = ob['noise']
-            intrvl = ob[intervals]
+            id = ob["id"]
+            tod = _get_optional("tod", ob)
+            base = _get_optional("baselines", ob)
+            nse = _get_optional("noise", ob)
+            intrvl = None
+            if intervals is not None:
+                _get_optional(intervals, ob)
 
             if gcomm.rank == 0:
                 groupstr = "observation {}:\n".format(id)
-                groupstr = "{}  {} total samples, {} detectors\n".format(
-                    groupstr, tod.total_samples, len(tod.detectors))
+                for ko in sorted(ob.keys()):
+                    groupstr = "{}  key {}\n".format(groupstr, ko)
+                if tod is not None:
+                    groupstr = "{}  {} total samples, {} detectors\n".format(
+                        groupstr, tod.total_samples, len(tod.detectors))
                 if intrvl is not None:
                     groupstr = "{}  {} intervals:\n".format(groupstr,
-                                                            len(intrvl))
+                        len(intrvl))
                     for it in intrvl:
                         groupstr = "{}    {} --> {} ({} --> {})\n".format(
                             groupstr, it.first, it.last, it.start, it.stop)
@@ -440,75 +451,78 @@ class Data(object):
             # rank zero of the group will print general information,
             # and each process will get its statistics.
 
-            offset, nsamp = tod.local_samples
-            dets = tod.local_dets
-
             procstr = "  proc {}\n".format(gcomm.rank)
-            my_chunks = 1
-            if tod.local_chunks is not None:
-                my_chunks = tod.local_chunks[1]
-            procstr = "{}    sample range {} --> {} in {} chunks:\n".format(
-                procstr, offset, (offset + nsamp - 1), my_chunks)
+            if tod is not None:
+                offset, nsamp = tod.local_samples
+                dets = tod.local_dets
 
-            if tod.local_chunks is not None:
-                chkoff = tod.local_samples[0]
-                for chk in range(tod.local_chunks[1]):
-                    abschk = tod.local_chunks[0] + chk
-                    chkstart = chkoff
-                    chkstop = chkstart + tod.total_chunks[abschk] - 1
-                    procstr = "{}      {} --> {}\n".format(procstr, chkstart,
-                                                           chkstop)
-                    chkoff += tod.total_chunks[abschk]
+                my_chunks = 1
+                if tod.local_chunks is not None:
+                    my_chunks = tod.local_chunks[1]
+                procstr = "{}    sample range {} --> {} in {} chunks:\n".format(
+                    procstr, offset, (offset + nsamp - 1), my_chunks)
 
-            if nsamp > 0:
+                if tod.local_chunks is not None:
+                    chkoff = tod.local_samples[0]
+                    for chk in range(tod.local_chunks[1]):
+                        abschk = tod.local_chunks[0] + chk
+                        chkstart = chkoff
+                        chkstop = chkstart + tod.total_chunks[abschk] - 1
+                        procstr = "{}      {} --> {}\n".format(procstr,
+                            chkstart, chkstop)
+                        chkoff += tod.total_chunks[abschk]
 
-                stamps = tod.local_times()
+                if nsamp > 0:
+                    stamps = tod.local_times()
 
-                procstr = "{}    timestamps {} --> {}\n".format(
-                    procstr, stamps[0], stamps[-1])
+                    procstr = "{}    timestamps {} --> {}\n".format(
+                        procstr, stamps[0], stamps[-1])
 
-                common = tod.local_common_flags()
-                for dt in dets:
-                    procstr = "{}    det {}:\n".format(procstr, dt)
+                    common = tod.local_common_flags()
+                    for dt in dets:
+                        procstr = "{}    det {}:\n".format(procstr, dt)
 
-                    pdata = tod.local_pointing(dt)
+                        pdata = tod.local_pointing(dt)
 
-                    procstr = "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] " \
-                              "--> [{:.3e} {:.3e} {:.3e} {:.3e}]\n".format(
-                                  procstr, pdata[0, 0], pdata[0, 1], pdata[0, 2],
-                                  pdata[0, 3], pdata[-1, 0], pdata[-1, 1],
-                                  pdata[-1, 2], pdata[-1, 3])
+                        procstr = \
+                            "{}      pntg [{:.3e} {:.3e} {:.3e} {:.3e}] " \
+                            "--> [{:.3e} {:.3e} {:.3e} {:.3e}]\n".format(
+                            procstr, pdata[0, 0], pdata[0, 1], pdata[0, 2],
+                            pdata[0, 3], pdata[-1, 0], pdata[-1, 1],
+                            pdata[-1, 2], pdata[-1, 3])
 
-                    data = tod.local_signal(dt)
-                    flags = tod.local_flags(dt)
-                    procstr = "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(
-                        procstr, data[0], flags[0], data[-1], flags[-1])
-                    good = np.where(((flags & flag_mask) |
-                                     (common & common_flag_mask)) == 0)[0]
-                    procstr = "{}        {} good samples\n".format(procstr,
-                                                                   len(good))
-                    try:
-                        min = np.min(data[good])
-                        max = np.max(data[good])
-                        mean = np.mean(data[good])
-                        rms = np.std(data[good])
+                        data = tod.local_signal(dt)
+                        flags = tod.local_flags(dt)
+                        procstr = \
+                            "{}      {:.3e} ({}) --> {:.3e} ({})\n".format(
+                            procstr, data[0], flags[0], data[-1], flags[-1])
+                        good = np.where(((flags & flag_mask) |
+                            (common & common_flag_mask)) == 0)[0]
+                        procstr = \
+                            "{}        {} good samples\n".format(procstr,
+                            len(good))
+                        try:
+                            min = np.min(data[good])
+                            max = np.max(data[good])
+                            mean = np.mean(data[good])
+                            rms = np.std(data[good])
+                            procstr = "{}        min = {:.4e}, max = {:.4e}, " \
+                                "mean = {:.4e}, rms = {:.4e}\n".format(
+                                procstr, min, max, mean, rms)
+                        except:
+                            procstr = "{}        min = N/A, max = N/A, " \
+                                "mean = N/A, rms = N/A\n".format(procstr)
+
+                    for cname in tod.cache.keys():
+                        procstr = "{}    cache {}:\n".format(procstr, cname)
+                        ref = tod.cache.reference(cname)
+                        min = np.min(ref)
+                        max = np.max(ref)
+                        mean = np.mean(ref)
+                        rms = np.std(ref)
                         procstr = "{}        min = {:.4e}, max = {:.4e}, " \
-                                  "mean = {:.4e}, rms = {:.4e}\n".format(
-                                      procstr, min, max, mean, rms)
-                    except:
-                        procstr = "{}        min = N/A, max = N/A, " \
-                                  "mean = N/A, rms = N/A\n".format(procstr)
-
-                for cname in tod.cache.keys():
-                    procstr = "{}    cache {}:\n".format(procstr, cname)
-                    ref = tod.cache.reference(cname)
-                    min = np.min(ref)
-                    max = np.max(ref)
-                    mean = np.mean(ref)
-                    rms = np.std(ref)
-                    procstr = "{}        min = {:.4e}, max = {:.4e}, " \
-                              "mean = {:.4e}, rms = {:.4e}\n".format(
-                                  procstr, min, max, mean, rms)
+                            "mean = {:.4e}, rms = {:.4e}\n".format(
+                            procstr, min, max, mean, rms)
 
             recvstr = ""
             if gcomm.rank == 0:

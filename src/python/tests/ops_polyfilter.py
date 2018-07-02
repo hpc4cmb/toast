@@ -23,111 +23,55 @@ from ..tod.sim_tod import *
 
 from .. import rng as rng
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class OpPolyFilterTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = 'toast_test_output'
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-        self.data = Data(self.toastcomm)
+        # Create one observation per group, and each observation will have
+        # one detector per process and a single chunk.  Data within an
+        # observation is distributed by detector.
 
-        self.order = 5
-
-        self.dets = ['f1a_apply', 'f1b_apply', 'f2a', 'f2b', 'white', 'high']
-        self.fp = {}
-        for d in self.dets:
-            self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
-
+        self.data = create_distdata(self.comm, obs_per_group=1)
+        self.ndet = self.data.comm.group_size
         self.rate = 20.0
 
-        self.rates = {}
-        self.fmin = {}
-        self.fknee = {}
-        self.alpha = {}
-        self.NET = {}
+        # Create detectors with a range of knee frequencies.
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate, net=10.0,
+            fmin=1.0e-5, fknee=np.linspace(0.01, 0.19, num=self.ndet))
 
-        self.rates['f1a_apply'] = self.rate
-        self.fmin['f1a_apply'] = 1.0e-5
-        self.fknee['f1a_apply'] = 0.15
-        self.alpha['f1a_apply'] = 1.0
-        self.NET['f1a_apply'] = 10.0
+        # Fitting order
+        self.order = 5
 
-        self.rates['f1b_apply'] = self.rate
-        self.fmin['f1b_apply'] = 1.0e-5
-        self.fknee['f1b_apply'] = 0.1
-        self.alpha['f1b_apply'] = 1.0
-        self.NET['f1b_apply'] = 10.0
+        # Total Samples
+        self.totsamp = 100000
 
-        self.rates['f2a'] = self.rate
-        self.fmin['f2a'] = 1.0e-5
-        self.fknee['f2a'] = 0.05
-        self.alpha['f2a'] = 1.0
-        self.NET['f2a'] = 10.0
+        # Populate the observations (one per group)
 
-        self.rates['f2b'] = self.rate
-        self.fmin['f2b'] = 1.0e-5
-        self.fknee['f2b'] = 0.001
-        self.alpha['f2b'] = 1.0
-        self.NET['f2b'] = 10.0
-
-        self.rates['white'] = self.rate
-        self.fmin['white'] = 0.0
-        self.fknee['white'] = 0.0
-        self.alpha['white'] = 1.0
-        self.NET['white'] = 10.0
-
-        self.rates['high'] = self.rate
-        self.fmin['high'] = 1.0e-5
-        self.fknee['high'] = 40.0
-        self.alpha['high'] = 2.0
-        self.NET['high'] = 10.0
-
-        self.totsamp = 10000
-
-        self.oversample = 2
-
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
-        self.chunksize = chunksize
-
-        # Construct an empty TOD (no pointing needed)
-
-        self.tod = TODHpixSpiral(
-            self.toastcomm.comm_group,
-            self.fp,
+        tod = TODHpixSpiral(
+            self.data.comm.comm_group,
+            dquat,
             self.totsamp,
+            detranks=self.data.comm.comm_group.size,
             firsttime=0.0,
             rate=self.rate,
-            nside=512,
-            sampsizes=chunks)
+            nside=512)
 
-        # construct an analytic noise model
+        # Construct an analytic noise model for the detectors
 
-        self.nse = AnalyticNoise(
-            rate=self.rates,
-            fmin=self.fmin,
-            detectors=self.dets,
-            fknee=self.fknee,
-            alpha=self.alpha,
-            NET=self.NET
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
         )
 
         intervals = []
@@ -138,48 +82,34 @@ class OpPolyFilterTest(MPITestCase):
                 start=istart/self.rate, stop=istop/self.rate,
                 first=istart, last=istop-1))
 
-        ob = {}
-        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
-        ob['id'] = 0
-        ob['tod'] = self.tod
-        ob['intervals'] = intervals
-        ob['baselines'] = None
-        ob['noise'] = self.nse
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
+        self.data.obs[0]["intervals"] = intervals
 
-        self.data.obs.append(ob)
 
     def test_filter(self):
-        start = MPI.Wtime()
-
-        ob = self.data.obs[0]
-        tod = ob['tod']
-        nse = ob['noise']
-
         # generate timestreams
-
         op = OpSimNoise()
         op.exec(self.data)
 
         # Replace the noise with a polynomial fit
-
-        old_rms = {}
-
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            x = np.arange(y.size)
-            p = np.polyfit(x, y, self.order)
-            y[:] = np.polyval(p, x)
-            old_rms[det] = np.std(y)
-            del y
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            orms = {}
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                x = np.arange(y.size)
+                p = np.polyfit(x, y, self.order)
+                y[:] = np.polyval(p, x)
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
 
         # Filter timestreams
-
-        op = OpPolyFilter(name='noise', order=self.order, pattern=r'.*apply.*')
+        op = OpPolyFilter(name="noise", order=self.order)
         op.exec(self.data)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
 
         # Ensure all timestreams are zeroed out by the filter.
         # The polynomial basis used in populating the TOD is different
@@ -187,17 +117,15 @@ class OpPolyFilterTest(MPITestCase):
         # strictly orthogonal on a sparse grid so we expect a low level
         # residual.
 
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            rms = np.std(y)
-            old = old_rms[det]
-            if rms / old > 1e-6 and 'apply' in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'
-                                   ''.format(det, old, rms))
-            if rms / old < 1e-1 and 'apply' not in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'
-                                   ''.format(det, old, rms))
-            del y
-
-        self.print_in_turns('polyfilter test took {:.3f} s'.format(elapsed))
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) > 1e-6:
+                    raise RuntimeError("det {} old rms = {}, new rms = {}"
+                                       "".format(det, old, rms))
+                del y
+        return

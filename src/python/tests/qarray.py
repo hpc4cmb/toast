@@ -32,35 +32,48 @@ class QarrayTest(MPITestCase):
         self.rot_by_q1 = np.array([0.4176698, 0.84203849, 0.34135482])
         self.rot_by_q2 = np.array([0.8077876, 0.3227185, 0.49328689])
 
+
     def test_arraylist_dot_onedimarrays(self):
         np.testing.assert_array_almost_equal(
             qarray.arraylist_dot(self.vec, self.vec +1),
             np.dot(self.vec, self.vec +1))
+        return
+
 
     def test_arraylist_dot_1dimbymultidim(self):
         np.testing.assert_array_almost_equal(
             qarray.arraylist_dot(self.vec2, self.vec),
             np.dot(self.vec2, self.vec))
+        return
+
 
     def test_arraylist_dot_multidim(self):
         result = np.hstack(
             np.dot(v1, v2) for (v1, v2) in zip(self.vec2, self.vec2+1))
         np.testing.assert_array_almost_equal(
             qarray.arraylist_dot(self.vec2, self.vec2 +1), result)
+        return
+
 
     def test_inv(self):
         np.testing.assert_array_almost_equal(qarray.inv(self.q1), self.q1inv)
+        return
+
 
     def test_norm(self):
         np.testing.assert_array_almost_equal(
             qarray.norm(self.q1), self.q1/np.linalg.norm(self.q1))
         np.testing.assert_array_almost_equal(
             qarray.norm(self.qtonormalize), self.qnormalized)
+        return
+
 
     def test_mult_onequaternion(self):
         my_mult_result = qarray.mult(self.q1, self.q2)
         np.testing.assert_array_almost_equal(
             my_mult_result, self.mult_result)
+        return
+
 
     def test_mult_qarray(self):
         dim = (3, 1)
@@ -80,11 +93,15 @@ class QarrayTest(MPITestCase):
         res = qarray.mult(np.tile(self.q1, 10).reshape((-1, 4)), nulquat)
         np.testing.assert_array_almost_equal(
             res, np.tile(check, 10).reshape((-1, 4)))
+        return
+
 
     def test_rotate_onequaternion(self):
         my_rot_result = qarray.rotate(self.q1, self.vec)
         np.testing.assert_array_almost_equal(
             my_rot_result, self.rot_by_q1)
+        return
+
 
     def test_rotate_qarray(self):
         my_rot_result = qarray.rotate(np.vstack([self.q1, self.q2]), self.vec)
@@ -108,6 +125,8 @@ class QarrayTest(MPITestCase):
         dir = qarray.rotate(quats, zaxis)
 
         np.testing.assert_array_almost_equal(dir, check)
+        return
+
 
     def test_slerp(self):
         q = qarray.norm(np.array([[2., 3, 4, 5], [6., 7, 8, 9]]))
@@ -121,11 +140,15 @@ class QarrayTest(MPITestCase):
             q_interp[1], qarray.norm(q[0] * 2/3 + q[1]/3), decimal=4)
         np.testing.assert_array_almost_equal(
             q_interp[2], qarray.norm((q[0] + q[1])/2), decimal=4)
+        return
+
 
     def test_rotation(self):
         np.testing.assert_array_almost_equal(
             qarray.rotation(np.array([0.0, 0.0, 1.0]), np.radians(30)),
             np.array([0, 0, np.sin(np.radians(15)), np.cos(np.radians(15))]))
+        return
+
 
     def test_toaxisangle(self):
         axis = np.array([0.0, 0.0, 1.0])
@@ -134,6 +157,8 @@ class QarrayTest(MPITestCase):
         qaxis, qangle = qarray.to_axisangle(q)
         np.testing.assert_array_almost_equal(axis, qaxis)
         self.assertAlmostEqual(angle, qangle)
+        return
+
 
     def test_exp(self):
         # Exponential test from:
@@ -142,6 +167,8 @@ class QarrayTest(MPITestCase):
             qarray.exp(self.qeasy),
             np.array([[0.71473568, 0.71473568, 0.23824523, 2.22961712],
                       [0.71473568, 0.71473568, 0.23824523, 2.22961712]]))
+        return
+
 
     def test_ln(self):
         # Log test from: http://world.std.com/~sweetser/java/qcalc/qcalc.html
@@ -149,6 +176,8 @@ class QarrayTest(MPITestCase):
             qarray.ln(self.qeasy),
             np.array([[0.31041794, 0.31041794, 0.10347265, 0.],
                       [0.31041794, 0.31041794, 0.10347265, 0.]]))
+        return
+
 
     def test_pow(self):
         # Pow test from: http://world.std.com/~sweetser/java/qcalc/qcalc.html
@@ -160,6 +189,8 @@ class QarrayTest(MPITestCase):
             qarray.pow(self.qeasy, 0.1),
             np.array([[0.03103127, 0.03103127, 0.01034376, 0.99898305],
                       [0.03103127, 0.03103127, 0.01034376, 0.99898305]]))
+        return
+
 
     def test_torotmat(self):
         # Rotmat test from Quaternion
@@ -168,10 +199,14 @@ class QarrayTest(MPITestCase):
             np.array([[8.00000000e-01, -2.77555756e-17, 6.00000000e-01],
                       [3.60000000e-01, 8.00000000e-01, -4.80000000e-01],
                       [-4.80000000e-01, 6.00000000e-01, 6.40000000e-01]]))
+        return
+
 
     def test_fromrotmat(self):
         np.testing.assert_array_almost_equal(
             self.qeasy[0], qarray.from_rotmat(qarray.to_rotmat(self.qeasy[0])))
+        return
+
 
     def test_fromvectors(self):
         angle = np.radians(30)
@@ -194,6 +229,7 @@ class QarrayTest(MPITestCase):
             np.cos(np.radians(15))]), 3).reshape(-1, 4)
 
         np.testing.assert_array_almost_equal(q, comp)
+        return
 
 
     def test_fp(self):
@@ -213,6 +249,8 @@ class QarrayTest(MPITestCase):
             check = np.dot(detdir, zaxis)
 
             np.testing.assert_almost_equal(check, np.cos(radius))
+        return
+
 
     def test_angles(self):
         ntheta = 5
@@ -251,9 +289,9 @@ class QarrayTest(MPITestCase):
         np.testing.assert_array_almost_equal(check, phi, decimal=6)
 
         check = np.arctan2(
-            orient[:, 0]*dir[:, 1] - orient[:, 1]*dir[:, 0],
-            - (orient[:, 0]*dir[:, 2]*dir[:, 0])
-            - (orient[:, 1]*dir[:, 2]*dir[:, 1])
+            orient[:, 0]*dir[:, 1] - orient[:, 1]*dir[:, 0], \
+            - (orient[:, 0]*dir[:, 2]*dir[:, 0]) \
+            - (orient[:, 1]*dir[:, 2]*dir[:, 1]) \
             + (orient[:, 2]*(dir[:, 0]*dir[:, 0] + dir[:, 1]*dir[:, 1])))
 
         np.testing.assert_array_almost_equal(check, pa, decimal=6)
@@ -325,13 +363,14 @@ class QarrayTest(MPITestCase):
         check_theta, check_phi = qarray.to_position(quat)
         check_theta2, check_phi2, check_pa = qarray.to_angles(quat, IAU=False)
 
-        np.testing.assert_array_almost_equal(check_theta, check_theta2, decimal=4)
+        np.testing.assert_array_almost_equal(check_theta, check_theta2,
+            decimal=4)
         np.testing.assert_array_almost_equal(check_phi, check_phi2, decimal=4)
+        return
+
 
     def test_depths(self):
-        """Verify that qarray methods preserve the depths of their inputs
-        """
-
+        # Verify that qarray methods preserve the depths of their inputs
         np.testing.assert_equal(qarray.mult(self.q1, self.q2).shape, (4,))
         np.testing.assert_equal(
             qarray.mult(np.atleast_2d(self.q1), self.q2).shape, (1, 4))
@@ -403,3 +442,4 @@ class QarrayTest(MPITestCase):
         np.testing.assert_equal(np.shape(ret2[0]), (1,))
         np.testing.assert_equal(np.shape(ret2[1]), (1,))
         np.testing.assert_equal(np.shape(ret2[2]), (1,))
+        return

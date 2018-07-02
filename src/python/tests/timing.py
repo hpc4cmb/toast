@@ -10,10 +10,12 @@ from ..mpi import MPI
 from .mpi import MPITestCase
 from .. import timing as timing
 
+
 def fibonacci(n):
     if n < 2:
         return n
     return fibonacci(n - 1) + fibonacci(n - 2)
+
 
 class TimingTest(MPITestCase):
 
@@ -22,13 +24,15 @@ class TimingTest(MPITestCase):
         timing.timing_manager.use_timers = True
         timing.timing_manager.serial_report = True
 
-    # Test if the timers are working if not disabled at compilation
+
     def test_timing(self):
+        # Test if the timers are working if not disabled at compilation
         if timing.enabled() is False:
             return
 
         tman = timing.timing_manager()
-        tman.set_output_file("timing_report.out", self.outdir, "timing_report.json")
+        tman.set_output_file("timing_report_{}.out".format(self.comm.rank),
+            self.outdir, "timing_report_{}.json".format(self.comm.rank))
 
         def time_fibonacci(n):
             atimer = timing.auto_timer('({})@{}'.format(n, timing.FILE(use_dirname=True)))
@@ -60,17 +64,18 @@ class TimingTest(MPITestCase):
             self.assertFalse(t.real_elapsed() < 0.0)
             self.assertFalse(t.user_elapsed() < 0.0)
         timing.toggle(True)
+        return
 
 
-    # Test the timing on/off toggle functionalities
     def test_toggle(self):
+        # Test the timing on/off toggle functionalities
         # if compiled with DISABLE_TIMERS
         if timing.enabled() is False:
             return
 
         tman = timing.timing_manager()
         timing.toggle(True)
-        print ('Current max depth: {}'.format(timing.max_depth()))
+        #print ('Current max depth: {}'.format(timing.max_depth()))
         timing.set_max_depth(timing.default_max_depth())
         tman.clear()
 
@@ -96,13 +101,14 @@ class TimingTest(MPITestCase):
             fibonacci(24)
         self.assertEqual(tman.size(), 1)
 
-        tman.set_output_file("timing_toggle.out", self.outdir,
-                             "timing_toggle.json")
+        tman.set_output_file("timing_toggle_{}.out".format(self.comm.rank),
+            self.outdir, "timing_toggle_{}.json".format(self.comm.rank))
         tman.report()
+        return
 
 
-    # Test the timing on/off toggle functionalities
     def test_max_depth(self):
+        # Test the timing on/off toggle functionalities
         # if compiled with DISABLE_TIMERS
         if timing.enabled() is False:
             return
@@ -123,6 +129,7 @@ class TimingTest(MPITestCase):
 
         self.assertEqual(tman.size(), ntimers)
 
-        tman.set_output_file("timing_depth.out", self.outdir,
-                             "timing_depth.json")
+        tman.set_output_file("timing_depth_{}.out".format(self.comm.rank),
+            self.outdir, "timing_depth_{}.json".format(self.comm.rank))
         tman.report()
+        return

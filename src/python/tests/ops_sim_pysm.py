@@ -17,61 +17,50 @@ from ..map.rings import DistRings
 from ..map import PySMSky
 from ..todmap.pysm_operator import OpSimPySM
 
+from ..dist import distribute_uniform
+
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 def setup_toast_observations(self, nside):
-    self.outdir = "toast_test_output"
-    if self.comm.rank == 0:
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
+    fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+    self.outdir = create_outdir(self.comm, fixture_name)
 
-    # Note: self.comm is set by the test infrastructure
-    self.worldsize = self.comm.size
-    if (self.worldsize >= 2):
-        self.groupsize = int( self.worldsize / 2 )
-        self.ngroup = 2
-    else:
-        self.groupsize = 1
-        self.ngroup = 1
-    self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-    self.data = Data(self.toastcomm)
+    # Create one observation per group, and each observation will have
+    # a fixed number of detectors and one chunk per process.
+    self.data = create_distdata(self.comm, obs_per_group=1)
 
-    spread = 0 * np.pi / 180.0
-    angterm = np.cos(spread / 2.0)
-    axiscoef = np.sin(spread / 2.0)
-
+    # Create a single detector.  We could use more, but that would change
+    # the results compared to previous versions of these unit tests.
+    self.ndet = 1
     self.dets = {
-        'fake_0A' : np.array([axiscoef, 0.0, 0.0, angterm]),
+        'fake_0A' : np.array([0.0, 0.0, 0.0, 1.0]),
     }
 
+    # Use one TOD sample per healpix pixel with the "spiral" pointing.
     self.nside = nside
     self.totsamp = 12 * self.nside**2
+    self.rate = 1.0
 
-    # Every process group creates a single observation that will
-    # have the same data.
-    nobs = 1
+    # Chunks - one per process.
+    chunks = uniform_chunks(self.totsamp, nchunk=self.data.comm.group_size)
 
-    for i in range(nobs):
-        # create the TOD for this observation.  This fake TOD just has
-        # boresight pointing that spirals around the healpix rings.
+    # Populate the observations (one per group)
 
-        tod = TODHpixSpiral(
-            self.toastcomm.comm_group,
-            self.dets,
-            self.totsamp,
-            rate=1.0,
-            nside=self.nside,
-            detranks=self.toastcomm.group_size,
-        )
+    tod = TODHpixSpiral(
+        self.data.comm.comm_group,
+        self.dets,
+        self.totsamp,
+        detranks=1,
+        firsttime=0.0,
+        rate=self.rate,
+        nside=self.nside,
+        sampsizes=chunks)
 
-        ob = {}
-        ob['name'] = 'test'
-        ob['id'] = 0
-        ob['tod'] = tod
-        ob['intervals'] = None
-        ob['baselines'] = None
-        ob['noise'] = None
+    self.data.obs[0]["tod"] = tod
 
-        self.data.obs.append(ob)
+    return
 
 
 class OpSimPySMTest(MPITestCase):
@@ -84,15 +73,12 @@ class OpSimPySMTest(MPITestCase):
 
 
     def test_pysm_local_pix(self):
-        start = MPI.Wtime()
-
         npix = 12 * self.nside * self.nside
 
-        npix_local = int(np.ceil(npix / float(self.toastcomm.comm_world.size)))
-        local_pixels = np.arange(
-            self.toastcomm.comm_world.rank * npix_local,
-            min(self.toastcomm.comm_world.rank*npix_local + npix_local, npix)
-        )
+        local_start, nlocal = \
+            distribute_uniform(npix, self.comm.size)[self.comm.rank]
+        local_pixels = np.arange(nlocal, dtype=np.int64)
+        local_pixels += local_start
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
@@ -104,36 +90,33 @@ class OpSimPySMTest(MPITestCase):
             'ame': "a1",
         }
         bandpasses = {
-                "1a": (np.linspace(20, 25, 10), np.ones(10)),
-                "1b": (np.linspace(21, 26, 10), np.ones(10)),
-                "2a": (np.linspace(18, 23, 10), np.ones(10)),
-                "2b": (np.linspace(19, 24, 10), np.ones(10)),
+            "1a": (np.linspace(20, 25, 10), np.ones(10)),
+            "1b": (np.linspace(21, 26, 10), np.ones(10)),
+            "2a": (np.linspace(18, 23, 10), np.ones(10)),
+            "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=local_pixels, nside=self.nside,
                      pysm_sky_config=pysm_sky_config, units='uK_RJ')
         local_map = {} # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
 
-        # Now we have timestreams in the cache.  We could compare the
-        # timestream values or we could make a binned map and look at those
-        # values.
+        if self.comm.rank == 0:
+            # The first process has the first few pixels
+            np.testing.assert_almost_equal(
+                local_map["sky_1a"][0, :3],
+                np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(
-            local_map["sky_1a"][0, :3],
-            np.array([121.40114346, 79.86737489, 77.23336053]))
+        if self.comm.rank == self.comm.size - 1:
+            # The last process has the last few pixels
+            np.testing.assert_almost_equal(
+                local_map["sky_1b"][2, -3:],
+                np.array([1.57564944, -0.22345616, -3.55604102]))
 
-        np.testing.assert_almost_equal(
-            local_map["sky_1b"][2, -3:],
-            np.array([1.57564944, -0.22345616, -3.55604102]))
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
 
     def test_pysm_distrings(self):
-        start = MPI.Wtime()
-
-        dist_rings = DistRings(self.toastcomm.comm_world,
+        dist_rings = DistRings(self.data.comm.comm_world,
                                nside = self.nside,
                                nnz = 3)
 
@@ -147,31 +130,30 @@ class OpSimPySMTest(MPITestCase):
             'ame': "a1",
         }
         bandpasses = {
-                "1a": (np.linspace(20, 25, 10), np.ones(10)),
-                "1b": (np.linspace(21, 26, 10), np.ones(10)),
-                "2a": (np.linspace(18, 23, 10), np.ones(10)),
-                "2b": (np.linspace(19, 24, 10), np.ones(10)),
+            "1a": (np.linspace(20, 25, 10), np.ones(10)),
+            "1b": (np.linspace(21, 26, 10), np.ones(10)),
+            "2a": (np.linspace(18, 23, 10), np.ones(10)),
+            "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(local_pixels=dist_rings.local_pixels, nside=self.nside,
                      pysm_sky_config=pysm_sky_config, units='uK_RJ')
         local_map = {} # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
 
-        # Now we have timestreams in the cache.  We could compare the
-        # timestream values or we could make a binned map and look at those
-        # values.
+        if self.comm.rank == 0:
+            # The first process has the first few pixels
+            np.testing.assert_almost_equal(
+                local_map["sky_1a"][0, :3],
+                np.array([121.40114346, 79.86737489, 77.23336053]))
 
-        np.testing.assert_almost_equal(
-            local_map["sky_1a"][0, :3],
-            np.array([121.40114346, 79.86737489, 77.23336053]))
+        if self.comm.rank == 0:
+            # The first process has the symmetric rings at the end of the map
+            np.testing.assert_almost_equal(
+                local_map["sky_1b"][2, -3:],
+                np.array([1.57564944, -0.22345616, -3.55604102]))
 
-        np.testing.assert_almost_equal(
-            local_map["sky_1b"][2, -3:],
-            np.array([1.57564944, -0.22345616, -3.55604102]))
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("test_pysm took {:.3f} s".format(elapsed))
 
     def test_op_pysm_nosmooth(self):
         # expand the pointing into a low-res pointing matrix
@@ -191,7 +173,7 @@ class OpSimPySMTest(MPITestCase):
             'bandwidth_ghz': 5,
             'fmin': 1e-05,
             'fwhm': 0.16666666666666666}}
-        op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
+        op_sim_pysm = OpSimPySM(comm=self.data.comm.comm_world,
                                 out='signal',
                                 pysm_model="a2,d7,f1,s3,c1",
                                 focalplanes=[focalplane],
@@ -200,6 +182,7 @@ class OpSimPySMTest(MPITestCase):
                                 apply_beam=False, nest=False, units='uK_RJ')
 
         op_sim_pysm.exec(self.data)
+
         tod = self.data.obs[0]["tod"]
         rescanned_tod = tod.cache.reference("signal_fake_0A")
         pix = tod.cache.reference("pixels_fake_0A")
@@ -214,13 +197,19 @@ class OpSimPySMTest(MPITestCase):
         expected = []
         for i, (qw, uw) in enumerate([(-1, 1), (1, 1), (1, -1)]):
             expected.append(1.*I[i] + qw*0.70710678*Q[i] + uw*0.70710678*U[i])
-        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
-                                             decimal=4)
+
+        if tod.mpicomm.rank == 0:
+            np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
+                decimal=4)
+
+        return
+
 
 class OpSimPySMTestSmooth(MPITestCase):
 
     def setUp(self):
         setup_toast_observations(self, nside=64)
+
 
     def test_op_pysm_smooth(self):
         # expand the pointing into a low-res pointing matrix
@@ -233,7 +222,7 @@ class OpSimPySMTestSmooth(MPITestCase):
             'bandwidth_ghz': 5,
             #'fwhm': 30*0.16666666666666666}}
             'fwhm': 600}} # fwhm is in arcmin
-        op_sim_pysm = OpSimPySM(comm=self.toastcomm.comm_world,
+        op_sim_pysm = OpSimPySM(comm=self.data.comm.comm_world,
                                 out='signal',
                                 pysm_model="a2,d7,f1,s3,c1",
                                 focalplanes=[focalplane],
@@ -242,7 +231,9 @@ class OpSimPySMTestSmooth(MPITestCase):
                                 apply_beam=True, nest=False, units='uK_RJ')
 
         op_sim_pysm.exec(self.data)
-        rescanned_tod = self.data.obs[0]["tod"].cache.reference("signal_fake_0A")
+
+        tod = self.data.obs[0]["tod"]
+        rescanned_tod = tod.cache.reference("signal_fake_0A")
 
         I = np.array([94.77166125, 91.80626154, 95.08816366])
         Q = np.array([-5.23292836,  4.85879899, -4.80883829])
@@ -250,5 +241,8 @@ class OpSimPySMTestSmooth(MPITestCase):
         expected = []
         for i, (qw, uw) in enumerate([(-1, 1), (1, 1), (1, -1)]):
             expected.append(1.*I[i] + qw*0.70710678*Q[i] + uw*0.70710678*U[i])
-        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
-                                             decimal=1)
+
+        if tod.mpicomm.rank == 0:
+            np.testing.assert_array_almost_equal(rescanned_tod[:3], expected,
+                decimal=1)
+        return

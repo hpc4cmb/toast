@@ -4,7 +4,7 @@ language: python
 
 matrix:
   include:
-    # GCC 4.8
+    # GCC 4.8 - this is the default version for many distros
     - os: linux
       dist: trusty
       sudo: false
@@ -28,32 +28,6 @@ matrix:
             - pkg-config
       env:
         - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++) && export FC=$(which gfortran)"
-    # GCC 4.9
-    - os: linux
-      dist: trusty
-      sudo: false
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - build-essential
-            - gcc-4.9
-            - g++-4.9
-            - gfortran-4.9
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - libhdf5-dev
-            - libmpich-dev
-            - mpich
-            - fftw3-dev
-            - cfitsio-dev
-            - libatlas-base-dev
-            - pkg-config
-      env:
-        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9)"
     # GCC 5
     - os: linux
       dist: trusty
@@ -213,8 +187,9 @@ install:
 # Configure, build, and run tests
 
 script:
-    - python -c "import toast.tests; toast.tests.run()"
-    - cd examples/; bash run_tiny_tests.sh
+    - export OMP_NUM_THREADS=2
+    - mpirun -np 4 python -c "import toast.tests; toast.tests.run()"
+    - cd examples/; mpirun -np 4 bash run_tiny_tests.sh
 
 # Slack integration
 

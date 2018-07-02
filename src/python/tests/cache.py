@@ -36,8 +36,6 @@ class CacheTest(MPITestCase):
 
 
     def test_create(self):
-        start = MPI.Wtime()
-
         for k, v in self.types.items():
             ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
             del ref
@@ -73,15 +71,10 @@ class CacheTest(MPITestCase):
             self.pycache.destroy('test-{}'.format(k))
 
         self.cache.clear()
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("cache create test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_create_none(self):
-        start = MPI.Wtime()
-
         try:
             ref = self.cache.create(None, np.float, (1,10))
             raise RuntimeError('Creating object with None key succeeded')
@@ -89,16 +82,10 @@ class CacheTest(MPITestCase):
             pass
 
         self.cache.clear()
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns(
-            "cache create none test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_put_none(self):
-        start = MPI.Wtime()
-
         try:
             ref = self.cache.put(None, np.float, np.arange(10))
             raise RuntimeError('Putting an object with None key succeeded')
@@ -106,34 +93,22 @@ class CacheTest(MPITestCase):
             pass
 
         self.cache.clear()
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("cache put none test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_clear(self):
-        start = MPI.Wtime()
-
         for k, v in self.types.items():
             ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
             del ref
-
-        warnings.filterwarnings('error')
-        self.cache.clear('.*')
-        self.cache.clear('.*')
-        warnings.resetwarnings()
-
+        # warnings.filterwarnings('error')
+        # self.cache.clear('.*')
+        # self.cache.clear('.*')
+        # warnings.resetwarnings()
         self.cache.clear()
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("cache clear test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_alias(self):
-        start = MPI.Wtime()
-
         ref = self.cache.put('test', np.arange(10))
         del ref
 
@@ -152,7 +127,4 @@ class CacheTest(MPITestCase):
 
         ex = self.cache.exists('test-alias-2')
         self.assertFalse(ex)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("cache alias test took {:.3f} s".format(elapsed))
+        return

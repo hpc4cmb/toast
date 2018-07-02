@@ -102,13 +102,17 @@ namespace toast { namespace mpi_shmem {
                 // If there is memory already allocated, preserve its
                 // contents.
 
-                size_t n_copy;
+                size_t n_copy = 0;
                 T *temp;
 
-                if (n < n_)
+                if (n < n_) {
+                    // We are shrinking the memory
                     n_copy = n;
-                else
-                    n_copy = n;
+                } else if (n_ > 0) {
+                    // We are expanding the memory AND
+                    // we currently have a non-zero memory size
+                    n_copy = n_;
+                }
 
                 if ( n_copy > 0 && rank_ == 0 ) {
                     temp = ( T* ) std::malloc( sizeof(T) * n_copy );

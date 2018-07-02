@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -23,139 +23,105 @@ from ..tod.sim_noise import *
 from ..tod.sim_interval import *
 from ..map import *
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class BinnedTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-        self.mapdir = os.path.join(self.outdir, "binned")
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.mapdir):
-                os.mkdir(self.mapdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
+        # Create one observation per group, and each observation will have
+        # a fixed number of detectors and one chunk per process.
 
-        self.toastcomm = Comm(world=self.comm)
-        self.data = Data(self.toastcomm)
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.detnames = ['bore']
-        self.dets = {
-            'bore' : np.array([0.0, 0.0, 1.0, 0.0])
-            }
+        self.ndet = 1
+        self.rate = 20.0
+        self.hwprpm = 100
+
+        # Create detectors with default properties
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate)
+
+        # Samples per observation
+        self.totsamp = 2000000
+
+        # Pixelization
 
         self.sim_nside = 32
         self.sim_npix = 12 * self.sim_nside**2
 
-        self.totsamp = 2000000
-
         self.map_nside = 32
         self.map_npix = 12 * self.map_nside**2
-        
-        self.rate = 200.0
-        self.spinperiod = 1.0
-        self.spinangle = 30.0
-        self.precperiod = 5.0
-        self.precangle = 65.0
-
-        self.hwprpm = 100
 
         self.subnside = int(self.map_nside / 4)
         self.subnpix = 12 * self.subnside**2
         self.nsubmap = int( self.map_npix / self.subnpix )
 
-        self.NET = 7.0
+        # Scan strategy
 
-        self.fmins = {
-            'bore' : 0.0,
-        }
-        self.rates = {
-            'bore' : self.rate,
-        }
-        self.fknee = {
-            'bore' : 0.0,
-        }
-        self.alpha = {
-            'bore' : 1.0,
-        }
-        self.netd = {
-            'bore' : self.NET
-        }
+        self.spinperiod = 1.0
+        self.spinangle = 30.0
+        self.precperiod = 5.0
+        self.precangle = 65.0
 
-        # madam only supports a single observation
-        nobs = 1
-
-        # in order to make sure that the noise realization is reproducible
-        # all all concurrencies, we set the chunksize to something independent
+        # In order to make sure that the noise realization is reproducible
+        # at all concurrencies, we set the chunksize to something independent
         # of the number of ranks.
 
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
-        self.chunksize = chunksize
+        chunks = uniform_chunks(self.totsamp, nchunk=100)
 
         # define some valid data intervals so that we can test flag handling
         # in the gaps
 
-        for i in range(nobs):
-            # create the TOD for this observation
+        nint = 4
+        intsamp = self.totsamp // nint
+        inttime = (intsamp - 1) / self.rate
+        durtime = inttime * 0.85
+        gaptime = inttime - durtime
+        intrvls = regular_intervals(nint, 0, 0, self.rate, durtime, gaptime)
+        self.validsamp = 0
+        for it in intrvls:
+            self.validsamp += it.last - it.first + 1
 
-            tod = TODSatellite(
-                self.toastcomm.comm_group, 
-                self.dets, 
-                self.totsamp, 
-                firsttime=0.0, 
-                rate=self.rate, 
-                spinperiod=self.spinperiod,
-                spinangle=self.spinangle,
-                precperiod=self.precperiod, 
-                precangle=self.precangle, 
-                sampsizes=chunks)
+        # We have multiple observations
+        self.validsamp *= self.data.comm.ngroups
 
-            tod.set_prec_axis()
+        # Populate the single observation per group
 
-            # add analytic noise model with white noise
+        tod = TODSatellite(
+            self.data.comm.comm_group,
+            dquat,
+            self.totsamp,
+            detranks=1,
+            firsttime=0.0,
+            rate=self.rate,
+            spinperiod=self.spinperiod,
+            spinangle=self.spinangle,
+            precperiod=self.precperiod,
+            precangle=self.precangle,
+            sampsizes=chunks)
 
-            nse = AnalyticNoise(
-                rate=self.rates, 
-                fmin=self.fmins,
-                detectors=self.detnames,
-                fknee=self.fknee,
-                alpha=self.alpha,
-                NET=self.netd)
+        tod.set_prec_axis()
 
-            nint = 4
-            intsamp = self.totsamp // nint
-            inttime = (intsamp - 1) / self.rate
-            durtime = inttime * 0.85
-            gaptime = inttime - durtime
-            intrvls = regular_intervals(nint, 0, 0, self.rate, durtime, gaptime)
-            self.validsamp = 0
-            for it in intrvls:
-                print(it.first, " ", it.last, " ", it.start, " ", it.stop)
-                self.validsamp += it.last - it.first + 1
-            print(self.validsamp, " good samples")
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
+        )
 
-            ob = {}
-            ob['name'] = 'test'
-            ob['id'] = 0
-            ob['tod'] = tod
-            ob['baselines'] = None
-            ob['noise'] = nse
-            ob['intervals'] = intrvls
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
+        self.data.obs[0]["intervals"] = intrvls
 
-            self.data.obs.append(ob)
 
     def test_binned(self):
-        start = MPI.Wtime()
-
         # flag data outside valid intervals
         gapflagger = OpFlagGaps()
         gapflagger.exec(self.data)
@@ -171,7 +137,7 @@ class BinnedTest(MPITestCase):
 
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.mapdir,"info.txt"), "w")
+            handle = open(os.path.join(self.outdir,"info.txt"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
@@ -186,22 +152,22 @@ class BinnedTest(MPITestCase):
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix,
+        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
                             nnz=6, dtype=np.float64, submap=self.subnpix,
                             local=localsm)
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix,
+        zmap = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
                           nnz=3, dtype=np.float64, submap=self.subnpix,
                           local=localsm)
         zmap.data.fill(0.0)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix,
+        hits = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
                           nnz=1, dtype=np.int64, submap=self.subnpix,
                           local=localsm)
         hits.data.fill(0)
 
-        # accumulate the inverse covariance and noise weighted map.  
+        # accumulate the inverse covariance and noise weighted map.
         # Use detector weights based on the analytic NET.
 
         tod = self.data.obs[0]['tod']
@@ -218,23 +184,23 @@ class BinnedTest(MPITestCase):
         hits.allreduce()
         zmap.allreduce()
 
-        hits.write_healpix_fits(os.path.join(self.mapdir, "hits.fits"))
-        invnpp.write_healpix_fits(os.path.join(self.mapdir, "invnpp.fits"))
-        zmap.write_healpix_fits(os.path.join(self.mapdir, "zmap.fits"))
+        hits.write_healpix_fits(os.path.join(self.outdir, "hits.fits"))
+        invnpp.write_healpix_fits(os.path.join(self.outdir, "invnpp.fits"))
+        zmap.write_healpix_fits(os.path.join(self.outdir, "zmap.fits"))
 
         # invert it
         covariance_invert(invnpp, 1.0e-3)
 
-        invnpp.write_healpix_fits(os.path.join(self.mapdir, "npp.fits"))
+        invnpp.write_healpix_fits(os.path.join(self.outdir, "npp.fits"))
 
         # compute the binned map, N_pp x Z
 
         covariance_apply(invnpp, zmap)
-        zmap.write_healpix_fits(os.path.join(self.mapdir, "binned.fits"))
+        zmap.write_healpix_fits(os.path.join(self.outdir, "binned.fits"))
 
         # compare with MADAM
 
-        madam_out = os.path.join(self.mapdir, "madam")
+        madam_out = os.path.join(self.outdir, "madam")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -267,9 +233,8 @@ class BinnedTest(MPITestCase):
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
-                
+
                 hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
-                print('Loading', hitsfile)
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -277,8 +242,7 @@ class BinnedTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                toastfile = os.path.join(self.mapdir, 'hits.fits')
-                print('Loading', toastfile)
+                toastfile = os.path.join(self.outdir, 'hits.fits')
                 toasthits = hp.read_map(toastfile, nest=True)
 
                 nt.assert_equal(hits, toasthits)
@@ -289,7 +253,7 @@ class BinnedTest(MPITestCase):
                 covfile = os.path.join(madam_out, 'madam_wcov_inv.fits')
                 cov = hp.read_map(covfile, nest=True, field=None)
 
-                toastfile = os.path.join(self.mapdir, 'invnpp.fits')
+                toastfile = os.path.join(self.outdir, 'invnpp.fits')
                 toastcov = hp.read_map(toastfile, nest=True, field=None)
 
                 """
@@ -306,7 +270,7 @@ class BinnedTest(MPITestCase):
                 covfile = os.path.join(madam_out, 'madam_wcov.fits')
                 cov = hp.read_map(covfile, nest=True, field=None)
 
-                toastfile = os.path.join(self.mapdir, 'npp.fits')
+                toastfile = os.path.join(self.outdir, 'npp.fits')
                 toastcov = hp.read_map(toastfile, nest=True, field=None)
 
                 """
@@ -350,7 +314,7 @@ class BinnedTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                toastfile = os.path.join(self.mapdir, 'binned.fits')
+                toastfile = os.path.join(self.outdir, 'binned.fits')
                 toastbins = hp.read_map(toastfile, nest=True, field=None)
 
                 outfile = "{}_I.png".format(toastfile)
@@ -421,7 +385,7 @@ class BinnedTest(MPITestCase):
 
                 # compute the binned map serially as a check
 
-                zfile = os.path.join(self.mapdir, 'zmap.fits')
+                zfile = os.path.join(self.outdir, 'zmap.fits')
                 ztoast = hp.read_map(zfile, nest=True, field=None)
 
                 binserial = np.copy(ztoast)
@@ -436,7 +400,7 @@ class BinnedTest(MPITestCase):
                                       + toastcov[4][p] * ztoast[1][p] \
                                       + toastcov[5][p] * ztoast[2][p]
 
-                toastfile = os.path.join(self.mapdir, 'binned_serial')
+                toastfile = os.path.join(self.outdir, 'binned_serial')
                 outfile = "{}_I.png".format(toastfile)
                 hp.mollview(binserial[0], xsize=1600, nest=True)
                 plt.savefig(outfile)
@@ -502,13 +466,8 @@ class BinnedTest(MPITestCase):
                 nt.assert_almost_equal(bins[2][mask], binserial[2][mask],
                                        decimal=3)
 
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
         else:
-            print("libmadam not available, skipping tests")
-
-        #self.assertTrue(False)
+            if self.comm.rank == 0:
+                print("libmadam not available, skipping tests", flush=True)
 
         return
-

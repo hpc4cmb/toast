@@ -88,27 +88,32 @@ class AnalyticNoise(Noise):
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freqs=freqs, psds=psds)
 
-    @property
+
+    def rate(self, det):
+        """(float): the sample rate in Hz.
+        """
+        return self._rate[det]
+
+
     def fmin(self, det):
+        """(float): the minimum frequency in Hz, used as a high pass.
         """
-        (float): the minimum frequency in Hz, used as a high pass.
-        """
-        return self._fmin
+        return self._fmin[det]
+
 
     def fknee(self, det):
-        """
-        (float): the knee frequency in Hz.
+        """(float): the knee frequency in Hz.
         """
         return self._fknee[det]
 
+
     def alpha(self, det):
-        """
-        (float): the (positive!) slope exponent.
+        """(float): the (positive!) slope exponent.
         """
         return self._alpha[det]
 
+
     def NET(self, det):
-        """
-        (float): the NET.
+        """(float): the NET.
         """
         return self._NET[det]

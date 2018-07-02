@@ -419,7 +419,7 @@ class DistPixels(object):
                 raise RuntimeError(errors)
             # Now read the map
             fdata = hp.read_map(path, field=None, dtype=self._dtype,
-                                memmap=True, nest=self._nest)
+                                memmap=True, nest=self._nest, verbose=False)
             if self._nnz == 1:
                 fdata = (fdata, )
 
