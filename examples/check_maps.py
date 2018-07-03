@@ -24,6 +24,6 @@ for filename in filenames:
             continue
         m_diff_std = (m - m_ref).std()
 
-        assert m_diff_std < 1e-7, "{} Maps differ, std {}".format(pol, m_diff_std)
+        assert m_diff_std < 1e-6, "{} Maps differ, std {}".format(pol, m_diff_std)
 
 print("Test passed")
