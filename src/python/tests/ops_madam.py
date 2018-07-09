@@ -60,16 +60,23 @@ class OpMadamTest(MPITestCase):
 
     def test_madam_gradient(self):
         # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside)
+        grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
+        # Write outputs to a test-specific directory
+        mapdir = os.path.join(self.outdir, "grad")
+        if self.comm.rank == 0:
+            if os.path.isdir(mapdir):
+                shutil.rmtree(mapdir)
+            os.makedirs(mapdir)
+
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_madam_info"), "w")
+            handle = open(os.path.join(mapdir,"out_test_madam_info"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
@@ -80,14 +87,14 @@ class OpMadamTest(MPITestCase):
         pars[ "fsample" ] = self.rate
         pars[ "nside_map" ] = self.map_nside
         pars[ "nside_cross" ] = self.map_nside
-        pars[ "nside_submap" ] = self.map_nside
+        pars[ "nside_submap" ] = min(8, self.map_nside)
         pars[ "write_map" ] = "F"
         pars[ "write_binmap" ] = "T"
         pars[ "write_matrix" ] = "F"
         pars[ "write_wcov" ] = "F"
         pars[ "write_hits" ] = "T"
         pars[ "kfilter" ] = "F"
-        pars[ "path_output" ] = self.outdir
+        pars[ "path_output" ] = mapdir
         pars[ "info" ] = 0
 
         madam = OpMadam(params=pars, name="grad")
@@ -98,34 +105,44 @@ class OpMadamTest(MPITestCase):
 
             m0 = None
             if self.comm.rank == 0:
-                m0 = hp.read_map(os.path.join(self.outdir,"madam_bmap.fits"))
+                m0 = hp.read_map(os.path.join(mapdir,"madam_bmap.fits"))
 
             madam.exec(self.data)
 
             m1 = None
+            failed = False
             if self.comm.rank == 0:
-                m1 = hp.read_map(os.path.join(self.outdir,
-                    "madam_bmap_001.fits"))
+                m1 = hp.read_map(os.path.join(mapdir, "madam_bmap_001.fits"))
                 if not np.allclose(m0, m1):
-                    raise Exception(\
+                    print(\
                         "Madam did not produce the same map from the "
                         "same data.")
+                    failed = True
+            failed = self.comm.bcast(failed, root=0)
+            self.assertFalse(failed)
         else:
             print("libmadam not available, skipping tests")
 
 
     def test_madam_output(self):
         # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside)
+        grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
+        # Write outputs to a test-specific directory
+        mapdir = os.path.join(self.outdir, "out")
+        if self.comm.rank == 0:
+            if os.path.isdir(mapdir):
+                shutil.rmtree(mapdir)
+            os.makedirs(mapdir)
+
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_madam_info"), "w")
+            handle = open(os.path.join(mapdir,"out_test_madam_info"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
@@ -133,18 +150,18 @@ class OpMadamTest(MPITestCase):
         pars = {}
         pars[ "kfirst" ] = "T"
         pars[ "iter_max" ] = 100
-        pars[ "base_first" ] = 1.0
+        pars[ "base_first" ] = 5.0
         pars[ "fsample" ] = self.rate
         pars[ "nside_map" ] = self.map_nside
         pars[ "nside_cross" ] = self.map_nside
-        pars[ "nside_submap" ] = self.map_nside
+        pars[ "nside_submap" ] = min(8, self.map_nside)
         pars[ "write_map" ] = "F"
         pars[ "write_binmap" ] = "T"
         pars[ "write_matrix" ] = "F"
         pars[ "write_wcov" ] = "F"
         pars[ "write_hits" ] = "T"
         pars[ "kfilter" ] = "F"
-        pars[ "path_output" ] = self.outdir
+        pars[ "path_output" ] = mapdir
         pars[ "info" ] = 0
 
         madam = OpMadam(params=pars, name="grad", name_out="destriped")

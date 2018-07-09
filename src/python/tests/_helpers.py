@@ -5,7 +5,11 @@
 from ..mpi import MPI
 
 import os
+import sys
+import traceback
 import numpy as np
+
+from contextlib import contextmanager
 
 from ..dist import Comm, Data
 from .. import qarray as qa
@@ -148,3 +152,36 @@ def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
 
     return names, quat, det_eps, det_rate, det_net, det_fmin, \
         det_fknee, det_alpha
+
+#
+# @contextmanager
+# def mpi_guard(comm=MPI.COMM_WORLD):
+#     """Ensure that if one MPI process raises an exception, all of them do.
+#
+#     Args:
+#         comm (mpi4py.MPI.Comm): The MPI communicator.
+#
+#     """
+#     failed = 0
+#     print(comm.rank, ": guard: enter", flush=True)
+#     try:
+#         print(comm.rank, ": guard: yield", flush=True)
+#         yield
+#     except:
+#         print(comm.rank, ": guard: except", flush=True)
+#         msg = "Exception on process {}:\n".format(comm.rank)
+#         exc_type, exc_value, exc_traceback = sys.exc_info()
+#         lines = traceback.format_exception(exc_type, exc_value,
+#             exc_traceback)
+#         msg += "\n".join(lines)
+#         print(msg, flush=True)
+#         failed = 1
+#         print(comm.rank, ": guard: except done", flush=True)
+#
+#     print(comm.rank, ": guard: failcount reduce", flush=True)
+#     failcount = comm.allreduce(failed, op=MPI.SUM)
+#     if failcount > 0:
+#         raise RuntimeError("One or more MPI processes raised an exception")
+#     print(comm.rank, ": guard: done", flush=True)
+#
+#     return

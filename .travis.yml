@@ -1,34 +1,16 @@
-# We set the language to python, so that we can more easily specify our
-# build matrix.  We simply apt install the compiled dependencies.
+# We set the language to python, since we are focused on a recent python
+# version and want to use the build matrix for testing different compiler
+# versions.
 language: python
+
+# We use APT to get as many packages as possible.  Then we compile the rest
+# of our dependencies.  If you change any packages in the build matrix, you
+# should also update the travis dependency build script and rebuild the
+# tarballs of dependencies.
 
 matrix:
   include:
-    # GCC 4.8 - this is the default version for many distros
-    - os: linux
-      dist: trusty
-      sudo: false
-      addons:
-        apt:
-          packages:
-            - build-essential
-            - gcc
-            - g++
-            - gfortran
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - libhdf5-dev
-            - libmpich-dev
-            - mpich
-            - fftw3-dev
-            - cfitsio-dev
-            - libatlas-base-dev
-            - pkg-config
-      env:
-        - MATRIX_EVAL="export CC=$(which gcc) && export CXX=$(which g++) && export FC=$(which gfortran)"
-    # GCC 5
+    # GCC 4.9 - this is the oldest version working well with libelemental.
     - os: linux
       dist: trusty
       sudo: false
@@ -38,23 +20,57 @@ matrix:
             - ubuntu-toolchain-r-test
           packages:
             - build-essential
+            - git
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - cmake
+            - pkg-config
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
+            - gcc-4.9
+            - g++-4.9
+            - gfortran-4.9
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9) && export DEPGCC=-4.9"
+    # GCC 5 - default version for ubuntu 16.04 LTS
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - git
+            - autoconf
+            - automake
+            - m4
+            - libtool
+            - cmake
+            - pkg-config
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
             - gcc-5
             - g++-5
             - gfortran-5
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - libhdf5-dev
-            - libmpich-dev
-            - mpich
-            - fftw3-dev
-            - cfitsio-dev
-            - libatlas-base-dev
-            - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5)"
-    # GCC 6
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5) && export DEPGCC=-5"
+    # GCC 7 - default version for ubuntu 18.04 LTS
     - os: linux
       dist: trusty
       sudo: false
@@ -64,132 +80,84 @@ matrix:
             - ubuntu-toolchain-r-test
           packages:
             - build-essential
-            - gcc-6
-            - g++-6
-            - gfortran-6
+            - git
             - autoconf
             - automake
             - m4
             - libtool
-            - libhdf5-dev
-            - libmpich-dev
-            - mpich
-            - fftw3-dev
-            - cfitsio-dev
-            - libatlas-base-dev
+            - cmake
             - pkg-config
-      env:
-        - MATRIX_EVAL="export CC=$(which gcc-6) && export CXX=$(which g++-6) && export FC=$(which gfortran-6)"
-    # GCC 7
-    - os: linux
-      dist: trusty
-      sudo: false
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - build-essential
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
             - gcc-7
             - g++-7
             - gfortran-7
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - libhdf5-dev
-            - libmpich-dev
-            - mpich
-            - fftw3-dev
-            - cfitsio-dev
-            - libatlas-base-dev
-            - pkg-config
       env:
-        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7)"
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7) && export DEPGCC=-7"
 
-# The versions to test
+# The python versions to test.
 python:
     - 3.6
 
-# Set up MPI and mpi4py
+# Download pre-built dependencies and set up our environment.
 
 before_install:
-    # set the C and C++ compilers
+    # Set the C and C++ compilers
     - eval "${MATRIX_EVAL}"
-    # Information about C and C++ compilers
-    - echo "CC = ${CC} $(${CC} -dumpversion)"
-    - echo "CXX = ${CXX} $(${CXX} -dumpversion)"
-    # set the MPICH underlying compilers
+    - echo "  CC = ${CC} $(${CC} -dumpversion)"
+    - echo "  CXX = ${CXX} $(${CXX} -dumpversion)"
+    - echo "  FC = ${FC} $(${FC} -dumpversion)"
+    # Set python site version
+    - export PYSITE=$(python --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+    - echo "Python site version = ${PYSITE}"
+    # Install python dependencies. NOTE:  if you change this list, also
+    # change them in the dependency tarball script.
+    - pip install -q numpy scipy matplotlib cython astropy ephem healpy
+    - pip install -q https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
+    # Install all compiled dependencies from a pre-cached location
+    - export DEPSURL="http://portal.nersc.gov/project/cmb/toast_travis/travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2"
+    - echo "Fetching dependencies from ${DEPSURL}"
+    - wget ${DEPSURL}
+    - tar xjf travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2 --directory ${HOME}
+    # Load dependencies into our search paths
+    - export PATH="${HOME}/software/bin:${PATH}"
+    - export CPATH="${HOME}/software/include:${CPATH}"
+    - export LIBRARY_PATH="${HOME}/software/lib:${LIBRARY_PATH}"
+    - export LD_LIBRARY_PATH="${HOME}/software/lib:${LD_LIBRARY_PATH}"
+    - export PYTHONPATH="${HOME}/software/lib/python${PYSITE}/site-packages:${PYTHONPATH}"
+    # MPI compilers
     - export MPICC=$(which mpicc)
     - export MPICXX=$(which mpicxx)
-    - export MPICH_CC=${CC}
-    - export MPICH_CXX=${CXX}
-    # F90 required by libmadam
     - export MPIFC=$(which mpif90)
-    - export MPICH_FC=${FC}
-    # explicitly set the C and C++ compilers to MPICH compilers for autotools
-    - export CC=$(which mpicc)
-    - export CXX=$(which mpicxx)
-    # information about the MPI compilers
-    - echo "MPICC = ${MPICC}"
-    - echo "MPICXX = ${MPICXX}"
-    - echo "[MPI] CC = ${CC} $(${CC} -dumpversion)"
-    - echo "[MPI] CXX = ${CXX} $(${CXX} -dumpversion)"
-    - ${MPICC} -v
-    - ${MPICXX} -v
-    # miniconda install
-    - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    - bash miniconda.sh -b -p $HOME/miniconda
-    - export PATH="$HOME/miniconda/bin:$PATH"
-    - hash -r
-    - conda config --set always_yes yes --set changeps1 no
-    - conda update -q conda
-    # Useful for debugging any issues with conda
-    - conda info -a
-    - conda install -c conda-forge numpy scipy matplotlib healpy pyephem pip cython
-    - pip install mpi4py
-    # Install libsharp C
-    - git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1
-    - cd libsharp
-    - autoreconf
-    - ./configure --enable-mpi --enable-pic
-    - make
-    - export LIBSHARP="$HOME/miniconda"
-    - cp -r auto/* $LIBSHARP
-    # Install libsharp Python
-    - cd python
-    - CC="mpicc -g" LDSHARED="mpicc -g -shared" python setup.py install
-    - cd ../..
-    # Install PySM
-    - pip install https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
-    # Install libmadam from github master
-    - git clone https://github.com/hpc4cmb/libmadam.git --single-branch --depth 1
-    - cd libmadam
-    - ./autogen.sh
-    - export FCFLAGS="-O0 -g -fbounds-check -fPIC"
-    - export CFLAGS="-O0 -g -fPIC"
-    - ./configure --prefix=$HOME/miniconda
-    - make
-    - make install
-    - cd ..
 
-# Skip this
+# Install TOAST.
 
 install:
-    # build
+    # Build and install
     - ./autogen.sh
-    - export CFLAGS="-O3 -g -fPIC -pthread -std=c99"
-    - export CXXFLAGS="-O3 -g -fPIC -pthread"
-    - ./configure --prefix=$HOME/miniconda
-    - make
+    - export GCCSTD=""
+    - if [ "x${DEPGCC}" = "x-4.9" ]; then export GCCSTD="-std=gnu++11"; fi
+    - if [ "x${DEPGCC}" = "x-5" ]; then export GCCSTD="-std=gnu++11"; fi
+    - CC="${MPICC}" CXX="${MPICXX}" CFLAGS="-O2 -g -fPIC -pthread -std=c99" CXXFLAGS="-O2 -g -fPIC -pthread ${GCCSTD}" ./configure --prefix=${HOME}/toast
+    - make -j 2
     - make install
+    # Load TOAST install prefix into our environment
+    - export PATH="${HOME}/toast/bin:${PATH}"
+    - export CPATH="${HOME}/toast/include:${CPATH}"
+    - export LIBRARY_PATH="${HOME}/toast/lib:${LIBRARY_PATH}"
+    - export LD_LIBRARY_PATH="${HOME}/toast/lib:${LD_LIBRARY_PATH}"
+    - export PYTHONPATH="${HOME}/toast/lib/python${PYSITE}/site-packages:${PYTHONPATH}"
 
-# Configure, build, and run tests
+# Run tests
 
 script:
-    - export OMP_NUM_THREADS=2
-    - mpirun -np 4 python -c "import toast.tests; toast.tests.run()"
-    - cd examples/; mpirun -np 4 bash run_tiny_tests.sh
+    - ./travis/travis_run.sh
 
 # Slack integration
 

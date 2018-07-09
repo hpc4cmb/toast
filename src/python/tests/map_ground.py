@@ -172,7 +172,7 @@ class MapGroundTest(MPITestCase):
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
-        madam = OpMadam(params=pars, name='grad', purge=True,
+        madam = OpMadam(params=pars, name='grad', purge=False,
             common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
