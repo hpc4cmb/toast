@@ -98,10 +98,6 @@ ADD rules/patch_* ./rules/
 
 @fftw@
 
-# Install Healpix
-
-@healpix@
-
 # Install elemental
 
 @elemental@

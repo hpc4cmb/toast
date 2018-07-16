@@ -84,10 +84,6 @@ ADD rules/patch_* ./rules/
 
 @fftw@
 
-# Install Healpix
-
-@healpix@
-
 # Install libmadam
 
 @madam@

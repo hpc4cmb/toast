@@ -11,7 +11,7 @@ if [ "x${loadedintel}" = x ]; then
     fi
 fi
 module swap intel intel/18.0.1.163
-module load gcc/7.2.0
+module load gcc/7.3.0
 module load git
 module load cmake/3.8.1
 export CRAYPE_LINK_TYPE=dynamic

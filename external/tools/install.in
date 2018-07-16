@@ -100,10 +100,6 @@ fi
 
 @fftw@
 
-# Install Healpix
-
-@healpix@
-
 # Install Boost
 
 @boost@
