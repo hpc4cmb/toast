@@ -63,8 +63,6 @@ class OpSimGradient(Operator):
 
         for obs in data.obs:
             tod = obs['tod']
-            base = obs['baselines']
-            nse = obs['noise']
 
             offset, nsamp = tod.local_samples
 

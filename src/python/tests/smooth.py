@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -23,24 +23,15 @@ from ..map.pixels import *
 from ..map.rings import DistRings
 from ..map.smooth import LibSharpSmooth
 
+from ._helpers import (create_outdir, create_comm)
+
+
 class LibSharpSmoothTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-        self.data = {} #FIXME once Data supports map, use Data: Data(self.toastcomm)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
+        self.toastcomm = create_comm(self.comm)
 
         # create the same noise input map on all processes
         self.nside = 32
@@ -55,31 +46,41 @@ class LibSharpSmoothTest(MPITestCase):
         # calling the OpSmooth operator
 
         self.dist_rings = DistRings(self.toastcomm.comm_world,
-                            nside = self.nside,
-                            nnz = 3)
-        self.data["signal_map"] = self.input_map[:, self.dist_rings.local_pixels]
+            nside=self.nside, nnz=3)
+        self.data = dict()
+        self.data["signal_map"] = \
+            self.input_map[:, self.dist_rings.local_pixels]
+
 
     def tearDown(self):
         del self.data
 
 
     def test_smooth(self):
-        start = MPI.Wtime()
-
-        # construct the PySM operator.  Pass in information needed by PySM...
         op = LibSharpSmooth(comm=self.comm, signal_map="signal_map",
-                lmax=self.lmax, grid=self.dist_rings.libsharp_grid,
-                fwhm_deg=self.fwhm_deg, beam=None)
+            lmax=self.lmax, grid=self.dist_rings.libsharp_grid,
+            fwhm_deg=self.fwhm_deg, beam=None)
         op.exec(self.data)
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("test_opsmooth took {:.3f} s".format(elapsed))
+        # Copy our local piece into a buffer of zeros that we will
+        # reduce to the root process.  We could also use a gather, but
+        # this is a small buffer.
+        local_output_map = np.zeros(self.input_map.shape, dtype=np.float64)
+        local_output_map[:, self.dist_rings.local_pixels] = \
+            self.data["smoothed_signal_map"]
 
-        output_map = np.zeros(self.input_map.shape, dtype=np.float64) if self.comm.rank == 0 else None
-        self.comm.Reduce(self.data["smoothed_signal_map"], output_map, root=0, op=MPI.SUM)
+        output_map = None
+        if self.comm.rank == 0:
+            output_map = np.zeros(self.input_map.shape, dtype=np.float64)
+        self.comm.Reduce(local_output_map, output_map,
+            root=0, op=MPI.SUM)
 
         if self.comm.rank == 0:
-            hp_smoothed = hp.smoothing(self.input_map, fwhm=np.radians(self.fwhm_deg), lmax=self.lmax)
-            np.testing.assert_array_almost_equal(hp_smoothed, output_map, decimal=2)
-            print("Std of difference between libsharp and healpy", (hp_smoothed-output_map).std())
+            hp_smoothed = hp.smoothing(self.input_map,
+                fwhm=np.radians(self.fwhm_deg), lmax=self.lmax)
+            np.testing.assert_array_almost_equal(hp_smoothed, output_map,
+                decimal=2)
+            print("Std of difference between libsharp and healpy",
+                (hp_smoothed-output_map).std())
+
+        return

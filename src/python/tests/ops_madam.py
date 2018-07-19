@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -17,164 +17,173 @@ from ..tod.sim_det_noise import *
 from ..tod.sim_det_map import *
 from ..map.madam import *
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class OpMadamTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-        self.mapdir = os.path.join(self.outdir, "madam")
-        if self.comm.rank == 0:
-            if os.path.isdir(self.mapdir):
-                shutil.rmtree(self.mapdir)
-            os.mkdir(self.mapdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
+        # One observation per group
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.toastcomm = Comm(world=self.comm)
-        self.data = Data(self.toastcomm)
-
-        self.dets = {
-            'bore' : np.array([0.0, 0.0, 1.0, 0.0])
-            }
-
-        self.sim_nside = 64
-        self.totsamp = 3 * 49152
-        #self.totsamp = 20
-        self.rms = 10.0
-        self.map_nside = 64
+        self.ndet = self.data.comm.group_size
         self.rate = 50.0
 
-        # madam only supports a single observation
-        nobs = 1
+        # Create detectors with defaults
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate)
 
-        for i in range(nobs):
-            # create the TOD for this observation
+        # Samples per observation
+        self.totsamp = 3 * 49152
 
-            tod = TODHpixSpiral(
-                self.toastcomm.comm_group, 
-                self.dets,
-                self.totsamp,
-                rate=self.rate,
-                nside=self.sim_nside
-            )
+        # Pixelization
+        self.sim_nside = 64
+        self.map_nside = 64
 
-            ob = {}
-            ob['name'] = 'test'
-            ob['id'] = 0
-            ob['tod'] = tod
-            ob['intervals'] = None
-            ob['baselines'] = None
-            ob['noise'] = None
+        # Populate the observations
 
-            self.data.obs.append(ob)
+        tod = TODHpixSpiral(
+            self.data.comm.comm_group,
+            dquat,
+            self.totsamp,
+            detranks=self.data.comm.group_size,
+            rate=self.rate,
+            nside=self.sim_nside
+        )
+
+        self.data.obs[0]["tod"] = tod
 
 
     def test_madam_gradient(self):
-        start = MPI.Wtime()
-
         # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside)
+        grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
+        # Write outputs to a test-specific directory
+        mapdir = os.path.join(self.outdir, "grad")
+        if self.comm.rank == 0:
+            if os.path.isdir(mapdir):
+                shutil.rmtree(mapdir)
+            os.makedirs(mapdir)
+
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_madam_info"), "w")
+            handle = open(os.path.join(mapdir,"out_test_madam_info"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = self.map_nside
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = self.mapdir
-        pars[ 'info' ] = 0
+        pars[ "kfirst" ] = "F"
+        pars[ "base_first" ] = 1.0
+        pars[ "fsample" ] = self.rate
+        pars[ "nside_map" ] = self.map_nside
+        pars[ "nside_cross" ] = self.map_nside
+        pars[ "nside_submap" ] = min(8, self.map_nside)
+        pars[ "write_map" ] = "F"
+        pars[ "write_binmap" ] = "T"
+        pars[ "write_matrix" ] = "F"
+        pars[ "write_wcov" ] = "F"
+        pars[ "write_hits" ] = "T"
+        pars[ "kfilter" ] = "F"
+        pars[ "path_output" ] = mapdir
+        pars[ "info" ] = 0
 
-        madam = OpMadam(params=pars, name='grad', dets=self.dets)
+        madam = OpMadam(params=pars, name="grad")
         if madam.available:
             # Run Madam twice on the same data and ensure the result
             # does not change
             madam.exec(self.data)
-            m0 = hp.read_map(os.path.join(self.mapdir,'madam_bmap.fits'))
+
+            m0 = None
+            if self.comm.rank == 0:
+                m0 = hp.read_map(os.path.join(mapdir,"madam_bmap.fits"))
+
             madam.exec(self.data)
-            m1 = hp.read_map(os.path.join(self.mapdir,'madam_bmap_001.fits'))
-            if not np.allclose(m0, m1):
-                raise Exception(
-                    'Madam did not produce the same map from the same data.')
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
+
+            m1 = None
+            failed = False
+            if self.comm.rank == 0:
+                m1 = hp.read_map(os.path.join(mapdir, "madam_bmap_001.fits"))
+                if not np.allclose(m0, m1):
+                    print(\
+                        "Madam did not produce the same map from the "
+                        "same data.")
+                    failed = True
+            failed = self.comm.bcast(failed, root=0)
+            self.assertFalse(failed)
         else:
             print("libmadam not available, skipping tests")
 
-    def test_madam_output(self):
-        start = MPI.Wtime()
 
+    def test_madam_output(self):
         # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside)
+        grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
+        # Write outputs to a test-specific directory
+        mapdir = os.path.join(self.outdir, "out")
+        if self.comm.rank == 0:
+            if os.path.isdir(mapdir):
+                shutil.rmtree(mapdir)
+            os.makedirs(mapdir)
+
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_madam_info"), "w")
+            handle = open(os.path.join(mapdir,"out_test_madam_info"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
 
         pars = {}
-        pars[ 'kfirst' ] = 'T'
-        pars[ 'iter_max' ] = 100
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = self.map_nside
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = self.mapdir
-        pars[ 'info' ] = 0
+        pars[ "kfirst" ] = "T"
+        pars[ "iter_max" ] = 100
+        pars[ "base_first" ] = 5.0
+        pars[ "fsample" ] = self.rate
+        pars[ "nside_map" ] = self.map_nside
+        pars[ "nside_cross" ] = self.map_nside
+        pars[ "nside_submap" ] = min(8, self.map_nside)
+        pars[ "write_map" ] = "F"
+        pars[ "write_binmap" ] = "T"
+        pars[ "write_matrix" ] = "F"
+        pars[ "write_wcov" ] = "F"
+        pars[ "write_hits" ] = "T"
+        pars[ "kfilter" ] = "F"
+        pars[ "path_output" ] = mapdir
+        pars[ "info" ] = 0
 
-        madam = OpMadam(params=pars, name='grad', name_out='destriped', dets=self.dets)
+        madam = OpMadam(params=pars, name="grad", name_out="destriped")
+
         if madam.available:
-            tod = self.data.obs[0]['tod']
-            det = 'bore'
-            ref_in = tod.cache.reference('grad_'+det)
-            rms0 = np.std(ref_in)
-            ref_in[ref_in.size//2:] += 1e6 # Add an offset
-            rms1 = np.std(ref_in)
+            tod = self.data.obs[0]["tod"]
+
+            rms1 = None
+            for det in tod.local_dets:
+                ref_in = tod.cache.reference("grad_"+det)
+                rms0 = np.std(ref_in)
+                ref_in[ref_in.size//2:] += 1e6 # Add an offset
+                rms1 = np.std(ref_in)
+                del ref_in
 
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
-            ref_out = tod.cache.reference('destriped_'+det)
-            rms2 = np.std(ref_out)
-            if rms1 < 0.9*rms2:
-                raise Exception('Destriped TOD does not have lower RMS')
+            for det in tod.local_dets:
+                ref_out = tod.cache.reference("destriped_"+det)
+                rms2 = np.std(ref_out)
+                del ref_out
+                if rms1 < 0.9*rms2:
+                    raise Exception("Destriped TOD does not have lower RMS")
         else:
             print("libmadam not available, skipping tests")

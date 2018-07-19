@@ -47,24 +47,18 @@ class TODTest(MPITestCase):
     def tearDown(self):
         pass
 
-    def test_props(self):
-        start = MPI.Wtime()
 
+    def test_props(self):
         self.assertEqual(sorted(self.tod.detectors), sorted(self.dets))
         self.assertEqual(sorted(self.tod.local_dets), sorted(self.dets))
         self.assertEqual(self.tod.total_samples, self.totsamp)
         self.assertEqual(self.tod.local_samples[0], self.myoff)
         self.assertEqual(self.tod.local_samples[1], self.mynsamp)
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print("Proc {}:  test took {:.4f} s".format(MPI.COMM_WORLD.rank, elapsed))
 
     def test_read(self):
-        start = MPI.Wtime()
-
         common = self.tod.read_common_flags(local_start=0, n=self.mynsamp)
-
         for d in self.dets:
             data = self.tod.read(detector=d, local_start=0, n=self.mynsamp)
             flags = self.tod.read_flags(detector=d, local_start=0,
@@ -72,16 +66,10 @@ class TODTest(MPITestCase):
             np.testing.assert_equal(flags, self.flagvec)
             np.testing.assert_equal(common, self.pflagvec)
             np.testing.assert_almost_equal(data, self.datavec)
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print("Proc {}:  test took {:.4f} s".format(MPI.COMM_WORLD.rank, elapsed))
 
     def test_cached_read(self):
-        start = MPI.Wtime()
-
-        # First call caches the TOD
-
         common = self.tod.local_common_flags()
         for d in self.dets:
             data = self.tod.local_signal(d)
@@ -100,36 +88,25 @@ class TODTest(MPITestCase):
             np.testing.assert_equal(common, self.pflagvec)
             np.testing.assert_almost_equal(data, self.datavec)
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
+        return
+
 
     def test_read_pntg(self):
-        start = MPI.Wtime()
-
         for d in self.dets:
             pntg = self.tod.read_pntg(detector=d, local_start=0, n=self.mynsamp)
             np.testing.assert_almost_equal(pntg, self.pntgvec)
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
 
     def test_local_intervals(self):
-        start = MPI.Wtime()
-
         local_intervals = self.tod.local_intervals(None)
         self.assertEqual(self.mynsamp,
                          local_intervals[0].last - local_intervals[0].first + 1)
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
 
     def test_local_signal(self):
-        start = MPI.Wtime()
-
         for d in self.dets:
             data = self.tod.local_signal(d)
             np.testing.assert_almost_equal(data, self.datavec)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
+        return

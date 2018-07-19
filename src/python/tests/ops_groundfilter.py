@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -20,97 +20,42 @@ from ..tod.sim_noise import *
 from ..tod.sim_det_noise import *
 from ..tod.sim_tod import *
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class OpGroundFilterTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = 'toast_test_output'
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-        self.data = Data(self.toastcomm)
+        # One observation per group
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.wbin = 0.01 # in degrees
-
-        self.dets = ['f1a', 'f1b', 'f2a', 'f2b', 'white', 'high']
-        self.fp = {}
-        for d in self.dets:
-            self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
-
+        # Detector properties.  We place one detector per process at the
+        # boresight with evenly spaced polarization orientations.
+        self.ndet = self.data.comm.group_size
+        self.NET = 10.0
         self.rate = 20.0
 
-        self.rates = {}
-        self.fmin = {}
-        self.fknee = {}
-        self.alpha = {}
-        self.NET = {}
+        # Create detectors with a range of knee frequencies.
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET,
+            fmin=1.0e-5, fknee=np.linspace(0.0, 0.1, num=self.ndet))
 
-        self.rates['f1a'] = self.rate
-        self.fmin['f1a'] = 1.0e-5
-        self.fknee['f1a'] = 0.15
-        self.alpha['f1a'] = 1.0
-        self.NET['f1a'] = 10.0
+        # Samples per observation
+        self.totsamp = 100000
 
-        self.rates['f1b'] = self.rate
-        self.fmin['f1b'] = 1.0e-5
-        self.fknee['f1b'] = 0.1
-        self.alpha['f1b'] = 1.0
-        self.NET['f1b'] = 10.0
+        # bin size
+        self.wbin = 0.01 # in degrees
 
-        self.rates['f2a'] = self.rate
-        self.fmin['f2a'] = 1.0e-5
-        self.fknee['f2a'] = 0.05
-        self.alpha['f2a'] = 1.0
-        self.NET['f2a'] = 10.0
-
-        self.rates['f2b'] = self.rate
-        self.fmin['f2b'] = 1.0e-5
-        self.fknee['f2b'] = 0.001
-        self.alpha['f2b'] = 1.0
-        self.NET['f2b'] = 10.0
-
-        self.rates['white'] = self.rate
-        self.fmin['white'] = 0.0
-        self.fknee['white'] = 0.0
-        self.alpha['white'] = 1.0
-        self.NET['white'] = 10.0
-
-        self.rates['high'] = self.rate
-        self.fmin['high'] = 1.0e-5
-        self.fknee['high'] = 40.0
-        self.alpha['high'] = 2.0
-        self.NET['high'] = 10.0
-
-        self.totsamp = 10000
-
-        self.oversample = 2
-
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
-        self.chunksize = chunksize
-
-        # Construct a ground TOD
-
-        self.tod = TODGround(
-            self.toastcomm.comm_group,
-            self.fp,
+        # Populate the observation
+        tod = TODGround(
+            self.data.comm.comm_group,
+            dquat,
             self.totsamp,
+            detranks=self.data.comm.group_size,
             firsttime=0.0,
             rate=self.rate,
             azmin=45,
@@ -118,66 +63,52 @@ class OpGroundFilterTest(MPITestCase):
             el=45)
 
         # construct an analytic noise model
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
+        )
 
-        self.nse = AnalyticNoise(
-            rate=self.rates,
-            fmin=self.fmin,
-            detectors=self.dets,
-            fknee=self.fknee,
-            alpha=self.alpha,
-            NET=self.NET)
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
 
-        ob = {}
-        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
-        ob['id'] = 0
-        ob['tod'] = self.tod
-        ob['intervals'] = None
-        ob['baselines'] = None
-        ob['noise'] = self.nse
-
-        self.data.obs.append(ob)
 
     def test_filter(self):
-        start = MPI.Wtime()
-
-        ob = self.data.obs[0]
-        tod = ob['tod']
-        nse = ob['noise']
-
         # generate timestreams
-
         op = OpSimNoise()
         op.exec(self.data)
 
         # Replace the noise with a ground-synchronous signal
-
-        old_rms = {}
-
-        az = tod.read_boresight_az()
-
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            ref = tod.cache.reference(cachename)
-            ref[:] = np.sin(az)
-            old_rms[det] = np.std(ref)
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            az = tod.read_boresight_az()
+            orms = {}
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                y[:] = np.sin(az)
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
 
         # Filter timestreams
-
         op = OpGroundFilter(name='noise', wbin=self.wbin, common_flag_mask=0)
         op.exec(self.data)
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-
         # Ensure all timestreams are zeroed out by the filter
-        
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            ref = tod.cache.reference(cachename)
-            rms = np.std(ref)
-            old = old_rms[det]
-            if rms / old > 1e-3:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
-
-        self.print_in_turns('groundfilter test took {:.3f} s'.format(elapsed))
-
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) > 1.0e-3:
+                    raise RuntimeError("det {} old rms = {}, new rms = {}"
+                                       "".format(det, old, rms))
+                del y
+        return

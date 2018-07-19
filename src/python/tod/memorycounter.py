@@ -69,9 +69,8 @@ class OpMemoryCounter(Operator):
             tod = obs['tod']
             tot_task += tod.cache.report(silent=True)
 
-        if cgroup is MPI.UNDEFINED:
-            tot_group = 0
-        else:
+        tot_group = 0
+        if cgroup is not MPI.UNDEFINED:
             tot_group = cgroup.allreduce(tot_task, op=MPI.SUM)
         tot_world = cworld.allreduce(tot_task, op=MPI.SUM)
 

@@ -14,7 +14,7 @@ using namespace std;
 using namespace toast;
 
 
-const size_t TOASTmpiShmemTest::n = 100;
+const size_t TOASTmpiShmemTest::n = 10;
 
 
 TEST_F( TOASTmpiShmemTest, instantiate ) {
@@ -34,15 +34,27 @@ TEST_F( TOASTmpiShmemTest, instantiate ) {
 
 TEST_F( TOASTmpiShmemTest, access ) {
 
+    MPI_Comm comm = MPI_COMM_WORLD;
+    int rank;
+    MPI_Comm_rank(comm, &rank);
+
     toast::mpi_shmem::mpi_shmem<double> shmem( n );
 
     shmem.set( 20 );
 
+    int ret = MPI_Barrier(comm);
+
     shmem.resize( 2*n );
 
-    double *p = shmem.data();
+    ret = MPI_Barrier(comm);
 
-    shmem[n-1] = 10;
+    double * p = shmem.data();
+
+    if (rank == 0) {
+        shmem[n-1] = 10;
+    }
+
+    ret = MPI_Barrier(comm);
 
     EXPECT_FLOAT_EQ( shmem[n-2], 20 );
     EXPECT_FLOAT_EQ( shmem[n-1], 10 );

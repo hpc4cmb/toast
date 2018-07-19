@@ -23,96 +23,38 @@ from ..tod.sim_tod import *
 
 from .. import rng as rng
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class OpGainScramblerTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = 'toast_test_output'
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-        self.data = Data(self.toastcomm)
+        # One observation per group
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.order = 5
-
-        self.dets = ['f1a_apply', 'f1b_apply', 'f2a', 'f2b', 'white', 'high']
-        self.fp = {}
-        for d in self.dets:
-            self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
-
+        self.ndet = 4
         self.rate = 20.0
 
-        self.rates = {}
-        self.fmin = {}
-        self.fknee = {}
-        self.alpha = {}
-        self.NET = {}
+        # Create detectors with a range of knee frequencies.
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate, net=10.0,
+            fmin=1.0e-5, fknee=np.linspace(0.0, 0.1, num=self.ndet))
 
-        self.rates['f1a_apply'] = self.rate
-        self.fmin['f1a_apply'] = 1.0e-5
-        self.fknee['f1a_apply'] = 0.15
-        self.alpha['f1a_apply'] = 1.0
-        self.NET['f1a_apply'] = 10.0
+        # Total samples per observation
+        self.totsamp = 200000
 
-        self.rates['f1b_apply'] = self.rate
-        self.fmin['f1b_apply'] = 1.0e-5
-        self.fknee['f1b_apply'] = 0.1
-        self.alpha['f1b_apply'] = 1.0
-        self.NET['f1b_apply'] = 10.0
-
-        self.rates['f2a'] = self.rate
-        self.fmin['f2a'] = 1.0e-5
-        self.fknee['f2a'] = 0.05
-        self.alpha['f2a'] = 1.0
-        self.NET['f2a'] = 10.0
-
-        self.rates['f2b'] = self.rate
-        self.fmin['f2b'] = 1.0e-5
-        self.fknee['f2b'] = 0.001
-        self.alpha['f2b'] = 1.0
-        self.NET['f2b'] = 10.0
-
-        self.rates['white'] = self.rate
-        self.fmin['white'] = 0.0
-        self.fknee['white'] = 0.0
-        self.alpha['white'] = 1.0
-        self.NET['white'] = 10.0
-
-        self.rates['high'] = self.rate
-        self.fmin['high'] = 1.0e-5
-        self.fknee['high'] = 40.0
-        self.alpha['high'] = 2.0
-        self.NET['high'] = 10.0
-
-        self.totsamp = 10000
-
-        self.oversample = 2
-
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
-        self.chunksize = chunksize
+        # Chunks
+        chunks = uniform_chunks(self.totsamp, nchunk=self.data.comm.group_size)
 
         # Construct an empty TOD (no pointing needed)
 
-        self.tod = TODHpixSpiral(
-            self.toastcomm.comm_group,
-            self.fp,
+        tod = TODHpixSpiral(
+            self.data.comm.comm_group,
+            dquat,
             self.totsamp,
             firsttime=0.0,
             rate=self.rate,
@@ -121,64 +63,54 @@ class OpGainScramblerTest(MPITestCase):
 
         # construct an analytic noise model
 
-        self.nse = AnalyticNoise(
-            rate=self.rates,
-            fmin=self.fmin,
-            detectors=self.dets,
-            fknee=self.fknee,
-            alpha=self.alpha,
-            NET=self.NET
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
         )
 
-        ob = {}
-        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
-        ob['id'] = 0
-        ob['tod'] = self.tod
-        ob['intervals'] = None
-        ob['baselines'] = None
-        ob['noise'] = self.nse
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
 
-        self.data.obs.append(ob)
 
     def test_scrambler(self):
-        start = MPI.Wtime()
-
-        ob = self.data.obs[0]
-        tod = ob['tod']
-        nse = ob['noise']
-
         # generate timestreams
-
         op = OpSimNoise()
         op.exec(self.data)
 
         # Record the old RMS
-
-        old_rms = {}
-
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            old_rms[det] = np.std(y)
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            orms = {}
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
 
         # Scramble the timestreams
 
-        op = OpGainScrambler(center=2, sigma=1e-6, name='noise', pattern=r'.*apply.*')
+        op = OpGainScrambler(center=2, sigma=1e-6, name='noise')
         op.exec(self.data)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
 
         # Ensure RMS changes for the implicated detectors
 
-        for det in tod.local_dets:
-            cachename = 'noise_{}'.format(det)
-            y = tod.cache.reference(cachename)
-            rms = np.std(y)
-            old = old_rms[det]
-            if np.abs(rms / old) - 2 > 1e-3 and 'apply' in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
-            if np.abs(rms / old) - 1 > 1e-10 and 'apply' not in det:
-                raise RuntimeError('det {} old rms = {}, new rms = {}'.format(det, old, rms))
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) - 2 > 1e-3:
+                    raise RuntimeError(\
+                        "det {} old rms = {}, new rms = {}"\
+                        .format(det, old, rms))
+                del y
 
-        self.print_in_turns('gainscrambler test took {:.3f} s'.format(elapsed))
+        return

@@ -21,6 +21,7 @@ toasttestsdir = $(pythondir)/toast/tests
 
 toasttests_PYTHON = \
 __init__.py \
+_helpers.py \
 binned.py \
 cache.py \
 cbuffer.py \

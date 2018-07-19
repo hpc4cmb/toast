@@ -23,95 +23,43 @@ from ..tod.sim_tod import *
 
 from .. import rng as rng
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class OpMemoryCounterTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = 'toast_test_output'
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(world=self.comm, groupsize=self.groupsize)
-        self.data = Data(self.toastcomm)
+        # One observation per group
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.dets = ['f1a_apply', 'f1b_apply', 'f2a', 'f2b', 'white', 'high']
-        self.fp = {}
-        for d in self.dets:
-            self.fp[d] = np.array([0.0, 0.0, 1.0, 0.0])
+        # Detector properties.  We place one detector per process at the
+        # boresight with evenly spaced polarization orientations.
 
+        self.ndet = 4
+        self.NET = 5.0
         self.rate = 20.0
 
-        self.rates = {}
-        self.fmin = {}
-        self.fknee = {}
-        self.alpha = {}
-        self.NET = {}
+        # Create detectors with default properties.
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET)
 
-        self.rates['f1a_apply'] = self.rate
-        self.fmin['f1a_apply'] = 1.0e-5
-        self.fknee['f1a_apply'] = 0.15
-        self.alpha['f1a_apply'] = 1.0
-        self.NET['f1a_apply'] = 10.0
+        # Total samples per observation
+        self.totsamp = 100000
 
-        self.rates['f1b_apply'] = self.rate
-        self.fmin['f1b_apply'] = 1.0e-5
-        self.fknee['f1b_apply'] = 0.1
-        self.alpha['f1b_apply'] = 1.0
-        self.NET['f1b_apply'] = 10.0
+        # Chunks
+        chunks = uniform_chunks(self.totsamp, nchunk=self.data.comm.group_size)
 
-        self.rates['f2a'] = self.rate
-        self.fmin['f2a'] = 1.0e-5
-        self.fknee['f2a'] = 0.05
-        self.alpha['f2a'] = 1.0
-        self.NET['f2a'] = 10.0
+        # Populate the observations
 
-        self.rates['f2b'] = self.rate
-        self.fmin['f2b'] = 1.0e-5
-        self.fknee['f2b'] = 0.001
-        self.alpha['f2b'] = 1.0
-        self.NET['f2b'] = 10.0
-
-        self.rates['white'] = self.rate
-        self.fmin['white'] = 0.0
-        self.fknee['white'] = 0.0
-        self.alpha['white'] = 1.0
-        self.NET['white'] = 10.0
-
-        self.rates['high'] = self.rate
-        self.fmin['high'] = 1.0e-5
-        self.fknee['high'] = 40.0
-        self.alpha['high'] = 2.0
-        self.NET['high'] = 10.0
-
-        self.totsamp = 10000
-
-        self.oversample = 2
-
-        nchunk = 10
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
-
-        self.chunksize = chunksize
-
-        # Construct an empty TOD (no pointing needed)
-
-        self.tod = TODHpixSpiral(
-            self.toastcomm.comm_group,
-            self.fp,
+        tod = TODHpixSpiral(
+            self.data.comm.comm_group,
+            dquat,
             self.totsamp,
+            detranks=1,
             firsttime=0.0,
             rate=self.rate,
             nside=512,
@@ -119,50 +67,38 @@ class OpMemoryCounterTest(MPITestCase):
 
         # construct an analytic noise model
 
-        self.nse = AnalyticNoise(
-            rate=self.rates,
-            fmin=self.fmin,
-            detectors=self.dets,
-            fknee=self.fknee,
-            alpha=self.alpha,
-            NET=self.NET
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
         )
 
-        ob = {}
-        ob['name'] = 'noisetest-{}'.format(self.toastcomm.group)
-        ob['id'] = 0
-        ob['tod'] = self.tod
-        ob['intervals'] = None
-        ob['baselines'] = None
-        ob['noise'] = self.nse
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
 
-        self.data.obs.append(ob)
 
     def test_counter(self):
-        start = MPI.Wtime()
-
         ob = self.data.obs[0]
         tod = ob['tod']
-        nse = ob['noise']
-
         # Ensure timestamps are cached before simulating noise
-        tod.local_times()
+        blah = tod.local_times()
+        del blah
 
-        counter = OpMemoryCounter()
+        counter = OpMemoryCounter(silent=True)
 
         tot_old = counter.exec(self.data)
 
         # generate timestreams
-
         op = OpSimNoise()
         op.exec(self.data)
 
         tot_new = counter.exec(self.data)
 
-        np.testing.assert_equal(
-            tot_new - tot_old, self.totsamp * len(self.dets) * 8)
+        expected = self.data.comm.ngroups * self.totsamp * self.ndet * 8
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
+        np.testing.assert_equal(tot_new - tot_old, expected)
 
-        self.print_in_turns('memorycounter test took {:.3f} s'.format(elapsed))
+        return

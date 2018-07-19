@@ -6,6 +6,6 @@ Unit tests for the toast package.
 """
 
 # If toast has not yet been imported, make sure we initialize MPI
-from .. import mpi
+from ..mpi import MPI
 
 from .runner import test as run

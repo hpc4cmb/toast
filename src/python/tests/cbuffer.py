@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 
@@ -37,70 +37,48 @@ class CbufferTest(MPITestCase):
 
 
     def test_create(self):
-        start = MPI.Wtime()
-
         data = {}
-
         for k, v in self.types.items():
             data[k] = ToastBuffer(self.nsamp, k)
-
         del data
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("ToastBuffer create test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_buffer(self):
-        start = MPI.Wtime()
-
         data = {}
-
         for k, v in self.types.items():
             raw = ToastBuffer(self.nsamp, k)
             data[k] = np.asarray(raw)
             for i in range(self.nsamp):
                 data[k][i] = i
-            print(data[k])
-
+            #print(data[k])
         del data
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("ToastBuffer buffer test took {:.3f} s".format(elapsed))
+        return
 
 
     def test_refcount(self):
-        start = MPI.Wtime()
-
         data = {}
-
         for k, v in self.types.items():
             raw = ToastBuffer(self.nsamp, k)
             gc.collect()
-            print("    raw buffer {} has refcount {}".format(k, sys.getrefcount(raw)))
-            print(gc.get_referrers(raw))
+            #print("    raw buffer {} has refcount {}".format(k, sys.getrefcount(raw)))
+            #print(gc.get_referrers(raw))
 
             data[k] = np.asarray(raw)
-            print("buffer {} has numpy type {}".format(k, data[k].dtype))
+            #print("buffer {} has numpy type {}".format(k, data[k].dtype))
             for i in range(self.nsamp):
                 data[k][i] = i
             gc.collect()
-            print("    now raw buffer {} has refcount {}".format(k, sys.getrefcount(raw)))
-            print(gc.get_referrers(raw))
-            
+            #print("    now raw buffer {} has refcount {}".format(k, sys.getrefcount(raw)))
+            #print(gc.get_referrers(raw))
+
             del raw
-        
+
         for k, v in self.types.items():
             gc.collect()
-            print("    dict buffer {} has refcount {}".format(k, sys.getrefcount(data[k])))
-            print(gc.get_referrers(data[k]))
+            self.assertTrue(sys.getrefcount(data[k]) <= 2)
+            #print("    dict buffer {} has refcount {}".format(k, sys.getrefcount(data[k])))
+            #print(gc.get_referrers(data[k]))
 
         del data
-
-        #self.assertTrue(False)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("ToastBuffer refcount test took {:.3f} s".format(elapsed))
-
+        return

@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -22,114 +22,82 @@ from ..map import *
 
 from .. import ctoast as ctoast
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
+
 class CovarianceTest(MPITestCase):
 
     def setUp(self):
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-        self.mapdir = os.path.join(self.outdir, "covariance")
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.mapdir):
-                os.mkdir(self.mapdir)
+        # Create one observation per group, and each observation will have
+        # a fixed number of detectors and one chunk per process.
 
-        # Note: self.comm is set by the test infrastructure
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.toastcomm = Comm(world=self.comm)
-        self.data = Data(self.toastcomm)
+        self.ndet = 1
+        self.rate = 40.0
+        self.hwprpm = 50
 
-        self.detnames = ['bore']
-        self.dets = {
-            'bore' : np.array([0.0, 0.0, 1.0, 0.0])
-            }
+        # Create detectors
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate, net=7.0)
+
+        # Samples per observation
+        self.totsamp = 240000
+
+        # Pixelization
 
         self.sim_nside = 32
         self.sim_npix = 12 * self.sim_nside**2
 
-        self.totsamp = 2000000
-
         self.map_nside = 32
         self.map_npix = 12 * self.map_nside**2
-        
-        self.rate = 40.0
-        self.spinperiod = 10.0
-        self.spinangle = 30.0
-        self.precperiod = 50.0
-        self.precangle = 65.0
-        self.hwprpm = 50.0
 
         self.subnside = int(self.map_nside / 4)
         self.subnpix = 12 * self.subnside**2
         self.nsubmap = int( self.map_npix / self.subnpix )
 
-        self.NET = 7.0
+        # Scan strategy
 
-        self.fmins = {
-            'bore' : 0.0,
-        }
-        self.rates = {
-            'bore' : self.rate,
-        }
-        self.fknee = {
-            'bore' : 0.0,
-        }
-        self.alpha = {
-            'bore' : 1.0,
-        }
-        self.netd = {
-            'bore' : self.NET
-        }
+        self.spinperiod = 10.0
+        self.spinangle = 30.0
+        self.precperiod = 50.0
+        self.precangle = 65.0
 
-        # madam only supports a single observation
-        nobs = 1
+        # One chunk per process
+        chunks = uniform_chunks(self.totsamp, nchunk=self.data.comm.group_size)
 
-        # give every process one chunk
-        nchunk = self.toastcomm.group_size
-        chunksize = int(self.totsamp / nchunk)
-        chunks = np.ones(nchunk, dtype=np.int64)
-        chunks *= chunksize
-        remain = self.totsamp - (nchunk * chunksize)
-        for r in range(remain):
-            chunks[r] += 1
+        # Populate the single observation per group
 
-        for i in range(nobs):
-            # create the TOD for this observation
+        tod = TODSatellite(
+            self.data.comm.comm_group,
+            dquat,
+            self.totsamp,
+            detranks=1,
+            firsttime=0.0,
+            rate=self.rate,
+            spinperiod=self.spinperiod,
+            spinangle=self.spinangle,
+            precperiod=self.precperiod,
+            precangle=self.precangle,
+            sampsizes=chunks)
 
-            tod = TODSatellite(
-                self.toastcomm.comm_group, 
-                self.dets, 
-                self.totsamp, 
-                firsttime=0.0, 
-                rate=self.rate, 
-                spinperiod=self.spinperiod,
-                spinangle=self.spinangle,
-                precperiod=self.precperiod, 
-                precangle=self.precangle, 
-                sampsizes=chunks)
+        tod.set_prec_axis()
 
-            tod.set_prec_axis()
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
+        )
 
-            # add analytic noise model with white noise
-
-            nse = AnalyticNoise(
-                rate=self.rates, 
-                fmin=self.fmins,
-                detectors=self.detnames,
-                fknee=self.fknee,
-                alpha=self.alpha,
-                NET=self.netd)
-
-            ob = {}
-            ob['name'] = 'test'
-            ob['id'] = 0
-            ob['tod'] = tod
-            ob['intervals'] = None
-            ob['baselines'] = None
-            ob['noise'] = nse
-
-            self.data.obs.append(ob)
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
 
 
     def tearDown(self):
@@ -144,13 +112,16 @@ class CovarianceTest(MPITestCase):
         scale = 2.0
         nsamp = nsm * npix
 
-        fake = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=nnz, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        fake = DistPixels(comm=self.data.comm.comm_world, size=nsm*npix,
+            nnz=nnz, dtype=np.float64, submap=npix, local=np.arange(nsm))
         check = fake.duplicate()
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=1, dtype=np.int64, submap=npix, local=np.arange(nsm))
+        hits = DistPixels(comm=self.data.comm.comm_world, size=nsm*npix, nnz=1,
+            dtype=np.int64, submap=npix, local=np.arange(nsm))
         checkhits = hits.duplicate()
 
-        invn = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=block, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        invn = DistPixels(comm=self.data.comm.comm_world, size=nsm*npix,
+            nnz=block, dtype=np.float64, submap=npix, local=np.arange(nsm))
         checkinvn = invn.duplicate()
 
         sm = np.zeros(nsamp, dtype=np.int64)
@@ -165,8 +136,8 @@ class CovarianceTest(MPITestCase):
 
         signal = np.random.normal(size=nsamp)
 
-        ctoast.cov_accumulate_diagonal(nsm, npix, nnz, nsamp, sm, pix, wt, scale, 
-            signal, fake.data, hits.data, invn.data)
+        ctoast.cov_accumulate_diagonal(nsm, npix, nnz, nsamp, sm, pix, wt,
+            scale, signal, fake.data, hits.data, invn.data)
 
         for i in range(nsamp):
             checkhits.data[sm[i], pix[i], 0] += 1
@@ -174,7 +145,8 @@ class CovarianceTest(MPITestCase):
             for j in range(nnz):
                 check.data[sm[i], pix[i], j] += scale * signal[i] * wt[i*nnz+j]
                 for k in range(j, nnz):
-                    checkinvn.data[sm[i], pix[i], off] += scale * wt[i*nnz+j] * wt[i*nnz+k]
+                    checkinvn.data[sm[i], pix[i], off] += \
+                        scale * wt[i*nnz+j] * wt[i*nnz+k]
                     off += 1
 
         # for i in range(nsamp):
@@ -190,8 +162,6 @@ class CovarianceTest(MPITestCase):
         nt.assert_almost_equal(fake.data, check.data)
         nt.assert_almost_equal(invn.data, checkinvn.data)
 
-        #self.assertTrue(False)
-
         return
 
 
@@ -204,7 +174,8 @@ class CovarianceTest(MPITestCase):
         nelem = int(nnz * (nnz+1) / 2)
         threshold = 1.0e-6
 
-        invn = DistPixels(comm=self.toastcomm.comm_group, size=nsm*npix, nnz=nelem, dtype=np.float64, submap=npix, local=np.arange(nsm))
+        invn = DistPixels(comm=self.data.comm.comm_world, size=nsm*npix,
+            nnz=nelem, dtype=np.float64, submap=npix, local=np.arange(nsm))
         check = invn.duplicate()
 
         rowdata = 10.0 * np.arange(nnz, 0, -1)
@@ -236,13 +207,12 @@ class CovarianceTest(MPITestCase):
 
 
     def test_invnpp(self):
-        start = MPI.Wtime()
-
         op = OpSimNoise(realization=0)
         op.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU",
+            hwprpm=self.hwprpm)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -254,22 +224,25 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
+            nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
         invnpp.data.fill(0.0)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+        hits = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
+            nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
         hits.data.fill(0)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
 
-        tod = self.data.obs[0]['tod']
-        nse = self.data.obs[0]['noise']
+        tod = self.data.obs[0]["tod"]
+        nse = self.data.obs[0]["noise"]
         detweights = {}
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits, name="noise")
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
+            hits=hits, name="noise")
         build_invnpp.exec(self.data)
 
         # for i in range(invnpp.data.shape[0]):
@@ -289,7 +262,7 @@ class CovarianceTest(MPITestCase):
         # Matrices that failed the rcond test are set to zero
         nonzero = (np.absolute(invnpp.data) > 1.0e-12)
         if np.sum(nonzero) == 0:
-            raise Exception('All matrices failed the rcond test.')
+            raise Exception("All matrices failed the rcond test.")
 
         nt.assert_almost_equal(invnpp.data[nonzero], check.data[nonzero])
 
@@ -297,10 +270,9 @@ class CovarianceTest(MPITestCase):
 
 
     def test_distpix_init(self):
-        start = MPI.Wtime()
-
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU",
+            hwprpm=self.hwprpm)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -312,22 +284,22 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
+            nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-        invnpp2 = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, localpix=localpix)
+        invnpp2 = DistPixels(comm=self.data.comm.comm_world,
+            size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix,
+            localpix=localpix)
 
         nt.assert_equal( invnpp.local, invnpp2.local )
-
-        #self.assertTrue(False)
 
         return
 
 
     def test_multiply(self):
-        start = MPI.Wtime()
-
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU",
+            hwprpm=self.hwprpm)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -339,20 +311,23 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
+            nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.sim_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+        hits = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
+            nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
 
-        tod = self.data.obs[0]['tod']
-        nse = self.data.obs[0]['noise']
+        tod = self.data.obs[0]["tod"]
+        nse = self.data.obs[0]["noise"]
         detweights = {}
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
+            hits=hits)
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -373,7 +348,7 @@ class CovarianceTest(MPITestCase):
                 if np.all( invnpp.data[i,j] == 0 ):
                     # Matrix failed to invert
                     continue
-                off = 0                
+                off = 0
                 for k in range(nnz):
                     for m in range(k, nnz):
                         if k == m:
@@ -386,10 +361,9 @@ class CovarianceTest(MPITestCase):
 
 
     def test_fitsio(self):
-        start = MPI.Wtime()
-
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU', hwprpm=self.hwprpm)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU",
+            hwprpm=self.hwprpm)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -401,22 +375,26 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
+        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.map_npix,
+            nnz=6, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-        rcond = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm)
+        rcond = DistPixels(comm=self.data.comm.comm_world, size=self.map_npix,
+            nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm)
 
-        hits = DistPixels(comm=self.toastcomm.comm_group, size=self.map_npix, nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
+        hits = DistPixels(comm=self.data.comm.comm_world, size=self.map_npix,
+            nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
 
-        tod = self.data.obs[0]['tod']
-        nse = self.data.obs[0]['noise']
+        tod = self.data.obs[0]["tod"]
+        nse = self.data.obs[0]["noise"]
         detweights = {}
         for d in tod.local_dets:
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
+            hits=hits)
         build_invnpp.exec(self.data)
 
         #self.assertTrue(False)
@@ -437,20 +415,18 @@ class CovarianceTest(MPITestCase):
 
         subsum = [ np.sum(invnpp.data[x,:,:]) for x in range(len(invnpp.local)) ]
 
-        print("proc {} submap sum = {} ({})".format(self.toastcomm.comm_group.rank, " ".join([ "{}:{}".format(x,y) for x,y in zip(invnpp.local, subsum) ]), np.sum(subsum)))
-
-        outfile = os.path.join(self.mapdir, 'covtest.fits')
-        if self.toastcomm.comm_group.rank == 0:
+        outfile = os.path.join(self.outdir, "covtest.fits")
+        if self.data.comm.comm_world.rank == 0:
             if os.path.isfile(outfile):
                 os.remove(outfile)
 
-        hitfile = os.path.join(self.mapdir, 'covtest_hits.fits')
-        if self.toastcomm.comm_group.rank == 0:
+        hitfile = os.path.join(self.outdir, "covtest_hits.fits")
+        if self.data.comm.comm_world.rank == 0:
             if os.path.isfile(hitfile):
                 os.remove(hitfile)
 
-        rcondfile = os.path.join(self.mapdir, 'covtest_rcond.fits')
-        if self.toastcomm.comm_group.rank == 0:
+        rcondfile = os.path.join(self.outdir, "covtest_rcond.fits")
+        if self.data.comm.comm_world.rank == 0:
             if os.path.isfile(rcondfile):
                 os.remove(rcondfile)
 
@@ -458,17 +434,13 @@ class CovarianceTest(MPITestCase):
         rcond.write_healpix_fits(rcondfile)
         hits.write_healpix_fits(hitfile)
 
-        print("proc {} invnpp.data on write sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
-
         invnpp.data.fill(0.0)
         invnpp.read_healpix_fits(outfile)
-
-        print("proc {} invnpp.data on read sum = {}".format(self.toastcomm.comm_group.rank, np.sum(invnpp.data)))
 
         diffdata = invnpp.duplicate()
         diffdata.data -= check.data
 
-        difffile = os.path.join(self.mapdir, 'readwrite_diff.fits')
+        difffile = os.path.join(self.outdir, "readwrite_diff.fits")
         diffdata.write_healpix_fits(difffile)
 
         if self.comm.rank == 0:
@@ -510,4 +482,3 @@ class CovarianceTest(MPITestCase):
         nt.assert_equal(hits.data, checkhits.data)
 
         return
-

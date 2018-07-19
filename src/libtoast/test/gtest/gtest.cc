@@ -2461,13 +2461,23 @@ Result HandleExceptionsInMethodIfSupported(
 
 }  // namespace internal
 
+// Add an MPI barrier to keep the tests executing in lock-step.  This is useful
+// since only the root process is printing result info.  Also, if one process
+// fails, we just abort, since it is considerable work to have all processes
+// fail the test gracefully if one process dies.
+
+#include <mpi.h>
+
 // Runs the test and updates the test result.
 void Test::Run() {
   if (!HasSameFixtureClass()) return;
 
+  int ret = MPI_Barrier(MPI_COMM_WORLD);
+
   internal::UnitTestImpl* const impl = internal::GetUnitTestImpl();
   impl->os_stack_trace_getter()->UponLeavingGTest();
   internal::HandleExceptionsInMethodIfSupported(this, &Test::SetUp, "SetUp()");
+
   // We will run the test only if SetUp() was successful.
   if (!HasFatalFailure()) {
     impl->os_stack_trace_getter()->UponLeavingGTest();
@@ -2481,6 +2491,10 @@ void Test::Run() {
   impl->os_stack_trace_getter()->UponLeavingGTest();
   internal::HandleExceptionsInMethodIfSupported(
       this, &Test::TearDown, "TearDown()");
+
+  if (HasFatalFailure()) {
+      ret = MPI_Abort(MPI_COMM_WORLD, 1);
+  }
 }
 
 // Returns true iff the current test has a fatal failure.

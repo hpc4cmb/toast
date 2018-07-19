@@ -12,24 +12,18 @@ import numpy as np
 import sys
 import os
 
+from ._helpers import (create_outdir, create_distdata)
 
 class DataTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
+        # Create one observation per group.
+
+        self.data = create_distdata(self.comm, obs_per_group=1)
+
         self.ntask = 24
         self.sizes1 = [
             29218,
@@ -92,10 +86,8 @@ class DataTest(MPITestCase):
 
 
     def test_construction(self):
-        start = MPI.Wtime()
-
         dist_uni1 = distribute_uniform(self.totsamp1, self.ntask)
-        # with open("test_uni_{}".format(self.comm.rank), 'w') as f:
+        # with open("test_uni_{}".format(self.comm.rank), "w") as f:
         #     for d in dist_uni:
         #         f.write("uniform:  {} {}\n".format(d[0], d[1]))
         n1 = np.sum(np.array(dist_uni1)[:,1])
@@ -113,10 +105,10 @@ class DataTest(MPITestCase):
             for brk in breaks:
                 if brk > offset and brk < offset+nsamp:
                     raise Exception(
-                    'Uniform data distribution did not honor the breaks')
+                    "Uniform data distribution did not honor the breaks")
 
         dist_disc1 = distribute_discrete(self.sizes1, self.ntask)
-        # with open("test_disc_{}".format(self.comm.rank), 'w') as f:
+        # with open("test_disc_{}".format(self.comm.rank), "w") as f:
         #     for d in dist_disc:
         #         f.write("discrete:  {} {}\n".format(d[0], d[1]))
 
@@ -135,16 +127,12 @@ class DataTest(MPITestCase):
             for brk in breaks:
                 if brk > offset and brk < offset+nchunk:
                     raise Exception(
-                    'Discrete data distribution did not honor the breaks')
-
-        self.assertEqual(self.toastcomm.ngroups, self.ngroup)
-        self.assertEqual(self.toastcomm.group_size, self.groupsize)
-
-        self.data = Data(self.toastcomm)
+                    "Discrete data distribution did not honor the breaks")
 
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_construct_info"), "w")
+            handle = open(os.path.join(self.outdir,"out_test_construct_info"),
+                "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
@@ -157,25 +145,20 @@ class DataTest(MPITestCase):
                 for d in dist_disc3:
                     f.write("{:04d} = ({}, {})\n".format(indx, d[0], d[1]))
                     indx += 1
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        return
 
 
     def test_split(self):
-        start = MPI.Wtime()
+        data = Data(self.data.comm)
+        data.obs.append({"site":"Atacama", "season":1})
+        data.obs.append({"site":"Atacama", "season":2})
+        data.obs.append({"site":"Atacama", "season":3})
+        data.obs.append({"site":"Pole", "season":1})
+        data.obs.append({"site":"Pole", "season":2})
+        data.obs.append({"site":"Pole", "season":3})
 
-        data = Data(self.toastcomm)
-        data.obs.append({'site':'Atacama', 'season':1})
-        data.obs.append({'site':'Atacama', 'season':2})
-        data.obs.append({'site':'Atacama', 'season':3})
-        data.obs.append({'site':'Pole', 'season':1})
-        data.obs.append({'site':'Pole', 'season':2})
-        data.obs.append({'site':'Pole', 'season':3})
-
-        datasplit_site = data.split('site')
-        datasplit_season = data.split('season')
+        datasplit_site = data.split("site")
+        datasplit_season = data.split("season")
 
         nt.assert_equal(len(datasplit_site), 2)
         nt.assert_equal(len(datasplit_season), 3)
@@ -185,17 +168,14 @@ class DataTest(MPITestCase):
         sum1 = 0
         for value, site_data in datasplit_site:
             for obs in site_data.obs:
-                assert('var1' not in obs)
-                obs['var1'] = 1
+                assert("var1" not in obs)
+                obs["var1"] = 1
                 sum1 += 1
 
         sum2 = 0
         for value, season_data in datasplit_season:
             for obs in season_data.obs:
-                sum2 += obs['var1']
+                sum2 += obs["var1"]
 
         nt.assert_equal(sum1, sum2)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print('Proc {}:  test took {:.4f} s'.format( MPI.COMM_WORLD.rank, elapsed ))
+        return

@@ -1,5 +1,5 @@
 # Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by 
+# All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
@@ -14,6 +14,7 @@ import numpy.testing as nt
 import healpy as hp
 from scipy.constants import degree
 
+from .. import qarray as qa
 from ..tod.tod import *
 from ..tod.pointing import *
 from ..tod.sim_tod import *
@@ -22,41 +23,40 @@ from ..tod.sim_det_map import *
 from ..tod.sim_noise import *
 from ..map import *
 
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
+
 
 class MapGroundTest(MPITestCase):
 
-
     def setUp(self):
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-        self.mapdir = os.path.join(self.outdir, "map_ground")
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.mapdir):
-                os.mkdir(self.mapdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
-        # Note: self.comm is set by the test infrastructure
+        # Create one observation per group, and each observation will have
+        # one detector per process and a single chunk.
 
-        self.toastcomm = Comm(world=self.comm)
-        self.data = Data(self.toastcomm)
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.detnames = ['bore']
-        self.dets = {
-            'bore' : np.array([0.0, 0.0, 1.0, 0.0])
-            }
+        self.ndet = self.data.comm.group_size
+        self.rate = 20.0
 
-        # this is an unpolarized detector...
-        self.epsilon = {
-            'bore' : 1.0,
-        }
+        # Create detectors with white noise
+        self.NET = 5.0
 
-        nside = 1024
-        self.sim_nside = nside
-        #self.totsamp = 400000
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet, samplerate=self.rate,
+            fknee=0.0, net=self.NET)
+
+        # Samples per observation
         self.totsamp = 100000
+
+        # Pixelization
+        nside = 256
+        self.sim_nside = nside
         self.map_nside = nside
-        self.rate = 40.0
+
+        # Scan properties
         self.site_lon = '-67:47:10'
         self.site_lat = '-22:57:30'
         self.site_alt = 5200.
@@ -68,79 +68,56 @@ class MapGroundTest(MPITestCase):
         self.scan_accel = 0.1
         self.CES_start = None
 
-        self.NET = 7.0
+        # Populate the single observation per group
 
-        self.fmins = {
-            'bore' : 0.0,
-        }
-        self.rates = {
-            'bore' : self.rate,
-        }
-        self.fknee = {
-            'bore' : 0.0,
-        }
-        self.alpha = {
-            'bore' : 1.0,
-        }
-        self.netd = {
-            'bore' : self.NET
-        }
+        tod = TODGround(
+            self.data.comm.comm_group,
+            dquat,
+            self.totsamp,
+            detranks=self.data.comm.group_size,
+            firsttime=0.0,
+            rate=self.rate,
+            site_lon=self.site_lon,
+            site_lat=self.site_lat,
+            site_alt=self.site_alt,
+            azmin=self.azmin,
+            azmax=self.azmax,
+            el=self.el,
+            coord=self.coord,
+            scanrate=self.scanrate,
+            scan_accel=self.scan_accel,
+            CES_start=self.CES_start)
 
-        # madam only supports a single observation
-        nobs = 1
+        self.common_flag_mask = tod.TURNAROUND
 
+        common_flags = tod.read_common_flags()
+
+        # Number of flagged samples in each observation.  Only the first row
+        # of the process grid needs to contribute, since all process columns
+        # have identical common flags.
         nflagged = 0
-
-        for i in range(nobs):
-            # create the TOD for this observation
-
-            tod = TODGround(
-                self.toastcomm.comm_group,
-                self.dets, 
-                self.totsamp, 
-                firsttime=0.0,
-                rate=self.rate,
-                site_lon=self.site_lon,
-                site_lat=self.site_lat,
-                site_alt=self.site_alt,
-                azmin=self.azmin,
-                azmax=self.azmax,
-                el=self.el,
-                coord=self.coord,
-                scanrate=self.scanrate,
-                scan_accel=self.scan_accel,
-                CES_start=self.CES_start)
-
-            self.common_flag_mask = tod.TURNAROUND
-
-            common_flags = tod.read_common_flags()
+        if tod.grid_comm_col.rank == 0:
             nflagged += np.sum((common_flags & self.common_flag_mask) != 0)
 
-            # add analytic noise model with white noise
+        # Number of flagged samples across all observations
+        self.nflagged = self.data.comm.comm_world.allreduce(nflagged)
 
-            nse = AnalyticNoise(
-                rate=self.rates, 
-                fmin=self.fmins,
-                detectors=self.detnames,
-                fknee=self.fknee, 
-                alpha=self.alpha, 
-                NET=self.netd)
+        # add analytic noise model with white noise
 
-            ob = {}
-            ob['name'] = 'test'
-            ob['id'] = 0
-            ob['tod'] = tod
-            ob['intervals'] = None
-            ob['baselines'] = None
-            ob['noise'] = nse
+        nse = AnalyticNoise(
+            rate=drate,
+            fmin=dfmin,
+            detectors=dnames,
+            fknee=dfknee,
+            alpha=dalpha,
+            NET=dnet
+        )
 
-            self.data.obs.append(ob)
+        self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["noise"] = nse
 
-        self.nflagged = nflagged
 
     def test_azel(self):
-        start = MPI.Wtime()
-
         quats1 = []
         quats2 = []
 
@@ -153,20 +130,16 @@ class MapGroundTest(MPITestCase):
         for i in range(10):
             if np.all(quats1[0][i] == quats2[0][i]):
                 raise Exception('Horizontal and celestial pointing must be different')
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        self.print_in_turns("Az/El test took {:.3f} s".format(elapsed))
 
     def test_grad(self):
-        start = MPI.Wtime()
-
         # add simple sky gradient signal
         grad = OpSimGradient(nside=self.sim_nside, nest=True, common_flag_mask=self.common_flag_mask)
         grad.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         handle = None
@@ -177,7 +150,7 @@ class MapGroundTest(MPITestCase):
             handle.close()
 
         # make a binned map with madam
-        madam_out = os.path.join(self.mapdir, "madam_grad")
+        madam_out = os.path.join(self.outdir, "madam_grad")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -199,12 +172,10 @@ class MapGroundTest(MPITestCase):
         pars[ 'path_output' ] = madam_out
         pars[ 'info' ] = 0
 
-        madam = OpMadam(params=pars, name='grad', purge=True, common_flag_mask=self.common_flag_mask)
+        madam = OpMadam(params=pars, name='grad', purge=False,
+            common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
@@ -228,24 +199,24 @@ class MapGroundTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp-self.nflagged, tothits)
+                nt.assert_equal(self.ndet * ((self.data.comm.ngroups * \
+                    self.totsamp) - self.nflagged), tothits)
 
                 sig = grad.sigmap()
                 mask = (bins > -1.0e20)
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
-
         else:
             print("libmadam not available, skipping tests")
+        return
+
 
     def test_noise(self):
-        start = MPI.Wtime()
-
         # generate noise timestreams from the noise model
         nsig = OpSimNoise()
         nsig.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         handle = None
@@ -266,7 +237,7 @@ class MapGroundTest(MPITestCase):
             detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
 
         # make a binned map with madam
-        madam_out = os.path.join(self.mapdir, "madam_noise")
+        madam_out = os.path.join(self.outdir, "madam_noise")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -291,9 +262,6 @@ class MapGroundTest(MPITestCase):
         madam = OpMadam(params=pars, detweights=detweights, name='noise', common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
@@ -318,33 +286,31 @@ class MapGroundTest(MPITestCase):
                 # number of hits and the timestream rms
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp-self.nflagged, tothits)
-                print("tothits = ", tothits)
+                nt.assert_equal(self.ndet * ((self.data.comm.ngroups * \
+                    self.totsamp) - self.nflagged), tothits)
 
                 mask = (bins > -1.0e20)
-                print("num good pix = ", len(mask))
+                #print("num good pix = ", len(mask))
                 rthits = np.sqrt(hits[mask].astype(np.float64))
-                print("rthits = ", rthits)
-                print("bmap = ", bins[mask])
+                #print("rthits = ", rthits)
+                #print("bmap = ", bins[mask])
                 weighted = bins[mask] * rthits
-                print("weighted = ", weighted)
+                #print("weighted = ", weighted)
                 pixrms = np.sqrt(np.mean(weighted**2))
                 todrms = self.NET * np.sqrt(self.rate)
                 relerr = np.absolute(pixrms - todrms) / todrms
-                print("pixrms = ", pixrms)
-                print("todrms = ", todrms)
-                print("relerr = ", relerr)
+                #print("pixrms = ", pixrms)
+                #print("todrms = ", todrms)
+                #print("relerr = ", relerr)
                 self.assertTrue(relerr < 0.03)
-
         else:
             print("libmadam not available, skipping tests")
+        return
 
 
     def test_scanmap(self):
-        start = MPI.Wtime()
-
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -360,9 +326,9 @@ class MapGroundTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
-        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
         distsig.data[lsub,lpix,:] = np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
 
@@ -378,7 +344,7 @@ class MapGroundTest(MPITestCase):
             handle.close()
 
         # make a binned map with madam
-        madam_out = os.path.join(self.mapdir, "madam_scansim")
+        madam_out = os.path.join(self.outdir, "madam_scansim")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -403,9 +369,6 @@ class MapGroundTest(MPITestCase):
         madam = OpMadam(params=pars, name='scan', common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
@@ -429,20 +392,20 @@ class MapGroundTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp-self.nflagged, tothits)
+                nt.assert_equal(self.ndet * ((self.data.comm.ngroups * \
+                    self.totsamp) - self.nflagged), tothits)
                 mask = (bins > -1.0e20)
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
-
         else:
             print("libmadam not available, skipping tests")
+        return
 
 
     def test_hwpfast(self):
-        start = MPI.Wtime()
-
         # make a pointing matrix with a HWP that rotates 2*PI every sample
         hwprate = self.rate * 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon, hwprpm=hwprate)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True,
+            hwprpm=hwprate)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -458,9 +421,9 @@ class MapGroundTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
-        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
         distsig.data[lsub,lpix,:] = np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
 
@@ -476,7 +439,7 @@ class MapGroundTest(MPITestCase):
             handle.close()
 
         # make a binned map with madam
-        madam_out = os.path.join(self.mapdir, "madam_hwpfast")
+        madam_out = os.path.join(self.outdir, "madam_hwpfast")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -501,9 +464,6 @@ class MapGroundTest(MPITestCase):
         madam = OpMadam(params=pars, name='scan', common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
@@ -527,21 +487,21 @@ class MapGroundTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp-self.nflagged, tothits)
+                nt.assert_equal(self.ndet * ((self.data.comm.ngroups * \
+                    self.totsamp) - self.nflagged), tothits)
                 mask = (bins > -1.0e20)
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
-
         else:
             print("libmadam not available, skipping tests")
+        return
 
 
     def test_hwpconst(self):
-        start = MPI.Wtime()
-
         # make a pointing matrix with a HWP that is constant
         hwpstep = 2.0 * np.pi
         hwpsteptime = (self.totsamp / self.rate) / 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, epsilon=self.epsilon, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True,
+            hwpstep=hwpstep, hwpsteptime=hwpsteptime)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -557,9 +517,9 @@ class MapGroundTest(MPITestCase):
         submapsize = np.floor_divide(self.sim_nside, 16)
         localsm = np.unique(np.floor_divide(localpix, submapsize))
 
-        # construct a distributed map which has the gradient        
+        # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
-        distsig = DistPixels(comm=self.toastcomm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1, dtype=np.float64, submap=submapsize, local=localsm)
         lsub, lpix = distsig.global_to_local(localpix)
         distsig.data[lsub,lpix,:] = np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
 
@@ -575,7 +535,7 @@ class MapGroundTest(MPITestCase):
             handle.close()
 
         # make a binned map with madam
-        madam_out = os.path.join(self.mapdir, "madam_hwpconst")
+        madam_out = os.path.join(self.outdir, "madam_hwpconst")
         if self.comm.rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
@@ -600,13 +560,10 @@ class MapGroundTest(MPITestCase):
         madam = OpMadam(params=pars, name='scan', common_flag_mask=self.common_flag_mask)
         if madam.available:
             madam.exec(self.data)
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            self.print_in_turns("Madam test took {:.3f} s".format(elapsed))
 
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
-                
+
                 hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
                 hits = hp.read_map(hitsfile, nest=True)
 
@@ -626,9 +583,10 @@ class MapGroundTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.totsamp-self.nflagged, tothits)
+                nt.assert_equal(self.ndet * ((self.data.comm.ngroups * \
+                    self.totsamp) - self.nflagged), tothits)
                 mask = (bins > -1.0e20)
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
-
         else:
             print("libmadam not available, skipping tests")
+        return
