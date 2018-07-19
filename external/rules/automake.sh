@@ -1,8 +1,8 @@
-curl -SL https://ftp.gnu.org/gnu/automake/automake-1.15.tar.gz \
+curl -SL http://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.gz \
     | tar xzf - \
-    && cd automake-1.15 \
+    && cd automake-1.16.1 \
     && CC="gcc" ./configure \
     --prefix="@AUX_PREFIX@" \
-    && make -j 4 && make install \
+    && make -j @MAKEJ@ && make install \
     && cd .. \
     && rm -rf automake*

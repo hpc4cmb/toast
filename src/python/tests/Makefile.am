@@ -51,6 +51,7 @@ tod.py \
 tod_satellite.py \
 sim_focalplane.py \
 tidas.py \
+spt3g.py \
 timing.py
 
 

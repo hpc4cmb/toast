@@ -218,6 +218,10 @@ def main():
                         required=False, default=None,
                         help='Output TIDAS export path')
 
+    parser.add_argument('--spt3g',
+                        required=False, default=None,
+                        help='Output SPT3G export path')
+
     parser.add_argument('--input_map', required=False,
                         help='Input map for signal')
     parser.add_argument('--input_pysm_model', required=False,
@@ -632,11 +636,16 @@ def main():
 
             if mc == firstmc:
                 # For the first realization, optionally export the
-                # timestream data to a TIDAS volume.
+                # timestream data.  If we had observation intervals defined,
+                # we could pass "use_interval=True" to the export operators,
+                # which would ensure breaks in the exported data at
+                # acceptable places.
                 if args.tidas is not None:
-                    from toast.tod.tidas import OpTidasExport
+                    from toast.tod.tidas import OpTidasExport, TODTidas
                     tidas_path = os.path.abspath(args.tidas)
-                    export = OpTidasExport(tidas_path, name="tot_signal")
+                    export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
+                        use_intervals=False, group_dets="total",
+                        export_name="tot_signal")
                     export.exec(data)
 
                     comm.comm_world.barrier()
@@ -647,6 +656,20 @@ def main():
                             .format(elapsed), flush=True)
                     start = stop
 
+                if args.spt3g is not None:
+                    from toast.tod.spt3g import Op3GExport, TOD3G
+                    spt3g_path = os.path.abspath(args.spt3g)
+                    export = Op3GExport(spt3g_path, "total", TOD3G,
+                        use_intervals=False, export_name="tot_signal")
+                    export.exec(data)
+
+                    comm.comm_world.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_world.rank == 0:
+                        print("  SPT3G export took {:.3f} s"\
+                            .format(elapsed), flush=True)
+                    start = stop
 
 
             zmap.data.fill(0.0)

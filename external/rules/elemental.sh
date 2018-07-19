@@ -20,6 +20,6 @@ curl -SL https://github.com/elemental/Elemental/archive/v0.87.7.tar.gz \
     -D CMAKE_Fortran_FLAGS="@FCFLAGS@ @OPENMP_CFLAGS@" \
     -D CMAKE_SHARED_LINKER_FLAGS="@OPENMP_CXXFLAGS@" \
     .. \
-    && make -j 4 && make install \
+    && make -j @MAKEJ@ && make install \
     && cd ../.. \
     && rm -rf Elemental*

@@ -98,6 +98,14 @@ ADD rules/patch_* ./rules/
 
 @fftw@
 
+# Install libbz2
+
+@bzip2@
+
+# Install Boost
+
+@boost@
+
 # Install elemental
 
 @elemental@
@@ -125,6 +133,10 @@ ADD rules/patch_* ./rules/
 # Install libmadam
 
 @madam@
+
+# Install SPT3G
+
+@spt3g@
 
 # Install TIDAS
 

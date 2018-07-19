@@ -463,6 +463,16 @@ class TOD(object):
             "class method")
         return
 
+    def _get_boresight_azel(self, start, n):
+        raise NotImplementedError("Fell through to TOD._get_boresight_azel base"
+            "class method")
+        return None
+
+    def _put_boresight_azel(self, start, data):
+        raise NotImplementedError("Fell through to TOD._put_boresight_azel base"
+            "class method")
+        return
+
     def _get_pntg(self, detector, start, n):
         raise NotImplementedError(
             "Fell through to TOD._get_pntg base class method")
@@ -629,6 +639,70 @@ class TOD(object):
             raise ValueError("local sample range is invalid")
         self._put_boresight(local_start, data, **kwargs)
         return
+
+
+    def read_boresight_azel(self, local_start=0, n=0, **kwargs):
+        """
+        Read boresight Azimuth / Elevation quaternion pointing.
+
+        This returns the pointing of the boresight in the horizontal coordinate
+        system, if it exists.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            A 2D array of shape (n, 4)
+
+        Raises:
+            NotImplementedError: if the telescope is not on the Earth.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot read boresight- process has no local samples")
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
+        return self._get_boresight_azel(local_start, n, **kwargs)
+
+
+    def write_boresight_azel(self, local_start=0, data=None, **kwargs):
+        """Write boresight Azimuth / Elevation quaternion pointing.
+
+        This writes the quaternion pointing for the boresight in the horizontal
+        coordinate system, if it exists.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): 2D array of quaternions with shape[1] == 4.
+
+        Raises:
+            RuntimeError or AttributeError : if the telescope is not on
+                the Earth.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
+        if len(data.shape) != 2:
+            raise ValueError("data should be a 2D array")
+        if data.shape[1] != 4:
+            raise ValueError("data should have second dimension of size 4")
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot write boresight- process has no local samples")
+        if (local_start < 0) \
+           or (local_start + data.shape[0] > self.local_samples[1]):
+            raise ValueError("local sample range is invalid")
+        self._put_boresight_azel(local_start, data, **kwargs)
+        return
+
 
     # Read and write detector data
 
@@ -989,6 +1063,18 @@ class TOD(object):
                 "".format(local_start, local_start+vel.shape[0]-1))
         self._put_velocity(local_start, vel, **kwargs)
         return
+
+    def export(self, oldtod):
+        """Export data from an existing TOD class.
+
+        Args:
+            oldtod (TOD): the existing TOD
+
+        """
+        raise NotImplementedError(
+            "Fell through to TOD.export base class method")
+        return
+
 
 
 class TODCache(TOD):

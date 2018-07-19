@@ -46,6 +46,10 @@ from ..tod import tidas_available
 if tidas_available:
     from . import tidas as testtidas
 
+from ..tod import spt3g_available
+if spt3g_available:
+    from . import spt3g as testspt3g
+
 from ..map import libsharp_available
 if libsharp_available:
     from . import ops_sim_pysm as testopspysm
@@ -78,6 +82,8 @@ def test(name=None, verbosity=2):
     mpirunner = MPITestRunner(comm, verbosity=verbosity, warnings="ignore")
     suite = unittest.TestSuite()
 
+    print("rank {} created test runner".format(comm.rank), flush=True)
+
     if name is None:
         suite.addTest( loader.loadTestsFromModule(testcbuffer) )
         suite.addTest( loader.loadTestsFromModule(testcache) )
@@ -103,8 +109,10 @@ def test(name=None, verbosity=2):
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
-        # if tidas_available:
-        #     suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if tidas_available:
+            suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if spt3g_available:
+            suite.addTest( loader.loadTestsFromModule(testspt3g) )
         if libsharp_available:
             suite.addTest( loader.loadTestsFromModule(testopspysm) )
             suite.addTest( loader.loadTestsFromModule(testsmooth) )
@@ -115,6 +123,7 @@ def test(name=None, verbosity=2):
         else:
             modname = "toast.tests.{}".format(name)
             suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
+            print("rank {} loaded test {}".format(comm.rank, name), flush=True)
 
     ret = 0
     _ret = mpirunner.run(suite)

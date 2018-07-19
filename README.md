@@ -4,5 +4,4 @@
 
 See the full documentation here:
 
-http://hpc4cmb.github.io/toast/
-
+https://toast-cmb.readthedocs.io/en/latest/
