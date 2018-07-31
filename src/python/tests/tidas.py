@@ -19,46 +19,43 @@ from ..dist import *
 
 from .. import qarray as qa
 
-from ..tod import Interval
+from ..tod import Interval, regular_intervals, TODGround
+
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
 
 # This file will only be imported if TIDAS is already available
 import tidas as tds
 from tidas.mpi import MPIVolume
 from ..tod import tidas as tt
+from ..tod import tidas_utils as ttutils
 
 
 class TidasTest(MPITestCase):
 
     def setUp(self):
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        self.groupsize = None
-        self.ngroup = None
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
-
-        self.mygroup = self.toastcomm.group
-
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
         self.outvol = os.path.join(self.outdir, "test_tidas")
         self.export = os.path.join(self.outdir, "export_tidas")
+        self.groundexport = os.path.join(self.outdir, "export_tidas_ground")
+
+        # Create observations, divided evenly between groups
+        self.nobs = 4
+        opg = self.nobs
+        if self.comm.size >= 2:
+            opg = self.nobs // 2
+        self.data = create_distdata(self.comm, obs_per_group=opg)
+
+        # Create a set of boresight detectors
+        self.ndet = 8
         self.rate = 20.0
 
-        # Properties of the observations
-        self.nobs = 4
+        self.dnames, self.dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha \
+            = boresight_focalplane(self.ndet, samplerate=self.rate)
 
-        dist_obs = distribute_uniform(self.nobs, self.ngroup)
-        self.myobs_first = dist_obs[self.mygroup][0]
-        self.myobs_n = dist_obs[self.mygroup][1]
+        # Create a set of intervals that sub-divide each observation.
 
         self.obslen = 90.0
         self.obsgap = 10.0
@@ -78,23 +75,17 @@ class TidasTest(MPITestCase):
         self.subgapsamp = 0
         self.subsamp = self.subtotsamp - self.subgapsamp
 
-        # Detectors
-        self.dets = [
-            "d100-1a",
-            "d100-1b",
-            "d145-2a",
-            "d145-2b",
-            "d220-3a",
-            "d220-3b"
-        ]
-
-        self.detquats = {}
-        for d in self.dets:
-            self.detquats[d] = np.array([0,0,0,1], dtype=np.float64)
-
-        # Group schema
-        self.schm = tt.create_tidas_schema(self.dets, tds.DataType.float64,
-            "volts")
+        # Ground scan properties
+        self.site_lon = '-67:47:10'
+        self.site_lat = '-22:57:30'
+        self.site_alt = 5200.
+        self.coord = 'C'
+        self.azmin=45
+        self.azmax=55
+        self.el=60
+        self.scanrate = 1.0
+        self.scan_accel = 0.1
+        self.CES_start = None
 
 
     def tearDown(self):
@@ -114,7 +105,7 @@ class TidasTest(MPITestCase):
         ret.put_uint32("uint32", 1000000000)
         ret.put_int64("int64", -100000000000)
         ret.put_uint64("uint64", 100000000000)
-        return tt.to_dict(ret)
+        return ttutils.to_dict(ret)
 
 
     def meta_verify(self, dct):
@@ -133,21 +124,15 @@ class TidasTest(MPITestCase):
 
 
     def create_intervals(self, start, first):
-        ret = []
-        for i in range(self.nsub):
-            ifirst = i * self.subtotsamp
-            if i == self.nsub - 1:
-                ilast = self.obssamp - 1
-            else:
-                ilast = (i+1) * self.subtotsamp - 1
-            istart = float(ifirst) / self.rate
-            istop = float(ilast) / self.rate
-            ret.append(tds.Intrvl(
-                (start + istart),
-                (start + istop),
-                (first + ifirst),
-                (first + ilast)))
-        return ret
+        subtime = self.subsamp / self.rate
+        subgap = self.subgapsamp / self.rate
+
+        ret = regular_intervals(
+            self.nsub, start, first, self.rate, subtime, subgap)
+
+        tret = [ tds.Intrvl(x.start, x.stop, x.first, x.last) for x in ret ]
+
+        return tret
 
 
     def intervals_init(self, start, first):
@@ -156,7 +141,10 @@ class TidasTest(MPITestCase):
 
     def intervals_verify(self, ilist, start, first):
         reg = self.create_intervals(start, first)
-        nt.assert_equal(len(ilist), len(reg))
+        inlen = int(len(ilist))
+        checklen = int(len(reg))
+        self.assertTrue(inlen == checklen)
+
         for i in range(len(ilist)):
             nt.assert_almost_equal(ilist[i].start, reg[i].start)
             nt.assert_equal(ilist[i].first, reg[i].first)
@@ -182,9 +170,9 @@ class TidasTest(MPITestCase):
         return qa.from_angles(theta, phi, pa)
 
 
-    def obs_create(self, vol, parent, name, obsid):
+    def obs_create(self, vol, name, obsid, start, first):
         # create the observation within the TIDAS volume
-        tob = tt.tidas_obs(vol, parent, name)
+        tob = ttutils.find_obs(vol, "", name)
         obsprops = tds.Dictionary()
         obsprops.put_int64("obs_id", obsid)
         obsprops.put_int64("obs_telescope_id", 1234)
@@ -193,24 +181,33 @@ class TidasTest(MPITestCase):
         # Create the observation group
         obsgroup = tob.group_add("observation",
             tds.Group(tds.Schema(), obsprops, 0))
+        del obsprops
+        del obsgroup
 
-        return
-
-
-    def obs_init(self, obscomm, vol, name, start, first):
         # create intervals
         ilist = self.intervals_init(start, 0)
         dist = [ (y.first - x.first) for x, y in zip(ilist[:-1], ilist[1:]) ]
         dist.append(self.obstotalsamp - ilist[-1].first)
 
-        # instantiate a TOD for this observation
-        tod = tt.TODTidas(obscomm, obscomm.size, vol, "/{}".format(name),
-            detectors=self.detquats, samples=self.obstotalsamp, azel=True,
-            meta=self.meta_setup(), distintervals=dist)
-
-        intr = tod.block.intervals_add("chunks",
-            tds.Intervals(tds.Dictionary(), len(ilist)))
+        intr = tob.intervals_add(
+            "chunks", tds.Intervals(tds.Dictionary(), len(ilist)))
+        #print("rank {}: write intervals".format(self.comm.rank), flush=True)
         intr.write(ilist)
+        del intr
+        del tob
+
+        # Create a TOD for this observation.
+        tt.TODTidas.create(vol, "/{}".format(name), self.dquat,
+                           self.obstotalsamp, self.meta_setup(), True)
+
+        return
+
+
+    def obs_init(self, obscomm, vol, name, start, first):
+        tod = tt.TODTidas(obscomm, obscomm.size, vol, "/{}".format(name),
+                          distintervals="chunks")
+
+        #print("rank {}: done create TOD {}".format(self.comm.rank, name), flush=True)
 
         # Now write the data.  For this test, we simply write the detector
         # index (as a float) to the detector timestream.  We also flag every
@@ -219,7 +216,6 @@ class TidasTest(MPITestCase):
 
         detranks, sampranks = tod.grid_size
         rankdet, ranksamp = tod.grid_ranks
-        blk = tod.block
 
         off = tod.local_samples[0]
         n = tod.local_samples[1]
@@ -230,6 +226,7 @@ class TidasTest(MPITestCase):
         flags[::2] = 1
 
         if rankdet == 0:
+            #print("rank {}: working on timestamps".format(self.comm.rank), flush=True)
             # Processes along the first row of the process grid write
             # their slice of the timestamps.
             incr = 1.0 / self.rate
@@ -239,24 +236,34 @@ class TidasTest(MPITestCase):
 
             for p in range(sampranks):
                 if p == ranksamp:
+                    #print("rank {}: write timestamp slice".format(self.comm.rank), flush=True)
                     tod.write_times(stamps=stamps)
+                #print("rank {}: grid row barrier".format(self.comm.rank), flush=True)
                 tod.grid_comm_row.barrier()
+
+            #print("rank {}: done timestamps".format(self.comm.rank), flush=True)
 
             # Same with the boresight
             boresight = self.create_bore(tod.total_samples, tod.local_samples)
 
             for p in range(sampranks):
                 if p == ranksamp:
+                    #print("rank {}: write boresight".format(self.comm.rank), flush=True)
                     tod.write_boresight(data=boresight)
+                #print("rank {}: bore grid row barrier".format(self.comm.rank), flush=True)
                 tod.grid_comm_row.barrier()
 
             # Now the common flags
             for p in range(sampranks):
                 if p == ranksamp:
+                    #print("rank {}: write common".format(self.comm.rank), flush=True)
                     tod.write_common_flags(flags=flags)
+                #print("rank {}: com grid row barrier".format(self.comm.rank), flush=True)
                 tod.grid_comm_row.barrier()
 
+        #print("rank {}: hit tod comm barrier".format(self.comm.rank), flush=True)
         tod.mpicomm.barrier()
+        #print("rank {}: done tod comm barrier".format(self.comm.rank), flush=True)
 
         # Detector data- serialize for now
         for p in range(tod.mpicomm.size):
@@ -269,9 +276,11 @@ class TidasTest(MPITestCase):
                     fakedata[:] = np.arange(tod.local_samples[1])
                     fakedata += tod.local_samples[0]
                     fakedata *= indx
+                    #print("rank {}: write det {}".format(self.comm.rank, d), flush=True)
                     tod.write(detector=d, data=fakedata)
                     # write detector flags
                     tod.write_flags(detector=d, flags=flags)
+            #print("rank {}: write det barrier".format(self.comm.rank), flush=True)
             tod.mpicomm.barrier()
 
         del tod
@@ -279,21 +288,27 @@ class TidasTest(MPITestCase):
         return
 
 
-    def obs_verify(self, tod, start, first):
+    def obs_verify(self, vol, parent, name, tod, start, first, ignore_last):
         nlocal = tod.local_samples[1]
         odd = False
         if tod.local_samples[0] % 2 != 0:
             odd = True
 
+        block = ttutils.find_obs(vol, parent, name)
+
         # Read the intervals and compare
 
-        intr = tod.block.intervals_get("chunks")
+        intr = block.intervals_get("chunks")
         ilist = intr.read()
+        if ignore_last:
+            # These intervals included a final one representing the last
+            # gap in sampling.  Trim it before comparing.
+            ilist = ilist[0:-1]
         self.intervals_verify(ilist, start, 0)
 
         # Verify group properties
 
-        self.meta_verify(tod.group.dictionary())
+        self.meta_verify(ttutils.from_dict(tod.meta()))
 
         # Read and compare timestamps
 
@@ -351,90 +366,163 @@ class TidasTest(MPITestCase):
                 shutil.rmtree(path)
         self.comm.barrier()
 
+        #print("rank {}: creating volume".format(self.comm.rank), flush=True)
         # Create the volume on the world communicator
-        vol = MPIVolume(self.toastcomm.comm_world, path, tds.BackendType.hdf5,
+        vol = MPIVolume(self.data.comm.comm_world, path, tds.BackendType.hdf5,
             tds.CompressionType.none, dict())
-
+        del vol
+        #print("rank {}: creating volume done".format(self.comm.rank), flush=True)
         # Usually for real data we will have a hierarchy of blocks
         # (year, month, season, etc).  For this test we just add generic
         # observations to the root block.
 
-        # One process from each group creates the observations
-        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
-            obsname = "obs_{:02d}".format(ob)
-            if self.toastcomm.comm_group.rank == 0:
-                self.obs_create(vol, "", obsname, ob)
+        # For simplicity, just have every group take turns writing their data.
+        # this is fine for a small unit test.
 
-        vol.meta_sync()
+        for pgrp in range(self.data.comm.ngroups):
+            if pgrp == self.data.comm.group:
+                vol = MPIVolume(self.data.comm.comm_group, path,
+                                tds.AccessMode.write)
 
-        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
-            obsname = "obs_{:02d}".format(ob)
-            start = ob * self.obstotal
-            first = ob * self.obstotalsamp
-            self.obs_init(self.toastcomm.comm_group, vol, obsname, start,
-                first)
+                # One process from each group creates the observations
+                for ob in range(len(self.data.obs)):
+                    obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
+                    start = ob * self.obstotal
+                    first = ob * self.obstotalsamp
+                    if self.data.comm.comm_group.rank == 0:
+                        self.obs_create(vol, obsname, ob, start, first)
 
-        vol.meta_sync()
+                vol.meta_sync()
 
-        del vol
+                for ob in range(len(self.data.obs)):
+                    obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
+                    start = ob * self.obstotal
+                    first = ob * self.obstotalsamp
+                    #print("rank {}: init obs {}".format(self.comm.rank, obsname), flush=True)
+                    self.obs_init(self.data.comm.comm_group, vol, obsname,
+                                  start, first)
+
+                vol.meta_sync()
+                del vol
+
+            self.comm.barrier()
 
         return
 
 
-    def volume_verify(self, path):
-        vol = MPIVolume(self.toastcomm.comm_world, path, tds.AccessMode.read)
+    def init_ground(self):
+        # Create the simulated TODs
+        for ob in range(len(self.data.obs)):
+            obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
+            start = ob * self.obstotal
+            first = ob * self.obstotalsamp
+            tod = TODGround(
+                self.data.comm.comm_group,
+                self.dquat,
+                self.obstotalsamp,
+                detranks=self.data.comm.group_size,
+                firsttime=start,
+                rate=self.rate,
+                site_lon=self.site_lon,
+                site_lat=self.site_lat,
+                site_alt=self.site_alt,
+                azmin=self.azmin,
+                azmax=self.azmax,
+                el=self.el,
+                coord=self.coord,
+                scanrate=self.scanrate,
+                scan_accel=self.scan_accel,
+                CES_start=self.CES_start)
+            self.data.obs[ob]["tod"] = tod
+        return
+
+
+    def volume_verify(self, path, detgroup="detectors", ignore_last=False):
+        vol = MPIVolume(self.data.comm.comm_world, path, tds.AccessMode.read)
         root = vol.root()
 
-        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
-            obsname = "obs_{:02d}".format(ob)
+        for ob in range(len(self.data.obs)):
+            obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
+            #print("rank {}: verify obs {}".format(self.comm.rank, obsname), flush=True)
             obs = root.block_get(obsname)
             start = ob * self.obstotal
             first = ob * self.obstotalsamp
             ilist = self.intervals_init(start, 0)
             dist = [ (y.first - x.first) for x, y in zip(ilist[:-1], ilist[1:]) ]
             dist.append(self.obstotalsamp - ilist[-1].first)
-            tod = tt.TODTidas(self.toastcomm.comm_group,
-                self.toastcomm.comm_group.size, vol, "/{}".format(obsname),
-                distintervals=dist)
-            self.obs_verify(tod, start, first)
+            tod = tt.TODTidas(self.data.comm.comm_group,
+                self.data.comm.group_size, vol, "/{}".format(obsname),
+                distintervals=dist, group_dets=detgroup)
+            self.obs_verify(vol, "", obsname, tod, start, first, ignore_last)
         del vol
         return
 
 
     def test_io(self):
-        start = MPI.Wtime()
-
         self.volume_init(self.outvol)
         self.volume_verify(self.outvol)
-
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
         return
 
 
     def test_export(self):
-        start = MPI.Wtime()
-
         self.volume_init(self.outvol)
 
-        distdata = tt.load_tidas(self.toastcomm,
-            self.toastcomm.comm_group.size, self.outvol, "w", tt.TODTidas,
-            "detectors", distintervals="chunks")
+        distdata = tt.load_tidas(self.data.comm,
+            self.data.comm.group_size, self.outvol, "w",
+            "detectors", tt.TODTidas, distintervals="chunks")
 
         if self.comm.rank == 0:
             if os.path.isdir(self.export):
                 shutil.rmtree(self.export)
         self.comm.barrier()
 
+        # NOTE:  the use_todchunks option will take the distribution chunks
+        # of the TOD and create a set of intervals in the volume.  These
+        # chunks were themselves created from a set of intervals above with
+        # gaps.  So there will be final chunk that is the last "gap" period
+        # to add up to the total samples.
         dumper = tt.OpTidasExport(self.export, tt.TODTidas, backend="hdf5",
-            use_todchunks=True, group_dets="detectors")
+            use_todchunks=True)
         dumper.exec(distdata)
 
-        self.volume_verify(self.export)
+        self.volume_verify(self.export, ignore_last=True)
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
+        #print("finished verify 1", flush=True)
+        distdata2 = tt.load_tidas(self.data.comm,
+            self.data.comm.group_size, self.export, "r", "detectors",
+            tt.TODTidas, group_dets="detectors", distintervals="chunks")
 
-        #print("Proc {}:  test took {:.4f} s".format( MPI.COMM_WORLD.rank, elapsed ))
+        #print("finished load 2", flush=True)
+
+        dumper2 = tt.OpTidasExport(self.export, tt.TODTidas,
+            use_todchunks=True, create_opts={"group_dets":"bolos"},
+            ctor_opts={"group_dets":"bolos"})
+        dumper2.exec(distdata2)
+
+        #print("finished export 2", flush=True)
+
+        self.volume_verify(self.export, detgroup="bolos", ignore_last=True)
+
+        return
+
+
+    def test_ground(self):
+        # Create simulated tods in memory
+        self.init_ground()
+
+        # Export this
+        if self.comm.rank == 0:
+            if os.path.isdir(self.groundexport):
+                shutil.rmtree(self.groundexport)
+        self.comm.barrier()
+
+        dumper = tt.OpTidasExport(self.groundexport, tt.TODTidas,
+                                  backend="hdf5", use_todchunks=True)
+        dumper.exec(self.data)
+
+        # Load it back in.
+        distdata = tt.load_tidas(self.data.comm,
+            self.data.comm.group_size, self.groundexport, "w", "detectors",
+            tt.TODTidas, distintervals="chunks", group_dets="detectors")
+
         return

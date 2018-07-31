@@ -28,6 +28,7 @@ usage () {
 # The first argument to this script should select the package extension
 # for the compilers, like "", "-5", "-6", "-7".
 toolchain="$1"
+toolchainver=$(echo $toolchain | sed -e "s/^-//")
 
 # Runtime packages.  These are packages that will be installed into system
 # locations when travis is actually running.  We install them here so that we
@@ -44,10 +45,10 @@ export CXX=$(which g++${toolchain})
 export FC=$(which gfortran${toolchain})
 
 # Install travis python
-if [ ! -e "${HOME}/virtualenv/python3.6/bin/activate" ]; then
-    wget https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64/python-3.6.tar.bz2
-    sudo tar xjf python-3.6.tar.bz2 --directory /
-fi
+# if [ ! -e "${HOME}/virtualenv/python3.6/bin/activate" ]; then
+#     wget https://s3.amazonaws.com/travis-python-archives/binaries/ubuntu/14.04/x86_64/python-3.6.tar.bz2
+#     sudo tar xjf python-3.6.tar.bz2 --directory /
+# fi
 source ${HOME}/virtualenv/python3.6/bin/activate
 
 # Pip install the runtime packages we need.  These are not saved in the tarball.
@@ -133,6 +134,42 @@ wget https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
     && make install \
     && cd ..
 
+# libbz2, needed for boost / spt3g
+# FIXME: change patch link below after branch is merged upstream.
+
+curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
+        | tar xjf - \
+        && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_bzip2 \
+        && cd bzip2-1.0.6 \
+        && patch -p1 < ../patch_bzip2 \
+        && CC="${CC}" CFLAGS="-O2 -g -fPIC -pthread" \
+        make -f Makefile-toast \
+        && cp -a bzlib.h "${PREFIX}/include" \
+        && cp -a libbz2.so* "${PREFIX}/lib" \
+        && cd ..
+
+# Install boost (needed by spt3g)
+
+curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.bz2 \
+    -o boost_1_65_1.tar.bz2 \
+    && tar xjf boost_1_65_1.tar.bz2 \
+    && cd boost_1_65_1 \
+    && echo "" > tools/build/src/user-config.jam \
+    && echo "using gcc : ${toolchainver} : ${CXX} ;" >> tools/build/src/user-config.jam \
+    && echo "using mpi : ${MPICXX} : <include>\"${PREFIX}/include\" <library-path>\"${PREFIX}/lib\" <find-shared-library>\"mpichcxx\" <find-shared-library>\"mpich\" ;" >> tools/build/src/user-config.jam \
+    && BOOST_BUILD_USER_CONFIG=tools/build/src/user-config.jam \
+    BZIP2_INCLUDE="${PREFIX}/include" \
+    BZIP2_LIBPATH="${PREFIX}/lib" \
+    ./bootstrap.sh \
+    --with-toolset=gcc \
+    --with-python=python${PYSITE} \
+    --prefix=${PREFIX} \
+    && ./b2 --toolset=gcc${toolchain} --layout=tagged \
+    --user-config=./tools/build/src/user-config.jam \
+    $(python3-config --includes | sed -e 's/-I//g' -e 's/\([^[:space:]]\+\)/ include=\1/g') \
+    variant=release threading=multi link=shared runtime-link=shared install \
+    && cd ..
+
 # Install Elemental
 
 wget https://github.com/elemental/Elemental/archive/v0.87.7.tar.gz \
@@ -205,6 +242,52 @@ git clone https://github.com/Libsharp/libsharp --branch master --single-branch -
     python setup.py install --prefix="${PREFIX}" \
     && cd ../..
 
+# Install spt3g software
+# FIXME: change patch link below after branch is merged upstream.
+
+git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-branch --depth 1 \
+    && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_spt3g \
+    && export spt3g_start=$(pwd) \
+    && cd spt3g_software \
+    && patch -p1 < ../patch_spt3g \
+    && cd .. \
+    && cp -a spt3g_software "${PREFIX}/spt3g" \
+    && cd "${PREFIX}/spt3g" \
+    && mkdir build \
+    && cd build \
+    && LDFLAGS="-Wl,-z,muldefs" \
+    cmake \
+    -DCMAKE_C_COMPILER="${CC}" \
+    -DCMAKE_CXX_COMPILER="${CXX}" \
+    -DCMAKE_C_FLAGS="-O2 -g -fPIC -pthread" \
+    -DCMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread" \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DBOOST_ROOT="${PREFIX}" \
+    .. \
+    && make \
+    && ln -s ${PREFIX}/spt3g/build/bin/* ${PREFIX}/bin/ \
+    && ln -s ${PREFIX}/spt3g/build/spt3g ${PREFIX}/lib/python${PYSITE}/site-packages/ \
+    && cd ${spt3g_start}
+
+# Install TIDAS
+
+git clone https://github.com/hpc4cmb/tidas.git --branch master --single-branch --depth 1 \
+    && cd tidas \
+    && mkdir build \
+    && cd build \
+    && cmake \
+    -DCMAKE_C_COMPILER="${CC}" \
+    -DCMAKE_CXX_COMPILER="${CXX}" \
+    -DMPI_C_COMPILER="${MPICC}" \
+    -DMPI_CXX_COMPILER="${MPICXX}" \
+    -DCMAKE_C_FLAGS="-O2 -g -fPIC -pthread -DSQLITE_DISABLE_INTRINSIC" \
+    -DCMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread -DSQLITE_DISABLE_INTRINSIC" \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+    .. \
+    && make && make install \
+    && cd ../..
+
 # Make sure that any python modules installed to our prefix are built into pyc
 # files- so that we can make those directories read-only
 
@@ -214,4 +297,4 @@ python -m compileall -f "${PREFIX}/lib/python${PYSITE}/site-packages"
 cd "${HOME}" \
     && export \
     TARBALL="travis_14.04_gcc${toolchain}_python${PYSITE}.tar.bz2" \
-    && tar cjvf "${TARBALL}" software
+    && tar cjf "${TARBALL}" software

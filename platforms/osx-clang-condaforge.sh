@@ -1,9 +1,9 @@
 #!/bin/bash
 #
 # This config assumes use of clang and Anaconda python,
-# using mpich, mpi4py, cfitsio, and fftw from the 
+# using mpich, mpi4py, cfitsio, and fftw from the
 # conda-forge channel.
-# 
+#
 # 1.  Install miniconda / anaconda
 #
 # 2.  Edit ~/.condarc to look like this:
@@ -26,6 +26,7 @@ OPTS="$@"
 
 condabin=$(dirname $(which python))
 
+export PYTHON=python3
 export CC=mpicc
 export CXX=mpicxx
 export MPICC=mpicc
@@ -35,4 +36,3 @@ export CXXFLAGS="-O3 -g"
 
 ./configure ${OPTS} \
 --without-mkl
-

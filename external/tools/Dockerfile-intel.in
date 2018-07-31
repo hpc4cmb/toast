@@ -1,4 +1,4 @@
-FROM ubuntu:17.10 as builder
+FROM ubuntu:18.04 as builder
 
 MAINTAINER Theodore Kisner <tskisner@lbl.gov>
 
@@ -180,7 +180,7 @@ RUN python -c "import matplotlib.font_manager as fm; f = fm.FontManager"
 # Now we create the runtime image (second stage of the build).
 #---------------------------------------------------------------
 
-FROM ubuntu:17.04
+FROM ubuntu:18.04
 
 # Copy our installed software binaries and libraries
 

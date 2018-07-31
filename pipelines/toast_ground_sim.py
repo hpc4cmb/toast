@@ -732,7 +732,7 @@ def expand_pointing(args, comm, data, mem_counter):
 
     # Only purge the pointing if we are NOT going to export the
     # data to a TIDAS volume
-    if args.tidas is None:
+    if (args.tidas is None) and (args.spt3g is None):
         for ob in data.obs:
             tod = ob['tod']
             tod.free_radec_quats()
@@ -1255,7 +1255,10 @@ def output_tidas(args, comm, data, totalname):
     start = MPI.Wtime()
 
     export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
-        use_intervals=True, group_dets="total", export_name=totalname)
+                            use_intervals=True,
+                            create_opts={"group_dets":"sim"},
+                            ctor_opts={"group_dets":"sim"},
+                            cache_name=totalname)
     export.exec(data)
 
     comm.comm_world.Barrier()
@@ -1281,8 +1284,9 @@ def output_spt3g(args, comm, data, totalname):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = Op3GExport(spt3g_path, "total", TOD3G,
-        use_intervals=True, export_name=totalname)
+    export = Op3GExport(spt3g_path, TOD3G, use_intervals=True,
+                        export_opts={"prefix" : "sim"},
+                        cache_name=totalname)
     export.exec(data)
 
     comm.comm_world.Barrier()

@@ -46,49 +46,83 @@ def main():
 
     global_start = MPI.Wtime()
 
-    parser = argparse.ArgumentParser(description="Read existing data and "
-        "make a simple map.", fromfile_prefix_chars="@")
+    parser = argparse.ArgumentParser(
+        description="Read existing data and make a simple map.",
+        fromfile_prefix_chars="@")
 
     parser.add_argument("--groupsize", required=False, type=int, default=0,
-        help="size of processor groups used to distribute observations")
+                        help="size of processor groups used to distribute "\
+                        "observations")
 
     parser.add_argument("--hwprpm", required=False, type=float,
-        default=0.0, help="The rate (in RPM) of the HWP rotation")
+                        default=0.0,
+                        help="The rate (in RPM) of the HWP rotation")
 
-    parser.add_argument( "--outdir", required=False, default="out",
-        help="Output directory" )
+    parser.add_argument('--samplerate',
+                        required=False, default=100.0, type=np.float,
+                        help='Detector sample rate (Hz)')
 
-    parser.add_argument( "--nside", required=False, type=int, default=64,
-        help="Healpix NSIDE" )
+    parser.add_argument("--outdir", required=False, default="out",
+                        help="Output directory")
 
-    parser.add_argument( "--subnside", required=False, type=int, default=8,
-        help="Distributed pixel sub-map NSIDE" )
+    parser.add_argument("--nside", required=False, type=int, default=64,
+                        help="Healpix NSIDE")
+
+    parser.add_argument("--subnside", required=False, type=int, default=8,
+                        help="Distributed pixel sub-map NSIDE")
 
     parser.add_argument("--coord", required=False, default="E",
-        help="Sky coordinate system [C,E,G]")
+                        help="Sky coordinate system [C,E,G]")
 
-    parser.add_argument( "--baseline", required=False, type=float,
-        default=60.0, help="Destriping baseline length (seconds)" )
+    parser.add_argument("--baseline", required=False, type=float,
+                        default=60.0,
+                        help="Destriping baseline length (seconds)")
 
-    parser.add_argument( "--noisefilter", required=False, default=False,
-        action="store_true", help="Destripe with the noise filter enabled" )
+    parser.add_argument("--noisefilter", required=False, default=False,
+                        action="store_true",
+                        help="Destripe with the noise filter enabled")
 
-    parser.add_argument( "--madam", required=False, default=False,
-        action="store_true", help="If specified, use libmadam for map-making" )
+    parser.add_argument("--madam", required=False, default=False,
+                        action="store_true",
+                        help="If specified, use libmadam for map-making")
 
-    parser.add_argument( "--madampar", required=False, default=None,
-        help="Madam parameter file" )
+    parser.add_argument("--madampar", required=False, default=None,
+                        help="Madam parameter file")
+
+    parser.add_argument("--polyorder",
+                        required=False, type=int,
+                        help="Polynomial order for the polyfilter")
+
+    parser.add_argument("--wbin_ground",
+                        required=False, type=float,
+                        help="Ground template bin width [degrees]")
 
     parser.add_argument("--flush", required=False, default=False,
-        action="store_true", help="Flush every print statement.")
+                        action="store_true",
+                        help="Flush every print statement.")
 
     parser.add_argument("--tidas", required=False, default=None,
-        help="Input TIDAS volume")
+                        help="Input TIDAS volume")
+
+    parser.add_argument("--tidas_detgroup", required=False, default=None,
+                        help="TIDAS detector group")
 
     parser.add_argument("--spt3g", required=False, default=None,
-        help="Input SPT3G data directory")
+                        help="Input SPT3G data directory")
+
+    parser.add_argument("--spt3g_prefix", required=False, default=None,
+                        help="SPT3G data frame file prefix")
+
+    parser.add_argument("--common_flag_mask",
+                        required=False, default=0, type=np.uint8,
+                        help="Common flag mask")
+
+    parser.add_argument("--debug", required=False, default=False,
+                        action="store_true",
+                        help="Write data distribution info and focalplane plot")
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+    #args = parser.parse_args(sys.argv)
 
     autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
@@ -141,13 +175,22 @@ def main():
 
     data = None
 
-    # Work in progress:  add option for detranks.  Also repack extra
-    # options passed on command line into kwargs for the TOD creation.
-    #
-    # if args.tidas is not None:
-    #     data = load_tidas(comm, detranks, args.tidas, "w", tt.tidas.TODTidas, group_dets, **kwargs)
-    # if args.spt3g is not None:
-    #     data = load_spt3g(comm, detranks, path, prefix, todclass, **kwargs)
+    if args.tidas is not None:
+        from toast.tod import tidas as tds
+        if args.tidas_detgroup is None:
+            raise RuntimeError("you must specify the detector group")
+        data = tds.load_tidas(comm, comm.group_size, args.tidas,
+                              "r", args.tidas_detgroup, tds.TODTidas,
+                              group_dets=args.tidas_detgroup,
+                              distintervals="chunks")
+
+    if args.spt3g is not None:
+        from toast.tod import spt3g as s3g
+        if args.spt3g_prefix is None:
+            raise RuntimeError("you must specify the frame file prefix")
+        data = s3g.load_spt3g(comm, comm.group_size, args.spt3g,
+                              args.spt3g_prefix, s3g.obsweight_spt3g,
+                              s3g.TOD3G)
 
     mtime = elapsed(comm.comm_world, mtime, "Distribute data")
 
@@ -162,6 +205,26 @@ def main():
             handle.close()
         mtime = elapsed(comm.comm_world, mtime,
             "Dumping debug data distribution")
+        if comm.comm_world.rank == 0:
+            outfile = "{}_focalplane.png".format(args.outdir)
+            set_backend()
+            # Just plot the dets from the first TOD
+            temptod = data.obs[0]["tod"]
+            # FIXME: change this once we store det info in the metadata.
+            dfwhm = { x : 10.0 for x in temptod.detectors }
+            tt.plot_focalplane(temptod.detoffset(), 10.0, 10.0, outfile, fwhm=dfwhm)
+        comm.comm_world.barrier()
+        mtime = elapsed(comm.comm_world, mtime,
+            "Plotting debug focalplane")
+
+    # Compute pointing matrix
+
+    pointing = tt.OpPointingHpix(
+        nside=args.nside, nest=True, mode="IQU",
+        hwprpm=args.hwprpm)
+    pointing.exec(data)
+
+    mtime = elapsed(comm.comm_world, mtime, "Expand pointing")
 
     # Mapmaking.
 
@@ -169,11 +232,27 @@ def main():
     # observation.  We need to have both spt3g and tidas format Noise
     # classes which read the information from disk.  Then the mapmaking
     # operators need to get these noise weights from each observation.
-    detweights = { d : 1.0 for d in detectors }
+    detweights = { d : 1.0 for d in data.obs[0]["tod"].detectors }
 
     if not args.madam:
         if comm.comm_world.rank == 0:
             print("Not using Madam, will only make a binned map!", flush=True)
+
+        # Filter data if desired
+
+        if args.polyorder:
+            polyfilter = tt.OpPolyFilter(
+                order=args.polyorder,
+                common_flag_mask=args.common_flag_mask)
+            polyfilter.exec(data)
+            mtime = elapsed(comm.comm_world, mtime, "Polynomial filtering")
+
+        if args.wbin_ground:
+            groundfilter = tt.OpGroundFilter(
+                wbin=args.wbin_ground,
+                common_flag_mask=args.common_flag_mask)
+            groundfilter.exec(data)
+            mtime = elapsed(comm.comm_world, mtime, "Ground template filtering")
 
         # Compute pixel space distribution
 
@@ -198,14 +277,13 @@ def main():
         zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
             dtype=np.float64, submap=subnpix, local=localsm)
 
-        # compute the hits and covariance once, since the pointing and noise
-        # weights are fixed.
+        # compute the hits and covariance.
 
         invnpp.data.fill(0.0)
         hits.data.fill(0)
 
         build_invnpp = tm.OpAccumDiag(detweights=detweights, invnpp=invnpp,
-            hits=hits)
+                                      hits=hits, common_flag_mask=args.common_flag_mask)
         build_invnpp.exec(data)
 
         invnpp.allreduce()
@@ -224,8 +302,8 @@ def main():
         mtime = elapsed(comm.comm_world, mtime, "Writing N_pp")
 
         zmap.data.fill(0.0)
-        build_zmap = tm.OpAccumDiag(zmap=zmap, name="tot_signal",
-                                    detweights=detweights)
+        build_zmap = tm.OpAccumDiag(zmap=zmap, detweights=detweights,
+                                    common_flag_mask=args.common_flag_mask)
         build_zmap.exec(data)
         zmap.allreduce()
         mtime = elapsed(comm.comm_world, mtime, "Building noise weighted map")
@@ -233,7 +311,7 @@ def main():
         tm.covariance_apply(invnpp, zmap)
         mtime = elapsed(comm.comm_world, mtime, "Computing binned map")
 
-        zmap.write_healpix_fits(os.path.join(outpath, "binned.fits"))
+        zmap.write_healpix_fits(os.path.join(args.outdir, "binned.fits"))
         mtime = elapsed(comm.comm_world, mtime, "Writing binned map")
 
     else:
@@ -271,7 +349,8 @@ def main():
             pars[ "kfilter" ] = "F"
         pars[ "fsample" ] = args.samplerate
 
-        madam = tm.OpMadam(params=pars, detweights=detweights)
+        madam = tm.OpMadam(params=pars, detweights=detweights,
+                           common_flag_mask=args.common_flag_mask)
         madam.exec(data)
         mtime = elapsed(comm.comm_world, mtime, "Madam mapmaking")
 

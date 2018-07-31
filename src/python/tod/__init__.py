@@ -5,7 +5,7 @@
 
 # import functions into our public API
 
-from .tod import TOD
+from .tod import (TOD, TODCache)
 
 from .interval import Interval
 
@@ -47,4 +47,4 @@ from .conviqt import OpSimConviqt
 
 from .tidas import available as tidas_available
 
-from .spt3g import available as spt3g_available
+from .spt3g_utils import available as spt3g_available

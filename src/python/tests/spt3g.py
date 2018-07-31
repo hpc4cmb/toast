@@ -19,59 +19,46 @@ from ..dist import *
 
 from .. import qarray as qa
 
-from ..tod import Interval
+from ..tod import Interval, TODCache, TODGround
+
+from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
+    uniform_chunks)
 
 # This file will only be imported if SPT3G is already available
+from spt3g import core as c3g
+from ..tod import spt3g_utils as s3utils
 from ..tod import spt3g as s3g
 
 
 class Spt3gTest(MPITestCase):
 
     def setUp(self):
-        print("rank {} spt3g setUp".format(self.comm.rank), flush=True)
-        # Reset the frame file size for these tests, so that we can test
-        # boundary effects.
-        self._original_framefile = s3g.TARGET_FRAMEFILE_SIZE
-        s3g.TARGET_FRAMEFILE_SIZE = 100000
-
-        # Note: self.comm is set by the test infrastructure
-        self.worldsize = self.comm.size
-        self.groupsize = None
-        self.ngroup = None
-        if (self.worldsize >= 2):
-            self.groupsize = int( self.worldsize / 2 )
-            self.ngroup = 2
-        else:
-            self.groupsize = 1
-            self.ngroup = 1
-        self.toastcomm = Comm(self.comm, groupsize=self.groupsize)
-
-        print("rank {} created toastcomm".format(self.comm.rank), flush=True)
-
-        self.mygroup = self.toastcomm.group
-
-        print("rank {} in group {}".format(self.comm.rank, self.mygroup), flush=True)
-
-        self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
-            if not os.path.isdir(self.outdir):
-                os.mkdir(self.outdir)
-
-        self.comm.barrier()
-        print("rank {} done mkdir".format(self.comm.rank), flush=True)
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
 
         self.datawrite = os.path.join(self.outdir, "test_3g")
         self.dataexport = os.path.join(self.outdir, "export_3g")
+        self.groundexport = os.path.join(self.outdir, "export_3g_ground")
+
+        # Reset the frame file size for these tests, so that we can test
+        # boundary effects.
+        self._original_framefile = s3g.TARGET_FRAMEFILE_SIZE
+
+        # Create observations, divided evenly between groups
+        self.nobs = 4
+        opg = self.nobs
+        if self.comm.size >= 2:
+            opg = self.nobs // 2
+        self.data = create_distdata(self.comm, obs_per_group=opg)
+
+        # Create a set of boresight detectors
+        self.ndet = 4
         self.rate = 20.0
 
-        # Properties of the observations
-        self.nobs = 8
+        self.dnames, self.dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha \
+            = boresight_focalplane(self.ndet, samplerate=self.rate)
 
-        dist_obs = distribute_uniform(self.nobs, self.ngroup)
-        self.myobs_first = dist_obs[self.mygroup][0]
-        self.myobs_n = dist_obs[self.mygroup][1]
-
-        print("rank {} obs {} ... {}".format(self.comm.rank, self.myobs_first, self.myobs_first + self.myobs_n), flush=True)
+        # Properties of each observation
 
         self.obslen = 90.0
         self.obsgap = 10.0
@@ -81,34 +68,34 @@ class Spt3gTest(MPITestCase):
         self.obssamp = int(self.obslen * self.rate)
         self.obsgapsamp = self.obstotalsamp - self.obssamp
 
-        self.obstotal = (self.obstotalsamp - 1) / self.rate
-        self.obslen = (self.obssamp - 1) / self.rate
-        self.obsgap = (self.obsgapsamp - 1) / self.rate
+        self.obstotal = self.obstotalsamp / self.rate
+        self.obslen = self.obssamp / self.rate
+        self.obsgap = self.obstotal - self.obsgap
 
         # Properties of the intervals within an observation
         self.nsub = 12
         self.subtotsamp = self.obssamp // self.nsub
         self.subgapsamp = 0
         self.subsamp = self.subtotsamp - self.subgapsamp
+
         self.frames = list()
         for i in range(self.nsub):
             self.frames.append(self.subtotsamp)
         if self.obssamp > self.subtotsamp * self.nsub:
             self.frames.append(self.obssamp - self.subtotsamp * self.nsub)
 
-        # Detectors
-        self.dets = [
-            "d100-1a",
-            "d100-1b",
-            "d145-2a",
-            "d145-2b",
-            "d220-3a",
-            "d220-3b"
-        ]
+        # Ground scan properties
+        self.site_lon = '-67:47:10'
+        self.site_lat = '-22:57:30'
+        self.site_alt = 5200.
+        self.coord = 'C'
+        self.azmin=45
+        self.azmax=55
+        self.el=60
+        self.scanrate = 5.0
+        self.scan_accel = 100.0
+        self.CES_start = None
 
-        self.detquats = {}
-        for d in self.dets:
-            self.detquats[d] = np.array([0,0,0,1], dtype=np.float64)
 
 
     def tearDown(self):
@@ -151,12 +138,11 @@ class Spt3gTest(MPITestCase):
         return qa.from_angles(theta, phi, pa)
 
 
-    def obs_create(self, comm, name, path, prefix):
+    def obs_create(self, comm, name):
         # fake metadata
         props = self.meta_setup()
 
-        tod = s3g.TOD3G(comm, comm.size, path=path,
-            prefix=prefix, detectors=self.detquats,
+        tod = s3g.TOD3G(comm, comm.size, detectors=self.dquat,
             samples=self.obssamp, framesizes=self.frames,
             azel=True, meta=props)
 
@@ -201,6 +187,12 @@ class Spt3gTest(MPITestCase):
         # checking read / write integrity.
         tod.write_boresight_azel(data=boresight)
 
+        # Fake velocity / position data
+        posvec = np.zeros((n, 3), dtype=np.float64)
+        posvec[:,2] = 1.0
+        tod.write_velocity(vel=posvec)
+        tod.write_position(pos=posvec)
+
         # Now the common flags
         tod.write_common_flags(flags=flags)
 
@@ -215,6 +207,46 @@ class Spt3gTest(MPITestCase):
             fakedata *= indx
             tod.write(detector=d, data=fakedata)
             # write detector flags
+            tod.write_flags(detector=d, flags=flags)
+        return
+
+
+    def obs_zero(self, obs, start, off):
+        tod = obs["tod"]
+        # Write empty data to all fields
+
+        detranks, sampranks = tod.grid_size
+        rankdet, ranksamp = tod.grid_ranks
+
+        off = tod.local_samples[0]
+        n = tod.local_samples[1]
+
+        # We use this for both the common and all the detector
+        # flags just to check write/read roundtrip.
+        flags = np.zeros(n, dtype=np.uint8)
+
+        # Everyone writes their timestamps
+
+        stamps = np.zeros(n, dtype=np.float64)
+        tod.write_times(stamps=stamps)
+
+        # Same with the boresight
+        boresight = np.zeros((n, 4), dtype=np.float64)
+        tod.write_boresight(data=boresight)
+        tod.write_boresight_azel(data=boresight)
+
+        # Fake velocity / position data
+        posvec = np.zeros((n, 3), dtype=np.float64)
+        tod.write_velocity(vel=posvec)
+        tod.write_position(pos=posvec)
+
+        # Now the common flags
+        tod.write_common_flags(flags=flags)
+
+        # Detector data
+        fakedata = np.zeros(n, dtype=np.float64)
+        for d in tod.local_dets:
+            tod.write(detector=d, data=fakedata)
             tod.write_flags(detector=d, flags=flags)
         return
 
@@ -287,61 +319,188 @@ class Spt3gTest(MPITestCase):
         return
 
 
-    def data_init(self, path, prefix):
-        data = Data(self.toastcomm)
+    def data_init(self):
+        data = Data(self.data.comm)
 
-        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
-            obsname = "obs_{:02d}".format(ob)
+        for ob in range(len(self.data.obs)):
+            obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
             obsstart = ob * self.obstotal
             obsoff = ob * self.obstotalsamp
-            obs = self.obs_create(self.toastcomm.comm_group, obsname, path,
-                prefix)
+            obs = self.obs_create(self.data.comm.comm_group, obsname)
             self.obs_init(obs, obsstart, obsoff)
             data.obs.append(obs)
 
         return data
 
 
+    def init_ground(self):
+        # Create the simulated TODs
+        for ob in range(len(self.data.obs)):
+            obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
+            start = ob * self.obstotal
+            first = ob * self.obstotalsamp
+            tod = TODGround(
+                self.data.comm.comm_group,
+                self.dquat,
+                self.obstotalsamp,
+                detranks=self.data.comm.group_size,
+                firsttime=start,
+                rate=self.rate,
+                site_lon=self.site_lon,
+                site_lat=self.site_lat,
+                site_alt=self.site_alt,
+                azmin=self.azmin,
+                azmax=self.azmax,
+                el=self.el,
+                coord=self.coord,
+                scanrate=self.scanrate,
+                scan_accel=self.scan_accel,
+                CES_start=self.CES_start)
+            self.data.obs[ob]["tod"] = tod
+        return
+
+
     def data_verify(self, path, prefix):
-        for ob in range(self.myobs_first, self.myobs_first + self.myobs_n):
-            obsname = "obs_{:02d}".format(ob)
+        for ob in range(len(self.data.obs)):
+            obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
             obsdir = os.path.join(path, obsname)
             obsstart = ob * self.obstotal
             obsoff = ob * self.obstotalsamp
-            tod = s3g.TOD3G(self.toastcomm.comm_group,
-                self.toastcomm.comm_group.size, path=obsdir, prefix=prefix)
+            tod = s3g.TOD3G(self.data.comm.comm_group,
+                self.data.comm.comm_group.size, path=obsdir, prefix=prefix)
             self.obs_verify(tod, obsstart, obsoff)
         return
 
 
+    def test_utils(self):
+        s3g.TARGET_FRAMEFILE_SIZE = 200000
+        # We want to test the frame operations with a process grid that has
+        # multiple ranks in both the sample and detector directions.
+        detranks = self.comm.size
+        if self.comm.size % 2 == 0:
+            detranks = 2
+
+        # Create a simple tod with a cache that we can use for testing.
+        tod_in = TODCache(self.comm, self.dnames, self.obssamp,
+            detquats=self.dquat, detranks=detranks,
+            sampsizes=self.frames)
+
+        tod_out = TODCache(self.comm, self.dnames, self.obssamp,
+            detquats=self.dquat, detranks=detranks,
+            sampsizes=self.frames)
+
+        # Write some fake data to this TOD
+        obs_in = {"tod": tod_in}
+        self.obs_init(obs_in, 0.0, 0)
+
+        obs_out = {"tod": tod_out}
+        self.obs_zero(obs_out, 0.0, 0)
+
+        # For timestamps, we need to copy the internal cached timestamps
+        # (float64) into spt3g timestamps.
+        stamps = np.copy(tod_in.cache.reference(tod_in._stamps))
+        stamps *= 1.0e9
+        istamps = stamps.astype(np.int64)
+        tod_in.cache.put("spt3gtime", istamps)
+
+        # Make lists of fields that we are going to write to the spt3g frames.
+        # These use the internal names of the cache objects in a TODCache
+        # class.  We will test that we can dump this data to frames and
+        # restore it.
+
+        common = list()
+        common.append( ("spt3gtime", c3g.G3VectorTime, "spt3gtime") )
+        common.append( (tod_in._bore, c3g.G3VectorDouble, tod_in._bore) )
+        common.append( (tod_in._bore_azel, c3g.G3VectorDouble, tod_in._bore_azel) )
+        common.append( (tod_in._pos, c3g.G3VectorDouble, tod_in._pos) )
+        common.append( (tod_in._vel, c3g.G3VectorDouble, tod_in._vel) )
+        common.append( (tod_in._common, c3g.G3VectorUnsignedChar, tod_in._common) )
+
+        detfields = [ ("{}{}".format(tod_in._pref_detdata, x),
+                       "{}{}".format(tod_in._pref_detdata, x))\
+                     for x in tod_in.detectors ]
+
+        flagfields = [ ("{}{}".format(tod_in._pref_detflags, x),
+                        "{}{}".format(tod_in._pref_detflags, x)) \
+                     for x in tod_in.detectors ]
+
+        off = 0
+        frames = list()
+        for findx, frm in enumerate(self.frames):
+            #print("cache to frame {} at {}".format(findx, off), flush=True)
+            fdata = s3utils.cache_to_frames(tod_in, findx, 1, [off], [frm],
+                common=common, detector_fields=detfields,
+                flag_fields=flagfields, units=c3g.G3TimestreamUnits.Tcmb)
+            #print("  got ",fdata, flush=True)
+            frames.extend(fdata)
+            off += frm
+
+        # Restore frames to cache
+
+        off = 0
+        for findx, frm in enumerate(self.frames):
+            #print("frame to cache {} at {}".format(findx, off), flush=True)
+            s3utils.frame_to_cache(tod_out, findx, off, frm,
+                frame_data=frames[findx])
+            off += frm
+
+        # Compare input to output
+
+        np.testing.assert_almost_equal(tod_in.cache.reference("spt3gtime"),
+            tod_out.cache.reference("spt3gtime"))
+
+        np.testing.assert_almost_equal(tod_in.read_position(),
+            tod_out.read_position())
+
+        np.testing.assert_almost_equal(tod_in.read_velocity(),
+            tod_out.read_velocity())
+
+        np.testing.assert_almost_equal(tod_in.read_boresight(),
+            tod_out.read_boresight())
+
+        np.testing.assert_almost_equal(tod_in.read_boresight_azel(),
+            tod_out.read_boresight_azel())
+
+        np.testing.assert_equal(tod_in.read_common_flags(),
+            tod_out.read_common_flags())
+
+        for det in tod_in.local_dets:
+            np.testing.assert_almost_equal(tod_in.read(detector=det),
+                tod_out.read(detector=det))
+            np.testing.assert_equal(tod_in.read_flags(detector=det),
+                tod_out.read_flags(detector=det))
+
+        return
+
+
     def test_io(self):
-        start = MPI.Wtime()
-
-        print("rank {} enter test_io".format(self.comm.rank), flush=True)
-
-        origdata = self.data_init(self.datawrite, "test")
+        s3g.TARGET_FRAMEFILE_SIZE = 200000
+        origdata = self.data_init()
 
         if self.comm.rank == 0:
             if os.path.isdir(self.datawrite):
                 shutil.rmtree(self.datawrite)
         self.comm.barrier()
 
-        dumper = s3g.Op3GExport(self.datawrite, "test", s3g.TOD3G,
-            use_todchunks=True)
+        dumper = s3g.Op3GExport(self.datawrite, s3g.TOD3G, use_todchunks=True,
+                                export_opts={"prefix" : "test"})
         dumper.exec(origdata)
 
-        print("{}: Done with export 1".format(self.comm.rank), flush=True)
+        #print("{}: Done with export 1".format(self.comm.rank), flush=True)
         self.comm.barrier()
 
         self.data_verify(self.datawrite, "test")
 
-        print("{}: Done with verify 1".format(self.comm.rank), flush=True)
+        #print("{}: Done with verify 1".format(self.comm.rank), flush=True)
         self.comm.barrier()
 
-        loaddata = s3g.load_spt3g(self.toastcomm,
-            self.toastcomm.comm_group.size, self.datawrite, "test", s3g.TOD3G)
+        loaddata = s3g.load_spt3g(self.data.comm,
+                                  self.data.comm.comm_group.size,
+                                  self.datawrite, "test",
+                                  s3g.obsweight_spt3g,
+                                  s3g.TOD3G)
 
-        print("{}: Done with load".format(self.comm.rank), flush=True)
+        #print("{}: Done with load".format(self.comm.rank), flush=True)
         self.comm.barrier()
 
         if self.comm.rank == 0:
@@ -349,20 +508,44 @@ class Spt3gTest(MPITestCase):
                 shutil.rmtree(self.dataexport)
         self.comm.barrier()
 
-        exporter = s3g.Op3GExport(self.dataexport, "test", s3g.TOD3G,
-            use_todchunks=True)
+        exporter = s3g.Op3GExport(self.dataexport, s3g.TOD3G,
+                                  use_todchunks=True,
+                                  export_opts={"prefix" : "test"})
         exporter.exec(loaddata)
 
-        print("{}: Done with export 2".format(self.comm.rank), flush=True)
+        #print("{}: Done with export 2".format(self.comm.rank), flush=True)
         self.comm.barrier()
 
         self.data_verify(self.dataexport, "test")
 
-        print("{}: Done with verify 2".format(self.comm.rank), flush=True)
+        #print("{}: Done with verify 2".format(self.comm.rank), flush=True)
         self.comm.barrier()
 
-        assert(False)
+        return
 
-        stop = MPI.Wtime()
-        elapsed = stop - start
+
+    def test_ground(self):
+        s3g.TARGET_FRAMEFILE_SIZE = 400000
+        # Create simulated tods in memory
+        self.init_ground()
+
+        # Export this
+        if self.comm.rank == 0:
+            if os.path.isdir(self.groundexport):
+                shutil.rmtree(self.groundexport)
+        self.comm.barrier()
+
+        dumper = s3g.Op3GExport(self.groundexport, s3g.TOD3G,
+                                use_todchunks=True,
+                                export_opts={"prefix" : "test"})
+        dumper.exec(self.data)
+
+        # Load it back in.
+
+        loaddata = s3g.load_spt3g(self.data.comm,
+                                  self.data.comm.comm_group.size,
+                                  self.groundexport, "test",
+                                  s3g.obsweight_spt3g,
+                                  s3g.TOD3G)
+
         return

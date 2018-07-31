@@ -1,5 +1,5 @@
-curl -SL http://www.bzip.org/1.0.6/bzip2-1.0.6.tar.gz \
-    | tar xzf - \
+curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
+    | tar xjf - \
     && cd bzip2-1.0.6 \
     && patch -p1 < ../rules/patch_bzip2 \
     && CC="@CC@" CFLAGS="@CFLAGS@" \

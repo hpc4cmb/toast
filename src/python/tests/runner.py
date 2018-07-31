@@ -82,8 +82,6 @@ def test(name=None, verbosity=2):
     mpirunner = MPITestRunner(comm, verbosity=verbosity, warnings="ignore")
     suite = unittest.TestSuite()
 
-    print("rank {} created test runner".format(comm.rank), flush=True)
-
     if name is None:
         suite.addTest( loader.loadTestsFromModule(testcbuffer) )
         suite.addTest( loader.loadTestsFromModule(testcache) )
@@ -120,10 +118,12 @@ def test(name=None, verbosity=2):
         if (name == "tidas") and (not tidas_available):
             print("Cannot run TIDAS tests- package not available")
             return
+        elif (name == "spt3g") and (not spt3g_available):
+            print("Cannot run SPT3G tests- package not available")
+            return
         else:
             modname = "toast.tests.{}".format(name)
             suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
-            print("rank {} loaded test {}".format(comm.rank, name), flush=True)
 
     ret = 0
     _ret = mpirunner.run(suite)

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -7,6 +7,8 @@ from ..mpi import MPI
 import sys
 import os
 import re
+
+import traceback
 
 import numpy as np
 
@@ -22,56 +24,26 @@ available = True
 try:
     from spt3g import core as c3g
     #from spt3g import coordinateutils as c3c
+    from . import spt3g_utils as s3utils
 except:
     available = False
 
 
 # Module-level constants
 
-STR_TIME = "TIMESTAMPS"
-CACHE_PREF = "SPT3G"
-STR_FLAG = "FLAG"
-STR_COMMON = "COMMON"
-STR_QUAT = "QUAT"
-STR_BORE = "BORE"
-STR_BOREAZEL = "BOREAZEL"
-STR_POS = "POS"
-STR_VEL = "VEL"
-STR_DET = "DET"
+STR_TIME = "timestamps"
+STR_FLAG = "flag"
+STR_COMMON = "common"
+STR_QUAT = "quaternion"
+STR_BORE = "boresight"
+STR_BOREAZEL = "boresight_azel"
+STR_POS = "position"
+STR_VEL = "velocity"
+STR_DET = "det"
 
 # Used to determine file breaks when writing new data.  This
 # is the desired approximate file size in bytes.
 TARGET_FRAMEFILE_SIZE = 500000000
-#TARGET_FRAMEFILE_SIZE = 5000000
-
-
-def from_g3_type(val):
-    if isinstance(val, bool):
-        return bool(val)
-    elif isinstance(val, int):
-        return int(val)
-    elif isinstance(val, float):
-        return float(val)
-    else:
-        check = str(val)
-        if check == "NONE":
-            return None
-        else:
-            return check
-    return None
-
-
-def to_g3_type(val):
-    if val is None:
-        return c3g.G3String("NONE")
-    elif isinstance(val, (bool)):
-        return c3g.G3Bool(val)
-    elif isinstance(val, (int)):
-        return c3g.G3Int(val)
-    elif isinstance(val, (float)):
-        return c3g.G3Double(val)
-    else:
-        return c3g.G3String(val)
 
 
 def read_spt3g_obs(file):
@@ -79,7 +51,7 @@ def read_spt3g_obs(file):
     f = list(reader(None))
     obframe = f[0]
     obspat = re.compile("^obs_(.*)")
-    detpat = re.compile("{}_{}-(.*)".format(STR_QUAT, STR_DET))
+    detpat = re.compile("{}_(.*)".format(STR_QUAT))
 
     obs = dict()
     props = dict()
@@ -92,21 +64,21 @@ def read_spt3g_obs(file):
             obsmat = obspat.match(k)
             detmat = detpat.match(k)
             if obsmat is not None:
-                obs[obsmat.group(1)] = from_g3_type(obframe[k])
+                obs[obsmat.group(1)] = s3utils.from_g3_type(obframe[k])
             elif detmat is not None:
                 dets[detmat.group(1)] = np.array(obframe[k], dtype=np.float64)
             else:
-                props[k] = from_g3_type(obframe[k])
+                props[k] = s3utils.from_g3_type(obframe[k])
     return obs, props, dets, nsamp
 
 
 def write_spt3g_obs(writer, props, dets, nsamp):
     f = c3g.G3Frame(c3g.G3FrameType.Observation)
     for k, v in props.items():
-        f[k] = to_g3_type(v)
+        f[k] = s3utils.to_g3_type(v)
     f["samples"] = c3g.G3Int(nsamp)
     for k, v in dets.items():
-        f["{}_{}-{}".format(STR_QUAT, STR_DET, k)] = c3g.G3VectorDouble(v)
+        f["{}_{}".format(STR_QUAT, k)] = c3g.G3VectorDouble(v)
     writer(f)
     return
 
@@ -142,6 +114,12 @@ def bytes_per_sample(ndet, have_azel):
 class TOD3G(TOD):
     """This class provides an interface to a directory of spt3g frame files.
 
+    This class serves as *an example* for how to create a TOD class that
+    interfaces with spt3g data files.  Experiments will surely need to
+    implement their own classes that use some of the same utilities and also
+    use their own "schema" for the frames.  This class just reads / writes
+    a minimal set of data required by a TOAST TOD.
+
     An instance of this class loads a directory of frame files into memory.
     This data may be manipulated in memory (using the write* methods), but
     the modifications will not be stored to disk until the export method is
@@ -150,13 +128,9 @@ class TOD3G(TOD):
 
     Observation properties and detector pointing offsets from the boresight are
     given as quaternions, and are stored in an observation frame at the
-    start of the sequence of frame files.  The sequence of frame files are
-    named with a prefix and a number which represents the first sample of that
-    frame relative to the start of the observation.
-
-    This class is generic- it can only read / write standard data streams
-    and objects in the TOD.cache.  More specialized uses for specific
-    experiments should be implemented in their own classes.
+    start of each frame file.  The sequence of frame files are named with a
+    prefix and a number which represents the first sample of that frame
+    relative to the start of the observation.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which this
@@ -183,34 +157,16 @@ class TOD3G(TOD):
             of the detector timestreams.
         detbreaks (list):  Optional list of hard breaks in the detector
             distribution.
-        export_name (str):  When exporting data, the name of the cache object
-            (<name>_<detector>) to use for the detector timestream.  If None,
-            use the TOD read* methods.  If this is specified, then those cache
-            objects will NOT be exported to the cache frames.
-        export_common_flag_name (str):  When exporting data, the name of the
-            cache object to use for common flags.  If None, use the TOD read*
-            methods.  If this is specified, then that cache object will NOT be
-            exported to the cache frames.
-        export_flag_name (str):  When exporting data, the name of the cache
-            object (<name>_<detector>) to use for the detector flags.  If None,
-            use the TOD read* methods.  If this is specified, then those cache
-            objects will NOT be exported to the cache frames.
+
 
     """
     def __init__(self, mpicomm, detranks, path=None, prefix=None,
         detectors=None, samples=None, framesizes=None, azel=False, meta=dict(),
-        units=None, detbreaks=None, export_name=None,
-        export_common_flag_name=None, export_flag_name=None):
+        units=None, detbreaks=None):
 
         if not available:
             raise RuntimeError("spt3g is not available")
 
-        self._export_cachename = export_name
-        self._export_cachecomm = export_common_flag_name
-        self._export_cacheflag = export_flag_name
-
-        if (path is None) or (prefix is None):
-            raise RuntimeError("The path and prefix options must be specified")
         self._path = path
         self._prefix = prefix
 
@@ -220,7 +176,7 @@ class TOD3G(TOD):
         dets = None
         nsamp = None
         props = None
-        self._have_azel = None
+        self._have_azel = False
         self._units = None
         self._frame_sizes = None
         self._frame_sample_offs = None
@@ -231,6 +187,10 @@ class TOD3G(TOD):
         self._createmode = False
         if (detectors is not None) and (samples is not None):
             self._createmode = True
+        else:
+            if (self._path is None) or (self._prefix is None):
+                raise RuntimeError("If reading existing data, path and "
+                                   "prefix are required.")
 
         if mpicomm.rank == 0:
             if self._createmode:
@@ -244,7 +204,6 @@ class TOD3G(TOD):
                 if self._frame_sizes is None:
                     self._frame_sizes = [ nsamp ]
                 self._frame_sample_offs = list()
-                self._files = list()
                 self._file_sample_offs = list()
                 self._file_frame_offs = list()
 
@@ -258,14 +217,18 @@ class TOD3G(TOD):
                 fileoff = 0
                 fileframeoff = 0
                 sampoff = 0
+
                 for fr in self._frame_sizes:
                     frbytes = fr * sampbytes
+                    if frbytes > TARGET_FRAMEFILE_SIZE:
+                        msg = "A single frame ({}) is larger than the target"\
+                            " frame file size ({}).  Increase the target size."\
+                            .format(frbytes, TARGET_FRAMEFILE_SIZE)
+                        raise RuntimeError(msg)
                     if filebytes + frbytes > TARGET_FRAMEFILE_SIZE:
                         # Start a new file
                         self._file_sample_offs.append(fileoff)
                         self._file_frame_offs.append(fileframeoff)
-                        self._files.append(os.path.join(path,
-                            "{}_{:08d}.g3".format(prefix, fileoff)))
                         fileoff += filesamps
                         fileframeoff += fileframes
                         filesamps = 0
@@ -280,8 +243,6 @@ class TOD3G(TOD):
                 # process the last file
                 self._file_sample_offs.append(fileoff)
                 self._file_frame_offs.append(fileframeoff)
-                self._files.append(os.path.join(path,
-                    "{}_{:08d}.g3".format(prefix, fileoff)))
             else:
                 # We must have existing data
                 self._frame_sizes = list()
@@ -367,13 +328,14 @@ class TOD3G(TOD):
         self._detindx = {}
         for det in dets:
             bdet = det.encode("utf-8")
-            ind = None
+            uid = None
             try:
                 ind = int.from_bytes(bdet, byteorder="little")
+                uid = int(ind & 0xFFFFFFFF)
             except:
                 raise RuntimeError("Cannot convert detector name {} to a "
                     "unique integer- maybe it is too long?".format(det))
-            self._detindx[det] = ind
+            self._detindx[det] = uid
 
         # call base class constructor to distribute data
         super().__init__(mpicomm, list(sorted(dets.keys())), nsamp,
@@ -388,8 +350,7 @@ class TOD3G(TOD):
         if not self._createmode:
             # We are reading existing data into cache.  Create our local pieces
             # of the data.
-            self._cache_init()
-            self._import_frames()
+            self.load_frames()
 
         return
 
@@ -397,31 +358,27 @@ class TOD3G(TOD):
     def _cache_init(self):
         if not self._done_cache_init:
             # Timestamps
-            name = "{}-{}".format(CACHE_PREF, STR_TIME)
-            self.cache.create(name, np.float64, (self.local_samples[1],))
+            self.cache.create(STR_TIME, np.int64, (self.local_samples[1],))
 
             # Boresight quaternions
-            name = "{}-{}".format(CACHE_PREF, STR_BORE)
-            self.cache.create(name, np.float64, (self.local_samples[1], 4))
+            self.cache.create(STR_BORE, np.float64, (self.local_samples[1], 4))
             if self._have_azel:
-                name = "{}-{}".format(CACHE_PREF, STR_BOREAZEL)
-                self.cache.create(name, np.float64, (self.local_samples[1], 4))
+                self.cache.create(STR_BOREAZEL, np.float64,
+                                  (self.local_samples[1], 4))
 
             # Common flags
-            name = "{}-{}".format(CACHE_PREF, STR_COMMON)
+            name = "{}_{}".format(STR_FLAG, STR_COMMON)
             self.cache.create(name, np.uint8, (self.local_samples[1],))
 
             # Telescope position and velocity
-            name = "{}-{}".format(CACHE_PREF, STR_POS)
-            self.cache.create(name, np.float64, (self.local_samples[1], 3))
-            name = "{}-{}".format(CACHE_PREF, STR_VEL)
-            self.cache.create(name, np.float64, (self.local_samples[1], 3))
+            self.cache.create(STR_POS, np.float64, (self.local_samples[1], 3))
+            self.cache.create(STR_VEL, np.float64, (self.local_samples[1], 3))
 
             # Detector data and flags
             for det in self.local_dets:
-                name = "{}-{}_{}".format(CACHE_PREF, STR_DET, det)
+                name = "{}_{}".format(STR_DET, det)
                 self.cache.create(name, np.float64, (self.local_samples[1],))
-                name = "{}-{}_{}".format(CACHE_PREF, STR_FLAG, det)
+                name = "{}_{}".format(STR_FLAG, det)
                 self.cache.create(name, np.uint8, (self.local_samples[1],))
 
             self._done_cache_init = True
@@ -429,132 +386,136 @@ class TOD3G(TOD):
         return
 
 
-    def _frame_indices(self, frame):
-        localfirst = self.local_samples[0]
-        locallast = self.local_samples[0] + self.local_samples[1] - 1
-        frsize = self._frame_sizes[frame]
-        frfirst = self._frame_sample_offs[frame]
-        memoff = None
-        froff = None
-        nfr = None
-        # Does this frame overlap with any of our data?
-        if (frfirst <= locallast) and (frfirst + frsize >= localfirst):
-            # compute offsets into our local data and the frame
-            memoff = frfirst - localfirst
-            froff = 0
-            nfr = frsize
-            if memoff < 0:
-                nfr = frsize + memoff
-                froff = -memoff
-                memoff = 0
-            if memoff + nfr > self.local_samples[1]:
-                nfr = self.local_samples[1] - memoff
-        return (memoff, froff, nfr)
-
-
-    def _import_frames(self):
+    def load_frames(self):
+        self._cache_init()
         for ifile, (ffile, foff) in enumerate(zip(self._files,
             self._file_frame_offs)):
-            nf = None
+            nframes = None
             if ifile == len(self._files) - 1:
                 # we are at the last file
-                nf = len(self._frame_sizes) - foff
+                nframes = len(self._frame_sizes) - foff
             else:
                 # get number of frames in this file
-                nf = self._file_frame_offs[ifile+1] - foff
+                nframes = self._file_frame_offs[ifile+1] - foff
 
-            gfile = [ None for x in range(nf) ]
+            #print("load {}:  proc {} file {} starts at frame {} and has {} frames".format(self._path, self.mpicomm.rank, ifile, foff, nframes), flush=True)
+
+            # nframes includes only the scan frames.  We add one here to
+            # get the total including the observation frame.
+            gfile = [ None for x in range(nframes + 1) ]
             if self.mpicomm.rank == 0:
                 gfile = c3g.G3File(ffile)
 
             obs = True
-            for reloff, fdata in enumerate(gfile):
+            for fileframe, fdata in enumerate(gfile):
                 if obs:
+                    # Skip the observation frame.
                     obs = False
                     continue
-                fdata = self.mpicomm.bcast(fdata, root=0)
-                # The "-1" here skips the observation frame in the reloff
-                # counting.
-                memoff, froff, nfr = self._frame_indices(foff + reloff - 1)
-                if memoff is not None:
-                    # Timestamps
-                    name = "{}-{}".format(CACHE_PREF, STR_TIME)
-                    ref = self.cache.reference(name)
-                    # convert from nanoseconds to floating point seconds
-                    ntime = np.array(fdata[STR_TIME][froff:froff+nfr])
-                    ref[memoff:memoff+nfr] = 1.0e-9 * ntime.astype(np.float64)
-                    del ref
-                    del ntime
+                scanframe = fileframe - 1
+                frame = foff + scanframe
+                frame_offset = self._frame_sample_offs[frame]
+                frame_size = self._frame_sizes[frame]
+                # if self.mpicomm.rank == 0:
+                #     print("load {}:    proc {} working on frame {} (samples {} - {}) data = {}".format(self._path, self.mpicomm.rank, frame, frame_offset, frame_offset+frame_size, fdata), flush=True)
 
-                    # Boresight quaternions
-                    name = "{}-{}".format(CACHE_PREF, STR_BORE)
-                    ref = self.cache.reference(name)
-                    ref[memoff:memoff+nfr,:] = \
-                        np.array(fdata[STR_BORE][4*froff:4*(froff+nfr)]).reshape((-1, 4))
-                    del ref
-                    if self._have_azel:
-                        name = "{}-{}".format(CACHE_PREF, STR_BOREAZEL)
-                        ref = self.cache.reference(name)
-                        ref[memoff:memoff+nfr,:] = \
-                            np.array(fdata[STR_BOREAZEL][4*froff:4*(froff+nfr)]).reshape((-1, 4))
-                        del ref
+                s3utils.frame_to_cache(self, frame, frame_offset, frame_size,
+                                       frame_data=fdata, detector_map=STR_DET,
+                                       flag_map=STR_FLAG, common_prefix=None,
+                                       det_prefix="{}_".format(STR_DET),
+                                       flag_prefix="{}_".format(STR_FLAG))
 
-                    # Common flags
-                    name = "{}-{}".format(CACHE_PREF, STR_COMMON)
-                    ref = self.cache.reference(name)
-                    ref[memoff:memoff+nfr] = \
-                        np.array(fdata[STR_COMMON][froff:froff+nfr], dtype=np.uint8)
-                    del ref
-
-                    # Telescope position / velocity
-
-                    name = "{}-{}".format(CACHE_PREF, STR_POS)
-                    ref = self.cache.reference(name)
-                    ref[memoff:memoff+nfr,:] = \
-                        np.array(fdata[STR_POS][3*froff:3*(froff+nfr)]).reshape((-1, 3))
-                    del ref
-
-                    name = "{}-{}".format(CACHE_PREF, STR_VEL)
-                    ref = self.cache.reference(name)
-                    ref[memoff:memoff+nfr,:] = \
-                        np.array(fdata[STR_VEL][3*froff:3*(froff+nfr)]).reshape((-1, 3))
-                    del ref
-
-                    # Detector data and flags
-                    detmap = fdata[STR_DET]
-                    flagmap = fdata[STR_FLAG]
-                    for d in self.local_dets:
-                        name = "{}-{}_{}".format(CACHE_PREF, STR_DET, d)
-                        ref = self.cache.reference(name)
-                        ref[memoff:memoff+nfr] = detmap[d][froff:froff+nfr]
-                        del ref
-                        name = "{}-{}_{}".format(CACHE_PREF, STR_FLAG, d)
-                        ref = self.cache.reference(name)
-                        ref[memoff:memoff+nfr] = \
-                            np.array(flagmap[d][froff:froff+nfr],
-                            dtype=np.uint8)
-                        del ref
+                #print("load {}:    proc {} hit barrier for frame {}".format(self._path, self.mpicomm.rank, frame), flush=True)
+                self.mpicomm.barrier()
+                #if self.mpicomm.rank == 0:
+                #print("load {}:    proc {} finished frame {}".format(self._path, self.mpicomm.rank, frame), flush=True)
+            del gfile
+            #print("load {}:    proc {} finished file {}".format(self._path, self.mpicomm.rank, ifile), flush=True)
         return
 
 
-    def _export_frames(self, oldtod):
-        # The process grid
-        detranks, sampranks = self.grid_size
-        rankdet, ranksamp = self.grid_ranks
+    def _export_frames(self, path=None, prefix=None, cache_name=None,
+                       cache_common=None, cache_flag_name=None):
+        """Export cache data to frames.
 
-        for ifile, (ffile, foff) in enumerate(zip(self._files,
+        This will either export the cache fields that correspond to the "real"
+        data (those manipulated by the read / write methods) or will export
+        alternate cache fields specified by the arguments.
+
+        Args:
+            path (str):  Override any path specified at construction time.
+            prefix (str):  Override any prefix specified at construction time.
+            cache_name (str):  When exporting data, the name of the cache
+                object (<name>_<detector>) to use for the detector timestream.
+                If None, use the TOD read* methods.
+            cache_common (str):  When exporting data, the name of the cache
+                object to use for common flags.  If None, use the TOD read*
+                methods.
+            cache_flag_name (str):  When exporting data, the name of the
+                cache object (<name>_<detector>) to use for the detector
+                flags.  If None, use the TOD read* methods.
+
+        """
+        self._cache_init()
+
+        # Create the frame schema we are using when exporting data
+
+        common_fields = [
+            (STR_TIME, c3g.G3VectorTime, STR_TIME),
+            (STR_BORE, c3g.G3VectorDouble, STR_BORE),
+            (STR_BOREAZEL, c3g.G3VectorDouble, STR_BOREAZEL),
+            (STR_POS, c3g.G3VectorDouble, STR_POS),
+            (STR_VEL, c3g.G3VectorDouble, STR_VEL)
+        ]
+        if cache_common is None:
+            cname = "{}_{}".format(STR_FLAG, STR_COMMON)
+            common_fields.append( (cname, c3g.G3VectorUnsignedChar, cname) )
+        else:
+            common_fields.append( (cache_common, c3g.G3VectorUnsignedChar,
+                                   cache_common) )
+
+        det_fields = None
+        if cache_name is None:
+            det_fields = [ ("{}_{}".format(STR_DET, d), d) \
+                           for d in self.detectors ]
+        else:
+            det_fields = [ ("{}_{}".format(cache_name, d), d) \
+                           for d in self.detectors ]
+
+        flag_fields = None
+        if cache_flag_name is None:
+            flag_fields = [ ("{}_{}".format(STR_FLAG, d), d) \
+                           for d in self.detectors ]
+        else:
+            flag_fields = [ ("{}_{}".format(cache_flag_name, d), d) \
+                           for d in self.detectors ]
+
+        ex_path = self._path
+        if path is not None:
+            ex_path = path
+
+        ex_prefix = self._prefix
+        if prefix is not None:
+            ex_prefix = prefix
+
+        if (ex_path is None) or (ex_prefix is None):
+            raise RuntimeError("You must specify the TOD path and prefix, "
+                               "either at construction or export")
+
+        ex_files = [ os.path.join(ex_path,
+                    "{}_{:08d}.g3".format(ex_prefix, x)) \
+                    for x in self._file_sample_offs ]
+
+        for ifile, (ffile, foff) in enumerate(zip(ex_files,
             self._file_frame_offs)):
-            nf = None
-            nsamp = None
-            if ifile == len(self._files) - 1:
+            nframes = None
+            #print("  ifile = {}, ffile = {}, foff = {}".format(ifile, ffile, foff), flush=True)
+            if ifile == len(ex_files) - 1:
                 # we are at the last file
-                nf = len(self._frame_sizes) - foff
-                nsamp = self.total_samples - self._file_sample_offs[-1]
+                nframes = len(self._frame_sizes) - foff
             else:
-                # get number of frames / samples in this file
-                nf = self._file_frame_offs[ifile+1] - foff
-                nsamp = self._file_sample_offs[ifile + 1] - \
-                    self._file_sample_offs[ifile]
+                # get number of frames in this file
+                nframes = self._file_frame_offs[ifile+1] - foff
 
             writer = None
             if self.mpicomm.rank == 0:
@@ -567,359 +528,50 @@ class TOD3G(TOD):
                 write_spt3g_obs(writer, props, self._detquats,
                     self.total_samples)
 
-            for fr in range(nf):
-                fdata = None
-                if self.mpicomm.rank == 0:
-                    fdata = c3g.G3Frame(c3g.G3FrameType.Scan)
-
-                memoff, froff, nfr = self._frame_indices(foff + fr)
-
-                # For a given timestream, the gather is done across the
-                # process row which contains the specific detector, or across
-                # the first process row for common telescope data.
-
-                # Gather timestamps
-
-                data = None
-                alldata = None
-                if rankdet == 0:
-                    # Only the first row of the process grid does this.
-                    if memoff is not None:
-                        data = oldtod.read_times(local_start=memoff, n=nfr)
-                    else:
-                        data = np.zeros(0, dtype=np.float64)
-
-                    if ranksamp == 0:
-                        # allocate receive buffer
-                        alldata = np.zeros(self._frame_sizes[fr],
-                            dtype=np.float64)
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv times".format(foff + fr), flush=True)
-
-                    self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                    if ranksamp == 0:
-                        # convert to integer nanoseconds
-                        alldata *= 1.0e9
-                        idata = alldata.astype(np.int64)
-                        # FIXME: there *must* be a better way to instantiate a vector of
-                        # G3 timestamps...
-                        g3times = list()
-                        for t in range(len(idata)):
-                            g3times.append(c3g.G3Time(idata[t]))
-                        fdata[STR_TIME] = c3g.G3VectorTime(g3times)
-                        del g3times
-                        del idata
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv times DONE".format(foff + fr), flush=True)
-
-                    del data
-                    del alldata
-
-                # Gather boresight data
-
-                data = None
-                alldata = None
-                if rankdet == 0:
-                    # Only the first row of the process grid does this.
-                    if memoff is not None:
-                        data = oldtod.read_boresight(local_start=memoff, n=nfr)
-                    else:
-                        data = np.zeros(0, dtype=np.float64)
-
-                    if ranksamp == 0:
-                        # allocate receive buffer
-                        alldata = np.zeros(4 * self._frame_sizes[foff + fr],
-                            dtype=np.float64)
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv boresight radec".format(foff + fr), flush=True)
-
-                    self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                    if ranksamp == 0:
-                        fdata[STR_BORE] = c3g.G3VectorDouble(alldata.flatten())
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv boresight radec DONE".format(foff + fr), flush=True)
-
-                    del data
-                    del alldata
-
-                if self._have_azel:
-                    data = None
-                    alldata = None
-                    if rankdet == 0:
-                        # Only the first row of the process grid does this.
-                        if memoff is not None:
-                            data = oldtod.read_boresight_azel(
-                                local_start=memoff, n=nfr)
-                        else:
-                            data = np.zeros(0, dtype=np.float64)
-
-                        if ranksamp == 0:
-                            # allocate receive buffer
-                            alldata = np.zeros(4 * self._frame_sizes[foff + fr],
-                                dtype=np.float64)
-
-                        # if ranksamp == 0:
-                        #     print("frame {} gatherv boresight azel".format(foff + fr), flush=True)
-
-                        self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                        if ranksamp == 0:
-                            fdata[STR_BOREAZEL] = \
-                                c3g.G3VectorDouble(alldata.flatten())
-
-                        # if ranksamp == 0:
-                        #     print("frame {} gatherv boresight azel DONE".format(foff + fr), flush=True)
-
-                        del data
-                        del alldata
-
-                # Gather common flags
-
-                data = None
-                alldata = None
-                if rankdet == 0:
-                    # Only the first row of the process grid does this.
-                    if memoff is not None:
-                        if self._export_cachecomm is not None:
-                            data = oldtod.cache.reference(
-                                self._export_cachecomm)[memoff:memoff+nfr]
-                        else:
-                            data = oldtod.read_common_flags(
-                                local_start=memoff, n=nfr)
-                    else:
-                        data = np.zeros(0, dtype=np.uint8)
-
-                    if ranksamp == 0:
-                        # allocate receive buffer
-                        alldata = np.zeros(self._frame_sizes[foff + fr],
-                            dtype=np.uint8)
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv common flags".format(foff + fr), flush=True)
-
-                    self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                    if ranksamp == 0:
-                        # The bindings of G3Vector seem to only work with lists...
-                        fdata[STR_COMMON] = \
-                            c3g.G3VectorInt(alldata.astype(np.int32).tolist())
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv common flags DONE".format(foff + fr), flush=True)
-
-                    del data
-                    del alldata
-
-                # Telescope position and velocity
-
-                data = None
-                alldata = None
-                if rankdet == 0:
-                    # Only the first row of the process grid does this.
-                    if memoff is not None:
-                        data = oldtod.read_position(local_start=memoff, n=nfr)
-                    else:
-                        data = np.zeros(0, dtype=np.float64)
-
-                    if ranksamp == 0:
-                        # allocate receive buffer
-                        alldata = np.zeros(3 * self._frame_sizes[foff + fr],
-                            dtype=np.float64)
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv pos".format(foff + fr), flush=True)
-
-                    self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                    if ranksamp == 0:
-                        fdata[STR_POS] = c3g.G3VectorDouble(alldata.flatten())
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv pos DONE".format(foff + fr), flush=True)
-
-                    del data
-                    del alldata
-
-                data = None
-                alldata = None
-                if rankdet == 0:
-                    # Only the first row of the process grid does this.
-                    if memoff is not None:
-                        data = oldtod.read_velocity(local_start=memoff, n=nfr)
-                    else:
-                        data = np.zeros(0, dtype=np.float64)
-
-                    if ranksamp == 0:
-                        # allocate receive buffer
-                        alldata = np.zeros(3 * self._frame_sizes[foff + fr],
-                            dtype=np.float64)
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv vel".format(foff + fr), flush=True)
-
-                    self.grid_comm_row.Gatherv(data, alldata, root=0)
-
-                    if ranksamp == 0:
-                        fdata[STR_VEL] = c3g.G3VectorDouble(alldata.flatten())
-
-                    # if ranksamp == 0:
-                    #     print("frame {} gatherv vel DONE".format(foff + fr), flush=True)
-
-                    del data
-                    del alldata
-
-                self.mpicomm.barrier()
-
-                # Now go through all detectors and add the data and flags to
-                # the frame.  Pre-allocate and reuse the data buffers.
-
-                detmap = c3g.G3TimestreamMap()
-                flagmap = c3g.G3MapVectorInt()
-
-                data = None
-                flags = None
-                if nfr is None:
-                    data = np.zeros(0, dtype=np.float64)
-                    flags = np.zeros(0, dtype=np.uint8)
-                else:
-                    data = np.zeros(nfr, dtype=np.float64)
-                    flags = np.zeros(nfr, dtype=np.uint8)
-
-                alldata = None
-                allflags = None
-                if ranksamp == 0:
-                    alldata = np.zeros(self._frame_sizes[foff + fr],
-                        dtype=np.float64)
-                    allflags = np.zeros(self._frame_sizes[foff + fr],
-                        dtype=np.uint8)
-
-                dindx = 0
-                for det in self.detectors:
-                    # For each detector, processes which have the detector
-                    # in their local_dets should be in the same process row.
-                    # We do the gather over just this process row.  Then the
-                    # first process in the row sends the data to rank zero in
-                    # the full communicator for insertion into the frame.
-                    gatherproc = 0
-
-                    # if self.mpicomm.rank == 0:
-                    #     print("frame {} gatherv det {}".format(foff + fr, det), flush=True)
-
-                    if (det in self.local_dets):
-                        # We are in the process row working on this detector.
-                        if memoff is not None:
-                            # We have some data
-                            if self._export_cachename is not None:
-                                cname = "{}_{}".format(self._export_cachename,
-                                    det)
-                                data[:] = oldtod.cache.reference(
-                                    cname)[memoff:memoff+nfr]
-                            else:
-                                data[:] = oldtod.read(detector=det,
-                                    local_start=memoff, n=nfr)
-                            if self._export_cacheflag is not None:
-                                cname = "{}_{}".format(self._export_cacheflag,
-                                    det)
-                                flags[:] = oldtod.cache.reference(
-                                    cname)[memoff:memoff+nfr]
-                            else:
-                                flags[:] = oldtod.read_flags(detector=det,
-                                    local_start=memoff, n=nfr)
-
-                        if ranksamp == 0:
-                            # We are the one doing the gathering
-                            gatherproc = self.mpicomm.rank
-
-                        self.grid_comm_row.Gatherv(data, alldata, root=0)
-                        self.grid_comm_row.Gatherv(flags, allflags, root=0)
-
-                    # All processes find out which one did the gather
-                    gatherproc = self.mpicomm.allreduce(gatherproc, MPI.SUM)
-
-                    if gatherproc != 0:
-                        # Data not yet on rank 0
-                        if self.mpicomm.rank == 0:
-                            # Receive data from the first process in this row
-                            self.mpicomm.Recv(alldata, source=gatherproc,
-                                tag=dindx)
-                            self.mpicomm.Recv(allflags, source=gatherproc,
-                                tag=(len(self.detectors)+dindx) )
-                        elif (self.mpicomm.rank == gatherproc):
-                            # Send our data
-                            self.mpicomm.Send(alldata, 0, tag=dindx)
-                            self.mpicomm.Send(allflags, 0,
-                                tag=(len(self.detectors)+dindx) )
-
-                    if self.mpicomm.rank == 0:
-                        #print("frame {} gatherv det {} DONE".format(foff + fr, det), flush=True)
-                        if self._units is None:
-                            # We do this conditional, since we can't use
-                            # G3TimestreamUnits.None in python ("None" is
-                            # interpreted as python None).
-                            detmap[det] = c3g.G3Timestream(alldata)
-                        else:
-                            detmap[det] = \
-                                c3g.G3Timestream(alldata, self._units)
-                        # The bindings of G3Vector seem to only work with
-                        # lists...  Also there is no vectormap for unsigned
-                        # char, so we have to use int...
-                        flagmap[det] = \
-                            c3g.G3VectorInt(allflags.astype(np.int32).tolist())
-
-                    self.mpicomm.barrier()
-                    dindx += 1
-
-                del data
-                del alldata
-                del flags
-                del allflags
-
-                if self.mpicomm.rank == 0:
-                    fdata[STR_DET] = detmap
-                    fdata[STR_FLAG] = flagmap
-                    writer(fdata)
+            # Collect data for all frames in the file in one go.
+
+            frm_offsets = [ self._frame_sample_offs[foff+f] \
+                           for f in range(nframes) ]
+            frm_sizes = [ self._frame_sizes[foff+f] \
+                           for f in range(nframes) ]
 
             if self.mpicomm.rank == 0:
-                # Close writer
+                print("  {} file {}".format(self._path, ifile), flush=True)
+                print("    start frame = {}, nframes = {}".format(foff, nframes), flush=True)
+                print("    frame offs = ",frm_offsets, flush=True)
+                print("    frame sizes = ",frm_sizes, flush=True)
+
+            fdata = s3utils.cache_to_frames(self, foff, nframes, frm_offsets,
+                                           frm_sizes,
+                                           common=common_fields,
+                                           detector_fields=det_fields,
+                                           flag_fields=flag_fields,
+                                           detector_map=STR_DET,
+                                           flag_map=STR_FLAG,
+                                           units=self._units)
+
+            if self.mpicomm.rank == 0:
+                for fdt in fdata:
+                    writer(fdt)
                 del writer
+            del fdata
 
         return
 
 
     def detoffset(self):
-        """
-        Return dictionary of detector quaternions.
-
-        This returns a dictionary with the detector names as the keys and the
-        values are 4-element numpy arrays containing the quaternion offset
-        from the boresight.
-
-        Args:
-            None
-
-        Returns (dict):
-            the dictionary of quaternions.
-        """
         return dict(self._detquats)
 
 
     def _get_boresight(self, start, n):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_BORE)
-        ref = self.cache.reference(name)[start:start+n,:]
+        ref = self.cache.reference(STR_BORE)[start:start+n,:]
         return ref
 
 
     def _put_boresight(self, start, data):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_BORE)
-        ref = self.cache.reference(name)
+        ref = self.cache.reference(STR_BORE)
         ref[start:(start+data.shape[0]),:] = data
         del ref
         return
@@ -929,8 +581,7 @@ class TOD3G(TOD):
         if not self._have_azel:
             raise RuntimeError("No Az/El pointing for this TOD")
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_BOREAZEL)
-        ref = self.cache.reference(name)[start:start+n,:]
+        ref = self.cache.reference(STR_BOREAZEL)[start:start+n,:]
         return ref
 
 
@@ -938,8 +589,7 @@ class TOD3G(TOD):
         if not self._have_azel:
             raise RuntimeError("No Az/El pointing for this TOD")
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_BOREAZEL)
-        ref = self.cache.reference(name)
+        ref = self.cache.reference(STR_BOREAZEL)
         ref[start:(start+data.shape[0]),:] = data
         del ref
         return
@@ -947,14 +597,14 @@ class TOD3G(TOD):
 
     def _get(self, detector, start, n):
         self._cache_init()
-        name = "{}-{}_{}".format(CACHE_PREF, STR_DET, detector)
+        name = "{}_{}".format(STR_DET, detector)
         ref = self.cache.reference(name)[start:start+n]
         return ref
 
 
     def _put(self, detector, start, data):
         self._cache_init()
-        name = "{}-{}_{}".format(CACHE_PREF, STR_DET, detector)
+        name = "{}_{}".format(STR_DET, detector)
         ref = self.cache.reference(name)
         ref[start:(start+data.shape[0])] = data
         del ref
@@ -963,14 +613,14 @@ class TOD3G(TOD):
 
     def _get_flags(self, detector, start, n):
         self._cache_init()
-        name = "{}-{}_{}".format(CACHE_PREF, STR_FLAG, detector)
+        name = "{}_{}".format(STR_FLAG, detector)
         ref = self.cache.reference(name)[start:start+n]
         return ref
 
 
     def _put_flags(self, detector, start, flags):
         self._cache_init()
-        name = "{}-{}_{}".format(CACHE_PREF, STR_FLAG, detector)
+        name = "{}_{}".format(STR_FLAG, detector)
         ref = self.cache.reference(name)
         ref[start:(start+flags.shape[0])] = flags
         del ref
@@ -979,14 +629,14 @@ class TOD3G(TOD):
 
     def _get_common_flags(self, start, n):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_COMMON)
+        name = "{}_{}".format(STR_FLAG, STR_COMMON)
         ref = self.cache.reference(name)[start:start+n]
         return ref
 
 
     def _put_common_flags(self, start, flags):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_COMMON)
+        name = "{}_{}".format(STR_FLAG, STR_COMMON)
         ref = self.cache.reference(name)
         ref[start:(start+flags.shape[0])] = flags
         del ref
@@ -995,16 +645,17 @@ class TOD3G(TOD):
 
     def _get_times(self, start, n):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_TIME)
-        ref = self.cache.reference(name)[start:start+n]
-        return ref
+        ref = self.cache.reference(STR_TIME)[start:start+n]
+        tm = 1.0e-9 * ref.astype(np.float64)
+        del ref
+        return tm
 
 
     def _put_times(self, start, stamps):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_TIME)
-        ref = self.cache.reference(name)
-        ref[start:(start+stamps.shape[0])] = stamps
+        ref = self.cache.reference(STR_TIME)
+        ref[start:(start+stamps.shape[0])] = np.array(1.0e9 * stamps,
+                                                      dtype=np.int64)
         del ref
         return
 
@@ -1025,15 +676,13 @@ class TOD3G(TOD):
 
     def _get_position(self, start, n):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_POS)
-        ref = self.cache.reference(name)[start:start+n,:]
+        ref = self.cache.reference(STR_POS)[start:start+n,:]
         return ref
 
 
     def _put_position(self, start, pos):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_POS)
-        ref = self.cache.reference(name)
+        ref = self.cache.reference(STR_POS)
         ref[start:(start+pos.shape[0]),:] = pos
         del ref
         return
@@ -1041,29 +690,43 @@ class TOD3G(TOD):
 
     def _get_velocity(self, start, n):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_VEL)
-        ref = self.cache.reference(name)[start:start+n,:]
+        ref = self.cache.reference(STR_VEL)[start:start+n,:]
         return ref
 
 
     def _put_velocity(self, start, vel):
         self._cache_init()
-        name = "{}-{}".format(CACHE_PREF, STR_VEL)
-        ref = self.cache.reference(name)
+        ref = self.cache.reference(STR_VEL)
         ref[start:(start+vel.shape[0]),:] = vel
         del ref
         return
 
 
-    def export(self, oldtod):
-        # For each frame, gather the data from relevant processes and write
-        # out.  In order for this to work, the path and prefix must have been
-        # set at construction time.
-        self._export_frames(oldtod)
+    def export(self, **kwargs):
+        self._export_frames(**kwargs)
         return
 
 
-def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
+def obsweight_spt3g(framefile):
+    """Returns a weight for a framefile.
+
+    This reads the special observation frame at the start of the file and
+    returns the product of the number of detectors and the number of
+    samples.
+
+    Args:
+        framefile (str):  The frame file.  The first frame should be an
+            observation frame.
+
+    Returns:
+        (float): the weight.
+
+    """
+    obs, props, dets, nsamp = read_spt3g_obs(framefile)
+    return nsamp * len(dets.keys())
+
+
+def load_spt3g(comm, detranks, path, prefix, obsweight, todclass, **kwargs):
     """
     Loads an existing TOAST dataset in SPT3G format.
 
@@ -1079,13 +742,18 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
         path (str):  The top-level directory that contains subdirectories (one
             per observation).
         prefix (str):  The frame file prefix.
+        obsweight (function):  A function that returns the relative weight of
+            an observation, given the first frame file of that observation.
+            This will only be called on the root process.
         todclass (TOD): an SPT3G-compatible TOD class, which must have a
-            constructor that takes ......  All additional arguments should be keyword args.
+            constructor that takes the communicator, detranks, path and
+            prefix.  All additional arguments should be keyword args.
         kwargs: All additional arguments to this function are passed to the
             TOD constructor for each observation.
 
     Returns (toast.Data):
         The distributed data object.
+
     """
     if not available:
         raise RuntimeError("spt3g is not available")
@@ -1100,7 +768,7 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
 
     # One process gets the list of observation directories
     obslist = list()
-    obsweight = dict()
+    weight = dict()
 
     if cworld.rank == 0:
         for root, dirs, files in os.walk(path, topdown=True):
@@ -1110,25 +778,16 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
                 obslist.append(d)
                 # Read the observation frame to find the number of samples.
                 fr = os.path.join(path, d, "{}_{:08d}.g3".format(prefix, 0))
-                obs, props, dets, nsamp = read_spt3g_obs(fr)
-                obsweight[d] = nsamp * len(dets.keys())
+                weight[d] = obsweight(fr)
             break
         obslist = sorted(obslist)
 
     obslist = cworld.bcast(obslist, root=0)
-    obsweight = cworld.bcast(obsweight, root=0)
+    weight = cworld.bcast(weight, root=0)
 
     # Distribute observations based on number of samples
-    dweight = [ obsweight[x] for x in obslist ]
-    if cworld.rank == 0:
-        print("dweight = ",dweight, flush=True)
-    cworld.barrier()
-
+    dweight = [ weight[x] for x in obslist ]
     distobs = distribute_discrete(dweight, comm.ngroups)
-
-    if cworld.rank == 0:
-        print("distobs = ",distobs, flush=True)
-    cworld.barrier()
 
     # Distributed data
 
@@ -1142,10 +801,18 @@ def load_spt3g(comm, detranks, path, prefix, todclass, **kwargs):
         opath = os.path.join(path, obslist[ob])
         fr = os.path.join(opath, "{}_{:08d}.g3".format(prefix, 0))
         obs, props, dets, nsamp = read_spt3g_obs(fr)
-        if cgroup.rank == 0:
-            print("group {} creating TOD {}".format(comm.group, opath), flush=True)
-        obs["tod"] = todclass(cgroup, detranks, path=opath, prefix=prefix,
-            **kwargs)
+        # if cgroup.rank == 0:
+        #     print("group {} creating TOD {}".format(comm.group, opath), flush=True)
+        try:
+            obs["tod"] = todclass(cgroup, detranks, path=opath, prefix=prefix, **kwargs)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
+            print("".join(lines), flush=True)
+            MPI.COMM_WORLD.Abort()
+        #print("proc {} hit TOD {} barrier".format(comm.comm_world.rank, opath), flush=True)
+        comm.comm_group.barrier()
         data.obs.append(obs)
 
     return data
@@ -1158,29 +825,43 @@ class Op3GExport(Operator):
     Each observation directory will contain one frame file per sample chunk.
 
     Args:
-        path (str): The output top-level directory.
-        prefix (str): The frame file prefix.
+        outdir (str): the top-level output directory.
         todclass (TOD): a SPT3G-compatible TOD class, which must have a
             constructor with the proper required arguments and which takes
             additional arguments as keywords.
-        use_todchunks (bool): if True, use the chunk of the original TOD for
+        use_todchunks (bool): if True, use the chunks of the original TOD for
             data distribution.
         use_intervals (bool): if True, use the intervals in the observation
             dictionary for data distribution.
-        kwargs: All additional arguments to this constructor are passed to the
-            TOD constructor for each observation.
+        ctor_opts (dict): dictionary of options to pass as kwargs to the
+            TOD constructor.
+        export_opts (dict): dictionary of options to pass to the export method
+            of the TOD.
+        cache_name (str):  The name of the cache object (<name>_<detector>) in
+            the existing TOD to use for the detector timestream.  If None, use
+            the read* methods from the existing TOD.
+        cache_common (str):  The name of the cache object in the existing TOD
+            to use for common flags.  If None, use the read* methods from the
+            existing TOD.
+        cache_flag_name (str):   The name of the cache object
+            (<name>_<detector>) in the existing TOD to use for the flag
+            timestream.  If None, use the read* methods from the existing TOD.
 
     """
-    def __init__(self, path, prefix, todclass, use_todchunks=False,
-        use_intervals=False, **kwargs):
+    def __init__(self, outdir, todclass, use_todchunks=False,
+                 use_intervals=False, ctor_opts={}, export_opts={},
+                 cache_common=None, cache_name=None, cache_flag_name=None):
 
         if not available:
             raise RuntimeError("spt3g is not available")
 
-        self._path = os.path.abspath(path.rstrip("/"))
-        self._prefix = prefix
+        self._outdir = outdir
         self._todclass = todclass
-        self._kwargs = kwargs
+        self._ctor_opts = ctor_opts
+        self._export_opts = export_opts
+        self._cache_common = cache_common
+        self._cache_name = cache_name
+        self._cache_flag_name = cache_flag_name
         if use_todchunks and use_intervals:
             raise RuntimeError("cannot use both TOD chunks and Intervals")
         self._usechunks = use_todchunks
@@ -1213,8 +894,8 @@ class Op3GExport(Operator):
 
         # One process checks the path
         if cworld.rank == 0:
-            if not os.path.isdir(self._path):
-                os.makedirs(self._path)
+            if not os.path.isdir(self._outdir):
+                os.makedirs(self._outdir)
         cworld.barrier()
 
         for obs in data.obs:
@@ -1228,19 +909,25 @@ class Op3GExport(Operator):
             # Every observation must have a name...
             obsname = obs["name"]
 
+            if cworld.rank == 0:
+                print("Start spt3g data copy for {}".format(obsname), flush=True)
+
             # The existing TOD
             oldtod = obs["tod"]
             nsamp = oldtod.total_samples
             dets = oldtod.detoffset()
 
+            #print("rank {}, obs {}:  old tod has {} samps of {}".format(cworld.rank, obsname, nsamp, sorted(dets.keys())), flush=True)
+
             # Get any other metadata from the old TOD
             props.update(oldtod.meta())
 
             # First process in the group makes the output directory
-            obsdir = os.path.join(self._path, obsname)
+            obsdir = os.path.join(self._outdir, obsname)
             if cgroup.rank == 0:
                 if not os.path.isdir(obsdir):
                     os.makedirs(obsdir)
+            #print("rank {}, obs {}:  hit group barrier".format(cworld.rank, obsname), flush=True)
             cgroup.barrier()
 
             olddetranks, oldsampranks = oldtod.grid_size
@@ -1255,6 +942,7 @@ class Op3GExport(Operator):
                 except:
                     azel = False
             azel = cgroup.bcast(azel, root=0)
+            #print("rank {}, obs {}:  azel = {}".format(cworld.rank, obsname, azel), flush=True)
 
             # Determine data distribution chunks
             framesizes = None
@@ -1267,11 +955,52 @@ class Op3GExport(Operator):
                 framesizes = intervals_to_chunklist(obs["intervals"], nsamp)
 
             # The new TOD to handle exporting
-            tod = self._todclass(oldtod.mpicomm, olddetranks, path=obsdir,
-                prefix=self._prefix, detectors=dets,
+            tod = self._todclass(oldtod.mpicomm, olddetranks, detectors=dets,
                 samples=nsamp, framesizes=framesizes,
-                azel=azel, meta=props, **self._kwargs)
+                azel=azel, meta=props, **self._ctor_opts)
 
-            tod.export(oldtod)
+            # Copy data between TODs
+
+            #print("rank {}, obs {}:  start data copy".format(cworld.rank, obsname), flush=True)
+
+            tod.write_times(stamps=oldtod.read_times())
+            tod.write_boresight(data=oldtod.read_boresight())
+            if azel:
+                tod.write_boresight_azel(data=oldtod.read_boresight_azel())
+            tod.write_position(pos=oldtod.read_position())
+            tod.write_velocity(vel=oldtod.read_velocity())
+            if self._cache_common is None:
+                tod.write_common_flags(flags=oldtod.read_common_flags())
+            else:
+                ref = oldtod.cache.reference(self._cache_common)
+                tod.write_common_flags(flags=ref)
+                del ref
+            for d in oldtod.local_dets:
+                if self._cache_name is None:
+                    tod.write(detector=d, data=oldtod.read(detector=d))
+                else:
+                    ref = oldtod.cache.reference("{}_{}"\
+                                                 .format(self._cache_name, d))
+                    tod.write(detector=d, data=ref)
+                    del ref
+                if self._cache_flag_name is None:
+                    tod.write_flags(detector=d,
+                                    flags=oldtod.read_flags(detector=d))
+                else:
+                    ref = oldtod.cache.reference("{}_{}".format(\
+                                                 self._cache_flag_name, d))
+                    tod.write_flags(detector=d, flags=ref)
+                    del ref
+
+            #print("rank {}, obs {}:  end data copy".format(cworld.rank, obsname), flush=True)
+
+            if cgroup.rank == 0:
+                print("Start spt3g data export for {}".format(obsname), flush=True)
+
+            # Export data from cache.
+            tod.export(path=obsdir, **self._export_opts)
+
+            if cgroup.rank == 0:
+                print("Done spt3g export for {}".format(obsname), flush=True)
 
         return

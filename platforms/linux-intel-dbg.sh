@@ -5,6 +5,7 @@
 
 OPTS="$@"
 
+export PYTHON=python3
 export CC=mpiicc
 export CXX=mpiicpc
 export MPICC=mpiicc

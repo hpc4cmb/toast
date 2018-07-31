@@ -9,6 +9,7 @@
 
 OPTS="$@"
 
+export PYTHON=python3
 export CC=cc
 export CXX=CC
 export MPICC=cc

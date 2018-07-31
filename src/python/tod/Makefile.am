@@ -40,7 +40,9 @@ sim_det_dipole.py \
 sim_det_atm.py \
 sim_focalplane.py \
 tidas.py \
-spt3g.py
+tidas_utils.py \
+spt3g.py \
+spt3g_utils.py
 
 
 if HAVE_AM_MPI

@@ -1048,7 +1048,7 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
     if args.tidas is None:
         return
     autotimer = timing.auto_timer()
-    from toast.tod.tidas import OpTidasExport
+    from toast.tod.tidas import OpTidasExport, TODTidas
     tidas_path = os.path.abspath(args.tidas)
     comm.comm_world.Barrier()
     if comm.comm_world.rank == 0:
@@ -1056,9 +1056,10 @@ def output_tidas(args, comm, data, totalname, common_flag_name, flag_name):
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname,
-        common_flag_name=common_flag_name,
-        flag_name=flag_name, usedist=True)
+    export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
+                            use_todchunks=True,
+                            ctor_opts={"group_dets":"sim"},
+                            cache_name=totalname)
     export.exec(data)
 
     comm.comm_world.Barrier()

@@ -138,8 +138,8 @@ class MPILock(object):
                 self._win = MPI.Win.Create(self._waiting, comm=self._comm)
             except:
                 if self._debug:
-                    print("rank {} win create raised exception".format(self._rank),
-                        flush=True)
+                    print("rank {} win create raised exception"\
+                        .format(self._rank), flush=True)
                 status = 1
             self._checkabort(self._comm, status,
                 "shared memory allocation")

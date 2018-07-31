@@ -2,15 +2,15 @@
 # Serial compilers
 
 INTEL_COMP = yes
-CC = icc
-CXX = icpc
-FC = ifort
+CC = ${INTEL_PATH}/linux/bin/intel64/icc
+CXX = ${INTEL_PATH}/linux/bin/intel64/icpc
+FC = ${INTEL_PATH}/linux/bin/intel64/ifort
 
 # MPI compilers
 
-MPICC = cc
-MPICXX = CC
-MPIFC = ftn
+MPICC = ${CRAYPE_DIR}/bin/cc
+MPICXX = ${CRAYPE_DIR}/bin/CC
+MPIFC = ${CRAYPE_DIR}/bin/ftn
 MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
 MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
 MPI_CXXLIB = mpichcxx_intel

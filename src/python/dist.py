@@ -42,19 +42,38 @@ class Comm(object):
         if self._gsize == 0:
             self._gsize = self._wsize
 
-        self._ngroups = int(self._wsize / self._gsize)
-        if self._ngroups*self._gsize != self._wsize:
-            raise RuntimeError("Requested group size ")
-        self._group = int(self._wrank / self._gsize)
+        self._ngroups = self._wsize // self._gsize
 
+        if self._ngroups * self._gsize != self._wsize:
+            msg = "World communicator size ({}) is not evenly divisible "\
+                "by requested group size ({}).".format(self._wsize, self._gsize)
+            raise RuntimeError(msg)
+
+        self._group = self._wrank // self._gsize
         self._grank = self._wrank % self._gsize
 
+        # NOTE:  These checks should be unnecessary since we are raising an
+        # exception above for group sizes that do not evenly divide into the
+        # world size.
+
         if self._group >= self._ngroups:
+            # This process is in the pool of "leftover" processes after the
+            # splitting into groups.  Invalidate its group membership.
             self._group = MPI.UNDEFINED
             self._grank = MPI.UNDEFINED
+            self._gcomm = MPI.NULL
+            self._rcomm = MPI.NULL
+        else:
+            # This process is in a valid group.
+            if self._ngroups == 1:
+                # We just have one group with all processes.
+                self._gcomm = self._wcomm
+                self._rcomm = MPI.COMM_SELF
+            else:
+                # We need to split the communicator.
+                self._gcomm = self._wcomm.Split(self._group, self._grank)
+                self._rcomm = self._wcomm.Split(self._grank, self._group)
 
-        self._gcomm = self._wcomm.Split(self._group, self._grank)
-        self._rcomm = self._wcomm.Split(self._grank, self._group)
 
     @property
     def world_size(self):

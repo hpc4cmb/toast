@@ -644,8 +644,10 @@ def main():
                     from toast.tod.tidas import OpTidasExport, TODTidas
                     tidas_path = os.path.abspath(args.tidas)
                     export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
-                        use_intervals=False, group_dets="total",
-                        export_name="tot_signal")
+                                           use_todchunks=True,
+                                           create_opts={"group_dets":"sim"},
+                                           ctor_opts={"group_dets":"sim"},
+                                           cache_name="tot_signal")
                     export.exec(data)
 
                     comm.comm_world.barrier()
@@ -659,8 +661,9 @@ def main():
                 if args.spt3g is not None:
                     from toast.tod.spt3g import Op3GExport, TOD3G
                     spt3g_path = os.path.abspath(args.spt3g)
-                    export = Op3GExport(spt3g_path, "total", TOD3G,
-                        use_intervals=False, export_name="tot_signal")
+                    export = Op3GExport(spt3g_path, TOD3G, use_todchunks=True,
+                                        export_opts={"prefix" : "sim"},
+                                        cache_name="tot_signal")
                     export.exec(data)
 
                     comm.comm_world.barrier()

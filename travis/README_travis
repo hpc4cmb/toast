@@ -20,8 +20,8 @@ Requirements
 
 - A working docker installation.
 
-- A checkout of the TOAST source code that contains the updated travis scripts
-  in this directory.
+- A checkout of the TOAST source code that contains the updated travis
+  scripts in this directory.
 
 
 Procedure

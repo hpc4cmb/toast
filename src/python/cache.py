@@ -68,8 +68,7 @@ def toast2numpy(tbtype):
 
 
 class Cache(object):
-    """
-    Timestream data cache with explicit memory management.
+    """Timestream data cache with explicit memory management.
 
     Args:
         pymem (bool): if True, use python memory rather than external
@@ -99,8 +98,7 @@ class Cache(object):
 
 
     def clear(self, pattern=None):
-        """
-        Clear one or more buffers.
+        """Clear one or more buffers.
 
         Args:
             pattern (str): a regular expression to match against the buffer
@@ -135,8 +133,7 @@ class Cache(object):
 
 
     def create(self, name, type, shape):
-        """
-        Create a named data buffer of the given type and shape.
+        """Create a named data buffer of the given type and shape.
 
         Args:
             name (str): the name to assign to the buffer.
@@ -164,8 +161,8 @@ class Cache(object):
 
 
     def put(self, name, data, replace=False):
-        """
-        Create a named data buffer to hold the provided data.
+        """Create a named data buffer to hold the provided data.
+
         If replace is True, existing buffer of the same name is first
         destroyed. If replace is True and the name is an alias, it is
         promoted to a new data buffer.
@@ -200,8 +197,7 @@ class Cache(object):
 
 
     def add_alias(self, alias, name):
-        """
-        Add an alias to a name that already exists in the cache.
+        """Add an alias to a name that already exists in the cache.
 
         Args:
             alias (str): alias to create
@@ -221,8 +217,7 @@ class Cache(object):
 
 
     def destroy(self, name):
-        """
-        Deallocate the specified buffer.
+        """Deallocate the specified buffer.
 
         Only call this if all numpy arrays that reference the memory
         are out of use.
@@ -259,8 +254,7 @@ class Cache(object):
 
 
     def exists(self, name, return_ref=False):
-        """
-        Check whether a buffer exists.
+        """Check whether a buffer exists.
 
         Args:
             name (str): the name of the buffer to search for.
@@ -291,8 +285,7 @@ class Cache(object):
 
 
     def reference(self, name):
-        """
-        Return a numpy array pointing to the buffer.
+        """Return a numpy array pointing to the buffer.
 
         The returned array will wrap a pointer to the raw buffer, but will
         not claim ownership.  When the numpy array is garbage collected, it
@@ -312,8 +305,7 @@ class Cache(object):
 
 
     def keys(self):
-        """
-        Return a list of all the keys in the cache.
+        """Return a list of all the keys in the cache.
 
         Args:
 
@@ -325,8 +317,7 @@ class Cache(object):
 
 
     def aliases(self):
-        """
-        Return a dictionary of all the aliases to keys in the cache.
+        """Return a dictionary of all the aliases to keys in the cache.
 
         Args:
 
@@ -338,8 +329,7 @@ class Cache(object):
 
 
     def report(self, silent=False):
-        """
-        Report memory usage.
+        """Report memory usage.
 
         Args:
             silent (bool):  Count and return the memory without printing.

@@ -43,8 +43,6 @@ sudo apt-get install -y curl procps build-essential gfortran git subversion \
     libopenblas-dev \
     libcfitsio-dev \
     libhdf5-dev \
-    mpich \
-    libmpich-dev \
     python3 \
     libpython3-dev \
     python3-pip \
@@ -112,6 +110,20 @@ echo "" >> "${ENV_FILE}"
 pip3 install --target="${PREFIX}/lib/python${PYSITE}/site-packages" healpy
 
 pip3 install --target="${PREFIX}/lib/python${PYSITE}/site-packages" ephem
+
+pip3 install --target="${PREFIX}/lib/python${PYSITE}/site-packages" https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
+
+# Install our own MPICH
+
+curl -SL http://www.mpich.org/static/downloads/3.2/mpich-3.2.tar.gz \
+    | tar -xzf - \
+    && cd mpich-3.2 \
+    && CC="gcc" CXX="g++" FC="gfortran" \
+    CFLAGS="-O3 -fPIC -pthread" CXXFLAGS="-O3 -fPIC -pthread" FCFLAGS="-O3 -fPIC -pthread" \
+    ./configure --prefix="${PREFIX}" \
+    && make -j 4 && make install \
+    && cd .. \
+    && rm -rf mpich-3.2*
 
 # Install Latest mpi4py.  We want to build this ourselves so that it uses the
 # MPI version we have installed (MPICH or OpenMPI).  We also need a version
@@ -208,14 +220,6 @@ popd > /dev/null
     && cd ../.. \
     && rm -rf libsharp*
 
-# Install PySM
-
- git clone https://github.com/zonca/PySM_public.git --branch megarun_2017 --single-branch --depth 1 \
-    && cd PySM_public \
-    && python3 setup.py install --prefix="${PREFIX}" \
-    && cd .. \
-    && rm -rf PySM*
-
 # Install aatm
 
  curl -SL https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
@@ -232,6 +236,45 @@ popd > /dev/null
     && make -j 4 && make install \
     && cd .. \
     && rm -rf aatm*
+
+# The following commands to install libbz2 and boost are needed if you
+# plan on building the spt3g_software package.  Otherwise you can comment
+# them out.
+
+# Install libbz2
+
+ curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
+    | tar xjf - \
+    && cd bzip2-1.0.6 \
+    && patch -p1 < "${SDIR}/../rules/patch_bzip2" \
+    && CC="gcc" CFLAGS="-O3 -fPIC -pthread" \
+    make -f Makefile-toast \
+    && cp -a bzlib.h "${PREFIX}/include" \
+    && cp -a libbz2.so* "${PREFIX}/lib" \
+    && cd .. \
+    && rm -rf bzip2*
+
+# Install Boost
+
+ curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.bz2 \
+    -o boost_1_65_1.tar.bz2 \
+    && tar xjf boost_1_65_1.tar.bz2 \
+    && cd boost_1_65_1 \
+    && echo "" > tools/build/user-config.jam \
+    && echo "using mpi : mpicxx : <include>\"${PREFIX}/include\" <library-path>\"${PREFIX}/lib\" <find-shared-library>\"mpicxx\" <find-shared-library>\"mpi\" ;" >> tools/build/user-config.jam \
+    && echo "option jobs : 4 ;" >> tools/build/user-config.jam \
+    && BOOST_BUILD_USER_CONFIG=tools/build/user-config.jam \
+    BZIP2_INCLUDE="${PREFIX}/include" \
+    BZIP2_LIBPATH="${PREFIX}/lib" \
+    ./bootstrap.sh \
+    --with-toolset=gcc \
+    --with-python=python3.6 \
+    --prefix="${PREFIX}" \
+    && ./b2 --layout=tagged --user-config=./tools/build/user-config.jam\
+    $(python3.6-config --includes | sed -e 's/-I//g' -e 's/\([^[:space:]]\+\)/ include=\1/g') \
+    variant=release threading=multi link=shared runtime-link=shared install \
+    && cd .. \
+    && rm -rf boost*
 
 # Make sure that any python modules installed to our prefix are built into pyc
 # files- so that we can make those directories read-only

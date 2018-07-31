@@ -14,6 +14,7 @@ git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-
     -DCMAKE_C_FLAGS="@CFLAGS@" \
     -DCMAKE_CXX_FLAGS="@CXXFLAGS@" \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DBOOST_ROOT="@AUX_PREFIX@" \
     -DPYTHON_EXECUTABLE:FILEPATH="@CONDA_PREFIX@/bin/python" \
     .. \
     && make -j @MAKEJ@ \

@@ -30,13 +30,13 @@ class IntervalTest(MPITestCase):
     def test_tochunks(self):
         intrvls = regular_intervals(self.nint, self.start, self.first,
             self.rate, self.duration, self.gap)
-        totsamp = self.nint * ( int(self.duration * self.rate) + 1 ) \
-            + (self.nint - 1) * ( int(self.gap * self.rate) + 1 )
+        totsamp = self.nint * (intrvls[0].last - intrvls[0].first + 1)
+        totsamp += self.nint * (intrvls[1].first - intrvls[0].last - 1)
         sizes = intervals_to_chunklist(intrvls, totsamp,
             startsamp=self.first+10)
-        for it in intrvls:
-            print(it.first," ",it.last," ",it.start," ",it.stop)
-        print(sizes)
+        # for it in intrvls:
+        #     print(it.first," ",it.last," ",it.start," ",it.stop)
+        # print(sizes)
         nt.assert_equal(np.sum(sizes), totsamp)
 
 
