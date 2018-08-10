@@ -5,14 +5,13 @@
 from ctypes.util import find_library
 import os
 
-from toast.cache import Cache
-from toast.mpi import MPI
-from toast.op import Operator
-
 import ctypes as ct
 import healpy as hp
 import numpy as np
 import numpy.ctypeslib as npc
+from toast.cache import Cache
+from toast.mpi import MPI
+from toast.op import Operator
 import toast.timing as timing
 
 libmadam = None
@@ -181,6 +180,7 @@ class OpMadam(Operator):
         self._translate_timestamps = translate_timestamps
 
     def __del__(self):
+        self._cache.clear()
         if self._cached:
             libmadam.clear_caches()
             self._cached = False
