@@ -11,6 +11,8 @@ import os
 from ..dist import *
 from ..tod.tod import *
 
+from ..tod.applygain import *
+
 
 class TODTest(MPITestCase):
 
@@ -109,4 +111,46 @@ class TODTest(MPITestCase):
         for d in self.dets:
             data = self.tod.local_signal(d)
             np.testing.assert_almost_equal(data, self.datavec)
-        return
+
+class TestApplyGain(MPITestCase):
+
+    def setUp(self):
+        self.gain = {
+                "TIME":np.arange(10),
+                "CH-1":2*np.ones(10, dtype=np.float32),
+                "CH-2":3*np.ones(10, dtype=np.float32)
+                }
+        self.gain["CH-2"][5:] = 0
+    
+    def test_write_calibration_file(self):
+        write_calibration_file("test_cal.fits", gain)
+
+    def test_op_applygain(self):
+
+        self.outdir = "toast_test_output"
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.outdir):
+                os.mkdir(self.outdir)
+        self.mapdir = os.path.join(self.outdir, "dipole")
+        if self.comm.rank == 0:
+            if not os.path.isdir(self.mapdir):
+                os.mkdir(self.mapdir)
+
+        # Note: self.comm is set by the test infrastructure
+
+        self.toastcomm = Comm(world=self.comm)
+        self.data = Data(self.toastcomm)
+
+        self.detnames = ['bore']
+        self.dets = {
+            'CH-1' : np.array([0.0, 0.0, 1.0, 0.0]),
+            'CH-2' : np.array([0.0, 1.0, 0.0, 0.0])
+            }
+
+        # generate input data of ones for each of the 2 channels and 10 timestamps
+        # from 1 to 10, no need for pointing
+
+        op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+        op_apply_gain.exec(self.data)
+
+        # compare calibrated timelines
