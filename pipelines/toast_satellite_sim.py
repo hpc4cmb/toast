@@ -216,10 +216,11 @@ def main():
         "valid matplotlib color string." )
 
     parser.add_argument( "--gain", required=False, default=None,
-        help= "Calibrate the input timelines with a set of gains"
-        "FITS file containing one extension for each detector "
-        "named after the detector."
-        "Each extension has a TIME and a GAIN column.")
+        help= "Calibrate the input timelines with a set of gains from a"
+        "FITS file containing 3 extensions:"
+        "HDU named DETECTORS : table with list of detector names in a column named DETECTORS"
+        "HDU named TIME: table with common timestamps column named TIME"
+        "HDU named GAINS: 2D image of floats with one row per detector and one column per value.")
 
     parser.add_argument('--tidas',
                         required=False, default=None,
@@ -310,8 +311,9 @@ def main():
         if args.gain is not None:
             gain = {}
             with fits.open(args.gain) as f:
-                for ext in f[1:]:
-                    gain[ext.name.upper()] = {k:ext.data[k] for k in ["TIME", "GAIN"]}
+                gain["TIME"] = np.array(f["TIME"].data["TIME"])
+                for i_det, det_name in f["DETECTORS"].data["DETECTORS"]:
+                    gain[det_name] = np.array(f["GAINS"].data[i_det, :])
 
     if args.gain is not None:
         gain = comm.comm_world.bcast(gain, root=0)
