@@ -12,7 +12,7 @@ from ..dist import *
 from ..tod.tod import *
 
 from ..tod.applygain import *
-
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 class TODTest(MPITestCase):
 
@@ -123,7 +123,7 @@ class TestApplyGain(MPITestCase):
         self.gain["CH-2"][5:] = 0
     
     def test_write_calibration_file(self):
-        write_calibration_file("test_cal.fits", gain)
+        write_calibration_file("test_cal.fits", self.gain)
 
     def test_op_applygain(self):
 
@@ -139,18 +139,35 @@ class TestApplyGain(MPITestCase):
         # Note: self.comm is set by the test infrastructure
 
         self.toastcomm = Comm(world=self.comm)
-        self.data = Data(self.toastcomm)
+        self.data = create_distdata(self.comm, obs_per_group=1)
 
-        self.detnames = ['bore']
-        self.dets = {
-            'CH-1' : np.array([0.0, 0.0, 1.0, 0.0]),
-            'CH-2' : np.array([0.0, 1.0, 0.0, 0.0])
-            }
+        # Two detectors, default properties
+        self.ndet = 2
+        self.dets = ["1a", "1b"]
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
+            boresight_focalplane(self.ndet)
+
+        # Pick some number of samples per observation
+        self.samples_per_obs = 10
+
+        # (there is only one observation per group- see above)
+        self.data.obs[0]['tod'] = TODCache(self.data.comm.comm_group,
+            self.dets, self.samples_per_obs)
 
         # generate input data of ones for each of the 2 channels and 10 timestamps
         # from 1 to 10, no need for pointing
 
-        op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+        for obs in self.data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                tod.write(detector=det, data=np.ones(tod.local_samples[1]))
+
+        for obs in self.data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                tod.read(detector=det)
+
+        op_apply_gain = OpApplyGain(self.gain, name="signal")
         op_apply_gain.exec(self.data)
 
         # compare calibrated timelines
