@@ -149,6 +149,7 @@ class TestApplyGain(MPITestCase):
 
         # Pick some number of samples per observation
         self.samples_per_obs = 10
+        time_stamps = np.arange(self.samples_per_obs)
 
         # (there is only one observation per group- see above)
         self.data.obs[0]['tod'] = TODCache(self.data.comm.comm_group,
@@ -159,15 +160,17 @@ class TestApplyGain(MPITestCase):
 
         for obs in self.data.obs:
             tod = obs['tod']
+            tod.write_times(stamps=time_stamps)
             for det in tod.local_dets:
                 tod.write(detector=det, data=np.ones(tod.local_samples[1]))
 
-        for obs in self.data.obs:
-            tod = obs['tod']
-            for det in tod.local_dets:
-                tod.read(detector=det)
 
         op_apply_gain = OpApplyGain(self.gain, name="toast_tod_detdata")
         op_apply_gain.exec(self.data)
 
         # compare calibrated timelines
+
+        for obs in self.data.obs:
+            tod = obs['tod']
+            for det in tod.local_dets:
+                tod.read(detector=det, name="toast_tod_detdata")
