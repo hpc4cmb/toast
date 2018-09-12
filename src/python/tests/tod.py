@@ -167,7 +167,7 @@ class TestApplyGain(MPITestCase):
             for det in tod.local_dets:
                 tod.read(detector=det)
 
-        op_apply_gain = OpApplyGain(self.gain, name="signal")
+        op_apply_gain = OpApplyGain(self.gain, name="toast_tod_detdata")
         op_apply_gain.exec(self.data)
 
         # compare calibrated timelines
