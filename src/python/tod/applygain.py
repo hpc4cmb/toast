@@ -89,7 +89,7 @@ class OpApplyGain(Operator):
                 ref = tod.local_signal(det, self._name)
                 obs_times = tod.read_times()
 
-                calibrate(obs_times, ref, self._gain["TIME"], self._gain[det.upper()], order=0, inplace=True)
+                calibrate(obs_times, ref, self._gain["TIME"], self._gain[det], order=0, inplace=True)
 
                 assert np.isnan(ref).sum() == 0, "The signal timestream includes NaN"
 
