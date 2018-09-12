@@ -117,10 +117,10 @@ class TestApplyGain(MPITestCase):
     def setUp(self):
         self.gain = {
                 "TIME":np.arange(10),
-                "CH-1":2*np.ones(10, dtype=np.float32),
-                "CH-2":3*np.ones(10, dtype=np.float32)
+                "1a":2*np.ones(10, dtype=np.float32),
+                "1b":3*np.ones(10, dtype=np.float32)
                 }
-        self.gain["CH-2"][5:] = 0
+        self.gain["1b"][5:] = 0
     
     def test_write_calibration_file(self):
         write_calibration_file("test_cal.fits", self.gain)
