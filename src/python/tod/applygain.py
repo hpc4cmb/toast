@@ -15,7 +15,10 @@ from astropy.io import fits
 
 def write_calibration_file(filename, gain):
     """
+    Write gains to a FITS file in the standard TOAST format
+
     Args:
+        filename (string): output filename, overwritten by default
         gain (dict):  Dictionary, key "TIME" has the common timestamps,
             other keys are channel names their values are the gains
     """
