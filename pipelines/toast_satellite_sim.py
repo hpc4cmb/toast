@@ -17,6 +17,7 @@ import traceback
 import pickle
 
 import numpy as np
+from astropy.io import fits
 
 import toast
 import toast.tod as tt
@@ -214,6 +215,13 @@ def main():
         "(float).  For optional plotting, the key \"color\" can specify a "
         "valid matplotlib color string." )
 
+    parser.add_argument( "--gain", required=False, default=None,
+        help= "Calibrate the input timelines with a set of gains from a"
+        "FITS file containing 3 extensions:"
+        "HDU named DETECTORS : table with list of detector names in a column named DETECTORS"
+        "HDU named TIME: table with common timestamps column named TIME"
+        "HDU named GAINS: 2D image of floats with one row per detector and one column per value.")
+
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
@@ -279,6 +287,7 @@ def main():
     start = MPI.Wtime()
 
     fp = None
+    gain = None
 
     # Load focalplane information
 
@@ -298,6 +307,17 @@ def main():
         else:
             with open(args.fp, "rb") as p:
                 fp = pickle.load(p)
+
+        if args.gain is not None:
+            gain = {}
+            with fits.open(args.gain) as f:
+                gain["TIME"] = np.array(f["TIME"].data["TIME"])
+                for i_det, det_name in f["DETECTORS"].data["DETECTORS"]:
+                    gain[det_name] = np.array(f["GAINS"].data[i_det, :])
+
+    if args.gain is not None:
+        gain = comm.comm_world.bcast(gain, root=0)
+
     fp = comm.comm_world.bcast(fp, root=0)
 
     stop = MPI.Wtime()
@@ -630,6 +650,10 @@ def main():
                     elapsed), flush=True)
             start = stop
 
+            if gain is not None:
+                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+                op_apply_gain.exec(data)
+
             if mc == firstmc:
                 # For the first realization, optionally export the
                 # timestream data to a TIDAS volume.
@@ -746,6 +770,10 @@ def main():
             # add sky signal
             if has_signal:
                 add_sky_signal(args, comm, data, totalname="tot_signal", signalname=signalname)
+
+            if gain is not None:
+                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+                op_apply_gain.exec(data)
 
             comm.comm_world.barrier()
             stop = MPI.Wtime()

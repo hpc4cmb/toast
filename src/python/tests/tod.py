@@ -11,6 +11,8 @@ import os
 from ..dist import *
 from ..tod.tod import *
 
+from ..tod.applygain import *
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 class TODTest(MPITestCase):
 
@@ -109,4 +111,3 @@ class TODTest(MPITestCase):
         for d in self.dets:
             data = self.tod.local_signal(d)
             np.testing.assert_almost_equal(data, self.datavec)
-        return
