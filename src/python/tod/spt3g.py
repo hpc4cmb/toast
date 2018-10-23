@@ -535,11 +535,11 @@ class TOD3G(TOD):
             frm_sizes = [ self._frame_sizes[foff+f] \
                            for f in range(nframes) ]
 
-            if self.mpicomm.rank == 0:
-                print("  {} file {}".format(self._path, ifile), flush=True)
-                print("    start frame = {}, nframes = {}".format(foff, nframes), flush=True)
-                print("    frame offs = ",frm_offsets, flush=True)
-                print("    frame sizes = ",frm_sizes, flush=True)
+            # if self.mpicomm.rank == 0:
+            #     print("  {} file {}".format(self._path, ifile), flush=True)
+            #     print("    start frame = {}, nframes = {}".format(foff, nframes), flush=True)
+            #     print("    frame offs = ",frm_offsets, flush=True)
+            #     print("    frame sizes = ",frm_sizes, flush=True)
 
             fdata = s3utils.cache_to_frames(self, foff, nframes, frm_offsets,
                                            frm_sizes,
@@ -909,8 +909,8 @@ class Op3GExport(Operator):
             # Every observation must have a name...
             obsname = obs["name"]
 
-            if cworld.rank == 0:
-                print("Start spt3g data copy for {}".format(obsname), flush=True)
+            # if cworld.rank == 0:
+            #     print("Start spt3g data copy for {}".format(obsname), flush=True)
 
             # The existing TOD
             oldtod = obs["tod"]
@@ -994,13 +994,13 @@ class Op3GExport(Operator):
 
             #print("rank {}, obs {}:  end data copy".format(cworld.rank, obsname), flush=True)
 
-            if cgroup.rank == 0:
-                print("Start spt3g data export for {}".format(obsname), flush=True)
+            # if cgroup.rank == 0:
+            #     print("Start spt3g data export for {}".format(obsname), flush=True)
 
             # Export data from cache.
             tod.export(path=obsdir, **self._export_opts)
 
-            if cgroup.rank == 0:
-                print("Done spt3g export for {}".format(obsname), flush=True)
+            # if cgroup.rank == 0:
+            #     print("Done spt3g export for {}".format(obsname), flush=True)
 
         return

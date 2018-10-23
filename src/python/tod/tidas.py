@@ -440,7 +440,8 @@ class TODTidas(TOD):
         stop = MPI.Wtime()
         dur = stop - start
         if (mpicomm is None) or (mpicomm.rank == 0):
-            print("{}: {:.3f} s".format(msg, dur), flush=True)
+            pass
+            #print("{}: {:.3f} s".format(msg, dur), flush=True)
         return stop
 
 
@@ -1022,7 +1023,8 @@ class OpTidasExport(Operator):
             stop = MPI.Wtime()
             dur = stop - start
             if mcomm.rank == 0:
-                print("{}: {:.3f} s".format(msg, dur), flush=True)
+                pass
+                #print("{}: {:.3f} s".format(msg, dur), flush=True)
             return stop
 
         tm = MPI.Wtime()
