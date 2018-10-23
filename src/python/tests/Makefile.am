@@ -41,6 +41,7 @@ smooth.py \
 ops_polyfilter.py \
 ops_groundfilter.py \
 ops_gainscrambler.py \
+ops_applygain.py \
 ops_memorycounter.py \
 psd_math.py \
 qarray.py \

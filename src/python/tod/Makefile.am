@@ -29,6 +29,7 @@ noise.py \
 polyfilter.py \
 groundfilter.py \
 gainscrambler.py \
+applygain.py \
 memorycounter.py \
 interval.py \
 sim_interval.py \
