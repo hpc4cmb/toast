@@ -26,6 +26,13 @@ import toast.timing as timing
 import toast.tod as tt
 import toast.todmap as ttm
 
+if tt.tidas_available:
+    from toast.tod.tidas import OpTidasExport, TODTidas
+
+if tt.spt3g_available:
+    from toast.tod.spt3g import Op3GExport, TOD3G
+
+
 if 'TOAST_STARTUP_DELAY' in os.environ:
     import numpy as np
     import time
@@ -282,6 +289,10 @@ def parse_arguments(comm):
     if args.tidas is not None:
         if not tt.tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
+
+    if args.spt3g is not None:
+        if not tt.spt3g_available:
+            raise RuntimeError("SPT3G not found- cannot export")
 
     if comm.comm_world.rank == 0:
         print('\nAll parameters:')
@@ -1245,7 +1256,7 @@ def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
     autotimer = timing.auto_timer()
-    from toast.tod.tidas import OpTidasExport, TODTidas
+
     tidas_path = os.path.abspath(args.tidas)
 
     comm.comm_world.Barrier()
@@ -1275,7 +1286,7 @@ def output_spt3g(args, comm, data, totalname):
     if args.spt3g is None:
         return
     autotimer = timing.auto_timer()
-    from toast.tod.spt3g import Op3GExport, TOD3G
+
     spt3g_path = os.path.abspath(args.spt3g)
 
     comm.comm_world.Barrier()

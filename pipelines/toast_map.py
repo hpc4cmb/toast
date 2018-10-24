@@ -28,6 +28,12 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
+if tt.tidas_available:
+    from toast.tod import tidas as tds
+
+if tt.spt3g_available:
+    from toast.tod import spt3g as s3g
+
 
 def elapsed(mcomm, start, msg):
     mcomm.barrier()
@@ -176,7 +182,6 @@ def main():
     data = None
 
     if args.tidas is not None:
-        from toast.tod import tidas as tds
         if args.tidas_detgroup is None:
             raise RuntimeError("you must specify the detector group")
         data = tds.load_tidas(comm, comm.group_size, args.tidas,
@@ -185,7 +190,6 @@ def main():
                               distintervals="chunks")
 
     if args.spt3g is not None:
-        from toast.tod import spt3g as s3g
         if args.spt3g_prefix is None:
             raise RuntimeError("you must specify the frame file prefix")
         data = s3g.load_spt3g(comm, comm.group_size, args.spt3g,

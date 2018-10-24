@@ -29,6 +29,13 @@ import toast.timing as timing
 
 from toast.vis import set_backend
 
+if tt.tidas_available:
+    from toast.tod.tidas import OpTidasExport, TODTidas
+
+if tt.spt3g_available:
+    from toast.tod.spt3g import Op3GExport, TOD3G
+
+
 def add_sky_signal(args, comm, data, totalname, signalname):
     """ Add signalname to totalname in the obs tod
 
@@ -262,6 +269,10 @@ def main():
     if args.tidas is not None:
         if not tt.tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
+
+    if args.spt3g is not None:
+        if not tt.spt3g_available:
+            raise RuntimeError("SPT3G not found- cannot export")
 
     groupsize = args.groupsize
     if groupsize == 0:
@@ -665,7 +676,6 @@ def main():
                 # which would ensure breaks in the exported data at
                 # acceptable places.
                 if args.tidas is not None:
-                    from toast.tod.tidas import OpTidasExport, TODTidas
                     tidas_path = os.path.abspath(args.tidas)
                     export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
                                            use_todchunks=True,
@@ -683,7 +693,6 @@ def main():
                     start = stop
 
                 if args.spt3g is not None:
-                    from toast.tod.spt3g import Op3GExport, TOD3G
                     spt3g_path = os.path.abspath(args.spt3g)
                     export = Op3GExport(spt3g_path, TOD3G, use_todchunks=True,
                                         export_opts={"prefix" : "sim"},
