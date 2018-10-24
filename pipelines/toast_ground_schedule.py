@@ -7,15 +7,15 @@
 # This script creates a CES schedule file that can be used as input
 # to toast_ground_sim.py
 
+import argparse
 from datetime import datetime
 import os
 
-import argparse
 import dateutil.parser
-import ephem
 from pylab import cm
 from scipy.constants import degree
 
+import ephem
 import healpy as hp
 import numpy as np
 import toast.qarray as qa
@@ -47,6 +47,8 @@ class Patch(object):
     step = -1
     az_min = 0
     _area = None
+    current_el_min = 0
+    current_el_max = 0
 
     def __init__(self, name, weight, corners,
                  el_min=0, el_max=np.pi / 2, el_step=0,
@@ -252,23 +254,36 @@ def prioritize(args, visible):
                     hits1 = visible[j].rising_time
                 else:
                     hits1 = visible[j].rising_hits
+                el1 = np.degrees(visible[j].current_el_max)
             else:
                 if args.equalize_time:
                     hits1 = visible[j].setting_time
                 else:
                     hits1 = visible[j].setting_hits
+                el1 = np.degrees(visible[j].current_el_min)
             if patch_is_rising(visible[j + 1]):
                 if args.equalize_time:
                     hits2 = visible[j + 1].rising_time
                 else:
                     hits2 = visible[j + 1].rising_hits
+                el2 = np.degrees(visible[j + 1].current_el_max)
             else:
                 if args.equalize_time:
                     hits2 = visible[j + 1].setting_time
                 else:
                     hits2 = visible[j + 1].setting_hits
+                el2 = np.degrees(visible[j + 1].current_el_min)
+            # Patch with the lower weight goes first.  Having more
+            # earlier observing time and lower observing elevation
+            # will increase the weight.
             weight1 = (hits1 + 1) * visible[j].weight
             weight2 = (hits2 + 1) * visible[j + 1].weight
+            if args.elevation_penalty_limit > 0:
+                lim = args.elevation_penalty_limit
+                if el1 < lim:
+                    weight1 *= (lim / el1) ** args.elevation_penalty_power
+                if el2 < lim:
+                    weight2 *= (lim / el2) ** args.elevation_penalty_power
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
     if args.debug:
@@ -912,6 +927,8 @@ def get_visible(args, observer, sun, moon, patches, el_min):
         #            lonlat=True, coord='C', color=color, lw=lw)
         # DEBUG end
         if in_view:
+            patch.current_el_min = patch_el_min
+            patch.current_el_max = patch_el_max
             if not args.delay_sso_check:
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
@@ -1085,6 +1102,13 @@ def parse_args():
                         required=False, default=0, type=np.float,
                         help='Random fractional margin [0..1] added to the '
                         'scans to smooth out edge effects')
+    parser.add_argument('--elevation_penalty_limit',
+                        required=False, default=0, type=np.float,
+                        help='Assign a penalty to observing elevations below '
+                        'this limit [degrees]')
+    parser.add_argument('--elevation_penalty_power',
+                        required=False, default=2, type=np.float,
+                        help='Power in the elevation penalty function [> 0] ')
     parser.add_argument('--equalize_area',
                         required=False, default=False, action='store_true',
                         help='Adjust priorities to account for patch area')
