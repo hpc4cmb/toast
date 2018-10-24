@@ -71,8 +71,17 @@ class TOD(object):
         # communicators, since this is useful for gathering data in some
         # operations.
 
-        self._comm_row = self._mpicomm.Split(self._rank_det, self._rank_samp)
-        self._comm_col = self._mpicomm.Split(self._rank_samp, self._rank_det)
+        if self._sampranks == 1:
+            self._comm_row = MPI.COMM_SELF
+        else:
+            self._comm_row = self._mpicomm.Split(self._rank_det,
+                                                 self._rank_samp)
+
+        if self._detranks == 1:
+            self._comm_col = MPI.COMM_SELF
+        else:
+            self._comm_col = self._mpicomm.Split(self._rank_samp,
+                                                 self._rank_det)
 
         self._dets = detectors
 
@@ -460,6 +469,16 @@ class TOD(object):
             "class method")
         return
 
+    def _get_boresight_azel(self, start, n):
+        raise NotImplementedError("Fell through to TOD._get_boresight_azel base"
+            "class method")
+        return None
+
+    def _put_boresight_azel(self, start, data):
+        raise NotImplementedError("Fell through to TOD._put_boresight_azel base"
+            "class method")
+        return
+
     def _get_pntg(self, detector, start, n):
         raise NotImplementedError(
             "Fell through to TOD._get_pntg base class method")
@@ -626,6 +645,70 @@ class TOD(object):
             raise ValueError("local sample range is invalid")
         self._put_boresight(local_start, data, **kwargs)
         return
+
+
+    def read_boresight_azel(self, local_start=0, n=0, **kwargs):
+        """
+        Read boresight Azimuth / Elevation quaternion pointing.
+
+        This returns the pointing of the boresight in the horizontal coordinate
+        system, if it exists.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            A 2D array of shape (n, 4)
+
+        Raises:
+            NotImplementedError: if the telescope is not on the Earth.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot read boresight- process has no local samples")
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start+n-1))
+        return self._get_boresight_azel(local_start, n, **kwargs)
+
+
+    def write_boresight_azel(self, local_start=0, data=None, **kwargs):
+        """Write boresight Azimuth / Elevation quaternion pointing.
+
+        This writes the quaternion pointing for the boresight in the horizontal
+        coordinate system, if it exists.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            data (array): 2D array of quaternions with shape[1] == 4.
+
+        Raises:
+            RuntimeError or AttributeError : if the telescope is not on
+                the Earth.
+
+        """
+        autotimer = timing.auto_timer(type(self).__name__)
+        if len(data.shape) != 2:
+            raise ValueError("data should be a 2D array")
+        if data.shape[1] != 4:
+            raise ValueError("data should have second dimension of size 4")
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot write boresight- process has no local samples")
+        if (local_start < 0) \
+           or (local_start + data.shape[0] > self.local_samples[1]):
+            raise ValueError("local sample range is invalid")
+        self._put_boresight_azel(local_start, data, **kwargs)
+        return
+
 
     # Read and write detector data
 
@@ -1002,6 +1085,7 @@ class TODCache(TOD):
         samples (int):  The total number of samples.
         detindx (dict): the detector indices for use in simulations.  Default is
             { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
+        detquats (dict):  Dictionary of detector quaternions.
         detranks (int):  The dimension of the process grid in the detector
             direction.  The MPI communicator size must be evenly divisible
             by this number.
@@ -1025,6 +1109,7 @@ class TODCache(TOD):
         self._pref_detflags = "toast_tod_detflags_"
         self._pref_detpntg = "toast_tod_detpntg_"
         self._bore = "toast_boresight"
+        self._bore_azel = "toast_boresight_azel"
         self._common = "toast_tod_common_flags"
         self._stamps = "toast_tod_stamps"
         self._pos = "toast_tod_pos"
@@ -1077,6 +1162,20 @@ class TODCache(TOD):
             self.cache.create(self._bore, np.float64,
                 (self.local_samples[1],4))
         ref = self.cache.reference(self._bore)
+        ref[start:(start+data.shape[0]),:] = data
+        return
+
+    def _get_boresight_azel(self, start, n):
+        if not self.cache.exists(self._bore_azel):
+            raise ValueError("boresight not yet written")
+        ref = self.cache.reference(self._bore_azel)[start:start+n,:]
+        return ref
+
+    def _put_boresight_azel(self, start, data):
+        if not self.cache.exists(self._bore_azel):
+            self.cache.create(self._bore_azel, np.float64,
+                (self.local_samples[1],4))
+        ref = self.cache.reference(self._bore_azel)
         ref[start:(start+data.shape[0]),:] = data
         return
 

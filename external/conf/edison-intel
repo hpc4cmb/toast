@@ -2,15 +2,15 @@
 # Serial compilers
 
 INTEL_COMP = yes
-CC = icc
-CXX = icpc
-FC = ifort
+CC = ${INTEL_PATH}/linux/bin/intel64/icc
+CXX = ${INTEL_PATH}/linux/bin/intel64/icpc
+FC = ${INTEL_PATH}/linux/bin/intel64/ifort
 
 # MPI compilers
 
-MPICC = cc
-MPICXX = CC
-MPIFC = ftn
+MPICC = ${CRAYPE_DIR}/bin/cc
+MPICXX = ${CRAYPE_DIR}/bin/CC
+MPIFC = ${CRAYPE_DIR}/bin/ftn
 MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
 MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
 MPI_CXXLIB = mpichcxx_intel
@@ -30,7 +30,10 @@ LDFLAGS = -lpthread -liomp5
 
 # Are we doing a cross-compile?
 
-CROSS = 
+CROSS =
+
+# Parallel builds
+MAKEJ = 4
 
 # Miniconda install
 
@@ -41,7 +44,7 @@ PYVERSION = 3.6
 # For BLAS/LAPACK, use MKL
 
 BLAS = -L${MKLROOT}/lib/intel64 -lmkl_rt -liomp5 -lpthread -limf -lsvml -ldl
-LAPACK = 
+LAPACK =
 
 # Boost toolchain name
 
@@ -51,4 +54,3 @@ BOOSTCHAIN = intel-linux
 
 CHGRP = hpcosmo
 CHMOD = a+rX,g-w,o-w
-

@@ -26,6 +26,13 @@ import toast.timing as timing
 import toast.tod as tt
 import toast.todmap as ttm
 
+if tt.tidas_available:
+    from toast.tod.tidas import OpTidasExport, TODTidas
+
+if tt.spt3g_available:
+    from toast.tod.spt3g import Op3GExport, TOD3G
+
+
 if 'TOAST_STARTUP_DELAY' in os.environ:
     import numpy as np
     import time
@@ -262,6 +269,9 @@ def parse_arguments(comm):
     parser.add_argument('--tidas',
                         required=False, default=None,
                         help='Output TIDAS export path')
+    parser.add_argument('--spt3g',
+                        required=False, default=None,
+                        help='Output SPT3G export path')
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
@@ -279,6 +289,10 @@ def parse_arguments(comm):
     if args.tidas is not None:
         if not tt.tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
+
+    if args.spt3g is not None:
+        if not tt.spt3g_available:
+            raise RuntimeError("SPT3G not found- cannot export")
 
     if comm.comm_world.rank == 0:
         print('\nAll parameters:')
@@ -729,7 +743,7 @@ def expand_pointing(args, comm, data, mem_counter):
 
     # Only purge the pointing if we are NOT going to export the
     # data to a TIDAS volume
-    if args.tidas is None:
+    if (args.tidas is None) and (args.spt3g is None):
         for ob in data.obs:
             tod = ob['tod']
             tod.free_radec_quats()
@@ -1242,22 +1256,55 @@ def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
     autotimer = timing.auto_timer()
-    from toast.tod.tidas import OpTidasExport
+
     tidas_path = os.path.abspath(args.tidas)
+
     comm.comm_world.Barrier()
     if comm.comm_world.rank == 0:
-        print('Exporting TOD to a TIDAS volume at {}'.format(tidas_path),
+        print('Exporting data to a TIDAS volume at {}'.format(tidas_path),
               flush=args.flush)
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, name=totalname, usedist=True)
+    export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
+                            use_intervals=True,
+                            create_opts={"group_dets":"sim"},
+                            ctor_opts={"group_dets":"sim"},
+                            cache_name=totalname)
     export.exec(data)
 
     comm.comm_world.Barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Wrote simulated TOD to {}:{} in {:.2f} s'
-              ''.format(tidas_path, totalname,
+        print('Wrote simulated data to {}:{} in {:.2f} s'
+              ''.format(tidas_path, "total",
+                        stop - start), flush=args.flush)
+    del autotimer
+    return
+
+
+def output_spt3g(args, comm, data, totalname):
+    if args.spt3g is None:
+        return
+    autotimer = timing.auto_timer()
+
+    spt3g_path = os.path.abspath(args.spt3g)
+
+    comm.comm_world.Barrier()
+    if comm.comm_world.rank == 0:
+        print('Exporting data to SPT3G directory tree at {}'.format(spt3g_path),
+              flush=args.flush)
+    start = MPI.Wtime()
+
+    export = Op3GExport(spt3g_path, TOD3G, use_intervals=True,
+                        export_opts={"prefix" : "sim"},
+                        cache_name=totalname)
+    export.exec(data)
+
+    comm.comm_world.Barrier()
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print('Wrote simulated data to {}:{} in {:.2f} s'
+              ''.format(spt3g_path, "total",
                         stop - start), flush=args.flush)
     del autotimer
     return
@@ -1510,8 +1557,9 @@ def main():
 
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally
-                # export the timestream data to a TIDAS volume.
+                # export the timestream data.
                 output_tidas(args, comm, data, totalname)
+                output_spt3g(args, comm, data, totalname)
 
             outpath = setup_output(args, comm, mc, freq)
 

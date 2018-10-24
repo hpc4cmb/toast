@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -494,7 +494,8 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
         dets (dict): dictionary of detector quaternions.
         width (float): width of plot in degrees.
         height (float): height of plot in degrees.
-        outfile (str): output PNG path.
+        outfile (str): output PNG path.  If None, then matplotlib will be
+            used for inline plotting.
         fwhm (dict): dictionary of detector beam FWHM in arcminutes, used
             to draw the circles to scale.
         facecolor (dict): dictionary of color values for the face of each
@@ -504,9 +505,10 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
         labels (dict): plot this text in the center of each pixel.
 
     """
-    import matplotlib
-    # Force matplotlib to not use any Xwindows backend.
-    matplotlib.use("Agg")
+    if outfile is not None:
+        import matplotlib
+        # Force matplotlib to not use any Xwindows backend.
+        matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     xfigsize = int(5 * width)
@@ -581,6 +583,9 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
                 verticalalignment='center',
                 bbox=dict(fc='w', ec='none', pad=1, alpha=1.0))
 
-    plt.savefig(outfile)
-    plt.close()
+    if outfile is None:
+        plt.show()
+    else:
+        plt.savefig(outfile)
+        plt.close()
     return

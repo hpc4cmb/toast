@@ -1,4 +1,4 @@
-SUBDIRS = 
+SUBDIRS =
 
 # Initialize compile and linking flags
 
@@ -40,7 +40,10 @@ sim_det_map.py \
 sim_det_dipole.py \
 sim_det_atm.py \
 sim_focalplane.py \
-tidas.py
+tidas.py \
+tidas_utils.py \
+spt3g.py \
+spt3g_utils.py
 
 
 if HAVE_AM_MPI
@@ -52,4 +55,3 @@ EXTRA_DIST = conviqt_example.txt
 
 clean-local :
 	@rm -f *.pyc
-

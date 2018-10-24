@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -46,6 +46,10 @@ from . import tod_satellite as testtodsat
 from ..tod import tidas_available
 if tidas_available:
     from . import tidas as testtidas
+
+from ..tod import spt3g_available
+if spt3g_available:
+    from . import spt3g as testspt3g
 
 from ..map import libsharp_available
 if libsharp_available:
@@ -105,14 +109,19 @@ def test(name=None, verbosity=2):
         suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         suite.addTest( loader.loadTestsFromModule(testmapground) )
         suite.addTest( loader.loadTestsFromModule(testbinned) )
-        # if tidas_available:
-        #     suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if tidas_available:
+            suite.addTest( loader.loadTestsFromModule(testtidas) )
+        if spt3g_available:
+            suite.addTest( loader.loadTestsFromModule(testspt3g) )
         if libsharp_available:
             suite.addTest( loader.loadTestsFromModule(testopspysm) )
             suite.addTest( loader.loadTestsFromModule(testsmooth) )
     elif name != "ctoast":
         if (name == "tidas") and (not tidas_available):
             print("Cannot run TIDAS tests- package not available")
+            return
+        elif (name == "spt3g") and (not spt3g_available):
+            print("Cannot run SPT3G tests- package not available")
             return
         else:
             modname = "toast.tests.{}".format(name)

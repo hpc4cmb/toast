@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -171,3 +171,47 @@ class OpFlagGaps(Operator):
             commonflags[:] |= gapflags
 
         return
+
+
+def intervals_to_chunklist(intervals, nsamp, startsamp=0):
+    """Create a list of contiguous sample chunks from intervals.
+
+    Given a list of (possibly discontinuous) intervals, construct a
+    list of contiguous chunks of samples.  The chunks are defined between
+    the starting points of each interval.  An additional chunk at the
+    beginning and end are added if necessary so that the sum of chunks
+    equals the total number of samples.
+
+    Args:
+        intervals (list): sorted list of Interval objects.
+        nsamp (int): the number of samples to consider.
+        startsamp (int): the first sample to consider.
+
+    Returns:
+        (list): list of sample chunks.
+
+    """
+    chunks = list()
+    previous = None
+    for it in intervals:
+        if it.last < startsamp:
+            continue
+        if it.first >= (startsamp + nsamp):
+            continue
+        if previous is None:
+            # We are at the first interval which overlaps our
+            # sample range.
+            if it.first <= startsamp:
+                previous = startsamp
+            else:
+                chunks.append(it.first - startsamp)
+                previous = it.first
+        else:
+            chunks.append(it.first - previous)
+            previous = it.first
+    # Handle final chunk
+    chunks.append(intervals[-1].last - previous + 1)
+    sm = np.sum(chunks)
+    if sm < nsamp:
+        chunks.append(nsamp - sm)
+    return chunks

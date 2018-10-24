@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -758,6 +758,12 @@ class TODGround(TOD):
         super().__init__(mpicomm, self._detlist, samples, sampsizes=[samples],
                          sampbreaks=None, meta=props, **kwargs)
 
+        self._AU = 149597870.7
+        self._radperday = 0.01720209895
+        self._radpersec = self._radperday / 86400.0
+        self._radinc = self._radpersec / self._rate
+        self._earthspeed = self._radpersec * self._AU
+
         if self._report_timing:
             mpicomm.Barrier()
             tstop = MPI.Wtime()
@@ -1180,7 +1186,14 @@ class TODGround(TOD):
                 raise RuntimeError("Boresight radec pointing was purged.")
             return self._boresight[start:start+n]
 
+    def _get_boresight_azel(self, start, n):
+        return self._get_boresight(start, n, azel=True)
+
     def _put_boresight(self, start, data):
+        raise RuntimeError("cannot write boresight to simulated data streams")
+        return
+
+    def _put_boresight_azel(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
 

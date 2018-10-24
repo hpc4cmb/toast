@@ -1,7 +1,7 @@
 //
 // Time Ordered Astrophysics Scalable Tools (TOAST)
 //
-// Copyright (c) 2015-2017, The Regents of the University of California
+// Copyright (c) 2015-2018, The Regents of the University of California
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without

@@ -9,6 +9,7 @@
 
 OPTS="$@"
 
+export PYTHON=python3
 export CC=cc
 export CXX=CC
 export MPICC=cc
@@ -20,5 +21,4 @@ export OPENMP_CXXFLAGS="-fopenmp"
 
 ./configure ${OPTS} \
     --witout-mkl \
-    --with-blas="-lopenblas"
-
+    --with-blas="-lopenblas -fopenmp"

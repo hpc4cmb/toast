@@ -27,8 +27,10 @@ PYVERSION = 3.6
 
 CROSS =
 
+# Parallel builds
+MAKEJ = 4
+
 BLAS = -llapack -lopenblas -lm -ldl
-LAPACK = 
+LAPACK =
 
 BOOSTCHAIN = gcc
-

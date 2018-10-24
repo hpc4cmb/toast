@@ -12,5 +12,6 @@ conda install --copy --yes \
     pandas \
     memory_profiler \
     ipython \
+    cmake \
     && python -c "import matplotlib.font_manager" \
     && rm -rf @CONDA_PREFIX@/pkgs/*

@@ -1,15 +1,15 @@
 
 # Serial compilers
 
-CC = gcc
-CXX = g++
-FC = gfortran
+CC = ${GCC_PATH}/bin/gcc
+CXX = ${GCC_PATH}/bin/g++
+FC = ${GCC_PATH}/bin/gfortran
 
 # MPI compilers
 
-MPICC = cc
-MPICXX = CC
-MPIFC = ftn
+MPICC = ${CRAYPE_DIR}/bin/cc
+MPICXX = ${CRAYPE_DIR}/bin/CC
+MPIFC = ${CRAYPE_DIR}/bin/ftn
 MPI_CPPFLAGS = ${CRAY_MPICH2_DIR}/include
 MPI_LDFLAGS = ${CRAY_MPICH2_DIR}/lib
 MPI_CXXLIB = mpichcxx
@@ -31,6 +31,9 @@ LDFLAGS = -lpthread -fopenmp
 
 CROSS =
 
+# Parallel builds
+MAKEJ = 4
+
 # Miniconda install
 
 INTEL_CONDA = no
@@ -40,7 +43,7 @@ PYVERSION = 3.6
 # For BLAS/LAPACK, we use our own openblas
 
 BLAS = -lopenblas
-LAPACK = 
+LAPACK =
 
 # Boost toolchain name
 
@@ -50,4 +53,3 @@ BOOSTCHAIN = gcc
 
 CHGRP = hpcosmo
 CHMOD = a+rX,g-w,o-w
-

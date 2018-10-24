@@ -32,6 +32,9 @@ LDFLAGS = -lpthread -liomp5
 
 CROSS = --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu
 
+# Parallel builds
+MAKEJ = 4
+
 # Miniconda install
 
 INTEL_CONDA = yes
@@ -41,10 +44,9 @@ PYVERSION = 3.6
 # For BLAS/LAPACK, use MKL
 
 BLAS = -L${TACC_INTEL_DIR}/mkl/lib/intel64 -lmkl_rt -liomp5 -lpthread -lmemkind -lm -ldl
-LAPACK = 
+LAPACK =
 
 # Group and permissions to set
 
 CHGRP = G-818225
 CHMOD = a+rX,g-w,o-w
-

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -28,6 +28,13 @@ import toast.qarray as qa
 import toast.timing as timing
 
 from toast.vis import set_backend
+
+if tt.tidas_available:
+    from toast.tod.tidas import OpTidasExport, TODTidas
+
+if tt.spt3g_available:
+    from toast.tod.spt3g import Op3GExport, TOD3G
+
 
 def add_sky_signal(args, comm, data, totalname, signalname):
     """ Add signalname to totalname in the obs tod
@@ -226,6 +233,10 @@ def main():
                         required=False, default=None,
                         help='Output TIDAS export path')
 
+    parser.add_argument('--spt3g',
+                        required=False, default=None,
+                        help='Output SPT3G export path')
+
     parser.add_argument('--input_map', required=False,
                         help='Input map for signal')
     parser.add_argument('--input_pysm_model', required=False,
@@ -258,6 +269,10 @@ def main():
     if args.tidas is not None:
         if not tt.tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
+
+    if args.spt3g is not None:
+        if not tt.spt3g_available:
+            raise RuntimeError("SPT3G not found- cannot export")
 
     groupsize = args.groupsize
     if groupsize == 0:
@@ -656,11 +671,17 @@ def main():
 
             if mc == firstmc:
                 # For the first realization, optionally export the
-                # timestream data to a TIDAS volume.
+                # timestream data.  If we had observation intervals defined,
+                # we could pass "use_interval=True" to the export operators,
+                # which would ensure breaks in the exported data at
+                # acceptable places.
                 if args.tidas is not None:
-                    from toast.tod.tidas import OpTidasExport
                     tidas_path = os.path.abspath(args.tidas)
-                    export = OpTidasExport(tidas_path, name="tot_signal")
+                    export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
+                                           use_todchunks=True,
+                                           create_opts={"group_dets":"sim"},
+                                           ctor_opts={"group_dets":"sim"},
+                                           cache_name="tot_signal")
                     export.exec(data)
 
                     comm.comm_world.barrier()
@@ -671,6 +692,20 @@ def main():
                             .format(elapsed), flush=True)
                     start = stop
 
+                if args.spt3g is not None:
+                    spt3g_path = os.path.abspath(args.spt3g)
+                    export = Op3GExport(spt3g_path, TOD3G, use_todchunks=True,
+                                        export_opts={"prefix" : "sim"},
+                                        cache_name="tot_signal")
+                    export.exec(data)
+
+                    comm.comm_world.barrier()
+                    stop = MPI.Wtime()
+                    elapsed = stop - start
+                    if comm.comm_world.rank == 0:
+                        print("  SPT3G export took {:.3f} s"\
+                            .format(elapsed), flush=True)
+                    start = stop
 
 
             zmap.data.fill(0.0)

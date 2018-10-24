@@ -13,6 +13,7 @@
 
 OPTS="$@"
 
+export PYTHON=python3
 export CC=cc
 export CXX=CC
 export MPICC=cc
@@ -26,4 +27,3 @@ export OPENMP_CXXFLAGS="-qopenmp"
     --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu \
     --with-math="-limf" \
     --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
-

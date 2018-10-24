@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -138,8 +138,8 @@ class MPILock(object):
                 self._win = MPI.Win.Create(self._waiting, comm=self._comm)
             except:
                 if self._debug:
-                    print("rank {} win create raised exception".format(self._rank),
-                        flush=True)
+                    print("rank {} win create raised exception"\
+                        .format(self._rank), flush=True)
                 status = 1
             self._checkabort(self._comm, status,
                 "shared memory allocation")

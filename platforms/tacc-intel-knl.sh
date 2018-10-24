@@ -4,6 +4,7 @@
 
 OPTS="$@"
 
+export PYTHON=python3
 export MPICC=mpiicc
 export MPICXX=mpiicpc
 export CFLAGS="-O3 -g -fPIC -xMIC-AVX512 -pthread"
@@ -15,4 +16,3 @@ export OPENMP_CXXFLAGS="-qopenmp"
     --build x86_64-pc-linux-gnu --host x86_64-unknown-linux-gnu \
     --with-math="-limf" \
     --with-mkl="${TACC_INTEL_DIR}/mkl/lib/intel64"
-
