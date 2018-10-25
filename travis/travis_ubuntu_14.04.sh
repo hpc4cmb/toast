@@ -37,7 +37,7 @@ toolchainver=$(echo $toolchain | sed -e "s/^-//")
 # Install APT packages
 sudo -E apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
 sudo -E apt-get -yq update
-sudo -E apt-get -yq --no-install-suggests --no-install-recommends install build-essential git autoconf automake m4 libtool cmake pkg-config locales libgl1-mesa-glx xvfb libopenblas-dev liblapack-dev libfftw3-dev libhdf5-dev libcfitsio3-dev gcc${toolchain} g++${toolchain} gfortran${toolchain}
+sudo -E apt-get -yq --no-install-suggests --no-install-recommends install build-essential git autoconf automake m4 libtool pkg-config locales libgl1-mesa-glx xvfb libopenblas-dev liblapack-dev libfftw3-dev libhdf5-dev libcfitsio3-dev gcc${toolchain} g++${toolchain} gfortran${toolchain}
 
 # Export serial compiler variables
 export CC=$(which gcc${toolchain})
@@ -52,7 +52,7 @@ export FC=$(which gfortran${toolchain})
 source ${HOME}/virtualenv/python3.6/bin/activate
 
 # Pip install the runtime packages we need.  These are not saved in the tarball.
-pip install numpy scipy matplotlib cython astropy ephem healpy
+pip install numpy scipy matplotlib cython astropy ephem healpy cmake
 
 # Set up TOAST dependencies for travis.  We use the following approach:
 #
