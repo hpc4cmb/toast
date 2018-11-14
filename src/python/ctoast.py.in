@@ -1316,6 +1316,26 @@ def cov_apply_diagonal(nsub, subsize, nnz, mat, vec):
         vec.reshape(-1))
     return
 
+lib.ctoast_map_tools_fast_scanning32.restype = None
+lib.ctoast_map_tools_fast_scanning32.argtypes = [
+    npf64, ct.c_longlong, npi64, npf64, ct.c_longlong, npf32]
+
+def map_tools_fast_scanning32(toi, pixels, weights, bmap):
+    nweight, nsamp = np.shape(weights)
+    if bmap.ndim != 1:
+        raise RuntimeError('map to sample must be one-dimensional')
+    if toi.size != nsamp:
+        raise RuntimeError('toi and weights are incompatible')
+    if np.shape(pixels)[0] != nweight or np.shape(pixels)[1] != nsamp:
+        raise RuntimeError('pixels and weights are incompatible')
+    if np.amax(pixels) >= bmap.size:
+        raise RuntimeError('pixels point outside bmap')
+    pixbuf = np.ascontiguousarray(pixels.T).reshape(-1)
+    weightbuf = np.ascontiguousarray(weights.T).reshape(-1)
+    lib.ctoast_map_tools_fast_scanning32(toi, nsamp, pixbuf, weightbuf,
+                                         nweight, bmap)
+    return
+
 
 #--------------------------------------
 #  Run C++ test suite

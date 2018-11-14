@@ -1307,6 +1307,15 @@ void ctoast_cov_apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     return;
 }
 
+void ctoast_map_tools_fast_scanning32( double * toi, int64_t const nsamp,
+                                       int64_t const * pixels,
+                                       double const * weights,
+                                       int64_t const nweight,
+                                       float const * bmap ) {
+    TOAST_AUTO_TIMER();
+    toast::map_tools::fast_scanning32( toi, nsamp, pixels, weights, nweight, bmap );
+    return;
+}
 
 //--------------------------------------
 // Run test suite

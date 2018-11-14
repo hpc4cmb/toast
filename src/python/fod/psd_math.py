@@ -3,14 +3,38 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
+from scipy.signal import fftconvolve
+from scipy.signal.windows import hamming
 
 from .. import timing as timing
 from ..ctoast import fod_autosums, fod_crosssums
 from ..mpi import MPI
+from ..tod import flagged_running_average
+
+
+def highpass_flagged_signal(sig, good, naverage):
+    """ Highpass-filter the signal to remove sub harmonic modes.
+    """
+    # First fit and remove a linear trend.  Loss of power from this
+    # filter is assumed negligible in the frequency bins of interest
+    ngood = np.sum(good)
+    if ngood == 0:
+        raise RuntimeError('No valid samples')
+    templates = np.vstack([np.ones(ngood), np.arange(good.size)[good]])
+    invcov = np.dot(templates, templates.T)
+    cov = np.linalg.inv(invcov)
+    proj = np.dot(templates, sig[good])
+    coeff = np.dot(cov, proj)
+    sig[good] -= coeff[0] + coeff[1] * templates[1]
+    # Then prewhiten the data.  This filter will be corrected in the
+    # PSD estimates.
+    trend = flagged_running_average(sig, good == 0, naverage)
+    sig[good] -= trend[good]
+    return sig
 
 
 def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
-                comm=None):
+                comm=None, return_cov=False):
     """
     Compute the sample autocovariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
@@ -25,13 +49,14 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
+        return_cov (bool): Return also the covariance function
     """
     return crosscov_psd(times, signal, None, flags, lagmax, stationary_period,
-                        fsample, comm)
+                        fsample, comm, return_cov)
 
 
 def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
-                 fsample, comm=None):
+                 fsample, comm=None, return_cov=False):
     """
     Compute the sample (cross)covariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
@@ -47,6 +72,7 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
+        return_cov (bool): Return also the covariance function
     """
     autotimer = timing.auto_timer()
     if comm is None:
@@ -56,6 +82,11 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
     else:
         rank = comm.rank
         ntask = comm.size
+
+    # We apply a prewhitening filter to the signal.  To accommodate the
+    # quality flags, the filter is a moving average that only accounts
+    # for the unflagged samples
+    naverage = lagmax
 
     time_start = comm.bcast(times[0], root=0)
     time_stop = comm.bcast(times[-1], root=ntask - 1)
@@ -132,14 +163,17 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
             continue
 
         sig1 = extended_signal1[realflg].copy()
-        sig1[good] -= np.mean(sig1[good])
+        sig1 = highpass_flagged_signal(sig1, good, naverage)
+        # High pass filter does not work at the ends
+        ind = slice(naverage // 2, -naverage // 2)
         if signal2 is None:
-            (cov, cov_hits) = fod_autosums(sig1, good.astype(np.int8), lagmax)
+            (cov, cov_hits) = fod_autosums(
+                sig1[ind], good[ind].astype(np.int8), lagmax)
         else:
             sig2 = extended_signal2[realflg].copy()
-            sig2[good] -= np.mean(sig2[good])
-            (cov, cov_hits) = fod_crosssums(sig1, sig2, good.astype(np.int8),
-                                            lagmax)
+            sig2 = highpass_flagged_signal(sig2, good, lagmax)
+            (cov, cov_hits) = fod_crosssums(
+                sig1[ind], sig2[ind], good[ind].astype(np.int8), lagmax)
 
         covs[ireal] = (cov_hits, cov)
 
@@ -170,6 +204,7 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
     # Now process the ones this task owns
 
     my_psds = []
+    my_cov = []
 
     for ireal in my_covs.keys():
 
@@ -201,8 +236,26 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
         cov = np.hstack([cov, cov[:0:-1]])
 
+        #w = np.roll(hamming(cov.size), -lagmax)
+        #cov *= w
+
         psd = np.fft.rfft(cov).real
         psdfreq = np.fft.rfftfreq(len(cov), d=1 / fsample)
+
+        # Post process the PSD estimate:
+        #  1) Deconvolve the prewhitening (highpass) filter
+        arg = 2 * np.pi * np.abs(psdfreq) * naverage / fsample
+        tf = np.ones(lagmax)
+        ind = arg != 0
+        tf[ind] -= np.sin(arg[ind]) / arg[ind]
+        psd[ind] /= tf[ind] ** 2
+        #  2) Apply the Hann window to reduce unnecessary noise
+        psd = np.convolve(psd, [.25, .5, .25], mode='same')
+
+        # Transfrom the corrected PSD back to get an unbiased
+        # covariance function
+        cov = np.fft.irfft(psd)
+        my_cov.append((cov_hits, cov[:lagmax]))
 
         # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
@@ -212,4 +265,21 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
         my_psds.append((tstart, tstop, psdfreq, psd))
 
-    return my_psds
+    if return_cov:
+        return my_psds, my_cov
+    else:
+        return my_psds
+
+
+def smooth_with_hits(hits, cov, wbin):
+    """ Smooth the covariance function taking into account the
+    number of hits in each bin.
+    """
+
+    kernel = np.ones(wbin)
+    smooth_hits = fftconvolve(hits, kernel, mode='same')
+    smooth_cov = fftconvolve(cov * hits, kernel, mode='same')
+    good = smooth_hits > 0
+    smooth_cov[good] /= smooth_hits[good]
+
+    return smooth_hits, smooth_cov

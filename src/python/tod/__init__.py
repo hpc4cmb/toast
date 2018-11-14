@@ -42,7 +42,7 @@ from .memorycounter import OpMemoryCounter
 from .pointing_math import quat2angle, aberrate
 
 from .tod_math import (calibrate, dipole, sim_noise_timestream,
-                       OpCacheCopy, OpCacheClear)
+                       OpCacheCopy, OpCacheClear, flagged_running_average)
 
 from .conviqt import OpSimConviqt
 
