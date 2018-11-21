@@ -384,24 +384,27 @@ class OpSimAtmosphere(Operator):
                         ngood = np.sum(good)
                         if ngood == 0:
                             continue
+                    else:
+                        good = slice(0, nind)
+                        ngood = nind
+
+                    try:
+                        # Some TOD classes provide a shortcut to Az/El
+                        az, el = tod.read_azel(
+                            detector=det, local_start=istart, n=nind)[good]
+                    except Exception as e:
                         azelquat = tod.read_pntg(
                             detector=det, local_start=istart, n=nind,
                             azel=True)[good]
-                        atmdata = np.zeros(ngood, dtype=np.float64)
-                    else:
-                        ngood = nind
-                        azelquat = tod.read_pntg(
-                            detector=det, local_start=istart, n=nind, azel=True)
-                        atmdata = np.zeros(nind, dtype=np.float64)
+                        # Convert Az/El quaternion of the detector back into
+                        # angles for the simulation.
+                        theta, phi = qa.to_position(azelquat)
+                        # Azimuth is measured in the opposite direction
+                        # than longitude
+                        az = 2 * np.pi - phi
+                        el = np.pi / 2 - theta
 
-                    # Convert Az/El quaternion of the detector back into
-                    # angles for the simulation.
-
-                    theta, phi, _ = qa.to_angles(azelquat)
-                    # Azimuth is measured in the opposite direction
-                    # than longitude
-                    az = 2 * np.pi - phi
-                    el = np.pi / 2 - theta
+                    atmdata = np.zeros(ngood, dtype=np.float64)
 
                     if np.ptp(az) < np.pi:
                         azmin_det = np.amin(az)

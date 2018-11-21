@@ -14,6 +14,58 @@ from toast.mpi import MPI
 from toast.op import Operator
 import toast.timing as timing
 
+MADAM_TIMESTAMP_TYPE = np.float64
+MADAM_SIGNAL_TYPE = np.float32
+MADAM_PIXEL_TYPE = np.int32
+MADAM_WEIGHT_TYPE = np.float32
+
+# DEBUG begin
+
+import psutil
+
+def memreport(comm=None):
+    """ Gather and report the amount of allocated, free and swapped system memory
+    """
+    if psutil is None:
+        return
+    vmem = psutil.virtual_memory()._asdict()
+    memstr = 'Memory usage\n'
+    for key, value in vmem.items():
+        if comm is None:
+            vlist = [value]
+        else:
+            vlist = comm.gather(value)
+        if comm is None or comm.rank == 0:
+            vlist = np.array(vlist, dtype=np.float64)
+            if key != 'percent':
+                # From bytes to better units
+                if np.amax(vlist) < 2 ** 20:
+                    vlist /= 2 ** 10
+                    unit = 'kB'
+                elif np.amax(vlist) < 2 ** 30:
+                    vlist /= 2 ** 20
+                    unit = 'MB'
+                else:
+                    vlist /= 2 ** 30
+                    unit = 'GB'
+            else:
+                unit = '% '
+            if comm is None or comm.size == 1:
+                memstr += '{:>12} : {:8.3f} {}\n'.format(key, vlist[0], unit)
+            else:
+                memstr += '{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  ' \
+                    '< {:8.3f} {}\n'.format(
+                        key, np.amin(vlist), unit, np.median(vlist),
+                        np.std(vlist), unit, np.amax(vlist), unit)
+    if comm is None or comm.rank == 0:
+        print(memstr, flush=True)
+    if comm is not None:
+        comm.Barrier()
+    return
+
+# DEBUG end
+
+
 libmadam = None
 
 try:
@@ -26,38 +78,38 @@ except OSError:
 if libmadam is not None:
     libmadam.destripe.restype = None
     libmadam.destripe.argtypes = [
-        ct.c_int,
-        ct.c_char_p,
-        ct.c_long,
-        ct.c_char_p,
+        ct.c_int,  # fcomm
+        ct.c_char_p,  # parstring
+        ct.c_long,  # ndet
+        ct.c_char_p,  # detstring
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_long,
-        ct.c_long,
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,  # nsamp
+        ct.c_long,  # nnz
+        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_long,  # nperiod
         npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_long,
         npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_long,
+        ct.c_long,  # npsdtot
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_long,
+        ct.c_long,  # npsdbin
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_long,
+        ct.c_long,  # npsdval
         npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
     ]
     libmadam.destripe_with_cache.restype = None
     libmadam.destripe_with_cache.argtypes = [
-        ct.c_int,
-        ct.c_long,
-        ct.c_long,
-        ct.c_long,
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
-        ct.c_char_p,
+        ct.c_int,  # fcomm
+        ct.c_long,  # ndet
+        ct.c_long,  # nsamp
+        ct.c_long,  # nnz
+        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        ct.c_char_p,  # outpath
     ]
     libmadam.clear_caches.restype = None
     libmadam.clear_caches.argtypes = []
@@ -251,6 +303,7 @@ class OpMadam(Operator):
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
+        memreport(comm)
         fcomm = comm.py2f()
         if self._cached:
             # destripe
@@ -446,7 +499,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
-            'timestamps', np.float64, (nsamp,))
+            'timestamps', MADAM_TIMESTAMP_TYPE, (nsamp,))
 
         offset = 0
         time_offset = 0
@@ -493,7 +546,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
-            'signal', np.float64, (nsamp * ndet,))
+            'signal', MADAM_SIGNAL_TYPE, (nsamp * ndet,))
         self._madam_signal[:] = np.nan
 
         global_offset = 0
@@ -531,7 +584,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
-            'pixels', np.int64, (nsamp * ndet,))
+            'pixels', MADAM_PIXEL_TYPE, (nsamp * ndet,))
         self._madam_pixels[:] = -1
 
         global_offset = 0
@@ -610,7 +663,7 @@ class OpMadam(Operator):
         auto_timer = timing.auto_timer(type(self).__name__)
 
         self._madam_pixweights = self._cache.create(
-            'pixweights', np.float64, (nsamp * ndet * nnz,))
+            'pixweights', MADAM_WEIGHT_TYPE, (nsamp * ndet * nnz,))
         self._madam_pixweights[:] = 0
 
         global_offset = 0
