@@ -15,7 +15,7 @@ from toast.op import Operator
 import toast.timing as timing
 
 MADAM_TIMESTAMP_TYPE = np.float64
-MADAM_SIGNAL_TYPE = np.float32
+MADAM_SIGNAL_TYPE = np.float64
 MADAM_PIXEL_TYPE = np.int32
 MADAM_WEIGHT_TYPE = np.float32
 
@@ -284,16 +284,22 @@ class OpMadam(Operator):
          obs_period_ranges, psdfreqs, detectors, nside) = self._prepare(data,
                                                                         comm)
 
-        psdinfo, pixels_dtype, weight_dtype = self._stage_data(
+        psdinfo, signal_type, pixels_dtype, weight_dtype = self._stage_data(
             data, comm, nsamp, ndet, nnz, nnz_full, nnz_stride,
             obs_period_ranges, psdfreqs, detectors, nside)
+
+        #if comm.rank == 0:
+        #    data.obs[0]['tod'].cache.report()
 
         self._destripe(comm, parstring, ndet, detstring, nsamp, nnz, periods,
                        psdinfo)
 
         self._unstage_data(comm, data, nsamp, nnz, nnz_full,
-                           obs_period_ranges, detectors, pixels_dtype, nside,
-                           weight_dtype)
+                           obs_period_ranges, detectors, signal_type,
+                           pixels_dtype, nside, weight_dtype)
+
+        #if comm.rank == 0:
+        #    data.obs[0]['tod'].cache.report()
 
         return
 
@@ -557,6 +563,7 @@ class OpMadam(Operator):
             for idet, det in enumerate(detectors):
                 # Get the signal.
                 signal = tod.local_signal(det, self._name)
+                signal_dtype = signal.dtype
                 offset = global_offset
                 for istart, istop in period_ranges:
                     nn = istop - istart
@@ -575,7 +582,7 @@ class OpMadam(Operator):
 
             global_offset = offset
 
-        return
+        return signal_dtype
 
     def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges,
                       nside):
@@ -729,7 +736,8 @@ class OpMadam(Operator):
             if nodecomm.rank % nread != iread:
                 continue
             psds = self._stage_time(data, detectors, nsamp, obs_period_ranges)
-            self._stage_signal(data, detectors, nsamp, ndet, obs_period_ranges)
+            signal_dtype = self._stage_signal(data, detectors, nsamp, ndet,
+                                             obs_period_ranges)
             pixels_dtype = self._stage_pixels(data, detectors, nsamp, ndet,
                                               obs_period_ranges, nside)
             weight_dtype = self._stage_pixweights(
@@ -781,11 +789,11 @@ class OpMadam(Operator):
         psdinfo = (detweights, npsd, npsdtot, psdstarts, npsdbin, psdfreqs,
                    npsdval, psdvals)
 
-        return psdinfo, pixels_dtype, weight_dtype
+        return psdinfo, signal_dtype, pixels_dtype, weight_dtype
 
     def _unstage_data(self, comm, data, nsamp, nnz, nnz_full,
-                      obs_period_ranges, detectors, pixels_dtype, nside,
-                      weight_dtype):
+                      obs_period_ranges, detectors, signal_type,
+                      pixels_dtype, nside, weight_dtype):
         """ Clear Madam buffers, restore pointing into TOAST caches
         and cache the destriped signal.
 
@@ -811,7 +819,7 @@ class OpMadam(Operator):
                     tod = obs['tod']
                     nlocal = tod.local_samples[1]
                     for idet, det in enumerate(detectors):
-                        signal = np.ones(nlocal) * np.nan
+                        signal = np.ones(nlocal, dtype=signal_type) * np.nan
                         offset = global_offset
                         for istart, istop in period_ranges:
                             nn = istop - istart
