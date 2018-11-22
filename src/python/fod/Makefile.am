@@ -21,7 +21,8 @@ toastfoddir = $(pythondir)/toast/fod
 
 toastfod_PYTHON = \
 __init__.py \
-psd_math.py
+psd_math.py \
+noise_estimation.py
 
 
 clean-local :
