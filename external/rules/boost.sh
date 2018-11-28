@@ -1,7 +1,7 @@
-curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.bz2 \
-    -o boost_1_65_1.tar.bz2 \
-    && tar xjf boost_1_65_1.tar.bz2 \
-    && cd boost_1_65_1 \
+curl -SL https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.bz2 \
+    -o boost_1_68_0.tar.bz2 \
+    && tar xjf boost_1_68_0.tar.bz2 \
+    && cd boost_1_68_0 \
     && echo "" > tools/build/user-config.jam \
     && echo "using mpi : @MPICXX@ : <include>\"@MPI_CPPFLAGS@\" <library-path>\"@MPI_LDFLAGS@\" <find-shared-library>\"@MPI_CXXLIB@\" <find-shared-library>\"@MPI_LIB@\" ;" >> tools/build/user-config.jam \
     && echo "option jobs : @MAKEJ@ ;" >> tools/build/user-config.jam \
