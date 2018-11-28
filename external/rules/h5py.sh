@@ -1,6 +1,6 @@
-curl -SL https://pypi.python.org/packages/41/7a/6048de44c62fc5e618178ef9888850c3773a9e4be249e5e673ebce0402ff/h5py-2.7.1.tar.gz#md5=da630aebe3ab9fa218ac405a218e95e0 \
+curl -SL https://files.pythonhosted.org/packages/74/5d/6f11a5fffc3d8884bb8d6c06abbee0b3d7c8c81bde9819979208ba823a47/h5py-2.8.0.tar.gz \
     | tar xzf - \
-    && cd h5py-2.7.1 \
+    && cd h5py-2.8.0 \
     && CC="@CC@" LDSHARED="@CC@ -shared" \
     python setup.py install --prefix=@AUX_PREFIX@ \
     && cd .. \

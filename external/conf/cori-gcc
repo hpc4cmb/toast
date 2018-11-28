@@ -19,9 +19,9 @@ MPI_EXTRA_LINK =
 
 # Compile flags
 
-CFLAGS = -O3 -fPIC -pthread
-CXXFLAGS = -O3 -fPIC -pthread
-FCFLAGS = -O3 -fPIC -fexceptions -pthread
+CFLAGS = -O3 -march=haswell -fPIC -pthread
+CXXFLAGS = -O3 -march=haswell -fPIC -pthread
+FCFLAGS = -O3 -march=haswell -fPIC -fexceptions -pthread
 
 OPENMP_CFLAGS = -fopenmp
 OPENMP_CXXFLAGS = -fopenmp
@@ -38,11 +38,11 @@ MAKEJ = 4
 
 INTEL_CONDA = no
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-PYVERSION = 3.6
+PYVERSION = 3.7
 
 # For BLAS/LAPACK, we use our own openblas
 
-BLAS = -lopenblas
+BLAS = -lopenblas -fopenmp -lpthread -lgfortran -lm
 LAPACK =
 
 # Boost toolchain name

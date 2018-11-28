@@ -1,6 +1,6 @@
-curl -SL http://github.com/xianyi/OpenBLAS/archive/v0.2.20.tar.gz \
+curl -SL https://github.com/xianyi/OpenBLAS/archive/v0.3.3.tar.gz \
     | tar xzf - \
-    && cd OpenBLAS-0.2.20 \
+    && cd OpenBLAS-0.3.3 \
     && make USE_OPENMP=1 NO_SHARED=1 \
     FC="@FC@" FCFLAGS="@FCFLAGS@" \
     CC="@CC@" CFLAGS="@CFLAGS@" \

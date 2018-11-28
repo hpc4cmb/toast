@@ -33,7 +33,7 @@ MAKEJ = 4
 
 INTEL_CONDA = yes
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-PYVERSION = 3.6
+PYVERSION = 3.7
 
 # For BLAS/LAPACK, use MKL
 

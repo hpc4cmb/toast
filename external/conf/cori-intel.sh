@@ -10,7 +10,6 @@ if [ "x${loadedintel}" = x ]; then
       module swap PrgEnv-gnu PrgEnv-intel
     fi
 fi
-module swap intel intel/18.0.1.163
-module load gcc/7.3.0
+module load gcc
 module load git
 export CRAYPE_LINK_TYPE=dynamic
