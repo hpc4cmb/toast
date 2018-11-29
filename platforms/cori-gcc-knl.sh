@@ -14,11 +14,11 @@ export CC=cc
 export CXX=CC
 export MPICC=cc
 export MPICXX=CC
-export CFLAGS="-O3 -g -fPIC"
-export CXXFLAGS="-O3 -g -fPIC"
+export CFLAGS="-O3 -g -march=knl -fPIC -pthread -malign-data=cacheline -finline-functions"
+export CXXFLAGS="-O3 -g -march=knl -fPIC -pthread -malign-data=cacheline -finline-functions"
 export OPENMP_CFLAGS="-fopenmp"
 export OPENMP_CXXFLAGS="-fopenmp"
 
 ./configure ${OPTS} \
-    --witout-mkl \
-    --with-blas="-lopenblas -fopenmp"
+    --without-mkl \
+    --with-blas="-lopenblas -fopenmp -lpthread -lgfortran -lm"
