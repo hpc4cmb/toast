@@ -204,6 +204,8 @@ void toast::sim_noise::sim_noise_timestream(
     //std::cerr << "noise sim finalize took " << t6 - t5 << " s" << std::endl; // DEBUG
     //exit(-1); // DEBUG
 
+    store.clear();
+
     return;
 
 }
