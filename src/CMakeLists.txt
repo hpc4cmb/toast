@@ -4,12 +4,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(libtidas)
+add_subdirectory(libtoast)
 
-add_subdirectory(python)
+# if(MPI_FOUND)
+#     add_subdirectory(libtidas-mpi)
+# endif(MPI_FOUND)
 
-add_subdirectory(tests)
-
-add_subdirectory(libtoast-mpi)
-
-add_subdirectory(tests-mpi)
+# add_subdirectory(python)
