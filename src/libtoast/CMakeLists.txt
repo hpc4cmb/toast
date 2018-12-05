@@ -13,9 +13,10 @@ target_include_directories(toast PUBLIC
     PRIVATE src)
 
 if(MPI_FOUND)
-    target_compile_definitions(toast PUBLIC HAVE_MPI)
+    target_compile_definitions(toast PRIVATE HAVE_MPI=1)
 endif(MPI_FOUND)
 
+# Add dependencies here...
 # target_link_libraries(tidas ${HDF5_C_LIBRARIES})
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
