@@ -7,11 +7,11 @@
 /doc/_build
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
+# __pycache__/
+# *.py[cod]
 
 # C extensions
-*.so
+# *.so
 
 /examples/*.slurm
 /examples/tiny_*_shell.sh
@@ -26,7 +26,7 @@ __pycache__/
 # Build directories when using ./cmake/platforms/...
 /build-*
 
-*_test_output
+# *_test_output
 
 # generated files
 /src/python/_version.py
@@ -35,7 +35,7 @@ __pycache__/
 *.swp
 *.swo
 
-*.json
+#*.json
 
 # Darwin Finder files
 *.DS_Store

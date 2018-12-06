@@ -1,41 +1,32 @@
-/*
-Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
-All rights reserved.  Use of this source code is governed by 
-a BSD-style license that can be found in the LICENSE file.
-*/
 
+// Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
+// All rights reserved.  Use of this source code is governed by
+// a BSD-style license that can be found in the LICENSE file.
 
 #include <toast_test.hpp>
-
-#include <cmath>
-
-
-using namespace std;
-using namespace toast;
 
 
 const int TOASTsfTest::size = 1000;
 
 
-void TOASTsfTest::SetUp () {
+void TOASTsfTest::SetUp() {
+    angin.resize(size);
+    sinout.resize(size);
+    cosout.resize(size);
+    xin.resize(size);
+    yin.resize(size);
+    atanout.resize(size);
+    sqin.resize(size);
+    sqout.resize(size);
+    rsqin.resize(size);
+    rsqout.resize(size);
+    expin.resize(size);
+    expout.resize(size);
+    login.resize(size);
+    logout.resize(size);
 
-    angin = toast::mem::simd_array<double>(size);
-    sinout = toast::mem::simd_array<double>(size);
-    cosout = toast::mem::simd_array<double>(size);
-    xin = toast::mem::simd_array<double>(size);
-    yin = toast::mem::simd_array<double>(size);
-    atanout = toast::mem::simd_array<double>(size);
-    sqin = toast::mem::simd_array<double>(size);
-    sqout = toast::mem::simd_array<double>(size);
-    rsqin = toast::mem::simd_array<double>(size);
-    rsqout = toast::mem::simd_array<double>(size);
-    expin = toast::mem::simd_array<double>(size);
-    expout = toast::mem::simd_array<double>(size);
-    login = toast::mem::simd_array<double>(size);
-    logout = toast::mem::simd_array<double>(size);
-        
-    for ( int i = 0; i < size; ++i ) {
-        angin[i] = (double)(i + 1) * ( 2.0 * PI / (double)(size + 1) );
+    for (int i = 0; i < size; ++i) {
+        angin[i] = (double)(i + 1) * (2.0 * toast::PI / (double)(size + 1));
         sinout[i] = ::sin(angin[i]);
         cosout[i] = ::cos(angin[i]);
         xin[i] = cosout[i];
@@ -56,123 +47,120 @@ void TOASTsfTest::SetUp () {
     return;
 }
 
-
-void TOASTsfTest::TearDown () {
-
+void TOASTsfTest::TearDown() {
     return;
 }
 
+TEST_F(TOASTsfTest, trig) {
+    std::vector <double, toast::simd_allocator <double> > comp1(size);
+    std::vector <double, toast::simd_allocator <double> > comp2(size);
 
-TEST_F( TOASTsfTest, trig ) {
-    double comp1[size];
-    double comp2[size];
-
-    sf::sin ( size, angin, comp1 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( sinout[i], comp1[i] );
+    toast::vsin(size, angin.data(), comp1.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(sinout[i], comp1[i]);
     }
 
-    sf::cos ( size, angin, comp2 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( cosout[i], comp2[i] );
+    toast::vcos(size, angin.data(), comp2.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(cosout[i], comp2[i]);
     }
 
-    sf::sincos ( size, angin, comp1, comp2 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( sinout[i], comp1[i] );
-        EXPECT_DOUBLE_EQ( cosout[i], comp2[i] );
+    toast::vsincos(size, angin.data(), comp1.data(), comp2.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(sinout[i], comp1[i]);
+        EXPECT_DOUBLE_EQ(cosout[i], comp2[i]);
     }
 
-    sf::atan2 ( size, yin, xin, comp1 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( atanout[i], comp1[i] );
-    }
-}
-
-
-TEST_F( TOASTsfTest, fasttrig ) {
-    double comp1[size];
-    double comp2[size];
-
-    sf::fast_sin ( size, angin, comp1 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( sinout[i], comp1[i] );
-    }
-
-    sf::fast_cos ( size, angin, comp2 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( cosout[i], comp2[i] );
-    }
-
-    sf::fast_sincos ( size, angin, comp1, comp2 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( sinout[i], comp1[i] );
-        EXPECT_FLOAT_EQ( cosout[i], comp2[i] );
-    }
-
-    sf::fast_atan2 ( size, yin, xin, comp1 );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( atanout[i], comp1[i] );
+    toast::vatan2(size, yin.data(), xin.data(), comp1.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(atanout[i], comp1[i]);
     }
 }
 
 
-TEST_F( TOASTsfTest, sqrtlog ) {
-    double comp[size];
+TEST_F(TOASTsfTest, fasttrig) {
+    std::vector <double, toast::simd_allocator <double> > comp1(size);
+    std::vector <double, toast::simd_allocator <double> > comp2(size);
 
-    sf::sqrt ( size, sqin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( sqout[i], comp[i] );
+    toast::vfast_sin(size, angin.data(), comp1.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(sinout[i], comp1[i]);
     }
 
-    sf::rsqrt ( size, rsqin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        if(std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
-            EXPECT_DOUBLE_EQ( rsqout[i], comp[i] );
+    toast::vfast_cos(size, angin.data(), comp2.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(cosout[i], comp2[i]);
+    }
+
+    toast::vfast_sincos(size, angin.data(), comp1.data(), comp2.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(sinout[i], comp1[i]);
+        EXPECT_FLOAT_EQ(cosout[i], comp2[i]);
+    }
+
+    toast::vfast_atan2(size, yin.data(), xin.data(), comp1.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(atanout[i], comp1[i]);
+    }
+}
+
+
+TEST_F(TOASTsfTest, sqrtlog) {
+    std::vector <double, toast::simd_allocator <double> > comp(size);
+
+    toast::vsqrt(size, sqin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(sqout[i], comp[i]);
+    }
+
+    toast::vrsqrt(size, rsqin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        if (std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
+            EXPECT_DOUBLE_EQ(rsqout[i], comp[i]);
         }
     }
 
-    sf::exp ( size, expin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( expout[i], comp[i] );
+    toast::vexp(size, expin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(expout[i], comp[i]);
     }
 
-    sf::log ( size, login, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_DOUBLE_EQ( logout[i], comp[i] );
+    toast::vlog(size, login.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_DOUBLE_EQ(logout[i], comp[i]);
     }
 }
 
 
-TEST_F( TOASTsfTest, fast_sqrtlog ) {
-    double comp[size];
+TEST_F(TOASTsfTest, fast_sqrtlog) {
+    std::vector <double, toast::simd_allocator <double> > comp(size);
 
-    sf::fast_sqrt ( size, sqin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( sqout[i], comp[i] );
+    toast::vfast_sqrt(size, sqin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(sqout[i], comp[i]);
     }
 
-    sf::fast_rsqrt ( size, rsqin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        if(std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
-            EXPECT_FLOAT_EQ( rsqout[i], comp[i] );
+    toast::vfast_rsqrt(size, rsqin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        if (std::isfinite(comp[i]) || std::isfinite(rsqout[i])) {
+            EXPECT_FLOAT_EQ(rsqout[i], comp[i]);
         }
     }
 
-    sf::fast_exp ( size, expin, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( expout[i], comp[i] );
+    toast::vfast_exp(size, expin.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(expout[i], comp[i]);
     }
 
-    sf::fast_log ( size, login, comp );
-    for ( int i = 0; i < size; ++i ) {
-        EXPECT_FLOAT_EQ( logout[i], comp[i] );
+    toast::vfast_log(size, login.data(), comp.data());
+    for (int i = 0; i < size; ++i) {
+        EXPECT_FLOAT_EQ(logout[i], comp[i]);
     }
 }
 
 
-TEST_F( TOASTsfTest, fast_erfinv ) {
-    double in[10] = {
+TEST_F(TOASTsfTest, fast_erfinv) {
+    std::vector <double, toast::simd_allocator <double> > in = {
         -9.990000e-01,
         -7.770000e-01,
         -5.550000e-01,
@@ -185,7 +173,7 @@ TEST_F( TOASTsfTest, fast_erfinv ) {
         9.990000e-01
     };
 
-    double check[10] = {
+    std::vector <double, toast::simd_allocator <double> > check = {
         -2.326753765513524e+00,
         -8.616729665092674e-01,
         -5.400720684419686e-01,
@@ -198,13 +186,11 @@ TEST_F( TOASTsfTest, fast_erfinv ) {
         2.326753765513546e+00
     };
 
-    double out[10];
+    std::vector <double, toast::simd_allocator <double> > out(10);
 
-    sf::fast_erfinv ( 10, in, out );
+    toast::vfast_erfinv(10, in.data(), out.data());
 
-    for ( int i = 0; i < 10; ++i ) {
-        EXPECT_FLOAT_EQ( out[i], check[i] );
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_FLOAT_EQ(out[i], check[i]);
     }
 }
-
-

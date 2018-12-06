@@ -25,7 +25,7 @@ class Environment {
         std::vector <std::string> signals() const;
         void print() const;
         bool use_mpi() const;
-        int max_omp_threads() const;
+        int max_threads() const;
 
     private:
 
@@ -40,7 +40,7 @@ class Environment {
         bool use_mpi_;
         bool at_nersc_;
         bool in_slurm_;
-        int max_omp_threads_;
+        int max_threads_;
 };
 
 }

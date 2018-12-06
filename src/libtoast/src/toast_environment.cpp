@@ -134,9 +134,9 @@ toast::Environment::Environment() {
     }
 
     // OpenMP
-    max_omp_threads_ = 1;
+    max_threads_ = 1;
     #ifdef _OPENMP
-    max_omp_threads_ = omp_get_max_threads();
+    max_threads_ = omp_get_max_threads();
     #endif // ifdef _OPENMP
 
     // Was toast configured to use MPI?  We put this setting here in the
@@ -189,8 +189,8 @@ bool toast::Environment::use_mpi() const {
     return use_mpi_;
 }
 
-int toast::Environment::max_omp_threads() const {
-    return max_omp_threads_;
+int toast::Environment::max_threads() const {
+    return max_threads_;
 }
 
 std::vector <std::string> toast::Environment::signals() const {
@@ -207,20 +207,20 @@ void toast::Environment::print() const {
 
     for (auto const & sig : signals_avail_) {
         if (signals_enabled_.count(sig) == 0) {
-            fprintf(stdout, "%s:   %s unavailable\n", prefix.c_str(),
+            fprintf(stdout, "%s:   %9s unavailable\n", prefix.c_str(),
                     sig.c_str());
         } else {
             if (signals_enabled_.at(sig)) {
-                fprintf(stdout, "%s:   %s enabled\n", prefix.c_str(),
+                fprintf(stdout, "%s:   %9s enabled\n", prefix.c_str(),
                         sig.c_str());
             } else {
-                fprintf(stdout, "%s:   %s disabled\n", prefix.c_str(),
+                fprintf(stdout, "%s:   %9s disabled\n", prefix.c_str(),
                         sig.c_str());
             }
         }
     }
-    fprintf(stdout, "%s: Max OpenMP threads = %d\n", prefix.c_str(),
-            max_omp_threads_);
+    fprintf(stdout, "%s: Max threads = %d\n", prefix.c_str(),
+            max_threads_);
     if (have_mpi_) {
         fprintf(stdout, "%s: MPI build enabled\n", prefix.c_str());
     } else {

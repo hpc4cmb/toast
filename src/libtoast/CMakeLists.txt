@@ -4,6 +4,7 @@
 add_library(toast
     src/toast_environment.cpp
     src/toast_utils.cpp
+    src/toast_math_sf.cpp
     src/toast_math_rng.cpp
 )
 

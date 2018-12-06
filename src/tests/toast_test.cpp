@@ -3,12 +3,10 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_HPP
-#define TOAST_HPP
+#include <toast_test.hpp>
 
-#include <toast/environment.hpp>
-#include <toast/utils.hpp>
-#include <toast/sf.hpp>
-#include <toast/rng.hpp>
 
-#endif // ifndef TOAST_HPP
+int main(int argc, char * argv[]) {
+    int ret = toast::test::runner(argc, argv);
+    return ret;
+}

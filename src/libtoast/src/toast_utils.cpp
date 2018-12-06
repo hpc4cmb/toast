@@ -13,6 +13,39 @@
 #include <algorithm>
 
 
+toast::exception::exception(const char * msg, const char * file,
+                            int line) : std::exception() {
+    snprintf(msg_, msg_len_, "Exeption at line %d of file %s:  %s", line, file,
+             msg);
+    return;
+}
+
+toast::exception::~exception() throw() {
+    return;
+}
+
+const char * toast::exception::what() const throw() {
+    return msg_;
+}
+
+void * toast::aligned_alloc(size_t size, size_t align) {
+    void * mem = NULL;
+    int ret = posix_memalign(&mem, align, size);
+    if (ret != 0) {
+        std::ostringstream o;
+        o << "cannot allocate " << size <<
+            " bytes of memory with alignment " << align;
+        TOAST_THROW(o.str().c_str());
+    }
+    memset(mem, 0, size);
+    return mem;
+}
+
+void toast::aligned_free(void * ptr) {
+    free(ptr);
+    return;
+}
+
 toast::Timer::Timer() {
     clear();
 }
