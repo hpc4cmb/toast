@@ -22,6 +22,7 @@ class Environment {
         static Environment & get();
 
         std::string log_level() const;
+        void set_log_level(char const * level);
         std::vector <std::string> signals() const;
         void print() const;
         bool use_mpi() const;

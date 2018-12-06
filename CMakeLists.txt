@@ -23,6 +23,7 @@ include(BuildType)
 
 # External packages
 
+find_package(OpenMP)
 find_package(MPI)
 
 find_package(PythonInterp)

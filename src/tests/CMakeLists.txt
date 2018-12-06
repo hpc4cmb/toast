@@ -10,6 +10,7 @@ add_executable(toast_test
     toast_test.cpp
     toast_test_runner.cpp
     toast_test_env.cpp
+    toast_test_utils.cpp
     toast_test_sf.cpp
     toast_test_rng.cpp
 )

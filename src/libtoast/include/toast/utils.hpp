@@ -83,23 +83,6 @@ typedef void (* TOAST_EXCEPTION_HANDLER) (toast::exception & e);
 #define TOAST_THROW(msg) \
     throw toast::exception(msg, __FILE__, __LINE__)
 
-// Helper macro to pair with TOAST_CATCH
-#define TOAST_TRY \
-    try {
-// Catch a toast exception
-#define TOAST_CATCH                     \
-}catch (toast::exception & e) {         \
-    std::cerr << e.what() << std::endl; \
-    toast::cleanup();                   \
-    throw;                              \
-}
-// Catch a toast exception with a custom handler
-#define TOAST_CATCH_CUSTOM(handler) \
-}catch (toast::exception & e) {     \
-    (*handler)(e);                  \
-}
-//
-//
 class Timer {
     // Simple timer class that tracks elapsed seconds and number of times
     // it was started.
@@ -137,10 +120,12 @@ class GlobalTimers {
 
         void start(std::string const & name);
         void stop(std::string const & name);
+        void clear(std::string const & name);
         double seconds(std::string const & name) const;
         bool is_running(std::string const & name) const;
 
         void stop_all();
+        void clear_all();
 
         void report();
 
@@ -182,6 +167,7 @@ class Logger {
 
         // This class is a singleton- constructor is private.
         Logger();
+        void check_level();
 
         log_level level_;
         std::string prefix_;

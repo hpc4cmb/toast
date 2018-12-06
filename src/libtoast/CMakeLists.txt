@@ -17,8 +17,15 @@ if(MPI_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_MPI=1)
 endif(MPI_FOUND)
 
-# Add dependencies here...
-# target_link_libraries(tidas ${HDF5_C_LIBRARIES})
+# Dependencies
+
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast PRIVATE ${OpenMP_CXX_FLAGS})
+    set_target_properties(toast PROPERTIES LINK_FLAGS ${OpenMP_CXX_FLAGS})
+    target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
+endif(OpenMP_CXX_FOUND)
+
+# Installation
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 

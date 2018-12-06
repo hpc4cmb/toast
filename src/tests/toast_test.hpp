@@ -29,18 +29,18 @@ class TOASTenvTest : public ::testing::Test {
         virtual void TearDown() {}
 };
 
-// class TOASTtimingTest : public ::testing::Test {
-//     public:
-//
-//         TOASTtimingTest() {}
-//
-//         ~TOASTtimingTest() {}
-//
-//         virtual void SetUp() {}
-//
-//         virtual void TearDown() {}
-// };
-//
+class TOASTutilsTest : public ::testing::Test {
+    public:
+
+        TOASTutilsTest() {}
+
+        ~TOASTutilsTest() {}
+
+        virtual void SetUp() {}
+
+        virtual void TearDown() {}
+};
+
 //
 // class TOASTqarrayTest : public ::testing::Test {
 //     public:

@@ -82,7 +82,7 @@ void toast::Timer::clear() {
 
 double toast::Timer::seconds() const {
     if (running_) {
-        throw std::runtime_error("Timer is still running!");
+        TOAST_THROW("Timer is still running!");
     }
     return total_;
 }
@@ -121,11 +121,16 @@ void toast::GlobalTimers::start(std::string const & name) {
     return;
 }
 
+void toast::GlobalTimers::clear(std::string const & name) {
+    data[name].clear();
+    return;
+}
+
 void toast::GlobalTimers::stop(std::string const & name) {
     if (data.count(name) == 0) {
         std::ostringstream o;
         o << "Cannot stop timer " << name << " which does not exist";
-        throw std::runtime_error(o.str().c_str());
+        TOAST_THROW(o.str().c_str());
     }
     data.at(name).stop();
     return;
@@ -136,7 +141,7 @@ double toast::GlobalTimers::seconds(std::string const & name) const {
         std::ostringstream o;
         o << "Cannot get seconds for timer " << name
           << " which does not exist";
-        throw std::runtime_error(o.str().c_str());
+        TOAST_THROW(o.str().c_str());
     }
     return data.at(name).seconds();
 }
@@ -151,6 +156,13 @@ bool toast::GlobalTimers::is_running(std::string const & name) const {
 void toast::GlobalTimers::stop_all() {
     for (auto & tm : data) {
         tm.second.stop();
+    }
+    return;
+}
+
+void toast::GlobalTimers::clear_all() {
+    for (auto & tm : data) {
+        tm.second.clear();
     }
     return;
 }
@@ -174,10 +186,20 @@ void toast::GlobalTimers::report() {
 toast::Logger::Logger() {
     // Prefix for messages
     prefix_ = std::string("TOAST ");
+    return;
+}
 
-    // Check log level:
+toast::Logger & toast::Logger::get() {
+    static toast::Logger instance;
+
+    // Check the level every time we get a reference to the singleton,
+    // in case the level has been changed manually during runtime.
+    instance.check_level();
+    return instance;
+}
+
+void toast::Logger::check_level() {
     auto & env = toast::Environment::get();
-    level_ = log_level::none;
     std::string val = env.log_level();
     if (strncmp(val.c_str(), "DEBUG", 5) == 0) {
         level_ = log_level::debug;
@@ -189,14 +211,10 @@ toast::Logger::Logger() {
         level_ = log_level::error;
     } else if (strncmp(val.c_str(), "CRITICAL", 8) == 0) {
         level_ = log_level::critical;
+    } else {
+        level_ = log_level::none;
     }
     return;
-}
-
-toast::Logger & toast::Logger::get() {
-    static toast::Logger instance;
-
-    return instance;
 }
 
 void toast::Logger::debug(char const * msg) {

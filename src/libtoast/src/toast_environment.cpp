@@ -185,6 +185,10 @@ std::string toast::Environment::log_level() const {
     return loglvl_;
 }
 
+void toast::Environment::set_log_level(char const * level) {
+    loglvl_ = std::string(level);
+}
+
 bool toast::Environment::use_mpi() const {
     return use_mpi_;
 }
