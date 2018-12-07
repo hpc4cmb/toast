@@ -13,6 +13,7 @@ add_executable(toast_test
     toast_test_utils.cpp
     toast_test_sf.cpp
     toast_test_rng.cpp
+    toast_test_qarray.cpp
 )
 
 target_include_directories(toast_test PRIVATE

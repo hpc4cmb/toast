@@ -10,5 +10,6 @@
 #include <toast/utils.hpp>
 #include <toast/sf.hpp>
 #include <toast/rng.hpp>
+#include <toast/qarray.hpp>
 
 #endif // ifndef TOAST_HPP

@@ -6,6 +6,7 @@ add_library(toast
     src/toast_utils.cpp
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
+    src/toast_math_qarray.cpp
 )
 
 target_include_directories(toast PUBLIC

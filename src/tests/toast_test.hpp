@@ -41,29 +41,29 @@ class TOASTutilsTest : public ::testing::Test {
         virtual void TearDown() {}
 };
 
-//
-// class TOASTqarrayTest : public ::testing::Test {
-//     public:
-//
-//         TOASTqarrayTest() {}
-//
-//         ~TOASTqarrayTest() {}
-//
-//         virtual void SetUp();
-//         virtual void TearDown() {}
-//
-//         static const double q1[];
-//         static const double q1inv[];
-//         static const double q2[];
-//         static const double qtonormalize[];
-//         static const double qnormalized[];
-//         static const double vec[];
-//         static const double vec2[];
-//         static const double qeasy[];
-//         static const double mult_result[];
-//         static const double rot_by_q1[];
-//         static const double rot_by_q2[];
-// };
+
+class TOASTqarrayTest : public ::testing::Test {
+    public:
+
+        TOASTqarrayTest() {}
+
+        ~TOASTqarrayTest() {}
+
+        virtual void SetUp();
+        virtual void TearDown() {}
+
+        std::vector <double, toast::simd_allocator <double> > q1;
+        std::vector <double, toast::simd_allocator <double> > q1inv;
+        std::vector <double, toast::simd_allocator <double> > q2;
+        std::vector <double, toast::simd_allocator <double> > qtonormalize;
+        std::vector <double, toast::simd_allocator <double> > qnormalized;
+        std::vector <double, toast::simd_allocator <double> > vec;
+        std::vector <double, toast::simd_allocator <double> > vec2;
+        std::vector <double, toast::simd_allocator <double> > qeasy;
+        std::vector <double, toast::simd_allocator <double> > mult_result;
+        std::vector <double, toast::simd_allocator <double> > rot_by_q1;
+        std::vector <double, toast::simd_allocator <double> > rot_by_q2;
+};
 
 
 class TOASTrngTest : public ::testing::Test {
