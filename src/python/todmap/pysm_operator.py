@@ -190,12 +190,12 @@ class OpSimPySM(Operator):
             if self.comm.rank == 0 and self.coord != "G":
                 # PySM is always in Galactic, make rotation to Ecliptic or Equatorial
                 rot = hp.Rotator(coord = ["G", self.coord])
-                # this requires healpy 1.12
+                # this requires healpy 1.12.8
                 try:
-                    full_map_rank0 = rot.rotate_map(full_map_rank0)
+                    full_map_rank0 = rot.rotate_map_alms(full_map_rank0, use_pixel_weights=True)
                 except AttributeError:
                     print('PySM coordinate conversion from G to another reference frame requires'
-                          'healpy.Rotator.rotate_map available since healpy 1.12')
+                          'healpy.Rotator.rotate_map_alms available since healpy 1.12.8')
                     raise
             if self.comm.rank == 0 and self._nest:
                 # PySM is RING, toast is NEST
