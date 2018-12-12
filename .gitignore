@@ -70,6 +70,7 @@ __pycache__/
 /examples/*.out
 /examples/*.jpg
 /examples/*.png
+/examples/ref*
 
 # Build directories when using ./cmake/platforms/...
 /build-*
@@ -99,3 +100,10 @@ __pycache__/
 
 # Darwin Finder files
 *.DS_Store
+
+# CMake
+CMakeFiles
+CMakeCache.txt
+
+# Notebooks
+*.ipynb
