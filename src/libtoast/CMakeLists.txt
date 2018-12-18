@@ -7,12 +7,16 @@ add_library(toast
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
+    src/toast_math_fft.cpp
 )
 
 target_include_directories(toast PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
     PRIVATE src)
+
+# This compiler definition makes it possible to query the serial library
+# to see if we also have the MPI library.
 
 if(MPI_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_MPI=1)
@@ -25,6 +29,15 @@ if(OpenMP_CXX_FOUND)
     set_target_properties(toast PROPERTIES LINK_FLAGS ${OpenMP_CXX_FLAGS})
     target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
+
+if(FFTW_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
+    target_include_directories(toast PUBLIC ${FFTW_INCLUDE_DIRS})
+    target_link_libraries(toast "${FFTW_LIBRARIES}")
+    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
+        target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
+    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
+endif(FFTW_FOUND)
 
 # Installation
 

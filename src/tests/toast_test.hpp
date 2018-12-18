@@ -134,27 +134,27 @@ class TOASTsfTest : public ::testing::Test {
 //         virtual void TearDown() {}
 // };
 //
-//
-// class TOASTfftTest : public ::testing::Test {
-//     public:
-//
-//         TOASTfftTest() {}
-//
-//         ~TOASTfftTest() {}
-//
-//         virtual void SetUp() {}
-//
-//         virtual void TearDown() {}
-//
-//         void runbatch(int64_t nbatch,
-//                       toast::fft::r1d_p forward,
-//                       toast::fft::r1d_p reverse);
-//
-//         static const int64_t length;
-//         static const int64_t n;
-// };
-//
-//
+
+class TOASTfftTest : public ::testing::Test {
+    public:
+
+        TOASTfftTest() {}
+
+        ~TOASTfftTest() {}
+
+        virtual void SetUp() {}
+
+        virtual void TearDown() {}
+
+        void runbatch(int64_t nbatch,
+                      toast::fft_r1d::pshr forward,
+                      toast::fft_r1d::pshr reverse);
+
+        static const int64_t length;
+        static const int64_t n;
+};
+
+
 // class TOASTcovTest : public ::testing::Test {
 //     public:
 //

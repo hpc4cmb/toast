@@ -24,9 +24,15 @@ include(BuildType)
 # External packages
 
 find_package(OpenMP)
+
+find_package(LAPACK)
+
+find_package(FFTW)
+
 find_package(MPI)
 
 find_package(PythonInterp)
+
 find_package(MPI4PY)
 
 # Internal products
