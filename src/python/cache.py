@@ -80,22 +80,20 @@ class Cache(object):
         self._refs = {}
         self._aliases = {}
 
-
     def __del__(self):
         # free all buffers at destruction time
         self._aliases.clear()
         if not self._pymem:
             keylist = list(self._refs.keys())
             for k in keylist:
-                #gc.collect()
-                referrers = gc.get_referrers(self._refs[k])
-                #print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
-                #print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
-                if sys.getrefcount(self._refs[k]) > 2:
-                    warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
+                # gc.collect()
+                # referrers = gc.get_referrers(self._refs[k])
+                # print("__del__ {} referrers for {} are: ".format(len(referrers), k), referrers)
+                # print("__del__ refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+                # if sys.getrefcount(self._refs[k]) > 2:
+                #    warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
                 del self._refs[k]
         self._refs.clear()
-
 
     def clear(self, pattern=None):
         """Clear one or more buffers.
@@ -111,12 +109,19 @@ class Cache(object):
             if not self._pymem:
                 keylist = list(self._refs.keys())
                 for k in keylist:
-                    #gc.collect()
-                    referrers = gc.get_referrers(self._refs[k])
-                    #print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
-                    #print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+                    # gc.collect()
+                    # referrers = gc.get_referrers(self._refs[k])
+                    # print("clear {} referrers for {} are: ".format(len(referrers), k), referrers)
+                    # print("clear refcount for {} is ".format(k), sys.getrefcount(self._refs[k]) )
+                    """
                     if sys.getrefcount(self._refs[k]) > 2:
-                        warnings.warn("Cache object {} has external references and will not be freed.".format(k), RuntimeWarning)
+                        warnings.warn(
+                            "Cache object {} has external references and will not be freed.".format(
+                                k
+                            ),
+                            RuntimeWarning,
+                        )
+                    """
                     del self._refs[k]
             self._refs.clear()
         else:
@@ -131,7 +136,6 @@ class Cache(object):
                 self.destroy(n)
         return
 
-
     def create(self, name, type, shape):
         """Create a named data buffer of the given type and shape.
 
@@ -142,7 +146,7 @@ class Cache(object):
         """
 
         if name is None:
-            raise ValueError('Cache name cannot be None')
+            raise ValueError("Cache name cannot be None")
 
         if self.exists(name):
             raise RuntimeError("Data buffer or alias {} already exists".format(name))
@@ -153,12 +157,15 @@ class Cache(object):
             flatsize = 1
             for s in range(len(shape)):
                 if shape[s] <= 0:
-                    raise RuntimeError("Cache object must have non-zero sizes in all dimensions")
+                    raise RuntimeError(
+                        "Cache object must have non-zero sizes in all dimensions"
+                    )
                 flatsize *= shape[s]
-            self._refs[name] = np.asarray( ToastBuffer(int(flatsize), numpy2toast(type)) ).reshape(shape)
+            self._refs[name] = np.asarray(
+                ToastBuffer(int(flatsize), numpy2toast(type))
+            ).reshape(shape)
 
         return self._refs[name]
-
 
     def put(self, name, data, replace=False):
         """Create a named data buffer to hold the provided data.
@@ -174,7 +181,7 @@ class Cache(object):
         """
 
         if name is None:
-            raise ValueError('Cache name cannot be None')
+            raise ValueError("Cache name cannot be None")
 
         if self.exists(name) and replace:
             ref = self.reference(name)
@@ -195,7 +202,6 @@ class Cache(object):
 
         return ref
 
-
     def add_alias(self, alias, name):
         """Add an alias to a name that already exists in the cache.
 
@@ -205,16 +211,19 @@ class Cache(object):
         """
 
         if alias is None or name is None:
-            raise ValueError('Cache name or alias cannot be None')
+            raise ValueError("Cache name or alias cannot be None")
 
         if name not in self._refs.keys():
-            raise RuntimeError("Data buffer {} does not exist for alias {}".format(name, alias))
+            raise RuntimeError(
+                "Data buffer {} does not exist for alias {}".format(name, alias)
+            )
 
         if alias in self._refs.keys():
-            raise RuntimeError("Proposed alias {} would shadow existing buffer.".format(alias))
+            raise RuntimeError(
+                "Proposed alias {} would shadow existing buffer.".format(alias)
+            )
 
         self._aliases[alias] = name
-
 
     def destroy(self, name):
         """Deallocate the specified buffer.
@@ -238,7 +247,7 @@ class Cache(object):
         aliases_to_remove = []
         for key, value in self._aliases.items():
             if value == name:
-                aliases_to_remove.append( key )
+                aliases_to_remove.append(key)
         for key in aliases_to_remove:
             del self._aliases[key]
 
@@ -248,10 +257,14 @@ class Cache(object):
             # print("destroy referrers for {} are ".format(name), gc.get_referrers(self._refs[name]))
             # print("destroy refcount for {} is ".format(name), sys.getrefcount(self._refs[name]) )
             if sys.getrefcount(self._refs[name]) > 2:
-                warnings.warn("Cache object {} has external references and will not be freed.".format(name), RuntimeWarning)
+                warnings.warn(
+                    "Cache object {} has external references and will not be freed.".format(
+                        name
+                    ),
+                    RuntimeWarning,
+                )
         del self._refs[name]
         return
-
 
     def exists(self, name, return_ref=False):
         """Check whether a buffer exists.
@@ -283,7 +296,6 @@ class Cache(object):
                     ref = self._refs[self._aliases[name]]
                 return ref
 
-
     def reference(self, name):
         """Return a numpy array pointing to the buffer.
 
@@ -303,7 +315,6 @@ class Cache(object):
             raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
         return ref
 
-
     def keys(self):
         """Return a list of all the keys in the cache.
 
@@ -315,18 +326,16 @@ class Cache(object):
 
         return list(self._refs.keys())
 
-
     def aliases(self):
         """Return a dictionary of all the aliases to keys in the cache.
 
         Args:
 
-        Returns:
+         Returns:
             (dict): Dictionary of aliases.
         """
 
         return self._aliases.copy()
-
 
     def report(self, silent=False):
         """Report memory usage.
@@ -339,7 +348,7 @@ class Cache(object):
         """
 
         if not silent:
-            print('Cache memory usage:')
+            print("Cache memory usage:")
 
         tot = 0
         for key in self.keys():
@@ -348,9 +357,9 @@ class Cache(object):
             del ref
             tot += sz
             if not silent:
-                print(' - {:25} {:5.2f} MB'.format(key, sz/2**20))
+                print(" - {:25} {:5.2f} MB".format(key, sz / 2 ** 20))
 
         if not silent:
-            print(' {:27} {:5.2f} MB'.format('TOTAL', tot/2**20))
+            print(" {:27} {:5.2f} MB".format("TOTAL", tot / 2 ** 20))
 
         return tot
