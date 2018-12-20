@@ -4,6 +4,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from toast.mpi import MPI, finalize
+
 import copy
 from datetime import datetime
 import os
@@ -16,7 +18,6 @@ import argparse
 import dateutil.parser
 from toast import Weather
 import toast
-from toast.mpi import MPI, finalize
 
 import healpy as hp
 import numpy as np
@@ -33,10 +34,11 @@ if tt.spt3g_available:
     from toast.tod.spt3g import Op3GExport, TOD3G
 
 
-if 'TOAST_STARTUP_DELAY' in os.environ:
+if "TOAST_STARTUP_DELAY" in os.environ:
     import numpy as np
     import time
-    delay = np.float(os.environ['TOAST_STARTUP_DELAY'])
+
+    delay = np.float(os.environ["TOAST_STARTUP_DELAY"])
     wait = np.random.rand() * delay
     # print('Sleeping for {} seconds before importing TOAST'.format(wait),
     #      flush=True)
@@ -58,233 +60,443 @@ def parse_arguments(comm):
     parser = argparse.ArgumentParser(
         description="Simulate ground-based boresight pointing.  Simulate "
         "atmosphere and make maps for some number of noise Monte Carlos.",
-        fromfile_prefix_chars='@')
-    parser.add_argument('--groupsize',
-                        required=False, type=np.int,
-                        help='Size of a process group assigned to a CES')
+        fromfile_prefix_chars="@",
+    )
+    parser.add_argument(
+        "--groupsize",
+        required=False,
+        type=np.int,
+        help="Size of a process group assigned to a CES",
+    )
 
-    parser.add_argument('--timezone', required=False, type=np.int, default=0,
-                        help='Offset to apply to MJD to separate days [hours]')
-    parser.add_argument('--coord', required=False, default='C',
-                        help='Sky coordinate system [C,E,G]')
-    parser.add_argument('--schedule', required=True,
-                        help='Comma-separated list CES schedule files '
-                        '(from toast_ground_schedule.py)')
-    parser.add_argument('--weather',
-                        required=False,
-                        help='Comma-separated list of TOAST weather files for '
-                        'every schedule.  Repeat the same file if the '
-                        'schedules share observing site.')
-    parser.add_argument('--samplerate',
-                        required=False, default=100.0, type=np.float,
-                        help='Detector sample rate (Hz)')
-    parser.add_argument('--scanrate',
-                        required=False, default=1.0, type=np.float,
-                        help='Scanning rate [deg / s]')
-    parser.add_argument('--scan_accel',
-                        required=False, default=1.0, type=np.float,
-                        help='Scanning rate change [deg / s^2]')
-    parser.add_argument('--sun_angle_min',
-                        required=False, default=30.0, type=np.float,
-                        help='Minimum azimuthal distance between the Sun and '
-                        'the bore sight [deg]')
+    parser.add_argument(
+        "--timezone",
+        required=False,
+        type=np.int,
+        default=0,
+        help="Offset to apply to MJD to separate days [hours]",
+    )
+    parser.add_argument(
+        "--coord", required=False, default="C", help="Sky coordinate system [C,E,G]"
+    )
+    parser.add_argument(
+        "--schedule",
+        required=True,
+        help="Comma-separated list CES schedule files "
+        "(from toast_ground_schedule.py)",
+    )
+    parser.add_argument(
+        "--weather",
+        required=False,
+        help="Comma-separated list of TOAST weather files for "
+        "every schedule.  Repeat the same file if the "
+        "schedules share observing site.",
+    )
+    parser.add_argument(
+        "--samplerate",
+        required=False,
+        default=100.0,
+        type=np.float,
+        help="Detector sample rate (Hz)",
+    )
+    parser.add_argument(
+        "--scanrate",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Scanning rate [deg / s]",
+    )
+    parser.add_argument(
+        "--scan_accel",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Scanning rate change [deg / s^2]",
+    )
+    parser.add_argument(
+        "--sun_angle_min",
+        required=False,
+        default=30.0,
+        type=np.float,
+        help="Minimum azimuthal distance between the Sun and " "the bore sight [deg]",
+    )
 
-    parser.add_argument('--conserve_memory', dest='conserve_memory',
-                        required=False, action='store_true',
-                        help='Conserve memory')
-    parser.add_argument('--no_conserve_memory', dest='conserve_memory',
-                        required=False, action='store_false',
-                        help='Do not conserve memory')
+    parser.add_argument(
+        "--conserve_memory",
+        dest="conserve_memory",
+        required=False,
+        action="store_true",
+        help="Conserve memory",
+    )
+    parser.add_argument(
+        "--no_conserve_memory",
+        dest="conserve_memory",
+        required=False,
+        action="store_false",
+        help="Do not conserve memory",
+    )
     parser.set_defaults(conserve_memory=True)
 
-    parser.add_argument('--polyorder',
-                        required=False, type=np.int,
-                        help='Polynomial order for the polyfilter')
+    parser.add_argument(
+        "--polyorder",
+        required=False,
+        type=np.int,
+        help="Polynomial order for the polyfilter",
+    )
 
-    parser.add_argument('--wbin_ground',
-                        required=False, type=np.float,
-                        help='Ground template bin width [degrees]')
+    parser.add_argument(
+        "--wbin_ground",
+        required=False,
+        type=np.float,
+        help="Ground template bin width [degrees]",
+    )
 
-    parser.add_argument('--gain_sigma',
-                        required=False, type=np.float,
-                        help='Gain error distribution')
+    parser.add_argument(
+        "--gain_sigma", required=False, type=np.float, help="Gain error distribution"
+    )
 
-    parser.add_argument('--hwprpm',
-                        required=False, default=0.0, type=np.float,
-                        help='The rate (in RPM) of the HWP rotation')
-    parser.add_argument('--hwpstep', required=False, default=None,
-                        help='For stepped HWP, the angle in degrees '
-                        'of each step')
-    parser.add_argument('--hwpsteptime',
-                        required=False, default=0.0, type=np.float,
-                        help='For stepped HWP, the the time in seconds '
-                        'between steps')
+    parser.add_argument(
+        "--hwprpm",
+        required=False,
+        default=0.0,
+        type=np.float,
+        help="The rate (in RPM) of the HWP rotation",
+    )
+    parser.add_argument(
+        "--hwpstep",
+        required=False,
+        default=None,
+        help="For stepped HWP, the angle in degrees " "of each step",
+    )
+    parser.add_argument(
+        "--hwpsteptime",
+        required=False,
+        default=0.0,
+        type=np.float,
+        help="For stepped HWP, the the time in seconds " "between steps",
+    )
 
-    parser.add_argument('--input_map', required=False,
-                        help='Input map for signal')
-    parser.add_argument('--input_pysm_model', required=False,
-                        help='Comma separated models for on-the-fly PySM '
-                        'simulation, e.g. s3,d6,f1,a2"')
-    parser.add_argument('--apply_beam', required=False, action='store_true',
-                        help='Apply beam convolution to input map with '
-                        'gaussian beam parameters defined in focalplane')
+    parser.add_argument("--input_map", required=False, help="Input map for signal")
+    parser.add_argument(
+        "--input_pysm_model",
+        required=False,
+        help="Comma separated models for on-the-fly PySM "
+        'simulation, e.g. s3,d6,f1,a2"',
+    )
+    parser.add_argument(
+        "--apply_beam",
+        required=False,
+        action="store_true",
+        help="Apply beam convolution to input map with "
+        "gaussian beam parameters defined in focalplane",
+    )
 
-    parser.add_argument('--skip_atmosphere',
-                        required=False, default=False, action='store_true',
-                        help='Disable simulating the atmosphere.')
-    parser.add_argument('--skip_noise',
-                        required=False, default=False, action='store_true',
-                        help='Disable simulating detector noise.')
-    parser.add_argument('--skip_bin',
-                        required=False, default=False, action='store_true',
-                        help='Disable binning the map.')
-    parser.add_argument('--skip_hits',
-                        required=False, default=False, action='store_true',
-                        help='Do not save the 3x3 matrices and hitmaps')
-    parser.add_argument('--skip_destripe',
-                        required=False, default=False, action='store_true',
-                        help='Do not destripe the data')
-    parser.add_argument('--skip_daymaps',
-                        required=False, default=False, action='store_true',
-                        help='Do not bin daily maps')
+    parser.add_argument(
+        "--skip_atmosphere",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Disable simulating the atmosphere.",
+    )
+    parser.add_argument(
+        "--skip_noise",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Disable simulating detector noise.",
+    )
+    parser.add_argument(
+        "--skip_bin",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Disable binning the map.",
+    )
+    parser.add_argument(
+        "--skip_hits",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Do not save the 3x3 matrices and hitmaps",
+    )
+    parser.add_argument(
+        "--skip_destripe",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Do not destripe the data",
+    )
+    parser.add_argument(
+        "--skip_daymaps",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Do not bin daily maps",
+    )
 
-    parser.add_argument('--atm_lmin_center',
-                        required=False, default=0.01, type=np.float,
-                        help='Kolmogorov turbulence dissipation scale center')
-    parser.add_argument('--atm_lmin_sigma',
-                        required=False, default=0.001, type=np.float,
-                        help='Kolmogorov turbulence dissipation scale sigma')
-    parser.add_argument('--atm_lmax_center',
-                        required=False, default=10.0, type=np.float,
-                        help='Kolmogorov turbulence injection scale center')
-    parser.add_argument('--atm_lmax_sigma',
-                        required=False, default=10.0, type=np.float,
-                        help='Kolmogorov turbulence injection scale sigma')
-    parser.add_argument('--atm_gain',
-                        required=False, default=1e-4, type=np.float,
-                        help='Atmospheric gain factor.')
-    parser.add_argument('--atm_zatm',
-                        required=False, default=40000.0, type=np.float,
-                        help='atmosphere extent for temperature profile')
-    parser.add_argument('--atm_zmax',
-                        required=False, default=200.0, type=np.float,
-                        help='atmosphere extent for water vapor integration')
-    parser.add_argument('--atm_xstep',
-                        required=False, default=10.0, type=np.float,
-                        help='size of volume elements in X direction')
-    parser.add_argument('--atm_ystep',
-                        required=False, default=10.0, type=np.float,
-                        help='size of volume elements in Y direction')
-    parser.add_argument('--atm_zstep',
-                        required=False, default=10.0, type=np.float,
-                        help='size of volume elements in Z direction')
-    parser.add_argument('--atm_nelem_sim_max',
-                        required=False, default=1000, type=np.int,
-                        help='controls the size of the simulation slices')
-    parser.add_argument('--atm_gangsize',
-                        required=False, default=1, type=np.int,
-                        help='size of the gangs that create slices')
-    parser.add_argument('--atm_wind_time',
-                        required=False, default=36000.0, type=np.float,
-                        help='Maximum time to simulate without discontinuity')
-    parser.add_argument('--atm_z0_center',
-                        required=False, default=2000.0, type=np.float,
-                        help='central value of the water vapor distribution')
-    parser.add_argument('--atm_z0_sigma',
-                        required=False, default=0.0, type=np.float,
-                        help='sigma of the water vapor distribution')
-    parser.add_argument('--atm_T0_center',
-                        required=False, default=280.0, type=np.float,
-                        help='central value of the temperature distribution')
-    parser.add_argument('--atm_T0_sigma',
-                        required=False, default=10.0, type=np.float,
-                        help='sigma of the temperature distribution')
-    parser.add_argument('--atm_cache',
-                        required=False, default='atm_cache',
-                        help='Atmosphere cache directory')
+    parser.add_argument(
+        "--atm_lmin_center",
+        required=False,
+        default=0.01,
+        type=np.float,
+        help="Kolmogorov turbulence dissipation scale center",
+    )
+    parser.add_argument(
+        "--atm_lmin_sigma",
+        required=False,
+        default=0.001,
+        type=np.float,
+        help="Kolmogorov turbulence dissipation scale sigma",
+    )
+    parser.add_argument(
+        "--atm_lmax_center",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="Kolmogorov turbulence injection scale center",
+    )
+    parser.add_argument(
+        "--atm_lmax_sigma",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="Kolmogorov turbulence injection scale sigma",
+    )
+    parser.add_argument(
+        "--atm_gain",
+        required=False,
+        default=1e-4,
+        type=np.float,
+        help="Atmospheric gain factor.",
+    )
+    parser.add_argument(
+        "--atm_zatm",
+        required=False,
+        default=40000.0,
+        type=np.float,
+        help="atmosphere extent for temperature profile",
+    )
+    parser.add_argument(
+        "--atm_zmax",
+        required=False,
+        default=200.0,
+        type=np.float,
+        help="atmosphere extent for water vapor integration",
+    )
+    parser.add_argument(
+        "--atm_xstep",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="size of volume elements in X direction",
+    )
+    parser.add_argument(
+        "--atm_ystep",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="size of volume elements in Y direction",
+    )
+    parser.add_argument(
+        "--atm_zstep",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="size of volume elements in Z direction",
+    )
+    parser.add_argument(
+        "--atm_nelem_sim_max",
+        required=False,
+        default=1000,
+        type=np.int,
+        help="controls the size of the simulation slices",
+    )
+    parser.add_argument(
+        "--atm_gangsize",
+        required=False,
+        default=1,
+        type=np.int,
+        help="size of the gangs that create slices",
+    )
+    parser.add_argument(
+        "--atm_wind_time",
+        required=False,
+        default=36000.0,
+        type=np.float,
+        help="Maximum time to simulate without discontinuity",
+    )
+    parser.add_argument(
+        "--atm_z0_center",
+        required=False,
+        default=2000.0,
+        type=np.float,
+        help="central value of the water vapor distribution",
+    )
+    parser.add_argument(
+        "--atm_z0_sigma",
+        required=False,
+        default=0.0,
+        type=np.float,
+        help="sigma of the water vapor distribution",
+    )
+    parser.add_argument(
+        "--atm_T0_center",
+        required=False,
+        default=280.0,
+        type=np.float,
+        help="central value of the temperature distribution",
+    )
+    parser.add_argument(
+        "--atm_T0_sigma",
+        required=False,
+        default=10.0,
+        type=np.float,
+        help="sigma of the temperature distribution",
+    )
+    parser.add_argument(
+        "--atm_cache",
+        required=False,
+        default="atm_cache",
+        help="Atmosphere cache directory",
+    )
 
-    parser.add_argument('--outdir',
-                        required=False, default='out',
-                        help='Output directory')
-    parser.add_argument('--zip',
-                        required=False, default=False, action='store_true',
-                        help='Compress the output fits files')
-    parser.add_argument('--debug',
-                        required=False, default=False, action='store_true',
-                        help='Write diagnostics')
-    parser.add_argument('--flush',
-                        required=False, default=False, action='store_true',
-                        help='Flush every print statement.')
-    parser.add_argument('--nside',
-                        required=False, default=512, type=np.int,
-                        help='Healpix NSIDE')
-    parser.add_argument('--madam_prefix',
-                        required=False, default='toast',
-                        help='Output map prefix')
-    parser.add_argument('--madam_iter_max',
-                        required=False, default=1000, type=np.int,
-                        help='Maximum number of CG iterations in Madam')
-    parser.add_argument('--madam_baseline_length',
-                        required=False, default=10000.0, type=np.float,
-                        help='Destriping baseline length (seconds)')
-    parser.add_argument('--madam_baseline_order',
-                        required=False, default=0, type=np.int,
-                        help='Destriping baseline polynomial order')
-    parser.add_argument('--madam_precond_width',
-                        required=False, default=1, type=np.int,
-                        help='Madam preconditioner width')
-    parser.add_argument('--madam_noisefilter',
-                        required=False, default=False, action='store_true',
-                        help='Destripe with the noise filter enabled')
-    parser.add_argument('--madampar',
-                        required=False, default=None,
-                        help='Madam parameter file')
-    parser.add_argument('--no_madam_allreduce',
-                        required=False, default=False, action='store_true',
-                        help='Do not use allreduce communication in Madam')
-    parser.add_argument('--common_flag_mask',
-                        required=False, default=1, type=np.uint8,
-                        help='Common flag mask')
-    parser.add_argument('--MC_start',
-                        required=False, default=0, type=np.int,
-                        help='First Monte Carlo noise realization')
-    parser.add_argument('--MC_count',
-                        required=False, default=1, type=np.int,
-                        help='Number of Monte Carlo noise realizations')
-    parser.add_argument('--fp',
-                        required=False, default=None,
-                        help='Pickle file containing a dictionary of detector '
-                        'properties.  The keys of this dict are the detector '
-                        'names, and each value is also a dictionary with keys '
-                        '"quat" (4 element ndarray), "fwhm" (float, arcmin), '
-                        '"fknee" (float, Hz), "alpha" (float), and '
-                        '"NET" (float).')
-    parser.add_argument('--focalplane_radius',
-                        required=False, type=np.float,
-                        help='Override focal plane radius [deg]')
-    parser.add_argument('--freq',
-                        required=True,
-                        help='Comma-separated list of frequencies with '
-                        'identical focal planes')
-    parser.add_argument('--tidas',
-                        required=False, default=None,
-                        help='Output TIDAS export path')
-    parser.add_argument('--spt3g',
-                        required=False, default=None,
-                        help='Output SPT3G export path')
+    parser.add_argument(
+        "--outdir", required=False, default="out", help="Output directory"
+    )
+    parser.add_argument(
+        "--zip",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Compress the output fits files",
+    )
+    parser.add_argument(
+        "--debug",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Write diagnostics",
+    )
+    parser.add_argument(
+        "--flush",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Flush every print statement.",
+    )
+    parser.add_argument(
+        "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+    )
+    parser.add_argument(
+        "--madam_prefix", required=False, default="toast", help="Output map prefix"
+    )
+    parser.add_argument(
+        "--madam_iter_max",
+        required=False,
+        default=1000,
+        type=np.int,
+        help="Maximum number of CG iterations in Madam",
+    )
+    parser.add_argument(
+        "--madam_baseline_length",
+        required=False,
+        default=10000.0,
+        type=np.float,
+        help="Destriping baseline length (seconds)",
+    )
+    parser.add_argument(
+        "--madam_baseline_order",
+        required=False,
+        default=0,
+        type=np.int,
+        help="Destriping baseline polynomial order",
+    )
+    parser.add_argument(
+        "--madam_precond_width",
+        required=False,
+        default=1,
+        type=np.int,
+        help="Madam preconditioner width",
+    )
+    parser.add_argument(
+        "--madam_noisefilter",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Destripe with the noise filter enabled",
+    )
+    parser.add_argument(
+        "--madampar", required=False, default=None, help="Madam parameter file"
+    )
+    parser.add_argument(
+        "--no_madam_allreduce",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Do not use allreduce communication in Madam",
+    )
+    parser.add_argument(
+        "--common_flag_mask",
+        required=False,
+        default=1,
+        type=np.uint8,
+        help="Common flag mask",
+    )
+    parser.add_argument(
+        "--MC_start",
+        required=False,
+        default=0,
+        type=np.int,
+        help="First Monte Carlo noise realization",
+    )
+    parser.add_argument(
+        "--MC_count",
+        required=False,
+        default=1,
+        type=np.int,
+        help="Number of Monte Carlo noise realizations",
+    )
+    parser.add_argument(
+        "--fp",
+        required=False,
+        default=None,
+        help="Pickle file containing a dictionary of detector "
+        "properties.  The keys of this dict are the detector "
+        "names, and each value is also a dictionary with keys "
+        '"quat" (4 element ndarray), "fwhm" (float, arcmin), '
+        '"fknee" (float, Hz), "alpha" (float), and '
+        '"NET" (float).',
+    )
+    parser.add_argument(
+        "--focalplane_radius",
+        required=False,
+        type=np.float,
+        help="Override focal plane radius [deg]",
+    )
+    parser.add_argument(
+        "--freq",
+        required=True,
+        help="Comma-separated list of frequencies with " "identical focal planes",
+    )
+    parser.add_argument(
+        "--tidas", required=False, default=None, help="Output TIDAS export path"
+    )
+    parser.add_argument(
+        "--spt3g", required=False, default=None, help="Output SPT3G export path"
+    )
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
 
-    if len(args.freq.split(',')) != 1:
+    if len(args.freq.split(",")) != 1:
         # Multi frequency run.  We don't support multiple copies of
         # scanned signal.
         if args.input_map:
-            raise RuntimeError('Multiple frequencies are not supported when '
-                               'scanning from a map')
+            raise RuntimeError(
+                "Multiple frequencies are not supported when " "scanning from a map"
+            )
 
     if not args.skip_atmosphere and args.weather is None:
-        raise RuntimeError('Cannot simulate atmosphere without a TOAST '
-                           'weather file')
+        raise RuntimeError("Cannot simulate atmosphere without a TOAST " "weather file")
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -295,9 +507,9 @@ def parse_arguments(comm):
             raise RuntimeError("SPT3G not found- cannot export")
 
     if comm.comm_world.rank == 0:
-        print('\nAll parameters:')
+        print("\nAll parameters:")
         print(args, flush=args.flush)
-        print('')
+        print("")
 
     if args.groupsize:
         comm = toast.Comm(groupsize=args.groupsize)
@@ -334,15 +546,17 @@ def load_weather(args, comm, schedules):
     if comm.comm_world.rank == 0:
         weathers = []
         weatherdict = {}
-        for fname in args.weather.split(','):
+        for fname in args.weather.split(","):
             if fname not in weatherdict:
                 if not os.path.isfile(fname):
-                    raise RuntimeError('No such weather file: {}'.format(fname))
+                    raise RuntimeError("No such weather file: {}".format(fname))
                 start1 = MPI.Wtime()
                 weatherdict[fname] = Weather(fname)
                 stop1 = MPI.Wtime()
-                print('Load {}: {:.2f} seconds'.format(fname, stop1 - start1),
-                      flush=args.flush)
+                print(
+                    "Load {}: {:.2f} seconds".format(fname, stop1 - start1),
+                    flush=args.flush,
+                )
             weathers.append(weatherdict[fname])
     else:
         weathers = None
@@ -351,15 +565,14 @@ def load_weather(args, comm, schedules):
     if len(weathers) == 1 and len(schedules) > 1:
         weathers *= len(schedules)
     if len(weathers) != len(schedules):
-        raise RuntimeError(
-            'Number of weathers must equal number of schedules or be 1.')
+        raise RuntimeError("Number of weathers must equal number of schedules or be 1.")
 
     for schedule, weather in zip(schedules, weathers):
         schedule.append(weather)
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Loading weather {:.3f} s'.format(stop - start), flush=args.flush)
+        print("Loading weather {:.3f} s".format(stop - start), flush=args.flush)
     del autotimer
     return
 
@@ -373,57 +586,86 @@ def load_schedule(args, comm):
     schedules = []
 
     if comm.comm_world.rank == 0:
-        for fn in args.schedule.split(','):
+        for fn in args.schedule.split(","):
             if not os.path.isfile(fn):
-                raise RuntimeError('No such schedule file: {}'.format(fn))
+                raise RuntimeError("No such schedule file: {}".format(fn))
             start1 = MPI.Wtime()
-            with open(fn, 'r') as f:
+            with open(fn, "r") as f:
                 while True:
                     line = f.readline()
-                    if line.startswith('#'):
+                    if line.startswith("#"):
                         continue
-                    (site_name, telescope, site_lat, site_lon,
-                     site_alt) = line.split()
+                    (site_name, telescope, site_lat, site_lon, site_alt) = line.split()
                     site_alt = float(site_alt)
                     site = (site_name, telescope, site_lat, site_lon, site_alt)
                     break
                 all_ces = []
                 for line in f:
-                    if line.startswith('#'):
+                    if line.startswith("#"):
                         continue
-                    (start_date, start_time, stop_date, stop_time, mjdstart,
-                     mjdstop, name, azmin, azmax, el, rs, sun_el1, sun_az1,
-                     sun_el2, sun_az2, moon_el1, moon_az1, moon_el2, moon_az2,
-                     moon_phase, scan, subscan) = line.split()
-                    start_time = start_date + ' ' + start_time
-                    stop_time = stop_date + ' ' + stop_time
+                    (
+                        start_date,
+                        start_time,
+                        stop_date,
+                        stop_time,
+                        mjdstart,
+                        mjdstop,
+                        name,
+                        azmin,
+                        azmax,
+                        el,
+                        rs,
+                        sun_el1,
+                        sun_az1,
+                        sun_el2,
+                        sun_az2,
+                        moon_el1,
+                        moon_az1,
+                        moon_el2,
+                        moon_az2,
+                        moon_phase,
+                        scan,
+                        subscan,
+                    ) = line.split()
+                    start_time = start_date + " " + start_time
+                    stop_time = stop_date + " " + stop_time
                     # Define season as a calendar year.  This can be
                     # changed later and could even be in the schedule file.
-                    season = int(start_date.split('-')[0])
+                    season = int(start_date.split("-")[0])
                     try:
-                        start_time = dateutil.parser.parse(start_time
-                                                           + ' +0000')
-                        stop_time = dateutil.parser.parse(stop_time + ' +0000')
+                        start_time = dateutil.parser.parse(start_time + " +0000")
+                        stop_time = dateutil.parser.parse(stop_time + " +0000")
                     except Exception:
                         start_time = dateutil.parser.parse(start_time)
                         stop_time = dateutil.parser.parse(stop_time)
                     start_timestamp = start_time.timestamp()
                     stop_timestamp = stop_time.timestamp()
-                    all_ces.append([
-                        start_timestamp, stop_timestamp, name, float(mjdstart),
-                        int(scan), int(subscan), float(azmin), float(azmax),
-                        float(el), season, start_date])
+                    all_ces.append(
+                        [
+                            start_timestamp,
+                            stop_timestamp,
+                            name,
+                            float(mjdstart),
+                            int(scan),
+                            int(subscan),
+                            float(azmin),
+                            float(azmax),
+                            float(el),
+                            season,
+                            start_date,
+                        ]
+                    )
             schedules.append([site, all_ces])
             stop1 = MPI.Wtime()
-            print('Load {}: {:.2f} seconds'.format(fn, stop1 - start1),
-                  flush=args.flush)
+            print(
+                "Load {}: {:.2f} seconds".format(fn, stop1 - start1), flush=args.flush
+            )
 
     schedules = comm.comm_world.bcast(schedules)
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Loading schedule {:.3f} s'.format(stop - start),
-              flush=args.flush)
+        print("Loading schedule {:.3f} s".format(stop - start), flush=args.flush)
     del autotimer
     return schedules
 
@@ -438,7 +680,7 @@ def get_focalplane_radius(args, focalplane, rmin=1.0):
     autotimer = timing.auto_timer()
     cosangs = []
     for det in focalplane:
-        quat = focalplane[det]['quat']
+        quat = focalplane[det]["quat"]
         vec = qa.rotate(quat, ZAXIS)
         cosangs.append(np.dot(ZAXIS, vec))
     mincos = np.amin(cosangs)
@@ -458,13 +700,15 @@ def load_focalplanes(args, comm, schedules):
 
     focalplanes = []
     if comm.comm_world.rank == 0:
-        for fpfile in args.fp.split(','):
+        for fpfile in args.fp.split(","):
             start1 = MPI.Wtime()
-            with open(fpfile, 'rb') as picklefile:
+            with open(fpfile, "rb") as picklefile:
                 focalplane = pickle.load(picklefile)
                 stop1 = MPI.Wtime()
-                print('Load {}:  {:.2f} seconds'.format(fpfile, stop1 - start1),
-                      flush=args.flush)
+                print(
+                    "Load {}:  {:.2f} seconds".format(fpfile, stop1 - start1),
+                    flush=args.flush,
+                )
                 focalplanes.append(focalplane)
                 start1 = stop1
     focalplanes = comm.comm_world.bcast(focalplanes)
@@ -473,23 +717,24 @@ def load_focalplanes(args, comm, schedules):
         focalplanes *= len(schedules)
     if len(focalplanes) != len(schedules):
         raise RuntimeError(
-            'Number of focalplanes must equal number of schedules or be 1.')
+            "Number of focalplanes must equal number of schedules or be 1."
+        )
 
     detweights = {}
     for schedule, focalplane in zip(schedules, focalplanes):
         schedule.append(focalplane)
         for detname, det in focalplane.items():
-            net = det['NET']
+            net = det["NET"]
             detweight = 1.0 / (args.samplerate * net * net)
             if detname in detweights and detweights[detname] != detweight:
-                raise RuntimeError(
-                    'Detector weight for {} changes'.format(detname))
+                raise RuntimeError("Detector weight for {} changes".format(detname))
             detweights[detname] = detweight
 
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Load focalplane(s):  {:.2f} seconds'.format(stop - start),
-              flush=args.flush)
+        print(
+            "Load focalplane(s):  {:.2f} seconds".format(stop - start), flush=args.flush
+        )
     del autotimer
     return detweights
 
@@ -510,13 +755,14 @@ def get_analytic_noise(args, focalplane):
     rates = {}
     for d in detectors:
         rates[d] = args.samplerate
-        fmin[d] = focalplane[d]['fmin']
-        fknee[d] = focalplane[d]['fknee']
-        alpha[d] = focalplane[d]['alpha']
-        NET[d] = focalplane[d]['NET']
+        fmin[d] = focalplane[d]["fmin"]
+        fknee[d] = focalplane[d]["fknee"]
+        alpha[d] = focalplane[d]["alpha"]
+        NET[d] = focalplane[d]["NET"]
     del autotimer
-    return tt.AnalyticNoise(rate=rates, fmin=fmin, detectors=detectors,
-                            fknee=fknee, alpha=alpha, NET=NET)
+    return tt.AnalyticNoise(
+        rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET
+    )
 
 
 def get_breaks(comm, all_ces, nces, args):
@@ -552,8 +798,11 @@ def get_breaks(comm, all_ces, nces, args):
     nbreak = len(breaks)
     if nbreak < comm.ngroups - 1:
         if comm.comm_world.rank == 0:
-            print('WARNING: there are more process groups than observing days. '
-                  'Will try distributing by observation.', flush=True)
+            print(
+                "WARNING: there are more process groups than observing days. "
+                "Will try distributing by observation.",
+                flush=True,
+            )
         breaks = []
         for i in range(nces - 1):
             scan1 = all_ces[i][4]
@@ -564,8 +813,9 @@ def get_breaks(comm, all_ces, nces, args):
 
     if nbreak != comm.ngroups - 1:
         raise RuntimeError(
-            'Number of observing days ({}) does not match number of process '
-            'groups ({}).'.format(nbreak + 1, comm.ngroups))
+            "Number of observing days ({}) does not match number of process "
+            "groups ({}).".format(nbreak + 1, comm.ngroups)
+        )
     del autotimer
     return breaks
 
@@ -579,8 +829,19 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     autotimer = timing.auto_timer()
     ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
 
-    (CES_start, CES_stop, CES_name, mjdstart, scan, subscan,
-     azmin, azmax, el, season, date) = ces
+    (
+        CES_start,
+        CES_stop,
+        CES_name,
+        mjdstart,
+        scan,
+        subscan,
+        azmin,
+        azmax,
+        el,
+        season,
+        date,
+    ) = ces
 
     _, _, site_lat, site_lon, site_alt = site
 
@@ -590,16 +851,31 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
 
     try:
         tod = tt.TODGround(
-            comm.comm_group, detquats, totsamples,
-            detranks=comm.comm_group.size, firsttime=CES_start,
-            rate=args.samplerate, site_lon=site_lon, site_lat=site_lat,
-            site_alt=site_alt, azmin=azmin, azmax=azmax, el=el,
-            scanrate=args.scanrate, scan_accel=args.scan_accel,
-            CES_start=None, CES_stop=None, sun_angle_min=args.sun_angle_min,
-            coord=args.coord, sampsizes=None)
+            comm.comm_group,
+            detquats,
+            totsamples,
+            detranks=comm.comm_group.size,
+            firsttime=CES_start,
+            rate=args.samplerate,
+            site_lon=site_lon,
+            site_lat=site_lat,
+            site_alt=site_alt,
+            azmin=azmin,
+            azmax=azmax,
+            el=el,
+            scanrate=args.scanrate,
+            scan_accel=args.scan_accel,
+            CES_start=None,
+            CES_stop=None,
+            sun_angle_min=args.sun_angle_min,
+            coord=args.coord,
+            sampsizes=None,
+        )
     except RuntimeError as e:
-        raise RuntimeError('Failed to create TOD for {}-{}-{}: "{}"'
-                           ''.format(CES_name, scan, subscan, e))
+        raise RuntimeError(
+            'Failed to create TOD for {}-{}-{}: "{}"'
+            "".format(CES_name, scan, subscan, e)
+        )
 
     # Create the observation
 
@@ -609,25 +885,26 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     telescope_id = name2id(telescope_name)
 
     obs = {}
-    obs['name'] = 'CES-{}-{}-{}-{}-{}'.format(site_name, telescope_name,
-                                              CES_name, scan, subscan)
-    obs['tod'] = tod
-    obs['baselines'] = None
-    obs['noise'] = noise
-    obs['id'] = int(mjdstart * 10000)
-    obs['intervals'] = tod.subscans
-    obs['site'] = site_name
-    obs['telescope'] = telescope_name
-    obs['site_id'] = site_id
-    obs['telescope_id'] = telescope_id
-    obs['fpradius'] = fpradius
-    obs['weather'] = weather
-    obs['start_time'] = CES_start
-    obs['altitude'] = site_alt
-    obs['season'] = season
-    obs['date'] = date
-    obs['MJD'] = mjdstart
-    obs['focalplane'] = fp
+    obs["name"] = "CES-{}-{}-{}-{}-{}".format(
+        site_name, telescope_name, CES_name, scan, subscan
+    )
+    obs["tod"] = tod
+    obs["baselines"] = None
+    obs["noise"] = noise
+    obs["id"] = int(mjdstart * 10000)
+    obs["intervals"] = tod.subscans
+    obs["site"] = site_name
+    obs["telescope"] = telescope_name
+    obs["site_id"] = site_id
+    obs["telescope_id"] = telescope_id
+    obs["fpradius"] = fpradius
+    obs["weather"] = weather
+    obs["start_time"] = CES_start
+    obs["altitude"] = site_alt
+    obs["season"] = season
+    obs["date"] = date
+    obs["MJD"] = mjdstart
+    obs["focalplane"] = fp
     del autotimer
     return obs
 
@@ -662,7 +939,7 @@ def create_observations(args, comm, schedules, mem_counter):
         detectors = sorted(focalplane.keys())
         detquats = {}
         for d in detectors:
-            detquats[d] = focalplane[d]['quat']
+            detquats[d] = focalplane[d]["quat"]
 
         # Noise model for this schedule
         noise = get_analytic_noise(args, focalplane)
@@ -670,8 +947,7 @@ def create_observations(args, comm, schedules, mem_counter):
         all_ces_tot = []
         nces = len(all_ces)
         for ces in all_ces:
-            all_ces_tot.append((ces, site, focalplane, fpradius,
-                                detquats, weather))
+            all_ces_tot.append((ces, site, focalplane, fpradius, detquats, weather))
 
         breaks = get_breaks(comm, all_ces, nces, args)
 
@@ -685,36 +961,42 @@ def create_observations(args, comm, schedules, mem_counter):
 
     if args.skip_atmosphere:
         for ob in data.obs:
-            tod = ob['tod']
+            tod = ob["tod"]
             tod.free_azel_quats()
 
     if comm.comm_group.rank == 0:
-        print('Group # {:4} has {} observations.'.format(
-            comm.group, len(data.obs)), flush=args.flush)
+        print(
+            "Group # {:4} has {} observations.".format(comm.group, len(data.obs)),
+            flush=args.flush,
+        )
 
     if len(data.obs) == 0:
-        raise RuntimeError('Too many tasks. Every MPI task must '
-                           'be assigned to at least one observation.')
+        raise RuntimeError(
+            "Too many tasks. Every MPI task must "
+            "be assigned to at least one observation."
+        )
 
     mem_counter.exec(data)
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Simulated scans in {:.2f} seconds'
-              ''.format(stop - start), flush=args.flush)
+        print(
+            "Simulated scans in {:.2f} seconds" "".format(stop - start),
+            flush=args.flush,
+        )
 
     # Split the data object for each telescope for separate mapmaking.
     # We could also split by site.
 
     if len(schedules) > 1:
-        telescope_data = data.split('telescope')
+        telescope_data = data.split("telescope")
         if len(telescope_data) == 1:
             # Only one telescope available
             telescope_data = []
     else:
         telescope_data = []
-    telescope_data.insert(0, ('all', data))
+    telescope_data.insert(0, ("all", data))
     del autotimer
     return data, telescope_data
 
@@ -733,11 +1015,16 @@ def expand_pointing(args, comm, data, mem_counter):
     hwpsteptime = args.hwpsteptime
 
     if comm.comm_world.rank == 0:
-        print('Expanding pointing', flush=args.flush)
+        print("Expanding pointing", flush=args.flush)
 
     pointing = tt.OpPointingHpix(
-        nside=args.nside, nest=True, mode='IQU',
-        hwprpm=hwprpm, hwpstep=hwpstep, hwpsteptime=hwpsteptime)
+        nside=args.nside,
+        nest=True,
+        mode="IQU",
+        hwprpm=hwprpm,
+        hwpstep=hwpstep,
+        hwpsteptime=hwpsteptime,
+    )
 
     pointing.exec(data)
 
@@ -745,14 +1032,15 @@ def expand_pointing(args, comm, data, mem_counter):
     # data to a TIDAS volume
     if (args.tidas is None) and (args.spt3g is None):
         for ob in data.obs:
-            tod = ob['tod']
+            tod = ob["tod"]
             tod.free_radec_quats()
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Pointing generation took {:.3f} s'.format(stop - start),
-              flush=args.flush)
+        print(
+            "Pointing generation took {:.3f} s".format(stop - start), flush=args.flush
+        )
 
     mem_counter.exec(data)
     del autotimer
@@ -763,10 +1051,10 @@ def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
-    if not args.skip_bin or args.input_map:
+    if not args.skip_bin or args.input_map or args.input_pysm_model:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Scanning local pixels', flush=args.flush)
+            print("Scanning local pixels", flush=args.flush)
         start = MPI.Wtime()
 
         # Prepare for using distpixels objects
@@ -781,9 +1069,9 @@ def get_submaps(args, comm, data):
         localpix = lc.exec(data)
         if localpix is None:
             raise RuntimeError(
-                'Process {} has no hit pixels. Perhaps there are fewer '
-                'detectors than processes in the group?'.format(
-                    comm.comm_world.rank))
+                "Process {} has no hit pixels. Perhaps there are fewer "
+                "detectors than processes in the group?".format(comm.comm_world.rank)
+            )
 
         # find the locally hit submaps.
         localsm = np.unique(np.floor_divide(localpix, subnpix))
@@ -792,11 +1080,12 @@ def get_submaps(args, comm, data):
         stop = MPI.Wtime()
         elapsed = stop - start
         if comm.comm_world.rank == 0:
-            print('Local submaps identified in {:.3f} s'.format(elapsed),
-                  flush=args.flush)
+            print(
+                "Local submaps identified in {:.3f} s".format(elapsed), flush=args.flush
+            )
+        del autotimer
     else:
-        localpix, localsm = None, None
-    del autotimer
+        localpix, localsm, subnpix = None, None, None
     return localpix, localsm, subnpix
 
 
@@ -807,10 +1096,10 @@ def add_sky_signal(data, totalname_freq, signalname):
     if signalname is not None:
         autotimer = timing.auto_timer()
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
             for det in tod.local_dets:
-                cachename_in = '{}_{}'.format(signalname, det)
-                cachename_out = '{}_{}'.format(totalname_freq, det)
+                cachename_in = "{}_{}".format(signalname, det)
+                cachename_out = "{}_{}".format(totalname_freq, det)
                 ref_in = tod.cache.reference(cachename_in)
                 if tod.cache.exists(cachename_out):
                     ref_out = tod.cache.reference(cachename_out)
@@ -822,25 +1111,29 @@ def add_sky_signal(data, totalname_freq, signalname):
     return
 
 
-def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix,
-                        localsm):
+def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, localsm):
     """ Use PySM to simulate smoothed sky signal.
 
     """
     autotimer = timing.auto_timer()
     # Convolve a signal TOD from PySM
     start = MPI.Wtime()
-    signalname = 'signal'
+    signalname = "signal"
     op_sim_pysm = ttm.OpSimPySM(
-        comm=comm.comm_rank, out=signalname, pysm_model=args.input_pysm_model,
-        focalplanes=[s[3] for s in schedules], nside=args.nside,
-        subnpix=subnpix, localsm=localsm, apply_beam=args.apply_beam,
-        coord=args.coord)
+        comm=comm.comm_rank,
+        out=signalname,
+        pysm_model=args.input_pysm_model,
+        focalplanes=[s[3] for s in schedules],
+        nside=args.nside,
+        subnpix=subnpix,
+        localsm=localsm,
+        apply_beam=args.apply_beam,
+        coord=args.coord,
+    )
     op_sim_pysm.exec(data)
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('PySM took {:.2f} seconds'.format(stop - start),
-              flush=args.flush)
+        print("PySM took {:.2f} seconds".format(stop - start), flush=args.flush)
 
     mem_counter.exec(data)
     del autotimer
@@ -856,28 +1149,34 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
     if args.input_map:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Scanning input map', flush=args.flush)
+            print("Scanning input map", flush=args.flush)
         start = MPI.Wtime()
 
         npix = 12 * args.nside ** 2
 
         # Scan the sky signal
         if comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
-            raise RuntimeError(
-                'Input map does not exist: {}'.format(args.input_map))
+            raise RuntimeError("Input map does not exist: {}".format(args.input_map))
         distmap = tm.DistPixels(
-            comm=comm.comm_world, size=npix, nnz=3,
-            dtype=np.float32, submap=subnpix, local=localsm)
+            comm=comm.comm_world,
+            size=npix,
+            nnz=3,
+            dtype=np.float32,
+            submap=subnpix,
+            local=localsm,
+        )
         mem_counter._objects.append(distmap)
         distmap.read_healpix_fits(args.input_map)
-        scansim = tt.OpSimScan(distmap=distmap, out='signal')
+        scansim = tt.OpSimScan(distmap=distmap, out="signal")
         scansim.exec(data)
 
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Read and sampled input map:  {:.2f} seconds'
-                  ''.format(stop - start), flush=args.flush)
-        signalname = 'signal'
+            print(
+                "Read and sampled input map:  {:.2f} seconds" "".format(stop - start),
+                flush=args.flush,
+            )
+        signalname = "signal"
 
         mem_counter.exec(data)
         del autotimer
@@ -892,12 +1191,12 @@ def setup_sigcopy(args):
     part of the atmospheric noise is simulated first and then the
     frequency scaling is applied to a copy of the atmospheric noise.
     """
-    if len(args.freq.split(',')) == 1:
-        totalname = 'total'
-        totalname_freq = 'total'
+    if len(args.freq.split(",")) == 1:
+        totalname = "total"
+        totalname_freq = "total"
     else:
-        totalname = 'total'
-        totalname_freq = 'total_freq'
+        totalname = "total"
+        totalname_freq = "total_freq"
 
     return totalname, totalname_freq
 
@@ -916,34 +1215,34 @@ def setup_madam(args):
     if submap > args.nside:
         submap = args.nside
 
-    pars['temperature_only'] = False
-    pars['force_pol'] = True
-    pars['kfirst'] = not args.skip_destripe
-    pars['write_map'] = not args.skip_destripe
-    pars['write_binmap'] = not args.skip_bin
-    pars['write_matrix'] = not args.skip_hits
-    pars['write_wcov'] = not args.skip_hits
-    pars['write_hits'] = not args.skip_hits
-    pars['nside_cross'] = cross
-    pars['nside_submap'] = submap
+    pars["temperature_only"] = False
+    pars["force_pol"] = True
+    pars["kfirst"] = not args.skip_destripe
+    pars["write_map"] = not args.skip_destripe
+    pars["write_binmap"] = not args.skip_bin
+    pars["write_matrix"] = not args.skip_hits
+    pars["write_wcov"] = not args.skip_hits
+    pars["write_hits"] = not args.skip_hits
+    pars["nside_cross"] = cross
+    pars["nside_submap"] = submap
     if args.no_madam_allreduce:
-        pars['allreduce'] = False
+        pars["allreduce"] = False
     else:
-        pars['allreduce'] = True
-    pars['reassign_submaps'] = True
-    pars['pixlim_cross'] = 1e-3
-    pars['pixmode_cross'] = 2
-    pars['pixlim_map'] = 1e-2
-    pars['pixmode_map'] = 2
+        pars["allreduce"] = True
+    pars["reassign_submaps"] = True
+    pars["pixlim_cross"] = 1e-3
+    pars["pixmode_cross"] = 2
+    pars["pixlim_map"] = 1e-2
+    pars["pixmode_map"] = 2
     # Instead of fixed detector weights, we'll want to use scaled noise
     # PSD:s that include the atmospheric noise
-    pars['radiometers'] = True
-    pars['noise_weights_from_psd'] = True
+    pars["radiometers"] = True
+    pars["noise_weights_from_psd"] = True
 
     if args.madampar is not None:
-        pat = re.compile(r'\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*')
-        comment = re.compile(r'^#.*')
-        with open(args.madampar, 'r') as f:
+        pat = re.compile(r"\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*")
+        comment = re.compile(r"^#.*")
+        with open(args.madampar, "r") as f:
             for line in f:
                 if comment.match(line) is None:
                     result = pat.match(line)
@@ -951,20 +1250,23 @@ def setup_madam(args):
                         key, value = result.group(1), result.group(2)
                         pars[key] = value
 
-    pars['base_first'] = args.madam_baseline_length
-    pars['basis_order'] = args.madam_baseline_order
-    pars['nside_map'] = args.nside
+    pars["base_first"] = args.madam_baseline_length
+    pars["basis_order"] = args.madam_baseline_order
+    pars["nside_map"] = args.nside
     if args.madam_noisefilter:
         if args.madam_baseline_order != 0:
-            raise RuntimeError('Madam cannot build a noise filter when baseline'
-                               'order is higher than zero.')
-        pars['kfilter'] = True
+            raise RuntimeError(
+                "Madam cannot build a noise filter when baseline"
+                "order is higher than zero."
+            )
+        pars["kfilter"] = True
     else:
-        pars['kfilter'] = False
-    pars['precond_width'] = args.madam_precond_width
-    pars['fsample'] = args.samplerate
-    pars['iter_max'] = args.madam_iter_max
-    pars['file_root'] = args.madam_prefix
+        pars["kfilter"] = False
+    pars["precond_width_min"] = 0
+    pars["precond_width_max"] = args.madam_precond_width
+    pars["fsample"] = args.samplerate
+    pars["iter_max"] = args.madam_iter_max
+    pars["file_root"] = args.madam_prefix
     del autotimer
     return pars
 
@@ -986,17 +1288,17 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     autotimer = timing.auto_timer()
     start = MPI.Wtime()
     for obs in data.obs:
-        tod = obs['tod']
+        tod = obs["tod"]
         todcomm = tod.mpicomm
-        site_id = obs['site_id']
-        weather = obs['weather']
-        if 'focalplane' in obs:
-            focalplane = obs['focalplane']
+        site_id = obs["site_id"]
+        weather = obs["weather"]
+        if "focalplane" in obs:
+            focalplane = obs["focalplane"]
         else:
             focalplane = None
-        start_time = obs['start_time']
+        start_time = obs["start_time"]
         weather.set(site_id, mc, start_time)
-        altitude = obs['altitude']
+        altitude = obs["altitude"]
         air_temperature = weather.air_temperature
         surface_pressure = weather.surface_pressure
         pwv = weather.pwv
@@ -1011,15 +1313,20 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         my_ifreq_max = min(nfreq, nfreq_task * (todcomm.rank + 1))
         my_nfreq = my_ifreq_max - my_ifreq_min
         if my_nfreq > 0:
-            my_freqs = freqmin + np.arange(my_ifreq_min,
-                                           my_ifreq_max) * freqstep
+            my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max) * freqstep
             my_absorption = np.zeros(my_nfreq)
             err = toast.ctoast.atm_get_absorption_coefficient_vec(
-                altitude, air_temperature, surface_pressure, pwv,
-                my_freqs[0], my_freqs[-1], my_nfreq, my_absorption)
+                altitude,
+                air_temperature,
+                surface_pressure,
+                pwv,
+                my_freqs[0],
+                my_freqs[-1],
+                my_nfreq,
+                my_absorption,
+            )
             if err != 0:
-                raise RuntimeError(
-                    'Failed to get absorption coefficient vector')
+                raise RuntimeError("Failed to get absorption coefficient vector")
         else:
             my_freqs = np.array([])
             my_absorption = np.array([])
@@ -1030,19 +1337,18 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         for det in tod.local_dets:
             try:
                 # Use detector bandpass from the focalplane
-                center = focalplane[det]['bandcenter_ghz']
-                width = focalplane[det]['bandwidth_ghz']
+                center = focalplane[det]["bandcenter_ghz"]
+                width = focalplane[det]["bandwidth_ghz"]
             except Exception:
                 # Use default values for the entire focalplane
                 center = freq
-                width = .2 * freq
+                width = 0.2 * freq
             nstep = 101
             # Interpolate the absorption coefficient to do a top hat
             # integral across the bandpass
-            det_freqs = np.linspace(center - width / 2, center + width / 2,
-                                    nstep)
+            det_freqs = np.linspace(center - width / 2, center + width / 2, nstep)
             absorption_det = np.mean(np.interp(det_freqs, freqs, absorption))
-            cachename = '{}_{}'.format(totalname_freq, det)
+            cachename = "{}_{}".format(totalname_freq, det)
             ref = tod.cache.reference(cachename)
             ref *= absorption_det
             del ref
@@ -1050,8 +1356,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Atmosphere scaling took {:.3f} s'.format(stop - start),
-              flush=args.flush)
+        print("Atmosphere scaling took {:.3f} s".format(stop - start), flush=args.flush)
     del autotimer
     return
 
@@ -1071,34 +1376,39 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
         autotimer = timing.auto_timer()
         start = MPI.Wtime()
         for obs in data.obs:
-            site_id = obs['site_id']
-            weather = obs['weather']
-            start_time = obs['start_time']
+            site_id = obs["site_id"]
+            weather = obs["weather"]
+            start_time = obs["start_time"]
             weather.set(site_id, mc, start_time)
-            altitude = obs['altitude']
+            altitude = obs["altitude"]
             absorption = toast.ctoast.atm_get_absorption_coefficient(
-                altitude, weather.air_temperature, weather.surface_pressure,
-                weather.pwv, freq)
-            obs['noise_scale'] = absorption * weather.air_temperature
+                altitude,
+                weather.air_temperature,
+                weather.surface_pressure,
+                weather.pwv,
+                freq,
+            )
+            obs["noise_scale"] = absorption * weather.air_temperature
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Atmosphere weighting took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Atmosphere weighting took {:.3f} s".format(stop - start),
+                flush=args.flush,
+            )
         del autotimer
     else:
         for obs in data.obs:
-            obs['noise_scale'] = 1.
+            obs["noise_scale"] = 1.0
 
     return
 
 
-def simulate_atmosphere(args, comm, data, mc, mem_counter,
-                        totalname):
+def simulate_atmosphere(args, comm, data, mc, mem_counter, totalname):
     if not args.skip_atmosphere:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Simulating atmosphere', flush=args.flush)
+            print("Simulating atmosphere", flush=args.flush)
             if args.atm_cache and not os.path.isdir(args.atm_cache):
                 try:
                     os.makedirs(args.atm_cache)
@@ -1108,27 +1418,39 @@ def simulate_atmosphere(args, comm, data, mc, mem_counter,
 
         # Simulate the atmosphere signal
         atm = tt.OpSimAtmosphere(
-            out=totalname, realization=mc,
+            out=totalname,
+            realization=mc,
             lmin_center=args.atm_lmin_center,
             lmin_sigma=args.atm_lmin_sigma,
-            lmax_center=args.atm_lmax_center, gain=args.atm_gain,
-            lmax_sigma=args.atm_lmax_sigma, zatm=args.atm_zatm,
-            zmax=args.atm_zmax, xstep=args.atm_xstep,
-            ystep=args.atm_ystep, zstep=args.atm_zstep,
+            lmax_center=args.atm_lmax_center,
+            gain=args.atm_gain,
+            lmax_sigma=args.atm_lmax_sigma,
+            zatm=args.atm_zatm,
+            zmax=args.atm_zmax,
+            xstep=args.atm_xstep,
+            ystep=args.atm_ystep,
+            zstep=args.atm_zstep,
             nelem_sim_max=args.atm_nelem_sim_max,
-            verbosity=int(args.debug), gangsize=args.atm_gangsize,
-            z0_center=args.atm_z0_center, z0_sigma=args.atm_z0_sigma,
-            apply_flags=False, common_flag_mask=args.common_flag_mask,
-            cachedir=args.atm_cache, flush=args.flush,
-            wind_time=args.atm_wind_time)
+            verbosity=int(args.debug),
+            gangsize=args.atm_gangsize,
+            z0_center=args.atm_z0_center,
+            z0_sigma=args.atm_z0_sigma,
+            apply_flags=False,
+            common_flag_mask=args.common_flag_mask,
+            cachedir=args.atm_cache,
+            flush=args.flush,
+            wind_time=args.atm_wind_time,
+        )
 
         atm.exec(data)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Atmosphere simulation took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Atmosphere simulation took {:.3f} s".format(stop - start),
+                flush=args.flush,
+            )
 
         mem_counter.exec(data)
         del autotimer
@@ -1145,8 +1467,10 @@ def copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq):
     if totalname != totalname_freq:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Copying atmosphere from {} to {}'.format(
-                totalname, totalname_freq), flush=args.flush)
+            print(
+                "Copying atmosphere from {} to {}".format(totalname, totalname_freq),
+                flush=args.flush,
+            )
         cachecopy = tt.OpCacheCopy(totalname, totalname_freq, force=True)
         cachecopy.exec(data)
         mem_counter.exec(data)
@@ -1158,7 +1482,7 @@ def simulate_noise(args, comm, data, mc, mem_counter, totalname_freq):
     if not args.skip_noise:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Simulating noise', flush=args.flush)
+            print("Simulating noise", flush=args.flush)
         start = MPI.Wtime()
 
         nse = tt.OpSimNoise(out=totalname_freq, realization=mc)
@@ -1167,8 +1491,9 @@ def simulate_noise(args, comm, data, mc, mem_counter, totalname_freq):
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Noise simulation took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Noise simulation took {:.3f} s".format(stop - start), flush=args.flush
+            )
 
         mem_counter.exec(data)
         del autotimer
@@ -1179,18 +1504,20 @@ def scramble_gains(args, comm, data, mc, mem_counter, totalname_freq):
     if args.gain_sigma:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Scrambling gains', flush=args.flush)
+            print("Scrambling gains", flush=args.flush)
         start = MPI.Wtime()
 
         scrambler = tt.OpGainScrambler(
-            sigma=args.gain_sigma, name=totalname_freq, realization=mc)
+            sigma=args.gain_sigma, name=totalname_freq, realization=mc
+        )
         scrambler.exec(data)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Gain scrambling took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Gain scrambling took {:.3f} s".format(stop - start), flush=args.flush
+            )
 
         mem_counter.exec(data)
         del autotimer
@@ -1198,7 +1525,7 @@ def scramble_gains(args, comm, data, mc, mem_counter, totalname_freq):
 
 
 def setup_output(args, comm, mc, freq):
-    outpath = '{}/{:08}/{:03}'.format(args.outdir, mc, int(freq))
+    outpath = "{}/{:08}/{:03}".format(args.outdir, mc, int(freq))
     if comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
             try:
@@ -1212,18 +1539,22 @@ def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
     if args.polyorder:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Polyfiltering signal', flush=args.flush)
+            print("Polyfiltering signal", flush=args.flush)
         start = MPI.Wtime()
         polyfilter = tt.OpPolyFilter(
-            order=args.polyorder, name=totalname_freq,
-            common_flag_mask=args.common_flag_mask)
+            order=args.polyorder,
+            name=totalname_freq,
+            common_flag_mask=args.common_flag_mask,
+        )
         polyfilter.exec(data)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Polynomial filtering took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Polynomial filtering took {:.3f} s".format(stop - start),
+                flush=args.flush,
+            )
 
         mem_counter.exec(data)
         del autotimer
@@ -1234,18 +1565,21 @@ def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
     if args.wbin_ground:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
-            print('Ground filtering signal', flush=args.flush)
+            print("Ground filtering signal", flush=args.flush)
         start = MPI.Wtime()
         groundfilter = tt.OpGroundFilter(
-            wbin=args.wbin_ground, name=totalname_freq,
-            common_flag_mask=args.common_flag_mask)
+            wbin=args.wbin_ground,
+            name=totalname_freq,
+            common_flag_mask=args.common_flag_mask,
+        )
         groundfilter.exec(data)
 
         comm.comm_world.barrier()
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
-            print('Ground filtering took {:.3f} s'.format(stop - start),
-                  flush=args.flush)
+            print(
+                "Ground filtering took {:.3f} s".format(stop - start), flush=args.flush
+            )
 
         mem_counter.exec(data)
         del autotimer
@@ -1261,23 +1595,31 @@ def output_tidas(args, comm, data, totalname):
 
     comm.comm_world.Barrier()
     if comm.comm_world.rank == 0:
-        print('Exporting data to a TIDAS volume at {}'.format(tidas_path),
-              flush=args.flush)
+        print(
+            "Exporting data to a TIDAS volume at {}".format(tidas_path),
+            flush=args.flush,
+        )
     start = MPI.Wtime()
 
-    export = OpTidasExport(tidas_path, TODTidas, backend="hdf5",
-                            use_intervals=True,
-                            create_opts={"group_dets":"sim"},
-                            ctor_opts={"group_dets":"sim"},
-                            cache_name=totalname)
+    export = OpTidasExport(
+        tidas_path,
+        TODTidas,
+        backend="hdf5",
+        use_intervals=True,
+        create_opts={"group_dets": "sim"},
+        ctor_opts={"group_dets": "sim"},
+        cache_name=totalname,
+    )
     export.exec(data)
 
     comm.comm_world.Barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Wrote simulated data to {}:{} in {:.2f} s'
-              ''.format(tidas_path, "total",
-                        stop - start), flush=args.flush)
+        print(
+            "Wrote simulated data to {}:{} in {:.2f} s"
+            "".format(tidas_path, "total", stop - start),
+            flush=args.flush,
+        )
     del autotimer
     return
 
@@ -1291,21 +1633,29 @@ def output_spt3g(args, comm, data, totalname):
 
     comm.comm_world.Barrier()
     if comm.comm_world.rank == 0:
-        print('Exporting data to SPT3G directory tree at {}'.format(spt3g_path),
-              flush=args.flush)
+        print(
+            "Exporting data to SPT3G directory tree at {}".format(spt3g_path),
+            flush=args.flush,
+        )
     start = MPI.Wtime()
 
-    export = Op3GExport(spt3g_path, TOD3G, use_intervals=True,
-                        export_opts={"prefix" : "sim"},
-                        cache_name=totalname)
+    export = Op3GExport(
+        spt3g_path,
+        TOD3G,
+        use_intervals=True,
+        export_opts={"prefix": "sim"},
+        cache_name=totalname,
+    )
     export.exec(data)
 
     comm.comm_world.Barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Wrote simulated data to {}:{} in {:.2f} s'
-              ''.format(spt3g_path, "total",
-                        stop - start), flush=args.flush)
+        print(
+            "Wrote simulated data to {}:{} in {:.2f} s"
+            "".format(spt3g_path, "total", stop - start),
+            flush=args.flush,
+        )
     del autotimer
     return
 
@@ -1315,13 +1665,13 @@ def get_time_communicators(comm, data):
 
     """
     autotimer = timing.auto_timer()
-    time_comms = [('all', comm.comm_world)]
+    time_comms = [("all", comm.comm_world)]
 
     # A process will only have data for one season and one day.  If more
     # than one season is observed, we split the communicator to make
     # season maps.
 
-    my_season = data.obs[0]['season']
+    my_season = data.obs[0]["season"]
     seasons = np.array(comm.comm_world.allgather(my_season))
     do_seasons = np.any(seasons != my_season)
     if do_seasons:
@@ -1331,8 +1681,8 @@ def get_time_communicators(comm, data):
     # Split the communicator to make daily maps.  We could easily split
     # by month as well
 
-    my_day = int(data.obs[0]['MJD'])
-    my_date = data.obs[0]['date']
+    my_day = int(data.obs[0]["MJD"])
+    my_date = data.obs[0]["date"]
     days = np.array(comm.comm_world.allgather(my_day))
     do_days = np.any(days != my_day)
     if do_days:
@@ -1343,108 +1693,135 @@ def get_time_communicators(comm, data):
     return time_comms
 
 
-def apply_madam(args, comm, time_comms, data, telescope_data, freq, madampars,
-                mem_counter, mc, firstmc, outpath, detweights, totalname_madam,
-                first_call=True, extra_prefix=None):
+def apply_madam(
+    args,
+    comm,
+    time_comms,
+    data,
+    telescope_data,
+    freq,
+    madampars,
+    mem_counter,
+    mc,
+    firstmc,
+    outpath,
+    detweights,
+    totalname_madam,
+    first_call=True,
+    extra_prefix=None,
+):
     """ Use libmadam to bin and optionally destripe data.
 
     Bin and optionally destripe all conceivable subsets of the data.
 
     """
     if comm.comm_world.rank == 0:
-        print('Making maps', flush=args.flush)
+        print("Making maps", flush=args.flush)
     start = MPI.Wtime()
     autotimer = timing.auto_timer()
 
     pars = copy.deepcopy(madampars)
-    pars['path_output'] = outpath
-    file_root = pars['file_root']
-    if len(file_root) > 0 and not file_root.endswith('_'):
-        file_root += '_'
+    pars["path_output"] = outpath
+    file_root = pars["file_root"]
+    if len(file_root) > 0 and not file_root.endswith("_"):
+        file_root += "_"
     if extra_prefix is not None:
-        file_root += '{}_'.format(extra_prefix)
-    file_root += '{:03}'.format(int(freq))
+        file_root += "{}_".format(extra_prefix)
+    file_root += "{:03}".format(int(freq))
 
     if first_call:
         if mc != firstmc:
-            pars['write_matrix'] = False
-            pars['write_wcov'] = False
-            pars['write_hits'] = False
+            pars["write_matrix"] = False
+            pars["write_wcov"] = False
+            pars["write_hits"] = False
     else:
-        pars['kfirst'] = False
-        pars['write_map'] = False
-        pars['write_binmap'] = True
-        pars['write_matrix'] = False
-        pars['write_wcov'] = False
-        pars['write_hits'] = False
+        pars["kfirst"] = False
+        pars["write_map"] = False
+        pars["write_binmap"] = True
+        pars["write_matrix"] = False
+        pars["write_wcov"] = False
+        pars["write_hits"] = False
 
-    outputs = [pars['write_map'], pars['write_binmap'], pars['write_hits'],
-               pars['write_wcov'], pars['write_matrix']]
+    outputs = [
+        pars["write_map"] in [True, "t", "T"],
+        pars["write_binmap"] in [True, "t", "T"],
+        pars["write_hits"] in [True, "t", "T"],
+        pars["write_wcov"] in [True, "t", "T"],
+        pars["write_matrix"] in [True, "t", "T"],
+    ]
     if not np.any(outputs):
         if comm.comm_world.rank == 0:
-            print('No Madam outputs requested.  Skipping.', flush=args.flush)
+            print("No Madam outputs requested.  Skipping.", flush=args.flush)
         return
 
-    if args.madam_noisefilter or not pars['kfirst']:
+    if args.madam_noisefilter or not pars["kfirst"]:
         madam_intervals = None
     else:
-        madam_intervals = 'intervals'
+        madam_intervals = "intervals"
     madam = tm.OpMadam(
-        params=pars, detweights=detweights, name=totalname_madam,
-        common_flag_mask=args.common_flag_mask, purge_tod=False,
-        intervals=madam_intervals, conserve_memory=args.conserve_memory)
+        params=pars,
+        detweights=detweights,
+        name=totalname_madam,
+        common_flag_mask=args.common_flag_mask,
+        purge_tod=False,
+        intervals=madam_intervals,
+        conserve_memory=args.conserve_memory,
+    )
 
-    if 'info' in madam.params:
-        info = madam.params['info']
+    if "info" in madam.params:
+        info = madam.params["info"]
     else:
         info = 3
 
     for time_name, time_comm in time_comms:
         for tele_name, tele_data in telescope_data:
-            if len(time_name.split('-')) == 3:
+            if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
                 if args.skip_daymaps:
                     continue
-                if ((len(telescope_data) > 1) and (tele_name == 'all')):
+                if (len(telescope_data) > 1) and (tele_name == "all"):
                     # Skip daily maps over multiple telescopes
                     continue
                 if first_call:
                     # Do not destripe daily maps
-                    kfirst_save = pars['kfirst']
-                    write_map_save = pars['write_map']
-                    write_binmap_save = pars['write_binmap']
-                    pars['kfirst'] = False
-                    pars['write_map'] = False
-                    pars['write_binmap'] = True
+                    kfirst_save = pars["kfirst"]
+                    write_map_save = pars["write_map"]
+                    write_binmap_save = pars["write_binmap"]
+                    pars["kfirst"] = False
+                    pars["write_map"] = False
+                    pars["write_binmap"] = True
 
             start1 = MPI.Wtime()
-            madam.params['file_root'] = '{}_telescope_{}_time_{}'.format(
-                file_root, tele_name, time_name)
+            madam.params["file_root"] = "{}_telescope_{}_time_{}".format(
+                file_root, tele_name, time_name
+            )
             if time_comm == comm.comm_world:
-                madam.params['info'] = info
+                madam.params["info"] = info
             else:
                 # Cannot have verbose output from concurrent mapmaking
-                madam.params['info'] = 0
+                madam.params["info"] = 0
             if time_comm.rank == 0:
-                print('Mapping {}'.format(madam.params['file_root']),
-                      flush=args.flush)
+                print("Mapping {}".format(madam.params["file_root"]), flush=args.flush)
             madam.exec(tele_data, time_comm)
             time_comm.barrier()
             stop1 = MPI.Wtime()
             if time_comm.rank == 0:
-                print('Mapping {} took {:.3f} s'.format(
-                    madam.params['file_root'], stop1 - start1),
-                    flush=args.flush)
-            if len(time_name.split('-')) == 3 and first_call:
+                print(
+                    "Mapping {} took {:.3f} s".format(
+                        madam.params["file_root"], stop1 - start1
+                    ),
+                    flush=args.flush,
+                )
+            if len(time_name.split("-")) == 3 and first_call:
                 # Restore destriping parameters
-                pars['kfirst'] = kfirst_save
-                pars['write_map'] = write_map_save
-                pars['write_binmap'] = write_binmap_save
+                pars["kfirst"] = kfirst_save
+                pars["write_map"] = write_map_save
+                pars["write_binmap"] = write_binmap_save
 
     comm.comm_world.barrier()
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print('Madam took {:.3f} s'.format(stop - start), flush=args.flush)
+        print("Madam took {:.3f} s".format(stop - start), flush=args.flush)
 
     mem_counter.exec(data)
     del autotimer
@@ -1458,8 +1835,12 @@ def main():
     comm = toast.Comm()
 
     if comm.comm_world.rank == 0:
-        print('Running with {} processes at {}'.format(
-            comm.comm_world.size, str(datetime.now())), flush=True)
+        print(
+            "Running with {} processes at {}".format(
+                comm.comm_world.size, str(datetime.now())
+            ),
+            flush=True,
+        )
 
     global_timer = timing.simple_timer("Total time")
     global_timer.start()
@@ -1489,8 +1870,7 @@ def main():
 
     mem_counter = tt.OpMemoryCounter()
 
-    data, telescope_data = create_observations(args, comm, schedules,
-                                               mem_counter)
+    data, telescope_data = create_observations(args, comm, schedules, mem_counter)
 
     # Split the communicator for day and season mapmaking
 
@@ -1506,11 +1886,11 @@ def main():
     _, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
-        signalname = simulate_sky_signal(args, comm, data, mem_counter,
-                                         schedules, subnpix, localsm)
+        signalname = simulate_sky_signal(
+            args, comm, data, mem_counter, schedules, subnpix, localsm
+        )
     else:
-        signalname = scan_sky_signal(args, comm, data, mem_counter, localsm,
-                                     subnpix)
+        signalname = scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix)
 
     # Set up objects to take copies of the TOD at appropriate times
 
@@ -1521,7 +1901,7 @@ def main():
     firstmc = int(args.MC_start)
     nmc = int(args.MC_count)
 
-    freqs = [float(freq) for freq in args.freq.split(',')]
+    freqs = [float(freq) for freq in args.freq.split(",")]
     nfreq = len(freqs)
 
     for mc in range(firstmc, firstmc + nmc):
@@ -1534,14 +1914,15 @@ def main():
         for ifreq, freq in enumerate(freqs):
 
             if comm.comm_world.rank == 0:
-                print('Processing frequency {}GHz {} / {}, MC = {}'
-                      ''.format(freq, ifreq + 1, nfreq, mc), flush=args.flush)
+                print(
+                    "Processing frequency {}GHz {} / {}, MC = {}"
+                    "".format(freq, ifreq + 1, nfreq, mc),
+                    flush=args.flush,
+                )
 
-            copy_atmosphere(args, comm, data, mem_counter, totalname,
-                            totalname_freq)
+            copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq)
 
-            scale_atmosphere_by_frequency(args, comm, data, freq,
-                                          totalname_freq, mc)
+            scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc)
 
             update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
@@ -1549,11 +1930,9 @@ def main():
 
             mcoffset = ifreq * 1000000
 
-            simulate_noise(args, comm, data, mc + mcoffset, mem_counter,
-                           totalname_freq)
+            simulate_noise(args, comm, data, mc + mcoffset, mem_counter, totalname_freq)
 
-            scramble_gains(args, comm, data, mc + mcoffset, mem_counter,
-                           totalname_freq)
+            scramble_gains(args, comm, data, mc + mcoffset, mem_counter, totalname_freq)
 
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally
@@ -1565,10 +1944,22 @@ def main():
 
             # Bin and destripe maps
 
-            apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                        madampars, mem_counter, mc + mcoffset, firstmc, outpath,
-                        detweights, totalname_freq,
-                        first_call=True)
+            apply_madam(
+                args,
+                comm,
+                time_comms,
+                data,
+                telescope_data,
+                freq,
+                madampars,
+                mem_counter,
+                mc + mcoffset,
+                firstmc,
+                outpath,
+                detweights,
+                totalname_freq,
+                first_call=True,
+            )
 
             if args.polyorder or args.wbin_ground:
 
@@ -1576,15 +1967,27 @@ def main():
 
                 apply_polyfilter(args, comm, data, mem_counter, totalname_freq)
 
-                apply_groundfilter(args, comm, data, mem_counter,
-                                   totalname_freq)
+                apply_groundfilter(args, comm, data, mem_counter, totalname_freq)
 
                 # Bin maps
 
-                apply_madam(args, comm, time_comms, data, telescope_data, freq,
-                            madampars, mem_counter, mc + mcoffset, firstmc,
-                            outpath, detweights, totalname_freq,
-                            first_call=False, extra_prefix='filtered')
+                apply_madam(
+                    args,
+                    comm,
+                    time_comms,
+                    data,
+                    telescope_data,
+                    freq,
+                    madampars,
+                    mem_counter,
+                    mc + mcoffset,
+                    firstmc,
+                    outpath,
+                    detweights,
+                    totalname_freq,
+                    first_call=False,
+                    extra_prefix="filtered",
+                )
 
     mem_counter.exec(data)
 
@@ -1597,14 +2000,11 @@ def main():
     return
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
 
     try:
 
-
         main()
-
 
         tman = timing.timing_manager()
         tman.report()
@@ -1613,25 +2013,25 @@ if __name__ == '__main__':
         if MPI.COMM_WORLD.size == 1:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        print('*** print_tb:')
+        print("*** print_tb:")
         traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
-        print('*** print_exception:')
-        traceback.print_exception(exc_type, exc_value, exc_traceback,
-                                  limit=5, file=sys.stdout)
-        print('*** print_exc:')
+        print("*** print_exception:")
+        traceback.print_exception(
+            exc_type, exc_value, exc_traceback, limit=5, file=sys.stdout
+        )
+        print("*** print_exc:")
         traceback.print_exc()
-        print('*** format_exc, first and last line:')
+        print("*** format_exc, first and last line:")
         formatted_lines = traceback.format_exc().splitlines()
         print(formatted_lines[0])
         print(formatted_lines[-1])
-        print('*** format_exception:')
-        print(repr(traceback.format_exception(exc_type, exc_value,
-                                              exc_traceback)))
-        print('*** extract_tb:')
+        print("*** format_exception:")
+        print(repr(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+        print("*** extract_tb:")
         print(repr(traceback.extract_tb(exc_traceback)))
-        print('*** format_tb:')
+        print("*** format_tb:")
         print(repr(traceback.format_tb(exc_traceback)))
-        print('*** tb_lineno:', exc_traceback.tb_lineno, flush=True)
+        print("*** tb_lineno:", exc_traceback.tb_lineno, flush=True)
         toast.raise_error(6)  # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
     finalize()
