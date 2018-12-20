@@ -1842,8 +1842,9 @@ def main():
             flush=True,
         )
 
-    global_timer = timing.simple_timer("Total time")
-    global_timer.start()
+    if timing.enabled():
+        global_timer = timing.simple_timer("Total time")
+        global_timer.start()
 
     args, comm = parse_arguments(comm)
 
@@ -1992,9 +1993,10 @@ def main():
     mem_counter.exec(data)
 
     comm.comm_world.barrier()
-    global_timer.stop()
-    if comm.comm_world.rank == 0:
-        global_timer.report()
+    if timing.enabled():
+        global_timer.stop()
+        if comm.comm_world.rank == 0:
+            global_timer.report()
 
     del autotimer
     return
@@ -2006,8 +2008,9 @@ if __name__ == "__main__":
 
         main()
 
-        tman = timing.timing_manager()
-        tman.report()
+        if timing.enabled():
+            tman = timing.timing_manager()
+            tman.report()
     except Exception as e:
         print('Exception occurred: "{}"'.format(e), flush=True)
         if MPI.COMM_WORLD.size == 1:
