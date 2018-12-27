@@ -30,12 +30,12 @@
 
 #ifdef HAVE_FFTW
 
-class r1d_fftw : public toast::fft_r1d {
+class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
     public:
 
-        r1d_fftw(int64_t length, int64_t n, toast::fft_plan_type type,
-                 toast::fft_direction dir, double scale) :
-            toast::fft_r1d(length, n, type, dir, scale) {
+        FFTPlanReal1DFFTW(int64_t length, int64_t n, toast::fft_plan_type type,
+                          toast::fft_direction dir, double scale) :
+            toast::FFTPlanReal1D(length, n, type, dir, scale) {
             int threads = 1;
 
             // enable threads
@@ -98,7 +98,7 @@ class r1d_fftw : public toast::fft_r1d {
                                        ilength, &kind, flags);
         }
 
-        ~r1d_fftw() {
+        ~FFTPlanReal1DFFTW() {
             fftw_destroy_plan(static_cast <fftw_plan> (plan_));
             tview_.clear();
             fview_.clear();
@@ -151,12 +151,12 @@ class r1d_fftw : public toast::fft_r1d {
 
 #ifdef HAVE_MKL
 
-class r1d_mkl : public toast::fft_r1d {
+class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
     public:
 
-        r1d_mkl(int64_t length, int64_t n, toast::fft_plan_type type,
-                toast::fft_direction dir, double scale) :
-            toast::fft_r1d(length, n, type, dir, scale) {
+        FFTPlanReal1DMKL(int64_t length, int64_t n, toast::fft_plan_type type,
+                         toast::fft_direction dir, double scale) :
+            toast::FFTPlanReal1D(length, n, type, dir, scale) {
             // Allocate memory.
 
             // Verify that datatype sizes are as expected.
@@ -269,7 +269,7 @@ class r1d_mkl : public toast::fft_r1d {
             }
         }
 
-        ~r1d_mkl() {
+        ~FFTPlanReal1DMKL() {
             MKL_LONG status = DftiFreeDescriptor(&descriptor_);
         }
 
@@ -409,8 +409,9 @@ class r1d_mkl : public toast::fft_r1d {
 
 // Public 1D plan class
 
-toast::fft_r1d::fft_r1d(int64_t length, int64_t n, fft_plan_type type,
-                        fft_direction dir, double scale) {
+toast::FFTPlanReal1D::FFTPlanReal1D(int64_t length, int64_t n,
+                                    fft_plan_type type,
+                                    fft_direction dir, double scale) {
     type_ = type;
     dir_ = dir;
     length_ = length;
@@ -418,25 +419,26 @@ toast::fft_r1d::fft_r1d(int64_t length, int64_t n, fft_plan_type type,
     scale_ = scale;
 }
 
-int64_t toast::fft_r1d::length() {
+int64_t toast::FFTPlanReal1D::length() {
     return length_;
 }
 
-int64_t toast::fft_r1d::count() {
+int64_t toast::FFTPlanReal1D::count() {
     return n_;
 }
 
-toast::fft_r1d * toast::fft_r1d::create(int64_t length, int64_t n,
-                                        fft_plan_type type, fft_direction dir,
-                                        double scale) {
+toast::FFTPlanReal1D * toast::FFTPlanReal1D::create(int64_t length, int64_t n,
+                                                    fft_plan_type type,
+                                                    fft_direction dir,
+                                                    double scale) {
     #ifdef HAVE_MKL
 
-    return new r1d_mkl(length, n, type, dir, scale);
+    return new FFTPlanReal1DMKL(length, n, type, dir, scale);
 
     #else // ifdef HAVE_MKL
     # ifdef HAVE_FFTW
 
-    return new r1d_fftw(length, n, type, dir, scale);
+    return new FFTPlanReal1DFFTW(length, n, type, dir, scale);
 
     # else // ifdef HAVE_FFTW
     TOAST_THROW("FFTs require MKL or FFTW");
@@ -448,72 +450,72 @@ toast::fft_r1d * toast::fft_r1d::create(int64_t length, int64_t n,
 
 // Persistant storage of 1D plans for a fixed size
 
-toast::fft_r1d_plan_store::~fft_r1d_plan_store() {}
+toast::FFTPlanReal1DStore::~FFTPlanReal1DStore() {}
 
-void toast::fft_r1d_plan_store::clear() {
+void toast::FFTPlanReal1DStore::clear() {
     fplans_.clear();
     rplans_.clear();
     return;
 }
 
-toast::fft_r1d_plan_store & toast::fft_r1d_plan_store::get() {
-    static toast::fft_r1d_plan_store instance;
+toast::FFTPlanReal1DStore & toast::FFTPlanReal1DStore::get() {
+    static toast::FFTPlanReal1DStore instance;
     return instance;
 }
 
-void toast::fft_r1d_plan_store::cache(int64_t len, int64_t n) {
+void toast::FFTPlanReal1DStore::cache(int64_t len, int64_t n) {
     std::pair <int64_t, int64_t> key(len, n);
 
-    std::map <std::pair <int64_t, int64_t>, toast::fft_r1d::pshr>
+    std::map <std::pair <int64_t, int64_t>, toast::FFTPlanReal1D::pshr>
     ::iterator fit = fplans_.find(key);
     if (fit == fplans_.end()) {
         // allocate plan and add to store
-        fplans_[key] = toast::fft_r1d::pshr(
-            toast::fft_r1d::create(len, n, toast::fft_plan_type::fast,
-                                   toast::fft_direction::forward, 1.0));
+        fplans_[key] = toast::FFTPlanReal1D::pshr(
+            toast::FFTPlanReal1D::create(len, n, toast::fft_plan_type::fast,
+                                         toast::fft_direction::forward, 1.0));
     }
 
-    std::map <std::pair <int64_t, int64_t>, toast::fft_r1d::pshr>
+    std::map <std::pair <int64_t, int64_t>, toast::FFTPlanReal1D::pshr>
     ::iterator rit = rplans_.find(key);
     if (rit == rplans_.end()) {
         // allocate plan and add to store
-        rplans_[key] = toast::fft_r1d::pshr(
-            toast::fft_r1d::create(len, n, toast::fft_plan_type::fast,
-                                   toast::fft_direction::backward, 1.0));
+        rplans_[key] = toast::FFTPlanReal1D::pshr(
+            toast::FFTPlanReal1D::create(len, n, toast::fft_plan_type::fast,
+                                         toast::fft_direction::backward, 1.0));
     }
 
     return;
 }
 
-toast::fft_r1d::pshr toast::fft_r1d_plan_store::forward(int64_t len,
-                                                        int64_t n) {
+toast::FFTPlanReal1D::pshr toast::FFTPlanReal1DStore::forward(int64_t len,
+                                                              int64_t n) {
     std::pair <int64_t, int64_t> key(len, n);
 
-    std::map <std::pair <int64_t, int64_t>, toast::fft_r1d::pshr>
+    std::map <std::pair <int64_t, int64_t>, toast::FFTPlanReal1D::pshr>
     ::iterator it = fplans_.find(key);
 
     if (it == fplans_.end()) {
         // allocate plan and add to store
-        fplans_[key] = toast::fft_r1d::pshr(
-            toast::fft_r1d::create(len, n, toast::fft_plan_type::fast,
-                                   toast::fft_direction::forward, 1.0));
+        fplans_[key] = toast::FFTPlanReal1D::pshr(
+            toast::FFTPlanReal1D::create(len, n, toast::fft_plan_type::fast,
+                                         toast::fft_direction::forward, 1.0));
     }
 
     return fplans_[key];
 }
 
-toast::fft_r1d::pshr toast::fft_r1d_plan_store::backward(int64_t len,
-                                                         int64_t n) {
+toast::FFTPlanReal1D::pshr toast::FFTPlanReal1DStore::backward(int64_t len,
+                                                               int64_t n) {
     std::pair <int64_t, int64_t> key(len, n);
 
-    std::map <std::pair <int64_t, int64_t>, toast::fft_r1d::pshr>
+    std::map <std::pair <int64_t, int64_t>, toast::FFTPlanReal1D::pshr>
     ::iterator it = rplans_.find(key);
 
     if (it == rplans_.end()) {
         // allocate plan and add to store
-        rplans_[key] = toast::fft_r1d::pshr(
-            toast::fft_r1d::create(len, n, toast::fft_plan_type::fast,
-                                   toast::fft_direction::backward, 1.0));
+        rplans_[key] = toast::FFTPlanReal1D::pshr(
+            toast::FFTPlanReal1D::create(len, n, toast::fft_plan_type::fast,
+                                         toast::fft_direction::backward, 1.0));
     }
 
     return rplans_[key];

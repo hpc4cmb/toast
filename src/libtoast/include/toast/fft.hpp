@@ -10,7 +10,6 @@
 
 
 namespace toast {
-
 enum class fft_plan_type {
     fast,
     best
@@ -25,15 +24,16 @@ enum class fft_direction {
 // This uses aligned memory allocation
 typedef std::vector <double, toast::simd_allocator <double> > fft_data;
 
-class fft_r1d {
+class FFTPlanReal1D {
     public:
 
-        typedef std::shared_ptr <fft_r1d> pshr;
+        typedef std::shared_ptr <FFTPlanReal1D> pshr;
 
-        static fft_r1d * create(int64_t length, int64_t n, fft_plan_type type,
-                                fft_direction dir, double scale);
+        static FFTPlanReal1D * create(int64_t length, int64_t n,
+                                      fft_plan_type type,
+                                      fft_direction dir, double scale);
 
-        virtual ~fft_r1d() {}
+        virtual ~FFTPlanReal1D() {}
 
         virtual void exec() {
             return;
@@ -53,8 +53,8 @@ class fft_r1d {
 
     protected:
 
-        fft_r1d(int64_t length, int64_t n, fft_plan_type type,
-                fft_direction dir, double scale);
+        FFTPlanReal1D(int64_t length, int64_t n, fft_plan_type type,
+                      fft_direction dir, double scale);
 
         int64_t length_;
         int64_t n_;
@@ -66,24 +66,23 @@ class fft_r1d {
 
 // R1D FFT plan store
 
-class fft_r1d_plan_store {
+class FFTPlanReal1DStore {
     public:
 
-        ~fft_r1d_plan_store();
-        static fft_r1d_plan_store & get();
+        ~FFTPlanReal1DStore();
+        static FFTPlanReal1DStore & get();
         void cache(int64_t len, int64_t n = 1);
-        fft_r1d::pshr forward(int64_t len, int64_t n = 1);
-        fft_r1d::pshr backward(int64_t len, int64_t n = 1);
+        FFTPlanReal1D::pshr forward(int64_t len, int64_t n = 1);
+        FFTPlanReal1D::pshr backward(int64_t len, int64_t n = 1);
         void clear();
 
     private:
 
-        fft_r1d_plan_store() {}
+        FFTPlanReal1DStore() {}
 
-        std::map <std::pair <int64_t, int64_t>, fft_r1d::pshr> fplans_;
-        std::map <std::pair <int64_t, int64_t>, fft_r1d::pshr> rplans_;
+        std::map <std::pair <int64_t, int64_t>, FFTPlanReal1D::pshr> fplans_;
+        std::map <std::pair <int64_t, int64_t>, FFTPlanReal1D::pshr> rplans_;
 };
-
 }
 
 #endif // ifndef TOAST_RNG_HPP

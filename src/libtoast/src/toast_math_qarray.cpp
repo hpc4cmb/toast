@@ -73,7 +73,7 @@ void toast::qa_amplitude_one(size_t d, double const * v,
 
 void toast::qa_amplitude(size_t n, size_t m, size_t d, double const * v,
                          double * norm) {
-    std::vector <double, toast::simd_allocator <double> > temp(n);
+    toast::simd_array <double> temp(n);
 
     toast::qa_list_dot(n, m, d, v, v, temp.data());
 
@@ -100,7 +100,7 @@ void toast::qa_normalize_one(size_t d, double const * q_in,
 
 void toast::qa_normalize(size_t n, size_t m, size_t d,
                          double const * q_in, double * q_out) {
-    std::vector <double, toast::simd_allocator <double> > norm(n);
+    toast::simd_array <double> norm(n);
 
     toast::qa_amplitude(n, m, d, q_in, norm.data());
 
@@ -140,7 +140,7 @@ void toast::qa_normalize_inplace_one(size_t d, double * q) {
 }
 
 void toast::qa_normalize_inplace(size_t n, size_t m, size_t d, double * q) {
-    std::vector <double, toast::simd_allocator <double> > norm(n);
+    toast::simd_array <double> norm(n);
 
     toast::qa_amplitude(n, m, d, q, norm.data());
 
@@ -199,7 +199,7 @@ void toast::qa_rotate_one_one(double const * q, double const * v_in,
 
 void toast::qa_rotate_many_one(size_t nq, double const * q,
                                double const * v_in, double * v_out) {
-    std::vector <double, toast::simd_allocator <double> > q_unit(4 * nq);
+    toast::simd_array <double> q_unit(4 * nq);
 
     toast::qa_normalize(nq, 4, 4, q, q_unit.data());
 
@@ -317,7 +317,7 @@ void toast::qa_rotate_one_many(double const * q, size_t nv,
 
 void toast::qa_rotate_many_many(size_t n, double const * q,
                                 double const * v_in, double * v_out) {
-    std::vector <double, toast::simd_allocator <double> > q_unit(4 * n);
+    toast::simd_array <double> q_unit(4 * n);
 
     toast::qa_normalize(n, 4, 4, q, q_unit.data());
 
@@ -591,7 +591,7 @@ void toast::qa_slerp(size_t n_time, size_t n_targettime,
 // Exponential of a quaternion array.
 
 void toast::qa_exp(size_t n, double const * q_in, double * q_out) {
-    std::vector <double, toast::simd_allocator <double> > normv(n);
+    toast::simd_array <double> normv(n);
 
     toast::qa_amplitude(n, 4, 3, q_in, normv.data());
 
@@ -626,7 +626,7 @@ void toast::qa_exp(size_t n, double const * q_in, double * q_out) {
 // Natural logarithm of a quaternion array.
 
 void toast::qa_ln(size_t n, double const * q_in, double * q_out) {
-    std::vector <double, toast::simd_allocator <double> > normq(n);
+    toast::simd_array <double> normq(n);
 
     toast::qa_amplitude(n, 4, 4, q_in, normq.data());
 
@@ -660,7 +660,7 @@ void toast::qa_ln(size_t n, double const * q_in, double * q_out) {
 
 void toast::qa_pow(size_t n, double const * p, double const * q_in,
                    double * q_out) {
-    std::vector <double, toast::simd_allocator <double> > q_tmp(4 * n);
+    toast::simd_array <double> q_tmp(4 * n);
 
     toast::qa_ln(n, q_in, q_tmp.data());
 
@@ -705,7 +705,7 @@ void toast::qa_from_axisangle_one(double const * axis,
 
 void toast::qa_from_axisangle(size_t n, double const * axis,
                               double const * angle, double * q_out) {
-    std::vector <double, toast::simd_allocator <double> > a(n);
+    toast::simd_array <double> a(n);
 
     if (toast::is_aligned(angle)) {
         #pragma omp simd
@@ -718,8 +718,8 @@ void toast::qa_from_axisangle(size_t n, double const * axis,
         }
     }
 
-    std::vector <double, toast::simd_allocator <double> > sin_a(n);
-    std::vector <double, toast::simd_allocator <double> > cos_a(n);
+    toast::simd_array <double> sin_a(n);
+    toast::simd_array <double> cos_a(n);
 
     toast::vsincos(n, a.data(), sin_a.data(), cos_a.data());
 

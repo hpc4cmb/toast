@@ -8,6 +8,7 @@ add_library(toast
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
     src/toast_math_fft.cpp
+    src/toast_math_healpix.cpp
 )
 
 target_include_directories(toast PUBLIC

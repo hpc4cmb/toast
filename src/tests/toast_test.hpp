@@ -122,18 +122,18 @@ class TOASTsfTest : public ::testing::Test {
 };
 
 
-// class TOASThealpixTest : public ::testing::Test {
-//     public:
-//
-//         TOASThealpixTest() {}
-//
-//         ~TOASThealpixTest() {}
-//
-//         virtual void SetUp() {}
-//
-//         virtual void TearDown() {}
-// };
-//
+class TOASThealpixTest : public ::testing::Test {
+    public:
+
+        TOASThealpixTest() {}
+
+        ~TOASThealpixTest() {}
+
+        virtual void SetUp() {}
+
+        virtual void TearDown() {}
+};
+
 
 class TOASTfftTest : public ::testing::Test {
     public:
@@ -147,8 +147,8 @@ class TOASTfftTest : public ::testing::Test {
         virtual void TearDown() {}
 
         void runbatch(int64_t nbatch,
-                      toast::fft_r1d::pshr forward,
-                      toast::fft_r1d::pshr reverse);
+                      toast::FFTPlanReal1D::pshr forward,
+                      toast::FFTPlanReal1D::pshr reverse);
 
         static const int64_t length;
         static const int64_t n;

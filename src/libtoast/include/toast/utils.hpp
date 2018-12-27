@@ -13,6 +13,7 @@
 #include <chrono>
 #include <memory>
 #include <map>
+#include <vector>
 
 
 namespace toast {
@@ -63,11 +64,11 @@ static double const DEG2RAD = 1.74532925199432957692e-2;
 
 // Exception handling
 
-class exception : public std::exception {
+class Exception : public std::exception {
     public:
 
-        exception(const char * msg, const char * file, int line);
-        ~exception() throw();
+        Exception(const char * msg, const char * file, int line);
+        ~Exception() throw();
         const char * what() const throw();
 
     private:
@@ -77,11 +78,11 @@ class exception : public std::exception {
         char msg_[msg_len_];
 };
 
-typedef void (* TOAST_EXCEPTION_HANDLER) (toast::exception & e);
+typedef void (* TOAST_EXCEPTION_HANDLER) (toast::Exception & e);
 
 // Helper macro for throwing a toast exception
 #define TOAST_THROW(msg) \
-    throw toast::exception(msg, __FILE__, __LINE__)
+    throw toast::Exception(msg, __FILE__, __LINE__)
 
 class Timer {
     // Simple timer class that tracks elapsed seconds and number of times
@@ -275,6 +276,10 @@ bool operator!=(simd_allocator <T1> const &,
                 simd_allocator <T2> const &) throw() {
     return false;
 }
+
+// Helper alias for std::vector of a type with a simd_allocator for that type.
+template <typename T>
+using simd_array = std::vector <T, toast::simd_allocator <T> >;
 
 }
 

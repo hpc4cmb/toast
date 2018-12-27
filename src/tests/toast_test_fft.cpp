@@ -12,8 +12,8 @@ const int64_t TOASTfftTest::length = 32;
 const int64_t TOASTfftTest::n = 3;
 
 
-void TOASTfftTest::runbatch(int64_t nbatch, toast::fft_r1d::pshr forward,
-                            toast::fft_r1d::pshr reverse) {
+void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
+                            toast::FFTPlanReal1D::pshr reverse) {
     bool debug = false;
 
     if (debug) {
@@ -107,11 +107,11 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::fft_r1d::pshr forward,
 
 TEST_F(TOASTfftTest, roundtrip_single) {
     // create FFT plans
-    toast::fft_r1d::pshr fplan(
-        toast::fft_r1d::create(length, 1, toast::fft_plan_type::fast,
+    toast::FFTPlanReal1D::pshr fplan(
+        toast::FFTPlanReal1D::create(length, 1, toast::fft_plan_type::fast,
                                toast::fft_direction::forward, 1.0));
-    toast::fft_r1d::pshr rplan(
-        toast::fft_r1d::create(length, 1, toast::fft_plan_type::fast,
+    toast::FFTPlanReal1D::pshr rplan(
+        toast::FFTPlanReal1D::create(length, 1, toast::fft_plan_type::fast,
                                toast::fft_direction::backward, 1.0));
 
     // run test
@@ -120,11 +120,11 @@ TEST_F(TOASTfftTest, roundtrip_single) {
 
 TEST_F(TOASTfftTest, roundtrip_multi) {
     // create FFT plans
-    toast::fft_r1d::pshr fplan(
-        toast::fft_r1d::create(length, n, toast::fft_plan_type::fast,
+    toast::FFTPlanReal1D::pshr fplan(
+        toast::FFTPlanReal1D::create(length, n, toast::fft_plan_type::fast,
                                toast::fft_direction::forward, 1.0));
-    toast::fft_r1d::pshr rplan(
-        toast::fft_r1d::create(length, n, toast::fft_plan_type::fast,
+    toast::FFTPlanReal1D::pshr rplan(
+        toast::FFTPlanReal1D::create(length, n, toast::fft_plan_type::fast,
                                toast::fft_direction::backward, 1.0));
 
     // run test
@@ -134,12 +134,12 @@ TEST_F(TOASTfftTest, roundtrip_multi) {
 TEST_F(TOASTfftTest, plancache_single) {
     // use the plan store.  test both reuse of plans and
     // creation after a clear().
-    toast::fft_r1d_plan_store & store =
-        toast::fft_r1d_plan_store::get();
+    toast::FFTPlanReal1DStore & store =
+        toast::FFTPlanReal1DStore::get();
     store.clear();
 
-    toast::fft_r1d::pshr fplan = store.forward(length, 1);
-    toast::fft_r1d::pshr rplan = store.backward(length, 1);
+    toast::FFTPlanReal1D::pshr fplan = store.forward(length, 1);
+    toast::FFTPlanReal1D::pshr rplan = store.backward(length, 1);
     runbatch(1, fplan, rplan);
 
     fplan = store.forward(length, 1);
@@ -156,12 +156,12 @@ TEST_F(TOASTfftTest, plancache_single) {
 TEST_F(TOASTfftTest, plancache_multi) {
     // use the plan store.  test both reuse of plans and
     // creation after a clear().
-    toast::fft_r1d_plan_store & store =
-        toast::fft_r1d_plan_store::get();
+    toast::FFTPlanReal1DStore & store =
+        toast::FFTPlanReal1DStore::get();
     store.clear();
 
-    toast::fft_r1d::pshr fplan = store.forward(length, n);
-    toast::fft_r1d::pshr rplan = store.backward(length, n);
+    toast::FFTPlanReal1D::pshr fplan = store.forward(length, n);
+    toast::FFTPlanReal1D::pshr rplan = store.backward(length, n);
     runbatch(n, fplan, rplan);
 
     fplan = store.forward(length, n);

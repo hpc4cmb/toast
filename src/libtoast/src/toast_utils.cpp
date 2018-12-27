@@ -13,18 +13,18 @@
 #include <algorithm>
 
 
-toast::exception::exception(const char * msg, const char * file,
+toast::Exception::Exception(const char * msg, const char * file,
                             int line) : std::exception() {
     snprintf(msg_, msg_len_, "Exeption at line %d of file %s:  %s", line, file,
              msg);
     return;
 }
 
-toast::exception::~exception() throw() {
+toast::Exception::~Exception() throw() {
     return;
 }
 
-const char * toast::exception::what() const throw() {
+const char * toast::Exception::what() const throw() {
     return msg_;
 }
 

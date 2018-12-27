@@ -12,5 +12,6 @@
 #include <toast/rng.hpp>
 #include <toast/qarray.hpp>
 #include <toast/fft.hpp>
+#include <toast/healpix.hpp>
 
 #endif // ifndef TOAST_HPP

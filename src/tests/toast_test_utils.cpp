@@ -73,7 +73,7 @@ TEST_F(TOASTutilsTest, singletimer) {
     tm.start();
     try {
         tm.report("This should throw since timer not stopped...");
-    } catch (toast::exception & e) {
+    } catch (toast::Exception & e) {
         std::cout << "This should throw since timer not stopped..."
                   << std::endl;
         std::cout << e.what() << std::endl;
@@ -98,7 +98,7 @@ TEST_F(TOASTutilsTest, globaltimer) {
     for (auto const & tname : tnames) {
         try {
             gtm.stop(tname);
-        } catch (toast::exception & e) {
+        } catch (toast::Exception & e) {
             std::cout << "This should throw since timer " << tname
                       << " not yet created" << std::endl;
             std::cout << e.what() << std::endl;
@@ -113,7 +113,7 @@ TEST_F(TOASTutilsTest, globaltimer) {
         EXPECT_EQ(true, gtm.is_running(tname));
         try {
             gtm.stop(tname);
-        } catch (toast::exception & e) {
+        } catch (toast::Exception & e) {
             std::cout << "This should throw since timer " << tname
                       << " still running" << std::endl;
             std::cout << e.what() << std::endl;
