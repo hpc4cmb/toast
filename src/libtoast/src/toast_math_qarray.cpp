@@ -4,9 +4,9 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 
-#include <toast/utils.hpp>
-#include <toast/sf.hpp>
-#include <toast/qarray.hpp>
+#include <toast/sys_utils.hpp>
+#include <toast/math_sf.hpp>
+#include <toast/math_qarray.hpp>
 
 #include <cmath>
 #include <vector>

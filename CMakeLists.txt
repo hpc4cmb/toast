@@ -25,13 +25,14 @@ include(BuildType)
 
 find_package(OpenMP)
 
-find_package(LAPACK)
+find_package(LAPACK REQUIRED)
+find_package(LAPACKnames)
 
 find_package(FFTW)
 
 find_package(MPI)
 
-find_package(PythonInterp)
+find_package(PythonInterp REQUIRED)
 
 find_package(MPI4PY)
 

@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <toast/environment.hpp>
-#include <toast/utils.hpp>
+#include <toast/sys_environment.hpp>
+#include <toast/sys_utils.hpp>
 
 #include <cstring>
 #include <sstream>

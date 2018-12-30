@@ -21,7 +21,7 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
             std::endl;
     }
 
-    std::vector <toast::fft_data> compare(nbatch);
+    std::vector <toast::simd_array <double> > compare(nbatch);
 
     // First generate some gaussian random noise
 
@@ -109,10 +109,10 @@ TEST_F(TOASTfftTest, roundtrip_single) {
     // create FFT plans
     toast::FFTPlanReal1D::pshr fplan(
         toast::FFTPlanReal1D::create(length, 1, toast::fft_plan_type::fast,
-                               toast::fft_direction::forward, 1.0));
+                                     toast::fft_direction::forward, 1.0));
     toast::FFTPlanReal1D::pshr rplan(
         toast::FFTPlanReal1D::create(length, 1, toast::fft_plan_type::fast,
-                               toast::fft_direction::backward, 1.0));
+                                     toast::fft_direction::backward, 1.0));
 
     // run test
     runbatch(1, fplan, rplan);
@@ -122,10 +122,10 @@ TEST_F(TOASTfftTest, roundtrip_multi) {
     // create FFT plans
     toast::FFTPlanReal1D::pshr fplan(
         toast::FFTPlanReal1D::create(length, n, toast::fft_plan_type::fast,
-                               toast::fft_direction::forward, 1.0));
+                                     toast::fft_direction::forward, 1.0));
     toast::FFTPlanReal1D::pshr rplan(
         toast::FFTPlanReal1D::create(length, n, toast::fft_plan_type::fast,
-                               toast::fft_direction::backward, 1.0));
+                                     toast::fft_direction::backward, 1.0));
 
     // run test
     runbatch(n, fplan, rplan);

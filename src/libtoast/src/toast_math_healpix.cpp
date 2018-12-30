@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <toast/utils.hpp>
-#include <toast/sf.hpp>
-#include <toast/healpix.hpp>
+#include <toast/sys_utils.hpp>
+#include <toast/math_sf.hpp>
+#include <toast/math_healpix.hpp>
 
 #include <cmath>
 

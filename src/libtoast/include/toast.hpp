@@ -6,12 +6,13 @@
 #ifndef TOAST_HPP
 #define TOAST_HPP
 
-#include <toast/environment.hpp>
-#include <toast/utils.hpp>
-#include <toast/sf.hpp>
-#include <toast/rng.hpp>
-#include <toast/qarray.hpp>
-#include <toast/fft.hpp>
-#include <toast/healpix.hpp>
+#include <toast/sys_environment.hpp>
+#include <toast/sys_utils.hpp>
+#include <toast/math_lapack.hpp>
+#include <toast/math_sf.hpp>
+#include <toast/math_rng.hpp>
+#include <toast/math_qarray.hpp>
+#include <toast/math_fft.hpp>
+#include <toast/math_healpix.hpp>
 
 #endif // ifndef TOAST_HPP

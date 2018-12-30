@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <toast/utils.hpp>
-#include <toast/fft.hpp>
+#include <toast/sys_utils.hpp>
+#include <toast/math_fft.hpp>
 
 #include <cmath>
 #include <vector>
@@ -139,7 +139,7 @@ class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
     private:
 
         fftw_plan plan_;
-        toast::fft_data data_;
+        toast::simd_array <double> data_;
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;
@@ -396,7 +396,7 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
         }
 
         DFTI_DESCRIPTOR_HANDLE descriptor_;
-        toast::fft_data data_;
+        toast::simd_array <double> data_;
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;

@@ -2,8 +2,9 @@
 # Add the library target
 
 add_library(toast
-    src/toast_environment.cpp
-    src/toast_utils.cpp
+    src/toast_sys_environment.cpp
+    src/toast_sys_utils.cpp
+    src/toast_math_lapack.cpp
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
@@ -39,6 +40,14 @@ if(FFTW_FOUND)
         target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
     endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
 endif(FFTW_FOUND)
+
+# FIXME: restore MKL linking here after testing on a machine with Intel
+# compilers.
+
+
+
+target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+target_link_libraries(toast "${LAPACK_LIBRARIES}")
 
 # Installation
 
