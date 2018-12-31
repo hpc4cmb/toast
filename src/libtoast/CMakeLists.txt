@@ -10,6 +10,7 @@ add_library(toast
     src/toast_math_qarray.cpp
     src/toast_math_fft.cpp
     src/toast_math_healpix.cpp
+    src/toast_map_cov.cpp
 )
 
 target_include_directories(toast PUBLIC

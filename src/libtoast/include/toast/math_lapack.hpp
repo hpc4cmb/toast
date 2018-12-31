@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_LAPACK_HPP
-#define TOAST_LAPACK_HPP
+#ifndef TOAST_MATH_LAPACK_HPP
+#define TOAST_MATH_LAPACK_HPP
 
 
 namespace toast {

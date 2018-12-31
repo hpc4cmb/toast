@@ -155,24 +155,24 @@ class TOASTfftTest : public ::testing::Test {
 };
 
 
-// class TOASTcovTest : public ::testing::Test {
-//     public:
-//
-//         TOASTcovTest() {}
-//
-//         ~TOASTcovTest() {}
-//
-//         virtual void SetUp() {}
-//
-//         virtual void TearDown() {}
-//
-//         static const int64_t nsm;
-//         static const int64_t npix;
-//         static const int64_t nnz;
-//         static const int64_t nsamp;
-//         static const int64_t scale;
-// };
-//
+class TOASTcovTest : public ::testing::Test {
+    public:
+
+        TOASTcovTest() {}
+
+        ~TOASTcovTest() {}
+
+        virtual void SetUp() {}
+
+        virtual void TearDown() {}
+
+        static const int64_t nsm;
+        static const int64_t npix;
+        static const int64_t nnz;
+        static const int64_t nsamp;
+        static const int64_t scale;
+};
+
 //
 // class TOASTmpiShmemTest : public ::testing::Test {
 //     public:

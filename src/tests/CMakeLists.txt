@@ -16,6 +16,7 @@ add_executable(toast_test
     toast_test_qarray.cpp
     toast_test_fft.cpp
     toast_test_healpix.cpp
+    toast_test_cov.cpp
 )
 
 target_include_directories(toast_test PRIVATE

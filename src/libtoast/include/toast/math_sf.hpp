@@ -4,8 +4,8 @@
    a BSD-style license that can be found in the LICENSE file.
  */
 
-#ifndef TOAST_SF_HPP
-#define TOAST_SF_HPP
+#ifndef TOAST_MATH_SF_HPP
+#define TOAST_MATH_SF_HPP
 
 
 namespace toast {

@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_QARRAY_HPP
-#define TOAST_QARRAY_HPP
+#ifndef TOAST_MATH_QARRAY_HPP
+#define TOAST_MATH_QARRAY_HPP
 
 
 namespace toast {

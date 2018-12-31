@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_UTILS_HPP
-#define TOAST_UTILS_HPP
+#ifndef TOAST_SYS_UTILS_HPP
+#define TOAST_SYS_UTILS_HPP
 
 #include <cstddef>
 #include <cmath>

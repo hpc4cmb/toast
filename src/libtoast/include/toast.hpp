@@ -14,5 +14,6 @@
 #include <toast/math_qarray.hpp>
 #include <toast/math_fft.hpp>
 #include <toast/math_healpix.hpp>
+#include <toast/map_cov.hpp>
 
 #endif // ifndef TOAST_HPP
