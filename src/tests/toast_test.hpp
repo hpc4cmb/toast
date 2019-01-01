@@ -188,20 +188,20 @@ class TOASTcovTest : public ::testing::Test {
 //         static const size_t n;
 // };
 //
-//
-// class TOASTpolyfilterTest : public ::testing::Test {
-//     public:
-//
-//         TOASTpolyfilterTest() {}
-//
-//         ~TOASTpolyfilterTest() {}
-//
-//         virtual void SetUp() {}
-//
-//         virtual void TearDown() {}
-//
-//         static const size_t order, n;
-// };
+
+class TOASTpolyfilterTest : public ::testing::Test {
+    public:
+
+        TOASTpolyfilterTest() {}
+
+        ~TOASTpolyfilterTest() {}
+
+        virtual void SetUp() {}
+
+        virtual void TearDown() {}
+
+        static const int64_t order, n;
+};
 
 
 #endif // ifndef TOAST_TEST_HPP

@@ -10,3 +10,53 @@ TOAST aims to follow best practices whenever reasonably possible.  If you submit
     %> make check
 
 In order to run the python unit tests, you must first do a "make install".
+
+
+
+Compiled Code
+-------------------
+
+Class names follow python CamelCase convention
+Function names follow python_underscore_convention
+
+Formatting set by uncrustify.
+
+All code that is exposed through pybind11 in a single toast namespace.  Nested namespaces may be used for code that is internal to the C++ code.
+
+The "using" statement can be used for aliasing a specific class or type::
+
+    using ShapeContainer = py::detail::any_container<ssize_t>;
+
+But should **not** be used to import an entire namespace::
+
+    using std;
+
+Pointer / reference declaration.  This allows reading from right to left as "a pointer to a constant double" or "a reference to a constant double".
+
+    double const * data
+    double const & data
+
+Not:
+
+    const double * data
+    const double & data
+
+When indexing the size of an STL container, the index variable should be either of the size type declared in the container class or size_t.
+
+When describing time domain sample indices or intervals, we using int64_t everywhere for consistency.  This allows passing, e.g. "-1" to communicate unspecified intervals or sample indices.
+
+Single line conditional statements:
+
+    if (x > 0) y = x;
+
+Are permitted if they fit onto a single line.  Otherwise, insert braces.
+
+Internal toast source files should not include the main "toast.hpp".  Instead
+they should include the specific headers they need.  For example::
+
+    #include <toast/sys_utils.hpp>
+    #include <toast/math_lapack.hpp>
+    #include <toast/math_qarray.hpp>
+
+
+If attempting to vectorize code with OpenMP simd constructs, be sure to check that any data array used in the simd region are aligned (see toast::is_aligned).  Otherwise this can result in silent data corruption.

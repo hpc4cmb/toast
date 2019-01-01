@@ -15,5 +15,6 @@
 #include <toast/math_fft.hpp>
 #include <toast/math_healpix.hpp>
 #include <toast/map_cov.hpp>
+#include <toast/tod_filter.hpp>
 
 #endif // ifndef TOAST_HPP
