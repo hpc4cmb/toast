@@ -5,9 +5,14 @@
 # using conda or pip.
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
-if (POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-endif (POLICY CMP0048)
+foreach(policy
+    CMP0048
+    CMP0074
+  )
+  if(POLICY ${policy})
+    cmake_policy(SET ${policy} NEW)
+  endif()
+endforeach()
 
 project(toast VERSION 2.3.0 LANGUAGES C CXX)
 
@@ -29,6 +34,8 @@ find_package(LAPACK REQUIRED)
 find_package(LAPACKnames)
 
 find_package(FFTW)
+
+find_package(AATM)
 
 find_package(MPI)
 

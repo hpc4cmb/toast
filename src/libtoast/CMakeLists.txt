@@ -11,7 +11,10 @@ add_library(toast
     src/toast_math_fft.cpp
     src/toast_math_healpix.cpp
     src/toast_map_cov.cpp
+    src/toast_fod_psd.cpp
     src/toast_tod_filter.cpp
+    src/toast_tod_pointing.cpp
+    src/toast_tod_simnoise.cpp
 )
 
 target_include_directories(toast PUBLIC
@@ -33,6 +36,12 @@ if(OpenMP_CXX_FOUND)
     set_target_properties(toast PROPERTIES LINK_FLAGS ${OpenMP_CXX_FLAGS})
     target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
+
+if(AATM_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_AATM=1)
+    target_include_directories(toast PUBLIC ${AATM_INCLUDE_DIRS})
+    target_link_libraries(toast "${AATM_LIBRARIES}")
+endif(AATM_FOUND)
 
 if(FFTW_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_FFTW=1)

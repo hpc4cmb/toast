@@ -1,0 +1,23 @@
+
+// Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
+// All rights reserved.  Use of this source code is governed by
+// a BSD-style license that can be found in the LICENSE file.
+
+#ifndef TOAST_FOD_PSD_HPP
+#define TOAST_FOD_PSD_HPP
+
+#include <cstddef>
+#include <cstdint>
+
+namespace toast {
+
+void fod_autosums(int64_t n, const double * x, const uint8_t * good,
+                  int64_t lagmax, double * sums, int64_t * hits);
+
+void fod_crosssums(int64_t n, const double * x, const double * y,
+                   const uint8_t * good, int64_t lagmax, double * sums,
+                   int64_t * hits);
+
+}
+
+#endif // ifndef TOAST_FOD_PSD_HPP
