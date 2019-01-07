@@ -17,6 +17,8 @@
 #include <El.hpp>
 #endif
 
+#include "cholmod.h"
+
 
 namespace toast { namespace tatm {
 
@@ -110,10 +112,13 @@ private :
     long nelem_sim_max; // Size of the independent X-direction slices.
     double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation
                                          // grid
+    double rcorr, rcorrsq; // Correlation length    
     // Mapping between full volume and observation cone
     mpi_shmem_long *compressed_index=NULL;
     // Inverse mapping between full volume and observation cone
     mpi_shmem_long *full_index=NULL;
+    cholmod_common cholcommon;
+    cholmod_common *chcommon;
     void draw(); // Draw values of lmin, lmax, w, wdir, T0 (and optionally z0)
     void get_volume(); // Determine the rectangular volume needed
     // determine of the given coordinates are within observed volume
@@ -131,6 +136,11 @@ private :
     // Create a realization out of the square root covariance matrix
     void apply_covariance( El::DistMatrix<double> *cov,
                            long ind_start, long ind_stop );
+    cholmod_sparse * build_sparse_covariance(long ind_start, long ind_stop);
+    cholmod_sparse * sqrt_sparse_covariance(cholmod_sparse *cov,
+                                            long ind_start, long ind_stop);
+    void apply_sparse_covariance(cholmod_sparse *cov,
+                                 long ind_start, long ind_stop);
     // Compressed index to xyz-coordinates
     void ind2coord( long i, double *coord );
     // xyz-coordinates to Compressed index

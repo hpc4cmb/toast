@@ -19,6 +19,8 @@
 #include <cmath>
 #include <omp.h>
 
+#include "cholmod.h"
+
 double median( std::vector<double> vec ) {
     if ( vec.size() == 0 ) return 0;
 
@@ -188,6 +190,17 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
 
     // Initialize Elemental grid for distributed matrix manipulation
     grid = new El::Grid( comm_gang );
+
+    // Initialize cholmod
+    chcommon = &cholcommon;    
+    cholmod_start(chcommon);
+    if (verbosity > 1)
+        chcommon->print = 3;  // Default verbosity
+    else
+        chcommon->print = 1;  // Minimal verbosity
+    chcommon->itype = CHOLMOD_INT;  // All integer arrays are int
+    chcommon->dtype = CHOLMOD_DOUBLE;  // All float arrays are double
+    chcommon->final_ll = 1;  // The factorization is LL', not LDL'
 }
 
 
@@ -201,6 +214,7 @@ toast::tatm::sim::~sim() {
         if ( MPI_Comm_free( &comm_gang ) )
             std::cerr << "Failed to free MPI communicator." << std::endl;
     }
+    cholmod_finish(chcommon);
 }
 
 
@@ -542,17 +556,28 @@ int toast::tatm::sim::simulate( bool use_cache ) {
             slice_starts.push_back(ind_start);
             slice_stops.push_back(ind_stop);
 
-            if ( slice % ngang == gang ) {
-
-                El::DistMatrix<double> *cov = build_covariance(
-                    ind_start, ind_stop );
-                sqrt_covariance( cov, ind_start, ind_stop );
-                apply_covariance( cov, ind_start, ind_stop );
-
-                delete cov;
+            if (slice % ngang == gang) {
+                if (gangsize == 1) {
+                    cholmod_sparse *cov = build_sparse_covariance(ind_start,
+                                                                  ind_stop);
+                    cholmod_sparse *sqrt_cov = sqrt_sparse_covariance(cov,
+                                                                      ind_start,
+                                                                      ind_stop);
+                    cholmod_free_sparse(&cov, chcommon);
+                    apply_sparse_covariance(sqrt_cov,
+                                            ind_start,
+                                            ind_stop);
+                    cholmod_free_sparse(&sqrt_cov, chcommon);
+                } else {
+                    El::DistMatrix<double> *cov = build_covariance(ind_start,
+                                                                   ind_stop);
+                    sqrt_covariance(cov, ind_start, ind_stop);
+                    apply_covariance(cov, ind_start, ind_stop);
+                        delete cov;
+                }
             }
 
-            if ( ind_stop == nelem ) break;
+            if (ind_stop == nelem) break;
 
             ++slice;
         }
@@ -816,7 +841,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
             }
 #endif
             // Combine atmospheric emission (via interpolation) with the
-            // ambient temperature
+            // ambient temperature.
+            // Note that the r^2 (beam area) and 1/r^2 (source
+            // distance) factors cancel in the integral.
 
             double step_val;
             try {
@@ -1238,6 +1265,13 @@ void toast::tatm::sim::initialize_kolmogorov() {
         f.close();
     }
 
+    // Measure the correlation length
+    long icorr = nr - 1;
+    double lim = 1e-3;
+    while (fabs(kolmo_y[icorr]) < lim) --icorr;
+    rcorr = kolmo_x[icorr];
+    rcorrsq = rcorr * rcorr;
+
     double t2 = MPI_Wtime();
 
     if ( rank == 0 && verbosity > 0 )
@@ -1512,20 +1546,20 @@ void toast::tatm::sim::ind2coord( long i, double *coord ) {
     long ifull = (*full_index)[i];
 
     long ix = ifull * xstrideinv;
-    long iy = (ifull - ix*xstride) * ystrideinv;
-    long iz = ifull - ix*xstride - iy*ystride;
+    long iy = (ifull - ix * xstride) * ystrideinv;
+    long iz = ifull - ix * xstride - iy * ystride;
 
     // coordinates in the scan frame
 
-    double x = xstart + ix*xstep;
-    double y = ystart + iy*ystep;
-    double z = zstart + iz*zstep;
+    double x = xstart + ix * xstep;
+    double y = ystart + iy * ystep;
+    double z = zstart + iz * zstep;
 
     // Into the horizontal frame
 
-    coord[0] = x*cosel0 - z*sinel0;
+    coord[0] = x * cosel0 - z * sinel0;
     coord[1] = y;
-    coord[2] = x*sinel0 + z*cosel0;
+    coord[2] = x * sinel0 + z * cosel0;
 
 }
 
@@ -1805,6 +1839,123 @@ El::DistMatrix<double> *toast::tatm::sim::build_covariance(
 }
 
 
+cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
+                                                          long ind_stop) {
+    /*
+      Build a sparse covariance matrix.  CHOLMOD is serial, so the
+      gangsize must be 1.
+    */
+
+    if (gangsize > 1) {
+        throw std::runtime_error("Sparse matrix operations require gangsize = 1");
+    }
+
+    double t1 = MPI_Wtime();
+
+    // Build the covariance matrix first in the triplet form, then
+    // cast it to the column-packed format.
+    
+    std::vector<int> rows, cols;
+    std::vector<double> vals;
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice 
+    
+    // Fill the elements of the covariance matrix.
+
+#pragma omp parallel
+    {
+        std::vector<int> myrows, mycols;
+        std::vector<double> myvals;
+        
+#pragma omp for schedule(static, 10)
+        for (int icol=0; icol<nelem; ++icol) {
+            // Translate indices into coordinates
+            double colcoord[3];
+            ind2coord(icol + ind_start, colcoord);
+            for (int irow=icol; irow<nelem; ++irow) {
+                // Evaluate the covariance between the two coordinates
+                double rowcoord[3];
+                ind2coord(irow + ind_start, rowcoord);
+                if (fabs(colcoord[0] - rowcoord[0]) > rcorr) continue;
+                if (fabs(colcoord[1] - rowcoord[1]) > rcorr) continue;
+                if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
+                
+                double val = cov_eval(colcoord, rowcoord);
+            
+                // If the covariance exceeds the threshold, add it to the
+                // sparse matrix
+                if (val > 1e-30) {
+                    myrows.push_back(irow);
+                    mycols.push_back(icol);
+                    myvals.push_back(val);
+                }
+            }
+        }
+#pragma omp critical
+        {
+            rows.insert(rows.end(), myrows.begin(), myrows.end());
+            cols.insert(cols.end(), mycols.begin(), mycols.end());
+            vals.insert(vals.end(), myvals.begin(), myvals.end());
+        }
+        
+    }
+    
+    
+    double t2 = MPI_Wtime();
+
+    if (verbosity > 0) {
+        std::cerr << "Gang # "<< gang << " Sparse covariance evaluated in "
+                  << t2 - t1 << " s." << std::endl;
+    }
+
+    // stype > 0 means that only the lower diagonal
+    // elements of the symmetric matrix are needed. 
+    int stype = 1;
+    size_t nnz = vals.size();
+    
+    cholmod_triplet *cov_triplet = cholmod_allocate_triplet(nelem,
+                                                            nelem,
+                                                            nnz,
+                                                            stype,
+                                                            CHOLMOD_REAL,
+                                                            chcommon);
+    memcpy(cov_triplet->i, rows.data(), nnz * sizeof(int));
+    memcpy(cov_triplet->j, cols.data(), nnz * sizeof(int));
+    memcpy(cov_triplet->x, vals.data(), nnz * sizeof(double));
+    std::vector<int>().swap(rows); // Ensure vector is freed
+    std::vector<int>().swap(cols);
+    std::vector<double>().swap(vals);
+    cov_triplet->nnz = nnz;
+
+    cholmod_sparse *cov_sparse = cholmod_triplet_to_sparse(cov_triplet,
+                                                           nnz,
+                                                           chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_triplet_to_sparse failed.");
+    cholmod_free_triplet(&cov_triplet, chcommon);
+
+    t2 = MPI_Wtime();
+
+    if (verbosity > 0) {
+        std::cerr << "Gang # "<< gang << " Sparse covariance constructed in "
+                  << t2 - t1 << " s." << std::endl;
+    }
+
+    // Report memory usage
+
+    double tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+                      / pow(2.0, 20.0);
+    double max_mem = (nelem * nelem * sizeof(double)) / pow(2.0, 20.0);
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << "Gang # " << gang << " Allocated " << tot_mem
+                  << " MB for the sparse covariance matrix. "
+                  << "Compression: " << tot_mem / max_mem << std::endl;
+    }
+
+    return cov_sparse;
+}
+
+
 double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
 
     // Evaluate the atmospheric absorption covariance between two coordinates
@@ -1815,11 +1966,11 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
     // Uncomment these lines for smoothing
     //const double ndxinv = xxstep / (nn-1);
     //const double ndzinv = zzstep / (nn-1);
-    const double ninv = 1. / ( nn * nn );
+    const double ninv = 1.; // / (nn * nn);
 
     double val = 0;
 
-    for ( int ii1=0; ii1<nn; ++ii1 ) {
+    for (int ii1=0; ii1<nn; ++ii1) {
         double xx1 = coord1[0];
         double yy1 = coord1[1];
         double zz1 = coord1[2];
@@ -1830,7 +1981,7 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
         //    zz1 += ii1 * ndzinv;
         //}
 
-        for ( int ii2=0; ii2<nn; ++ii2 ) {
+        for (int ii2=0; ii2<nn; ++ii2) {
             double xx2 = coord2[0];
             double yy2 = coord2[1];
             double zz2 = coord2[2];
@@ -1841,21 +1992,23 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
             //    zz2 += ii2 * ndzinv;
             //}
 
-            // Water vapor altitude factor
-
-            double chi1 = std::exp( -(zz1+zz2) * z0inv );
-
-            // Kolmogorov factor
-
             double dx = xx1 - xx2;
             double dy = yy1 - yy2;
             double dz = zz1 - zz2;
+            double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < rcorrsq) {
+                double r = sqrt(r2);                
+                
+                // Water vapor altitude factor
 
+                double chi1 = std::exp(-(zz1 + zz2) * z0inv);
 
-            double r = sqrt( dx*dx + dy*dy + dz*dz );
-            double chi2 = kolmogorov( r );
+                // Kolmogorov factor
 
-            val += chi1 * chi2;
+                double chi2 = kolmogorov(r);
+
+                val += chi1 * chi2;
+            }
         }
     }
 
@@ -1945,6 +2098,106 @@ void toast::tatm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
     }
 
     return;
+}
+
+
+cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
+                                                         long ind_start,
+                                                         long ind_stop) {
+    /*
+      Cholesky-factorize the provided sparse matrix and return the
+      sparse matrix representation of the factorization
+
+      CHOLMOD is serial, so the gangsize must be 1.
+    */
+
+    if (gangsize > 1) {
+        throw std::runtime_error("Sparse matrix operations require gangsize = 1");
+    }
+
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice 
+    double t1 = MPI_Wtime();
+    
+    if (verbosity > 0) {
+        std::cerr << "Gang # " << gang
+                  << " Analyzing sparse covariance ... " << std::endl;
+    }
+    
+    cholmod_factor *factorization;
+    const int ntry = 3;
+    for (int itry = 0; itry < ntry; ++itry) {
+        factorization = cholmod_analyze(cov, chcommon);
+        if (chcommon->status != CHOLMOD_OK)
+            throw std::runtime_error("cholmod_analyze failed.");
+        if (verbosity > 0) {
+            std::cerr << "Gang # " << gang
+                      << " Factorizing sparse covariance ... " << std::endl;
+        }
+        cholmod_factorize(cov, factorization, chcommon);
+        if (chcommon->status != CHOLMOD_OK) {
+            if (itry < ntry - 1 ) {
+                // Extract the diagonal of the matrix and try
+                // factorizing again
+                int ndiag = ntry - itry - 1;
+                int iupper = ndiag - 1;
+                int ilower = -iupper;
+                if (verbosity > 0) {
+                    cholmod_print_sparse(cov, "Covariance matrix", chcommon);
+                    std::cerr << "Gang # " << gang
+                              << " Factorization failed, trying a band "
+                              << "diagonal matrix. ndiag = " << ndiag
+                              << std::endl;
+                }
+                int mode = 1;  // Numerical (not pattern) matrix
+                cholmod_band_inplace(ilower, iupper, mode, cov, chcommon);
+                if (chcommon->status != CHOLMOD_OK)
+                    throw std::runtime_error("cholmod_band_inplace failed.");
+            } else
+                throw std::runtime_error("cholmod_factorize failed.");
+        } else {
+            break;
+        }
+    }
+    
+    double t2 = MPI_Wtime();
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << "Gang # " << gang
+                  << " Cholesky decomposition done in " << t2 - t1
+                  << " s. N = " << nelem << std::endl;
+    }
+
+    // Report memory usage (only counting the non-zero elements, no
+    // supernode information)
+
+    size_t nnz = factorization->nzmax;
+    double tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+        / pow(2.0, 20.0);
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << "Gang # " << gang << " Allocated " << tot_mem
+                  << " MB for the sparse factorization." << std::endl;
+    }
+
+    cholmod_sparse *sqrt_cov = cholmod_factor_to_sparse(factorization, chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_factor_to_sparse failed.");
+    cholmod_free_factor(&factorization, chcommon);
+
+    // Report memory usage
+    
+    nnz = sqrt_cov->nzmax;
+    tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+        / pow(2.0, 20.0);
+    double max_mem = (nelem * nelem * sizeof(double)) / pow(2.0, 20.0);
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << "Gang # " << gang << " Allocated " << tot_mem
+                  << " MB for the sparse sqrt covariance matrix. "
+                  << "Compression: " << tot_mem / max_mem << std::endl;
+    }
+
+    return sqrt_cov;
 }
 
 
@@ -2057,6 +2310,109 @@ void toast::tatm::sim::apply_covariance( El::DistMatrix<double> *cov,
     // FIXME: This is where we would blend slices
 
     for ( long i=ind_start; i<ind_stop; ++i ) {
+        (*realization)[i] = p[i-ind_start];
+    }
+
+    return;
+}
+
+
+void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse *sqrt_cov,
+                                               long ind_start,
+                                               long ind_stop) {
+    /*
+      Apply the Cholesky-decomposed (square-root) sparse covariance
+      matrix to a vector of Gaussian random numbers to impose the
+      desired correlation properties.
+      
+      CHOLMOD is serial, so the gangsize must be 1.
+    */
+
+    if (gangsize > 1) {
+        throw std::runtime_error("Sparse matrix operations require gangsize = 1");
+    }
+    
+    double t1 = MPI_Wtime();
+
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
+
+    // Draw the Gaussian variates in a single call
+
+    cholmod_dense *noise_in = cholmod_allocate_dense(nelem, 1, nelem,
+                                                     CHOLMOD_REAL, chcommon);
+    rng::dist_normal(nelem, key1, key2, counter1, counter2, (double*)noise_in->x);
+    counter2 += nelem;
+
+    cholmod_dense *noise_out = cholmod_allocate_dense(nelem, 1, nelem,
+                                                      CHOLMOD_REAL, chcommon);
+    
+    // Apply the sqrt covariance to impose correlations
+
+    int notranspose = 0;
+    double one[2] = {1, 0};  // Complex one
+    double zero[2] = {0, 0};  // Complex zero
+
+    cholmod_sdmult(sqrt_cov, notranspose, one, zero, noise_in, noise_out, chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_sdmult failed.");
+    cholmod_free_dense(&noise_in, chcommon);
+
+    // Copy over to the atmosphere realization
+
+    El::DistMatrix<double,El::STAR,El::STAR> slice_realization(*grid);
+    El::Zeros(slice_realization, 1, nelem);
+
+    double *pnoise = (double*)noise_out->x;
+    slice_realization.Reserve(nelem);
+    for (int col=0; col<nelem; ++col) {
+        slice_realization.QueueUpdate(0, col, *(pnoise++));
+    }
+    slice_realization.ProcessQueues();
+
+    cholmod_free_dense(&noise_out, chcommon);
+
+    // Subtract the mean of the slice to reduce step between the slices
+
+    double *p = slice_realization.Buffer();
+    double mean = 0, var = 0;
+    for (long i=0; i<nelem; ++i) {
+        mean += p[i];
+        var += p[i] * p[i];
+    }
+    mean /= nelem;
+    var = var / nelem - mean * mean;
+    for (long i=0; i<nelem; ++i) p[i] -= mean;
+
+    double t2 = MPI_Wtime();
+
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << "Gang # " << gang
+                  << " Realization slice (" << ind_start << " -- " << ind_stop
+                  << ") var = " << var << ", constructed in "
+                  << t2-t1 << " s." << std::endl;
+    }
+
+    if (verbosity > 10) {
+        std::ofstream f;
+        std::ostringstream fname;
+        fname << "realization_"
+              << ind_start << "_" << ind_stop << ".txt";
+        f.open(fname.str(), std::ios::out);
+        for (long ielem=0; ielem<nelem; ielem++) {
+            double coord[3];
+            ind2coord(ielem, coord);
+            f << coord[0] << " " << coord[1] << " " << coord[2] << " "
+              << p[ielem]  << std::endl;
+        }
+        f.close();
+    }
+
+    // Copy the slice realization over appropriate indices in
+    // the full realization
+    // FIXME: This is where we would blend slices
+
+    for (long i=ind_start; i<ind_stop; ++i) {
         (*realization)[i] = p[i-ind_start];
     }
 
