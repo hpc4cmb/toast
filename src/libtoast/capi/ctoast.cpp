@@ -1017,7 +1017,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
     double T0_sigma, double zatm, double zmax, double xstep, double ystep,
     double zstep, long nelem_sim_max, int verbosity, MPI_Comm comm,
     int gangsize, uint64_t key1, uint64_t key2, uint64_t counter1,
-    uint64_t counter2, char *cachedir ) {
+    uint64_t counter2, char *cachedir, double rmin, double rmax ) {
 
 #ifdef HAVE_ELEMENTAL
     TOAST_AUTO_TIMER();
@@ -1029,7 +1029,8 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
                                     wdir_sigma, z0_center, z0_sigma, T0_center,
                                     T0_sigma, zatm, zmax, xstep, ystep, zstep,
                                     nelem_sim_max, verbosity, comm, gangsize,
-                                    key1, key2, counter1, counter2, cachedir ) );
+                                    key1, key2, counter1, counter2, cachedir,
+                                    rmin, rmax) );
     } catch ( std::exception &e ){
         std::cerr << "ERROR allocating atmosphere: " << e.what() << std::endl;
     } catch ( ... ) {

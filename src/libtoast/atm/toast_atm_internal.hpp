@@ -70,7 +70,9 @@ public :
          int gangsize=-1, // Size of the gangs that create slices
          uint64_t key1=0, uint64_t key2=0, // RNG keys
          uint64_t counterval1=0, uint64_t counterval2=0, // RNG counters
-         char *cachedir=NULL );
+         char *cachedir=NULL,
+         double rmin=0, double rmax=10000 // Line-of-sight observing limits
+         );
 
     ~sim();
 
@@ -110,9 +112,10 @@ private :
     double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
-    double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation
-                                         // grid
-    double rcorr, rcorrsq; // Correlation length    
+    // Kolmogorov correlation grid
+    double rmin_kolmo, rmax_kolmo, rstep, rstep_inv;
+    double rcorr, rcorrsq, corrlim; // Correlation length
+    double rmin, rmax; // line-of-sight integration limits
     // Mapping between full volume and observation cone
     mpi_shmem_long *compressed_index=NULL;
     // Inverse mapping between full volume and observation cone

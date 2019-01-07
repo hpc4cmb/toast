@@ -23,7 +23,7 @@ libc_path = find_library("libc")
 libc = ct.CDLL(libc_path, mode=ct.RTLD_GLOBAL)
 
 libc.free.restype = None
-libc.free.argtypes = [ ct.c_void_p ]
+libc.free.argtypes = [ct.c_void_p]
 
 # numpy pointer types that we use frequently.  These types handle treating "None"
 # as a NULL pointer.  See:
@@ -31,13 +31,17 @@ libc.free.argtypes = [ ct.c_void_p ]
 #  https://stackoverflow.com/questions/32120178/how-can-i-pass-null-to-an-external-library-using-ctypes-with-an-argument-decla
 #
 
+
 def wrapped_ndptr(*args, **kwargs):
     base = npc.ndpointer(*args, **kwargs)
+
     def from_param(cls, obj):
         if obj is None:
             return obj
         return base.from_param(obj)
-    return type(base.__name__, (base,), {'from_param': classmethod(from_param)})
+
+    return type(base.__name__, (base,), {"from_param": classmethod(from_param)})
+
 
 npu8 = wrapped_ndptr(dtype=np.uint8, ndim=1, flags="C_CONTIGUOUS")
 npi8 = wrapped_ndptr(dtype=np.int8, ndim=1, flags="C_CONTIGUOUS")
@@ -50,171 +54,222 @@ npf64 = wrapped_ndptr(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS")
 p_c_char = ct.POINTER(ct.c_char)
 pp_c_char = ct.POINTER(p_c_char)
 
-#--------------------------------------
+# --------------------------------------
 # Global library
-#--------------------------------------
+# --------------------------------------
 lib.ctoast_raise_error.restype = None
-lib.ctoast_raise_error.argtypes = [ ct.c_int ]
+lib.ctoast_raise_error.argtypes = [ct.c_int]
+
 
 def raise_error(errcode):
     lib.ctoast_raise_error(errcode)
 
-#--------------------------------------
+
+# --------------------------------------
 # Util sub-library
-#--------------------------------------
+# --------------------------------------
 class cTimer(ct.Structure):
     pass
+
 
 class cTimingManager(ct.Structure):
     pass
 
+
 def convert_to_p_c_char(s):
-    enc_s = s.encode('utf-8')
+    enc_s = s.encode("utf-8")
     c_str = ct.create_string_buffer(enc_s)
     return c_str
 
+
 lib.ctoast_timers_enabled.restype = ct.c_int
 lib.ctoast_timers_enabled.argtypes = []
+
 
 def timers_enabled():
     val = lib.ctoast_timers_enabled()
     return True if val > 0 else False
 
+
 lib.ctoast_timers_toggle.restype = None
-lib.ctoast_timers_toggle.argtypes = [ ct.c_int ]
+lib.ctoast_timers_toggle.argtypes = [ct.c_int]
+
 
 def timers_toggle(on_or_off):
     lib.ctoast_timers_toggle(on_or_off)
 
-lib.ctoast_get_simple_timer.restype = ct.POINTER(cTimer)
-lib.ctoast_get_simple_timer.argtypes = [ p_c_char, p_c_char ]
 
-def get_simple_timer(prefix, fmt = ""):
-    return lib.ctoast_get_simple_timer(convert_to_p_c_char(prefix),
-                                       convert_to_p_c_char(fmt));
+lib.ctoast_get_simple_timer.restype = ct.POINTER(cTimer)
+lib.ctoast_get_simple_timer.argtypes = [p_c_char, p_c_char]
+
+
+def get_simple_timer(prefix, fmt=""):
+    return lib.ctoast_get_simple_timer(
+        convert_to_p_c_char(prefix), convert_to_p_c_char(fmt)
+    )
+
 
 lib.ctoast_del_simple_timer.restype = None
-lib.ctoast_del_simple_timer.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_del_simple_timer.argtypes = [ct.POINTER(cTimer)]
+
 
 def delete_simple_timer(_ct):
     lib.ctoast_del_simple_timer(_ct)
 
+
 lib.ctoast_get_timer.restype = ct.POINTER(cTimer)
-lib.ctoast_get_timer.argtypes = [ p_c_char ]
+lib.ctoast_get_timer.argtypes = [p_c_char]
+
 
 def get_timer(key):
     return lib.ctoast_get_timer(convert_to_p_c_char(key))
 
+
 lib.ctoast_get_timer_at.restype = ct.POINTER(cTimer)
-lib.ctoast_get_timer_at.argtypes = [ ct.c_int ]
+lib.ctoast_get_timer_at.argtypes = [ct.c_int]
+
 
 def get_timer_at(key):
     return lib.ctoast_get_timer_at(key)
 
+
 lib.ctoast_timer_start.restype = None
-lib.ctoast_timer_start.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_start.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_start(timer):
     lib.ctoast_timer_start(timer)
 
+
 lib.ctoast_timer_stop.restype = None
-lib.ctoast_timer_stop.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_stop.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_stop(timer):
     lib.ctoast_timer_stop(timer)
 
+
 lib.ctoast_timer_report.restype = None
-lib.ctoast_timer_report.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_report.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_report(timer):
     lib.ctoast_timer_report(timer)
 
+
 lib.ctoast_get_timer_instance_count.restype = np.uint64
 lib.ctoast_get_timer_instance_count.argtypes = []
+
 
 def get_timer_instance_count():
     return lib.ctoast_get_timer_instance_count()
 
+
 lib.ctoast_op_timer_instance_count.restype = None
-lib.ctoast_op_timer_instance_count.argtypes = [ ct.c_int, ct.c_int ]
+lib.ctoast_op_timer_instance_count.argtypes = [ct.c_int, ct.c_int]
+
 
 def op_timer_instance_count(ncount, nhash):
     lib.ctoast_op_timer_instance_count(ncount, nhash)
 
+
 lib.ctoast_get_timing_manager.restype = ct.POINTER(cTimingManager)
 lib.ctoast_get_timing_manager.argtypes = []
+
 
 def get_timing_manager():
     return lib.ctoast_get_timing_manager()
 
+
 lib.ctoast_set_timing_output_file.restype = None
-lib.ctoast_set_timing_output_file.argtypes = [ p_c_char ]
+lib.ctoast_set_timing_output_file.argtypes = [p_c_char]
+
 
 def set_timing_output_file(fname):
     lib.ctoast_set_timing_output_file(convert_to_p_c_char(fname))
 
+
 lib.ctoast_serialize_timing_manager.restype = None
-lib.ctoast_serialize_timing_manager.argtypes = [ p_c_char ]
+lib.ctoast_serialize_timing_manager.argtypes = [p_c_char]
+
 
 def serialize_timing_manager(fname):
     lib.ctoast_serialize_timing_manager(convert_to_p_c_char(fname))
 
+
 lib.ctoast_timing_manager_report.restype = None
 lib.ctoast_timing_manager_report.argtypes = []
+
 
 def report_timing():
     lib.ctoast_timing_manager_report()
 
+
 lib.ctoast_timing_manager_size.restype = ct.c_int
 lib.ctoast_timing_manager_size.argtypes = []
+
 
 def timing_manager_size():
     return lib.ctoast_timing_manager_size()
 
+
 lib.ctoast_timing_manager_clear.restype = None
 lib.ctoast_timing_manager_clear.argtypes = []
+
 
 def timing_manager_clear():
     return lib.ctoast_timing_manager_clear()
 
+
 lib.ctoast_timing_manager_set_max_depth.restype = None
-lib.ctoast_timing_manager_set_max_depth.argtypes = [ ct.c_int ]
+lib.ctoast_timing_manager_set_max_depth.argtypes = [ct.c_int]
+
 
 def timing_manager_set_max_depth(_depth):
     lib.ctoast_timing_manager_set_max_depth(_depth)
 
+
 lib.ctoast_timing_manager_max_depth.restype = ct.c_int
 lib.ctoast_timing_manager_max_depth.argtypes = []
+
 
 def timing_manager_max_depth():
     return lib.ctoast_timing_manager_max_depth()
 
+
 lib.ctoast_timer_real_elapsed.restype = ct.c_double
-lib.ctoast_timer_real_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_real_elapsed.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_real_elapsed(timer):
     return lib.ctoast_timer_real_elapsed(timer)
 
+
 lib.ctoast_timer_system_elapsed.restype = ct.c_double
-lib.ctoast_timer_system_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_system_elapsed.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_system_elapsed(timer):
     return lib.ctoast_timer_system_elapsed(timer)
 
+
 lib.ctoast_timer_user_elapsed.restype = ct.c_double
-lib.ctoast_timer_user_elapsed.argtypes = [ ct.POINTER(cTimer) ]
+lib.ctoast_timer_user_elapsed.argtypes = [ct.POINTER(cTimer)]
+
 
 def timer_user_elapsed(timer):
     return lib.ctoast_timer_user_elapsed(timer)
 
-#--------------------------------------
+
+# --------------------------------------
 # Math sub-library
-#--------------------------------------
+# --------------------------------------
 
 # special functions
 
 lib.ctoast_sf_sin.restype = None
-lib.ctoast_sf_sin.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_sin.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_sin(ang):
     n = len(ang)
@@ -222,8 +277,10 @@ def sf_sin(ang):
     lib.ctoast_sf_sin(n, ang, sinout)
     return sinout
 
+
 lib.ctoast_sf_cos.restype = None
-lib.ctoast_sf_cos.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_cos.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_cos(ang):
     n = len(ang)
@@ -231,8 +288,10 @@ def sf_cos(ang):
     lib.ctoast_sf_cos(n, ang, cosout)
     return cosout
 
+
 lib.ctoast_sf_sincos.restype = None
-lib.ctoast_sf_sincos.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
+lib.ctoast_sf_sincos.argtypes = [ct.c_int, npf64, npf64, npf64]
+
 
 def sf_sincos(ang):
     n = len(ang)
@@ -241,8 +300,10 @@ def sf_sincos(ang):
     lib.ctoast_sf_sincos(n, ang, sinout, cosout)
     return (sinout, cosout)
 
+
 lib.ctoast_sf_atan2.restype = None
-lib.ctoast_sf_atan2.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
+lib.ctoast_sf_atan2.argtypes = [ct.c_int, npf64, npf64, npf64]
+
 
 def sf_atan2(y, x):
     n = len(y)
@@ -252,8 +313,10 @@ def sf_atan2(y, x):
     lib.ctoast_sf_atan2(n, y, x, ang)
     return ang
 
+
 lib.ctoast_sf_sqrt.restype = None
-lib.ctoast_sf_sqrt.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_sqrt.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_sqrt(input):
     n = len(input)
@@ -261,8 +324,10 @@ def sf_sqrt(input):
     lib.ctoast_sf_sqrt(n, input, out)
     return out
 
+
 lib.ctoast_sf_rsqrt.restype = None
-lib.ctoast_sf_rsqrt.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_rsqrt.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_rsqrt(input):
     n = len(input)
@@ -270,8 +335,10 @@ def sf_rsqrt(input):
     lib.ctoast_sf_rsqrt(n, input, out)
     return out
 
+
 lib.ctoast_sf_exp.restype = None
-lib.ctoast_sf_exp.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_exp.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_exp(input):
     n = len(input)
@@ -279,8 +346,10 @@ def sf_exp(input):
     lib.ctoast_sf_exp(n, input, out)
     return out
 
+
 lib.ctoast_sf_log.restype = None
-lib.ctoast_sf_log.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_log.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_log(input):
     n = len(input)
@@ -288,8 +357,10 @@ def sf_log(input):
     lib.ctoast_sf_log(n, input, out)
     return out
 
+
 lib.ctoast_sf_fast_sin.restype = None
-lib.ctoast_sf_fast_sin.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_sin.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_sin(ang):
     n = len(ang)
@@ -297,8 +368,10 @@ def sf_fast_sin(ang):
     lib.ctoast_sf_fast_sin(n, ang, sinout)
     return sinout
 
+
 lib.ctoast_sf_fast_cos.restype = None
-lib.ctoast_sf_fast_cos.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_cos.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_cos(ang):
     n = len(ang)
@@ -306,8 +379,10 @@ def sf_fast_cos(ang):
     lib.ctoast_sf_fast_cos(n, ang, cosout)
     return cosout
 
+
 lib.ctoast_sf_fast_sincos.restype = None
-lib.ctoast_sf_fast_sincos.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
+lib.ctoast_sf_fast_sincos.argtypes = [ct.c_int, npf64, npf64, npf64]
+
 
 def sf_fast_sincos(ang):
     n = len(ang)
@@ -316,8 +391,10 @@ def sf_fast_sincos(ang):
     lib.ctoast_sf_fast_sincos(n, ang, sinout, cosout)
     return (sinout, cosout)
 
+
 lib.ctoast_sf_fast_atan2.restype = None
-lib.ctoast_sf_fast_atan2.argtypes = [ ct.c_int, npf64, npf64, npf64 ]
+lib.ctoast_sf_fast_atan2.argtypes = [ct.c_int, npf64, npf64, npf64]
+
 
 def sf_fast_atan2(y, x):
     n = len(y)
@@ -327,8 +404,10 @@ def sf_fast_atan2(y, x):
     lib.ctoast_sf_fast_atan2(n, y, x, ang)
     return ang
 
+
 lib.ctoast_sf_fast_sqrt.restype = None
-lib.ctoast_sf_fast_sqrt.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_sqrt.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_sqrt(input):
     n = len(input)
@@ -336,8 +415,10 @@ def sf_fast_sqrt(input):
     lib.ctoast_sf_fast_sqrt(n, input, out)
     return out
 
+
 lib.ctoast_sf_fast_rsqrt.restype = None
-lib.ctoast_sf_fast_rsqrt.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_rsqrt.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_rsqrt(input):
     n = len(input)
@@ -345,8 +426,10 @@ def sf_fast_rsqrt(input):
     lib.ctoast_sf_fast_rsqrt(n, input, out)
     return out
 
+
 lib.ctoast_sf_fast_exp.restype = None
-lib.ctoast_sf_fast_exp.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_exp.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_exp(input):
     n = len(input)
@@ -354,8 +437,10 @@ def sf_fast_exp(input):
     lib.ctoast_sf_fast_exp(n, input, out)
     return out
 
+
 lib.ctoast_sf_fast_log.restype = None
-lib.ctoast_sf_fast_log.argtypes = [ ct.c_int, npf64, npf64 ]
+lib.ctoast_sf_fast_log.argtypes = [ct.c_int, npf64, npf64]
+
 
 def sf_fast_log(input):
     n = len(input)
@@ -363,43 +448,76 @@ def sf_fast_log(input):
     lib.ctoast_sf_fast_log(n, input, out)
     return out
 
+
 # RNG
 
 lib.ctoast_rng_dist_uint64.restype = None
-lib.ctoast_rng_dist_uint64.argtypes = [ ct.c_ulong, ct.c_ulonglong,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npu64 ]
+lib.ctoast_rng_dist_uint64.argtypes = [
+    ct.c_ulong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    npu64,
+]
+
 
 def rng_dist_uint64(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.uint64)
     lib.ctoast_rng_dist_uint64(n, key1, key2, counter1, counter2, ret)
     return ret
 
+
 lib.ctoast_rng_dist_uniform_01.restype = None
-lib.ctoast_rng_dist_uniform_01.argtypes = [ ct.c_ulong, ct.c_ulonglong,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
+lib.ctoast_rng_dist_uniform_01.argtypes = [
+    ct.c_ulong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    npf64,
+]
+
 
 def rng_dist_uniform_01(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
     lib.ctoast_rng_dist_uniform_01(n, key1, key2, counter1, counter2, ret)
     return ret
 
+
 lib.ctoast_rng_dist_uniform_11.restype = None
-lib.ctoast_rng_dist_uniform_11.argtypes = [ ct.c_ulong, ct.c_ulonglong,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
+lib.ctoast_rng_dist_uniform_11.argtypes = [
+    ct.c_ulong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    npf64,
+]
+
 
 def rng_dist_uniform_11(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
     lib.ctoast_rng_dist_uniform_11(n, key1, key2, counter1, counter2, ret)
     return ret
 
+
 lib.ctoast_rng_dist_normal.restype = None
-lib.ctoast_rng_dist_normal.argtypes = [ ct.c_ulong, ct.c_ulonglong,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, npf64 ]
+lib.ctoast_rng_dist_normal.argtypes = [
+    ct.c_ulong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    npf64,
+]
+
 
 def rng_dist_normal(n, key1, key2, counter1, counter2):
     ret = np.zeros(n, dtype=np.float64)
     lib.ctoast_rng_dist_normal(n, key1, key2, counter1, counter2, ret)
     return ret
+
 
 ################################################################################
 #     RNG (MT)
@@ -407,51 +525,99 @@ def rng_dist_normal(n, key1, key2, counter1, counter2):
 def u64(var):
     return np.uint64(var)
 
+
 lib.ctoast_rng_dist_uint64_mt.restype = None
-lib.ctoast_rng_dist_uint64_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
-    npu64, npu64, npu64, npu64, npu64 ]
+lib.ctoast_rng_dist_uint64_mt.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    npu64,
+    npu64,
+    npu64,
+    npu64,
+    npu64,
+]
+
 
 def rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2):
-    _nr = u64(nr) ; _nc = u64(nc)
+    _nr = u64(nr)
+    _nc = u64(nc)
     ret = np.zeros(_nr * _nc, dtype=np.uint64)
     lib.ctoast_rng_dist_uint64_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
 
+
 lib.ctoast_rng_dist_uniform_01_mt.restype = None
-lib.ctoast_rng_dist_uniform_01_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
-    npu64, npu64, npu64, npu64, npf64 ]
+lib.ctoast_rng_dist_uniform_01_mt.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    npu64,
+    npu64,
+    npu64,
+    npu64,
+    npf64,
+]
+
 
 def rng_dist_uniform_01_mt(nr, nc, key1, key2, counter1, counter2):
-    _nr = u64(nr) ; _nc = u64(nc)
+    _nr = u64(nr)
+    _nc = u64(nc)
     ret = np.zeros(_nr * _nc, dtype=np.float64)
     lib.ctoast_rng_dist_uniform_01_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
 
+
 lib.ctoast_rng_dist_uniform_11_mt.restype = None
-lib.ctoast_rng_dist_uniform_11_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
-    npu64, npu64, npu64, npu64, npf64 ]
+lib.ctoast_rng_dist_uniform_11_mt.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    npu64,
+    npu64,
+    npu64,
+    npu64,
+    npf64,
+]
+
 
 def rng_dist_uniform_11_mt(nr, nc, key1, key2, counter1, counter2):
-    _nr = u64(nr) ; _nc = u64(nc)
+    _nr = u64(nr)
+    _nc = u64(nc)
     ret = np.zeros(_nr * _nc, dtype=np.float64)
     lib.ctoast_rng_dist_uniform_11_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
 
+
 lib.ctoast_rng_dist_normal_mt.restype = None
-lib.ctoast_rng_dist_normal_mt.argtypes = [ ct.c_ulong, ct.c_ulong,
-    npu64, npu64, npu64, npu64, npf64 ]
+lib.ctoast_rng_dist_normal_mt.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    npu64,
+    npu64,
+    npu64,
+    npu64,
+    npf64,
+]
+
 
 def rng_dist_normal_mt(nr, nc, key1, key2, counter1, counter2):
-    _nr = u64(nr) ; _nc = u64(nc)
+    _nr = u64(nr)
+    _nc = u64(nc)
     ret = np.zeros(_nr * _nc, dtype=np.float64)
     lib.ctoast_rng_dist_normal_mt(nr, nc, key1, key2, counter1, counter2, ret)
     return ret.reshape(_nr, _nc)
 
+
 # Quaternion array
 
 lib.ctoast_qarray_list_dot.restype = None
-lib.ctoast_qarray_list_dot.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
-    npf64, npf64, npf64 ]
+lib.ctoast_qarray_list_dot.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    ct.c_ulong,
+    npf64,
+    npf64,
+    npf64,
+]
+
 
 def qarray_list_dot(n, m, d, a, b):
     dotprod = np.zeros(n, dtype=np.float64)
@@ -460,18 +626,27 @@ def qarray_list_dot(n, m, d, a, b):
     lib.ctoast_qarray_list_dot(n, m, d, ac, bc, dotprod)
     return dotprod
 
+
 lib.ctoast_qarray_inv.restype = None
-lib.ctoast_qarray_inv.argtypes = [ ct.c_ulong, npf64 ]
+lib.ctoast_qarray_inv.argtypes = [ct.c_ulong, npf64]
+
 
 def qarray_inv(n, q):
-    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out = np.zeros(4 * n, dtype=np.float64)
     q_out[:] = q[:]
     lib.ctoast_qarray_inv(n, q_out)
     return q_out
 
+
 lib.ctoast_qarray_amplitude.restype = None
-lib.ctoast_qarray_amplitude.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
-    npf64, npf64 ]
+lib.ctoast_qarray_amplitude.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    ct.c_ulong,
+    npf64,
+    npf64,
+]
+
 
 def qarray_amplitude(n, m, d, v):
     amp = np.zeros(n, dtype=np.float64)
@@ -479,105 +654,127 @@ def qarray_amplitude(n, m, d, v):
     lib.ctoast_qarray_amplitude(n, m, d, vc, amp)
     return amp
 
+
 lib.ctoast_qarray_normalize.restype = None
-lib.ctoast_qarray_normalize.argtypes = [ ct.c_ulong, ct.c_ulong, ct.c_ulong,
-    npf64, npf64 ]
+lib.ctoast_qarray_normalize.argtypes = [
+    ct.c_ulong,
+    ct.c_ulong,
+    ct.c_ulong,
+    npf64,
+    npf64,
+]
+
 
 def qarray_normalize(n, m, d, q_in):
-    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out = np.zeros(4 * n, dtype=np.float64)
     qc = np.require(q_in, requirements=["C"])
     lib.ctoast_qarray_normalize(n, m, d, qc, q_out)
     return q_out
 
+
 lib.ctoast_qarray_rotate.restype = None
-lib.ctoast_qarray_rotate.argtypes = [ ct.c_ulong, npf64, ct.c_ulong, npf64, npf64 ]
+lib.ctoast_qarray_rotate.argtypes = [ct.c_ulong, npf64, ct.c_ulong, npf64, npf64]
+
 
 def qarray_rotate(nq, q, nv, v_in):
     n = nq
     if nv > n:
         n = nv
-    v_out = np.zeros(3*n, dtype=np.float64)
+    v_out = np.zeros(3 * n, dtype=np.float64)
     qc = np.require(q, requirements=["C"])
     vc = np.require(v_in, requirements=["C"])
     lib.ctoast_qarray_rotate(nq, qc, nv, vc, v_out)
     return v_out
 
+
 lib.ctoast_qarray_mult.restype = None
-lib.ctoast_qarray_mult.argtypes = [ ct.c_ulong, npf64, ct.c_ulong, npf64, npf64 ]
+lib.ctoast_qarray_mult.argtypes = [ct.c_ulong, npf64, ct.c_ulong, npf64, npf64]
+
 
 def qarray_mult(pn, p, nq, q):
     n = nq
     if pn > n:
         n = pn
-    r = np.zeros(4*n, dtype=np.float64)
+    r = np.zeros(4 * n, dtype=np.float64)
     pc = np.require(p, requirements=["C"])
     qc = np.require(q, requirements=["C"])
     lib.ctoast_qarray_mult(pn, pc, nq, qc, r)
     return r
 
+
 lib.ctoast_qarray_slerp.restype = None
-lib.ctoast_qarray_slerp.argtypes = [ ct.c_ulong, ct.c_ulong, npf64,
-    npf64, npf64, npf64 ]
+lib.ctoast_qarray_slerp.argtypes = [ct.c_ulong, ct.c_ulong, npf64, npf64, npf64, npf64]
+
 
 def qarray_slerp(n_time, n_targettime, time, targettime, q_in):
-    q_interp = np.zeros(n_targettime*4, dtype=np.float64)
+    q_interp = np.zeros(n_targettime * 4, dtype=np.float64)
     tc = np.require(time, requirements=["C"])
     ttc = np.require(targettime, requirements=["C"])
     qc = np.require(q_in, requirements=["C"])
     lib.ctoast_qarray_slerp(n_time, n_targettime, tc, ttc, qc, q_interp)
     return q_interp
 
+
 lib.ctoast_qarray_exp.restype = None
-lib.ctoast_qarray_exp.argtypes = [ ct.c_ulong, npf64, npf64 ]
+lib.ctoast_qarray_exp.argtypes = [ct.c_ulong, npf64, npf64]
+
 
 def qarray_exp(n, q_in):
-    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out = np.zeros(4 * n, dtype=np.float64)
     qc = np.require(q_in, requirements=["C"])
     lib.ctoast_qarray_exp(n, qc, q_out)
     return q_out
 
+
 lib.ctoast_qarray_ln.restype = None
-lib.ctoast_qarray_ln.argtypes = [ ct.c_ulong, npf64, npf64 ]
+lib.ctoast_qarray_ln.argtypes = [ct.c_ulong, npf64, npf64]
+
 
 def qarray_ln(n, q_in):
-    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out = np.zeros(4 * n, dtype=np.float64)
     qc = np.require(q_in, requirements=["C"])
     lib.ctoast_qarray_ln(n, qc, q_out)
     return q_out
 
+
 lib.ctoast_qarray_pow.restype = None
-lib.ctoast_qarray_pow.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+lib.ctoast_qarray_pow.argtypes = [ct.c_ulong, npf64, npf64, npf64]
+
 
 def qarray_pow(n, p, q_in):
-    q_out = np.zeros(4*n, dtype=np.float64)
+    q_out = np.zeros(4 * n, dtype=np.float64)
     qc = np.require(q_in, requirements=["C"])
     lib.ctoast_qarray_pow(n, p, qc, q_out)
     return q_out
 
+
 lib.ctoast_qarray_from_axisangle.restype = None
-lib.ctoast_qarray_from_axisangle.argtypes = [ ct.c_ulong, npf64,
-    npf64, npf64 ]
+lib.ctoast_qarray_from_axisangle.argtypes = [ct.c_ulong, npf64, npf64, npf64]
+
 
 def qarray_from_axisangle(n, axis, angle):
-    q_out = np.zeros(n*4, dtype=np.float64)
+    q_out = np.zeros(n * 4, dtype=np.float64)
     axc = np.require(axis, requirements=["C"])
     anc = np.require(angle, requirements=["C"])
     lib.ctoast_qarray_from_axisangle(n, axc, anc, q_out)
     return q_out
 
+
 lib.ctoast_qarray_to_axisangle.restype = None
-lib.ctoast_qarray_to_axisangle.argtypes = [ ct.c_ulong, npf64, npf64,
-    npf64 ]
+lib.ctoast_qarray_to_axisangle.argtypes = [ct.c_ulong, npf64, npf64, npf64]
+
 
 def qarray_to_axisangle(n, q):
-    axis = np.zeros(n*3, dtype=np.float64)
+    axis = np.zeros(n * 3, dtype=np.float64)
     angle = np.zeros(n, dtype=np.float64)
     qc = np.require(q, requirements=["C"])
     lib.ctoast_qarray_to_axisangle(n, qc, axis, angle)
     return (axis, angle)
 
+
 lib.ctoast_qarray_to_rotmat.restype = None
-lib.ctoast_qarray_to_rotmat.argtypes = [ npf64, npf64 ]
+lib.ctoast_qarray_to_rotmat.argtypes = [npf64, npf64]
+
 
 def qarray_to_rotmat(q):
     rotmat = np.zeros(9, dtype=np.float64)
@@ -585,8 +782,10 @@ def qarray_to_rotmat(q):
     lib.ctoast_qarray_to_rotmat(qc, rotmat)
     return rotmat
 
+
 lib.ctoast_qarray_from_rotmat.restype = None
-lib.ctoast_qarray_from_rotmat.argtypes = [ npf64, npf64 ]
+lib.ctoast_qarray_from_rotmat.argtypes = [npf64, npf64]
+
 
 def qarray_from_rotmat(rotmat):
     q = np.zeros(4, dtype=np.float64)
@@ -594,21 +793,32 @@ def qarray_from_rotmat(rotmat):
     lib.ctoast_qarray_from_rotmat(rc, q)
     return q
 
+
 lib.ctoast_qarray_from_vectors.restype = None
-lib.ctoast_qarray_from_vectors.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+lib.ctoast_qarray_from_vectors.argtypes = [ct.c_ulong, npf64, npf64, npf64]
+
 
 def qarray_from_vectors(n, vec1, vec2):
-    q = np.zeros(4*n, dtype=np.float64)
+    q = np.zeros(4 * n, dtype=np.float64)
     vc1 = np.require(vec1, requirements=["C"])
     vc2 = np.require(vec2, requirements=["C"])
     lib.ctoast_qarray_from_vectors(n, vc1, vc2, q)
     return q
 
+
 lib.ctoast_qarray_from_angles.restype = None
-lib.ctoast_qarray_from_angles.argtypes = [ ct.c_ulong, npf64, npf64, npf64, npf64, ct.c_int ]
+lib.ctoast_qarray_from_angles.argtypes = [
+    ct.c_ulong,
+    npf64,
+    npf64,
+    npf64,
+    npf64,
+    ct.c_int,
+]
+
 
 def qarray_from_angles(n, theta, phi, pa, IAU=False):
-    q = np.zeros(4*n, dtype=np.float64)
+    q = np.zeros(4 * n, dtype=np.float64)
     iau = 0
     if IAU:
         iau = 1
@@ -618,8 +828,17 @@ def qarray_from_angles(n, theta, phi, pa, IAU=False):
     lib.ctoast_qarray_from_angles(n, thc, phc, pac, q, iau)
     return q
 
+
 lib.ctoast_qarray_to_angles.restype = None
-lib.ctoast_qarray_to_angles.argtypes = [ ct.c_ulong, npf64, npf64, npf64, npf64, ct.c_int ]
+lib.ctoast_qarray_to_angles.argtypes = [
+    ct.c_ulong,
+    npf64,
+    npf64,
+    npf64,
+    npf64,
+    ct.c_int,
+]
+
 
 def qarray_to_angles(n, quat, IAU=False):
     theta = np.zeros(n, dtype=np.float64)
@@ -632,8 +851,10 @@ def qarray_to_angles(n, quat, IAU=False):
     lib.ctoast_qarray_to_angles(n, qc, theta, phi, pa, iau)
     return (theta, phi, pa)
 
+
 lib.ctoast_qarray_to_position.restype = None
-lib.ctoast_qarray_to_position.argtypes = [ ct.c_ulong, npf64, npf64, npf64 ]
+lib.ctoast_qarray_to_position.argtypes = [ct.c_ulong, npf64, npf64, npf64]
+
 
 def qarray_to_position(n, quat):
     theta = np.zeros(n, dtype=np.float64)
@@ -642,149 +863,205 @@ def qarray_to_position(n, quat):
     lib.ctoast_qarray_to_position(n, qc, theta, phi)
     return (theta, phi)
 
+
 # FFT
+
 
 class cFFTR1D(ct.Structure):
     pass
 
-fft_plan_type = {
-    'fast' : ct.c_uint(0),
-    'best' : ct.c_uint(1)
-}
 
-fft_direction = {
-    'forward' : ct.c_uint(0),
-    'backward' : ct.c_uint(1)
-}
+fft_plan_type = {"fast": ct.c_uint(0), "best": ct.c_uint(1)}
+
+fft_direction = {"forward": ct.c_uint(0), "backward": ct.c_uint(1)}
 
 lib.ctoast_fft_r1d_alloc.restype = ct.POINTER(cFFTR1D)
-lib.ctoast_fft_r1d_alloc.argtypes = [ ct.c_longlong, ct.c_longlong, ct.c_uint,
-    ct.c_uint, ct.c_double ]
+lib.ctoast_fft_r1d_alloc.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_uint,
+    ct.c_uint,
+    ct.c_double,
+]
+
 
 def fft_r1d_alloc(length, n, type, dir, scale):
-    return lib.ctoast_fft_r1d_alloc(length, n, fft_plan_type[type],
-        fft_direction[dir], scale)
+    return lib.ctoast_fft_r1d_alloc(
+        length, n, fft_plan_type[type], fft_direction[dir], scale
+    )
+
 
 lib.ctoast_fft_r1d_free.restype = None
-lib.ctoast_fft_r1d_free.argtypes = [ ct.POINTER(cFFTR1D) ]
+lib.ctoast_fft_r1d_free.argtypes = [ct.POINTER(cFFTR1D)]
+
 
 def fft_r1d_free(plan):
     lib.ctoast_fft_r1d_free(plan)
     return
 
+
 lib.ctoast_fft_r1d_length.restype = ct.c_longlong
-lib.ctoast_fft_r1d_length.argtypes = [ ct.POINTER(cFFTR1D) ]
+lib.ctoast_fft_r1d_length.argtypes = [ct.POINTER(cFFTR1D)]
+
 
 def fft_r1d_length(plan):
     return lib.ctoast_fft_r1d_length(plan)
 
+
 lib.ctoast_fft_r1d_count.restype = ct.c_longlong
-lib.ctoast_fft_r1d_count.argtypes = [ ct.POINTER(cFFTR1D) ]
+lib.ctoast_fft_r1d_count.argtypes = [ct.POINTER(cFFTR1D)]
+
 
 def fft_r1d_count(plan):
     return lib.ctoast_fft_r1d_count(plan)
 
+
 lib.ctoast_fft_r1d_tdata_set.restype = None
-lib.ctoast_fft_r1d_tdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
+lib.ctoast_fft_r1d_tdata_set.argtypes = [
+    ct.POINTER(cFFTR1D),
+    ct.POINTER(ct.POINTER(ct.c_double)),
+]
+
 
 def fft_r1d_tdata_set(plan, data):
     cnt = len(data)
-    cdata = [ npc.as_ctypes(x) for x in data ]
+    cdata = [npc.as_ctypes(x) for x in data]
     pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
     lib.ctoast_fft_r1d_tdata_set(plan, pdata)
     return
 
+
 lib.ctoast_fft_r1d_tdata_get.restype = None
-lib.ctoast_fft_r1d_tdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
+lib.ctoast_fft_r1d_tdata_get.argtypes = [
+    ct.POINTER(cFFTR1D),
+    ct.POINTER(ct.POINTER(ct.c_double)),
+]
+
 
 def fft_r1d_tdata_get(plan):
     cnt = lib.ctoast_fft_r1d_count(plan)
     len = lib.ctoast_fft_r1d_length(plan)
-    data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
-    cdata = [ npc.as_ctypes(x) for x in data ]
+    data = [np.zeros(len, dtype=np.float64) for x in range(cnt)]
+    cdata = [npc.as_ctypes(x) for x in data]
     pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
     lib.ctoast_fft_r1d_tdata_get(plan, pdata)
     return data
 
+
 lib.ctoast_fft_r1d_fdata_set.restype = None
-lib.ctoast_fft_r1d_fdata_set.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
+lib.ctoast_fft_r1d_fdata_set.argtypes = [
+    ct.POINTER(cFFTR1D),
+    ct.POINTER(ct.POINTER(ct.c_double)),
+]
+
 
 def fft_r1d_fdata_set(plan, data):
     cnt = len(data)
-    cdata = [ npc.as_ctypes(x) for x in data ]
+    cdata = [npc.as_ctypes(x) for x in data]
     pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
     lib.ctoast_fft_r1d_fdata_set(plan, pdata)
     return
 
+
 lib.ctoast_fft_r1d_fdata_get.restype = None
-lib.ctoast_fft_r1d_fdata_get.argtypes = [ ct.POINTER(cFFTR1D), ct.POINTER(ct.POINTER(ct.c_double)) ]
+lib.ctoast_fft_r1d_fdata_get.argtypes = [
+    ct.POINTER(cFFTR1D),
+    ct.POINTER(ct.POINTER(ct.c_double)),
+]
+
 
 def fft_r1d_fdata_get(plan):
     cnt = lib.ctoast_fft_r1d_count(plan)
     len = lib.ctoast_fft_r1d_length(plan)
-    data = [ np.zeros(len, dtype=np.float64) for x in range(cnt) ]
-    cdata = [ npc.as_ctypes(x) for x in data ]
+    data = [np.zeros(len, dtype=np.float64) for x in range(cnt)]
+    cdata = [npc.as_ctypes(x) for x in data]
     pdata = (ct.POINTER(ct.c_double) * cnt)(*cdata)
     lib.ctoast_fft_r1d_fdata_get(plan, pdata)
     return data
 
+
 lib.ctoast_fft_r1d_exec.restype = None
-lib.ctoast_fft_r1d_exec.argtypes = [ ct.POINTER(cFFTR1D) ]
+lib.ctoast_fft_r1d_exec.argtypes = [ct.POINTER(cFFTR1D)]
+
 
 def fft_r1d_exec(plan):
     lib.ctoast_fft_r1d_exec(plan)
     return
 
+
 class cFFTR1D_Store(ct.Structure):
     pass
 
+
 lib.ctoast_fft_r1d_plan_store_get.restype = ct.POINTER(cFFTR1D_Store)
-lib.ctoast_fft_r1d_plan_store_get.argtypes = [ ]
+lib.ctoast_fft_r1d_plan_store_get.argtypes = []
+
 
 def fft_r1d_store_get():
     return lib.ctoast_fft_r1d_plan_store_get()
 
+
 lib.ctoast_fft_r1d_plan_store_clear.restype = None
-lib.ctoast_fft_r1d_plan_store_clear.argtypes = [ ct.POINTER(cFFTR1D_Store) ]
+lib.ctoast_fft_r1d_plan_store_clear.argtypes = [ct.POINTER(cFFTR1D_Store)]
+
 
 def fft_r1d_store_clear(store):
     lib.ctoast_fft_r1d_plan_store_clear(store)
     return
 
+
 lib.ctoast_fft_r1d_plan_store_cache.restype = None
-lib.ctoast_fft_r1d_plan_store_cache.argtypes = [ ct.POINTER(cFFTR1D_Store),
-    ct.c_longlong, ct.c_longlong ]
+lib.ctoast_fft_r1d_plan_store_cache.argtypes = [
+    ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong,
+    ct.c_longlong,
+]
+
 
 def fft_r1d_store_cache(store, len, count):
     lib.ctoast_fft_r1d_plan_store_cache(store, len, count)
     return
 
+
 lib.ctoast_fft_r1d_plan_store_forward.restype = ct.POINTER(cFFTR1D)
-lib.ctoast_fft_r1d_plan_store_forward.argtypes = [ ct.POINTER(cFFTR1D_Store),
-    ct.c_longlong, ct.c_longlong ]
+lib.ctoast_fft_r1d_plan_store_forward.argtypes = [
+    ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong,
+    ct.c_longlong,
+]
+
 
 def fft_r1d_store_forward(store, length, n):
     return lib.ctoast_fft_r1d_plan_store_forward(store, length, n)
 
+
 lib.ctoast_fft_r1d_plan_store_backward.restype = ct.POINTER(cFFTR1D)
-lib.ctoast_fft_r1d_plan_store_backward.argtypes = [ ct.POINTER(cFFTR1D_Store),
-    ct.c_longlong, ct.c_longlong ]
+lib.ctoast_fft_r1d_plan_store_backward.argtypes = [
+    ct.POINTER(cFFTR1D_Store),
+    ct.c_longlong,
+    ct.c_longlong,
+]
+
 
 def fft_r1d_store_backward(store, length, n):
     return lib.ctoast_fft_r1d_plan_store_backward(store, length, n)
 
+
 # Healpix
 
 lib.ctoast_healpix_ang2vec.restype = None
-lib.ctoast_healpix_ang2vec.argtypes = [ ct.c_longlong, npf64, npf64, npf64 ]
+lib.ctoast_healpix_ang2vec.argtypes = [ct.c_longlong, npf64, npf64, npf64]
+
 
 def healpix_ang2vec(n, theta, phi):
-    vec = np.zeros(3*n, dtype=np.float64)
+    vec = np.zeros(3 * n, dtype=np.float64)
     lib.ctoast_healpix_ang2vec(n, theta, phi, vec)
     return vec
 
+
 lib.ctoast_healpix_vec2ang.restype = None
-lib.ctoast_healpix_vec2ang.argtypes = [ ct.c_longlong, npf64, npf64, npf64 ]
+lib.ctoast_healpix_vec2ang.argtypes = [ct.c_longlong, npf64, npf64, npf64]
+
 
 def healpix_vec2ang(n, vec):
     theta = np.zeros(n, dtype=np.float64)
@@ -792,9 +1069,10 @@ def healpix_vec2ang(n, vec):
     lib.ctoast_healpix_vec2ang(n, vec, theta, phi)
     return (theta, phi)
 
+
 lib.ctoast_healpix_vecs2angpa.restype = None
-lib.ctoast_healpix_vecs2angpa.argtypes = [ ct.c_longlong, npf64, npf64,
-    npf64, npf64 ]
+lib.ctoast_healpix_vecs2angpa.argtypes = [ct.c_longlong, npf64, npf64, npf64, npf64]
+
 
 def healpix_vecs2angpa(n, vec):
     theta = np.zeros(n, dtype=np.float64)
@@ -803,33 +1081,48 @@ def healpix_vecs2angpa(n, vec):
     lib.ctoast_healpix_vecs2angpa(n, vec, theta, phi, pa)
     return (theta, phi, pa)
 
+
 class cHealpix(ct.Structure):
     pass
 
+
 lib.ctoast_healpix_pixels_alloc.restype = ct.POINTER(cHealpix)
-lib.ctoast_healpix_pixels_alloc.argtypes = [ ct.c_longlong ]
+lib.ctoast_healpix_pixels_alloc.argtypes = [ct.c_longlong]
+
 
 def healpix_pixels_alloc(nside):
     return lib.ctoast_healpix_pixels_alloc(nside)
 
+
 lib.ctoast_healpix_pixels_free.restype = None
-lib.ctoast_healpix_pixels_free.argtypes = [ ct.POINTER(cHealpix) ]
+lib.ctoast_healpix_pixels_free.argtypes = [ct.POINTER(cHealpix)]
+
 
 def healpix_pixels_free(hpix):
     lib.ctoast_healpix_pixels_free(hpix)
     return
 
+
 lib.ctoast_healpix_pixels_reset.restype = None
-lib.ctoast_healpix_pixels_reset.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong ]
+lib.ctoast_healpix_pixels_reset.argtypes = [ct.POINTER(cHealpix), ct.c_longlong]
+
 
 def healpix_pixels_reset(hpix, nside):
     lib.ctoast_healpix_pixels_reset(hpix, nside)
     return
 
+
 lib.ctoast_healpix_pixels_vec2zphi.restype = None
-lib.ctoast_healpix_pixels_vec2zphi.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npf64, npi32, npf64, npf64 ]
+lib.ctoast_healpix_pixels_vec2zphi.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npf64,
+    npi32,
+    npf64,
+    npf64,
+]
+
 
 def healpix_pixels_vec2zphi(hpix, n, vec):
     phi = np.zeros(n, dtype=np.float64)
@@ -839,9 +1132,17 @@ def healpix_pixels_vec2zphi(hpix, n, vec):
     lib.ctoast_healpix_pixels_vec2zphi(hpix, n, vec, phi, region, z, rtz)
     return (phi, region, z, rtz)
 
+
 lib.ctoast_healpix_pixels_theta2z.restype = None
-lib.ctoast_healpix_pixels_theta2z.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npi32, npf64, npf64 ]
+lib.ctoast_healpix_pixels_theta2z.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npi32,
+    npf64,
+    npf64,
+]
+
 
 def healpix_pixels_theta2z(hpix, n, theta):
     region = np.zeros(n, dtype=np.int32)
@@ -850,151 +1151,296 @@ def healpix_pixels_theta2z(hpix, n, theta):
     lib.ctoast_healpix_pixels_theta2z(hpix, n, theta, region, z, rtz)
     return (region, z, rtz)
 
+
 lib.ctoast_healpix_pixels_zphi2nest.restype = None
-lib.ctoast_healpix_pixels_zphi2nest.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
+lib.ctoast_healpix_pixels_zphi2nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npi32,
+    npf64,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_zphi2ring.restype = None
-lib.ctoast_healpix_pixels_zphi2ring.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npi32, npf64, npf64, npi64 ]
+lib.ctoast_healpix_pixels_zphi2ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npi32,
+    npf64,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_zphi2ring(hpix, n, phi, region, z, rtz):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_zphi2nest(hpix, n, phi, region, z, rtz, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_ang2nest.restype = None
-lib.ctoast_healpix_pixels_ang2nest.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npf64, npf64, npi64 ]
+lib.ctoast_healpix_pixels_ang2nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npf64,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_ang2nest(hpix, n, theta, phi):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ang2nest(hpix, n, theta, phi, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_ang2ring.restype = None
-lib.ctoast_healpix_pixels_ang2ring.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npf64, npf64, npi64 ]
+lib.ctoast_healpix_pixels_ang2ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npf64,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_ang2ring(hpix, n, theta, phi):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ang2ring(hpix, n, theta, phi, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_vec2nest.restype = None
-lib.ctoast_healpix_pixels_vec2nest.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npi64 ]
+lib.ctoast_healpix_pixels_vec2nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_vec2nest(hpix, n, vec):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_vec2nest(hpix, n, vec, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_vec2ring.restype = None
-lib.ctoast_healpix_pixels_vec2ring.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npf64, npi64 ]
+lib.ctoast_healpix_pixels_vec2ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npf64,
+    npi64,
+]
+
 
 def healpix_pixels_vec2ring(hpix, n, vec):
     pix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_vec2ring(hpix, n, vec, pix)
     return pix
 
+
 lib.ctoast_healpix_pixels_ring2nest.restype = None
-lib.ctoast_healpix_pixels_ring2nest.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_ring2nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_ring2nest(hpix, n, ringpix):
     nestpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_ring2nest(hpix, n, ringpix, nestpix)
     return nestpix
 
+
 lib.ctoast_healpix_pixels_nest2ring.restype = None
-lib.ctoast_healpix_pixels_nest2ring.argtypes = [ ct.POINTER(cHealpix),
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_nest2ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_nest2ring(hpix, n, nestpix):
     ringpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_nest2ring(hpix, n, nestpix, ringpix)
     return ringpix
 
+
 lib.ctoast_healpix_pixels_degrade_ring.restype = None
-lib.ctoast_healpix_pixels_degrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_degrade_ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_int,
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_degrade_ring(hpix, factor, n, inpix):
     outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_degrade_ring(hpix, factor, n, inpix, outpix)
     return outpix
 
+
 lib.ctoast_healpix_pixels_degrade_nest.restype = None
-lib.ctoast_healpix_pixels_degrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_degrade_nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_int,
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_degrade_nest(hpix, factor, n, inpix):
     outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_degrade_nest(hpix, factor, n, inpix, outpix)
     return outpix
 
+
 lib.ctoast_healpix_pixels_upgrade_ring.restype = None
-lib.ctoast_healpix_pixels_upgrade_ring.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_upgrade_ring.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_int,
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_upgrade_ring(hpix, factor, n, inpix):
     outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_upgrade_ring(hpix, factor, n, inpix, outpix)
     return outpix
 
+
 lib.ctoast_healpix_pixels_upgrade_nest.restype = None
-lib.ctoast_healpix_pixels_upgrade_nest.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_longlong, npi64, npi64 ]
+lib.ctoast_healpix_pixels_upgrade_nest.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_int,
+    ct.c_longlong,
+    npi64,
+    npi64,
+]
+
 
 def healpix_pixels_upgrade_nest(hpix, factor, n, inpix):
     outpix = np.zeros(n, dtype=np.int64)
     lib.ctoast_healpix_pixels_upgrade_nest(hpix, factor, n, inpix, outpix)
     return outpix
 
-#--------------------------------------
+
+# --------------------------------------
 #  Operator Helpers
-#--------------------------------------
+# --------------------------------------
 
 lib.ctoast_string_alloc.restype = ct.POINTER(ct.c_char_p)
-lib.ctoast_string_alloc.argtypes = [ ct.c_ulong, ct.c_ulong ]
+lib.ctoast_string_alloc.argtypes = [ct.c_ulong, ct.c_ulong]
 
 lib.ctoast_string_free.restype = None
-lib.ctoast_string_free.argtypes = [ ct.c_ulong, ct.POINTER(ct.c_char_p) ]
+lib.ctoast_string_free.argtypes = [ct.c_ulong, ct.POINTER(ct.c_char_p)]
 
 
-#--------------------------------------
+# --------------------------------------
 #  ATM sublibrary
-#--------------------------------------
+# --------------------------------------
+
 
 class cATMSim(ct.Structure):
     pass
 
+
 lib.ctoast_atm_sim_alloc.restype = ct.POINTER(cATMSim)
 lib.ctoast_atm_sim_alloc.argtypes = [
-    ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_long, ct.c_int, MPI_Comm, ct.c_int,
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
-    ct.c_char_p]
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_long,
+    ct.c_int,
+    MPI_Comm,
+    ct.c_int,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_char_p,
+    ct.c_double,
+    ct.c_double,
+]
+
 
 def atm_sim_alloc(
-        azmin, azmax, elmin, elmax, tmin, tmax, lmin_center=0.01,
-        lmin_sigma=0.001, lmax_center=10, lmax_sigma=10, w_center=25.0,
-        w_sigma=10.0, wdir_center=0.0, wdir_sigma=100.0, z0_center=2000.0,
-        z0_sigma=0.0, T0_center=280.0, T0_sigma=10.0, zatm=40000.0, zmax=2000.0,
-        xstep=100.0, ystep=100.0, zstep=100.0, nelem_sim_max=1000, verbosity=0,
-        comm=MPI.COMM_WORLD, gangsize=-1,
-        key1=0, key2=0, counter1=0, counter2=0, cachedir='.'):
+    azmin,
+    azmax,
+    elmin,
+    elmax,
+    tmin,
+    tmax,
+    lmin_center=0.01,
+    lmin_sigma=0.001,
+    lmax_center=10,
+    lmax_sigma=10,
+    w_center=25.0,
+    w_sigma=10.0,
+    wdir_center=0.0,
+    wdir_sigma=100.0,
+    z0_center=2000.0,
+    z0_sigma=0.0,
+    T0_center=280.0,
+    T0_sigma=10.0,
+    zatm=40000.0,
+    zmax=2000.0,
+    xstep=100.0,
+    ystep=100.0,
+    zstep=100.0,
+    nelem_sim_max=1000,
+    verbosity=0,
+    comm=MPI.COMM_WORLD,
+    gangsize=-1,
+    key1=0,
+    key2=0,
+    counter1=0,
+    counter2=0,
+    cachedir=".",
+    rmin=0,
+    rmax=10000,
+):
 
     comm_ptr = MPI._addressof(comm)
     c_comm = MPI_Comm.from_address(comm_ptr)
@@ -1004,80 +1450,183 @@ def atm_sim_alloc(
     else:
         cdir = None
 
+    print(
+        "Calling lib.ctoast_atm_sim_alloc with rmin = {}, rmax = {}".format(rmin, rmax),
+        flush=True,
+    )
+
     return lib.ctoast_atm_sim_alloc(
-        azmin, azmax, elmin, elmax, tmin, tmax,
-        lmin_center, lmin_sigma, lmax_center, lmax_sigma, w_center, w_sigma,
-        wdir_center, wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma,
-        zatm, zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, c_comm,
-        gangsize, key1, key2, counter1, counter2, cdir)
+        azmin,
+        azmax,
+        elmin,
+        elmax,
+        tmin,
+        tmax,
+        lmin_center,
+        lmin_sigma,
+        lmax_center,
+        lmax_sigma,
+        w_center,
+        w_sigma,
+        wdir_center,
+        wdir_sigma,
+        z0_center,
+        z0_sigma,
+        T0_center,
+        T0_sigma,
+        zatm,
+        zmax,
+        xstep,
+        ystep,
+        zstep,
+        nelem_sim_max,
+        verbosity,
+        c_comm,
+        gangsize,
+        key1,
+        key2,
+        counter1,
+        counter2,
+        cdir,
+        rmin,
+        rmax,
+    )
+
 
 lib.ctoast_atm_sim_free.restype = ct.c_int
-lib.ctoast_atm_sim_free.argtypes = [ ct.POINTER(cATMSim) ]
+lib.ctoast_atm_sim_free.argtypes = [ct.POINTER(cATMSim)]
+
 
 def atm_sim_free(sim):
     return lib.ctoast_atm_sim_free(sim)
 
+
 lib.ctoast_atm_sim_simulate.restype = ct.c_int
-lib.ctoast_atm_sim_simulate.argtypes = [ ct.POINTER(cATMSim), ct.c_int ]
+lib.ctoast_atm_sim_simulate.argtypes = [ct.POINTER(cATMSim), ct.c_int]
+
 
 def atm_sim_simulate(sim, use_cache):
     return lib.ctoast_atm_sim_simulate(sim, use_cache)
 
+
 lib.ctoast_atm_sim_observe.restype = ct.c_int
 lib.ctoast_atm_sim_observe.argtypes = [
-    ct.POINTER(cATMSim), npf64, npf64, npf64, npf64, ct.c_long, ct.c_double ]
+    ct.POINTER(cATMSim),
+    npf64,
+    npf64,
+    npf64,
+    npf64,
+    ct.c_long,
+    ct.c_double,
+]
+
 
 def atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r):
     return lib.ctoast_atm_sim_observe(sim, t, az, el, tod, nsamp, fixed_r)
 
+
 lib.ctoast_atm_get_absorption_coefficient.restype = ct.c_double
 lib.ctoast_atm_get_absorption_coefficient.argtypes = [
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double]
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+]
+
 
 def atm_get_absorption_coefficient(altitude, temperature, pressure, pwv, freq):
-    return lib.ctoast_atm_get_absorption_coefficient(altitude, temperature,
-                                                     pressure, pwv, freq)
+    return lib.ctoast_atm_get_absorption_coefficient(
+        altitude, temperature, pressure, pwv, freq
+    )
+
 
 lib.ctoast_atm_get_absorption_coefficient_vec.restype = ct.c_int
 lib.ctoast_atm_get_absorption_coefficient_vec.argtypes = [
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_size_t, npf64]
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_size_t,
+    npf64,
+]
 
-def atm_get_absorption_coefficient_vec(altitude, temperature, pressure, pwv,
-                                       freqmin, freqmax, nfreq, absorption):
+
+def atm_get_absorption_coefficient_vec(
+    altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, absorption
+):
     return lib.ctoast_atm_get_absorption_coefficient_vec(
-        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq,
-        absorption)
+        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, absorption
+    )
+
 
 lib.ctoast_atm_get_atmospheric_loading.restype = ct.c_double
 lib.ctoast_atm_get_atmospheric_loading.argtypes = [
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double]
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+]
+
 
 def atm_get_atmospheric_loading(altitude, temperature, pressure, pwv, freq):
-    return lib.ctoast_atm_get_atmospheric_loading(altitude, temperature,
-                                                  pressure, pwv, freq)
+    return lib.ctoast_atm_get_atmospheric_loading(
+        altitude, temperature, pressure, pwv, freq
+    )
+
 
 lib.ctoast_atm_get_atmospheric_loading_vec.restype = ct.c_int
 lib.ctoast_atm_get_atmospheric_loading_vec.argtypes = [
-    ct.c_double, ct.c_double, ct.c_double, ct.c_double, ct.c_double,
-    ct.c_double, ct.c_size_t, npf64]
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_size_t,
+    npf64,
+]
 
-def atm_get_atmospheric_loading_vec(altitude, temperature, pressure, pwv,
-                                    freqmin, freqmax, nfreq, loading):
+
+def atm_get_atmospheric_loading_vec(
+    altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, loading
+):
     return lib.ctoast_atm_get_atmospheric_loading_vec(
-        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, loading)
+        altitude, temperature, pressure, pwv, freqmin, freqmax, nfreq, loading
+    )
 
-#--------------------------------------
+
+# --------------------------------------
 #  TOD sublibrary
-#--------------------------------------
+# --------------------------------------
 
 lib.ctoast_sim_map_scan_map32.restype = None
 lib.ctoast_sim_map_scan_map32.argtypes = [
-    npi64, ct.c_long, npf64, ct.c_size_t, npi64, npf32, npf64, ct.c_size_t]
+    npi64,
+    ct.c_long,
+    npf64,
+    ct.c_size_t,
+    npi64,
+    npf32,
+    npf64,
+    ct.c_size_t,
+]
 
 lib.ctoast_sim_map_scan_map64.restype = None
 lib.ctoast_sim_map_scan_map64.argtypes = [
-    npi64, ct.c_long, npf64, ct.c_size_t, npi64, npf64, npf64, ct.c_size_t]
+    npi64,
+    ct.c_long,
+    npf64,
+    ct.c_size_t,
+    npi64,
+    npf64,
+    npf64,
+    ct.c_size_t,
+]
+
 
 def sim_map_scan_map(submap, weights, subpix, local_map, tod):
 
@@ -1086,81 +1635,151 @@ def sim_map_scan_map(submap, weights, subpix, local_map, tod):
 
     if weights.shape[0] != nsamp:
         raise RuntimeError(
-            'length of weights does not match length of tod: {} {}'
-            ''.format(weights.shape[0], nsamp))
+            "length of weights does not match length of tod: {} {}"
+            "".format(weights.shape[0], nsamp)
+        )
 
     if local_map.dtype == np.float32:
         lib.ctoast_sim_map_scan_map32(
-            submap, subnpix, weights.reshape(-1), nmap, subpix,
-            local_map.reshape(-1), tod, nsamp)
+            submap,
+            subnpix,
+            weights.reshape(-1),
+            nmap,
+            subpix,
+            local_map.reshape(-1),
+            tod,
+            nsamp,
+        )
     elif local_map.dtype == np.float64:
         lib.ctoast_sim_map_scan_map64(
-            submap, subnpix, weights.reshape(-1), nmap, subpix,
-            local_map.reshape(-1), tod, nsamp)
+            submap,
+            subnpix,
+            weights.reshape(-1),
+            nmap,
+            subpix,
+            local_map.reshape(-1),
+            tod,
+            nsamp,
+        )
     else:
         raise RuntimeError(
-            'scan_map: Unsupported map data type: {}'.format(local_map.dtype))
+            "scan_map: Unsupported map data type: {}".format(local_map.dtype)
+        )
 
     return
 
 
 lib.ctoast_filter_polyfilter.restype = None
 lib.ctoast_filter_polyfilter.argtypes = [
-    ct.c_long, ct.POINTER(ct.POINTER(ct.c_double)), npu8,
-    ct.c_size_t, ct.c_size_t, npi64, npi64, ct.c_size_t]
+    ct.c_long,
+    ct.POINTER(ct.POINTER(ct.c_double)),
+    npu8,
+    ct.c_size_t,
+    ct.c_size_t,
+    npi64,
+    npi64,
+    ct.c_size_t,
+]
+
 
 def filter_polyfilter(order, signals, flags, starts, stops):
 
     nsignal = len(signals)
     n = len(signals[0])
     for signal in signals:
-        if not signal.flags['C']:
-            raise RuntimeError('signal must be in C_CONTIGUOUS memory')
+        if not signal.flags["C"]:
+            raise RuntimeError("signal must be in C_CONTIGUOUS memory")
         if len(signal) != n:
-            raise RuntimeError(
-                'filter_polyfilter: all signals must be of same length')
+            raise RuntimeError("filter_polyfilter: all signals must be of same length")
     csignals = [npc.as_ctypes(x) for x in signals]
     psignals = (ct.POINTER(ct.c_double) * nsignal)(*csignals)
 
     nscan = len(starts)
     if len(stops) != nscan:
-        raise RuntimeError('lengths of starts and stops do not match')
+        raise RuntimeError("lengths of starts and stops do not match")
 
     lib.ctoast_filter_polyfilter(
-        order, psignals, flags, n, nsignal, starts, stops, nscan)
+        order, psignals, flags, n, nsignal, starts, stops, nscan
+    )
 
     return
 
+
 lib.ctoast_sim_noise_sim_noise_timestream.restype = None
 lib.ctoast_sim_noise_sim_noise_timestream.argtypes = [
-    ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
-    ct.c_ulonglong, ct.c_double, ct.c_ulonglong, ct.c_ulonglong, ct.c_ulonglong,
-    npf64, npf64, ct.c_ulonglong, npf64]
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_double,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    ct.c_ulonglong,
+    npf64,
+    npf64,
+    ct.c_ulonglong,
+    npf64,
+]
+
 
 def sim_noise_sim_noise_timestream(
-        realization, telescope, component, obsindx, detindx,
-        rate, firstsamp, samples, oversample, freq, psd):
+    realization,
+    telescope,
+    component,
+    obsindx,
+    detindx,
+    rate,
+    firstsamp,
+    samples,
+    oversample,
+    freq,
+    psd,
+):
 
     if freq.size != psd.size:
-        raise RuntimeError(
-            'freq and psd must be same size')
+        raise RuntimeError("freq and psd must be same size")
 
     noise = np.zeros(samples, dtype=np.float64)
 
     lib.ctoast_sim_noise_sim_noise_timestream(
-        realization, telescope, component, obsindx, detindx, rate, firstsamp,
-        samples, oversample, freq.astype(np.float64), psd.astype(np.float64),
-        psd.size, noise)
+        realization,
+        telescope,
+        component,
+        obsindx,
+        detindx,
+        rate,
+        firstsamp,
+        samples,
+        oversample,
+        freq.astype(np.float64),
+        psd.astype(np.float64),
+        psd.size,
+        noise,
+    )
 
     return noise
 
-lib.ctoast_pointing_healpix_matrix.restype = None
-lib.ctoast_pointing_healpix_matrix.argtypes = [ ct.POINTER(cHealpix), ct.c_int,
-    ct.c_double, ct.c_double, ct.c_char_p, ct.c_ulong, npf64, npf64, npu8, npi64,
-    npf64 ]
 
-def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
-    pixels, weights):
+lib.ctoast_pointing_healpix_matrix.restype = None
+lib.ctoast_pointing_healpix_matrix.argtypes = [
+    ct.POINTER(cHealpix),
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_char_p,
+    ct.c_ulong,
+    npf64,
+    npf64,
+    npu8,
+    npi64,
+    npf64,
+]
+
+
+def pointing_healpix_matrix(
+    hpix, nest, eps, cal, mode, pdata, hwpang, flags, pixels, weights
+):
 
     inest = 0
     if nest:
@@ -1203,20 +1822,37 @@ def pointing_healpix_matrix(hpix, nest, eps, cal, mode, pdata, hwpang, flags,
             raise RuntimeError("flags array has wrong length")
         cflags = np.require(flags, requirements=["C"])
 
-    lib.ctoast_pointing_healpix_matrix(hpix, inest, eps, cal,
-        ct.c_char_p(mode.encode('utf-8')), n, cpdata.reshape(-1), chwpang,
-        cflags, pixels, weights.reshape(-1))
+    lib.ctoast_pointing_healpix_matrix(
+        hpix,
+        inest,
+        eps,
+        cal,
+        ct.c_char_p(mode.encode("utf-8")),
+        n,
+        cpdata.reshape(-1),
+        chwpang,
+        cflags,
+        pixels,
+        weights.reshape(-1),
+    )
 
     return
 
 
-#--------------------------------------
+# --------------------------------------
 #  FOD sublibrary
-#--------------------------------------
+# --------------------------------------
 
 lib.ctoast_fod_autosums.restype = None
-lib.ctoast_fod_autosums.argtypes = [ ct.c_longlong, npf64, npi8,
-    ct.c_longlong, npf64, npi64 ]
+lib.ctoast_fod_autosums.argtypes = [
+    ct.c_longlong,
+    npf64,
+    npi8,
+    ct.c_longlong,
+    npf64,
+    npi64,
+]
+
 
 def fod_autosums(x, good, lagmax):
     n = len(x)
@@ -1227,8 +1863,16 @@ def fod_autosums(x, good, lagmax):
 
 
 lib.ctoast_fod_crosssums.restype = None
-lib.ctoast_fod_crosssums.argtypes = [ ct.c_longlong, npf64, npf64, npi8,
-    ct.c_longlong, npf64, npi64 ]
+lib.ctoast_fod_crosssums.argtypes = [
+    ct.c_longlong,
+    npf64,
+    npf64,
+    npi8,
+    ct.c_longlong,
+    npf64,
+    npi64,
+]
+
 
 def fod_crosssums(x, y, good, lagmax):
     n = len(x)
@@ -1238,117 +1882,246 @@ def fod_crosssums(x, y, good, lagmax):
     return (sums, hits)
 
 
-#--------------------------------------
+# --------------------------------------
 #  MAP sublibrary
-#--------------------------------------
+# --------------------------------------
 
 lib.ctoast_cov_accumulate_diagonal.restype = None
-lib.ctoast_cov_accumulate_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double, npf64,
-    npf64, npi64, npf64 ]
+lib.ctoast_cov_accumulate_diagonal.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npi64,
+    npi64,
+    npf64,
+    ct.c_double,
+    npf64,
+    npf64,
+    npi64,
+    npf64,
+]
 
-def cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
-    weights, scale, signal, zdata, hits, invnpp):
-    lib.ctoast_cov_accumulate_diagonal(nsub, subsize, nnz, nsamp, indx_submap,
-        indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1),
-        hits.reshape(-1), invnpp.reshape(-1))
+
+def cov_accumulate_diagonal(
+    nsub,
+    subsize,
+    nnz,
+    nsamp,
+    indx_submap,
+    indx_pix,
+    weights,
+    scale,
+    signal,
+    zdata,
+    hits,
+    invnpp,
+):
+    lib.ctoast_cov_accumulate_diagonal(
+        nsub,
+        subsize,
+        nnz,
+        nsamp,
+        indx_submap,
+        indx_pix,
+        weights.reshape(-1),
+        scale,
+        signal,
+        zdata.reshape(-1),
+        hits.reshape(-1),
+        invnpp.reshape(-1),
+    )
     return
+
 
 lib.ctoast_cov_accumulate_diagonal_hits.restype = None
-lib.ctoast_cov_accumulate_diagonal_hits.argtypes = [ ct.c_longlong,
-    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npi64 ]
+lib.ctoast_cov_accumulate_diagonal_hits.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npi64,
+    npi64,
+    npi64,
+]
 
-def cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp, indx_submap,
-    indx_pix, hits):
-    lib.ctoast_cov_accumulate_diagonal_hits(nsub, subsize, nnz, nsamp,
-        indx_submap, indx_pix, hits.reshape(-1))
+
+def cov_accumulate_diagonal_hits(
+    nsub, subsize, nnz, nsamp, indx_submap, indx_pix, hits
+):
+    lib.ctoast_cov_accumulate_diagonal_hits(
+        nsub, subsize, nnz, nsamp, indx_submap, indx_pix, hits.reshape(-1)
+    )
     return
+
 
 lib.ctoast_cov_accumulate_diagonal_invnpp.restype = None
-lib.ctoast_cov_accumulate_diagonal_invnpp.argtypes = [ ct.c_longlong,
-    ct.c_longlong, ct.c_longlong, ct.c_longlong, npi64, npi64, npf64,
-    ct.c_double, npi64, npf64 ]
+lib.ctoast_cov_accumulate_diagonal_invnpp.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npi64,
+    npi64,
+    npf64,
+    ct.c_double,
+    npi64,
+    npf64,
+]
 
-def cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp, indx_submap,
-    indx_pix, weights, scale, hits, invnpp):
-    lib.ctoast_cov_accumulate_diagonal_invnpp(nsub, subsize, nnz, nsamp,
-        indx_submap, indx_pix, weights.reshape(-1), scale, hits.reshape(-1),
-        invnpp.reshape(-1))
+
+def cov_accumulate_diagonal_invnpp(
+    nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, hits, invnpp
+):
+    lib.ctoast_cov_accumulate_diagonal_invnpp(
+        nsub,
+        subsize,
+        nnz,
+        nsamp,
+        indx_submap,
+        indx_pix,
+        weights.reshape(-1),
+        scale,
+        hits.reshape(-1),
+        invnpp.reshape(-1),
+    )
     return
+
 
 lib.ctoast_cov_accumulate_zmap.restype = None
-lib.ctoast_cov_accumulate_zmap.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, ct.c_longlong, npi64, npi64, npf64, ct.c_double,
-    npf64, npf64 ]
+lib.ctoast_cov_accumulate_zmap.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npi64,
+    npi64,
+    npf64,
+    ct.c_double,
+    npf64,
+    npf64,
+]
 
-def cov_accumulate_zmap(nsub, subsize, nnz, nsamp, indx_submap, indx_pix,
-    weights, scale, signal, zdata):
-    lib.ctoast_cov_accumulate_zmap(nsub, subsize, nnz, nsamp,
-        indx_submap, indx_pix, weights.reshape(-1), scale, signal, zdata.reshape(-1))
+
+def cov_accumulate_zmap(
+    nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, signal, zdata
+):
+    lib.ctoast_cov_accumulate_zmap(
+        nsub,
+        subsize,
+        nnz,
+        nsamp,
+        indx_submap,
+        indx_pix,
+        weights.reshape(-1),
+        scale,
+        signal,
+        zdata.reshape(-1),
+    )
     return
+
 
 lib.ctoast_cov_eigendecompose_diagonal.restype = None
-lib.ctoast_cov_eigendecompose_diagonal.argtypes = [ ct.c_longlong,
-    ct.c_longlong, ct.c_longlong, npf64, npf64, ct.c_double, ct.c_int,
-    ct.c_int ]
+lib.ctoast_cov_eigendecompose_diagonal.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npf64,
+    npf64,
+    ct.c_double,
+    ct.c_int,
+    ct.c_int,
+]
 
-def cov_eigendecompose_diagonal(nsub, subsize, nnz, data, cond, threshold,
-    do_invert, do_rcond):
-    lib.ctoast_cov_eigendecompose_diagonal(nsub, subsize, nnz,
-        data.reshape(-1), cond.reshape(-1), threshold, do_invert, do_rcond)
+
+def cov_eigendecompose_diagonal(
+    nsub, subsize, nnz, data, cond, threshold, do_invert, do_rcond
+):
+    lib.ctoast_cov_eigendecompose_diagonal(
+        nsub,
+        subsize,
+        nnz,
+        data.reshape(-1),
+        cond.reshape(-1),
+        threshold,
+        do_invert,
+        do_rcond,
+    )
     return
+
 
 lib.ctoast_cov_multiply_diagonal.restype = None
-lib.ctoast_cov_multiply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npf64, npf64 ]
+lib.ctoast_cov_multiply_diagonal.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npf64,
+    npf64,
+]
+
 
 def cov_multiply_diagonal(nsub, subsize, nnz, data1, data2):
-    lib.ctoast_cov_multiply_diagonal(nsub, subsize, nnz,
-        data1.reshape(-1), data2.reshape(-1))
+    lib.ctoast_cov_multiply_diagonal(
+        nsub, subsize, nnz, data1.reshape(-1), data2.reshape(-1)
+    )
     return
+
 
 lib.ctoast_cov_apply_diagonal.restype = None
-lib.ctoast_cov_apply_diagonal.argtypes = [ ct.c_longlong, ct.c_longlong,
-    ct.c_longlong, npf64, npf64 ]
+lib.ctoast_cov_apply_diagonal.argtypes = [
+    ct.c_longlong,
+    ct.c_longlong,
+    ct.c_longlong,
+    npf64,
+    npf64,
+]
+
 
 def cov_apply_diagonal(nsub, subsize, nnz, mat, vec):
-    lib.ctoast_cov_apply_diagonal(nsub, subsize, nnz, mat.reshape(-1),
-        vec.reshape(-1))
+    lib.ctoast_cov_apply_diagonal(nsub, subsize, nnz, mat.reshape(-1), vec.reshape(-1))
     return
+
 
 lib.ctoast_map_tools_fast_scanning32.restype = None
 lib.ctoast_map_tools_fast_scanning32.argtypes = [
-    npf64, ct.c_longlong, npi64, npf64, ct.c_longlong, npf32]
+    npf64,
+    ct.c_longlong,
+    npi64,
+    npf64,
+    ct.c_longlong,
+    npf32,
+]
+
 
 def map_tools_fast_scanning32(toi, pixels, weights, bmap):
     nweight, nsamp = np.shape(weights)
     if bmap.ndim != 1:
-        raise RuntimeError('map to sample must be one-dimensional')
+        raise RuntimeError("map to sample must be one-dimensional")
     if toi.size != nsamp:
-        raise RuntimeError('toi and weights are incompatible')
+        raise RuntimeError("toi and weights are incompatible")
     if np.shape(pixels)[0] != nweight or np.shape(pixels)[1] != nsamp:
-        raise RuntimeError('pixels and weights are incompatible')
+        raise RuntimeError("pixels and weights are incompatible")
     if np.amax(pixels) >= bmap.size:
-        raise RuntimeError('pixels point outside bmap')
+        raise RuntimeError("pixels point outside bmap")
     pixbuf = np.ascontiguousarray(pixels.T).reshape(-1)
     weightbuf = np.ascontiguousarray(weights.T).reshape(-1)
-    lib.ctoast_map_tools_fast_scanning32(toi, nsamp, pixbuf, weightbuf,
-                                         nweight, bmap)
+    lib.ctoast_map_tools_fast_scanning32(toi, nsamp, pixbuf, weightbuf, nweight, bmap)
     return
 
 
-#--------------------------------------
+# --------------------------------------
 #  Run C++ test suite
-#--------------------------------------
+# --------------------------------------
 
 lib.ctoast_test_runner.restype = ct.c_int
-lib.ctoast_test_runner.argtypes = [ ct.c_int, pp_c_char ]
+lib.ctoast_test_runner.argtypes = [ct.c_int, pp_c_char]
 
-def ctest_runner ():
+
+def ctest_runner():
     cargc = len(sys.argv)
     cargv = (p_c_char * cargc)()
     for i, arg in enumerate(sys.argv):
-        enc_arg = arg.encode('utf-8')
+        enc_arg = arg.encode("utf-8")
         cargv[i] = ct.create_string_buffer(enc_arg)
     ret = lib.ctoast_test_runner(cargc, cargv)
     return ret

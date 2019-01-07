@@ -19,7 +19,7 @@ def highpass_flagged_signal(sig, good, naverage):
     # filter is assumed negligible in the frequency bins of interest
     ngood = np.sum(good)
     if ngood == 0:
-        raise RuntimeError('No valid samples')
+        raise RuntimeError("No valid samples")
     templates = np.vstack([np.ones(ngood), np.arange(good.size)[good]])
     invcov = np.dot(templates, templates.T)
     cov = np.linalg.inv(invcov)
@@ -33,8 +33,16 @@ def highpass_flagged_signal(sig, good, naverage):
     return sig
 
 
-def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
-                comm=None, return_cov=False):
+def autocov_psd(
+    times,
+    signal,
+    flags,
+    lagmax,
+    stationary_period,
+    fsample,
+    comm=None,
+    return_cov=False,
+):
     """
     Compute the sample autocovariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
@@ -51,12 +59,22 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
         fsample (float):  The sampling frequency in Hz
         return_cov (bool): Return also the covariance function
     """
-    return crosscov_psd(times, signal, None, flags, lagmax, stationary_period,
-                        fsample, comm, return_cov)
+    return crosscov_psd(
+        times, signal, None, flags, lagmax, stationary_period, fsample, comm, return_cov
+    )
 
 
-def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
-                 fsample, comm=None, return_cov=False):
+def crosscov_psd(
+    times,
+    signal1,
+    signal2,
+    flags,
+    lagmax,
+    stationary_period,
+    fsample,
+    comm=None,
+    return_cov=False,
+):
     """
     Compute the sample (cross)covariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
@@ -100,8 +118,9 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
     if lagmax > nsamp:
         raise RuntimeError(
-            'crosscov_psd: Communicating TOD beyond nearest neighbors is not '
-            'implemented. Reduce lagmax or the size of the MPI communicator.')
+            "crosscov_psd: Communicating TOD beyond nearest neighbors is not "
+            "implemented. Reduce lagmax or the size of the MPI communicator."
+        )
 
     if rank != ntask - 1:
         nextend = lagmax
@@ -140,8 +159,7 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
             extended_flags[-lagmax:] = comm.recv(source=rank + 1, tag=1)
             extended_times[-lagmax:] = comm.recv(source=rank + 1, tag=2)
 
-    realization = ((extended_times - time_start)
-                   / stationary_period).astype(np.int64)
+    realization = ((extended_times - time_start) / stationary_period).astype(np.int64)
 
     # Set flagged elements to zero
 
@@ -167,13 +185,13 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
         # High pass filter does not work at the ends
         ind = slice(naverage // 2, -naverage // 2)
         if signal2 is None:
-            (cov, cov_hits) = fod_autosums(
-                sig1[ind], good[ind].astype(np.int8), lagmax)
+            (cov, cov_hits) = fod_autosums(sig1[ind], good[ind].astype(np.int8), lagmax)
         else:
             sig2 = extended_signal2[realflg].copy()
             sig2 = highpass_flagged_signal(sig2, good, lagmax)
             (cov, cov_hits) = fod_crosssums(
-                sig1[ind], sig2[ind], good[ind].astype(np.int8), lagmax)
+                sig1[ind], sig2[ind], good[ind].astype(np.int8), lagmax
+            )
 
         covs[ireal] = (cov_hits, cov)
 
@@ -236,8 +254,8 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
         cov = np.hstack([cov, cov[:0:-1]])
 
-        #w = np.roll(hamming(cov.size), -lagmax)
-        #cov *= w
+        # w = np.roll(hamming(cov.size), -lagmax)
+        # cov *= w
 
         psd = np.fft.rfft(cov).real
         psdfreq = np.fft.rfftfreq(len(cov), d=1 / fsample)
@@ -250,12 +268,12 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
         tf[ind] -= np.sin(arg[ind]) / arg[ind]
         psd[ind] /= tf[ind] ** 2
         #  2) Apply the Hann window to reduce unnecessary noise
-        psd = np.convolve(psd, [.25, .5, .25], mode='same')
+        psd = np.convolve(psd, [0.25, 0.5, 0.25], mode="same")
 
         # Transfrom the corrected PSD back to get an unbiased
         # covariance function
-        cov = np.fft.irfft(psd)
-        my_cov.append((cov_hits, cov[:lagmax]))
+        smooth_cov = np.fft.irfft(psd)
+        my_cov.append((cov_hits, smooth_cov[:lagmax]))
 
         # Set the white noise PSD normalization to sigma**2 / fsample
         psd /= fsample
@@ -277,8 +295,8 @@ def smooth_with_hits(hits, cov, wbin):
     """
 
     kernel = np.ones(wbin)
-    smooth_hits = fftconvolve(hits, kernel, mode='same')
-    smooth_cov = fftconvolve(cov * hits, kernel, mode='same')
+    smooth_hits = fftconvolve(hits, kernel, mode="same")
+    smooth_cov = fftconvolve(cov * hits, kernel, mode="same")
     good = smooth_hits > 0
     smooth_cov[good] /= smooth_hits[good]
 

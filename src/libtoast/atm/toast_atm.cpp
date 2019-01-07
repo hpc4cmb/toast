@@ -42,20 +42,22 @@ double mean( std::vector<double> vec ) {
 }
 
 
-toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
-              double tmin, double tmax,
-              double lmin_center, double lmin_sigma,
-              double lmax_center, double lmax_sigma,
-              double w_center, double w_sigma,
-              double wdir_center, double wdir_sigma,
-              double z0_center, double z0_sigma,
-              double T0_center, double T0_sigma,
-              double zatm, double zmax,
-              double xstep, double ystep, double zstep,
-              long nelem_sim_max,
-              int verbosity, MPI_Comm comm, int gangsize,
-              uint64_t key1,uint64_t key2,
-              uint64_t counterval1, uint64_t counterval2, char *cachedir)
+toast::tatm::sim::sim(double azmin, double azmax, double elmin, double elmax,
+                      double tmin, double tmax,
+                      double lmin_center, double lmin_sigma,
+                      double lmax_center, double lmax_sigma,
+                      double w_center, double w_sigma,
+                      double wdir_center, double wdir_sigma,
+                      double z0_center, double z0_sigma,
+                      double T0_center, double T0_sigma,
+                      double zatm, double zmax,
+                      double xstep, double ystep, double zstep,
+                      long nelem_sim_max,
+                      int verbosity, MPI_Comm comm, int gangsize,
+                      uint64_t key1,uint64_t key2,
+                      uint64_t counterval1, uint64_t counterval2, char *cachedir,
+                      double rmin, double rmax
+                      )
 : comm(comm), cachedir(cachedir),
   gangsize(gangsize), verbosity(verbosity),
   key1(key1), key2(key2),
@@ -70,10 +72,13 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
   T0_center(T0_center), T0_sigma(T0_sigma),
   zatm(zatm), zmax(zmax),
   xstep(xstep), ystep(ystep), zstep(zstep),
-  nelem_sim_max(nelem_sim_max)
+  nelem_sim_max(nelem_sim_max),
+  rmin(rmin), rmax(rmax)
 {
     counter1 = counter1start;
     counter2 = counter2start;
+
+    corrlim = 1e-3;
 
     if ( MPI_Comm_size( comm, &ntask ) )
         throw std::runtime_error( "Failed to get size of MPI communicator." );
@@ -136,23 +141,23 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     sinel0 = sin( el0 );
     cosel0 = cos( el0 );
 
-    xxstep = xstep*cosel0 - zstep*sinel0;
+    xxstep = xstep * cosel0 - zstep * sinel0;
     yystep = ystep;
-    zzstep = xstep*sinel0 + zstep*cosel0;
+    zzstep = xstep * sinel0 + zstep * cosel0;
 
     // speed up the in-cone calculation
     double tol = 0.1 * M_PI / 180; // 0.1 degree tolerance
-    tanmin = tan( -0.5*delta_az - tol );
-    tanmax = tan(  0.5*delta_az + tol );
+    tanmin = tan(-0.5 * delta_az - tol);
+    tanmax = tan(0.5 * delta_az + tol);
 
-    if ( rank == 0 && verbosity > 0 ) {
+    if (rank == 0 && verbosity > 0) {
         std::cerr << std::endl;
         std::cerr << "Input parameters:" << std::endl;
-        std::cerr << "             az = [" << azmin*180./M_PI << " - "
-                  << azmax*180./M_PI << "] (" << delta_az*180./M_PI
+        std::cerr << "             az = [" << azmin * 180. / M_PI << " - "
+                  << azmax * 180. / M_PI << "] (" << delta_az * 180. / M_PI
                   << " degrees)" << std::endl;
-        std::cerr << "             el = [" << elmin*180./M_PI << " - "
-                  << elmax*180./M_PI << "] (" << delta_el*180/M_PI
+        std::cerr << "             el = [" << elmin * 180. / M_PI << " - "
+                  << elmax * 180. / M_PI << "] (" << delta_el * 180 / M_PI
                   << " degrees)" << std::endl;
         std::cerr << "              t = [" << tmin << " - " << tmax
                   << "] (" << delta_t << " s)" << std::endl;
@@ -162,7 +167,7 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
                   << " m" << std::endl;
         std::cerr << "              w = " << w_center << " +- " << w_sigma
                   << " m" << std::endl;
-        std::cerr << "           wdir = " << wdir_center*180./M_PI << " +- "
+        std::cerr << "           wdir = " << wdir_center * 180. / M_PI << " +- "
                   << wdir_sigma*180./M_PI << " degrees " << std::endl;
         std::cerr << "             z0 = " << z0_center << " +- " << z0_sigma
                   << " m" << std::endl;
@@ -179,7 +184,10 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         std::cerr << "         yystep = " << yystep << " m" << std::endl;
         std::cerr << "         zzstep = " << zzstep << " m" << std::endl;
         std::cerr << "  nelem_sim_max = " << nelem_sim_max << std::endl;
+        std::cerr << "        corrlim = " << corrlim << std::endl;
         std::cerr << "      verbosity = " << verbosity << std::endl;
+        std::cerr << "           rmin = " << rmin << " m" << std::endl;
+        std::cerr << "           rmax = " << rmax << " m" << std::endl;
     }
 
     // Initialize Elemental.  This should already be done by the top-level
@@ -192,7 +200,7 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     grid = new El::Grid( comm_gang );
 
     // Initialize cholmod
-    chcommon = &cholcommon;    
+    chcommon = &cholcommon;
     cholmod_start(chcommon);
     if (verbosity > 1)
         chcommon->print = 3;  // Default verbosity
@@ -271,7 +279,8 @@ void toast::tatm::sim::load_realization() {
 
     std::ostringstream name;
     name << key1 << "_" << key2 << "_"
-         << counter1start << "_" << counter2start;
+         << counter1start << "_" << counter2start
+         << "_" << (int)rmax;
 
     char success;
 
@@ -340,6 +349,8 @@ void toast::tatm::sim::load_realization() {
             std::cerr << " wdir = " << wdir*180./M_PI << " degrees" << std::endl;
             std::cerr << "   z0 = " << z0 << " m" << std::endl;
             std::cerr << "   T0 = " << T0 << " K" << std::endl;
+            std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                      << corrlim << ")" << std::endl;
         }
     }
 
@@ -458,7 +469,8 @@ void toast::tatm::sim::save_realization() {
 
         std::ostringstream name;
         name << key1 << "_" << key2 << "_"
-             << counter1start << "_" << counter2start;
+             << counter1start << "_" << counter2start
+             << "_" << (int)rmax;
 
         // Save metadata
 
@@ -557,7 +569,9 @@ int toast::tatm::sim::simulate( bool use_cache ) {
             slice_stops.push_back(ind_stop);
 
             if (slice % ngang == gang) {
+                //if (gangsize == 1 && delta_x / rcorr > 10) {
                 if (gangsize == 1) {
+                    // Serial sparse matrix approach
                     cholmod_sparse *cov = build_sparse_covariance(ind_start,
                                                                   ind_stop);
                     cholmod_sparse *sqrt_cov = sqrt_sparse_covariance(cov,
@@ -569,6 +583,7 @@ int toast::tatm::sim::simulate( bool use_cache ) {
                                             ind_stop);
                     cholmod_free_sparse(&sqrt_cov, chcommon);
                 } else {
+                    // Dense distributed matrix approach
                     El::DistMatrix<double> *cov = build_covariance(ind_start,
                                                                    ind_stop);
                     sqrt_covariance(cov, ind_start, ind_stop);
@@ -790,6 +805,7 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
         double r = 1.5 * xstep;
         double rstep = xstep;
+        while (r < rmin) r += rstep;
 
         std::vector<long> last_ind(3);
         std::vector<double> last_nodes(8);
@@ -798,6 +814,7 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
         if ( fixed_r > 0 ) r = fixed_r;
 
         while ( true ) {
+            if (r > rmax) break;
 
             // Coordinates at distance r. The scan is centered on the X-axis
 
@@ -816,9 +833,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
             // Rotate to scan frame
 
-            double x = xx*cosel0 + zz*sinel0;
+            double x = xx * cosel0 + zz * sinel0;
             double y = yy;
-            double z = -xx*sinel0 + zz*cosel0;
+            double z = -xx * sinel0 + zz * cosel0;
 
             // Translate by the wind
 
@@ -827,9 +844,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
             z += ztel_now;
 
 #ifdef DEBUG
-            if ( x < xstart || x > xstart+delta_x ||
-                 y < ystart || y > ystart+delta_y ||
-                 z < zstart || z > zstart+delta_z ) {
+            if ( x < xstart || x > xstart + delta_x ||
+                 y < ystart || y > ystart + delta_y ||
+                 z < zstart || z > zstart + delta_z ) {
                 o << "atmsim::observe : (x,y,z) out of bounds: "
                   << std::endl
                   << "x = " << x << std::endl
@@ -968,14 +985,14 @@ void toast::tatm::sim::draw() {
     z0inv = 1. / (2. * z0);
 
     // Wind is parallel to surface. Rotate to a frame where the scan
-    // is along the X-axis.
+    // is across the X-axis.
 
-    double eastward_wind = w * cos( wdir );
-    double northward_wind = w * sin( wdir );
+    double eastward_wind = w * cos(wdir);
+    double northward_wind = w * sin(wdir);
 
-    double angle = az0-M_PI/2;
-    double wx_h = eastward_wind*cos( angle ) - northward_wind*sin( angle );
-    wy = eastward_wind*sin( angle ) + northward_wind*cos( angle );
+    double angle = az0 - M_PI / 2;
+    double wx_h = eastward_wind * cos(angle) - northward_wind * sin(angle);
+    wy = eastward_wind * sin(angle) + northward_wind * cos(angle);
 
     wx = wx_h * cosel0;
     wz = -wx_h * sinel0;
@@ -1010,6 +1027,13 @@ void toast::tatm::sim::draw() {
 
 void toast::tatm::sim::get_volume() {
 
+    // Trim zmax if rmax sets a more stringent limit
+
+    double zmax_test = rmax * sin(elmax);
+    if (zmax > zmax_test) {
+        zmax = zmax_test;
+    }
+
     // Horizontal volume
 
     double delta_z_h = zmax;
@@ -1029,19 +1053,19 @@ void toast::tatm::sim::get_volume() {
     z = r * sin(elmin);
     rproj = r * cos(elmin);
     x = rproj * cos(0);
-    z_min = -x*sinel0 + z*cosel0;
+    z_min = -x * sinel0 + z * cosel0;
 
     z = r * sin(elmax);
     rproj = r * cos(elmax);
-    x = rproj * cos(delta_az/2);
-    z_max = -x*sinel0 + z*cosel0;
+    x = rproj * cos(delta_az / 2);
+    z_max = -x * sinel0 + z * cosel0;
 
     // Cone width
     rproj = r * cos(elmin);
     if ( delta_az > M_PI )
         delta_y_cone = 2 * rproj;
     else
-        delta_y_cone = 2 * rproj * cos( 0.5*(M_PI - delta_az) );
+        delta_y_cone = 2 * rproj * cos(0.5 * (M_PI - delta_az));
     //std::cerr << "delta_y_cone = " << delta_y_cone << std::endl;
 
     // Cone height
@@ -1067,8 +1091,8 @@ void toast::tatm::sim::get_volume() {
     // Margin for interpolation
 
     delta_x += xstep;
-    delta_y += 2*ystep;
-    delta_z += 2*zstep;
+    delta_y += 2 * ystep;
+    delta_z += 2 * zstep;
 
     // Translate the volume to allow for wind.  Telescope sits
     // at (0, 0, 0) at t=0
@@ -1079,9 +1103,9 @@ void toast::tatm::sim::get_volume() {
         xstart = 0;
 
     if ( wy < 0 )
-        ystart = -0.5*delta_y_cone - wdy - ystep;
+        ystart = -0.5 * delta_y_cone - wdy - ystep;
     else
-        ystart = -0.5*delta_y_cone - ystep;
+        ystart = -0.5 * delta_y_cone - ystep;
 
     if ( wz < 0 )
         zstart = z_min - wdz - zstep;
@@ -1090,9 +1114,9 @@ void toast::tatm::sim::get_volume() {
 
     // Grid points
 
-    nx = delta_x/xstep + 1;
-    ny = delta_y/ystep + 1;
-    nz = delta_z/zstep + 1;
+    nx = delta_x / xstep + 1;
+    ny = delta_y / ystep + 1;
+    nz = delta_z / zstep + 1;
     nn = nx * ny * nz;
 
     // 1D storage of the 3D volume elements
@@ -1111,6 +1135,7 @@ void toast::tatm::sim::get_volume() {
         std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
         std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
         std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
+        std::cerr << "Observation cone along the X-axis:" << std::endl;
         std::cerr << "   delta_y_cone = " << delta_y_cone << " m" << std::endl;
         std::cerr << "   delta_z_cone = " << delta_z_cone << " m" << std::endl;
         std::cerr << "    xstart = " << xstart << " m" << std::endl;
@@ -1137,16 +1162,16 @@ void toast::tatm::sim::initialize_kolmogorov() {
     // correlation function at grid points. We integrate down from
     // 10*kappamax to 0 for numerical precision
 
-    rmin = 0;
-    double diag = sqrt( delta_x*delta_x + delta_y*delta_y);
-    rmax = sqrt( diag*diag + delta_z*delta_z ) * 1.01;
+    rmin_kolmo = 0;
+    double diag = sqrt(delta_x * delta_x + delta_y * delta_y);
+    rmax_kolmo = sqrt(diag * diag + delta_z * delta_z) * 1.01;
     nr = 1000; // Size of the interpolation grid
 
 #ifdef DEBUG
     nr /= 10;
 #endif
 
-    rstep = (rmax - rmin) / (nr-1);
+    rstep = (rmax_kolmo - rmin_kolmo) / (nr-1);
     rstep_inv = 1. / rstep;
 
     kolmo_x.clear();
@@ -1169,8 +1194,8 @@ void toast::tatm::sim::initialize_kolmogorov() {
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Evaluating Kolmogorov correlation at " << nr
-                  << " different separations in range " << rmin
-                  << " - " << rmax << " m" << std::endl;
+                  << " different separations in range " << rmin_kolmo
+                  << " - " << rmax_kolmo << " m" << std::endl;
         std::cerr << "kappamin = " << kappamin
                   << " 1/m, kappamax =  " << kappamax
                   << " 1/m. nkappa = " << nkappa << std::endl;
@@ -1222,7 +1247,8 @@ void toast::tatm::sim::initialize_kolmogorov() {
 
 #pragma omp parallel for schedule(static, 10)
     for ( long ir=0; ir<nr; ++ir ) {
-        double r = rmin + (exp(ir*nri*tau)-1)*enorm*(rmax-rmin);
+        double r = rmin_kolmo
+            + (exp(ir * nri * tau) - 1) * enorm * (rmax_kolmo - rmin_kolmo);
         double val = 0;
         if ( r * kappamax < 1e-2 ) {
             // special limit r -> 0,
@@ -1267,15 +1293,17 @@ void toast::tatm::sim::initialize_kolmogorov() {
 
     // Measure the correlation length
     long icorr = nr - 1;
-    double lim = 1e-3;
-    while (fabs(kolmo_y[icorr]) < lim) --icorr;
+    while (fabs(kolmo_y[icorr]) < corrlim) --icorr;
     rcorr = kolmo_x[icorr];
     rcorrsq = rcorr * rcorr;
 
     double t2 = MPI_Wtime();
 
-    if ( rank == 0 && verbosity > 0 )
+    if (rank == 0 && verbosity > 0) {
+        std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                  << corrlim << ")" << std::endl;
         std::cerr << "Kolmogorov initialized in " << t2-t1 << " s." << std::endl;
+    }
 
     return;
 }
@@ -1286,13 +1314,13 @@ double toast::tatm::sim::kolmogorov( double r ) {
     // Return autocovariance of a Kolmogorov process at separation r
 
     if ( r == 0 ) return kolmo_y[0];
-    if ( r == rmax ) return kolmo_y[nr-1];
+    if ( r == rmax_kolmo ) return kolmo_y[nr-1];
 
-    if ( r < rmin || r > rmax ) {
+    if ( r < rmin_kolmo || r > rmax_kolmo ) {
         std::ostringstream o;
         o.precision( 16 );
         o << "Kolmogorov value requested at " << r
-          << ", outside gridded range [" << rmin << ", " << rmax << "].";
+          << ", outside gridded range [" << rmin_kolmo << ", " << rmax_kolmo << "].";
         throw std::runtime_error( o.str().c_str() );
     }
 
@@ -1854,18 +1882,18 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
 
     // Build the covariance matrix first in the triplet form, then
     // cast it to the column-packed format.
-    
+
     std::vector<int> rows, cols;
     std::vector<double> vals;
-    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice 
-    
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
+
     // Fill the elements of the covariance matrix.
 
 #pragma omp parallel
     {
         std::vector<int> myrows, mycols;
         std::vector<double> myvals;
-        
+
 #pragma omp for schedule(static, 10)
         for (int icol=0; icol<nelem; ++icol) {
             // Translate indices into coordinates
@@ -1878,9 +1906,9 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
                 if (fabs(colcoord[0] - rowcoord[0]) > rcorr) continue;
                 if (fabs(colcoord[1] - rowcoord[1]) > rcorr) continue;
                 if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
-                
+
                 double val = cov_eval(colcoord, rowcoord);
-            
+
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
                 if (val > 1e-30) {
@@ -1896,10 +1924,10 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
             cols.insert(cols.end(), mycols.begin(), mycols.end());
             vals.insert(vals.end(), myvals.begin(), myvals.end());
         }
-        
+
     }
-    
-    
+
+
     double t2 = MPI_Wtime();
 
     if (verbosity > 0) {
@@ -1908,10 +1936,10 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
     }
 
     // stype > 0 means that only the lower diagonal
-    // elements of the symmetric matrix are needed. 
+    // elements of the symmetric matrix are needed.
     int stype = 1;
     size_t nnz = vals.size();
-    
+
     cholmod_triplet *cov_triplet = cholmod_allocate_triplet(nelem,
                                                             nelem,
                                                             nnz,
@@ -1997,8 +2025,8 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
             double dz = zz1 - zz2;
             double r2 = dx * dx + dy * dy + dz * dz;
             if (r2 < rcorrsq) {
-                double r = sqrt(r2);                
-                
+                double r = sqrt(r2);
+
                 // Water vapor altitude factor
 
                 double chi1 = std::exp(-(zz1 + zz2) * z0inv);
@@ -2115,14 +2143,14 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
         throw std::runtime_error("Sparse matrix operations require gangsize = 1");
     }
 
-    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice 
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
     double t1 = MPI_Wtime();
-    
+
     if (verbosity > 0) {
         std::cerr << "Gang # " << gang
                   << " Analyzing sparse covariance ... " << std::endl;
     }
-    
+
     cholmod_factor *factorization;
     const int ntry = 3;
     for (int itry = 0; itry < ntry; ++itry) {
@@ -2158,7 +2186,7 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
             break;
         }
     }
-    
+
     double t2 = MPI_Wtime();
     if (verbosity > 0) {
         std::cerr << std::endl;
@@ -2185,7 +2213,7 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
     cholmod_free_factor(&factorization, chcommon);
 
     // Report memory usage
-    
+
     nnz = sqrt_cov->nzmax;
     tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
         / pow(2.0, 20.0);
@@ -2324,14 +2352,14 @@ void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse *sqrt_cov,
       Apply the Cholesky-decomposed (square-root) sparse covariance
       matrix to a vector of Gaussian random numbers to impose the
       desired correlation properties.
-      
+
       CHOLMOD is serial, so the gangsize must be 1.
     */
 
     if (gangsize > 1) {
         throw std::runtime_error("Sparse matrix operations require gangsize = 1");
     }
-    
+
     double t1 = MPI_Wtime();
 
     size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
@@ -2345,7 +2373,7 @@ void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse *sqrt_cov,
 
     cholmod_dense *noise_out = cholmod_allocate_dense(nelem, 1, nelem,
                                                       CHOLMOD_REAL, chcommon);
-    
+
     // Apply the sqrt covariance to impose correlations
 
     int notranspose = 0;
