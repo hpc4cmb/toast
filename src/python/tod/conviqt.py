@@ -195,7 +195,7 @@ class OpSimConviqt(Operator):
         remove_monopole=False,
         remove_dipole=False,
         normalize_beam=False,
-        verbose=False
+        verbose=False,
     ):
 
         # We call the parent class constructor, which currently does nothing
@@ -301,7 +301,7 @@ class OpSimConviqt(Operator):
                     raise Exception("Failed to load " + beamfile)
 
                 if self._normalize_beam:
-                    scale = libconviqt.conviqt_beam_normalize()
+                    scale = libconviqt.conviqt_beam_normalize(beam)
                     if scale < 0:
                         raise Exception(
                             "Failed to normalize the beam in {}. normalize() "
@@ -372,8 +372,10 @@ class OpSimConviqt(Operator):
                 )
                 tstop = MPI.Wtime()
                 if self._verbose and tod.mpicomm.rank == 0:
-                    print('{} convolved in {:.2f}s'.format(
-                        det, tstop - tstart_convolve), flush=True)
+                    print(
+                        "{} convolved in {:.2f}s".format(det, tstop - tstart_convolve),
+                        flush=True,
+                    )
                 if err != 0:
                     raise Exception("Convolution FAILED!")
 
@@ -406,12 +408,16 @@ class OpSimConviqt(Operator):
 
                 tstop = MPI.Wtime()
                 if self._verbose and tod.mpicomm.rank == 0:
-                    print("{} processed in {:.2f}s".format(
-                        det, tstop - tstart_det), flush=True)
+                    print(
+                        "{} processed in {:.2f}s".format(det, tstop - tstart_det),
+                        flush=True,
+                    )
 
             tstop = MPI.Wtime()
             if self._verbose and tod.mpicomm.rank == 0:
-                print("{} convolved in {:.2f}s".format(
-                    'observation', tstop - tstart_obs), flush=True)
+                print(
+                    "{} convolved in {:.2f}s".format("observation", tstop - tstart_obs),
+                    flush=True,
+                )
 
         return
