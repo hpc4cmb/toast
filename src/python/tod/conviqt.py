@@ -379,7 +379,7 @@ class OpSimConviqt(Operator):
         # We need the three pointing angles to describe the
         # pointing. local_pointing returns the attitude quaternions.
         tstart = MPI.Wtime()
-        pdata = tod.local_pointing(det, self._quat_name).copy()
+        pdata = tod.local_pointing(det, self._quat_name)
         tstop = MPI.Wtime()
         if self._verbose and tod.mpicomm.rank == 0:
             print("{} pointing read in {:.2f}s".format(det, tstop - tstart), flush=True)
@@ -392,6 +392,7 @@ class OpSimConviqt(Operator):
             flags = flags & self._flag_mask
             totflags = np.copy(flags)
             totflags |= common
+            pdata = pdata.copy()
             pdata[totflags != 0] = nullquat
             tstop = MPI.Wtime()
             if self._verbose and tod.mpicomm.rank == 0:
