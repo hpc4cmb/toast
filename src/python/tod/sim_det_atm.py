@@ -4,7 +4,6 @@
 
 import os
 
-from scipy.constants import degree
 from toast.ctoast import (
     atm_sim_alloc,
     atm_sim_free,
@@ -251,9 +250,18 @@ class OpSimAtmosphere(Operator):
                         rmax,
                     )
 
-                    # if self._verbosity > 0:
-                    #    self._plot_snapshots(sim, prefix, obsname, azmin, azmax,
-                    #                         elmin, elmax, tmin, tmax, comm)
+                    if self._verbosity > 15:
+                        self._plot_snapshots(
+                            sim,
+                            prefix,
+                            obsname,
+                            scan_range,
+                            tmin,
+                            tmax,
+                            comm,
+                            rmin,
+                            rmax,
+                        )
 
                     self._observe_atmosphere(
                         sim,
@@ -275,6 +283,11 @@ class OpSimAtmosphere(Operator):
                     self._ystep *= np.sqrt(scale)
                     self._zstep *= np.sqrt(scale)
 
+                if self._verbosity > 5:
+                    self._save_tod(
+                        obsname, tod, times, istart, nind, ind, comm, common_ref
+                    )
+
                 self._xstep, self._ystep, self._zstep = xstart, ystart, zstart
                 tmin = tmax
 
@@ -292,18 +305,67 @@ class OpSimAtmosphere(Operator):
 
         return
 
-    def _plot_snapshots(self, sim, prefix, obsname, scan_range, tmin, tmax, comm):
+    def _save_tod(self, obsname, tod, times, istart, nind, ind, comm, common_ref):
+        import pickle
+
+        t = times[ind]
+        tmin, tmax = t[0], t[-1]
+        outdir = "snapshots"
+        if comm.rank == 0:
+            try:
+                os.makedirs(outdir)
+            except FileExistsError:
+                pass
+
+        try:
+            good = common_ref[ind] & tod.UNSTABLE == 0
+        except:
+            good = slice(0, nind)
+
+        for det in tod.local_dets:
+            # Cache the output signal
+            cachename = "{}_{}".format(self._out, det)
+            ref = tod.cache.reference(cachename)[ind]
+            try:
+                # Some TOD classes provide a shortcut to Az/El
+                az, el = tod.read_azel(detector=det, local_start=istart, n=nind)
+            except Exception as e:
+                azelquat = tod.read_pntg(
+                    detector=det, local_start=istart, n=nind, azel=True
+                )
+                # Convert Az/El quaternion of the detector back into
+                # angles for the simulation.
+                theta, phi = qa.to_position(azelquat)
+                # Azimuth is measured in the opposite direction
+                # than longitude
+                az = 2 * np.pi - phi
+                el = np.pi / 2 - theta
+
+            fn = os.path.join(
+                outdir,
+                "atm_tod_{}_{}_t_{}_{}.pck".format(obsname, det, int(tmin), int(tmax)),
+            )
+            with open(fn, "wb") as fout:
+                pickle.dump([det, t[good], az[good], el[good], ref[good]], fout)
+
+        return
+
+    def _plot_snapshots(
+        self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
+    ):
         """ Create snapshots of the atmosphere
 
         """
         from ..vis import set_backend
 
-        azmin, azmax, elmin, elmax = scan_range
-
         set_backend()
         import matplotlib.pyplot as plt
+        import pickle
 
-        elstep = 0.01 * degree
+        azmin, azmax, elmin, elmax = scan_range
+
+        # elstep = np.radians(0.01)
+        elstep = (elmax - elmin) / 320
         azstep = elstep * np.cos(0.5 * (elmin + elmax))
         azgrid = np.linspace(azmin, azmax, (azmax - azmin) // azstep + 1)
         elgrid = np.linspace(elmin, elmax, (elmax - elmin) // elstep + 1)
@@ -321,7 +383,7 @@ class OpSimAtmosphere(Operator):
         my_snapshots = []
         vmin = 1e30
         vmax = -1e30
-        tstep = 60
+        tstep = 1
         for i, t in enumerate(np.arange(tmin, tmax, tstep)):
             if i % ntask != rank:
                 continue
@@ -335,6 +397,25 @@ class OpSimAtmosphere(Operator):
             atmdata2d = atmdata.reshape(AZ.shape)
             my_snapshots.append((t, r, atmdata2d.copy()))
 
+        outdir = "snapshots"
+        if rank == 0:
+            try:
+                os.makedirs(outdir)
+            except FileExistsError:
+                pass
+        fn = os.path.join(
+            outdir,
+            "atm_{}_{}_t_{}_{}_r_{}_{}.pck".format(
+                obsname, rank, int(tmin), int(tmax), int(rmin), int(rmax)
+            ),
+        )
+        with open(fn, "wb") as fout:
+            pickle.dump([azgrid, elgrid, my_snapshots], fout)
+
+        print("Snapshots saved in {}".format(fn), flush=True)
+
+        """
+
         vmin = comm.allreduce(vmin, op=MPI.MIN)
         vmax = comm.allreduce(vmax, op=MPI.MAX)
 
@@ -344,10 +425,9 @@ class OpSimAtmosphere(Operator):
                 atmdata2d,
                 interpolation="nearest",
                 origin="lower",
-                extent=np.array(
+                extent=np.degrees(
                     [0, (azmax - azmin) * np.cos(0.5 * (elmin + elmax)), elmin, elmax]
-                )
-                / degree,
+                ),
                 cmap=plt.get_cmap("Blues"),
                 vmin=vmin,
                 vmax=vmax,
@@ -357,10 +437,13 @@ class OpSimAtmosphere(Operator):
             ax.set_title("t = {:15.1f} s, r = {:15.1f} m".format(t, r))
             ax.set_xlabel("az [deg]")
             ax.set_ylabel("el [deg]")
-            ax.set_yticks([elmin / degree, elmax / degree])
+            ax.set_yticks(np.degrees([elmin, elmax]))
             plt.savefig("atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r)))
             plt.close()
         del my_snapshots
+
+        """
+
         return
 
     def _get_from_obs(self, name, obs):
@@ -676,15 +759,21 @@ class OpSimAtmosphere(Operator):
                     flag_ref[ind] & self._flag_mask == 0,
                 )
                 ngood = np.sum(good)
-                if ngood == 0:
-                    continue
             else:
-                good = slice(0, nind)
-                ngood = nind
+                try:
+                    good = common_ref[ind] & tod.UNSTABLE == 0
+                    ngood = np.sum(good)
+                except:
+                    good = slice(0, nind)
+                    ngood = nind
+            if ngood == 0:
+                continue
 
             try:
                 # Some TOD classes provide a shortcut to Az/El
-                az, el = tod.read_azel(detector=det, local_start=istart, n=nind)[good]
+                az, el = tod.read_azel(detector=det, local_start=istart, n=nind)
+                az = az[good]
+                el = el[good]
             except Exception as e:
                 azelquat = tod.read_pntg(
                     detector=det, local_start=istart, n=nind, azel=True
@@ -750,10 +839,7 @@ class OpSimAtmosphere(Operator):
                 # Apply the frequency-dependent absorption-coefficient
                 atmdata *= absorption
 
-            if self._apply_flags:
-                ref[ind][good] += atmdata
-            else:
-                ref[ind] += atmdata
+            ref[ind][good] += atmdata
 
             del ref
 
