@@ -18,7 +18,6 @@ from ..dist import Comm, Data
 from ..op import Operator
 from ..tod import TOD
 from ..tod import Interval
-from ..tod import quat2angle
 
 from .. import timing as timing
 
@@ -402,7 +401,7 @@ class OpSimConviqt(Operator):
                 )
 
         tstart = MPI.Wtime()
-        theta, phi, psi = quat2angle(pdata)
+        theta, phi, psi = qa.to_angles(pdata)
         # Is the psi angle in Pxx or Dxx? Pxx will include the
         # detector polarization angle, Dxx will not.
         if self._dxx:
