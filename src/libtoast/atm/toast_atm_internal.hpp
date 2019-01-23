@@ -15,9 +15,8 @@
 
 #ifdef HAVE_ELEMENTAL
 #include <El.hpp>
-#endif
-
 #include "cholmod.h"
+#endif
 
 
 namespace toast { namespace tatm {

@@ -195,6 +195,7 @@ class OpSimConviqt(Operator):
         remove_monopole=False,
         remove_dipole=False,
         normalize_beam=False,
+        verbose=False
     ):
 
         # We call the parent class constructor, which currently does nothing
@@ -219,6 +220,7 @@ class OpSimConviqt(Operator):
         self._remove_monopole = remove_monopole
         self._remove_dipole = remove_dipole
         self._normalize_beam = normalize_beam
+        self._verbose = verbose
 
         self._out = out
 
@@ -257,6 +259,7 @@ class OpSimConviqt(Operator):
         nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         for obs in data.obs:
+            tstart_obs = MPI.Wtime()
             tod = obs["tod"]
             intrvl = obs["intervals"]
 
@@ -264,6 +267,7 @@ class OpSimConviqt(Operator):
             comm = MPI_Comm.from_address(comm_ptr)
 
             for det in tod.local_dets:
+                tstart_det = MPI.Wtime()
                 try:
                     skyfile, beamfile, epsilon, psipol = self._detectordata[det]
                 except:
@@ -362,9 +366,14 @@ class OpSimConviqt(Operator):
                 if convolver is None:
                     raise Exception("Failed to instantiate convolver")
 
+                tstart_convolve = MPI.Wtime()
                 err = libconviqt.conviqt_convolver_convolve(
                     convolver, pnt, self._calibrate
                 )
+                tstop = MPI.Wtime()
+                if self._verbose and tod.mpicomm.rank == 0:
+                    print('{} convolved in {:.2f}s'.format(
+                        det, tstop - tstart_convolve), flush=True)
                 if err != 0:
                     raise Exception("Convolution FAILED!")
 
@@ -394,5 +403,15 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_detector_del(detector)
                 libconviqt.conviqt_beam_del(beam)
                 libconviqt.conviqt_sky_del(sky)
+
+                tstop = MPI.Wtime()
+                if self._verbose and tod.mpicomm.rank == 0:
+                    print("{} processed in {:.2f}s".format(
+                        det, tstop - tstart_det), flush=True)
+
+            tstop = MPI.Wtime()
+            if self._verbose and tod.mpicomm.rank == 0:
+                print("{} convolved in {:.2f}s".format(
+                    'observation', tstop - tstart_obs), flush=True)
 
         return
