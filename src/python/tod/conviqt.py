@@ -262,6 +262,7 @@ class OpSimConviqt(Operator):
             tstart_obs = MPI.Wtime()
             tod = obs["tod"]
             intrvl = obs["intervals"]
+            offset, nsamp = tod.local_samples
 
             comm_ptr = MPI._addressof(tod.mpicomm)
             comm = MPI_Comm.from_address(comm_ptr)
@@ -278,117 +279,19 @@ class OpSimConviqt(Operator):
                         )
                     )
 
-                sky = libconviqt.conviqt_sky_new()
-                err = libconviqt.conviqt_sky_read(
-                    sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm
+                sky = self.get_sky(skyfile, comm, det, tod)
+
+                beam = self.get_beam(beamfile, comm, det, tod)
+
+                detector = self.get_detector(det, epsilon)
+
+                theta, phi, psi = self.get_pointing(tod, det, psipol)
+
+                pnt = self.get_buffer(theta, phi, psi, tod, nsamp, det)
+
+                convolved_data = self.convolve(
+                    sky, beam, detector, comm, pnt, tod, nsamp, det
                 )
-                if err != 0:
-                    raise RuntimeError("Failed to load " + skyfile)
-                if self._remove_monopole:
-                    err = libconviqt.conviqt_sky_remove_monopole(sky)
-                    if err != 0:
-                        raise RuntimeError("Failed to remove monopole")
-                if self._remove_dipole:
-                    err = libconviqt.conviqt_sky_remove_dipole(sky)
-                    if err != 0:
-                        raise RuntimeError("Failed to remove dipole")
-
-                beam = libconviqt.conviqt_beam_new()
-                err = libconviqt.conviqt_beam_read(
-                    beam, self._lmax, self._beammmax, self._pol, beamfile.encode(), comm
-                )
-                if err != 0:
-                    raise Exception("Failed to load " + beamfile)
-
-                if self._normalize_beam:
-                    scale = libconviqt.conviqt_beam_normalize(beam)
-                    if scale < 0:
-                        raise Exception(
-                            "Failed to normalize the beam in {}. normalize() "
-                            "returned {}".format(beamfile)
-                        )
-
-                detector = libconviqt.conviqt_detector_new_with_id(det.encode())
-                libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
-
-                # We need the three pointing angles to describe the
-                # pointing. read_pntg returns the attitude quaternions.
-                pdata = tod.local_pointing(det, self._quat_name).copy()
-
-                if self._apply_flags:
-                    common = tod.local_common_flags(self._common_flag_name)
-                    flags = tod.local_flags(det, self._flag_name)
-                    common = common & self._common_flag_mask
-                    flags = flags & self._flag_mask
-                    totflags = np.copy(flags)
-                    totflags |= common
-                    pdata[totflags != 0] = nullquat
-
-                theta, phi, psi = quat2angle(pdata)
-
-                # Is the psi angle in Pxx or Dxx? Pxx will include the
-                # detector polarization angle, Dxx will not.
-
-                if self._dxx:
-                    psi -= psipol
-
-                pnt = libconviqt.conviqt_pointing_new()
-
-                offset, nsamp = tod.local_samples
-
-                err = libconviqt.conviqt_pointing_alloc(pnt, nsamp * 5)
-
-                if err != 0:
-                    raise Exception("Failed to allocate pointing array")
-
-                ppnt = libconviqt.conviqt_pointing_data(pnt)
-
-                for row in range(nsamp):
-                    ppnt[row * 5 + 0] = phi[row]
-                    ppnt[row * 5 + 1] = theta[row]
-                    ppnt[row * 5 + 2] = psi[row]
-                    # This column will host the convolved data upon exit
-                    ppnt[row * 5 + 3] = 0
-                    # libconviqt will assign the running indices to this column.
-                    ppnt[row * 5 + 4] = 0
-
-                convolver = libconviqt.conviqt_convolver_new(
-                    sky,
-                    beam,
-                    detector,
-                    self._pol,
-                    self._lmax,
-                    self._beammmax,
-                    self._order,
-                    comm,
-                )
-
-                if convolver is None:
-                    raise Exception("Failed to instantiate convolver")
-
-                tstart_convolve = MPI.Wtime()
-                err = libconviqt.conviqt_convolver_convolve(
-                    convolver, pnt, self._calibrate
-                )
-                tstop = MPI.Wtime()
-                if self._verbose and tod.mpicomm.rank == 0:
-                    print(
-                        "{} convolved in {:.2f}s".format(det, tstop - tstart_convolve),
-                        flush=True,
-                    )
-                if err != 0:
-                    raise Exception("Convolution FAILED!")
-
-                # The pointer to the data will have changed during
-                # the convolution call ...
-
-                ppnt = libconviqt.conviqt_pointing_data(pnt)
-
-                convolved_data = np.zeros(nsamp)
-                for row in range(nsamp):
-                    convolved_data[row] = ppnt[row * 5 + 3]
-
-                libconviqt.conviqt_convolver_del(convolver)
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
@@ -421,3 +324,153 @@ class OpSimConviqt(Operator):
                 )
 
         return
+
+    def get_sky(self, skyfile, comm, det, tod):
+        tstart = MPI.Wtime()
+        sky = libconviqt.conviqt_sky_new()
+        err = libconviqt.conviqt_sky_read(
+            sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm
+        )
+        if err != 0:
+            raise RuntimeError("Failed to load " + skyfile)
+        if self._remove_monopole:
+            err = libconviqt.conviqt_sky_remove_monopole(sky)
+            if err != 0:
+                raise RuntimeError("Failed to remove monopole")
+        if self._remove_dipole:
+            err = libconviqt.conviqt_sky_remove_dipole(sky)
+            if err != 0:
+                raise RuntimeError("Failed to remove dipole")
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print(
+                "{} sky initialized in {:.2f}s".format(det, tstop - tstart), flush=True
+            )
+        return sky
+
+    def get_beam(self, beamfile, comm, det, tod):
+        tstart = MPI.Wtime()
+        beam = libconviqt.conviqt_beam_new()
+        err = libconviqt.conviqt_beam_read(
+            beam, self._lmax, self._beammmax, self._pol, beamfile.encode(), comm
+        )
+        if err != 0:
+            raise Exception("Failed to load " + beamfile)
+        if self._normalize_beam:
+            scale = libconviqt.conviqt_beam_normalize(beam)
+            if scale < 0:
+                raise Exception(
+                    "Failed to normalize the beam in {}. normalize() "
+                    "returned {}".format(beamfile)
+                )
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print(
+                "{} beam initialized in {:.2f}s".format(det, tstop - tstart), flush=True
+            )
+        return beam
+
+    def get_detector(self, det, epsilon):
+        detector = libconviqt.conviqt_detector_new_with_id(det.encode())
+        libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
+        return detector
+
+    def get_pointing(self, tod, det, psipol):
+        # We need the three pointing angles to describe the
+        # pointing. local_pointing returns the attitude quaternions.
+        tstart = MPI.Wtime()
+        pdata = tod.local_pointing(det, self._quat_name).copy()
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print("{} pointing read in {:.2f}s".format(det, tstop - tstart), flush=True)
+
+        if self._apply_flags:
+            tstart = MPI.Wtime()
+            common = tod.local_common_flags(self._common_flag_name)
+            flags = tod.local_flags(det, self._flag_name)
+            common = common & self._common_flag_mask
+            flags = flags & self._flag_mask
+            totflags = np.copy(flags)
+            totflags |= common
+            pdata[totflags != 0] = nullquat
+            tstop = MPI.Wtime()
+            if self._verbose and tod.mpicomm.rank == 0:
+                print(
+                    "{} flags initialized in {:.2f}s".format(det, tstop - tstart),
+                    flush=True,
+                )
+
+        tstart = MPI.Wtime()
+        theta, phi, psi = quat2angle(pdata)
+        # Is the psi angle in Pxx or Dxx? Pxx will include the
+        # detector polarization angle, Dxx will not.
+        if self._dxx:
+            psi -= psipol
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print(
+                "{} pointing angles computed in {:.2f}s".format(det, tstop - tstart),
+                flush=True,
+            )
+        return theta, phi, psi
+
+    def get_buffer(self, theta, phi, psi, tod, nsamp, det):
+        """
+        Pack the pointing into the libconviqt pointing array
+        """
+        tstart = MPI.Wtime()
+        pnt = libconviqt.conviqt_pointing_new()
+        err = libconviqt.conviqt_pointing_alloc(pnt, 5 * nsamp)
+        if err != 0:
+            raise Exception("Failed to allocate pointing array")
+        ppnt = libconviqt.conviqt_pointing_data(pnt)
+        arr = np.ctypeslib.as_array(ppnt, shape=(nsamp, 5))
+        arr[:, 0] = phi
+        arr[:, 1] = theta
+        arr[:, 2] = psi
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print(
+                "{} input array packed in {:.2f}s".format(det, tstop - tstart),
+                flush=True,
+            )
+        return pnt
+
+    def convolve(self, sky, beam, detector, comm, pnt, tod, nsamp, det):
+        tstart = MPI.Wtime()
+        convolver = libconviqt.conviqt_convolver_new(
+            sky,
+            beam,
+            detector,
+            self._pol,
+            self._lmax,
+            self._beammmax,
+            self._order,
+            comm,
+        )
+        if convolver is None:
+            raise Exception("Failed to instantiate convolver")
+        err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print("{} convolved in {:.2f}s".format(det, tstop - tstart), flush=True)
+        if err != 0:
+            raise Exception("Convolution FAILED!")
+
+        # The pointer to the data will have changed during
+        # the convolution call ...
+
+        tstart = MPI.Wtime()
+        ppnt = libconviqt.conviqt_pointing_data(pnt)
+        arr = np.ctypeslib.as_array(ppnt, shape=(nsamp, 5))
+        convolved_data = arr[:, 3].astype(np.float64)
+        tstop = MPI.Wtime()
+        if self._verbose and tod.mpicomm.rank == 0:
+            print(
+                "{} convolved data extracted in {:.2f}s".format(det, tstop - tstart),
+                flush=True,
+            )
+
+        libconviqt.conviqt_convolver_del(convolver)
+
+        return convolved_data
