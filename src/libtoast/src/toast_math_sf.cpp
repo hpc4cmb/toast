@@ -536,8 +536,8 @@ void toast::vfast_erfinv(int n, double const * in, double * out) {
     // With numerical constants obtained from:
     // https://people.maths.ox.ac.uk/gilesm/codes/erfinv/
     //
-    toast::simd_array <double> arg(n);
-    toast::simd_array <double> lg(n);
+    toast::AlignedVector <double> arg(n);
+    toast::AlignedVector <double> lg(n);
 
     if (toast::is_aligned(in)) {
         # pragma omp simd

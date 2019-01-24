@@ -52,8 +52,8 @@ void TOASTsfTest::TearDown() {
 }
 
 TEST_F(TOASTsfTest, trig) {
-    std::vector <double, toast::simd_allocator <double> > comp1(size);
-    std::vector <double, toast::simd_allocator <double> > comp2(size);
+    toast::AlignedVector <double> comp1(size);
+    toast::AlignedVector <double> comp2(size);
 
     toast::vsin(size, angin.data(), comp1.data());
     for (int i = 0; i < size; ++i) {
@@ -79,8 +79,8 @@ TEST_F(TOASTsfTest, trig) {
 
 
 TEST_F(TOASTsfTest, fasttrig) {
-    std::vector <double, toast::simd_allocator <double> > comp1(size);
-    std::vector <double, toast::simd_allocator <double> > comp2(size);
+    toast::AlignedVector <double> comp1(size);
+    toast::AlignedVector <double> comp2(size);
 
     toast::vfast_sin(size, angin.data(), comp1.data());
     for (int i = 0; i < size; ++i) {
@@ -106,7 +106,7 @@ TEST_F(TOASTsfTest, fasttrig) {
 
 
 TEST_F(TOASTsfTest, sqrtlog) {
-    std::vector <double, toast::simd_allocator <double> > comp(size);
+    toast::AlignedVector <double> comp(size);
 
     toast::vsqrt(size, sqin.data(), comp.data());
     for (int i = 0; i < size; ++i) {
@@ -133,7 +133,7 @@ TEST_F(TOASTsfTest, sqrtlog) {
 
 
 TEST_F(TOASTsfTest, fast_sqrtlog) {
-    std::vector <double, toast::simd_allocator <double> > comp(size);
+    toast::AlignedVector <double> comp(size);
 
     toast::vfast_sqrt(size, sqin.data(), comp.data());
     for (int i = 0; i < size; ++i) {
@@ -160,7 +160,7 @@ TEST_F(TOASTsfTest, fast_sqrtlog) {
 
 
 TEST_F(TOASTsfTest, fast_erfinv) {
-    std::vector <double, toast::simd_allocator <double> > in = {
+    toast::AlignedVector <double> in = {
         -9.990000e-01,
         -7.770000e-01,
         -5.550000e-01,
@@ -173,7 +173,7 @@ TEST_F(TOASTsfTest, fast_erfinv) {
         9.990000e-01
     };
 
-    std::vector <double, toast::simd_allocator <double> > check = {
+    toast::AlignedVector <double> check = {
         -2.326753765513524e+00,
         -8.616729665092674e-01,
         -5.400720684419686e-01,
@@ -186,7 +186,7 @@ TEST_F(TOASTsfTest, fast_erfinv) {
         2.326753765513546e+00
     };
 
-    std::vector <double, toast::simd_allocator <double> > out(10);
+    toast::AlignedVector <double> out(10);
 
     toast::vfast_erfinv(10, in.data(), out.data());
 

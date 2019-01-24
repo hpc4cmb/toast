@@ -33,7 +33,7 @@ void TOASTqarrayTest::SetUp() {
 TEST_F(TOASTqarrayTest, arraylist_dot1) {
     double check;
     double result;
-    std::vector <double, toast::simd_allocator <double> > pone(3);
+    toast::AlignedVector <double> pone(3);
 
     check = 0.0;
     for (size_t i = 0; i < 3; ++i) {
@@ -49,8 +49,8 @@ TEST_F(TOASTqarrayTest, arraylist_dot1) {
 
 TEST_F(TOASTqarrayTest, arraylist_dot2) {
     double check[2];
-    std::vector <double, toast::simd_allocator <double> > result(2);
-    std::vector <double, toast::simd_allocator <double> > pone(6);
+    toast::AlignedVector <double> result(2);
+    toast::AlignedVector <double> pone(6);
 
     for (size_t i = 0; i < 2; ++i) {
         check[i] = 0.0;
@@ -69,7 +69,7 @@ TEST_F(TOASTqarrayTest, arraylist_dot2) {
 
 
 TEST_F(TOASTqarrayTest, inv) {
-    std::vector <double, toast::simd_allocator <double> > result(4);
+    toast::AlignedVector <double> result(4);
 
     for (size_t i = 0; i < 4; ++i) {
         result[i] = q1[i];
@@ -84,7 +84,7 @@ TEST_F(TOASTqarrayTest, inv) {
 
 
 TEST_F(TOASTqarrayTest, norm) {
-    std::vector <double, toast::simd_allocator <double> > result(4);
+    toast::AlignedVector <double> result(4);
 
     toast::qa_normalize(1, 4, 4, qtonormalize.data(), result.data());
 
@@ -95,7 +95,7 @@ TEST_F(TOASTqarrayTest, norm) {
 
 
 TEST_F(TOASTqarrayTest, mult) {
-    std::vector <double, toast::simd_allocator <double> > result(4);
+    toast::AlignedVector <double> result(4);
 
     toast::qa_mult(1, q1.data(), 1, q2.data(), result.data());
 
@@ -107,10 +107,10 @@ TEST_F(TOASTqarrayTest, mult) {
 
 TEST_F(TOASTqarrayTest, multarray) {
     size_t n = 3;
-    std::vector <double, toast::simd_allocator <double> > in1(4 * n);
-    std::vector <double, toast::simd_allocator <double> > in2(4 * n);
-    std::vector <double, toast::simd_allocator <double> > result(4 * n);
-    std::vector <double, toast::simd_allocator <double> > null(4 * n);
+    toast::AlignedVector <double> in1(4 * n);
+    toast::AlignedVector <double> in2(4 * n);
+    toast::AlignedVector <double> result(4 * n);
+    toast::AlignedVector <double> null(4 * n);
 
     null[0] = 0.0;
     null[1] = 0.0;
@@ -143,7 +143,7 @@ TEST_F(TOASTqarrayTest, multarray) {
 
 
 TEST_F(TOASTqarrayTest, rot1) {
-    std::vector <double, toast::simd_allocator <double> > result(3);
+    toast::AlignedVector <double> result(3);
 
     toast::qa_rotate(1, q1.data(), 1, vec.data(), result.data());
 
@@ -155,9 +155,9 @@ TEST_F(TOASTqarrayTest, rot1) {
 
 TEST_F(TOASTqarrayTest, rotarray) {
     size_t n = 2;
-    std::vector <double, toast::simd_allocator <double> > qin(4 * n);
-    std::vector <double, toast::simd_allocator <double> > vin(3 * n);
-    std::vector <double, toast::simd_allocator <double> > result(3 * n);
+    toast::AlignedVector <double> qin(4 * n);
+    toast::AlignedVector <double> vin(3 * n);
+    toast::AlignedVector <double> result(3 * n);
 
     for (size_t i = 0; i < 4; ++i) {
         qin[i] = q1[i];
@@ -183,16 +183,14 @@ TEST_F(TOASTqarrayTest, slerp) {
     size_t n = 2;
     size_t ninterp = 4;
 
-    std::vector <double,
-                 toast::simd_allocator <double> > q =
+    toast::AlignedVector <double> q =
     {2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
-    std::vector <double, toast::simd_allocator <double> > qinterp(16);
-    std::vector <double, toast::simd_allocator <double> > time = {0.0, 9.0};
-    std::vector <double,
-                 toast::simd_allocator <double> > targettime =
+    toast::AlignedVector <double> qinterp(16);
+    toast::AlignedVector <double> time = {0.0, 9.0};
+    toast::AlignedVector <double> targettime =
     {0.0, 3.0, 4.5, 9.0};
-    std::vector <double, toast::simd_allocator <double> > qcheck1(4);
-    std::vector <double, toast::simd_allocator <double> > qcheck2(4);
+    toast::AlignedVector <double> qcheck1(4);
+    toast::AlignedVector <double> qcheck2(4);
 
     toast::qa_normalize_inplace(n, 4, 4, q.data());
 
@@ -217,9 +215,8 @@ TEST_F(TOASTqarrayTest, slerp) {
 
 
 TEST_F(TOASTqarrayTest, rotation) {
-    std::vector <double, toast::simd_allocator <double> > result(4);
-    std::vector <double,
-                 toast::simd_allocator <double> > axis = {0.0, 0.0, 1.0};
+    toast::AlignedVector <double> result(4);
+    toast::AlignedVector <double> axis = {0.0, 0.0, 1.0};
     double ang = toast::PI * 30.0 / 180.0;
 
     toast::qa_from_axisangle(1, axis.data(), &ang, result.data());
@@ -250,8 +247,8 @@ TEST_F(TOASTqarrayTest, toaxisangle) {
 
 
 TEST_F(TOASTqarrayTest, exp) {
-    std::vector <double, toast::simd_allocator <double> > result(8);
-    std::vector <double, toast::simd_allocator <double> > check =
+    toast::AlignedVector <double> result(8);
+    toast::AlignedVector <double> check =
     {0.71473568, 0.71473568, 0.23824523, 2.22961712, 0.71473568, 0.71473568,
      0.23824523, 2.22961712};
 
@@ -264,8 +261,8 @@ TEST_F(TOASTqarrayTest, exp) {
 
 
 TEST_F(TOASTqarrayTest, ln) {
-    std::vector <double, toast::simd_allocator <double> > result(8);
-    std::vector <double, toast::simd_allocator <double> > check =
+    toast::AlignedVector <double> result(8);
+    toast::AlignedVector <double> check =
     {0.31041794, 0.31041794, 0.10347265, 0.0, 0.31041794, 0.31041794,
      0.10347265, 0.0};
 
@@ -278,11 +275,11 @@ TEST_F(TOASTqarrayTest, ln) {
 
 
 TEST_F(TOASTqarrayTest, pow) {
-    std::vector <double, toast::simd_allocator <double> > p(2);
-    std::vector <double, toast::simd_allocator <double> > result(8);
-    std::vector <double, toast::simd_allocator <double> > check1 =
+    toast::AlignedVector <double> p(2);
+    toast::AlignedVector <double> result(8);
+    toast::AlignedVector <double> check1 =
     {0.672, 0.672, 0.224, 0.216, 0.672, 0.672, 0.224, 0.216};
-    std::vector <double, toast::simd_allocator <double> > check2 =
+    toast::AlignedVector <double> check2 =
     {0.03103127, 0.03103127, 0.01034376, 0.99898305, 0.03103127, 0.03103127,
      0.01034376, 0.99898305};
 
@@ -305,8 +302,8 @@ TEST_F(TOASTqarrayTest, pow) {
 
 
 TEST_F(TOASTqarrayTest, torotmat) {
-    std::vector <double, toast::simd_allocator <double> > result(9);
-    std::vector <double, toast::simd_allocator <double> > check =
+    toast::AlignedVector <double> result(9);
+    toast::AlignedVector <double> check =
     {8.00000000e-01, -2.77555756e-17, 6.00000000e-01, 3.60000000e-01,
      8.00000000e-01, -4.80000000e-01, -4.80000000e-01, 6.00000000e-01,
      6.40000000e-01};
@@ -322,8 +319,8 @@ TEST_F(TOASTqarrayTest, torotmat) {
 
 
 TEST_F(TOASTqarrayTest, fromrotmat) {
-    std::vector <double, toast::simd_allocator <double> > result(9);
-    std::vector <double, toast::simd_allocator <double> > qresult(4);
+    toast::AlignedVector <double> result(9);
+    toast::AlignedVector <double> qresult(4);
 
     toast::qa_to_rotmat(qeasy.data(), result.data());
     toast::qa_from_rotmat(result.data(), qresult.data());
@@ -335,14 +332,13 @@ TEST_F(TOASTqarrayTest, fromrotmat) {
 
 
 TEST_F(TOASTqarrayTest, fromvectors) {
-    std::vector <double, toast::simd_allocator <double> > result(4);
-    std::vector <double, toast::simd_allocator <double> > check =
+    toast::AlignedVector <double> result(4);
+    toast::AlignedVector <double> check =
     {0.0, 0.0, ::sin(15.0 * toast::PI / 180.0),
      ::cos(15.0 * toast::PI / 180.0)};
     double ang = 30.0 * toast::PI / 180.0;
-    std::vector <double, toast::simd_allocator <double> > v1 = {1.0, 0.0, 0.0};
-    std::vector <double,
-                 toast::simd_allocator <double> > v2 =
+    toast::AlignedVector <double> v1 = {1.0, 0.0, 0.0};
+    toast::AlignedVector <double> v2 =
     {::cos(ang), ::sin(ang), 0.0};
 
     toast::qa_from_vectors(1, v1.data(), v2.data(), result.data());
@@ -361,15 +357,15 @@ TEST_F(TOASTqarrayTest, thetaphipa) {
     double xaxis[3] = {1.0, 0.0, 0.0};
     double zaxis[3] = {0.0, 0.0, 1.0};
 
-    std::vector <double, toast::simd_allocator <double> > theta(n);
-    std::vector <double, toast::simd_allocator <double> > phi(n);
-    std::vector <double, toast::simd_allocator <double> > pa(n);
+    toast::AlignedVector <double> theta(n);
+    toast::AlignedVector <double> phi(n);
+    toast::AlignedVector <double> pa(n);
 
-    std::vector <double, toast::simd_allocator <double> > check_theta(n);
-    std::vector <double, toast::simd_allocator <double> > check_phi(n);
-    std::vector <double, toast::simd_allocator <double> > check_pa(n);
+    toast::AlignedVector <double> check_theta(n);
+    toast::AlignedVector <double> check_phi(n);
+    toast::AlignedVector <double> check_pa(n);
 
-    std::vector <double, toast::simd_allocator <double> > quat(4 * n);
+    toast::AlignedVector <double> quat(4 * n);
 
     // First run tests in Healpix convention...
 

@@ -100,8 +100,8 @@ void toast::tod_sim_noise_timestream(
     double psdshift = 0.01 * psdmin;
     double freqshift = increment;
 
-    toast::simd_array <double> logfreq(psdlen);
-    toast::simd_array <double> logpsd(psdlen);
+    toast::AlignedVector <double> logfreq(psdlen);
+    toast::AlignedVector <double> logpsd(psdlen);
 
     if (toast::is_aligned(freq) && toast::is_aligned(psd)) {
         #pragma omp simd
@@ -116,7 +116,7 @@ void toast::tod_sim_noise_timestream(
         }
     }
 
-    toast::simd_array <double> interp_psd(npsd);
+    toast::AlignedVector <double> interp_psd(npsd);
 
     #pragma omp simd
     for (int64_t i = 0; i < npsd; ++i) {
@@ -124,7 +124,7 @@ void toast::tod_sim_noise_timestream(
                                 freqshift);
     }
 
-    toast::simd_array <double> stepinv(psdlen);
+    toast::AlignedVector <double> stepinv(psdlen);
     for (int64_t ibin = 0; ibin < psdlen - 1; ++ibin) {
         stepinv[ibin] = 1 / (logfreq[ibin + 1] - logfreq[ibin]);
     }
@@ -152,7 +152,7 @@ void toast::tod_sim_noise_timestream(
     uint64_t key2 = obsindx * 4294967296 + detindx;
     uint64_t counter1 = 0;
     uint64_t counter2 = static_cast <uint64_t> (firstsamp * oversample);
-    toast::simd_array <double> rngdata(fftlen);
+    toast::AlignedVector <double> rngdata(fftlen);
 
     toast::rng_dist_normal(fftlen, key1, key2, counter1, counter2,
                            rngdata.data());

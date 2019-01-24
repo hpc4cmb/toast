@@ -139,7 +139,7 @@ class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
     private:
 
         fftw_plan plan_;
-        toast::simd_array <double> data_;
+        toast::AlignedVector <double> data_;
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;
@@ -396,7 +396,7 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
         }
 
         DFTI_DESCRIPTOR_HANDLE descriptor_;
-        toast::simd_array <double> data_;
+        toast::AlignedVector <double> data_;
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;

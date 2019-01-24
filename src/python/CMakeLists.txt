@@ -1,123 +1,80 @@
-#
-# build cbuffer
-#
-#------------------------------------------------------------------------------#
-#
-include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
+# pybind11
+add_subdirectory(pybind11)
 
-set_source_files_properties(cbuffer.c PROPERTIES LANGUAGE C)
+# Determine our python install location and set up a rule to install the
+# modules
 
-# Python files to add to cbuffer-lib target so they are listed in an
-# IDE (e.g. QtCreator), won't get compiled
-file(GLOB_RECURSE PYTHON_MODULE_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
-    ${CMAKE_CURRENT_LIST_DIR}/*.py.in
-    ${CMAKE_SOURCE_DIR}/pipelines/*.py)
-
-if(USE_COVERAGE)
-    add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES}
-        $<TARGET_OBJECTS:libtoast-object>)
-    add_dependencies(cbuffer-lib ${PROJECT_LINK_TARGETS})
-else()
-    add_library(cbuffer-lib MODULE cbuffer.c ${PYTHON_MODULE_FILES})
-    target_link_libraries(cbuffer-lib ${PROJECT_LINK_TARGETS})
-endif()
-
-if(CMAKE_C_COMPILER_IS_GNU AND NOT APPLE)
-    set(_LINK_FLAGS "-Xlinker -export-dynamic -Wl,-O1 -Wl,-Bsymbolic-functions")
-else()
-    set(_LINK_FLAGS "")
-endif()
-
-set_target_properties(cbuffer-lib
-    PROPERTIES OUTPUT_NAME      "cbuffer"
-    LINK_FLAGS                  "${_LINK_FLAGS}"
-    PREFIX                      ""
-    SUFFIX                      ".so"
-    COMPILE_FLAGS               "${CMAKE_C_FLAGS_EXTRA}"
-    #RPATH                       ${CMAKE_INSTALL_FULL_PYTHONDIR}
-    LANGUAGE                    C
-    LINKER_LANGUAGE             CXX)
-
-# py libs
-set(PYLIBS )
-foreach(_LIB dl util m)
-    find_library(${_LIB}_LIBRARY
-        NAMES ${_LIB}
-        PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR_DEFAULT} lib lib64)
-    if(${_LIB}_LIBRARY)
-        list(APPEND PYLIBS ${${_LIB}_LIBRARY})
-    endif()
-endforeach()
-
-target_link_libraries(cbuffer-lib ${PYLIBS}
-    ${EXTERNAL_LIBRARIES}
-    ${MPI_LIBRARIES}
-    ${PYTHON_LIBRARIES})
-install(TARGETS cbuffer-lib DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
-
-
-# =============================================================================#
-#   configuration variables
-# =============================================================================#
-find_program(GIT_COMMAND git)
-mark_as_advanced(GIT_COMMAND)
-
-execute_process(COMMAND ${GIT_COMMAND} describe --tags --abbrev=0
-    OUTPUT_VARIABLE GIT_LAST_TAG
+execute_process(
+    COMMAND "${PYTHON_EXECUTABLE}" -c "if True:
+        import sys
+        print('{}.{}'.format(sys.version_info.major, sys.version_info.minor))"
+    OUTPUT_VARIABLE PYTHON_MAJORMINOR
     OUTPUT_STRIP_TRAILING_WHITESPACE
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+)
 
-execute_process(COMMAND ${GIT_COMMAND} rev-list --count --branches
-    OUTPUT_VARIABLE GIT_DEV_NUMBER
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# Hardcode this to "lib" for now, since lib32/lib64 is a pain
+# to use on many systems.
+#set(PYTHON_SITE
+#    "${CMAKE_INSTALL_LIBDIR}/python${PYTHON_MAJORMINOR}/site-packages")
+set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages")
 
-set(VERSION "${GIT_LAST_TAG}.dev${GIT_DEV_NUMBER}")
+# Create a module for the serial toast library
 
-set(TOAST_LIB "${CMAKE_SHARED_LIBRARY_PREFIX}toast${CMAKE_SHARED_LIBRARY_SUFFIX}")
-set(LIBTOAST_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/${TOAST_LIB})
-set(HAVE_MPI True)
+pybind11_add_module(_libtoast MODULE
+    _libtoast.cpp
+    _libtoast_sys.cpp
+    _libtoast_math_sf.cpp
+)
+target_link_libraries(_libtoast PRIVATE toast)
 
-# =============================================================================#
-#   configuration files
-# =============================================================================#
+# Include path to the toast headers
+target_include_directories(_libtoast PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
+)
 
-file(GLOB PYTHON_FILES          ${CMAKE_CURRENT_LIST_DIR}/*.py)
-file(GLOB PYTHON_CONFIG_FILES   ${CMAKE_CURRENT_LIST_DIR}/*.py.in)
+install(TARGETS _libtoast DESTINATION ${PYTHON_SITE}/toast)
 
-foreach(PYCONFIG ${PYTHON_CONFIG_FILES})
-    get_filename_component(PYCONFIG_NAME ${PYCONFIG} NAME_WE)
-    configure_file(${PYCONFIG}
-        ${CMAKE_BINARY_DIR}/InstallTreeFiles/${PYCONFIG_NAME}.py
-        @ONLY)
-    list(APPEND PYTHON_FILES ${CMAKE_BINARY_DIR}/InstallTreeFiles/${PYCONFIG_NAME}.py)
-endforeach()
+# Install all the other python files
 
-install(FILES ${PYTHON_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
+install(FILES
+    __init__.py
+    utils.py
+    mpi.py
+    cache.py
+    dist.py
+    op.py
+    DESTINATION ${PYTHON_SITE}/toast
+)
 
-if(USE_COVERAGE)
-    file(GLOB_RECURSE _PYINSTALL_FILES ${CMAKE_CURRENT_LIST_DIR}/*.py
-        ${CMAKE_BINARY_DIR}/InstallTreeFiles/*.py
-        ${CMAKE_SOURCE_DIR}/pipelines/*.py)
-    set(PYTHON_INSTALL_FILES ${_PYINSTALL_FILES} CACHE INTERNAL "Python files installed" FORCE)
-endif(USE_COVERAGE)
+# Optionally create a module for the MPI library
 
-# install the python sub-directories
-install(DIRECTORY
-    ${CMAKE_CURRENT_LIST_DIR}/fod
-    ${CMAKE_CURRENT_LIST_DIR}/map
-    ${CMAKE_CURRENT_LIST_DIR}/tests
-    ${CMAKE_CURRENT_LIST_DIR}/tod
-    ${CMAKE_CURRENT_LIST_DIR}/todmap
-    DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME})
+if(MPI_FOUND AND MPI4PY_FOUND)
+    pybind11_add_module(_libtoast_mpi MODULE _libtoast_mpi.cpp)
 
-# ensure all the python files are executable
-foreach(DIR fod map tests tod todmap)
-    file(GLOB _FILES ${CMAKE_CURRENT_LIST_DIR}/${DIR}/*.py)
-    install(FILES ${_FILES} DESTINATION ${CMAKE_INSTALL_PYTHONDIR}/${LPROJECT_NAME}/${DIR}
-        #PERMISSIONS
-        #OWNER_READ    GROUP_READ    WORLD_READ
-        #OWNER_WRITE
-        #OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
+    string(STRIP "${MPI_CXX_COMPILE_FLAGS}" mpi_comp_flags)
+    target_compile_options(_libtoast_mpi PRIVATE "${mpi_comp_flags}")
+
+    string(STRIP "${MPI_CXX_LINK_FLAGS}" mpi_link_flags)
+    set_target_properties(_libtoast_mpi
+        PROPERTIES LINK_FLAGS "${mpi_link_flags}"
     )
-endforeach()
+
+    target_include_directories(_libtoast_mpi PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast-mpi/include"
+        ${MPI_CXX_INCLUDE_PATH}
+        ${MPI4PY_INCLUDE_DIR}
+    )
+
+    target_link_libraries(_libtoast_mpi
+        PRIVATE toast-mpi "${MPI_CXX_LIBRARIES}"
+    )
+
+    install(TARGETS _libtoast_mpi DESTINATION ${PYTHON_SITE}/toast)
+
+    install(FILES
+        mpi.py
+        DESTINATION ${PYTHON_SITE}/toast
+    )
+endif(MPI_FOUND AND MPI4PY_FOUND)

@@ -99,7 +99,7 @@ void toast::rng_dist_normal(size_t n,
                             uint64_t counter1, uint64_t counter2,
                             double * data) {
     // First compute uniform randoms on [0.0, 1.0)
-    toast::simd_array <double> uni(n);
+    toast::AlignedVector <double> uni(n);
 
     toast::rng_dist_uniform_01(n, key1, key2, counter1, counter2,
                                uni.data());

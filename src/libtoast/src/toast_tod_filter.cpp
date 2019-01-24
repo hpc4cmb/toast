@@ -47,7 +47,7 @@ void toast::filter_polynomial(int64_t order, double ** signals,
             // We subtract the template value even from flagged samples to
             // support point source masking etc.
 
-            toast::simd_array <double> full_templates(scanlen * norder);
+            toast::AlignedVector <double> full_templates(scanlen * norder);
 
             double dx = 2. / scanlen;
             double xstart = 0.5 * dx - 1;
@@ -71,7 +71,7 @@ void toast::filter_polynomial(int64_t order, double ** signals,
             // Assemble the flagged template matrix used in the linear
             // regression
 
-            toast::simd_array <double> templates(scanlen * norder);
+            toast::AlignedVector <double> templates(scanlen * norder);
 
             for (int64_t i = 0; i < scanlen; ++i) {
                 if (flags[start + i] != 0) continue;
@@ -81,7 +81,7 @@ void toast::filter_polynomial(int64_t order, double ** signals,
                 }
             }
 
-            toast::simd_array <double> cov(norder * norder);
+            toast::AlignedVector <double> cov(norder * norder);
 
             // invcov = templates x templates.T
 
@@ -117,9 +117,9 @@ void toast::filter_polynomial(int64_t order, double ** signals,
 
             // Filter every signal
 
-            toast::simd_array <double> proj(norder);
-            toast::simd_array <double> coeff(norder);
-            toast::simd_array <double> noise(scanlen);
+            toast::AlignedVector <double> proj(norder);
+            toast::AlignedVector <double> coeff(norder);
+            toast::AlignedVector <double> noise(scanlen);
 
             for (int isignal = 0; isignal < nsignal; ++isignal) {
                 double * signal = signals[isignal] + start;

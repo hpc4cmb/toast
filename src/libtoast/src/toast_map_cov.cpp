@@ -262,11 +262,11 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
             int info;
 
-            toast::simd_array <double> fdata(nnz * nnz);
-            toast::simd_array <double> ftemp(nnz * nnz);
-            toast::simd_array <double> finv(nnz * nnz);
-            toast::simd_array <double> evals(nnz);
-            toast::simd_array <double> work(lwork);
+            toast::AlignedVector <double> fdata(nnz * nnz);
+            toast::AlignedVector <double> ftemp(nnz * nnz);
+            toast::AlignedVector <double> finv(nnz * nnz);
+            toast::AlignedVector <double> evals(nnz);
+            toast::AlignedVector <double> work(lwork);
 
             // Here we "unroll" the loop over submaps and pixels within each
             // submap.
@@ -400,9 +400,9 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
             int64_t off;
 
-            toast::simd_array <double> fdata1(nnz * nnz);
-            toast::simd_array <double> fdata2(nnz * nnz);
-            toast::simd_array <double> fdata3(nnz * nnz);
+            toast::AlignedVector <double> fdata1(nnz * nnz);
+            toast::AlignedVector <double> fdata2(nnz * nnz);
+            toast::AlignedVector <double> fdata3(nnz * nnz);
 
             // Here we "unroll" the loop over submaps and pixels within each
             // submap.
@@ -476,7 +476,7 @@ void toast::cov_apply_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         int64_t m;
         int64_t off;
 
-        toast::simd_array <double> temp(nnz);
+        toast::AlignedVector <double> temp(nnz);
 
         for (i = 0; i < nsub; ++i) {
             for (j = 0; j < subsize; ++j) {

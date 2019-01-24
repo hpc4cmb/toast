@@ -92,6 +92,7 @@ class Timer {
 
         typedef std::chrono::high_resolution_clock::time_point time_point;
         typedef std::shared_ptr <Timer> pshr;
+        typedef std::unique_ptr <Timer> puniq;
 
         Timer();
         void start();
@@ -119,6 +120,7 @@ class GlobalTimers {
         // Singleton access
         static GlobalTimers & get();
 
+        std::vector <std::string> names() const;
         void start(std::string const & name);
         void stop(std::string const & name);
         void clear(std::string const & name);
@@ -192,7 +194,7 @@ bool is_aligned(T * ptr) {
 // Allocator that can be used with STL containers.
 
 template <typename T>
-class simd_allocator {
+class AlignedAllocator {
     // Custom allocator based on example in:
     // The C++ Standard Library - A Tutorial and Reference
     // by Nicolai M. Josuttis, Addison-Wesley, 1999
@@ -211,7 +213,7 @@ class simd_allocator {
         // rebind allocator to type U
         template <typename U>
         struct rebind {
-            typedef simd_allocator <U> other;
+            typedef AlignedAllocator <U> other;
         };
 
         // return address of values
@@ -223,14 +225,14 @@ class simd_allocator {
             return &value;
         }
 
-        simd_allocator() throw() {}
+        AlignedAllocator() throw() {}
 
-        simd_allocator(simd_allocator const &) throw() {}
+        AlignedAllocator(AlignedAllocator const &) throw() {}
 
         template <typename U>
-        simd_allocator(simd_allocator <U> const &) throw() {}
+        AlignedAllocator(AlignedAllocator <U> const &) throw() {}
 
-        ~simd_allocator() throw() {}
+        ~AlignedAllocator() throw() {}
 
         // return maximum number of elements that can be allocated
         size_type max_size() const throw() {
@@ -266,21 +268,23 @@ class simd_allocator {
 
 // return that all specializations of this allocator are interchangeable
 template <typename T1, class T2>
-bool operator==(simd_allocator <T1> const &,
-                simd_allocator <T2> const &) throw() {
+bool operator==(AlignedAllocator <T1> const &,
+                AlignedAllocator <T2> const &) throw() {
     return true;
 }
 
 template <typename T1, class T2>
-bool operator!=(simd_allocator <T1> const &,
-                simd_allocator <T2> const &) throw() {
+bool operator!=(AlignedAllocator <T1> const &,
+                AlignedAllocator <T2> const &) throw() {
     return false;
 }
 
-// Helper alias for std::vector of a type with a simd_allocator for that type.
+// Helper alias for std::vector of a type with a AlignedAllocator for that
+// type.
 template <typename T>
-using simd_array = std::vector <T, toast::simd_allocator <T> >;
+using AlignedVector = std::vector <T, toast::AlignedAllocator <T> >;
 
 }
+
 
 #endif // ifndef TOAST_UTILS_HPP

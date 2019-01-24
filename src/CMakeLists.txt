@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(libtoast)
 add_subdirectory(tests)
 
-# if(MPI_FOUND)
-#     add_subdirectory(libtidas-mpi)
-# endif(MPI_FOUND)
+if(MPI_FOUND)
+    add_subdirectory(libtoast-mpi)
+endif(MPI_FOUND)
 
-# add_subdirectory(python)
+add_subdirectory(python)

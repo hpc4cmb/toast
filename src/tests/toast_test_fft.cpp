@@ -21,7 +21,7 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
             std::endl;
     }
 
-    std::vector <toast::simd_array <double> > compare(nbatch);
+    std::vector <toast::AlignedVector <double> > compare(nbatch);
 
     // First generate some gaussian random noise
 

@@ -151,6 +151,13 @@ toast::Environment::Environment() {
     have_mpi_ = true;
     #endif // ifdef HAVE_MPI
 
+    // See if the user explicitly disabled MPI in the runtime environment.
+    bool disabled_mpi_ = false;
+    envval = ::getenv("TOAST_MPI_DISABLE");
+    if (envval != NULL) {
+        disabled_mpi_ = true;
+    }
+
     // Handle special case of running on a NERSC login node, where MPI is
     // used for compilation, but cannot be used at runtime.
     envval = ::getenv("NERSC_HOST");
@@ -167,6 +174,9 @@ toast::Environment::Environment() {
     }
 
     if (!have_mpi_) {
+        use_mpi_ = false;
+    }
+    if (disabled_mpi_) {
         use_mpi_ = false;
     }
     if (at_nersc_ && !in_slurm_) {

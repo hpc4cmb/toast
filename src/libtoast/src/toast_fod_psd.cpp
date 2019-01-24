@@ -11,8 +11,8 @@
 
 void toast::fod_autosums(int64_t n, double const * x, uint8_t const * good,
                          int64_t lagmax, double * sums, int64_t * hits) {
-    toast::simd_array <double> xgood(n);
-    toast::simd_array <uint8_t> gd(n);
+    toast::AlignedVector <double> xgood(n);
+    toast::AlignedVector <uint8_t> gd(n);
 
     for (int64_t i = 0; i < n; ++i) {
         if (good[i] != 0) {
@@ -45,9 +45,9 @@ void toast::fod_autosums(int64_t n, double const * x, uint8_t const * good,
 void toast::fod_crosssums(int64_t n, double const * x, double const * y,
                           uint8_t const * good, int64_t lagmax, double * sums,
                           int64_t * hits) {
-    toast::simd_array <double> xgood(n);
-    toast::simd_array <double> ygood(n);
-    toast::simd_array <uint8_t> gd(n);
+    toast::AlignedVector <double> xgood(n);
+    toast::AlignedVector <double> ygood(n);
+    toast::AlignedVector <uint8_t> gd(n);
 
     for (int64_t i = 0; i < n; ++i) {
         if (good[i] != 0) {

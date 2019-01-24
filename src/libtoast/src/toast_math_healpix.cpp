@@ -216,9 +216,9 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> work1(n);
-    toast::simd_array <double> work2(n);
-    toast::simd_array <double> work3(n);
+    toast::AlignedVector <double> work1(n);
+    toast::AlignedVector <double> work2(n);
+    toast::AlignedVector <double> work3(n);
 
     if (toast::is_aligned(vec) && toast::is_aligned(phi) &&
         toast::is_aligned(region) && toast::is_aligned(z)
@@ -276,7 +276,7 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> work1(n);
+    toast::AlignedVector <double> work1(n);
 
     toast::vfast_cos(static_cast <int> (n), theta, z);
 
@@ -581,9 +581,9 @@ void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> z(n);
-    toast::simd_array <double> rtz(n);
-    toast::simd_array <int> region(n);
+    toast::AlignedVector <double> z(n);
+    toast::AlignedVector <double> rtz(n);
+    toast::AlignedVector <int> region(n);
 
     theta2z(n, theta, region.data(), z.data(), rtz.data());
 
@@ -598,9 +598,9 @@ void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> z(n);
-    toast::simd_array <double> rtz(n);
-    toast::simd_array <int> region(n);
+    toast::AlignedVector <double> z(n);
+    toast::AlignedVector <double> rtz(n);
+    toast::AlignedVector <int> region(n);
 
     theta2z(n, theta, region.data(), z.data(), rtz.data());
 
@@ -615,10 +615,10 @@ void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> z(n);
-    toast::simd_array <double> rtz(n);
-    toast::simd_array <double> phi(n);
-    toast::simd_array <int> region(n);
+    toast::AlignedVector <double> z(n);
+    toast::AlignedVector <double> rtz(n);
+    toast::AlignedVector <double> phi(n);
+    toast::AlignedVector <int> region(n);
 
     vec2zphi(n, vec, phi.data(), region.data(), z.data(), rtz.data());
 
@@ -633,10 +633,10 @@ void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <double> z(n);
-    toast::simd_array <double> rtz(n);
-    toast::simd_array <double> phi(n);
-    toast::simd_array <int> region(n);
+    toast::AlignedVector <double> z(n);
+    toast::AlignedVector <double> rtz(n);
+    toast::AlignedVector <double> phi(n);
+    toast::AlignedVector <int> region(n);
 
     vec2zphi(n, vec, phi.data(), region.data(), z.data(), rtz.data());
 
@@ -926,8 +926,8 @@ void toast::HealpixPixels::degrade_ring(int factor, int64_t n,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <int64_t> temp_nest(n);
-    toast::simd_array <int64_t> temp(n);
+    toast::AlignedVector <int64_t> temp_nest(n);
+    toast::AlignedVector <int64_t> temp(n);
 
     ring2nest(n, inpix, temp_nest.data());
 
@@ -968,8 +968,8 @@ void toast::HealpixPixels::upgrade_ring(int factor, int64_t n,
         TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
     }
 
-    toast::simd_array <int64_t> temp_nest(n);
-    toast::simd_array <int64_t> temp(n);
+    toast::AlignedVector <int64_t> temp_nest(n);
+    toast::AlignedVector <int64_t> temp(n);
 
     ring2nest(n, inpix, temp_nest.data());
 

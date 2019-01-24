@@ -113,6 +113,15 @@ toast::GlobalTimers & toast::GlobalTimers::get() {
     return instance;
 }
 
+std::vector <std::string> toast::GlobalTimers::names() const {
+    std::vector <std::string> ret;
+    for (auto const & it : data) {
+        ret.push_back(it.first);
+    }
+    std::stable_sort(ret.begin(), ret.end());
+    return ret;
+}
+
 void toast::GlobalTimers::start(std::string const & name) {
     if (data.count(name) == 0) {
         data[name].clear();

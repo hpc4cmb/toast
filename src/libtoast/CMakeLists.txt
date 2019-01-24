@@ -1,7 +1,7 @@
 
 # Add the library target
 
-add_library(toast
+set(toast_SOURCES
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
     src/toast_math_lapack.cpp
@@ -16,6 +16,12 @@ add_library(toast
     src/toast_tod_pointing.cpp
     src/toast_tod_simnoise.cpp
 )
+
+#if(AATM_FOUND)
+#    set(toast_SOURCES ${toast_SOURCES} src/toast_tod_atm.cpp)
+#endif(AATM_FOUND)
+
+add_library(toast ${toast_SOURCES})
 
 target_include_directories(toast PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -77,7 +77,7 @@ TEST_F(TOASTrngTest, reprod_multi) {
 
     // The data buffer we will process in segments
     size_t nfull = nstream * size;
-    std::vector <double, toast::simd_allocator <double> > data(nfull);
+    toast::AlignedVector <double> data(nfull);
 
     // Parameters of all streams.  We are actually processing different
     // chunks of the same stream in this case, so the keys / counters are
@@ -138,7 +138,7 @@ TEST_F(TOASTrngTest, uniform11_multi) {
 
     // The data buffer we will process in segments
     size_t nfull = nstream * size;
-    std::vector <double, toast::simd_allocator <double> > data(nfull);
+    toast::AlignedVector <double> data(nfull);
 
     // Parameters of all streams.  We are actually processing different
     // chunks of the same stream in this case, so the keys / counters are
@@ -199,7 +199,7 @@ TEST_F(TOASTrngTest, uniform01_multi) {
 
     // The data buffer we will process in segments
     size_t nfull = nstream * size;
-    std::vector <double, toast::simd_allocator <double> > data(nfull);
+    toast::AlignedVector <double> data(nfull);
 
     // Parameters of all streams.  We are actually processing different
     // chunks of the same stream in this case, so the keys / counters are
@@ -260,7 +260,7 @@ TEST_F(TOASTrngTest, uint64_multi) {
 
     // The data buffer we will process in segments
     size_t nfull = nstream * size;
-    std::vector <uint64_t, toast::simd_allocator <uint64_t> > data(nfull);
+    toast::AlignedVector <uint64_t> data(nfull);
 
     // Parameters of all streams.  We are actually processing different
     // chunks of the same stream in this case, so the keys / counters are

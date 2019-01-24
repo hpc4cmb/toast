@@ -25,8 +25,8 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
 
     double eta = (1.0 - eps) / (1.0 + eps);
 
-    toast::simd_array <double> dir(3 * n);
-    toast::simd_array <double> pin(4 * n);
+    toast::AlignedVector <double> dir(3 * n);
+    toast::AlignedVector <double> pin(4 * n);
 
     if (flags == NULL) {
         std::copy(pdata, pdata + (4 * n), pin.begin());
@@ -67,9 +67,9 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
             weights[i] = cal;
         }
     } else if (mode == "IQU") {
-        toast::simd_array <double> orient(3 * n);
-        toast::simd_array <double> buf1(n);
-        toast::simd_array <double> buf2(n);
+        toast::AlignedVector <double> orient(3 * n);
+        toast::AlignedVector <double> buf1(n);
+        toast::AlignedVector <double> buf2(n);
 
         toast::qa_rotate_many_one(n, pin.data(), xaxis, orient.data());
 
@@ -87,7 +87,7 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
                                        dir[off + 1] * dir[off + 1]);
         }
 
-        toast::simd_array <double> detang(n);
+        toast::AlignedVector <double> detang(n);
 
         toast::vfast_atan2(n, by, bx, detang.data());
 

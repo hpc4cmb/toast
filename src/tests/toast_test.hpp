@@ -52,17 +52,17 @@ class TOASTqarrayTest : public ::testing::Test {
         virtual void SetUp();
         virtual void TearDown() {}
 
-        std::vector <double, toast::simd_allocator <double> > q1;
-        std::vector <double, toast::simd_allocator <double> > q1inv;
-        std::vector <double, toast::simd_allocator <double> > q2;
-        std::vector <double, toast::simd_allocator <double> > qtonormalize;
-        std::vector <double, toast::simd_allocator <double> > qnormalized;
-        std::vector <double, toast::simd_allocator <double> > vec;
-        std::vector <double, toast::simd_allocator <double> > vec2;
-        std::vector <double, toast::simd_allocator <double> > qeasy;
-        std::vector <double, toast::simd_allocator <double> > mult_result;
-        std::vector <double, toast::simd_allocator <double> > rot_by_q1;
-        std::vector <double, toast::simd_allocator <double> > rot_by_q2;
+        toast::AlignedVector <double> q1;
+        toast::AlignedVector <double> q1inv;
+        toast::AlignedVector <double> q2;
+        toast::AlignedVector <double> qtonormalize;
+        toast::AlignedVector <double> qnormalized;
+        toast::AlignedVector <double> vec;
+        toast::AlignedVector <double> vec2;
+        toast::AlignedVector <double> qeasy;
+        toast::AlignedVector <double> mult_result;
+        toast::AlignedVector <double> rot_by_q1;
+        toast::AlignedVector <double> rot_by_q2;
 };
 
 
@@ -105,20 +105,20 @@ class TOASTsfTest : public ::testing::Test {
         virtual void TearDown();
 
         static const int size;
-        std::vector <double, toast::simd_allocator <double> > angin;
-        std::vector <double, toast::simd_allocator <double> > sinout;
-        std::vector <double, toast::simd_allocator <double> > cosout;
-        std::vector <double, toast::simd_allocator <double> > xin;
-        std::vector <double, toast::simd_allocator <double> > yin;
-        std::vector <double, toast::simd_allocator <double> > atanout;
-        std::vector <double, toast::simd_allocator <double> > sqin;
-        std::vector <double, toast::simd_allocator <double> > sqout;
-        std::vector <double, toast::simd_allocator <double> > rsqin;
-        std::vector <double, toast::simd_allocator <double> > rsqout;
-        std::vector <double, toast::simd_allocator <double> > expin;
-        std::vector <double, toast::simd_allocator <double> > expout;
-        std::vector <double, toast::simd_allocator <double> > login;
-        std::vector <double, toast::simd_allocator <double> > logout;
+        toast::AlignedVector <double> angin;
+        toast::AlignedVector <double> sinout;
+        toast::AlignedVector <double> cosout;
+        toast::AlignedVector <double> xin;
+        toast::AlignedVector <double> yin;
+        toast::AlignedVector <double> atanout;
+        toast::AlignedVector <double> sqin;
+        toast::AlignedVector <double> sqout;
+        toast::AlignedVector <double> rsqin;
+        toast::AlignedVector <double> rsqout;
+        toast::AlignedVector <double> expin;
+        toast::AlignedVector <double> expout;
+        toast::AlignedVector <double> login;
+        toast::AlignedVector <double> logout;
 };
 
 
