@@ -2,13 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
+
 from ..mpi import MPI
 from .mpi import MPITestCase
 
-from ..cache import *
-
-import sys
-import warnings
+from ..cache import Cache
 
 
 class CacheTest(MPITestCase):
@@ -34,15 +33,15 @@ class CacheTest(MPITestCase):
         del self.cache
         del self.pycache
 
-
     def test_create(self):
         for k, v in self.types.items():
-            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
+            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp, 4))
             del ref
 
         for k, v in self.types.items():
             data = self.cache.reference('test-{}'.format(k))
-            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
+            data[:] += np.repeat(
+                np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
             del data
 
         for k, v in self.types.items():
@@ -55,12 +54,13 @@ class CacheTest(MPITestCase):
         self.cache.clear()
 
         for k, v in self.types.items():
-            ref = self.pycache.create('test-{}'.format(k), v, (self.nsamp,4))
+            ref = self.pycache.create('test-{}'.format(k), v, (self.nsamp, 4))
             del ref
 
         for k, v in self.types.items():
             data = self.pycache.reference('test-{}'.format(k))
-            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1,4)
+            data[:] += np.repeat(
+                np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
             del data
 
         for k, v in self.types.items():
@@ -73,17 +73,15 @@ class CacheTest(MPITestCase):
         self.cache.clear()
         return
 
-
     def test_create_none(self):
         try:
-            ref = self.cache.create(None, np.float, (1,10))
+            ref = self.cache.create(None, np.float, (1, 10))
             raise RuntimeError('Creating object with None key succeeded')
         except ValueError:
             pass
 
         self.cache.clear()
         return
-
 
     def test_put_none(self):
         try:
@@ -95,18 +93,12 @@ class CacheTest(MPITestCase):
         self.cache.clear()
         return
 
-
     def test_clear(self):
         for k, v in self.types.items():
-            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp,4))
+            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp, 4))
             del ref
-        # warnings.filterwarnings('error')
-        # self.cache.clear('.*')
-        # self.cache.clear('.*')
-        # warnings.resetwarnings()
         self.cache.clear()
         return
-
 
     def test_alias(self):
         ref = self.cache.put('test', np.arange(10))

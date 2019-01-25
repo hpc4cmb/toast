@@ -83,8 +83,9 @@ class Cache(object):
         if self._pymem:
             self._buffers[name] = np.zeros(shape, dtype=ttype)
         else:
-            self._buffers[name] = AlignedArray(shape, ttype)
-            self._buffers[name] = 0
+            # Note:  AlignedArray constructor zeros the memory.
+            self._buffers[name] = np.frombuffer(
+                AlignedArray(shape, ttype), dtype=ttype).reshape(shape)
         self._dtypes[name] = ttype
         self._shapes[name] = shape
         return self._buffers[name]

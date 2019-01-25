@@ -71,6 +71,8 @@ void pybuffer_check_double_1D(py::buffer data) {
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
+
+    // FIXME:  Also check for C-contiguous memory...
     return;
 }
 
@@ -78,10 +80,12 @@ void init_math_sf(py::module & m) {
     // Define a wrapper around our internal aligned memory vector class.
     // Expose the memory with the python / numpy buffer protocol.
 
-    py::class_ <AlignedArray> (
+    py::class_ <AlignedArray, std::unique_ptr <AlignedArray> > (
         m, "AlignedArray", py::buffer_protocol(), py::dynamic_attr())
     .def(py::init <std::vector <py::ssize_t> const &, py::dtype> ())
     .def(py::init <py::buffer> ())
+    .def_readonly("dtype", &AlignedArray::dtype)
+    .def_readonly("shape", &AlignedArray::shape)
     .def("empty_like", &AlignedArray::empty_like)
     .def("zeros_like", &AlignedArray::zeros_like)
     .def_buffer(
@@ -102,7 +106,23 @@ void init_math_sf(py::module & m) {
                 size_container(bstrides)
                 );
             return binfo;
-        });
+        })
+    .def("__repr__",
+         [](AlignedArray const & self) {
+             std::ostringstream sh;
+             sh << "(";
+             for (auto const & s : self.shape) {
+                 sh << s << ",";
+             }
+             sh << ")";
+             std::ostringstream o;
+             o << "<AlignedArray type=" << self.dtype.kind()
+               << " itemsize=" << self.dtype.itemsize()
+               << " shape=" << sh.str()
+               << " " << self.flatsize << " total elements>";
+             return o.str();
+         }
+         );
 
     // vector math functions
 
