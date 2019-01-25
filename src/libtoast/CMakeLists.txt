@@ -1,7 +1,18 @@
 
+# Add a custom command that produces version.cpp, plus
+# a dummy output that's not actually produced, in order
+# to force version.cmake to always be re-run before the build
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/_version.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/src/version.cpp
+    COMMAND ${CMAKE_COMMAND} -P
+        ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
+)
+
 # Add the library target
 
 set(toast_SOURCES
+    src/version.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
     src/toast_math_lapack.cpp

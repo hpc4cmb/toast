@@ -27,6 +27,7 @@ class Environment {
         void print() const;
         bool use_mpi() const;
         int max_threads() const;
+        std::string version() const;
 
     private:
 
@@ -42,6 +43,9 @@ class Environment {
         bool at_nersc_;
         bool in_slurm_;
         int max_threads_;
+        std::string git_version_;
+        std::string release_version_;
+        std::string version_;
 };
 
 }

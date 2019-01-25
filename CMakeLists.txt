@@ -19,6 +19,13 @@ project(toast VERSION 2.3.0 LANGUAGES C CXX)
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+# Copy the RELEASE file into the build directory
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/RELEASE"
+    "${CMAKE_CURRENT_BINARY_DIR}/RELEASE"
+    COPYONLY
+)
+
 # Use GNUInstallDirs to install libraries into correct locations on all
 # platforms.
 include(GNUInstallDirs)
