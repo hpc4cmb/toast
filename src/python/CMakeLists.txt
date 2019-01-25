@@ -44,6 +44,7 @@ install(FILES
     cache.py
     dist.py
     op.py
+    vis.py
     DESTINATION ${PYTHON_SITE}/toast
 )
 
@@ -78,3 +79,6 @@ if(MPI_FOUND AND MPI4PY_FOUND)
         DESTINATION ${PYTHON_SITE}/toast
     )
 endif(MPI_FOUND AND MPI4PY_FOUND)
+
+# Process the sub directories
+add_subdirectory(tests)

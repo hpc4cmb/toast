@@ -4,7 +4,7 @@
 
 import ctypes as ct
 
-from .utils import Environment, Logging
+from .utils import Environment, Logger
 
 env = Environment.get()
 
@@ -52,7 +52,7 @@ class Comm(object):
 
     """
     def __init__(self, world=None, groupsize=0):
-        log = Logging.get()
+        log = Logger.get()
         if world is None:
             if use_mpi:
                 # Default is COMM_WORLD

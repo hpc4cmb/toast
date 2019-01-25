@@ -6,7 +6,7 @@ import re
 import ctypes
 import numpy as np
 
-from .utils import Logging
+from .utils import Logger
 
 from ._libtoast import AlignedArray
 
@@ -280,7 +280,7 @@ class Cache(object):
             (int):  Amount of allocated memory in bytes
 
         """
-        log = Logging.get()
+        log = Logger.get()
         if not silent:
             log.info("Cache memory usage:")
         tot = 0

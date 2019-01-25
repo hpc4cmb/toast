@@ -235,6 +235,9 @@ std::vector <std::string> toast::Environment::signals() const {
 void toast::Environment::print() const {
     std::string prefix("TOAST ENV");
 
+    fprintf(stdout, "%s: Source code version = %s\n", prefix.c_str(),
+            version_.c_str());
+
     fprintf(stdout, "%s: Logging level = %s\n", prefix.c_str(),
             loglvl_.c_str());
 
