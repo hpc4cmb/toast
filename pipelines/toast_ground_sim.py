@@ -265,7 +265,7 @@ def parse_arguments(comm):
     parser.add_argument(
         "--atm_gain",
         required=False,
-        default=1e-4,
+        default=3e-5,
         type=np.float,
         help="Atmospheric gain factor.",
     )
