@@ -205,6 +205,7 @@ class OpSimAtmosphere(Operator):
 
             tmin = tmin_tot
             istart = 0
+            counter1start = counter1
             while tmin < tmax_tot:
                 istart, istop, tmax = self._get_time_range(
                     tmin, istart, times, tmax_tot, common_ref, tod
@@ -230,6 +231,7 @@ class OpSimAtmosphere(Operator):
                 rmax = 100
                 scale = 10
                 counter2start = counter2
+                counter1 = counter1start
                 xstart, ystart, zstart = self._xstep, self._ystep, self._zstep
                 while rmax < 100000:
                     sim, counter2 = self._simulate_atmosphere(
@@ -282,6 +284,7 @@ class OpSimAtmosphere(Operator):
                     self._xstep *= np.sqrt(scale)
                     self._ystep *= np.sqrt(scale)
                     self._zstep *= np.sqrt(scale)
+                    counter1 += 1
 
                 if self._verbosity > 5:
                     self._save_tod(
@@ -467,7 +470,7 @@ class OpSimAtmosphere(Operator):
         Following tod_math.py we set
         key1 = realization * 2^32 + telescope * 2^16 + component
         key2 = obsindx * 2^32
-        counter1 = currently unused (0)
+        counter1 = hierarchical cone counter
         counter2 = sample in stream (incremented internally in the atm code)
         """
         telescope = self._get_from_obs("telescope_id", obs)
@@ -670,9 +673,7 @@ class OpSimAtmosphere(Operator):
         if comm.rank == 0:
             fname = os.path.join(
                 cachedir,
-                "{}_{}_{}_{}_{}_metadata.txt".format(
-                    key1, key2, counter1, counter2, rmax
-                ),
+                "{}_{}_{}_{}_metadata.txt".format(key1, key2, counter1, counter2),
             )
             if use_cache and os.path.isfile(fname):
                 print(

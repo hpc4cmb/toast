@@ -279,8 +279,7 @@ void toast::tatm::sim::load_realization() {
 
     std::ostringstream name;
     name << key1 << "_" << key2 << "_"
-         << counter1start << "_" << counter2start
-         << "_" << (int)rmax;
+         << counter1start << "_" << counter2start;
 
     char success;
 
@@ -469,8 +468,7 @@ void toast::tatm::sim::save_realization() {
 
         std::ostringstream name;
         name << key1 << "_" << key2 << "_"
-             << counter1start << "_" << counter2start
-             << "_" << (int)rmax;
+             << counter1start << "_" << counter2start;
 
         // Save metadata
 
@@ -502,6 +500,10 @@ void toast::tatm::sim::save_realization() {
         f << z0 << std::endl;
         f << T0 << std::endl;
         f.close();
+
+        if ( verbosity > 0 )
+            std::cerr << "Saved metadata to "
+                      << fname.str() << std::endl;
 
         // Save realization
 
