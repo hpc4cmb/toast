@@ -21,47 +21,88 @@ MADAM_WEIGHT_TYPE = np.float32
 
 # DEBUG begin
 
+import gc
 import psutil
 
-def memreport(comm=None):
+
+def memreport(comm=None, msg=""):
     """ Gather and report the amount of allocated, free and swapped system memory
     """
     if psutil is None:
         return
     vmem = psutil.virtual_memory()._asdict()
-    memstr = 'Memory usage\n'
+    gc.collect()
+    vmem2 = psutil.virtual_memory()._asdict()
+    memstr = "Memory usage {}\n".format(msg)
     for key, value in vmem.items():
+        value2 = vmem2[key]
         if comm is None:
             vlist = [value]
+            vlist2 = [value2]
         else:
             vlist = comm.gather(value)
+            vlist2 = comm.gather(value2)
         if comm is None or comm.rank == 0:
             vlist = np.array(vlist, dtype=np.float64)
-            if key != 'percent':
+            vlist2 = np.array(vlist2, dtype=np.float64)
+            if key != "percent":
                 # From bytes to better units
                 if np.amax(vlist) < 2 ** 20:
                     vlist /= 2 ** 10
-                    unit = 'kB'
+                    vlist2 /= 2 ** 10
+                    unit = "kB"
                 elif np.amax(vlist) < 2 ** 30:
                     vlist /= 2 ** 20
-                    unit = 'MB'
+                    vlist2 /= 2 ** 20
+                    unit = "MB"
                 else:
                     vlist /= 2 ** 30
-                    unit = 'GB'
+                    vlist2 /= 2 ** 30
+                    unit = "GB"
             else:
-                unit = '% '
+                unit = "% "
             if comm is None or comm.size == 1:
-                memstr += '{:>12} : {:8.3f} {}\n'.format(key, vlist[0], unit)
+                memstr += "{:>12} : {:8.3f} {}\n".format(key, vlist[0], unit)
+                if np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
+                    memstr += "{:>12} : {:8.3f} {} (after GC)\n".format(
+                        key, vlist2[0], unit
+                    )
             else:
-                memstr += '{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  ' \
-                    '< {:8.3f} {}\n'.format(
-                        key, np.amin(vlist), unit, np.median(vlist),
-                        np.std(vlist), unit, np.amax(vlist), unit)
+                med1 = np.median(vlist)
+                memstr += (
+                    "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
+                    "< {:8.3f} {}\n".format(
+                        key,
+                        np.amin(vlist),
+                        unit,
+                        med1,
+                        np.std(vlist),
+                        unit,
+                        np.amax(vlist),
+                        unit,
+                    )
+                )
+                med2 = np.median(vlist2)
+                if np.abs(med2 - med1) / med1 > 1e-3:
+                    memstr += (
+                        "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
+                        "< {:8.3f} {} (after GC)\n".format(
+                            key,
+                            np.amin(vlist2),
+                            unit,
+                            med2,
+                            np.std(vlist2),
+                            unit,
+                            np.amax(vlist2),
+                            unit,
+                        )
+                    )
     if comm is None or comm.rank == 0:
         print(memstr, flush=True)
     if comm is not None:
         comm.Barrier()
     return
+
 
 # DEBUG end
 
@@ -69,9 +110,9 @@ def memreport(comm=None):
 libmadam = None
 
 try:
-    libmadam = ct.CDLL('libmadam.so')
+    libmadam = ct.CDLL("libmadam.so")
 except OSError:
-    path = find_library('madam')
+    path = find_library("madam")
     if path is not None:
         libmadam = ct.CDLL(path)
 
@@ -82,22 +123,22 @@ if libmadam is not None:
         ct.c_char_p,  # parstring
         ct.c_long,  # ndet
         ct.c_char_p,  # detstring
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_long,  # nsamp
         ct.c_long,  # nnz
-        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_long,  # nperiod
-        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=np.int64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_long,  # npsdtot
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_long,  # npsdbin
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_long,  # npsdval
-        npc.ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
+        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
     ]
     libmadam.destripe_with_cache.restype = None
     libmadam.destripe_with_cache.argtypes = [
@@ -105,10 +146,10 @@ if libmadam is not None:
         ct.c_long,  # ndet
         ct.c_long,  # nsamp
         ct.c_long,  # nnz
-        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags='C_CONTIGUOUS'),
-        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags='C_CONTIGUOUS'),
+        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags="C_CONTIGUOUS"),
+        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
         ct.c_char_p,  # outpath
     ]
     libmadam.clear_caches.restype = None
@@ -118,7 +159,7 @@ if libmadam is not None:
 # Assume that such entries are aggregated into a list in a parameter
 # dictionary
 
-repeated_keys = ['detset', 'detset_nopol', 'survey']
+repeated_keys = ["detset", "detset_nopol", "survey"]
 
 
 class OpMadam(Operator):
@@ -172,14 +213,32 @@ class OpMadam(Operator):
             monotonity.
     """
 
-    def __init__(self, params={}, detweights=None,
-                 pixels='pixels', pixels_nested=True, weights='weights',
-                 name=None, name_out=None, flag_name=None, flag_mask=255,
-                 common_flag_name=None, common_flag_mask=255,
-                 apply_flags=True, purge=False, dets=None, mcmode=False,
-                 purge_tod=False, purge_pixels=False, purge_weights=False,
-                 purge_flags=False, noise='noise', intervals='intervals',
-                 conserve_memory=True, translate_timestamps=True):
+    def __init__(
+        self,
+        params={},
+        detweights=None,
+        pixels="pixels",
+        pixels_nested=True,
+        weights="weights",
+        name=None,
+        name_out=None,
+        flag_name=None,
+        flag_mask=255,
+        common_flag_name=None,
+        common_flag_mask=255,
+        apply_flags=True,
+        purge=False,
+        dets=None,
+        mcmode=False,
+        purge_tod=False,
+        purge_pixels=False,
+        purge_weights=False,
+        purge_flags=False,
+        noise="noise",
+        intervals="intervals",
+        conserve_memory=True,
+        translate_timestamps=True,
+    ):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -213,13 +272,13 @@ class OpMadam(Operator):
             self._dets = None
         self._mcmode = mcmode
         if mcmode:
-            self.params['mcmode'] = True
+            self.params["mcmode"] = True
         else:
-            self.params['mcmode'] = False
+            self.params["mcmode"] = False
         if self._name_out is not None:
-            self.params['write_tod'] = True
+            self.params["write_tod"] = True
         else:
-            self.params['write_tod'] = False
+            self.params["write_tod"] = False
         self._cached = False
         self._noisekey = noise
         self._intervals = intervals
@@ -242,22 +301,22 @@ class OpMadam(Operator):
         """
         (bool): True if libmadam is found in the library search path.
         """
-        return (libmadam is not None)
+        return libmadam is not None
 
     def _dict2parstring(self, d):
-        s = ''
+        s = ""
         for key, value in d.items():
             if key in repeated_keys:
                 for separate_value in value:
-                    s += '{} = {};'.format(key, separate_value)
+                    s += "{} = {};".format(key, separate_value)
             else:
-                s += '{} = {};'.format(key, value)
+                s += "{} = {};".format(key, value)
         return s
 
     def _dets2detstring(self, dets):
-        s = ''
+        s = ""
         for d in dets:
-            s += '{};'.format(d)
+            s += "{};".format(d)
         return s
 
     def exec(self, data, comm=None):
@@ -271,8 +330,10 @@ class OpMadam(Operator):
             raise RuntimeError("Cannot find libmadam")
 
         if len(data.obs) == 0:
-            raise RuntimeError('OpMadam requires every supplied data object to '
-                               'contain at least one observation')
+            raise RuntimeError(
+                "OpMadam requires every supplied data object to "
+                "contain at least one observation"
+            )
 
         auto_timer = timing.auto_timer(type(self).__name__)
 
@@ -280,58 +341,118 @@ class OpMadam(Operator):
             # Just use COMM_WORLD
             comm = data.comm.comm_world
 
-        (parstring, detstring, nsamp, ndet, nnz, nnz_full, nnz_stride, periods,
-         obs_period_ranges, psdfreqs, detectors, nside) = self._prepare(data,
-                                                                        comm)
+        (
+            parstring,
+            detstring,
+            nsamp,
+            ndet,
+            nnz,
+            nnz_full,
+            nnz_stride,
+            periods,
+            obs_period_ranges,
+            psdfreqs,
+            detectors,
+            nside,
+        ) = self._prepare(data, comm)
 
         psdinfo, signal_type, pixels_dtype, weight_dtype = self._stage_data(
-            data, comm, nsamp, ndet, nnz, nnz_full, nnz_stride,
-            obs_period_ranges, psdfreqs, detectors, nside)
+            data,
+            comm,
+            nsamp,
+            ndet,
+            nnz,
+            nnz_full,
+            nnz_stride,
+            obs_period_ranges,
+            psdfreqs,
+            detectors,
+            nside,
+        )
 
-        #if comm.rank == 0:
+        # if comm.rank == 0:
         #    data.obs[0]['tod'].cache.report()
 
-        self._destripe(comm, parstring, ndet, detstring, nsamp, nnz, periods,
-                       psdinfo)
+        self._destripe(comm, parstring, ndet, detstring, nsamp, nnz, periods, psdinfo)
 
-        self._unstage_data(comm, data, nsamp, nnz, nnz_full,
-                           obs_period_ranges, detectors, signal_type,
-                           pixels_dtype, nside, weight_dtype)
+        self._unstage_data(
+            comm,
+            data,
+            nsamp,
+            nnz,
+            nnz_full,
+            obs_period_ranges,
+            detectors,
+            signal_type,
+            pixels_dtype,
+            nside,
+            weight_dtype,
+        )
 
-        #if comm.rank == 0:
+        # if comm.rank == 0:
         #    data.obs[0]['tod'].cache.report()
 
         return
 
-    def _destripe(self, comm, parstring, ndet, detstring, nsamp, nnz, periods,
-                  psdinfo):
+    def _destripe(self, comm, parstring, ndet, detstring, nsamp, nnz, periods, psdinfo):
         """ Destripe the buffered data
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
-        memreport(comm)
+        memreport(comm, "just before calling libmadam.destripe")
         fcomm = comm.py2f()
         if self._cached:
             # destripe
-            outpath = ''
-            if 'path_output' in self.params:
-                outpath = self.params['path_output']
-            outpath = outpath.encode('ascii')
+            outpath = ""
+            if "path_output" in self.params:
+                outpath = self.params["path_output"]
+            outpath = outpath.encode("ascii")
             libmadam.destripe_with_cache(
-                fcomm, ndet, nsamp, nnz, self._madam_timestamps,
-                self._madam_pixels, self._madam_pixweights, self._madam_signal,
-                outpath)
+                fcomm,
+                ndet,
+                nsamp,
+                nnz,
+                self._madam_timestamps,
+                self._madam_pixels,
+                self._madam_pixweights,
+                self._madam_signal,
+                outpath,
+            )
         else:
-            (detweights, npsd, npsdtot, psdstarts, npsdbin, psdfreqs,
-             npsdval, psdvals) = psdinfo
+            (
+                detweights,
+                npsd,
+                npsdtot,
+                psdstarts,
+                npsdbin,
+                psdfreqs,
+                npsdval,
+                psdvals,
+            ) = psdinfo
 
             # destripe
             libmadam.destripe(
-                fcomm, parstring.encode(), ndet, detstring.encode(), detweights,
-                nsamp, nnz, self._madam_timestamps, self._madam_pixels,
-                self._madam_pixweights, self._madam_signal, len(periods),
-                periods, npsd, npsdtot, psdstarts, npsdbin, psdfreqs, npsdval,
-                psdvals)
+                fcomm,
+                parstring.encode(),
+                ndet,
+                detstring.encode(),
+                detweights,
+                nsamp,
+                nnz,
+                self._madam_timestamps,
+                self._madam_pixels,
+                self._madam_pixweights,
+                self._madam_signal,
+                len(periods),
+                periods,
+                npsd,
+                npsdtot,
+                psdstarts,
+                npsdbin,
+                psdfreqs,
+                npsdval,
+                psdvals,
+            )
 
             if self._mcmode:
                 self._cached = True
@@ -343,10 +464,10 @@ class OpMadam(Operator):
         """
         if len(data.obs) != 1:
             nsamp = 0
-            tod0 = data.obs[0]['tod']
+            tod0 = data.obs[0]["tod"]
             detectors0 = tod0.local_dets
             for obs in data.obs:
-                tod = obs['tod']
+                tod = obs["tod"]
                 # For the moment, we require that all observations have
                 # the same set of detectors
                 detectors = tod.local_dets
@@ -360,11 +481,12 @@ class OpMadam(Operator):
                             break
                 if not dets_are_same:
                     raise RuntimeError(
-                        'When calling Madam, all TOD assigned to a process '
-                        'must have the same local detectors.')
+                        "When calling Madam, all TOD assigned to a process "
+                        "must have the same local detectors."
+                    )
                 nsamp += tod.local_samples[1]
         else:
-            tod = data.obs[0]['tod']
+            tod = data.obs[0]["tod"]
             nsamp = tod.local_samples[1]
         return nsamp
 
@@ -373,8 +495,8 @@ class OpMadam(Operator):
 
         """
         # Discard intervals that are too short to fit a baseline
-        if 'basis_order' in self.params:
-            norder = int(self.params['basis_order']) + 1
+        if "basis_order" in self.params:
+            norder = int(self.params["basis_order"]) + 1
         else:
             norder = 1
 
@@ -383,20 +505,20 @@ class OpMadam(Operator):
         obs_period_ranges = []
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
             # Check that all noise objects have the same binning
             if self._noisekey in obs.keys():
                 nse = obs[self._noisekey]
                 if nse is not None:
                     if psdfreqs is None:
-                        psdfreqs = nse.freq(detectors[0]).astype(
-                            np.float64).copy()
+                        psdfreqs = nse.freq(detectors[0]).astype(np.float64).copy()
                     for det in detectors:
                         check_psdfreqs = nse.freq(det)
                         if not np.allclose(psdfreqs, check_psdfreqs):
                             raise RuntimeError(
-                                'All PSDs passed to Madam must have'
-                                ' the same frequency binning.')
+                                "All PSDs passed to Madam must have"
+                                " the same frequency binning."
+                            )
             # Collect the valid intervals for this observation
             period_ranges = []
             if self._intervals in obs:
@@ -423,11 +545,14 @@ class OpMadam(Operator):
         nsamp_tot = comm.allreduce(nsamp, op=MPI.SUM)
         if nsamp_tot == 0:
             raise RuntimeError(
-                'No samples in valid intervals: nsamp_tot_full = {}, '
-                'nsamp_tot = {}'.format(nsamp_tot_full, nsamp_tot))
+                "No samples in valid intervals: nsamp_tot_full = {}, "
+                "nsamp_tot = {}".format(nsamp_tot_full, nsamp_tot)
+            )
         if comm.rank == 0:
-            print('OpMadam: {:.2f} % of samples are included in valid '
-                  'intervals.'.format(nsamp_tot * 100. / nsamp_tot_full))
+            print(
+                "OpMadam: {:.2f} % of samples are included in valid "
+                "intervals.".format(nsamp_tot * 100.0 / nsamp_tot_full)
+            )
 
         # Madam expects starting indices, not period lengths
         periods = np.zeros(nperiod, dtype=np.int64)
@@ -448,13 +573,12 @@ class OpMadam(Operator):
         # from the first observation. Madam will expect these to remain
         # unchanged across observations.
 
-        tod = data.obs[0]['tod']
+        tod = data.obs[0]["tod"]
 
         if self._dets is None:
             detectors = tod.local_dets
         else:
-            detectors = [det for det in tod.local_dets
-                         if det in self._dets]
+            detectors = [det for det in tod.local_dets if det in self._dets]
         ndet = len(detectors)
         detstring = self._dets2detstring(detectors)
 
@@ -466,38 +590,59 @@ class OpMadam(Operator):
         nnzname = "{}_{}".format(self._weights, detectors[0])
         nnz_full = tod.cache.reference(nnzname).shape[1]
 
-        if 'temperature_only' in self.params \
-           and self.params['temperature_only'] in [
-               'T', 'True', 'TRUE', 'true', True]:
+        if "temperature_only" in self.params and self.params["temperature_only"] in [
+            "T",
+            "True",
+            "TRUE",
+            "true",
+            True,
+        ]:
             if nnz_full not in [1, 3]:
                 raise RuntimeError(
-                    'OpMadam: Don\'t know how to make a temperature map '
-                    'with nnz={}'.format(nnz_full))
+                    "OpMadam: Don't know how to make a temperature map "
+                    "with nnz={}".format(nnz_full)
+                )
             nnz = 1
             nnz_stride = nnz_full
         else:
             nnz = nnz_full
             nnz_stride = 1
 
-        if 'nside_map' not in self.params:
+        if "nside_map" not in self.params:
             raise RuntimeError(
-                'OpMadam: "nside_map" must be set in the parameter dictionary')
-        nside = int(self.params['nside_map'])
+                'OpMadam: "nside_map" must be set in the parameter dictionary'
+            )
+        nside = int(self.params["nside_map"])
 
         parstring = self._dict2parstring(self.params)
 
-        if comm.rank == 0 and ('path_output' in self.params and
-                               not os.path.isdir(self.params['path_output'])):
-            os.makedirs(self.params['path_output'])
+        if comm.rank == 0 and (
+            "path_output" in self.params
+            and not os.path.isdir(self.params["path_output"])
+        ):
+            os.makedirs(self.params["path_output"])
 
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
 
         obs_period_ranges, psdfreqs, periods, nsamp = self._get_period_ranges(
-            comm, data, detectors, nsamp)
+            comm, data, detectors, nsamp
+        )
 
-        return (parstring, detstring, nsamp, ndet, nnz, nnz_full, nnz_stride,
-                periods, obs_period_ranges, psdfreqs, detectors, nside)
+        return (
+            parstring,
+            detstring,
+            nsamp,
+            ndet,
+            nnz,
+            nnz_full,
+            nnz_stride,
+            periods,
+            obs_period_ranges,
+            psdfreqs,
+            detectors,
+            nside,
+        )
 
     def _stage_time(self, data, detectors, nsamp, obs_period_ranges):
         """ Stage the timestamps and use them to build PSD inputs.
@@ -505,13 +650,14 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
-            'timestamps', MADAM_TIMESTAMP_TYPE, (nsamp,))
+            "timestamps", MADAM_TIMESTAMP_TYPE, (nsamp,)
+        )
 
         offset = 0
         time_offset = 0
         psds = {}
         for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
+            tod = obs["tod"]
             period_ranges = obs_period_ranges[iobs]
 
             # Collect the timestamps for the valid intervals
@@ -531,8 +677,8 @@ class OpMadam(Operator):
             # entries in the dictionary when the PSD actually changes
             if self._noisekey in obs.keys():
                 nse = obs[self._noisekey]
-                if 'noise_scale' in obs:
-                    noise_scale = obs['noise_scale']
+                if "noise_scale" in obs:
+                    noise_scale = obs["noise_scale"]
                 else:
                     noise_scale = 1
                 if nse is not None:
@@ -552,12 +698,13 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
-            'signal', MADAM_SIGNAL_TYPE, (nsamp * ndet,))
+            "signal", MADAM_SIGNAL_TYPE, (nsamp * ndet,)
+        )
         self._madam_signal[:] = np.nan
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
+            tod = obs["tod"]
             period_ranges = obs_period_ranges[iobs]
 
             for idet, det in enumerate(detectors):
@@ -567,8 +714,7 @@ class OpMadam(Operator):
                 offset = global_offset
                 for istart, istop in period_ranges:
                     nn = istop - istart
-                    dslice = slice(idet * nsamp + offset,
-                                   idet * nsamp + offset + nn)
+                    dslice = slice(idet * nsamp + offset, idet * nsamp + offset + nn)
                     self._madam_signal[dslice] = signal[istart:istop]
                     offset += nn
 
@@ -576,7 +722,8 @@ class OpMadam(Operator):
 
             for idet, det in enumerate(detectors):
                 if self._name is not None and (
-                        self._purge_tod or self._name == self._name_out):
+                    self._purge_tod or self._name == self._name_out
+                ):
                     cachename = "{}_{}".format(self._name, det)
                     tod.cache.clear(pattern=cachename)
 
@@ -584,19 +731,19 @@ class OpMadam(Operator):
 
         return signal_dtype
 
-    def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges,
-                      nside):
+    def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges, nside):
         """ Stage pixels
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
-            'pixels', MADAM_PIXEL_TYPE, (nsamp * ndet,))
+            "pixels", MADAM_PIXEL_TYPE, (nsamp * ndet,)
+        )
         self._madam_pixels[:] = -1
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
+            tod = obs["tod"]
             period_ranges = obs_period_ranges[iobs]
 
             commonflags = None
@@ -606,11 +753,11 @@ class OpMadam(Operator):
 
                 if self._apply_flags:
                     detflags = tod.local_flags(det, self._flag_name)
-                    commonflags = tod.local_common_flags(
-                        self._common_flag_name)
+                    commonflags = tod.local_common_flags(self._common_flag_name)
                     flags = np.logical_or(
                         (detflags & self._flag_mask) != 0,
-                        (commonflags & self._common_flag_mask) != 0)
+                        (commonflags & self._common_flag_mask) != 0,
+                    )
                     del detflags
 
                 # get the pixels for the valid intervals from the cache
@@ -632,8 +779,7 @@ class OpMadam(Operator):
                 offset = global_offset
                 for istart, istop in period_ranges:
                     nn = istop - istart
-                    dslice = slice(idet * nsamp + offset,
-                                   idet * nsamp + offset + nn)
+                    dslice = slice(idet * nsamp + offset, idet * nsamp + offset + nn)
                     self._madam_pixels[dslice] = pixels[istart:istop]
                     offset += nn
 
@@ -647,12 +793,12 @@ class OpMadam(Operator):
                 pixelsname = "{}_{}".format(self._pixels, det)
                 tod.cache.clear(pattern=pixelsname)
                 if self._name is not None and (
-                        self._purge_tod or self._name == self._name_out):
+                    self._purge_tod or self._name == self._name_out
+                ):
                     cachename = "{}_{}".format(self._name, det)
                     tod.cache.clear(pattern=cachename)
                 if self._purge_flags and self._flag_name is not None:
-                    cacheflagname = "{}_{}".format(
-                        self._flag_name, det)
+                    cacheflagname = "{}_{}".format(self._flag_name, det)
                     tod.cache.clear(pattern=cacheflagname)
 
             del commonflags
@@ -662,20 +808,22 @@ class OpMadam(Operator):
 
         return pixels_dtype
 
-    def _stage_pixweights(self, data, detectors, nsamp, ndet, nnz, nnz_full,
-                          nnz_stride, obs_period_ranges):
+    def _stage_pixweights(
+        self, data, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
+    ):
         """Now collect the pixel weights
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
 
         self._madam_pixweights = self._cache.create(
-            'pixweights', MADAM_WEIGHT_TYPE, (nsamp * ndet * nnz,))
+            "pixweights", MADAM_WEIGHT_TYPE, (nsamp * ndet * nnz,)
+        )
         self._madam_pixweights[:] = 0
 
         global_offset = 0
         for iobs, obs in enumerate(data.obs):
-            tod = obs['tod']
+            tod = obs["tod"]
             period_ranges = obs_period_ranges[iobs]
             for idet, det in enumerate(detectors):
                 # get the pixels and weights for the valid intervals
@@ -686,10 +834,13 @@ class OpMadam(Operator):
                 offset = global_offset
                 for istart, istop in period_ranges:
                     nn = istop - istart
-                    dwslice = slice((idet * nsamp + offset) * nnz,
-                                    (idet * nsamp + offset + nn) * nnz)
-                    self._madam_pixweights[dwslice] = weights[
-                        istart:istop].flatten()[::nnz_stride]
+                    dwslice = slice(
+                        (idet * nsamp + offset) * nnz,
+                        (idet * nsamp + offset + nn) * nnz,
+                    )
+                    self._madam_pixweights[dwslice] = weights[istart:istop].flatten()[
+                        ::nnz_stride
+                    ]
                     offset += nn
                 del weights
             # Purge the weights but restore them from the Madam
@@ -709,8 +860,20 @@ class OpMadam(Operator):
 
         return weight_dtype
 
-    def _stage_data(self, data, comm, nsamp, ndet, nnz, nnz_full, nnz_stride,
-                    obs_period_ranges, psdfreqs, detectors, nside):
+    def _stage_data(
+        self,
+        data,
+        comm,
+        nsamp,
+        ndet,
+        nnz,
+        nnz_full,
+        nnz_stride,
+        obs_period_ranges,
+        psdfreqs,
+        detectors,
+        nside,
+    ):
         """ create madam-compatible buffers
 
         Collect the TOD into Madam buffers. Process pixel weights
@@ -736,13 +899,22 @@ class OpMadam(Operator):
             if nodecomm.rank % nread != iread:
                 continue
             psds = self._stage_time(data, detectors, nsamp, obs_period_ranges)
-            signal_dtype = self._stage_signal(data, detectors, nsamp, ndet,
-                                             obs_period_ranges)
-            pixels_dtype = self._stage_pixels(data, detectors, nsamp, ndet,
-                                              obs_period_ranges, nside)
+            signal_dtype = self._stage_signal(
+                data, detectors, nsamp, ndet, obs_period_ranges
+            )
+            pixels_dtype = self._stage_pixels(
+                data, detectors, nsamp, ndet, obs_period_ranges, nside
+            )
             weight_dtype = self._stage_pixweights(
-                data, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride,
-                obs_period_ranges)
+                data,
+                detectors,
+                nsamp,
+                ndet,
+                nnz,
+                nnz_full,
+                nnz_stride,
+                obs_period_ranges,
+            )
         del nodecomm
 
         # detweights is either a dictionary of weights specified at
@@ -766,8 +938,7 @@ class OpMadam(Operator):
             psdvals = []
             for idet, det in enumerate(detectors):
                 if det not in psds:
-                    raise RuntimeError('Every detector must have at least '
-                                       'one PSD')
+                    raise RuntimeError("Every detector must have at least " "one PSD")
                 psdlist = psds[det]
                 npsd[idet] = len(psdlist)
                 for psdstart, psd in psdlist:
@@ -782,25 +953,44 @@ class OpMadam(Operator):
             npsdtot = np.sum(npsd)
             psdstarts = np.zeros(npsdtot)
             npsdbin = 10
-            fsample = 10.
+            fsample = 10.0
             psdfreqs = np.arange(npsdbin) * fsample / npsdbin
             npsdval = npsdbin * npsdtot
             psdvals = np.ones(npsdval)
-        psdinfo = (detweights, npsd, npsdtot, psdstarts, npsdbin, psdfreqs,
-                   npsdval, psdvals)
+        psdinfo = (
+            detweights,
+            npsd,
+            npsdtot,
+            psdstarts,
+            npsdbin,
+            psdfreqs,
+            npsdval,
+            psdvals,
+        )
 
         return psdinfo, signal_dtype, pixels_dtype, weight_dtype
 
-    def _unstage_data(self, comm, data, nsamp, nnz, nnz_full,
-                      obs_period_ranges, detectors, signal_type,
-                      pixels_dtype, nside, weight_dtype):
+    def _unstage_data(
+        self,
+        comm,
+        data,
+        nsamp,
+        nnz,
+        nnz_full,
+        obs_period_ranges,
+        detectors,
+        signal_type,
+        pixels_dtype,
+        nside,
+        weight_dtype,
+    ):
         """ Clear Madam buffers, restore pointing into TOAST caches
         and cache the destriped signal.
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = None
-        self._cache.destroy('timestamps')
+        self._cache.destroy("timestamps")
 
         if self._conserve_memory:
             nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
@@ -816,36 +1006,38 @@ class OpMadam(Operator):
             if self._name_out is not None:
                 global_offset = 0
                 for obs, period_ranges in zip(data.obs, obs_period_ranges):
-                    tod = obs['tod']
+                    tod = obs["tod"]
                     nlocal = tod.local_samples[1]
                     for idet, det in enumerate(detectors):
                         signal = np.ones(nlocal, dtype=signal_type) * np.nan
                         offset = global_offset
                         for istart, istop in period_ranges:
                             nn = istop - istart
-                            dslice = slice(idet * nsamp + offset,
-                                           idet * nsamp + offset + nn)
+                            dslice = slice(
+                                idet * nsamp + offset, idet * nsamp + offset + nn
+                            )
                             signal[istart:istop] = self._madam_signal[dslice]
                             offset += nn
                         cachename = "{}_{}".format(self._name_out, det)
                         tod.cache.put(cachename, signal, replace=True)
                     global_offset = offset
             self._madam_signal = None
-            self._cache.destroy('signal')
+            self._cache.destroy("signal")
 
             if not self._purge_pixels:
                 # restore the pixels from the Madam buffers
                 global_offset = 0
                 for obs, period_ranges in zip(data.obs, obs_period_ranges):
-                    tod = obs['tod']
+                    tod = obs["tod"]
                     nlocal = tod.local_samples[1]
                     for idet, det in enumerate(detectors):
                         pixels = -np.ones(nlocal, dtype=pixels_dtype)
                         offset = global_offset
                         for istart, istop in period_ranges:
                             nn = istop - istart
-                            dslice = slice(idet * nsamp + offset,
-                                           idet * nsamp + offset + nn)
+                            dslice = slice(
+                                idet * nsamp + offset, idet * nsamp + offset + nn
+                            )
                             pixels[istart:istop] = self._madam_pixels[dslice]
                             offset += nn
                         npix = 12 * nside ** 2
@@ -857,28 +1049,31 @@ class OpMadam(Operator):
                         tod.cache.put(cachename, pixels, replace=True)
                     global_offset = offset
             self._madam_pixels = None
-            self._cache.destroy('pixels')
+            self._cache.destroy("pixels")
 
             if not self._purge_weights and nnz == nnz_full:
                 # restore the weights from the Madam buffers
                 global_offset = 0
                 for obs, period_ranges in zip(data.obs, obs_period_ranges):
-                    tod = obs['tod']
+                    tod = obs["tod"]
                     nlocal = tod.local_samples[1]
                     for idet, det in enumerate(detectors):
                         weights = np.zeros([nlocal, nnz], dtype=weight_dtype)
                         offset = global_offset
                         for istart, istop in period_ranges:
                             nn = istop - istart
-                            dwslice = slice((idet * nsamp + offset) * nnz,
-                                            (idet * nsamp + offset + nn) * nnz)
+                            dwslice = slice(
+                                (idet * nsamp + offset) * nnz,
+                                (idet * nsamp + offset + nn) * nnz,
+                            )
                             weights[istart:istop] = self._madam_pixweights[
-                                dwslice].reshape([-1, nnz])
+                                dwslice
+                            ].reshape([-1, nnz])
                             offset += nn
                         cachename = "{}_{}".format(self._weights, det)
                         tod.cache.put(cachename, weights, replace=True)
                     global_offset = offset
             self._madam_pixweights = None
-            self._cache.destroy('pixweights')
+            self._cache.destroy("pixweights")
         del nodecomm
         return
