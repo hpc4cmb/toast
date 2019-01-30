@@ -208,7 +208,7 @@ class OpMadam(Operator):
             such as pixel matrices and noise filter.
         noise (str): Keyword to use when retrieving the noise object
             from the observation.
-        conserve_memory(bool): Stagger the Madam buffer staging on node.
+        conserve_memory(bool/int): Stagger the Madam buffer staging on node.
         translate_timestamps(bool): Translate timestamps to enforce
             monotonity.
     """
@@ -287,7 +287,9 @@ class OpMadam(Operator):
         self._madam_pixels = None
         self._madam_pixweights = None
         self._madam_signal = None
-        self._conserve_memory = conserve_memory
+        if conserve_memory is None:
+            conserve_memory = True
+        self._conserve_memory = int(conserve_memory)
         self._translate_timestamps = translate_timestamps
 
     def __del__(self):
@@ -888,8 +890,13 @@ class OpMadam(Operator):
         auto_timer = timing.auto_timer(type(self).__name__)
 
         if self._conserve_memory:
+            # The user has elected to stagger staging the data on each
+            # node to avoid exhausting memory
             nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
-            nread = nodecomm.size
+            if self._conserve_memory == 1:
+                nread = nodecomm.size
+            else:
+                nread = min(self._conserve_memory, nodecomm.size)
         else:
             nodecomm = MPI.COMM_SELF
             nread = 1
