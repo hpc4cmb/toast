@@ -278,7 +278,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc ( double azmin, double azmax,
     double w_sigma, double wdir_center, double wdir_sigma, double z0_center,
     double z0_sigma, double T0_center, double T0_sigma, double zatm,
     double zmax, double xstep, double ystep, double zstep, long nelem_sim_max,
-    int verbosity, MPI_Comm comm, int gangsize, uint64_t key1, uint64_t key2,
+    int verbosity, MPI_Comm comm, uint64_t key1, uint64_t key2,
     uint64_t counter1, uint64_t counter2, char *cachedir, double rmin, double rmax );
 
 int ctoast_atm_sim_free ( ctoast_atm_sim * sim );

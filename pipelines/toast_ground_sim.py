@@ -312,13 +312,6 @@ def parse_arguments(comm):
         help="controls the size of the simulation slices",
     )
     parser.add_argument(
-        "--atm_gangsize",
-        required=False,
-        default=1,
-        type=np.int,
-        help="size of the gangs that create slices",
-    )
-    parser.add_argument(
         "--atm_wind_time",
         required=False,
         default=36000.0,
@@ -1432,7 +1425,6 @@ def simulate_atmosphere(args, comm, data, mc, mem_counter, totalname):
             zstep=args.atm_zstep,
             nelem_sim_max=args.atm_nelem_sim_max,
             verbosity=int(args.debug),
-            gangsize=args.atm_gangsize,
             z0_center=args.atm_z0_center,
             z0_sigma=args.atm_z0_sigma,
             apply_flags=False,

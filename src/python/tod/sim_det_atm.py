@@ -54,7 +54,6 @@ class OpSimAtmosphere(Operator):
         zstep (float): size of volume elements in Z direction.
         nelem_sim_max (int): controls the size of the simulation slices.
         verbosity (int): more information is printed for values > 0.
-        gangsize (int): size of the gangs that create slices.
         z0_center (float):  central value of the water vapor
              distribution.
         z0_sigma (float):  sigma of the water vapor distribution.
@@ -97,7 +96,6 @@ class OpSimAtmosphere(Operator):
         zstep=100.0,
         nelem_sim_max=10000,
         verbosity=0,
-        gangsize=-1,
         gain=1,
         z0_center=2000,
         z0_sigma=0,
@@ -131,7 +129,6 @@ class OpSimAtmosphere(Operator):
         self._zstep = zstep
         self._nelem_sim_max = nelem_sim_max
         self._verbosity = verbosity
-        self._gangsize = gangsize
         self._cachedir = cachedir
         self._flush = flush
         self._freq = freq
@@ -644,7 +641,6 @@ class OpSimAtmosphere(Operator):
             self._nelem_sim_max,
             self._verbosity,
             comm,
-            self._gangsize,
             key1,
             key2,
             counter1,
