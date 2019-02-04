@@ -133,6 +133,7 @@ if libconviqt is not None:
         ct.c_long,
         ct.c_long,
         ct.c_long,
+        ct.c_int,
         MPI_Comm,
     ]
 
@@ -194,9 +195,8 @@ class OpSimConviqt(Operator):
         remove_monopole=False,
         remove_dipole=False,
         normalize_beam=False,
-        verbose=False,
+        verbosity=0,
     ):
-
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
@@ -219,7 +219,7 @@ class OpSimConviqt(Operator):
         self._remove_monopole = remove_monopole
         self._remove_dipole = remove_dipole
         self._normalize_beam = normalize_beam
-        self._verbose = verbose
+        self._verbosity = verbosity
 
         self._out = out
 
@@ -309,14 +309,14 @@ class OpSimConviqt(Operator):
                 libconviqt.conviqt_sky_del(sky)
 
                 tstop = MPI.Wtime()
-                if self._verbose and tod.mpicomm.rank == 0:
+                if self._verbosity > 0 and tod.mpicomm.rank == 0:
                     print(
                         "{} processed in {:.2f}s".format(det, tstop - tstart_det),
                         flush=True,
                     )
 
             tstop = MPI.Wtime()
-            if self._verbose and tod.mpicomm.rank == 0:
+            if self._verbosity > 0 and tod.mpicomm.rank == 0:
                 print(
                     "{} convolved in {:.2f}s".format("observation", tstop - tstart_obs),
                     flush=True,
@@ -341,7 +341,7 @@ class OpSimConviqt(Operator):
             if err != 0:
                 raise RuntimeError("Failed to remove dipole")
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
                 "{} sky initialized in {:.2f}s".format(det, tstop - tstart), flush=True
             )
@@ -363,7 +363,7 @@ class OpSimConviqt(Operator):
                     "returned {}".format(beamfile)
                 )
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
                 "{} beam initialized in {:.2f}s".format(det, tstop - tstart), flush=True
             )
@@ -380,7 +380,7 @@ class OpSimConviqt(Operator):
         tstart = MPI.Wtime()
         pdata = tod.local_pointing(det, self._quat_name)
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print("{} pointing read in {:.2f}s".format(det, tstop - tstart), flush=True)
 
         if self._apply_flags:
@@ -394,7 +394,7 @@ class OpSimConviqt(Operator):
             pdata = pdata.copy()
             pdata[totflags != 0] = nullquat
             tstop = MPI.Wtime()
-            if self._verbose and tod.mpicomm.rank == 0:
+            if self._verbosity > 0 and tod.mpicomm.rank == 0:
                 print(
                     "{} flags initialized in {:.2f}s".format(det, tstop - tstart),
                     flush=True,
@@ -407,7 +407,7 @@ class OpSimConviqt(Operator):
         if self._dxx:
             psi -= psipol
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
                 "{} pointing angles computed in {:.2f}s".format(det, tstop - tstart),
                 flush=True,
@@ -429,7 +429,7 @@ class OpSimConviqt(Operator):
         arr[:, 1] = theta
         arr[:, 2] = psi
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
                 "{} input array packed in {:.2f}s".format(det, tstop - tstart),
                 flush=True,
@@ -446,13 +446,14 @@ class OpSimConviqt(Operator):
             self._lmax,
             self._beammmax,
             self._order,
+            self._verbosity,
             comm,
         )
         if convolver is None:
             raise Exception("Failed to instantiate convolver")
         err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print("{} convolved in {:.2f}s".format(det, tstop - tstart), flush=True)
         if err != 0:
             raise Exception("Convolution FAILED!")
@@ -465,7 +466,7 @@ class OpSimConviqt(Operator):
         arr = np.ctypeslib.as_array(ppnt, shape=(nsamp, 5))
         convolved_data = arr[:, 3].astype(np.float64)
         tstop = MPI.Wtime()
-        if self._verbose and tod.mpicomm.rank == 0:
+        if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
                 "{} convolved data extracted in {:.2f}s".format(det, tstop - tstart),
                 flush=True,
