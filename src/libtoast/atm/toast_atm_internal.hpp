@@ -13,8 +13,9 @@
 #include <mpi.h>
 #include <vector>
 
+#ifdef HAVE_SUITESPARSE
 #include "cholmod.h"
-
+#endif
 
 namespace toast { namespace tatm {
 
@@ -36,7 +37,7 @@ int get_atmospheric_loading_vec(double altitude, double temperature,
                                 double *loading);
 #endif
 
-//#ifdef HAVE_SUITESPARSE
+#ifdef HAVE_SUITESPARSE
 
 class sim {
 
@@ -152,6 +153,8 @@ private :
     void load_realization();
     void save_realization();
 };
+
+#endif
 
 } }
 

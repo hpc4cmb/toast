@@ -20,6 +20,9 @@
 #include <omp.h>
 #include <algorithm>  // std::sort
 
+
+#ifdef HAVE_SUITESPARSE
+
 #include "cholmod.h"
 
 double median( std::vector<double> vec ) {
@@ -2081,3 +2084,5 @@ void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse *sqrt_cov,
 
     return;
 }
+
+#endif
