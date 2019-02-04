@@ -1019,7 +1019,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
     uint64_t key1, uint64_t key2, uint64_t counter1,
     uint64_t counter2, char *cachedir, double rmin, double rmax ) {
 
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     try {
         return reinterpret_cast < ctoast_atm_sim * >
@@ -1041,7 +1041,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
 }
 
 int ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     try {
             delete reinterpret_cast < toast::tatm::sim * > ( sim );
     } catch ( std::exception &e ){
@@ -1056,7 +1056,7 @@ int ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
 }
 
 int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
     int err;
@@ -1079,7 +1079,7 @@ int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
 int ctoast_atm_sim_observe(
     ctoast_atm_sim * sim, double *t, double *az, double *el,
     double *tod, long nsamp, double fixed_r ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
     int err;
