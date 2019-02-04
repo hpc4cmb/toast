@@ -63,21 +63,21 @@ if(MPI_FOUND AND MPI4PY_FOUND)
 
     target_include_directories(_libtoast_mpi PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast-mpi/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast_mpi/include"
         ${MPI_CXX_INCLUDE_PATH}
         ${MPI4PY_INCLUDE_DIR}
     )
 
     target_link_libraries(_libtoast_mpi
-        PRIVATE toast-mpi "${MPI_CXX_LIBRARIES}"
+        PRIVATE toast_mpi "${MPI_CXX_LIBRARIES}"
     )
 
     install(TARGETS _libtoast_mpi DESTINATION ${PYTHON_SITE}/toast)
 
-    install(FILES
-        mpi.py
-        DESTINATION ${PYTHON_SITE}/toast
-    )
+    #install(FILES
+    #    mpi.py
+    #    DESTINATION ${PYTHON_SITE}/toast
+    #)
 endif(MPI_FOUND AND MPI4PY_FOUND)
 
 # Process the sub directories
