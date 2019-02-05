@@ -63,7 +63,7 @@ pip install numpy scipy matplotlib cython astropy ephem healpy cmake
 # mpi4py     : Install from source to use our MPICH.
 # ephem      : Install with pip using travis virtualenv.
 # healpy     : Install with pip using travis virtualenv.
-# elemental  : Install using our MPICH and build matrix compilers.
+# suitesparse: Install using our build matrix compilers.
 # aatm       : Install with our build matrix compilers.
 # libmadam   : Install using our MPICH and build matrix compilers.
 # libconviqt : Install using our MPICH and build matrix compilers.
@@ -170,33 +170,21 @@ curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.
     variant=release threading=multi link=shared runtime-link=shared install \
     && cd ..
 
-# Install Elemental
+# Install SuiteSparse
 
-wget https://github.com/elemental/Elemental/archive/v0.87.7.tar.gz \
-    && tar -xzf v0.87.7.tar.gz \
-    && cd Elemental-0.87.7 \
-    && mkdir build && cd build \
-    && cmake \
-    -D CMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -D INSTALL_PYTHON_PACKAGE=OFF \
-    -D CMAKE_CXX_COMPILER="${MPICXX}" \
-    -D CMAKE_C_COMPILER="${MPICC}" \
-    -D CMAKE_Fortran_COMPILER="${MPIFC}" \
-    -D MPI_CXX_COMPILER="${MPICXX}" \
-    -D MPI_C_COMPILER="${MPICC}" \
-    -D MPI_Fortran_COMPILER="${MPIFC}" \
-    -D METIS_GKREGEX=ON \
-    -D EL_DISABLE_PARMETIS=TRUE \
-    -D MATH_LIBS="-llapack -lopenblas" \
-    -D CMAKE_BUILD_TYPE=Release \
-    -D CMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_C_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_Fortran_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_SHARED_LINKER_FLAGS="-fopenmp" \
-    .. \
-    && make \
-    && make install \
-    && cd ../..
+curl -SL http://faculty.cse.tamu.edu/davis/SuiteSparse/SuiteSparse-5.4.0.tar.gz \
+    -o SuiteSparse-5.4.0.tar.gz \
+    && tar xzf SuiteSparse-5.4.0.tar.gz \
+    && cd SuiteSparse \
+    && make CC="${CC}" CXX="${CXX}" CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
+    F77="${FC}" F77FLAGS="-O2 -g -fPIC -pthread" \
+    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas" \
+    && make install CC="gcc" CXX="g++" \
+    CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
+    F77="gfortran" F77FLAGS="-O2 -g -fPIC -pthread" \
+    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas" \
+    INSTALL="${PREFIX}" \
+    && cd ..
 
 # Install libmadam
 

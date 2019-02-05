@@ -92,9 +92,9 @@ ADD rules/patch_* ./rules/
 
 @boost@
 
-# Install elemental
+# Install SuiteSparse
 
-@elemental@
+@suitesparse@
 
 # Install HDF5
 

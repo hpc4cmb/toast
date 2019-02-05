@@ -108,9 +108,9 @@ fi
 
 @boost@
 
-# Install elemental
+# Install SuiteSparse
 
-@elemental@
+@suitesparse@
 
 # Install HDF5
 
