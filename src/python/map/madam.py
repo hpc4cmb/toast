@@ -14,10 +14,7 @@ from toast.mpi import MPI
 from toast.op import Operator
 import toast.timing as timing
 
-MADAM_TIMESTAMP_TYPE = np.float64
-MADAM_SIGNAL_TYPE = np.float64
-MADAM_PIXEL_TYPE = np.int32
-MADAM_WEIGHT_TYPE = np.float32
+import libmadam_wrapper as madam
 
 # DEBUG begin
 
@@ -112,61 +109,6 @@ except:
 
 
 # DEBUG end
-
-
-libmadam = None
-
-try:
-    libmadam = ct.CDLL("libmadam.so")
-except OSError:
-    path = find_library("madam")
-    if path is not None:
-        libmadam = ct.CDLL(path)
-
-if libmadam is not None:
-    libmadam.destripe.restype = None
-    libmadam.destripe.argtypes = [
-        ct.c_int,  # fcomm
-        ct.c_char_p,  # parstring
-        ct.c_long,  # ndet
-        ct.c_char_p,  # detstring
-        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_long,  # nsamp
-        ct.c_long,  # nnz
-        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_long,  # nperiod
-        npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=np.int64, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_long,  # npsdtot
-        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_long,  # npsdbin
-        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_long,  # npsdval
-        npc.ndpointer(dtype=np.float64, ndim=1, flags="C_CONTIGUOUS"),
-    ]
-    libmadam.destripe_with_cache.restype = None
-    libmadam.destripe_with_cache.argtypes = [
-        ct.c_int,  # fcomm
-        ct.c_long,  # ndet
-        ct.c_long,  # nsamp
-        ct.c_long,  # nnz
-        npc.ndpointer(dtype=MADAM_TIMESTAMP_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_PIXEL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_WEIGHT_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        npc.ndpointer(dtype=MADAM_SIGNAL_TYPE, ndim=1, flags="C_CONTIGUOUS"),
-        ct.c_char_p,  # outpath
-    ]
-    libmadam.clear_caches.restype = None
-    libmadam.clear_caches.argtypes = []
-
-# Some keys may be defined multiple times in the Madam parameter files.
-# Assume that such entries are aggregated into a list in a parameter
-# dictionary
-
-repeated_keys = ["detset", "detset_nopol", "survey"]
 
 
 class OpMadam(Operator):
@@ -302,7 +244,7 @@ class OpMadam(Operator):
     def __del__(self):
         self._cache.clear()
         if self._cached:
-            libmadam.clear_caches()
+            madam.clear_caches()
             self._cached = False
 
     @property
@@ -310,23 +252,7 @@ class OpMadam(Operator):
         """
         (bool): True if libmadam is found in the library search path.
         """
-        return libmadam is not None
-
-    def _dict2parstring(self, d):
-        s = ""
-        for key, value in d.items():
-            if key in repeated_keys:
-                for separate_value in value:
-                    s += "{} = {};".format(key, separate_value)
-            else:
-                s += "{} = {};".format(key, value)
-        return s
-
-    def _dets2detstring(self, dets):
-        s = ""
-        for d in dets:
-            s += "{};".format(d)
-        return s
+        return madam.available
 
     def exec(self, data, comm=None):
         """
@@ -335,7 +261,7 @@ class OpMadam(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        if libmadam is None:
+        if not madam.available:
             raise RuntimeError("Cannot find libmadam")
 
         if len(data.obs) == 0:
@@ -351,8 +277,8 @@ class OpMadam(Operator):
             comm = data.comm.comm_world
 
         (
-            parstring,
-            detstring,
+            pars,
+            dets,
             nsamp,
             ndet,
             nnz,
@@ -361,7 +287,6 @@ class OpMadam(Operator):
             periods,
             obs_period_ranges,
             psdfreqs,
-            detectors,
             nside,
         ) = self._prepare(data, comm)
 
@@ -375,14 +300,14 @@ class OpMadam(Operator):
             nnz_stride,
             obs_period_ranges,
             psdfreqs,
-            detectors,
+            dets,
             nside,
         )
 
         # if comm.rank == 0:
         #    data.obs[0]['tod'].cache.report()
 
-        self._destripe(comm, parstring, ndet, detstring, nsamp, nnz, periods, psdinfo)
+        self._destripe(comm, pars, dets, periods, psdinfo)
 
         self._unstage_data(
             comm,
@@ -391,7 +316,7 @@ class OpMadam(Operator):
             nnz,
             nnz_full,
             obs_period_ranges,
-            detectors,
+            dets,
             signal_type,
             pixels_dtype,
             nside,
@@ -403,24 +328,20 @@ class OpMadam(Operator):
 
         return
 
-    def _destripe(self, comm, parstring, ndet, detstring, nsamp, nnz, periods, psdinfo):
+    def _destripe(self, comm, pars, dets, periods, psdinfo):
         """ Destripe the buffered data
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         memreport(comm, "just before calling libmadam.destripe")
-        fcomm = comm.py2f()
         if self._cached:
             # destripe
             outpath = ""
             if "path_output" in self.params:
                 outpath = self.params["path_output"]
             outpath = outpath.encode("ascii")
-            libmadam.destripe_with_cache(
-                fcomm,
-                ndet,
-                nsamp,
-                nnz,
+            madam.destripe_with_cache(
+                comm,
                 self._madam_timestamps,
                 self._madam_pixels,
                 self._madam_pixweights,
@@ -428,38 +349,22 @@ class OpMadam(Operator):
                 outpath,
             )
         else:
-            (
-                detweights,
-                npsd,
-                npsdtot,
-                psdstarts,
-                npsdbin,
-                psdfreqs,
-                npsdval,
-                psdvals,
-            ) = psdinfo
+            (detweights, npsd, psdstarts, psdfreqs, psdvals) = psdinfo
 
             # destripe
-            libmadam.destripe(
-                fcomm,
-                parstring.encode(),
-                ndet,
-                detstring.encode(),
+            madam.destripe(
+                comm,
+                pars,
+                dets,
                 detweights,
-                nsamp,
-                nnz,
                 self._madam_timestamps,
                 self._madam_pixels,
                 self._madam_pixweights,
                 self._madam_signal,
-                len(periods),
                 periods,
                 npsd,
-                npsdtot,
                 psdstarts,
-                npsdbin,
                 psdfreqs,
-                npsdval,
                 psdvals,
             )
 
@@ -585,18 +490,17 @@ class OpMadam(Operator):
         tod = data.obs[0]["tod"]
 
         if self._dets is None:
-            detectors = tod.local_dets
+            dets = tod.local_dets
         else:
-            detectors = [det for det in tod.local_dets if det in self._dets]
-        ndet = len(detectors)
-        detstring = self._dets2detstring(detectors)
+            dets = [det for det in tod.local_dets if det in self._dets]
+        ndet = len(dets)
 
         # to get the number of Non-zero pointing weights per pixel,
         # we use the fact that for Madam, all processes have all detectors
         # for some slice of time.  So we can get this information from the
         # shape of the data from the first detector
 
-        nnzname = "{}_{}".format(self._weights, detectors[0])
+        nnzname = "{}_{}".format(self._weights, dets[0])
         nnz_full = tod.cache.reference(nnzname).shape[1]
 
         if "temperature_only" in self.params and self.params["temperature_only"] in [
@@ -623,8 +527,6 @@ class OpMadam(Operator):
             )
         nside = int(self.params["nside_map"])
 
-        parstring = self._dict2parstring(self.params)
-
         if comm.rank == 0 and (
             "path_output" in self.params
             and not os.path.isdir(self.params["path_output"])
@@ -635,12 +537,12 @@ class OpMadam(Operator):
         # determine the number of samples per detector
 
         obs_period_ranges, psdfreqs, periods, nsamp = self._get_period_ranges(
-            comm, data, detectors, nsamp
+            comm, data, dets, nsamp
         )
 
         return (
-            parstring,
-            detstring,
+            self.params,
+            dets,
             nsamp,
             ndet,
             nnz,
@@ -649,7 +551,6 @@ class OpMadam(Operator):
             periods,
             obs_period_ranges,
             psdfreqs,
-            detectors,
             nside,
         )
 
@@ -659,7 +560,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
-            "timestamps", MADAM_TIMESTAMP_TYPE, (nsamp,)
+            "timestamps", madam.TIMESTAMP_TYPE, (nsamp,)
         )
 
         offset = 0
@@ -707,7 +608,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
-            "signal", MADAM_SIGNAL_TYPE, (nsamp * ndet,)
+            "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
         )
         self._madam_signal[:] = np.nan
 
@@ -746,7 +647,7 @@ class OpMadam(Operator):
         """
         auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
-            "pixels", MADAM_PIXEL_TYPE, (nsamp * ndet,)
+            "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
         self._madam_pixels[:] = -1
 
@@ -826,7 +727,7 @@ class OpMadam(Operator):
         auto_timer = timing.auto_timer(type(self).__name__)
 
         self._madam_pixweights = self._cache.create(
-            "pixweights", MADAM_WEIGHT_TYPE, (nsamp * ndet * nnz,)
+            "pixweights", madam.WEIGHT_TYPE, (nsamp * ndet * nnz,)
         )
         self._madam_pixweights[:] = 0
 
@@ -960,7 +861,7 @@ class OpMadam(Operator):
                     psdvals.append(psd)
             npsdtot = np.sum(npsd)
             psdstarts = np.array(psdstarts, dtype=np.float64)
-            psdvals = np.hstack(psdvals).astype(np.float64)
+            psdvals = np.hstack(psdvals).astype(madam.PSD_TYPE)
             npsdval = psdvals.size
         else:
             npsd = np.ones(ndet, dtype=np.int64)
@@ -971,16 +872,7 @@ class OpMadam(Operator):
             psdfreqs = np.arange(npsdbin) * fsample / npsdbin
             npsdval = npsdbin * npsdtot
             psdvals = np.ones(npsdval)
-        psdinfo = (
-            detweights,
-            npsd,
-            npsdtot,
-            psdstarts,
-            npsdbin,
-            psdfreqs,
-            npsdval,
-            psdvals,
-        )
+        psdinfo = (detweights, npsd, psdstarts, psdfreqs, psdvals)
 
         return psdinfo, signal_dtype, pixels_dtype, weight_dtype
 
