@@ -21,131 +21,10 @@ from ..tod import Interval
 
 from .. import timing as timing
 
-libconviqt = None
-
 try:
-    libconviqt = ct.CDLL("libconviqt.so")
+    import libconviqt_wrapper as conviqt
 except:
-    path = find_library("conviqt")
-    if path is not None:
-        libconviqt = ct.CDLL(path)
-
-if libconviqt is not None:
-    # Beam functions
-
-    libconviqt.conviqt_beam_new.restype = ct.c_void_p
-    libconviqt.conviqt_beam_new.argtypes = []
-
-    libconviqt.conviqt_beam_del.restype = ct.c_int
-    libconviqt.conviqt_beam_del.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_beam_read.restype = ct.c_int
-    libconviqt.conviqt_beam_read.argtypes = [
-        ct.c_void_p,
-        ct.c_long,
-        ct.c_long,
-        ct.c_byte,
-        ct.c_char_p,
-        MPI_Comm,
-    ]
-
-    libconviqt.conviqt_beam_lmax.restype = ct.c_int
-    libconviqt.conviqt_beam_lmax.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_beam_mmax.restype = ct.c_int
-    libconviqt.conviqt_beam_mmax.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_beam_normalize.restype = ct.c_double
-    libconviqt.conviqt_beam_normalize.argtypes = [ct.c_void_p]
-
-    # Sky functions
-
-    libconviqt.conviqt_sky_new.restype = ct.c_void_p
-    libconviqt.conviqt_sky_new.argtypes = []
-
-    libconviqt.conviqt_sky_del.restype = ct.c_int
-    libconviqt.conviqt_sky_del.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_sky_read.restype = ct.c_int
-    libconviqt.conviqt_sky_read.argtypes = [
-        ct.c_void_p,
-        ct.c_long,
-        ct.c_byte,
-        ct.c_char_p,
-        ct.c_double,
-        MPI_Comm,
-    ]
-
-    libconviqt.conviqt_sky_lmax.restype = ct.c_int
-    libconviqt.conviqt_sky_lmax.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_sky_remove_monopole.restype = ct.c_int
-    libconviqt.conviqt_sky_remove_monopole.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_sky_remove_dipole.restype = ct.c_int
-    libconviqt.conviqt_sky_remove_dipole.argtypes = [ct.c_void_p]
-
-    # Detector functions
-
-    libconviqt.conviqt_detector_new.restype = ct.c_void_p
-    libconviqt.conviqt_detector_new.argtypes = []
-
-    libconviqt.conviqt_detector_new_with_id.restype = ct.c_void_p
-    libconviqt.conviqt_detector_new_with_id.argtypes = [ct.c_char_p]
-
-    libconviqt.conviqt_detector_del.restype = ct.c_int
-    libconviqt.conviqt_detector_del.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_detector_set_epsilon.restype = ct.c_int
-    libconviqt.conviqt_detector_set_epsilon.argtypes = [ct.c_void_p, ct.c_double]
-
-    libconviqt.conviqt_detector_get_epsilon.restype = ct.c_int
-    libconviqt.conviqt_detector_get_epsilon.argtypes = [
-        ct.c_void_p,
-        ct.POINTER(ct.c_double),
-    ]
-
-    libconviqt.conviqt_detector_get_id.restype = ct.c_int
-    libconviqt.conviqt_detector_get_id.argtypes = [ct.c_void_p, ct.c_char_p]
-
-    # Pointing functions
-
-    libconviqt.conviqt_pointing_new.restype = ct.c_void_p
-    libconviqt.conviqt_pointing_new.argtypes = []
-
-    libconviqt.conviqt_pointing_del.restype = ct.c_int
-    libconviqt.conviqt_pointing_del.argtypes = [ct.c_void_p]
-
-    libconviqt.conviqt_pointing_alloc.restype = ct.c_int
-    libconviqt.conviqt_pointing_alloc.argtypes = [ct.c_void_p, ct.c_long]
-
-    libconviqt.conviqt_pointing_data.restype = ct.POINTER(ct.c_double)
-    libconviqt.conviqt_pointing_data.argtypes = [ct.c_void_p]
-
-    # Convolver functions
-
-    libconviqt.conviqt_convolver_new.restype = ct.c_void_p
-    libconviqt.conviqt_convolver_new.argtypes = [
-        ct.c_void_p,
-        ct.c_void_p,
-        ct.c_void_p,
-        ct.c_byte,
-        ct.c_long,
-        ct.c_long,
-        ct.c_long,
-        ct.c_int,
-        MPI_Comm,
-    ]
-
-    libconviqt.conviqt_convolver_convolve.restype = ct.c_int
-    libconviqt.conviqt_convolver_convolve.argtypes = [
-        ct.c_void_p,
-        ct.c_void_p,
-        ct.c_byte,
-    ]
-
-    libconviqt.conviqt_convolver_del.restype = ct.c_int
-    libconviqt.conviqt_convolver_del.argtypes = [ct.c_void_p]
+    conviqt = None
 
 
 class OpSimConviqt(Operator):
@@ -228,7 +107,7 @@ class OpSimConviqt(Operator):
         """
         (bool): True if libconviqt is found in the library search path.
         """
-        return libconviqt is not None
+        return conviqt is not None and conviqt.available
 
     def exec(self, data):
         """
@@ -240,19 +119,10 @@ class OpSimConviqt(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        if libconviqt is None:
-            raise RuntimeError("The conviqt library was not found")
+        if not self.available:
+            raise RuntimeError("libconviqt is not available")
 
         autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        # comm = data.comm
-        # the global communicator
-        # cworld = comm.comm_world
-        # the communicator within the group
-        # cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        # crank = comm.comm_rank
 
         xaxis, yaxis, zaxis = np.eye(3)
         nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
@@ -260,11 +130,9 @@ class OpSimConviqt(Operator):
         for obs in data.obs:
             tstart_obs = MPI.Wtime()
             tod = obs["tod"]
+            comm = tod.mpicomm
             intrvl = obs["intervals"]
             offset, nsamp = tod.local_samples
-
-            comm_ptr = MPI._addressof(tod.mpicomm)
-            comm = MPI_Comm.from_address(comm_ptr)
 
             for det in tod.local_dets:
                 tstart_det = MPI.Wtime()
@@ -303,10 +171,10 @@ class OpSimConviqt(Operator):
                     )
                 ref[:] += convolved_data
 
-                libconviqt.conviqt_pointing_del(pnt)
-                libconviqt.conviqt_detector_del(detector)
-                libconviqt.conviqt_beam_del(beam)
-                libconviqt.conviqt_sky_del(sky)
+                del pnt
+                del detector
+                del beam
+                del sky
 
                 tstop = MPI.Wtime()
                 if self._verbosity > 0 and tod.mpicomm.rank == 0:
@@ -326,20 +194,11 @@ class OpSimConviqt(Operator):
 
     def get_sky(self, skyfile, comm, det, tod):
         tstart = MPI.Wtime()
-        sky = libconviqt.conviqt_sky_new()
-        err = libconviqt.conviqt_sky_read(
-            sky, self._lmax, self._pol, skyfile.encode(), self._fwhm, comm
-        )
-        if err != 0:
-            raise RuntimeError("Failed to load " + skyfile)
+        sky = conviqt.Sky(self._lmax, self._pol, skyfile, self._fwhm, comm)
         if self._remove_monopole:
-            err = libconviqt.conviqt_sky_remove_monopole(sky)
-            if err != 0:
-                raise RuntimeError("Failed to remove monopole")
+            sky.remove_monopole()
         if self._remove_dipole:
-            err = libconviqt.conviqt_sky_remove_dipole(sky)
-            if err != 0:
-                raise RuntimeError("Failed to remove dipole")
+            sky.remove_dipole()
         tstop = MPI.Wtime()
         if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
@@ -349,19 +208,9 @@ class OpSimConviqt(Operator):
 
     def get_beam(self, beamfile, comm, det, tod):
         tstart = MPI.Wtime()
-        beam = libconviqt.conviqt_beam_new()
-        err = libconviqt.conviqt_beam_read(
-            beam, self._lmax, self._beammmax, self._pol, beamfile.encode(), comm
-        )
-        if err != 0:
-            raise Exception("Failed to load " + beamfile)
+        beam = conviqt.Beam(self._lmax, self._beammmax, self._pol, beamfile, comm)
         if self._normalize_beam:
-            scale = libconviqt.conviqt_beam_normalize(beam)
-            if scale < 0:
-                raise Exception(
-                    "Failed to normalize the beam in {}. normalize() "
-                    "returned {}".format(beamfile)
-                )
+            beam.normalize()
         tstop = MPI.Wtime()
         if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print(
@@ -370,8 +219,7 @@ class OpSimConviqt(Operator):
         return beam
 
     def get_detector(self, det, epsilon):
-        detector = libconviqt.conviqt_detector_new_with_id(det.encode())
-        libconviqt.conviqt_detector_set_epsilon(detector, epsilon)
+        detector = conviqt.Detector(name=det, epsilon=epsilon)
         return detector
 
     def get_pointing(self, tod, det, psipol):
@@ -416,15 +264,11 @@ class OpSimConviqt(Operator):
 
     def get_buffer(self, theta, phi, psi, tod, nsamp, det):
         """
-        Pack the pointing into the libconviqt pointing array
+        Pack the pointing into the conviqt pointing array
         """
         tstart = MPI.Wtime()
-        pnt = libconviqt.conviqt_pointing_new()
-        err = libconviqt.conviqt_pointing_alloc(pnt, 5 * nsamp)
-        if err != 0:
-            raise Exception("Failed to allocate pointing array")
-        ppnt = libconviqt.conviqt_pointing_data(pnt)
-        arr = np.ctypeslib.as_array(ppnt, shape=(nsamp, 5))
+        pnt = conviqt.Pointing(nsamp)
+        arr = pnt.data()
         arr[:, 0] = phi
         arr[:, 1] = theta
         arr[:, 2] = psi
@@ -438,7 +282,7 @@ class OpSimConviqt(Operator):
 
     def convolve(self, sky, beam, detector, comm, pnt, tod, nsamp, det):
         tstart = MPI.Wtime()
-        convolver = libconviqt.conviqt_convolver_new(
+        convolver = conviqt.Convolver(
             sky,
             beam,
             detector,
@@ -449,21 +293,16 @@ class OpSimConviqt(Operator):
             self._verbosity,
             comm,
         )
-        if convolver is None:
-            raise Exception("Failed to instantiate convolver")
-        err = libconviqt.conviqt_convolver_convolve(convolver, pnt, self._calibrate)
+        convolver.convolve(pnt, self._calibrate)
         tstop = MPI.Wtime()
         if self._verbosity > 0 and tod.mpicomm.rank == 0:
             print("{} convolved in {:.2f}s".format(det, tstop - tstart), flush=True)
-        if err != 0:
-            raise Exception("Convolution FAILED!")
 
         # The pointer to the data will have changed during
         # the convolution call ...
 
         tstart = MPI.Wtime()
-        ppnt = libconviqt.conviqt_pointing_data(pnt)
-        arr = np.ctypeslib.as_array(ppnt, shape=(nsamp, 5))
+        arr = pnt.data()
         convolved_data = arr[:, 3].astype(np.float64)
         tstop = MPI.Wtime()
         if self._verbosity > 0 and tod.mpicomm.rank == 0:
@@ -472,6 +311,6 @@ class OpSimConviqt(Operator):
                 flush=True,
             )
 
-        libconviqt.conviqt_convolver_del(convolver)
+        del convolver
 
         return convolved_data

@@ -14,7 +14,10 @@ from toast.mpi import MPI
 from toast.op import Operator
 import toast.timing as timing
 
-import libmadam_wrapper as madam
+try:
+    import libmadam_wrapper as madam
+except:
+    madam = None
 
 # DEBUG begin
 
@@ -252,7 +255,7 @@ class OpMadam(Operator):
         """
         (bool): True if libmadam is found in the library search path.
         """
-        return madam.available
+        return madam is not None and madam.available
 
     def exec(self, data, comm=None):
         """
@@ -261,8 +264,8 @@ class OpMadam(Operator):
         Args:
             data (toast.Data): The distributed data.
         """
-        if not madam.available:
-            raise RuntimeError("Cannot find libmadam")
+        if not self.available:
+            raise RuntimeError("libmadam is not available")
 
         if len(data.obs) == 0:
             raise RuntimeError(
