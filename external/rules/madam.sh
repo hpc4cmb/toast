@@ -1,4 +1,4 @@
-curl -SL https://github.com/hpc4cmb/libmadam/releases/download/0.3.0/libmadam-0.3.0.tar.bz2 \
+curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1.0.0.tar.bz2 \
     | tar -xjf - \
     && cd libmadam-0.3.0 \
     && FC="@MPIFC@" MPIFC="@MPIFC@" FCFLAGS="@FCFLAGS@" \
