@@ -202,9 +202,9 @@ wget https://github.com/hpc4cmb/libmadam/releases/download/0.2.7/libmadam-0.2.7.
 
 # Install libconviqt
 
-wget -O libconviqt-1.0.2.tar.bz2 https://www.dropbox.com/s/4tzjn9bgq7enkf9/libconviqt-1.0.2.tar.bz2?dl=1 \
-    && tar -xjf libconviqt-1.0.2.tar.bz2 \
-    && cd libconviqt-1.0.2 \
+wget -O https://www.dropbox.com/s/11r3pj4wntnqax1/libconviqt-1.1.0.tar.bz2?dl=1 \
+    && tar -xjf libconviqt-1.1.0.tar.bz2 \
+    && cd libconviqt-1.1.0 \
     && CC="${MPICC}" CXX="${MPICXX}" \
     CFLAGS="-O2 -g -fPIC -pthread -std=gnu99" \
     CXXFLAGS="-O2 -g -fPIC -pthread" \
