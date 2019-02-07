@@ -179,18 +179,15 @@ curl -SL http://faculty.cse.tamu.edu/davis/SuiteSparse/SuiteSparse-5.4.0.tar.gz 
     && make CC="${CC}" CXX="${CXX}" CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
     F77="${FC}" F77FLAGS="-O2 -g -fPIC -pthread" \
     CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas" \
-    && make install CC="gcc" CXX="g++" \
-    CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
-    F77="gfortran" F77FLAGS="-O2 -g -fPIC -pthread" \
-    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas" \
-    INSTALL="${PREFIX}" \
+    && cp -a ./lib/* "${PREFIX}/lib/" \
+    && cp -a ./include/* "${PREFIX}/include/" \
     && cd ..
 
 # Install libmadam
 
-wget https://github.com/hpc4cmb/libmadam/releases/download/0.2.7/libmadam-0.2.7.tar.bz2 \
-    && tar -xjf libmadam-0.2.7.tar.bz2 \
-    && cd libmadam-0.2.7 \
+curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1.0.0.tar.bz2 \
+    | tar -xjf - \
+    && cd libmadam-1.0.0 \
     && FC="${MPIFC}" FCFLAGS="-O2 -g -fPIC -pthread" \
     CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread" \
     ./configure --with-cfitsio="/usr" \
@@ -198,7 +195,9 @@ wget https://github.com/hpc4cmb/libmadam/releases/download/0.2.7/libmadam-0.2.7.
     --with-fftw="/usr" --prefix="${PREFIX}" \
     && make \
     && make install \
-    && cd ..
+    && cd python \
+    && python setup.py install --prefix "${PREFIX}" \
+    && cd ../..
 
 # Install libconviqt
 
@@ -212,7 +211,9 @@ wget -O https://www.dropbox.com/s/11r3pj4wntnqax1/libconviqt-1.1.0.tar.bz2?dl=1 
     --prefix="${PREFIX}" \
     && make \
     && make install \
-    && cd ..
+    && cd python \
+    && python setup.py install --prefix "${PREFIX}" \
+    && cd ../..
 
 # Install libsharp
 
