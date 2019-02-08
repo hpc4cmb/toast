@@ -178,7 +178,7 @@ curl -SL http://faculty.cse.tamu.edu/davis/SuiteSparse/SuiteSparse-5.4.0.tar.gz 
     && cd SuiteSparse \
     && make CC="${CC}" CXX="${CXX}" CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
     F77="${FC}" F77FLAGS="-O2 -g -fPIC -pthread" \
-    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas" \
+    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas -fopenmp -lm" \
     && cp -a ./lib/* "${PREFIX}/lib/" \
     && cp -a ./include/* "${PREFIX}/include/" \
     && cd ..
@@ -191,7 +191,7 @@ curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1
     && FC="${MPIFC}" FCFLAGS="-O2 -g -fPIC -pthread" \
     CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread" \
     ./configure --with-cfitsio="/usr" \
-    --with-blas="-lopenblas" --with-lapack="-llapack" \
+    --with-blas="-lopenblas -fopenmp -lm" --with-lapack="-llapack" \
     --with-fftw="/usr" --prefix="${PREFIX}" \
     && make \
     && make install \
@@ -240,6 +240,7 @@ git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-
     && cd spt3g_software \
     && patch -p1 < ../patch_spt3g \
     && cd .. \
+    && rm -rf "${PREFIX}/spt3g" \
     && cp -a spt3g_software "${PREFIX}/spt3g" \
     && cd "${PREFIX}/spt3g" \
     && mkdir build \
