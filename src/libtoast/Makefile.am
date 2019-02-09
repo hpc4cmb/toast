@@ -1,5 +1,5 @@
 
-SUBDIRS = 
+SUBDIRS =
 
 if HAVE_AM_MPI
 else
@@ -9,7 +9,7 @@ endif
 SUBDIRS += util
 SUBDIRS += math
 
-if HAVE_AM_ELEMENTAL
+if HAVE_AM_SUITESPARSE
   SUBDIRS += atm
 endif
 
@@ -39,7 +39,7 @@ AM_CXXFLAGS =
 
 AM_LDFLAGS =
 
-AM_LIBS = 
+AM_LIBS =
 
 # Append compile and linking flags based on configure variables
 include $(top_srcdir)/src/build_options.am
@@ -64,7 +64,7 @@ $(top_builddir)/src/libtoast/fod/libtoast_fod.la \
 $(top_builddir)/src/libtoast/tod/libtoast_tod.la \
 $(top_builddir)/src/libtoast/util/libtoast_util.la
 
-if HAVE_AM_ELEMENTAL
+if HAVE_AM_SUITESPARSE
   libtoast_la_LIBADD += $(top_builddir)/src/libtoast/atm/libtoast_atm.la
 endif
 
@@ -90,4 +90,3 @@ $(AM_LIBS)
 
 
 bin_PROGRAMS : libtoast.la
-

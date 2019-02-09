@@ -201,8 +201,8 @@ curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1
 
 # Install libconviqt
 
-wget -O https://www.dropbox.com/s/11r3pj4wntnqax1/libconviqt-1.1.0.tar.bz2?dl=1 \
-    && tar -xjf libconviqt-1.1.0.tar.bz2 \
+curl -SL https://www.dropbox.com/s/11r3pj4wntnqax1/libconviqt-1.1.0.tar.bz2?dl=1 \
+    | tar -xjf - \
     && cd libconviqt-1.1.0 \
     && CC="${MPICC}" CXX="${MPICXX}" \
     CFLAGS="-O2 -g -fPIC -pthread -std=gnu99" \
