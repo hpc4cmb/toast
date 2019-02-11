@@ -135,11 +135,10 @@ wget https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
     && cd ..
 
 # libbz2, needed for boost / spt3g
-# FIXME: change patch link below after branch is merged upstream.
 
 curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
         | tar xjf - \
-        && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_bzip2 \
+        && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_bzip2 \
         && cd bzip2-1.0.6 \
         && patch -p1 < ../patch_bzip2 \
         && CC="${CC}" CFLAGS="-O2 -g -fPIC -pthread" \
@@ -232,10 +231,9 @@ git clone https://github.com/Libsharp/libsharp --branch master --single-branch -
     && cd ../..
 
 # Install spt3g software
-# FIXME: change patch link below after branch is merged upstream.
 
 git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-branch --depth 1 \
-    && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_spt3g \
+    && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_spt3g \
     && export spt3g_start=$(pwd) \
     && cd spt3g_software \
     && patch -p1 < ../patch_spt3g \

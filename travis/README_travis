@@ -51,7 +51,8 @@ $> ./travis_docker.sh travisci/ci-garnet:packer-1512502276-986baf0
 Now you will be inside the container, and the directory containing our scripts
 will be mounted in ~/scripts.  Build the tarball for the gcc suffix:
 
-$> ./scripts/travis_ubuntu_14.04.sh "-7"
+$> ./scripts/travis_ubuntu_14.04.sh "-7" >log 2>&1 &
+$> tail -f log
 
 Upload the tarball to NERSC:
 
