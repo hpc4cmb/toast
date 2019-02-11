@@ -1,6 +1,6 @@
-curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1.0.0.tar.bz2 \
+curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.1/libmadam-1.0.1.tar.bz2 \
     | tar -xjf - \
-    && cd libmadam-1.0.0 \
+    && cd libmadam-1.0.1 \
     && FC="@MPIFC@" MPIFC="@MPIFC@" FCFLAGS="@FCFLAGS@" \
     CC="@MPICC@" MPICC="@MPICC@" CFLAGS="@CFLAGS@" \
     ./configure @CROSS@ --with-cfitsio="@AUX_PREFIX@" \

@@ -243,6 +243,10 @@ class OpMadam(Operator):
             conserve_memory = True
         self._conserve_memory = int(conserve_memory)
         self._translate_timestamps = translate_timestamps
+        if "info" in params:
+            self._verbose = int(params["info"]) > 0
+        else:
+            self._verbose = True
 
     def __del__(self):
         self._cache.clear()
@@ -336,7 +340,8 @@ class OpMadam(Operator):
 
         """
         auto_timer = timing.auto_timer(type(self).__name__)
-        memreport(comm, "just before calling libmadam.destripe")
+        if self._verbose:
+            memreport(comm, "just before calling libmadam.destripe")
         if self._cached:
             # destripe
             outpath = ""

@@ -185,9 +185,9 @@ curl -SL http://faculty.cse.tamu.edu/davis/SuiteSparse/SuiteSparse-5.4.0.tar.gz 
 
 # Install libmadam
 
-curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.0/libmadam-1.0.0.tar.bz2 \
+curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.1/libmadam-1.0.1.tar.bz2 \
     | tar -xjf - \
-    && cd libmadam-1.0.0 \
+    && cd libmadam-1.0.1 \
     && FC="${MPIFC}" FCFLAGS="-O2 -g -fPIC -pthread" \
     CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread" \
     ./configure --with-cfitsio="/usr" \
