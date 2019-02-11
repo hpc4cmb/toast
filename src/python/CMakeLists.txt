@@ -24,6 +24,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast.cpp
     _libtoast_sys.cpp
     _libtoast_math_sf.cpp
+    _libtoast_math_rng.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
 

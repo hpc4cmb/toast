@@ -37,7 +37,8 @@ add_library(toast ${toast_SOURCES})
 target_include_directories(toast PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    PRIVATE src)
+    PRIVATE src
+)
 
 # This compiler definition makes it possible to query the serial library
 # to see if we also have the MPI library.

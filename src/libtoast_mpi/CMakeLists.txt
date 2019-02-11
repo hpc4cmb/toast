@@ -9,10 +9,10 @@ add_library(toast_mpi ${toast_mpi_SOURCES})
 target_include_directories(toast_mpi PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    PRIVATE src)
+    PRIVATE src
+)
 
 target_include_directories(toast_mpi PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
 )
 

@@ -32,6 +32,9 @@ class AlignedArray {
 
         ~AlignedArray();
 
+        static std::unique_ptr <AlignedArray> create(
+            std::vector <py::ssize_t> const & shp, py::dtype dt);
+
         static std::unique_ptr <AlignedArray> zeros_like(py::buffer other);
 
         static std::unique_ptr <AlignedArray> empty_like(py::buffer other);
@@ -50,7 +53,9 @@ class AlignedArray {
 
 // Helper functions to check numpy array data types and dimensions.
 void pybuffer_check_double_1D(py::buffer data);
+void pybuffer_check_uint64_1D(py::buffer data);
 
 // Initialize all the pieces of the bindings.
 void init_sys(py::module & m);
 void init_math_sf(py::module & m);
+void init_math_rng(py::module & m);
