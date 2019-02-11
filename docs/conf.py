@@ -100,11 +100,26 @@ pygments_style = 'sphinx'
 
 autoclass_content = 'both'
 
+# This value contains a list of modules to be mocked up. This is useful when
+# some external dependencies are not met at build time and break the
+# building process.
+autodoc_mock_imports = []
+for missing in ('numpy', 'matplotlib', 'healpy', 'astropy',
+                'pyephem', 'mpi4py'):
+    try:
+        foo = import_module(missing)
+    except ImportError:
+        autodoc_mock_imports.append(missing)
+
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'haiku'
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    html_theme = 'default'
+else:
+    html_theme = 'haiku'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
