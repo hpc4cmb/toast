@@ -58,8 +58,11 @@ endif(OpenMP_CXX_FOUND)
 if(LAPACK_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
     target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toast PROPERTIES LINK_FLAGS "${LAPACK_LINKER_FLAGS}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS
+        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
+    )
     target_link_libraries(toast "${LAPACK_LIBRARIES}")
+    target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
 
 if(AATM_FOUND)

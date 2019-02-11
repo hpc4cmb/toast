@@ -37,8 +37,11 @@ include(BuildType)
 
 find_package(OpenMP)
 
-find_package(LAPACK)
-find_package(LAPACKnames)
+find_package(BLAS)
+if(BLAS_FOUND)
+    find_package(LAPACK)
+    find_package(LAPACKnames)
+endif(BLAS_FOUND)
 
 find_package(FFTW)
 
