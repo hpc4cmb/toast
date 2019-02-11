@@ -9,10 +9,22 @@
 designed to allow the processing of data from telescopes that acquire
 data as timestreams (rather than images).
 """
-# Import MPI as early as possible, to prevent timeouts from the host system.
-from . import mpi
+import os
 
-from ._libtoast import Environment
-
-env = Environment.get()
-__version__ = env.version()
+# Get the package version from the libtoast environment if possible.  If this
+# import fails, it is likely due to the toast package being imported prior to
+# the build by setuptools (for example).
+__version__ = None
+try:
+    from ._libtoast import Environment
+    env = Environment.get()
+    __version__ = env.version()
+except ImportError:
+    # Just manually read the release file.
+    vparts = None
+    thisdir = os.path.abspath(os.path.dirname(__file__))
+    relfile = os.path.join(thisdir, "..", "..", "RELEASE")
+    with open(relfile, "r") as rel:
+        line = rel.readline().rstrip()
+        vparts = line.split(".")
+    __version__ = ".".join(vparts)

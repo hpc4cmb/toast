@@ -11,4 +11,4 @@ if(MPI_FOUND)
     add_subdirectory(libtoast_mpi)
 endif(MPI_FOUND)
 
-add_subdirectory(python)
+add_subdirectory(toast)
