@@ -16,6 +16,8 @@
 # define LAPACK_FUNC(lname, uname) lname ## _
 #elif defined LAPACK_NAMES_UFRONT
 # define LAPACK_FUNC(lname, uname) _ ## lname
+#else // if defined LAPACK_NAMES_LOWER
+# define LAPACK_FUNC(lname, uname) lname
 #endif // if defined LAPACK_NAMES_LOWER
 
 
@@ -29,7 +31,11 @@ void toast::lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N,
                         int * K, double * ALPHA, double * A, int * LDA,
                         double * B, int * LDB, double * BETA, double * C,
                         int * LDC) {
+    #ifdef HAVE_LAPACK
     dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -42,7 +48,11 @@ extern "C" void dgemv(char * TRANS, int * M, int * N, double * ALPHA,
 void toast::lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA,
                         double * A, int * LDA, double * X, int * INCX,
                         double * BETA, double * Y, int * INCY) {
+    #ifdef HAVE_LAPACK
     dgemv(TRANS, M, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -54,7 +64,11 @@ extern "C" void dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
 void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * LDA, double * W, double * WORK, int * LWORK,
                         int * INFO) {
+    #ifdef HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -67,7 +81,11 @@ extern "C" void dsymv(char * UPLO, int * N, double * ALPHA, double * A,
 void toast::lapack_symv(char * UPLO, int * N, double * ALPHA, double * A,
                         int * LDA, double * X, int * INCX, double * BETA,
                         double * Y, int * INCY) {
+    #ifdef HAVE_LAPACK
     dsymv(UPLO, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -78,7 +96,11 @@ extern "C" void dtrmv(char * UPLO, char * TRANS, char * DIAG, int * N,
 
 void toast::lapack_trmv(char * UPLO, char * TRANS, char * DIAG, int * N,
                         double * A, int * LDA, double * X, int * INCX) {
+    #ifdef HAVE_LAPACK
     dtrmv(UPLO, TRANS, DIAG, N, A, LDA, X, INCX);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -91,7 +113,11 @@ extern "C" void dsymm(char * SIDE, char * UPLO, int * M, int * N,
 void toast::lapack_symm(char * SIDE, char * UPLO, int * M, int * N,
                         double * ALPHA, double * A, int * LDA, double * B,
                         int * LDB, double * BETA, double * C, int * LDC) {
+    #ifdef HAVE_LAPACK
     dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -104,7 +130,11 @@ extern "C" void dsyrk(char * UPLO, char * TRANS, int * N, int * K,
 void toast::lapack_syrk(char * UPLO, char * TRANS, int * N, int * K,
                         double * ALPHA, double * A, int * LDA, double * BETA,
                         double * C, int * LDC) {
+    #ifdef HAVE_LAPACK
     dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -115,7 +145,11 @@ extern "C" void dpotrf(char * UPLO, int * N, double * A, int * LDA,
 
 void toast::lapack_potrf(char * UPLO, int * N, double * A, int * LDA,
                          int * INFO) {
+    #ifdef HAVE_LAPACK
     dpotrf(UPLO, N, A, LDA, INFO);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -128,7 +162,11 @@ extern "C" void dpocon(char * UPLO, int * N, double * A, int * LDA,
 void toast::lapack_pocon(char * UPLO, int * N, double * A, int * LDA,
                          double * ANORM, double * RCOND, double * WORK,
                          int * IWORK, int * INFO) {
+    #ifdef HAVE_LAPACK
     dpocon(UPLO, N, A, LDA, ANORM, RCOND, WORK, IWORK, INFO);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -139,6 +177,10 @@ extern "C" void dpotri(char * UPLOW, int * N, double * A, int * LDA,
 
 void toast::lapack_potri(char * UPLO, int * N, double * A, int * LDA,
                          int * INFO) {
+    #ifdef HAVE_LAPACK
     dpotri(UPLO, N, A, LDA, INFO);
+    #else // ifdef HAVE_LAPACK
+    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.")
+    #endif // ifdef HAVE_LAPACK
     return;
 }

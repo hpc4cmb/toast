@@ -50,20 +50,27 @@ endif(MPI_FOUND)
 # Dependencies
 
 if(OpenMP_CXX_FOUND)
-    target_compile_options(toast PRIVATE ${OpenMP_CXX_FLAGS})
-    set_target_properties(toast PROPERTIES LINK_FLAGS ${OpenMP_CXX_FLAGS})
+    target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
     target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
 
+if(LAPACK_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS "${LAPACK_LINKER_FLAGS}")
+    target_link_libraries(toast "${LAPACK_LIBRARIES}")
+endif(LAPACK_FOUND)
+
 if(AATM_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_AATM=1)
-    target_include_directories(toast PUBLIC ${AATM_INCLUDE_DIRS})
+    target_include_directories(toast PUBLIC "${AATM_INCLUDE_DIRS}")
     target_link_libraries(toast "${AATM_LIBRARIES}")
 endif(AATM_FOUND)
 
 if(FFTW_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
-    target_include_directories(toast PUBLIC ${FFTW_INCLUDE_DIRS})
+    target_include_directories(toast PUBLIC "${FFTW_INCLUDE_DIRS}")
     target_link_libraries(toast "${FFTW_LIBRARIES}")
     if(FFTW_DOUBLE_THREADS_LIB_FOUND)
         target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
@@ -73,10 +80,6 @@ endif(FFTW_FOUND)
 # FIXME: restore MKL linking here after testing on a machine with Intel
 # compilers.
 
-
-
-target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-target_link_libraries(toast "${LAPACK_LIBRARIES}")
 
 # Installation
 
