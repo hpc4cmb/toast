@@ -71,9 +71,16 @@ class CMakeBuild(build_ext):
 
 
 ext_modules = [
-    CMakeExtension("toast._libtoast"),
-    CMakeExtension("toast._libtoast_mpi")
+    CMakeExtension("toast._libtoast")
 ]
+
+try:
+    from mpi4py import MPI
+    # If we can import mpi4py, then assume that the MPI extension
+    # will be built.
+    ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
+except ImportError:
+    pass
 
 version = None
 with open("RELEASE", "r") as rel:
