@@ -8,6 +8,7 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 foreach(policy
     CMP0048
     CMP0074
+    CMP0077
   )
   if(POLICY ${policy})
     cmake_policy(SET ${policy} NEW)
