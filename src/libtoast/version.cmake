@@ -5,9 +5,10 @@
 execute_process(
     COMMAND
     git describe --tags --dirty --always
-    OUTPUT_VARIABLE GIT_DESC
+    OUTPUT_VARIABLE GIT_DESC_RAW
     ERROR_QUIET
 )
+string(STRIP "${GIT_DESC_RAW}" GIT_DESC)
 string(REGEX REPLACE "-.*$" "" GIT_LAST "${GIT_DESC}")
 
 execute_process(
@@ -42,8 +43,8 @@ else()
     set(RELEASE_VERSION "")
 endif()
 
-set(VERSION "const char* GIT_VERSION=\"${GIT_VERSION}\";
-const char* RELEASE_VERSION=\"${RELEASE_VERSION}\";")
+set(VERSION "const char* GIT_VERSION = \"${GIT_VERSION}\";
+const char* RELEASE_VERSION = \"${RELEASE_VERSION}\";")
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp)
     file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp VERSION_)
