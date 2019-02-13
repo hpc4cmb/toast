@@ -10,10 +10,6 @@ a BSD-style license that can be found in the LICENSE file.
 #include <climits>
 #include <thread>
 
-#ifdef HAVE_ELEMENTAL
-#   include <El.hpp>
-#endif
-
 #ifdef USE_TBB
 #   include <tbb/tbb.h>
 #   include <tbb/task_scheduler_init.h>
@@ -42,13 +38,8 @@ void toast::init ( int argc, char *argv[] )
 
     if ( ! initialized )
     {
-#   if defined(HAVE_ELEMENTAL)
-        // If we are using Elemental, let it initialize MPI
-        El::Initialize ( argc, argv );
-#   else
         ret = MPI_Init_thread ( &argc, &argv, MPI_THREAD_FUNNELED,
                                 &threadprovided );
-#   endif
     }
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -139,12 +130,7 @@ void toast::finalize ( )
     tbb_scheduler = nullptr;
 #endif // USE_TBB
 
-#if defined(HAVE_ELEMENTAL)
-    // If we are using Elemental, let it finalize MPI
-    El::Finalize ( );
-#else
     ret = MPI_Finalize ( );
-#endif
 
     return;
 }

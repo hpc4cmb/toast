@@ -12,8 +12,8 @@ MPICXX = mpicxx
 MPIFC = mpifort
 MPI_CPPFLAGS = /usr/include/mpi
 MPI_LDFLAGS = /usr/lib
-MPI_CXXLIB = mpi++
-MPI_LIB = mpi
+MPI_CXXLIB = mpichcxx
+MPI_LIB = mpich
 MPI_EXTRA_COMP =
 MPI_EXTRA_LINK =
 
@@ -38,11 +38,11 @@ MAKEJ = 4
 
 INTEL_CONDA = no
 MINICONDA = https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-PYVERSION = 3.6
+PYVERSION = 3.7
 
 # For BLAS/LAPACK, we use openblas
 
-BLAS = -lopenblas
+BLAS = -lopenblas -fopenmp -lm
 LAPACK =
 
 # Boost toolchain name

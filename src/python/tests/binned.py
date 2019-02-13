@@ -23,12 +23,15 @@ from ..tod.sim_noise import *
 from ..tod.sim_interval import *
 from ..map import *
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class BinnedTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -43,8 +46,9 @@ class BinnedTest(MPITestCase):
         self.hwprpm = 100
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate)
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet, samplerate=self.rate
+        )
 
         # Samples per observation
         self.totsamp = 2000000
@@ -52,14 +56,14 @@ class BinnedTest(MPITestCase):
         # Pixelization
 
         self.sim_nside = 32
-        self.sim_npix = 12 * self.sim_nside**2
+        self.sim_npix = 12 * self.sim_nside ** 2
 
         self.map_nside = 32
-        self.map_npix = 12 * self.map_nside**2
+        self.map_npix = 12 * self.map_nside ** 2
 
         self.subnside = int(self.map_nside / 4)
-        self.subnpix = 12 * self.subnside**2
-        self.nsubmap = int( self.map_npix / self.subnpix )
+        self.subnpix = 12 * self.subnside ** 2
+        self.nsubmap = int(self.map_npix / self.subnpix)
 
         # Scan strategy
 
@@ -103,7 +107,8 @@ class BinnedTest(MPITestCase):
             spinangle=self.spinangle,
             precperiod=self.precperiod,
             precangle=self.precangle,
-            sampsizes=chunks)
+            sampsizes=chunks,
+        )
 
         tod.set_prec_axis()
 
@@ -113,13 +118,12 @@ class BinnedTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
         self.data.obs[0]["intervals"] = intrvls
-
 
     def test_binned(self):
         # flag data outside valid intervals
@@ -131,13 +135,14 @@ class BinnedTest(MPITestCase):
         nsig.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode='IQU',
-                                  hwprpm=self.hwprpm)
+        pointing = OpPointingHpix(
+            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
+        )
         pointing.exec(self.data)
 
         handle = None
         if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"info.txt"), "w")
+            handle = open(os.path.join(self.outdir, "info.txt"), "w")
         self.data.info(handle)
         if self.comm.rank == 0:
             handle.close()
@@ -152,32 +157,48 @@ class BinnedTest(MPITestCase):
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
-                            nnz=6, dtype=np.float64, submap=self.subnpix,
-                            local=localsm)
+        invnpp = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.sim_npix,
+            nnz=6,
+            dtype=np.float64,
+            submap=self.subnpix,
+            local=localsm,
+        )
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
-                          nnz=3, dtype=np.float64, submap=self.subnpix,
-                          local=localsm)
+        zmap = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.sim_npix,
+            nnz=3,
+            dtype=np.float64,
+            submap=self.subnpix,
+            local=localsm,
+        )
         zmap.data.fill(0.0)
 
-        hits = DistPixels(comm=self.data.comm.comm_world, size=self.sim_npix,
-                          nnz=1, dtype=np.int64, submap=self.subnpix,
-                          local=localsm)
+        hits = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.sim_npix,
+            nnz=1,
+            dtype=np.int64,
+            submap=self.subnpix,
+            local=localsm,
+        )
         hits.data.fill(0)
 
         # accumulate the inverse covariance and noise weighted map.
         # Use detector weights based on the analytic NET.
 
-        tod = self.data.obs[0]['tod']
-        nse = self.data.obs[0]['noise']
+        tod = self.data.obs[0]["tod"]
+        nse = self.data.obs[0]["noise"]
         detweights = {}
         for d in tod.local_dets:
-            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
+            detweights[d] = 1.0 / (self.rate * nse.NET(d) ** 2)
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
-                                   hits=hits, zmap=zmap, name="noise")
+        build_invnpp = OpAccumDiag(
+            detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="noise"
+        )
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -207,24 +228,24 @@ class BinnedTest(MPITestCase):
             os.mkdir(madam_out)
 
         pars = {}
-        pars['temperature_only'] = 'F'
-        pars['force_pol'] = 'T'
-        pars['kfirst'] = 'F'
-        pars['base_first'] = 1.0
-        pars['fsample'] = self.rate
-        pars['nside_map'] = self.map_nside
-        pars['nside_cross'] = self.map_nside
-        pars['nside_submap'] = self.map_nside
-        pars['pixlim_cross'] = 1.0e-2
-        pars['pixlim_map'] = 1.0e-3
-        pars['write_map'] = 'F'
-        pars['write_binmap'] = 'T'
-        pars['write_matrix'] = 'T'
-        pars['write_wcov'] = 'T'
-        pars['write_hits'] = 'T'
-        pars['kfilter'] = 'F'
-        pars['path_output'] = madam_out
-        pars['info'] = 0
+        pars["temperature_only"] = "F"
+        pars["force_pol"] = "T"
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = self.map_nside
+        pars["pixlim_cross"] = 1.0e-2
+        pars["pixlim_map"] = 1.0e-3
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "T"
+        pars["write_wcov"] = "T"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
         madam = OpMadam(params=pars, detweights=detweights, name="noise")
 
@@ -234,7 +255,7 @@ class BinnedTest(MPITestCase):
             if self.comm.rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -242,7 +263,7 @@ class BinnedTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                toastfile = os.path.join(self.outdir, 'hits.fits')
+                toastfile = os.path.join(self.outdir, "hits.fits")
                 toasthits = hp.read_map(toastfile, nest=True)
 
                 nt.assert_equal(hits, toasthits)
@@ -250,10 +271,10 @@ class BinnedTest(MPITestCase):
                 tothits = np.sum(hits)
                 nt.assert_equal(self.validsamp, tothits)
 
-                covfile = os.path.join(madam_out, 'madam_wcov_inv.fits')
+                covfile = os.path.join(madam_out, "madam_wcov_inv.fits")
                 cov = hp.read_map(covfile, nest=True, field=None)
 
-                toastfile = os.path.join(self.outdir, 'invnpp.fits')
+                toastfile = os.path.join(self.outdir, "invnpp.fits")
                 toastcov = hp.read_map(toastfile, nest=True, field=None)
 
                 """
@@ -267,10 +288,10 @@ class BinnedTest(MPITestCase):
                     nt.assert_almost_equal(cov[p], toastcov[p])
                 """
 
-                covfile = os.path.join(madam_out, 'madam_wcov.fits')
+                covfile = os.path.join(madam_out, "madam_wcov.fits")
                 cov = hp.read_map(covfile, nest=True, field=None)
 
-                toastfile = os.path.join(self.outdir, 'npp.fits')
+                toastfile = os.path.join(self.outdir, "npp.fits")
                 toastcov = hp.read_map(toastfile, nest=True, field=None)
 
                 """
@@ -290,7 +311,7 @@ class BinnedTest(MPITestCase):
                     nt.assert_almost_equal(cov[p], toastcov[p])
                 """
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True, field=None)
                 mask = hp.mask_bad(bins[0])
                 bins[0][mask] = 0.0
@@ -314,7 +335,7 @@ class BinnedTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                toastfile = os.path.join(self.outdir, 'binned.fits')
+                toastfile = os.path.join(self.outdir, "binned.fits")
                 toastbins = hp.read_map(toastfile, nest=True, field=None)
 
                 outfile = "{}_I.png".format(toastfile)
@@ -335,7 +356,7 @@ class BinnedTest(MPITestCase):
                 # compare binned map to madam output
 
                 diffmap = toastbins[0] - bins[0]
-                mask = (bins[0] != 0)
+                mask = bins[0] != 0
                 """
                 print("toast/madam I diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -347,11 +368,11 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                #nt.assert_almost_equal(bins[0][mask], binserial[0][mask],
+                # nt.assert_almost_equal(bins[0][mask], binserial[0][mask],
                 #                       decimal=6)
 
                 diffmap = toastbins[1] - bins[1]
-                mask = (bins[1] != 0)
+                mask = bins[1] != 0
                 """
                 print("toast/madam Q diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -363,11 +384,11 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                #nt.assert_almost_equal(bins[1][mask], binserial[1][mask],
+                # nt.assert_almost_equal(bins[1][mask], binserial[1][mask],
                 #                       decimal=6)
 
                 diffmap = toastbins[2] - bins[2]
-                mask = (bins[2] != 0)
+                mask = bins[2] != 0
                 """
                 print("toast/madam U diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -379,28 +400,33 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                #nt.assert_almost_equal(bins[2][mask], binserial[2][mask],
+                # nt.assert_almost_equal(bins[2][mask], binserial[2][mask],
                 #                       decimal=6)
-
 
                 # compute the binned map serially as a check
 
-                zfile = os.path.join(self.outdir, 'zmap.fits')
+                zfile = os.path.join(self.outdir, "zmap.fits")
                 ztoast = hp.read_map(zfile, nest=True, field=None)
 
                 binserial = np.copy(ztoast)
                 for p in range(self.map_npix):
-                    binserial[0][p] = toastcov[0][p] * ztoast[0][p] \
-                                      + toastcov[1][p] * ztoast[1][p] \
-                                      + toastcov[2][p] * ztoast[2][p]
-                    binserial[1][p] = toastcov[1][p] * ztoast[0][p] \
-                                      + toastcov[3][p] * ztoast[1][p] \
-                                      + toastcov[4][p] * ztoast[2][p]
-                    binserial[2][p] = toastcov[2][p] * ztoast[0][p] \
-                                      + toastcov[4][p] * ztoast[1][p] \
-                                      + toastcov[5][p] * ztoast[2][p]
+                    binserial[0][p] = (
+                        toastcov[0][p] * ztoast[0][p]
+                        + toastcov[1][p] * ztoast[1][p]
+                        + toastcov[2][p] * ztoast[2][p]
+                    )
+                    binserial[1][p] = (
+                        toastcov[1][p] * ztoast[0][p]
+                        + toastcov[3][p] * ztoast[1][p]
+                        + toastcov[4][p] * ztoast[2][p]
+                    )
+                    binserial[2][p] = (
+                        toastcov[2][p] * ztoast[0][p]
+                        + toastcov[4][p] * ztoast[1][p]
+                        + toastcov[5][p] * ztoast[2][p]
+                    )
 
-                toastfile = os.path.join(self.outdir, 'binned_serial')
+                toastfile = os.path.join(self.outdir, "binned_serial")
                 outfile = "{}_I.png".format(toastfile)
                 hp.mollview(binserial[0], xsize=1600, nest=True)
                 plt.savefig(outfile)
@@ -419,7 +445,7 @@ class BinnedTest(MPITestCase):
                 # compare binned map to madam output
 
                 diffmap = binserial[0] - bins[0]
-                mask = (bins[0] != 0)
+                mask = bins[0] != 0
                 """
                 print("serial/madam I diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -431,11 +457,10 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[0][mask], binserial[0][mask],
-                                       decimal=3)
+                nt.assert_almost_equal(bins[0][mask], binserial[0][mask], decimal=3)
 
                 diffmap = binserial[1] - bins[1]
-                mask = (bins[1] != 0)
+                mask = bins[1] != 0
                 """
                 print("serial/madam Q diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -447,11 +472,10 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[1][mask], binserial[1][mask],
-                                       decimal=3)
+                nt.assert_almost_equal(bins[1][mask], binserial[1][mask], decimal=3)
 
                 diffmap = binserial[2] - bins[2]
-                mask = (bins[2] != 0)
+                mask = bins[2] != 0
                 """
                 print("serial/madam U diff mean / std = ",
                       np.mean(diffmap[mask]), np.std(diffmap[mask]))
@@ -463,8 +487,7 @@ class BinnedTest(MPITestCase):
                 hp.mollview(diffmap, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
-                nt.assert_almost_equal(bins[2][mask], binserial[2][mask],
-                                       decimal=3)
+                nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=3)
 
         else:
             if self.comm.rank == 0:

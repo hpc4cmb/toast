@@ -25,7 +25,8 @@ pixels.py \
 noise.py \
 rings.py \
 pysm.py \
-smooth.py
+smooth.py \
+mapsampler.py
 
 if HAVE_AM_MPI
   toastmap_PYTHON += madam.py

@@ -1016,10 +1016,10 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
     double wdir_sigma, double z0_center, double z0_sigma, double T0_center,
     double T0_sigma, double zatm, double zmax, double xstep, double ystep,
     double zstep, long nelem_sim_max, int verbosity, MPI_Comm comm,
-    int gangsize, uint64_t key1, uint64_t key2, uint64_t counter1,
-    uint64_t counter2, char *cachedir ) {
+    uint64_t key1, uint64_t key2, uint64_t counter1,
+    uint64_t counter2, char *cachedir, double rmin, double rmax ) {
 
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     try {
         return reinterpret_cast < ctoast_atm_sim * >
@@ -1028,8 +1028,9 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
                                     lmax_sigma, w_center, w_sigma, wdir_center,
                                     wdir_sigma, z0_center, z0_sigma, T0_center,
                                     T0_sigma, zatm, zmax, xstep, ystep, zstep,
-                                    nelem_sim_max, verbosity, comm, gangsize,
-                                    key1, key2, counter1, counter2, cachedir ) );
+                                    nelem_sim_max, verbosity, comm,
+                                    key1, key2, counter1, counter2, cachedir,
+                                    rmin, rmax) );
     } catch ( std::exception &e ){
         std::cerr << "ERROR allocating atmosphere: " << e.what() << std::endl;
     } catch ( ... ) {
@@ -1040,7 +1041,7 @@ ctoast_atm_sim * ctoast_atm_sim_alloc (
 }
 
 int ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     try {
             delete reinterpret_cast < toast::tatm::sim * > ( sim );
     } catch ( std::exception &e ){
@@ -1055,7 +1056,7 @@ int ctoast_atm_sim_free ( ctoast_atm_sim * sim ) {
 }
 
 int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
     int err;
@@ -1078,7 +1079,7 @@ int ctoast_atm_sim_simulate( ctoast_atm_sim * sim, int use_cache ) {
 int ctoast_atm_sim_observe(
     ctoast_atm_sim * sim, double *t, double *az, double *el,
     double *tod, long nsamp, double fixed_r ) {
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
     TOAST_AUTO_TIMER();
     toast::tatm::sim * sm = reinterpret_cast < toast::tatm::sim * > ( sim );
     int err;
@@ -1307,6 +1308,15 @@ void ctoast_cov_apply_diagonal ( int64_t nsub, int64_t subsize, int64_t nnz,
     return;
 }
 
+void ctoast_map_tools_fast_scanning32( double * toi, int64_t const nsamp,
+                                       int64_t const * pixels,
+                                       double const * weights,
+                                       int64_t const nweight,
+                                       float const * bmap ) {
+    TOAST_AUTO_TIMER();
+    toast::map_tools::fast_scanning32( toi, nsamp, pixels, weights, nweight, bmap );
+    return;
+}
 
 //--------------------------------------
 // Run test suite

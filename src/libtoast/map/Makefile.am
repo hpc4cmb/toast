@@ -30,9 +30,9 @@ libtoast_map_la_includedir = $(includedir)/toast
 
 libtoast_map_la_include_HEADERS = \
 toast/map.hpp \
-toast/cov.hpp
+toast/cov.hpp \
+toast/map_tools.hpp
 
 libtoast_map_la_SOURCES = \
-toast_cov.cpp
-
-
+toast_cov.cpp \
+toast_map_tools.cpp

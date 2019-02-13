@@ -63,7 +63,7 @@ pip install numpy scipy matplotlib cython astropy ephem healpy cmake
 # mpi4py     : Install from source to use our MPICH.
 # ephem      : Install with pip using travis virtualenv.
 # healpy     : Install with pip using travis virtualenv.
-# elemental  : Install using our MPICH and build matrix compilers.
+# suitesparse: Install using our build matrix compilers.
 # aatm       : Install with our build matrix compilers.
 # libmadam   : Install using our MPICH and build matrix compilers.
 # libconviqt : Install using our MPICH and build matrix compilers.
@@ -135,11 +135,10 @@ wget https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
     && cd ..
 
 # libbz2, needed for boost / spt3g
-# FIXME: change patch link below after branch is merged upstream.
 
 curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
         | tar xjf - \
-        && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_bzip2 \
+        && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_bzip2 \
         && cd bzip2-1.0.6 \
         && patch -p1 < ../patch_bzip2 \
         && CC="${CC}" CFLAGS="-O2 -g -fPIC -pthread" \
@@ -170,53 +169,40 @@ curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.
     variant=release threading=multi link=shared runtime-link=shared install \
     && cd ..
 
-# Install Elemental
+# Install SuiteSparse
 
-wget https://github.com/elemental/Elemental/archive/v0.87.7.tar.gz \
-    && tar -xzf v0.87.7.tar.gz \
-    && cd Elemental-0.87.7 \
-    && mkdir build && cd build \
-    && cmake \
-    -D CMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -D INSTALL_PYTHON_PACKAGE=OFF \
-    -D CMAKE_CXX_COMPILER="${MPICXX}" \
-    -D CMAKE_C_COMPILER="${MPICC}" \
-    -D CMAKE_Fortran_COMPILER="${MPIFC}" \
-    -D MPI_CXX_COMPILER="${MPICXX}" \
-    -D MPI_C_COMPILER="${MPICC}" \
-    -D MPI_Fortran_COMPILER="${MPIFC}" \
-    -D METIS_GKREGEX=ON \
-    -D EL_DISABLE_PARMETIS=TRUE \
-    -D MATH_LIBS="-llapack -lopenblas" \
-    -D CMAKE_BUILD_TYPE=Release \
-    -D CMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_C_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_Fortran_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_SHARED_LINKER_FLAGS="-fopenmp" \
-    .. \
-    && make \
-    && make install \
-    && cd ../..
+curl -SL http://faculty.cse.tamu.edu/davis/SuiteSparse/SuiteSparse-5.4.0.tar.gz \
+    -o SuiteSparse-5.4.0.tar.gz \
+    && tar xzf SuiteSparse-5.4.0.tar.gz \
+    && cd SuiteSparse \
+    && make CC="${CC}" CXX="${CXX}" CFLAGS="-O2 -g -fPIC -pthread" AUTOCC=no \
+    F77="${FC}" F77FLAGS="-O2 -g -fPIC -pthread" \
+    CFOPENMP="-fopenmp" LAPACK="-llapack" BLAS="-lopenblas -fopenmp -lm" \
+    && cp -a ./lib/* "${PREFIX}/lib/" \
+    && cp -a ./include/* "${PREFIX}/include/" \
+    && cd ..
 
 # Install libmadam
 
-wget https://github.com/hpc4cmb/libmadam/releases/download/0.2.7/libmadam-0.2.7.tar.bz2 \
-    && tar -xjf libmadam-0.2.7.tar.bz2 \
-    && cd libmadam-0.2.7 \
+curl -SL https://github.com/hpc4cmb/libmadam/releases/download/v1.0.1/libmadam-1.0.1.tar.bz2 \
+    | tar -xjf - \
+    && cd libmadam-1.0.1 \
     && FC="${MPIFC}" FCFLAGS="-O2 -g -fPIC -pthread" \
     CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread" \
     ./configure --with-cfitsio="/usr" \
-    --with-blas="-lopenblas" --with-lapack="-llapack" \
+    --with-blas="-lopenblas -fopenmp -lm" --with-lapack="-llapack" \
     --with-fftw="/usr" --prefix="${PREFIX}" \
     && make \
     && make install \
-    && cd ..
+    && cd python \
+    && python setup.py install --prefix "${PREFIX}" \
+    && cd ../..
 
 # Install libconviqt
 
-wget -O libconviqt-1.0.2.tar.bz2 https://www.dropbox.com/s/4tzjn9bgq7enkf9/libconviqt-1.0.2.tar.bz2?dl=1 \
-    && tar -xjf libconviqt-1.0.2.tar.bz2 \
-    && cd libconviqt-1.0.2 \
+curl -SL https://www.dropbox.com/s/11r3pj4wntnqax1/libconviqt-1.1.0.tar.bz2?dl=1 \
+    | tar -xjf - \
+    && cd libconviqt-1.1.0 \
     && CC="${MPICC}" CXX="${MPICXX}" \
     CFLAGS="-O2 -g -fPIC -pthread -std=gnu99" \
     CXXFLAGS="-O2 -g -fPIC -pthread" \
@@ -224,7 +210,9 @@ wget -O libconviqt-1.0.2.tar.bz2 https://www.dropbox.com/s/4tzjn9bgq7enkf9/libco
     --prefix="${PREFIX}" \
     && make \
     && make install \
-    && cd ..
+    && cd python \
+    && python setup.py install --prefix "${PREFIX}" \
+    && cd ../..
 
 # Install libsharp
 
@@ -243,14 +231,14 @@ git clone https://github.com/Libsharp/libsharp --branch master --single-branch -
     && cd ../..
 
 # Install spt3g software
-# FIXME: change patch link below after branch is merged upstream.
 
 git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-branch --depth 1 \
-    && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_spt3g \
+    && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_spt3g \
     && export spt3g_start=$(pwd) \
     && cd spt3g_software \
     && patch -p1 < ../patch_spt3g \
     && cd .. \
+    && rm -rf "${PREFIX}/spt3g" \
     && cp -a spt3g_software "${PREFIX}/spt3g" \
     && cd "${PREFIX}/spt3g" \
     && mkdir build \

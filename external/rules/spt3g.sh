@@ -3,6 +3,7 @@ git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-
     && cd spt3g_software \
     && patch -p1 < ../rules/patch_spt3g \
     && cd .. \
+    && rm -rf "@AUX_PREFIX@/spt3g" \
     && cp -a spt3g_software "@AUX_PREFIX@/spt3g" \
     && cd "@AUX_PREFIX@/spt3g" \
     && mkdir build \

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+  Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
   All rights reserved.  Use of this source code is governed by
   a BSD-style license that can be found in the LICENSE file.
 */
@@ -13,10 +13,9 @@
 #include <mpi.h>
 #include <vector>
 
-#ifdef HAVE_ELEMENTAL
-#include <El.hpp>
+#ifdef HAVE_SUITESPARSE
+#include "cholmod.h"
 #endif
-
 
 namespace toast { namespace tatm {
 
@@ -38,7 +37,7 @@ int get_atmospheric_loading_vec(double altitude, double temperature,
                                 double *loading);
 #endif
 
-#ifdef HAVE_ELEMENTAL
+#ifdef HAVE_SUITESPARSE
 
 class sim {
 
@@ -65,10 +64,11 @@ public :
          double xstep=100, double ystep=100, double zstep=100,
          long nelem_sim_max=1000, // Size of the simulation slices
          int verbosity=0, MPI_Comm comm=MPI_COMM_WORLD,
-         int gangsize=-1, // Size of the gangs that create slices
          uint64_t key1=0, uint64_t key2=0, // RNG keys
          uint64_t counterval1=0, uint64_t counterval2=0, // RNG counters
-         char *cachedir=NULL );
+         char *cachedir=NULL,
+         double rmin=0, double rmax=10000 // Line-of-sight observing limits
+         );
 
     ~sim();
 
@@ -85,9 +85,9 @@ public :
 
 private :
 
-    MPI_Comm comm=MPI_COMM_NULL, comm_gang=MPI_COMM_NULL;
+    MPI_Comm comm=MPI_COMM_NULL;
     std::string cachedir;
-    int rank, ntask, rank_gang, ntask_gang, nthread, gangsize, gang, ngang;
+    int rank, ntask, nthread;
     int verbosity;
     uint64_t key1, key2, counter1, counter2, counter1start, counter2start;
     double azmin, azmax, elmin, elmax, tmin, tmax, sinel0, cosel0;
@@ -108,29 +108,32 @@ private :
     double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
     long nr; // Number of steps in the Kolmogorov grid
     long nelem_sim_max; // Size of the independent X-direction slices.
-    double rmin, rmax, rstep, rstep_inv; // Kolmogorov correlation
-                                         // grid
+    // Kolmogorov correlation grid
+    double rmin_kolmo, rmax_kolmo, rstep, rstep_inv;
+    double rcorr, rcorrsq, corrlim; // Correlation length
+    double rmin, rmax; // line-of-sight integration limits
     // Mapping between full volume and observation cone
     mpi_shmem_long *compressed_index=NULL;
     // Inverse mapping between full volume and observation cone
     mpi_shmem_long *full_index=NULL;
+    cholmod_common cholcommon;
+    cholmod_common *chcommon;
     void draw(); // Draw values of lmin, lmax, w, wdir, T0 (and optionally z0)
     void get_volume(); // Determine the rectangular volume needed
     // determine of the given coordinates are within observed volume
     bool in_cone( double x, double y, double z, double t_in=-1 );
     void compress_volume(); // Find the volume elements really needed
-    El::Grid *grid=NULL;
     mpi_shmem_double *realization=NULL;
     // Find the next range of compressed indices to simulate
     void get_slice( long &ind_start, long &ind_stop );
     // Use the atmospheric parameters for volume element covariance
-    El::DistMatrix<double> * build_covariance( long ind_start, long ind_stop );
     // Cholesky decompose (square root) the covariance matrix
-    void sqrt_covariance( El::DistMatrix<double> *cov, long ind_start,
-                          long ind_stop );
+    cholmod_sparse * sqrt_sparse_covariance(cholmod_sparse *cov,
+                                            long ind_start, long ind_stop);
+    cholmod_sparse * build_sparse_covariance(long ind_start, long ind_stop);
     // Create a realization out of the square root covariance matrix
-    void apply_covariance( El::DistMatrix<double> *cov,
-                           long ind_start, long ind_stop );
+    void apply_sparse_covariance(cholmod_sparse *cov,
+                                 long ind_start, long ind_stop);
     // Compressed index to xyz-coordinates
     void ind2coord( long i, double *coord );
     // xyz-coordinates to Compressed index

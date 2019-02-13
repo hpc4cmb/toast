@@ -18,11 +18,17 @@
 #include <functional>
 #include <cmath>
 #include <omp.h>
+#include <algorithm>  // std::sort
+
+
+#ifdef HAVE_SUITESPARSE
+
+#include "cholmod.h"
 
 double median( std::vector<double> vec ) {
     if ( vec.size() == 0 ) return 0;
 
-    sort( vec.begin(), vec.end());
+    std::sort(vec.begin(), vec.end());
     int half1 = (vec.size() - 1) * .5;
     int half2 = vec.size() * .5;
 
@@ -40,22 +46,24 @@ double mean( std::vector<double> vec ) {
 }
 
 
-toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
-              double tmin, double tmax,
-              double lmin_center, double lmin_sigma,
-              double lmax_center, double lmax_sigma,
-              double w_center, double w_sigma,
-              double wdir_center, double wdir_sigma,
-              double z0_center, double z0_sigma,
-              double T0_center, double T0_sigma,
-              double zatm, double zmax,
-              double xstep, double ystep, double zstep,
-              long nelem_sim_max,
-              int verbosity, MPI_Comm comm, int gangsize,
-              uint64_t key1,uint64_t key2,
-              uint64_t counterval1, uint64_t counterval2, char *cachedir)
+toast::tatm::sim::sim(double azmin, double azmax, double elmin, double elmax,
+                      double tmin, double tmax,
+                      double lmin_center, double lmin_sigma,
+                      double lmax_center, double lmax_sigma,
+                      double w_center, double w_sigma,
+                      double wdir_center, double wdir_sigma,
+                      double z0_center, double z0_sigma,
+                      double T0_center, double T0_sigma,
+                      double zatm, double zmax,
+                      double xstep, double ystep, double zstep,
+                      long nelem_sim_max,
+                      int verbosity, MPI_Comm comm,
+                      uint64_t key1,uint64_t key2,
+                      uint64_t counterval1, uint64_t counterval2, char *cachedir,
+                      double rmin, double rmax
+                      )
 : comm(comm), cachedir(cachedir),
-  gangsize(gangsize), verbosity(verbosity),
+  verbosity(verbosity),
   key1(key1), key2(key2),
   counter1start(counterval1), counter2start(counterval2),
   azmin(azmin), azmax(azmax),
@@ -68,49 +76,24 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
   T0_center(T0_center), T0_sigma(T0_sigma),
   zatm(zatm), zmax(zmax),
   xstep(xstep), ystep(ystep), zstep(zstep),
-  nelem_sim_max(nelem_sim_max)
+  nelem_sim_max(nelem_sim_max),
+  rmin(rmin), rmax(rmax)
 {
     counter1 = counter1start;
     counter2 = counter2start;
+
+    corrlim = 1e-3;
 
     if ( MPI_Comm_size( comm, &ntask ) )
         throw std::runtime_error( "Failed to get size of MPI communicator." );
     if ( MPI_Comm_rank( comm, &rank ) )
         throw std::runtime_error( "Failed to get rank in MPI communicator." );
 
-    if ( gangsize == 1 ) {
-        ngang = ntask;
-        gang = rank;
-        comm_gang = MPI_COMM_SELF;
-        ntask_gang = 1;
-        rank_gang = 0;
-    } else if ( gangsize > 0 and 2*gangsize <= ntask ) {
-        ngang = ntask / gangsize;
-        gang = rank / gangsize;
-        // If the last gang is smaller than the rest, it will be merged with
-        // the second-to-last gang
-        if ( gang > ngang-1 ) gang = ngang - 1;
-        if ( MPI_Comm_split( comm, gang, rank, &comm_gang ) )
-            throw std::runtime_error( "Failed to split MPI communicator." );
-        if ( MPI_Comm_size( comm_gang, &ntask_gang ) )
-            throw std::runtime_error( "Failed to get size of the split MPI "
-                                      "communicator." );
-        if ( MPI_Comm_rank( comm_gang, &rank_gang ) )
-            throw std::runtime_error( "Failed to get rank in the split MPI "
-                                      "communicator." );
-    } else {
-        ngang = 1;
-        gang = 0;
-        comm_gang = comm;
-        ntask_gang = ntask;
-        rank_gang = rank;
-    }
-
     nthread = omp_get_max_threads();
 
     if (rank == 0 && verbosity > 0)
         std::cerr<<"atmsim constructed with " << ntask << " processes, "
-                 << ngang << " gangs, " << nthread << " threads per process."
+                 << nthread << " threads per process."
                  << std::endl;
 
     if ( azmin >= azmax ) throw std::runtime_error( "atmsim: azmin >= azmax." );
@@ -134,23 +117,23 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
     sinel0 = sin( el0 );
     cosel0 = cos( el0 );
 
-    xxstep = xstep*cosel0 - zstep*sinel0;
+    xxstep = xstep * cosel0 - zstep * sinel0;
     yystep = ystep;
-    zzstep = xstep*sinel0 + zstep*cosel0;
+    zzstep = xstep * sinel0 + zstep * cosel0;
 
     // speed up the in-cone calculation
     double tol = 0.1 * M_PI / 180; // 0.1 degree tolerance
-    tanmin = tan( -0.5*delta_az - tol );
-    tanmax = tan(  0.5*delta_az + tol );
+    tanmin = tan(-0.5 * delta_az - tol);
+    tanmax = tan(0.5 * delta_az + tol);
 
-    if ( rank == 0 && verbosity > 0 ) {
+    if (rank == 0 && verbosity > 0) {
         std::cerr << std::endl;
         std::cerr << "Input parameters:" << std::endl;
-        std::cerr << "             az = [" << azmin*180./M_PI << " - "
-                  << azmax*180./M_PI << "] (" << delta_az*180./M_PI
+        std::cerr << "             az = [" << azmin * 180. / M_PI << " - "
+                  << azmax * 180. / M_PI << "] (" << delta_az * 180. / M_PI
                   << " degrees)" << std::endl;
-        std::cerr << "             el = [" << elmin*180./M_PI << " - "
-                  << elmax*180./M_PI << "] (" << delta_el*180/M_PI
+        std::cerr << "             el = [" << elmin * 180. / M_PI << " - "
+                  << elmax * 180. / M_PI << "] (" << delta_el * 180 / M_PI
                   << " degrees)" << std::endl;
         std::cerr << "              t = [" << tmin << " - " << tmax
                   << "] (" << delta_t << " s)" << std::endl;
@@ -160,7 +143,7 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
                   << " m" << std::endl;
         std::cerr << "              w = " << w_center << " +- " << w_sigma
                   << " m" << std::endl;
-        std::cerr << "           wdir = " << wdir_center*180./M_PI << " +- "
+        std::cerr << "           wdir = " << wdir_center * 180. / M_PI << " +- "
                   << wdir_sigma*180./M_PI << " degrees " << std::endl;
         std::cerr << "             z0 = " << z0_center << " +- " << z0_sigma
                   << " m" << std::endl;
@@ -177,30 +160,30 @@ toast::tatm::sim::sim( double azmin, double azmax, double elmin, double elmax,
         std::cerr << "         yystep = " << yystep << " m" << std::endl;
         std::cerr << "         zzstep = " << zzstep << " m" << std::endl;
         std::cerr << "  nelem_sim_max = " << nelem_sim_max << std::endl;
+        std::cerr << "        corrlim = " << corrlim << std::endl;
         std::cerr << "      verbosity = " << verbosity << std::endl;
+        std::cerr << "           rmin = " << rmin << " m" << std::endl;
+        std::cerr << "           rmax = " << rmax << " m" << std::endl;
     }
 
-    // Initialize Elemental.  This should already be done by the top-level
-    // toast::init() function, which is called when importing the toast.mpi
-    // python package.
-
-    if ( !El::Initialized() ) El::Initialize();
-
-    // Initialize Elemental grid for distributed matrix manipulation
-    grid = new El::Grid( comm_gang );
+    // Initialize cholmod
+    chcommon = &cholcommon;
+    cholmod_start(chcommon);
+    if (verbosity > 1)
+        chcommon->print = 3;  // Default verbosity
+    else
+        chcommon->print = 1;  // Minimal verbosity
+    chcommon->itype = CHOLMOD_INT;  // All integer arrays are int
+    chcommon->dtype = CHOLMOD_DOUBLE;  // All float arrays are double
+    chcommon->final_ll = 1;  // The factorization is LL', not LDL'
 }
 
 
 toast::tatm::sim::~sim() {
-    if ( grid ) delete grid;
     if ( compressed_index ) delete compressed_index;
     if ( full_index ) delete full_index;
     if ( realization ) delete realization;
-    if ( comm_gang != MPI_COMM_NULL && comm_gang != MPI_COMM_SELF
-         && comm_gang != comm ) {
-        if ( MPI_Comm_free( &comm_gang ) )
-            std::cerr << "Failed to free MPI communicator." << std::endl;
-    }
+    cholmod_finish(chcommon);
 }
 
 
@@ -208,16 +191,10 @@ void toast::tatm::sim::print() {
     for (int i=0; i<ntask; ++i) {
         MPI_Barrier(comm);
         if (rank != i) continue;
-        std::cerr << rank << " : comm = " << comm
-                  << ", comm_gang = " << comm_gang << std::endl;
+        std::cerr << rank << " : comm = " << comm << std::endl;
         std::cerr << rank << " : cachedir " << cachedir << std::endl;
         std::cerr << rank << " : ntask = " << ntask
-                  << ", rank_gang = " << rank_gang
-                  << ", ntask_gang = " << ntask_gang
-                  << ", nthread = " << nthread
-                  << ", gangsize = " << gangsize
-                  << ", gang = " << gang
-                  << ", ngang = " << ngang << std::endl;
+                  << ", nthread = " << nthread << std::endl;
         std::cerr << rank << " : verbosity = " << verbosity
                   << ", key1 = " << key1
                   << ", key2 = " << key2
@@ -326,6 +303,8 @@ void toast::tatm::sim::load_realization() {
             std::cerr << " wdir = " << wdir*180./M_PI << " degrees" << std::endl;
             std::cerr << "   z0 = " << z0 << " m" << std::endl;
             std::cerr << "   T0 = " << T0 << " K" << std::endl;
+            std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                      << corrlim << ")" << std::endl;
         }
     }
 
@@ -477,6 +456,10 @@ void toast::tatm::sim::save_realization() {
         f << T0 << std::endl;
         f.close();
 
+        if ( verbosity > 0 )
+            std::cerr << "Saved metadata to "
+                      << fname.str() << std::endl;
+
         // Save realization
 
         std::ostringstream fname_real;
@@ -532,7 +515,7 @@ int toast::tatm::sim::simulate( bool use_cache ) {
         long ind_start = 0, ind_stop = 0, slice = 0;
 
         // Simulate the atmosphere in indepedent slices, each slice
-        // assigned to exactly one gang
+        // assigned to one process
 
         std::vector<int> slice_starts;
         std::vector<int> slice_stops;
@@ -542,29 +525,31 @@ int toast::tatm::sim::simulate( bool use_cache ) {
             slice_starts.push_back(ind_start);
             slice_stops.push_back(ind_stop);
 
-            if ( slice % ngang == gang ) {
-
-                El::DistMatrix<double> *cov = build_covariance(
-                    ind_start, ind_stop );
-                sqrt_covariance( cov, ind_start, ind_stop );
-                apply_covariance( cov, ind_start, ind_stop );
-
-                delete cov;
+            if (slice % ntask == rank) {
+                cholmod_sparse *cov = build_sparse_covariance(ind_start,
+                                                              ind_stop);
+                cholmod_sparse *sqrt_cov = sqrt_sparse_covariance(cov,
+                                                                  ind_start,
+                                                                  ind_stop);
+                cholmod_free_sparse(&cov, chcommon);
+                apply_sparse_covariance(sqrt_cov,
+                                        ind_start,
+                                        ind_stop);
+                cholmod_free_sparse(&sqrt_cov, chcommon);
             }
 
-            if ( ind_stop == nelem ) break;
+            if (ind_stop == nelem) break;
 
             ++slice;
         }
 
-        // Gather the slices from the gangs
+        // Gather the slices
 
         for ( size_t slice=0; slice < slice_starts.size(); ++slice ) {
             ind_start = slice_starts[slice];
             ind_stop = slice_stops[slice];
             int nind = ind_stop - ind_start;
-            int root_gang = slice % ngang;
-            int root = root_gang * gangsize;
+            int root = slice % ntask;
             std::vector<double> tempvec(nind);
             if ( rank == root ) {
                 std::memcpy( tempvec.data(), realization->data()+ind_start,
@@ -765,6 +750,7 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
         double r = 1.5 * xstep;
         double rstep = xstep;
+        while (r < rmin) r += rstep;
 
         std::vector<long> last_ind(3);
         std::vector<double> last_nodes(8);
@@ -773,6 +759,7 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
         if ( fixed_r > 0 ) r = fixed_r;
 
         while ( true ) {
+            if (r > rmax) break;
 
             // Coordinates at distance r. The scan is centered on the X-axis
 
@@ -791,9 +778,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
 
             // Rotate to scan frame
 
-            double x = xx*cosel0 + zz*sinel0;
+            double x = xx * cosel0 + zz * sinel0;
             double y = yy;
-            double z = -xx*sinel0 + zz*cosel0;
+            double z = -xx * sinel0 + zz * cosel0;
 
             // Translate by the wind
 
@@ -802,9 +789,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
             z += ztel_now;
 
 #ifdef DEBUG
-            if ( x < xstart || x > xstart+delta_x ||
-                 y < ystart || y > ystart+delta_y ||
-                 z < zstart || z > zstart+delta_z ) {
+            if ( x < xstart || x > xstart + delta_x ||
+                 y < ystart || y > ystart + delta_y ||
+                 z < zstart || z > zstart + delta_z ) {
                 o << "atmsim::observe : (x,y,z) out of bounds: "
                   << std::endl
                   << "x = " << x << std::endl
@@ -816,7 +803,9 @@ int toast::tatm::sim::observe( double *t, double *az, double *el, double *tod,
             }
 #endif
             // Combine atmospheric emission (via interpolation) with the
-            // ambient temperature
+            // ambient temperature.
+            // Note that the r^2 (beam area) and 1/r^2 (source
+            // distance) factors cancel in the integral.
 
             double step_val;
             try {
@@ -941,14 +930,14 @@ void toast::tatm::sim::draw() {
     z0inv = 1. / (2. * z0);
 
     // Wind is parallel to surface. Rotate to a frame where the scan
-    // is along the X-axis.
+    // is across the X-axis.
 
-    double eastward_wind = w * cos( wdir );
-    double northward_wind = w * sin( wdir );
+    double eastward_wind = w * cos(wdir);
+    double northward_wind = w * sin(wdir);
 
-    double angle = az0-M_PI/2;
-    double wx_h = eastward_wind*cos( angle ) - northward_wind*sin( angle );
-    wy = eastward_wind*sin( angle ) + northward_wind*cos( angle );
+    double angle = az0 - M_PI / 2;
+    double wx_h = eastward_wind * cos(angle) - northward_wind * sin(angle);
+    wy = eastward_wind * sin(angle) + northward_wind * cos(angle);
 
     wx = wx_h * cosel0;
     wz = -wx_h * sinel0;
@@ -983,6 +972,13 @@ void toast::tatm::sim::draw() {
 
 void toast::tatm::sim::get_volume() {
 
+    // Trim zmax if rmax sets a more stringent limit
+
+    double zmax_test = rmax * sin(elmax);
+    if (zmax > zmax_test) {
+        zmax = zmax_test;
+    }
+
     // Horizontal volume
 
     double delta_z_h = zmax;
@@ -1002,19 +998,19 @@ void toast::tatm::sim::get_volume() {
     z = r * sin(elmin);
     rproj = r * cos(elmin);
     x = rproj * cos(0);
-    z_min = -x*sinel0 + z*cosel0;
+    z_min = -x * sinel0 + z * cosel0;
 
     z = r * sin(elmax);
     rproj = r * cos(elmax);
-    x = rproj * cos(delta_az/2);
-    z_max = -x*sinel0 + z*cosel0;
+    x = rproj * cos(delta_az / 2);
+    z_max = -x * sinel0 + z * cosel0;
 
     // Cone width
     rproj = r * cos(elmin);
     if ( delta_az > M_PI )
         delta_y_cone = 2 * rproj;
     else
-        delta_y_cone = 2 * rproj * cos( 0.5*(M_PI - delta_az) );
+        delta_y_cone = 2 * rproj * cos(0.5 * (M_PI - delta_az));
     //std::cerr << "delta_y_cone = " << delta_y_cone << std::endl;
 
     // Cone height
@@ -1040,8 +1036,8 @@ void toast::tatm::sim::get_volume() {
     // Margin for interpolation
 
     delta_x += xstep;
-    delta_y += 2*ystep;
-    delta_z += 2*zstep;
+    delta_y += 2 * ystep;
+    delta_z += 2 * zstep;
 
     // Translate the volume to allow for wind.  Telescope sits
     // at (0, 0, 0) at t=0
@@ -1052,9 +1048,9 @@ void toast::tatm::sim::get_volume() {
         xstart = 0;
 
     if ( wy < 0 )
-        ystart = -0.5*delta_y_cone - wdy - ystep;
+        ystart = -0.5 * delta_y_cone - wdy - ystep;
     else
-        ystart = -0.5*delta_y_cone - ystep;
+        ystart = -0.5 * delta_y_cone - ystep;
 
     if ( wz < 0 )
         zstart = z_min - wdz - zstep;
@@ -1063,9 +1059,9 @@ void toast::tatm::sim::get_volume() {
 
     // Grid points
 
-    nx = delta_x/xstep + 1;
-    ny = delta_y/ystep + 1;
-    nz = delta_z/zstep + 1;
+    nx = delta_x / xstep + 1;
+    ny = delta_y / ystep + 1;
+    nz = delta_z / zstep + 1;
     nn = nx * ny * nz;
 
     // 1D storage of the 3D volume elements
@@ -1084,6 +1080,7 @@ void toast::tatm::sim::get_volume() {
         std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
         std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
         std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
+        std::cerr << "Observation cone along the X-axis:" << std::endl;
         std::cerr << "   delta_y_cone = " << delta_y_cone << " m" << std::endl;
         std::cerr << "   delta_z_cone = " << delta_z_cone << " m" << std::endl;
         std::cerr << "    xstart = " << xstart << " m" << std::endl;
@@ -1110,16 +1107,16 @@ void toast::tatm::sim::initialize_kolmogorov() {
     // correlation function at grid points. We integrate down from
     // 10*kappamax to 0 for numerical precision
 
-    rmin = 0;
-    double diag = sqrt( delta_x*delta_x + delta_y*delta_y);
-    rmax = sqrt( diag*diag + delta_z*delta_z ) * 1.01;
+    rmin_kolmo = 0;
+    double diag = sqrt(delta_x * delta_x + delta_y * delta_y);
+    rmax_kolmo = sqrt(diag * diag + delta_z * delta_z) * 1.01;
     nr = 1000; // Size of the interpolation grid
 
 #ifdef DEBUG
     nr /= 10;
 #endif
 
-    rstep = (rmax - rmin) / (nr-1);
+    rstep = (rmax_kolmo - rmin_kolmo) / (nr-1);
     rstep_inv = 1. / rstep;
 
     kolmo_x.clear();
@@ -1142,8 +1139,8 @@ void toast::tatm::sim::initialize_kolmogorov() {
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << std::endl;
         std::cerr << "Evaluating Kolmogorov correlation at " << nr
-                  << " different separations in range " << rmin
-                  << " - " << rmax << " m" << std::endl;
+                  << " different separations in range " << rmin_kolmo
+                  << " - " << rmax_kolmo << " m" << std::endl;
         std::cerr << "kappamin = " << kappamin
                   << " 1/m, kappamax =  " << kappamax
                   << " 1/m. nkappa = " << nkappa << std::endl;
@@ -1195,7 +1192,8 @@ void toast::tatm::sim::initialize_kolmogorov() {
 
 #pragma omp parallel for schedule(static, 10)
     for ( long ir=0; ir<nr; ++ir ) {
-        double r = rmin + (exp(ir*nri*tau)-1)*enorm*(rmax-rmin);
+        double r = rmin_kolmo
+            + (exp(ir * nri * tau) - 1) * enorm * (rmax_kolmo - rmin_kolmo);
         double val = 0;
         if ( r * kappamax < 1e-2 ) {
             // special limit r -> 0,
@@ -1238,10 +1236,19 @@ void toast::tatm::sim::initialize_kolmogorov() {
         f.close();
     }
 
+    // Measure the correlation length
+    long icorr = nr - 1;
+    while (fabs(kolmo_y[icorr]) < corrlim) --icorr;
+    rcorr = kolmo_x[icorr];
+    rcorrsq = rcorr * rcorr;
+
     double t2 = MPI_Wtime();
 
-    if ( rank == 0 && verbosity > 0 )
+    if (rank == 0 && verbosity > 0) {
+        std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                  << corrlim << ")" << std::endl;
         std::cerr << "Kolmogorov initialized in " << t2-t1 << " s." << std::endl;
+    }
 
     return;
 }
@@ -1252,13 +1259,13 @@ double toast::tatm::sim::kolmogorov( double r ) {
     // Return autocovariance of a Kolmogorov process at separation r
 
     if ( r == 0 ) return kolmo_y[0];
-    if ( r == rmax ) return kolmo_y[nr-1];
+    if ( r == rmax_kolmo ) return kolmo_y[nr-1];
 
-    if ( r < rmin || r > rmax ) {
+    if ( r < rmin_kolmo || r > rmax_kolmo ) {
         std::ostringstream o;
         o.precision( 16 );
         o << "Kolmogorov value requested at " << r
-          << ", outside gridded range [" << rmin << ", " << rmax << "].";
+          << ", outside gridded range [" << rmin_kolmo << ", " << rmax_kolmo << "].";
         throw std::runtime_error( o.str().c_str() );
     }
 
@@ -1512,20 +1519,20 @@ void toast::tatm::sim::ind2coord( long i, double *coord ) {
     long ifull = (*full_index)[i];
 
     long ix = ifull * xstrideinv;
-    long iy = (ifull - ix*xstride) * ystrideinv;
-    long iz = ifull - ix*xstride - iy*ystride;
+    long iy = (ifull - ix * xstride) * ystrideinv;
+    long iz = ifull - ix * xstride - iy * ystride;
 
     // coordinates in the scan frame
 
-    double x = xstart + ix*xstep;
-    double y = ystart + iy*ystep;
-    double z = zstart + iz*zstep;
+    double x = xstart + ix * xstep;
+    double y = ystart + iy * ystep;
+    double z = zstart + iz * zstep;
 
     // Into the horizontal frame
 
-    coord[0] = x*cosel0 - z*sinel0;
+    coord[0] = x * cosel0 - z * sinel0;
     coord[1] = y;
-    coord[2] = x*sinel0 + z*cosel0;
+    coord[2] = x * sinel0 + z * cosel0;
 
 }
 
@@ -1728,80 +1735,115 @@ double toast::tatm::sim::interp( double x, double y, double z,
 }
 
 
-El::DistMatrix<double> *toast::tatm::sim::build_covariance(
-    long ind_start, long ind_stop ) {
+cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
+                                                          long ind_stop) {
+    /*
+      Build a sparse covariance matrix.
+    */
 
     double t1 = MPI_Wtime();
 
-    // Allocate the distributed matrix
+    // Build the covariance matrix first in the triplet form, then
+    // cast it to the column-packed format.
 
-    long nelem_slice = ind_stop - ind_start;
+    std::vector<int> rows, cols;
+    std::vector<double> vals;
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
 
-    El::DistMatrix<double> *cov = NULL;
+    // Fill the elements of the covariance matrix.
 
-    try {
-        // Distributed element-element covariance matrix
-        cov = new El::DistMatrix<double>( nelem_slice, nelem_slice, *grid );
-    } catch ( std::bad_alloc & e ) {
-        std::cerr << rank << " : Out of memory allocating covariance."
-                  << std::endl;
-        throw;
+#pragma omp parallel
+    {
+        std::vector<int> myrows, mycols;
+        std::vector<double> myvals;
+
+#pragma omp for schedule(static, 10)
+        for (int icol=0; icol<nelem; ++icol) {
+            // Translate indices into coordinates
+            double colcoord[3];
+            ind2coord(icol + ind_start, colcoord);
+            for (int irow=icol; irow<nelem; ++irow) {
+                // Evaluate the covariance between the two coordinates
+                double rowcoord[3];
+                ind2coord(irow + ind_start, rowcoord);
+                if (fabs(colcoord[0] - rowcoord[0]) > rcorr) continue;
+                if (fabs(colcoord[1] - rowcoord[1]) > rcorr) continue;
+                if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
+
+                double val = cov_eval(colcoord, rowcoord);
+
+                // If the covariance exceeds the threshold, add it to the
+                // sparse matrix
+                if (val > 1e-30) {
+                    myrows.push_back(irow);
+                    mycols.push_back(icol);
+                    myvals.push_back(val);
+                }
+            }
+        }
+#pragma omp critical
+        {
+            rows.insert(rows.end(), myrows.begin(), myrows.end());
+            cols.insert(cols.end(), mycols.begin(), mycols.end());
+            vals.insert(vals.end(), myvals.begin(), myvals.end());
+        }
+
+    }
+
+
+    double t2 = MPI_Wtime();
+
+    if (verbosity > 0) {
+        std::cerr << rank << " : Sparse covariance evaluated in "
+                  << t2 - t1 << " s." << std::endl;
+    }
+
+    // stype > 0 means that only the lower diagonal
+    // elements of the symmetric matrix are needed.
+    int stype = 1;
+    size_t nnz = vals.size();
+
+    cholmod_triplet *cov_triplet = cholmod_allocate_triplet(nelem,
+                                                            nelem,
+                                                            nnz,
+                                                            stype,
+                                                            CHOLMOD_REAL,
+                                                            chcommon);
+    memcpy(cov_triplet->i, rows.data(), nnz * sizeof(int));
+    memcpy(cov_triplet->j, cols.data(), nnz * sizeof(int));
+    memcpy(cov_triplet->x, vals.data(), nnz * sizeof(double));
+    std::vector<int>().swap(rows); // Ensure vector is freed
+    std::vector<int>().swap(cols);
+    std::vector<double>().swap(vals);
+    cov_triplet->nnz = nnz;
+
+    cholmod_sparse *cov_sparse = cholmod_triplet_to_sparse(cov_triplet,
+                                                           nnz,
+                                                           chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_triplet_to_sparse failed.");
+    cholmod_free_triplet(&cov_triplet, chcommon);
+
+    t2 = MPI_Wtime();
+
+    if (verbosity > 0) {
+        std::cerr << rank << " : Sparse covariance constructed in "
+                  << t2 - t1 << " s." << std::endl;
     }
 
     // Report memory usage
 
-    double my_mem = cov->AllocatedMemory() * 2 * sizeof(double) / pow(2.0, 20.0);
-    double tot_mem;
-    if ( MPI_Allreduce( &my_mem, &tot_mem, 1, MPI_DOUBLE, MPI_SUM, comm_gang ) )
-        throw std::runtime_error(
-            "Failed to allreduce covariance matrix size." );
-    if ( rank_gang == 0 && verbosity > 0 ) {
+    double tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+                      / pow(2.0, 20.0);
+    double max_mem = (nelem * nelem * sizeof(double)) / pow(2.0, 20.0);
+    if (verbosity > 0) {
         std::cerr << std::endl;
-        std::cerr << "Gang # " << gang << " Allocated " << tot_mem
-                  << " MB for the distributed covariance matrix." << std::endl;
+        std::cerr << rank << " : Allocated " << tot_mem
+                  << " MB for the sparse covariance matrix. "
+                  << "Compression: " << tot_mem / max_mem << std::endl;
     }
 
-    // Fill the elements of the covariance matrix. Each task populates the matrix
-    // elements that are already stored locally.
-
-    int nrow = cov->LocalHeight();
-    int ncol = cov->LocalWidth();
-
-#pragma omp parallel for schedule(static, 10)
-    for (int icol=0; icol<ncol; ++icol) {
-        for (int irow=0; irow<nrow; ++irow) {
-
-            // Translate local indices to global indices
-
-            int globalcol = cov->GlobalCol( icol );
-            int globalrow = cov->GlobalRow( irow );
-
-            // Translate global indices into coordinates
-
-            double colcoord[3], rowcoord[3];
-            ind2coord( globalcol + ind_start, colcoord );
-            ind2coord( globalrow + ind_start, rowcoord );
-
-            // Evaluate the covariance between the two coordinates
-
-            double val = cov_eval( colcoord, rowcoord );
-            cov->SetLocal( irow, icol, val );
-        }
-    }
-
-    double t2 = MPI_Wtime();
-
-    if ( rank == 0 && verbosity > 0 )
-        std::cerr << "Gang # "<< gang << " Covariance constructed in "
-                  << t2-t1 << " s." << std::endl;
-
-    if ( false ) {
-        std::ostringstream fname;
-        fname << "covariance_" << ind_start << "_" << ind_stop;
-        El::Write( *cov, fname.str(), El::BINARY_FLAT );
-    }
-
-    return cov;
+    return cov_sparse;
 }
 
 
@@ -1815,11 +1857,11 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
     // Uncomment these lines for smoothing
     //const double ndxinv = xxstep / (nn-1);
     //const double ndzinv = zzstep / (nn-1);
-    const double ninv = 1. / ( nn * nn );
+    const double ninv = 1.; // / (nn * nn);
 
     double val = 0;
 
-    for ( int ii1=0; ii1<nn; ++ii1 ) {
+    for (int ii1=0; ii1<nn; ++ii1) {
         double xx1 = coord1[0];
         double yy1 = coord1[1];
         double zz1 = coord1[2];
@@ -1830,7 +1872,7 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
         //    zz1 += ii1 * ndzinv;
         //}
 
-        for ( int ii2=0; ii2<nn; ++ii2 ) {
+        for (int ii2=0; ii2<nn; ++ii2) {
             double xx2 = coord2[0];
             double yy2 = coord2[1];
             double zz2 = coord2[2];
@@ -1841,21 +1883,23 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
             //    zz2 += ii2 * ndzinv;
             //}
 
-            // Water vapor altitude factor
-
-            double chi1 = std::exp( -(zz1+zz2) * z0inv );
-
-            // Kolmogorov factor
-
             double dx = xx1 - xx2;
             double dy = yy1 - yy2;
             double dz = zz1 - zz2;
+            double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < rcorrsq) {
+                double r = sqrt(r2);
 
+                // Water vapor altitude factor
 
-            double r = sqrt( dx*dx + dy*dy + dz*dz );
-            double chi2 = kolmogorov( r );
+                double chi1 = std::exp(-(zz1 + zz2) * z0inv);
 
-            val += chi1 * chi2;
+                // Kolmogorov factor
+
+                double chi2 = kolmogorov(r);
+
+                val += chi1 * chi2;
+            }
         }
     }
 
@@ -1863,189 +1907,165 @@ double toast::tatm::sim::cov_eval( double *coord1, double *coord2 ) {
 }
 
 
-void toast::tatm::sim::sqrt_covariance( El::DistMatrix<double> *cov,
-				       long ind_start, long ind_stop ) {
+cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
+                                                         long ind_start,
+                                                         long ind_stop) {
+    /*
+      Cholesky-factorize the provided sparse matrix and return the
+      sparse matrix representation of the factorization
+    */
 
-    // Cholesky decompose the covariance matrix.  If the matrix is singular,
-    // regularize it by adding power to the diagonal.
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
+    double t1 = MPI_Wtime();
 
-    long nelem_slice = ind_stop - ind_start;
+    if (verbosity > 0) {
+        std::cerr << rank
+                  << " : Analyzing sparse covariance ... " << std::endl;
+    }
 
-    for ( int attempt=0; attempt < 10; ++attempt ) {
-        try {
-            El::DistMatrix<double> cov_temp(*cov);
-
-            MPI_Barrier( comm_gang );
-            double t1 = MPI_Wtime();
-
-            if ( rank_gang == 0 && verbosity > 0 ) {
-                std::cerr << std::endl;
-                std::cerr << "Gang # " << gang
-                          << " Cholesky decomposing covariance ... "
-                          << std::endl;
-            }
-
-            El::Cholesky( El::LOWER, cov_temp );
-
-            MPI_Barrier( comm_gang );
-            double t2 = MPI_Wtime();
-
-            if ( rank_gang == 0 && verbosity > 0 ) {
-                std::cerr << std::endl;
-                std::cerr << "Gang # " << gang
-                          << " Cholesky decomposition done in " << t2-t1
-                          << " s. N = " << nelem_slice
-                          << " ntask_gang = " << ntask_gang
-                          << " nthread = " << nthread << std::endl;
-            }
-
-            *cov = cov_temp;
-
+    cholmod_factor *factorization;
+    const int ntry = 3;
+    for (int itry = 0; itry < ntry; ++itry) {
+        factorization = cholmod_analyze(cov, chcommon);
+        if (chcommon->status != CHOLMOD_OK)
+            throw std::runtime_error("cholmod_analyze failed.");
+        if (verbosity > 0) {
+            std::cerr << rank
+                      << " : Factorizing sparse covariance ... " << std::endl;
+        }
+        cholmod_factorize(cov, factorization, chcommon);
+        if (chcommon->status != CHOLMOD_OK) {
+            if (itry < ntry - 1 ) {
+                // Extract the diagonal of the matrix and try
+                // factorizing again
+                int ndiag = ntry - itry - 1;
+                int iupper = ndiag - 1;
+                int ilower = -iupper;
+                if (verbosity > 0) {
+                    cholmod_print_sparse(cov, "Covariance matrix", chcommon);
+                    std::cerr << rank
+                              << " : Factorization failed, trying a band "
+                              << "diagonal matrix. ndiag = " << ndiag
+                              << std::endl;
+                }
+                int mode = 1;  // Numerical (not pattern) matrix
+                cholmod_band_inplace(ilower, iupper, mode, cov, chcommon);
+                if (chcommon->status != CHOLMOD_OK)
+                    throw std::runtime_error("cholmod_band_inplace failed.");
+            } else
+                throw std::runtime_error("cholmod_factorize failed.");
+        } else {
             break;
-
-        } catch ( ... ) {
-
-            if ( rank_gang == 0 && verbosity > 0 ) {
-                std::cerr << std::endl;
-                std::cerr << "Gang # " << gang
-                          << " Cholesky decomposition failed on attempt "
-                          << attempt
-                          << ". Regularizing matrix. " << std::endl;
-                if ( attempt == 9 ) {
-                    throw std::runtime_error(
-                        "Failed to decompose covariance matrix." );
-                }
-            }
-
-            int nrow = cov->LocalHeight();
-            int ncol = cov->LocalWidth();
-
-            for (int icol=0; icol<ncol; ++icol) {
-                for (int irow=0; irow<nrow; ++irow) {
-
-                    // Translate local indices to global indices
-
-                    int globalcol = cov->GlobalCol( icol );
-                    int globalrow = cov->GlobalRow( irow );
-
-                    if ( globalcol == globalrow ) {
-                        // Double the diagonal value
-                        double val = cov->GetLocal( irow, icol );
-                        cov->SetLocal( irow, icol, val * 2 );
-                    }
-                }
-            }
         }
     }
 
-    if ( false ) {
-        std::ostringstream fname;
-        fname << "sqrt_covariance_" << ind_start << "_" << ind_stop;
-        El::Write( *cov, fname.str(), El::BINARY_FLAT );
+    double t2 = MPI_Wtime();
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << rank
+                  << " : Cholesky decomposition done in " << t2 - t1
+                  << " s. N = " << nelem << std::endl;
     }
 
-    return;
+    // Report memory usage (only counting the non-zero elements, no
+    // supernode information)
+
+    size_t nnz = factorization->nzmax;
+    double tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+        / pow(2.0, 20.0);
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << rank << " : Allocated " << tot_mem
+                  << " MB for the sparse factorization." << std::endl;
+    }
+
+    cholmod_sparse *sqrt_cov = cholmod_factor_to_sparse(factorization, chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_factor_to_sparse failed.");
+    cholmod_free_factor(&factorization, chcommon);
+
+    // Report memory usage
+
+    nnz = sqrt_cov->nzmax;
+    tot_mem = (nelem * sizeof(int) + nnz * (sizeof(int) + sizeof(double)))
+        / pow(2.0, 20.0);
+    double max_mem = (nelem * nelem * sizeof(double)) / pow(2.0, 20.0);
+    if (verbosity > 0) {
+        std::cerr << std::endl;
+        std::cerr << rank << " : Allocated " << tot_mem
+                  << " MB for the sparse sqrt covariance matrix. "
+                  << "Compression: " << tot_mem / max_mem << std::endl;
+    }
+
+    return sqrt_cov;
 }
 
 
-void toast::tatm::sim::apply_covariance( El::DistMatrix<double> *cov,
-					long ind_start, long ind_stop ) {
+void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse *sqrt_cov,
+                                               long ind_start,
+                                               long ind_stop) {
+    /*
+      Apply the Cholesky-decomposed (square-root) sparse covariance
+      matrix to a vector of Gaussian random numbers to impose the
+      desired correlation properties.
+    */
 
     double t1 = MPI_Wtime();
 
-    long nelem_slice = ind_stop - ind_start;
-
-    // Generate a realization of the atmosphere that matches the structure
-    // of the element-element covariance matrix.  The covariance matrix in
-    // "cov" is assumed to have been replaced with its square root.
+    size_t nelem = ind_stop - ind_start;  // Number of elements in the slice
 
     // Draw the Gaussian variates in a single call
 
-    size_t nrand = nelem_slice;
-    std::vector<double> randn(nrand);
-    rng::dist_normal( nrand, key1, key2, counter1, counter2, randn.data() );
-    counter2 += nrand;
-    double *prand=randn.data();
+    cholmod_dense *noise_in = cholmod_allocate_dense(nelem, 1, nelem,
+                                                     CHOLMOD_REAL, chcommon);
+    rng::dist_normal(nelem, key1, key2, counter1, counter2, (double*)noise_in->x);
+    counter2 += nelem;
 
-    // Atmosphere realization
-
-    El::DistMatrix<double,El::STAR,El::STAR> slice_realization( *grid );
-    El::Zeros( slice_realization, 1, nelem_slice );
-
-    // Instantiate a realization with gaussian random variables on root process
-
-    if (rank_gang == 0) {
-        slice_realization.Reserve( nelem_slice );
-        for ( int col=0; col<nelem_slice; ++col ) {
-            slice_realization.QueueUpdate( 0, col, *(prand++) );
-        }
-    } else {
-        slice_realization.Reserve( 0 );
-    }
-
-    slice_realization.ProcessQueues();
-
-    if ( rank_gang == 0 && verbosity > 10 ) {
-        double *p = slice_realization.Buffer();
-
-        std::ofstream f;
-        std::ostringstream fname;
-        fname << "raw_realization_"
-              << ind_start << "_" << ind_stop << ".txt";
-        f.open( fname.str(), std::ios::out );
-        for ( long ielem=0; ielem<nelem_slice; ielem++ ) {
-            double coord[3];
-            ind2coord( ielem, coord );
-            f << coord[0] << " " << coord[1] << " " << coord[2] << " "
-              << p[ielem]  << std::endl;
-        }
-        f.close();
-    }
+    cholmod_dense *noise_out = cholmod_allocate_dense(nelem, 1, nelem,
+                                                      CHOLMOD_REAL, chcommon);
 
     // Apply the sqrt covariance to impose correlations
 
-    // Atmosphere realization
+    int notranspose = 0;
+    double one[2] = {1, 0};  // Complex one
+    double zero[2] = {0, 0};  // Complex zero
 
-    // El::Trmv is not implemented yet in Elemental
-    //El::Trmv( El::UPPER, El::NORMAL, El::NON_UNIT, *cov, slice_realization );
-    //El::Trmm( El::LEFT, El::LOWER, El::NORMAL, El::NON_UNIT,
-    //          1.0, *cov, slice_realization );
-    // For some reason, multiplying from the left only used the
-    // diagonal elements.
-    El::Trmm( El::RIGHT, El::LOWER, El::TRANSPOSE, El::NON_UNIT,
-              1.0, *cov, slice_realization );
+    cholmod_sdmult(sqrt_cov, notranspose, one, zero, noise_in, noise_out, chcommon);
+    if (chcommon->status != CHOLMOD_OK)
+        throw std::runtime_error("cholmod_sdmult failed.");
+    cholmod_free_dense(&noise_in, chcommon);
 
     // Subtract the mean of the slice to reduce step between the slices
 
-    double *p = slice_realization.Buffer();
+    double *p = (double*)noise_out->x;
     double mean = 0, var = 0;
-    for ( long i=0; i<nelem_slice; ++i ) {
+    for (long i=0; i<nelem; ++i) {
         mean += p[i];
         var += p[i] * p[i];
     }
-    mean /= nelem_slice;
-    var = var / nelem_slice - mean*mean;
-    for ( long i=0; i<nelem_slice; ++i ) p[i] -= mean;
+    mean /= nelem;
+    var = var / nelem - mean * mean;
+    for (long i=0; i<nelem; ++i) p[i] -= mean;
 
     double t2 = MPI_Wtime();
 
-    if ( rank_gang == 0 && verbosity > 0 ) {
+    if (verbosity > 0) {
         std::cerr << std::endl;
-        std::cerr << "Gang # " << gang
-                  << " Realization slice (" << ind_start << " -- " << ind_stop
+        std::cerr << rank
+                  << " : Realization slice (" << ind_start << " -- " << ind_stop
                   << ") var = " << var << ", constructed in "
                   << t2-t1 << " s." << std::endl;
     }
 
-    if ( rank_gang == 0 && verbosity > 10 ) {
+    if (verbosity > 10) {
         std::ofstream f;
         std::ostringstream fname;
         fname << "realization_"
               << ind_start << "_" << ind_stop << ".txt";
-        f.open( fname.str(), std::ios::out );
-        for ( long ielem=0; ielem<nelem_slice; ielem++ ) {
+        f.open(fname.str(), std::ios::out);
+        for (long ielem=0; ielem<nelem; ielem++) {
             double coord[3];
-            ind2coord( ielem, coord );
+            ind2coord(ielem, coord);
             f << coord[0] << " " << coord[1] << " " << coord[2] << " "
               << p[ielem]  << std::endl;
         }
@@ -2056,9 +2076,13 @@ void toast::tatm::sim::apply_covariance( El::DistMatrix<double> *cov,
     // the full realization
     // FIXME: This is where we would blend slices
 
-    for ( long i=ind_start; i<ind_stop; ++i ) {
+    for (long i=ind_start; i<ind_stop; ++i) {
         (*realization)[i] = p[i-ind_start];
     }
 
+    cholmod_free_dense(&noise_out, chcommon);
+
     return;
 }
+
+#endif

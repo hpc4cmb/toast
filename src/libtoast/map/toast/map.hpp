@@ -20,6 +20,8 @@ namespace toast {
 
 #include <toast/cov.hpp>
 
+#include <toast/map_tools.hpp>
+
 
 #endif
 
