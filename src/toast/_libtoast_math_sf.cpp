@@ -19,10 +19,13 @@ void init_math_sf(py::module & m) {
             toast::vsin(info.size, inraw,
                         outraw);
             return out;
-        }, R"(
+        }, py::arg(
+            "in"), R"(
         Compute the Sine for an array of float64 values.
 
         A new aligned-memory array is created for the result and returned.
+        To guarantee SIMD vectorization, the input array should be aligned
+        (i.e. use an AlignedArray).
 
         Args:
             in (array-like):  1D array of float64 values.
@@ -43,18 +46,21 @@ void init_math_sf(py::module & m) {
             toast::vsin(info_in.size, inraw,
                         outraw);
             return;
-        }, R"(
+        }, py::arg("in"), py::arg(
+            "out"), R"(
         Compute the Sine for an array of float64 values.
 
-        The results are stored in the provided output buffer.
+        The results are stored in the provided output buffer.  To
+        guarantee SIMD vectorization, the input and output arrays should be
+        aligned (i.e. use an AlignedArray).
 
         Args:
             in (array-like):  1D array of float64 values.
+
             out (array-like):  1D array of float64 values.
 
         Returns:
             None
-
     )");
 
     //

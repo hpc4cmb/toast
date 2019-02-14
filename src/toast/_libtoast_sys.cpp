@@ -41,6 +41,9 @@ void init_sys(py::module & m) {
                 level (str):  one of DEBUG, INFO, WARNING, ERROR or
                     CRITICAL.
 
+            Returns:
+                None
+
         )")
     .def("signals", &toast::Environment::signals,
          R"(
@@ -52,7 +55,7 @@ void init_sys(py::module & m) {
         )")
     .def("use_mpi", &toast::Environment::use_mpi,
          R"(
-            Return True if TOAST was compiled with MPI support *and* MPI
+            Return True if TOAST was compiled with MPI support **and** MPI
             is supported in the current runtime environment.
         )")
     .def("max_threads", &toast::Environment::max_threads,
@@ -105,6 +108,9 @@ void init_sys(py::module & m) {
 
             Args:
                 message (str): A message to prepend to the timing results.
+
+            Returns:
+                None
 
         )")
     .def("__repr__",

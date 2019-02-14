@@ -15,13 +15,13 @@ MPI communicators that can be used to divide many observations between whole
 groups of processes.  In practice this is not always needed, and the default
 construction of the Comm object just results in one group with all processes.
 
-.. autoclass:: toast.Comm
+.. autoclass:: toast.mpi.Comm
     :members:
 
 The Data class below is essentially just a list of observations for each
 process group.
 
-.. autoclass:: toast.Data
+.. autoclass:: toast.dist.Data
     :members:
 
 
@@ -29,5 +29,3 @@ Example
 -----------
 
 .. literalinclude:: ../examples/toast_example_dist.py
-
-

@@ -44,10 +44,10 @@ pydirs="toast"
 
 # Test
 for cppd in ${cppdirs}; do
-    find "${base}/${cppd}" -name "*.hpp" -exec ${unexe} ${untest} '{}' \;
-    find "${base}/${cppd}" -name "*.cpp" -exec ${unexe} ${untest} '{}' \;
+    find "${base}/${cppd}" -name "*.hpp" -not -path '*Random123*' -exec ${unexe} ${unrun} '{}' \;
+    find "${base}/${cppd}" -name "*.cpp" -not -path '*Random123*' -exec ${unexe} ${unrun} '{}' \;
 done
 
 for pyd in ${pydirs}; do
-    find "${base}/${pyd}" -name "*.py" -exec ${blkexe} ${blktest} '{}' \;
+    find "${base}/${pyd}" -name "*.py" -exec ${blkexe} ${blkrun} '{}' \;
 done

@@ -30,11 +30,15 @@ void init_math_rng(py::module & m) {
 
         Args:
             key1 (uint64):  The first element of the key.
+
             key2 (uint64):  The second element of the key.
+
             counter1 (uint64):  The first element of the counter.
+
             counter2 (uint64):  The second element of the counter.  This is
                 effectively the sample index in the stream defined by the
                 other 3 values.
+
             n (int):  The number of samples to generate.
 
         Returns:
@@ -62,11 +66,15 @@ void init_math_rng(py::module & m) {
 
         Args:
             key1 (uint64):  The first element of the key.
+
             key2 (uint64):  The second element of the key.
+
             counter1 (uint64):  The first element of the counter.
+
             counter2 (uint64):  The second element of the counter.  This is
                 effectively the sample index in the stream defined by the
                 other 3 values.
+
             data (array):  The array to populate.
 
         Returns:

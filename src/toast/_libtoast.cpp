@@ -103,6 +103,9 @@ PYBIND11_MODULE(_libtoast, m) {
 
     )";
 
+    // py::options options;
+    // options.disable_function_signatures();
+
     // Define a wrapper around our internal aligned memory vector class.
     // Expose the memory with the python / numpy buffer protocol.
 

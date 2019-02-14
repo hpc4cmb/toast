@@ -3,3 +3,5 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ._libtoast import (Environment, Timer, GlobalTimers, Logger)
+
+from ._libtoast import (vsin,)

@@ -21,11 +21,24 @@ sys.path.insert(0, os.path.abspath('..'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.viewcode'
 ]
+
+# Napoleon settings
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -119,9 +132,9 @@ for missing in ('numpy', 'matplotlib', 'healpy', 'astropy',
 # a list of builtin themes.
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
 if on_rtd:
-    html_theme = 'default'
+    html_theme = 'sphinx_rtd_theme'
 else:
-    html_theme = 'haiku'
+    html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -199,7 +212,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'TOASTdoc'
+htmlhelp_basename = 'TOASTdocs'
 
 
 # -- Options for LaTeX output ---------------------------------------------

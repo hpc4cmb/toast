@@ -11,17 +11,18 @@ Contents:
 
 .. toctree::
     :maxdepth: 2
-    
+
     intro.rst
     install.rst
-    pipelines.rst
-    dist.rst
+    workflow.rst
+    data.rst
     tod.rst
     intervals.rst
     noise.rst
     pointing.rst
     sim.rst
     maptools.rst
+    utils.rst
     timing.rst
     nersc.rst
     dev.rst
@@ -33,4 +34,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
