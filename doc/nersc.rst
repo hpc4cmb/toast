@@ -23,6 +23,9 @@ In order to load a full python-3.6 stack, and also all dependencies needed by to
 
     %> module load toast-deps
 
+For other available toast module, check using::
+
+    %> module avail toast
 
 Install TOAST
 ------------------
@@ -65,6 +68,8 @@ you can rename it to whatever you like::
         export PYTHONPATH=$PREFIX/lib/python3.6/site-packages:${PYTHONPATH}
     }
 
+Note that you may need to change ``python3.6`` to for example ``python3.7``, depending on the Python version you are loading.
+
 Log out and back in to make this function visible to your shell environment.
 Now checkout the toast source in your home directory somewhere::
 
@@ -78,6 +83,8 @@ for, consider that the `toast-deps` environment requires Intel compilers::
     %> cd toast
     %> ./autogen.sh
     %> ./platforms/edison-intel.sh --prefix=${SCRATCH}/software/toast
+    %> make
+    %> make install
 
 Now we can run our function to load this installation into our environment::
 
@@ -86,7 +93,7 @@ Now we can run our function to load this installation into our environment::
 On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to
 run our unittests, we first get an interactive compute node::
 
-    %> salloc
+    %> salloc -N 1 -C haswell -p debug -t 00:30:00
 
 and then run the tests::
 
