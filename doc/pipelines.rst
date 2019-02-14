@@ -36,7 +36,7 @@ In order to create a focalplane file, you can do for example::
       pickle.dump(fp, p)
 
 Note that until the older TOAST mapmaking tools are ported, this script
-requires the use of libmadam (the --madam option).
+requires the use of libmadam (the ``--madam`` option).
 
 .. include:: pipe_satellite_sim.inc
 
