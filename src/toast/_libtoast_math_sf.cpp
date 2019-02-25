@@ -10,57 +10,38 @@ void init_math_sf(py::module & m) {
     // vector math functions
 
     m.def(
-        "vsin", [](py::buffer in) {
-            pybuffer_check_double_1D(in);
-            auto out = AlignedArray::zeros_like(in);
-            py::buffer_info info = in.request();
-            double * inraw = reinterpret_cast <double *> (info.ptr);
-            double * outraw = reinterpret_cast <double *> (out->data.data());
-            toast::vsin(info.size, inraw,
-                        outraw);
-            return out;
-        }, py::arg(
-            "in"), R"(
-        Compute the Sine for an array of float64 values.
-
-        A new aligned-memory array is created for the result and returned.
-        To guarantee SIMD vectorization, the input array should be aligned
-        (i.e. use an AlignedArray).
-
-        Args:
-            in (array-like):  1D array of float64 values.
-
-        Returns:
-            (AlignedArray):  a new array with the result.
-
-    )");
-
-    m.def(
         "vsin", [](py::buffer in, py::buffer out) {
             pybuffer_check_double_1D(in);
             pybuffer_check_double_1D(out);
             py::buffer_info info_in = in.request();
             py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
             double * inraw = reinterpret_cast <double *> (info_in.ptr);
             double * outraw = reinterpret_cast <double *> (info_out.ptr);
-            toast::vsin(info_in.size, inraw,
-                        outraw);
+            toast::vsin(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out").none(
+            true), R"(
         Compute the Sine for an array of float64 values.
 
-        The results are stored in the provided output buffer.  To
-        guarantee SIMD vectorization, the input and output arrays should be
-        aligned (i.e. use an AlignedArray).
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedArray).
 
         Args:
-            in (array-like):  1D array of float64 values.
-
-            out (array-like):  1D array of float64 values.
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
 
         Returns:
             None
+
     )");
 
     //

@@ -13,29 +13,23 @@
 #include <algorithm>
 
 
-toast::Exception::Exception(const char * msg, const char * file,
-                            int line) : std::exception() {
-    snprintf(msg_, msg_len_, "Exeption at line %d of file %s:  %s", line, file,
-             msg);
-    return;
-}
-
-toast::Exception::~Exception() throw() {
-    return;
-}
-
-const char * toast::Exception::what() const throw() {
-    return msg_;
+std::string toast::format_here(std::pair <std::string, int> const & here) {
+    std::ostringstream h;
+    h << "file \"" << here.first << "\", line " << here.second;
+    return std::string(h.str());
 }
 
 void * toast::aligned_alloc(size_t size, size_t align) {
     void * mem = NULL;
     int ret = posix_memalign(&mem, align, size);
     if (ret != 0) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
-        o << "cannot allocate " << size <<
-            " bytes of memory with alignment " << align;
-        TOAST_THROW(o.str().c_str());
+        o << "cannot allocate " << size
+          << " bytes of memory with alignment " << align;
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
     memset(mem, 0, size);
     return mem;
@@ -82,7 +76,11 @@ void toast::Timer::clear() {
 
 double toast::Timer::seconds() const {
     if (running_) {
-        TOAST_THROW("Timer is still running!");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("Timer is still running!");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     return total_;
 }
@@ -137,9 +135,12 @@ void toast::GlobalTimers::clear(std::string const & name) {
 
 void toast::GlobalTimers::stop(std::string const & name) {
     if (data.count(name) == 0) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
         o << "Cannot stop timer " << name << " which does not exist";
-        TOAST_THROW(o.str().c_str());
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
     data.at(name).stop();
     return;
@@ -147,10 +148,13 @@ void toast::GlobalTimers::stop(std::string const & name) {
 
 double toast::GlobalTimers::seconds(std::string const & name) const {
     if (data.count(name) == 0) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
         o << "Cannot get seconds for timer " << name
           << " which does not exist";
-        TOAST_THROW(o.str().c_str());
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
     return data.at(name).seconds();
 }
@@ -234,9 +238,31 @@ void toast::Logger::debug(char const * msg) {
     return;
 }
 
+void toast::Logger::debug(char const * msg,
+                          std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::debug) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sDEBUG: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
+        fflush(stdout);
+    }
+    return;
+}
+
 void toast::Logger::info(char const * msg) {
     if (level_ <= log_level::info) {
         fprintf(stdout, "%sINFO: %s\n", prefix_.c_str(), msg);
+        fflush(stdout);
+    }
+    return;
+}
+
+void toast::Logger::info(char const * msg,
+                         std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::info) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sINFO: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
         fflush(stdout);
     }
     return;
@@ -250,6 +276,17 @@ void toast::Logger::warning(char const * msg) {
     return;
 }
 
+void toast::Logger::warning(char const * msg,
+                            std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::warning) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sWARNING: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
+        fflush(stdout);
+    }
+    return;
+}
+
 void toast::Logger::error(char const * msg) {
     if (level_ <= log_level::error) {
         fprintf(stdout, "%sERROR: %s\n", prefix_.c_str(), msg);
@@ -258,9 +295,31 @@ void toast::Logger::error(char const * msg) {
     return;
 }
 
+void toast::Logger::error(char const * msg,
+                          std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::error) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sERROR: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
+        fflush(stdout);
+    }
+    return;
+}
+
 void toast::Logger::critical(char const * msg) {
     if (level_ <= log_level::critical) {
         fprintf(stdout, "%sCRITICAL: %s\n", prefix_.c_str(), msg);
+        fflush(stdout);
+    }
+    return;
+}
+
+void toast::Logger::critical(char const * msg,
+                             std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::critical) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sCRITICAL: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
         fflush(stdout);
     }
     return;

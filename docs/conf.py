@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 #
-
 import sys
 import os
-import subprocess as sp
 
-from importlib import import_module
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('..'))
+# This is a hybrid package with a compiled extension.  The extension must be
+# built before running sphinx.
+try:
+    import toast
+except ImportError:
+    print("Before running sphinx, you must have built and installed"
+          " toast and have it in your search path")
+    raise
 
 # -- General configuration ------------------------------------------------
 
@@ -21,15 +21,17 @@ sys.path.insert(0, os.path.abspath('..'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.todo',
     'sphinx.ext.mathjax',
-    'sphinx.ext.viewcode'
+    'sphinx.ext.viewcode',
+    'sphinx.ext.napoleon'
 ]
 
 # Napoleon settings
 napoleon_google_docstring = True
-napoleon_numpy_docstring = False
+napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
 napoleon_include_special_with_doc = True
@@ -92,7 +94,7 @@ exclude_patterns = ['_build']
 #default_role = None
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
-#add_function_parentheses = True
+add_function_parentheses = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
@@ -109,22 +111,17 @@ pygments_style = 'sphinx'
 #modindex_common_prefix = []
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
-#keep_warnings = False
+keep_warnings = True
+
+# Include TO-DO items
+todo_include_todos = True
+
+# Include functions that begin with an underscore, e.g. _private().
+napoleon_include_private_with_doc = True
 
 # -- Options for autodoc --------------------------------------------------
 
-autoclass_content = 'both'
-
-# This value contains a list of modules to be mocked up. This is useful when
-# some external dependencies are not met at build time and break the
-# building process.
-autodoc_mock_imports = []
-for missing in ('numpy', 'matplotlib', 'healpy', 'astropy',
-                'pyephem', 'mpi4py'):
-    try:
-        foo = import_module(missing)
-    except ImportError:
-        autodoc_mock_imports.append(missing)
+# autoclass_content = 'both'
 
 # -- Options for HTML output ----------------------------------------------
 

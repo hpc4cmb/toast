@@ -161,10 +161,13 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
 
             // Verify that datatype sizes are as expected.
             if (sizeof(MKL_Complex16) != 2 * sizeof(double)) {
+                auto here = TOAST_HERE();
+                auto log = toast::Logger::get();
                 std::ostringstream o;
-                o <<
-                    "MKL_Complex16 is not the size of 2 doubles, check MKL API";
-                TOAST_THROW(o.str().c_str());
+                o << "MKL_Complex16 is not the size of 2 doubles, "
+                  << "check MKL API";
+                log.error(o.str().c_str(), here);
+                throw std::runtime_error(o.str().c_str());
             }
 
             buflength_ = 2 * (length_ / 2 + 1);
@@ -261,11 +264,14 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
             check_status(stderr, status);
 
             if (status != 0) {
+                auto here = TOAST_HERE();
+                auto log = toast::Logger::get();
                 std::ostringstream o;
-                o << "failed to create mkl FFT plan, status = " << status
-                  << std::endl;
-                o << "Message: " << DftiErrorMessage(status);
-                TOAST_THROW(o.str().c_str());
+                o << "failed to create mkl FFT plan, status = "
+                  << status << std::endl
+                  << "Message: " << DftiErrorMessage(status);
+                log.error(o.str().c_str(), here);
+                throw std::runtime_error(o.str().c_str());
             }
         }
 
@@ -287,9 +293,12 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
             }
 
             if (status != 0) {
+                auto here = TOAST_HERE();
+                auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "failed to execute MKL transform, status = " << status;
-                TOAST_THROW(o.str().c_str());
+                log.error(o.str().c_str(), here);
+                throw std::runtime_error(o.str().c_str());
             }
 
             return;
@@ -441,7 +450,11 @@ toast::FFTPlanReal1D * toast::FFTPlanReal1D::create(int64_t length, int64_t n,
     return new FFTPlanReal1DFFTW(length, n, type, dir, scale);
 
     # else // ifdef HAVE_FFTW
-    TOAST_THROW("FFTs require MKL or FFTW");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg = "FFTs require MKL or FFTW";
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     # endif // ifdef HAVE_FFTW
     #endif  // ifdef HAVE_MKL
 

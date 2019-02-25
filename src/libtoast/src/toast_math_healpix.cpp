@@ -20,7 +20,11 @@ const int64_t toast::HealpixPixels::jp_[] =
 void toast::healpix_ang2vec(int64_t n, double const * theta,
                             double const * phi, double * vec) {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(vec)) {
@@ -48,7 +52,11 @@ void toast::healpix_ang2vec(int64_t n, double const * theta,
 void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
                             double * phi) {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(vec)) {
@@ -80,7 +88,11 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
 void toast::healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
                                double * phi, double * pa) {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(vec) && toast::is_aligned(theta) &&
         toast::is_aligned(phi) && toast::is_aligned(pa)) {
@@ -160,14 +172,22 @@ toast::HealpixPixels::HealpixPixels(int64_t nside) {
 
 void toast::HealpixPixels::reset(int64_t nside) {
     if (nside <= 0) {
-        TOAST_THROW("cannot reset healpix pixels with NSIDE <= 0");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("cannot reset healpix pixels with NSIDE <= 0");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     // check for valid nside value
 
     uint64_t temp = static_cast <uint64_t> (nside);
     if (((~temp) & (temp - 1)) != (temp - 1)) {
-        TOAST_THROW("invalid NSIDE value- must be a multiple of 2");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("invalid NSIDE value- must be a multiple of 2");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     nside_ = nside;
@@ -213,7 +233,11 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
                                     double * phi, int * region, double * z,
                                     double * rtz) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> work1(n);
@@ -273,7 +297,11 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
                                    int * region, double * z,
                                    double * rtz) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> work1(n);
@@ -319,7 +347,11 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
                                      int const * region, double const * z,
                                      double const * rtz, int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
@@ -475,7 +507,11 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
                                      int const * region, double const * z,
                                      double const * rtz, int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
@@ -578,7 +614,11 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
 void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
                                     double const * phi, int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> z(n);
@@ -595,7 +635,11 @@ void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
 void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
                                     double const * phi, int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> z(n);
@@ -612,7 +656,11 @@ void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
 void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
                                     int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> z(n);
@@ -630,7 +678,11 @@ void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
 void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
                                     int64_t * pix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <double> z(n);
@@ -648,7 +700,11 @@ void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
 void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
                                      int64_t * nestpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix)) {
         #pragma omp simd
@@ -825,7 +881,11 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
 void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
                                      int64_t * ringpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix)) {
         #pragma omp simd
@@ -923,7 +983,11 @@ void toast::HealpixPixels::degrade_ring(int factor, int64_t n,
                                         int64_t const * inpix,
                                         int64_t * outpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <int64_t> temp_nest(n);
@@ -942,7 +1006,11 @@ void toast::HealpixPixels::degrade_nest(int factor, int64_t n,
                                         int64_t const * inpix,
                                         int64_t * outpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     int64_t shift = 2 * factor;
@@ -965,7 +1033,11 @@ void toast::HealpixPixels::upgrade_ring(int factor, int64_t n,
                                         int64_t const * inpix,
                                         int64_t * outpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     toast::AlignedVector <int64_t> temp_nest(n);
@@ -984,7 +1056,11 @@ void toast::HealpixPixels::upgrade_nest(int factor, int64_t n,
                                         int64_t const * inpix,
                                         int64_t * outpix) const {
     if (n > std::numeric_limits <int>::max()) {
-        TOAST_THROW("healpix vector conversion must be in chunks of < 2^31");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("healpix vector conversion must be in chunks of < 2^31");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     int64_t shift = 2 * factor;

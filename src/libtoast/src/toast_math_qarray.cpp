@@ -390,7 +390,11 @@ void toast::qa_rotate(size_t nq, double const * q, size_t nv,
     } else if (nq == nv) {
         toast::qa_rotate_many_many(nq, q, v_in, v_out);
     } else {
-        TOAST_THROW("incompatible quaternion and vector array dimensions");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("incompatible quaternion and vector array dimensions");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     return;
@@ -516,7 +520,11 @@ void toast::qa_mult(size_t np, double const * p, size_t nq,
     } else if (np == nq) {
         toast::qa_mult_many_many(np, p, nq, q, r);
     } else {
-        TOAST_THROW("incompatible quaternion array dimensions");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("incompatible quaternion array dimensions");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     return;

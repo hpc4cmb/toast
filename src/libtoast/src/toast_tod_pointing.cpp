@@ -110,9 +110,12 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
             weights[off + 2] = sinout[i] * eta * cal;
         }
     } else {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
         o << "unknown healpix pointing matrix mode \"" << mode << "\"";
-        TOAST_THROW(o.str().c_str());
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
 
     return;

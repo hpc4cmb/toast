@@ -91,6 +91,10 @@ void init_sys(py::module & m) {
     .def("is_running", &toast::Timer::is_running,
          R"(
             Is the timer running?
+
+            Returns:
+               (bool): True if the timer is running, else False.
+
         )")
     .def("seconds",
          [](toast::Timer const & self) {
@@ -100,9 +104,14 @@ void init_sys(py::module & m) {
                  return self.seconds();
              }
          }, R"(
-            Return the elapsed seconds (if stopped) else -1.
+            Return the elapsed seconds.
+
+            Returns:
+                (float): The elapsed seconds (if timer is stopped) else -1.
+
         )")
-    .def("report", &toast::Timer::report,
+    .def("report", &toast::Timer::report, py::arg(
+             "message"),
          R"(
             Report results of the timer to STDOUT.
 
@@ -149,56 +158,69 @@ void init_sys(py::module & m) {
     .def("names", &toast::GlobalTimers::names,
          R"(
         Return the names of all currently registered timers.
-        )")
-    .def("start", &toast::GlobalTimers::start,
-         R"(
-        Start a named timer.  The timer is created if it does not exist.
-
-        Args:
-            name (str):  The name of the timer.
-
-        )")
-    .def("stop", &toast::GlobalTimers::stop,
-         R"(
-        Stop a named timer.
-
-        Args:
-            name (str):  The name of the timer.
-
-        )")
-    .def("seconds", &toast::GlobalTimers::seconds,
-         R"(
-        Get the elapsed time for a stopped timer.
-
-        Args:
-            name (str):  The name of the timer.
 
         Returns:
-            (float):  The elapsed time in seconds.
+            (list): The names of the timers.
 
         )")
-    .def("is_running", &toast::GlobalTimers::is_running,
-         R"(
-        Check the state of a timer.
+    .def("start", &toast::GlobalTimers::start, py::arg(
+             "name"), R"(
+            Start the specified timer.
 
-        Args:
-            name (str):  The name of the timer.
+            If the named timer does not exist, it is first created before
+            being started.
 
-        Returns:
-            (bool):  True if the timer is running, else False.
+            Args:
+                name (str): The name of the global timer.
 
+            Returns:
+                None
+        )")
+    .def("stop", &toast::GlobalTimers::stop, py::arg(
+             "name"), R"(
+            Stop the specified timer.
+
+            The timer must already exist.
+
+            Args:
+                name (str): The name of the global timer.
+
+            Returns:
+                None
+        )")
+    .def("seconds", &toast::GlobalTimers::seconds, py::arg(
+             "name"), R"(
+            Get the elapsed time for a timer.
+
+            The timer must be stopped.
+
+            Args:
+                name (str): The name of the global timer.
+
+            Returns:
+                (float): The elapsed time in seconds.
+        )")
+    .def("is_running", &toast::GlobalTimers::is_running, py::arg(
+             "name"), R"(
+            Is the specified timer running?
+
+            Args:
+                name (str): The name of the global timer.
+
+            Returns:
+                (bool): True if the timer is running, else False.
         )")
     .def("stop_all", &toast::GlobalTimers::stop_all,
          R"(
-        Stop all timers.
+        Stop all global timers.
         )")
     .def("clear_all", &toast::GlobalTimers::clear_all,
          R"(
-        Clear all timers.
+        Clear all global timers.
         )")
     .def("report", &toast::GlobalTimers::report,
          R"(
-        Print the status of all timers to STDOUT.
+        Report results of all global timers to STDOUT.
         )");
 
 
@@ -219,24 +241,69 @@ void init_sys(py::module & m) {
          }, R"(
             Get a handle to the global logger.
         )")
-    .def("debug", &toast::Logger::debug,
-         R"(
+    .def("debug",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::debug,
+         py::arg(
+             "msg"), R"(
             Print a DEBUG level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )")
-    .def("info", &toast::Logger::info,
-         R"(
+    .def("info",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::info,
+         py::arg(
+             "msg"), R"(
             Print an INFO level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )")
-    .def("warning", &toast::Logger::warning,
-         R"(
+    .def("warning",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::warning,
+         py::arg(
+             "msg"), R"(
             Print a WARNING level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )")
-    .def("error", &toast::Logger::error,
-         R"(
+    .def("error",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::error,
+         py::arg(
+             "msg"), R"(
             Print an ERROR level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )")
-    .def("critical", &toast::Logger::critical,
-         R"(
+    .def("critical",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::critical,
+         py::arg(
+             "msg"), R"(
             Print a CRITICAL level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )");
 }

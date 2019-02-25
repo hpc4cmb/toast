@@ -15,47 +15,82 @@ TEST_F(TOASTutilsTest, logging) {
     std::cout << "Testing level CRITICAL" << std::endl;
     env.set_log_level("CRITICAL");
     auto & log = toast::Logger::get();
+
+    auto here = TOAST_HERE();
     log.critical("This message level is CRITICAL");
+    log.critical("This message level is CRITICAL at ", here);
     log.error("This message level is ERROR");
+    log.error("This message level is ERROR at ", here);
     log.warning("This message level is WARNING");
+    log.warning("This message level is WARNING at ", here);
     log.info("This message level is INFO");
+    log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
+    log.debug("This message level is DEBUG at ", here);
 
     std::cout << "Testing level ERROR" << std::endl;
     env.set_log_level("ERROR");
     log = toast::Logger::get();
+
+    here = TOAST_HERE();
     log.critical("This message level is CRITICAL");
+    log.critical("This message level is CRITICAL at ", here);
     log.error("This message level is ERROR");
+    log.error("This message level is ERROR at ", here);
     log.warning("This message level is WARNING");
+    log.warning("This message level is WARNING at ", here);
     log.info("This message level is INFO");
+    log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
+    log.debug("This message level is DEBUG at ", here);
 
     std::cout << "Testing level WARNING" << std::endl;
     env.set_log_level("WARNING");
     log = toast::Logger::get();
+
+    here = TOAST_HERE();
     log.critical("This message level is CRITICAL");
+    log.critical("This message level is CRITICAL at ", here);
     log.error("This message level is ERROR");
+    log.error("This message level is ERROR at ", here);
     log.warning("This message level is WARNING");
+    log.warning("This message level is WARNING at ", here);
     log.info("This message level is INFO");
+    log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
+    log.debug("This message level is DEBUG at ", here);
 
     std::cout << "Testing level INFO" << std::endl;
     env.set_log_level("INFO");
     log = toast::Logger::get();
+
+    here = TOAST_HERE();
     log.critical("This message level is CRITICAL");
+    log.critical("This message level is CRITICAL at ", here);
     log.error("This message level is ERROR");
+    log.error("This message level is ERROR at ", here);
     log.warning("This message level is WARNING");
+    log.warning("This message level is WARNING at ", here);
     log.info("This message level is INFO");
+    log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
+    log.debug("This message level is DEBUG at ", here);
 
     std::cout << "Testing level DEBUG" << std::endl;
     env.set_log_level("DEBUG");
     log = toast::Logger::get();
+
+    here = TOAST_HERE();
     log.critical("This message level is CRITICAL");
+    log.critical("This message level is CRITICAL at ", here);
     log.error("This message level is ERROR");
+    log.error("This message level is ERROR at ", here);
     log.warning("This message level is WARNING");
+    log.warning("This message level is WARNING at ", here);
     log.info("This message level is INFO");
+    log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
+    log.debug("This message level is DEBUG at ", here);
 }
 
 TEST_F(TOASTutilsTest, singletimer) {
@@ -73,7 +108,7 @@ TEST_F(TOASTutilsTest, singletimer) {
     tm.start();
     try {
         tm.report("This should throw since timer not stopped...");
-    } catch (toast::Exception & e) {
+    } catch (std::runtime_error & e) {
         std::cout << "This should throw since timer not stopped..."
                   << std::endl;
         std::cout << e.what() << std::endl;
@@ -98,7 +133,7 @@ TEST_F(TOASTutilsTest, globaltimer) {
     for (auto const & tname : tnames) {
         try {
             gtm.stop(tname);
-        } catch (toast::Exception & e) {
+        } catch (std::runtime_error & e) {
             std::cout << "This should throw since timer " << tname
                       << " not yet created" << std::endl;
             std::cout << e.what() << std::endl;
@@ -113,7 +148,7 @@ TEST_F(TOASTutilsTest, globaltimer) {
         EXPECT_EQ(true, gtm.is_running(tname));
         try {
             gtm.stop(tname);
-        } catch (toast::Exception & e) {
+        } catch (std::runtime_error & e) {
             std::cout << "This should throw since timer " << tname
                       << " still running" << std::endl;
             std::cout << e.what() << std::endl;

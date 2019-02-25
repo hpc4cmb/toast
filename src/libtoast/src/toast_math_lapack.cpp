@@ -34,7 +34,11 @@ void toast::lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N,
     #ifdef HAVE_LAPACK
     dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -51,7 +55,11 @@ void toast::lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA,
     #ifdef HAVE_LAPACK
     dgemv(TRANS, M, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -67,7 +75,11 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
     #ifdef HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -84,7 +96,11 @@ void toast::lapack_symv(char * UPLO, int * N, double * ALPHA, double * A,
     #ifdef HAVE_LAPACK
     dsymv(UPLO, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -99,7 +115,11 @@ void toast::lapack_trmv(char * UPLO, char * TRANS, char * DIAG, int * N,
     #ifdef HAVE_LAPACK
     dtrmv(UPLO, TRANS, DIAG, N, A, LDA, X, INCX);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -116,7 +136,11 @@ void toast::lapack_symm(char * SIDE, char * UPLO, int * M, int * N,
     #ifdef HAVE_LAPACK
     dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -133,7 +157,11 @@ void toast::lapack_syrk(char * UPLO, char * TRANS, int * N, int * K,
     #ifdef HAVE_LAPACK
     dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -148,7 +176,11 @@ void toast::lapack_potrf(char * UPLO, int * N, double * A, int * LDA,
     #ifdef HAVE_LAPACK
     dpotrf(UPLO, N, A, LDA, INFO);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -165,7 +197,11 @@ void toast::lapack_pocon(char * UPLO, int * N, double * A, int * LDA,
     #ifdef HAVE_LAPACK
     dpocon(UPLO, N, A, LDA, ANORM, RCOND, WORK, IWORK, INFO);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }
@@ -180,7 +216,11 @@ void toast::lapack_potri(char * UPLO, int * N, double * A, int * LDA,
     #ifdef HAVE_LAPACK
     dpotri(UPLO, N, A, LDA, INFO);
     #else // ifdef HAVE_LAPACK
-    TOAST_THROW("TOAST was not compiled with BLAS/LAPACK support.");
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
     return;
 }

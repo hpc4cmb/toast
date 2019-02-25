@@ -65,11 +65,14 @@ void toast::tod_sim_noise_timestream(
     double increment = rate / static_cast <double> (fftlen - 1);
 
     if (freq[0] > increment) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
         o << "input PSD has lowest frequency " << freq[0]
           << "Hz, which does not allow interpolation to " << increment
           << "Hz";
-        TOAST_THROW(o.str().c_str());
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
 
     double psdmin = 1e30;
@@ -80,17 +83,24 @@ void toast::tod_sim_noise_timestream(
     }
 
     if (psdmin < 0) {
-        TOAST_THROW("input PSD values should be >= zero");
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("input PSD values should be >= zero");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     double nyquist = 0.5 * rate;
     if (::fabs((freq[psdlen - 1] - nyquist) / nyquist) > 0.01) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
         std::ostringstream o;
         o.precision(16);
         o << "last frequency element does not match Nyquist "
           << "frequency for given sample rate: "
           << freq[psdlen - 1] << " != " << nyquist;
-        TOAST_THROW(o.str().c_str());
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
     }
 
     // Perform a logarithmic interpolation.  In order to avoid zero

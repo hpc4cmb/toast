@@ -20,20 +20,50 @@ class mpi_shmem {
     public:
 
         mpi_shmem(MPI_Comm comm = MPI_COMM_WORLD) : comm_(comm) {
+            int ret = MPI_Comm_rank(comm, &world_rank_);
+            if (ret != MPI_SUCCESS) {
+                auto here = TOAST_HERE();
+                auto log = toast::Logger::get();
+                std::string msg("Failed to get rank from input comm");
+                log.error(msg.c_str(), here);
+                throw std::runtime_error(msg.c_str());
+            }
+
             // Split the provided communicator into groups that share
             // memory (are on the same node).
 
-            if (MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0,
-                                    MPI_INFO_NULL, &shmcomm_)) {
-                TOAST_THROW("Failed to split communicator by node.");
+            ret = MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0,
+                                      MPI_INFO_NULL, &shmcomm_);
+            if (ret != MPI_SUCCESS) {
+                if (world_rank_ == 0) {
+                    auto here = TOAST_HERE();
+                    auto log = toast::Logger::get();
+                    std::string msg("Failed to split communicator by node.");
+                    log.error(msg.c_str(), here);
+                    throw std::runtime_error(msg.c_str());
+                }
             }
 
-            if (MPI_Comm_size(shmcomm_, &ntasks_)) {
-                TOAST_THROW("Failed to get node communicator size");
+            ret = MPI_Comm_size(shmcomm_, &ntasks_);
+            if (ret != MPI_SUCCESS) {
+                if (world_rank_ == 0) {
+                    auto here = TOAST_HERE();
+                    auto log = toast::Logger::get();
+                    std::string msg("Failed to get node communicator size");
+                    log.error(msg.c_str(), here);
+                    throw std::runtime_error(msg.c_str());
+                }
             }
 
-            if (MPI_Comm_rank(shmcomm_, &rank_)) {
-                TOAST_THROW("Failed to get node communicator rank");
+            ret = MPI_Comm_rank(shmcomm_, &rank_);
+            if (ret != MPI_SUCCESS) {
+                if (world_rank_ == 0) {
+                    auto here = TOAST_HERE();
+                    auto log = toast::Logger::get();
+                    std::string msg("Failed to get node communicator rank");
+                    log.error(msg.c_str(), here);
+                    throw std::runtime_error(msg.c_str());
+                }
             }
         }
 
@@ -56,19 +86,27 @@ class mpi_shmem {
             nlocal_ = n / ntasks_;
 
             if (nlocal_ * ntasks_ < n) nlocal_ += 1;
-            if (nlocal_ * (rank_ + 1) > n) nlocal_ = n - nlocal_ * rank_;
+            if (nlocal_ * (rank_ + 1) > n) {
+                nlocal_ = n - nlocal_ * rank_;
+            }
             if (nlocal_ < 0) nlocal_ = 0;
 
             // Allocate the shared memory
 
-            if (MPI_Win_allocate_shared(
-                    nlocal_ * sizeof(T), sizeof(T), MPI_INFO_NULL, shmcomm_,
-                    &local_, &win_)) {
-                std::ostringstream o;
-                o << " Failed to allocate " << n / 1024. / 1024.
-                  << " MB of shared memory with " << ntasks_
-                  << " tasks.";
-                TOAST_THROW(o.str().c_str());
+            int ret = MPI_Win_allocate_shared(
+                nlocal_ * sizeof(T), sizeof(T), MPI_INFO_NULL, shmcomm_,
+                &local_, &win_);
+            if (ret != MPI_SUCCESS) {
+                if (rank_ == 0) {
+                    auto here = TOAST_HERE();
+                    auto log = toast::Logger::get();
+                    std::ostringstream o;
+                    o << " Failed to allocate " << n / 1024. / 1024.
+                      << " MB of shared memory with " << ntasks_
+                      << " tasks.";
+                    log.error(o.str().c_str(), here);
+                    throw std::runtime_error(o.str().c_str());
+                }
             }
             n_ = n;
 
@@ -78,8 +116,15 @@ class mpi_shmem {
             MPI_Aint nn;
             int disp;
 
-            if (MPI_Win_shared_query(win_, 0, &nn, &disp, &global_)) {
-                TOAST_THROW("Failed to query shared memory address.");
+            ret = MPI_Win_shared_query(win_, 0, &nn, &disp, &global_);
+            if (ret != MPI_SUCCESS) {
+                if (rank_ == 0) {
+                    auto here = TOAST_HERE();
+                    auto log = toast::Logger::get();
+                    std::string msg("Failed to query shared memory address.");
+                    log.error(msg.c_str(), here);
+                    throw std::runtime_error(msg.c_str());
+                }
             }
 
             return global_;
@@ -87,8 +132,15 @@ class mpi_shmem {
 
         void free() {
             if (global_) {
-                if (MPI_Win_free(&win_)) {
-                    TOAST_THROW("Failed to free shared memory.");
+                int ret = MPI_Win_free(&win_);
+                if (ret != MPI_SUCCESS) {
+                    if (rank_ == 0) {
+                        auto here = TOAST_HERE();
+                        auto log = toast::Logger::get();
+                        std::string msg("Failed to free shared memory.");
+                        log.error(msg.c_str(), here);
+                        throw std::runtime_error(msg.c_str());
+                    }
                 }
                 local_ = NULL;
                 global_ = NULL;
@@ -160,10 +212,14 @@ class mpi_shmem {
 
         T * local_ = NULL;
         T * global_ = NULL;
-        size_t n_ = 0, nlocal_ = 0;
-        MPI_Comm comm_, shmcomm_;
+        size_t n_ = 0;
+        size_t nlocal_ = 0;
+        MPI_Comm comm_;
+        MPI_Comm shmcomm_;
         MPI_Win win_ = MPI_WIN_NULL;
-        int ntasks_, rank_;
+        int ntasks_;
+        int rank_;
+        int world_rank_;
 };
 
 }

@@ -62,27 +62,13 @@ static double const THREEPI_2 = 4.71238898038468985769;
 // Degrees to Radians
 static double const DEG2RAD = 1.74532925199432957692e-2;
 
-// Exception handling
 
-class Exception : public std::exception {
-    public:
+// Macro to return the current source location.
+#define TOAST_HERE() \
+    std::make_pair(std::string(__FILE__), int(__LINE__))
 
-        Exception(const char * msg, const char * file, int line);
-        ~Exception() throw();
-        const char * what() const throw();
+std::string format_here(std::pair <std::string, int> const & here);
 
-    private:
-
-        // use C strings here for passing to what()
-        static size_t const msg_len_ = 1024;
-        char msg_[msg_len_];
-};
-
-typedef void (* TOAST_EXCEPTION_HANDLER) (toast::Exception & e);
-
-// Helper macro for throwing a toast exception
-#define TOAST_THROW(msg) \
-    throw toast::Exception(msg, __FILE__, __LINE__)
 
 class Timer {
     // Simple timer class that tracks elapsed seconds and number of times
@@ -161,10 +147,20 @@ class Logger {
         static Logger & get();
 
         void debug(char const * msg);
+        void debug(char const * msg,
+                   std::pair <std::string, int> const & here);
         void info(char const * msg);
+        void info(char const * msg,
+                  std::pair <std::string, int> const & here);
         void warning(char const * msg);
+        void warning(char const * msg,
+                     std::pair <std::string, int> const & here);
         void error(char const * msg);
+        void error(char const * msg,
+                   std::pair <std::string, int> const & here);
         void critical(char const * msg);
+        void critical(char const * msg,
+                      std::pair <std::string, int> const & here);
 
     private:
 
