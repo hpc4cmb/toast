@@ -4,4 +4,4 @@
 
 from ._libtoast import (Environment, Timer, GlobalTimers, Logger)
 
-from ._libtoast import (vsin,)
+from ._libtoast import (AlignedArray, vsin)

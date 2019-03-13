@@ -27,8 +27,7 @@ void init_math_sf(py::module & m) {
             toast::vsin(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out").none(
-            true), R"(
+            "out"), R"(
         Compute the Sine for an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD

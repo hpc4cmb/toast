@@ -40,8 +40,10 @@ class AlignedArray {
         static std::unique_ptr <AlignedArray> empty_like(py::buffer other);
 
         py::dtype dtype;
+        std::string format;
         toast::AlignedVector <uint8_t> data;
         std::vector <py::ssize_t> shape;
+        std::vector <py::ssize_t> strides;
         py::ssize_t flatsize;
         py::ssize_t itemsize;
 
