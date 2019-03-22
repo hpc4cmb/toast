@@ -114,10 +114,9 @@ def distribute_uniform(totalsize, groups, breaks=None):
         breaks (list): List of hard breaks in the data distribution.
 
     Returns:
-        list of tuples: there is one tuple per group.  The
-        first element of the tuple is the first item
-        assigned to the group, and the second element is
-        the number of items assigned to the group.
+        (list): there is one tuple per group.  The first element of the tuple
+            is the first item assigned to the group, and the second element is
+            the number of items assigned to the group.
 
     """
     if breaks is not None:

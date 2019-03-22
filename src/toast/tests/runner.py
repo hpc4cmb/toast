@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -14,10 +14,10 @@ from ..vis import set_backend
 
 from . import cache as testcache
 # from . import timing as testtiming
-# from . import rng as testrng
+from . import rng as testrng
 # from . import fft as testfft
-# from . import dist as testdist
-# from . import qarray as testqarray
+from . import dist as testdist
+from . import qarray as testqarray
 # from . import tod as testtod
 # from . import psd_math as testpsdmath
 # from . import intervals as testintervals
@@ -82,10 +82,10 @@ def test(name=None, verbosity=2):
     if name is None:
         suite.addTest(loader.loadTestsFromModule(testcache))
         # suite.addTest( loader.loadTestsFromModule(testtiming) )
-        # suite.addTest( loader.loadTestsFromModule(testrng) )
+        suite.addTest(loader.loadTestsFromModule(testrng))
         # suite.addTest( loader.loadTestsFromModule(testfft) )
-        # suite.addTest( loader.loadTestsFromModule(testdist) )
-        # suite.addTest( loader.loadTestsFromModule(testqarray) )
+        suite.addTest(loader.loadTestsFromModule(testdist))
+        suite.addTest(loader.loadTestsFromModule(testqarray))
         # suite.addTest( loader.loadTestsFromModule(testtod) )
         # suite.addTest( loader.loadTestsFromModule(testtodsat) )
         # suite.addTest( loader.loadTestsFromModule(testpsdmath) )

@@ -11,8 +11,8 @@ void init_math_sf(py::module & m) {
 
     m.def(
         "vsin", [](py::buffer in, py::buffer out) {
-            pybuffer_check_double_1D(in);
-            pybuffer_check_double_1D(out);
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
             py::buffer_info info_in = in.request();
             py::buffer_info info_out = out.request();
             if (info_in.size != info_out.size) {
@@ -32,7 +32,7 @@ void init_math_sf(py::module & m) {
 
         The results are stored in the output buffer.  To guarantee SIMD
         vectorization, the input and output arrays should be aligned
-        (i.e. use an AlignedArray).
+        (i.e. use an AlignedF64).
 
         Args:
             in (array_like):  1D array of float64 values.
@@ -43,26 +43,1060 @@ void init_math_sf(py::module & m) {
 
     )");
 
-    //
-    // void vsin(int n, double const * ang, double * sinout);
-    // void vcos(int n, double const * ang, double * cosout);
-    // void vsincos(int n, double const * ang, double * sinout, double *
-    // cosout);
-    // void vatan2(int n, double const * y, double const * x, double * ang);
-    // void vsqrt(int n, double const * in, double * out);
-    // void vrsqrt(int n, double const * in, double * out);
-    // void vexp(int n, double const * in, double * out);
-    // void vlog(int n, double const * in, double * out);
-    //
-    // void vfast_sin(int n, double const * ang, double * sinout);
-    // void vfast_cos(int n, double const * ang, double * cosout);
-    // void vfast_sincos(int n, double const * ang, double * sinout,
-    //                   double * cosout);
-    // void vfast_atan2(int n, double const * y, double const * x, double *
-    // ang);
-    // void vfast_sqrt(int n, double const * in, double * out);
-    // void vfast_rsqrt(int n, double const * in, double * out);
-    // void vfast_exp(int n, double const * in, double * out);
-    // void vfast_log(int n, double const * in, double * out);
-    // void vfast_erfinv(int n, double const * in, double * out);
+    m.def(
+        "vsin", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vsin(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the Sine for an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vcos", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vcos(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the Cosine for an array of float64 values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vcos", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vcos(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the Cosine for an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vsincos", [](py::buffer in, py::buffer sinout, py::buffer cosout) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (sinout);
+            pybuffer_check_1D <double> (cosout);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_sinout = sinout.request();
+            py::buffer_info info_cosout = cosout.request();
+            if ((info_in.size != info_sinout.size) ||
+                (info_in.size != info_cosout.size)) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * sinoutraw = reinterpret_cast <double *> (info_sinout.ptr);
+            double * cosoutraw = reinterpret_cast <double *> (info_cosout.ptr);
+            toast::vsincos(info_in.size, inraw, sinoutraw, cosoutraw);
+            return;
+        }, py::arg("in"), py::arg("sinout"), py::arg(
+            "cosout"), R"(
+        Compute the sine and cosine for an array of float64 values.
+
+        The results are stored in the output buffers.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            sinout (array_like):  1D array of float64 values.
+            cosout (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vsincos", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 sinout(info_in.size);
+            AlignedF64 cosout(info_in.size);
+            toast::vsincos(info_in.size, inraw, sinout.data(), cosout.data());
+            return py::make_tuple(sinout, cosout);
+        }, py::arg(
+            "in"), R"(
+        Compute the sine and cosine for an array of float64 values.
+
+        The results are stored in newly created output buffers.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (tuple): (sin, cos) AlignedF64 output buffers with results.
+
+    )");
+
+    m.def(
+        "vatan2", [](py::buffer y, py::buffer x, py::buffer ang) {
+            pybuffer_check_1D <double> (y);
+            pybuffer_check_1D <double> (x);
+            pybuffer_check_1D <double> (ang);
+            py::buffer_info info_x = x.request();
+            py::buffer_info info_y = y.request();
+            py::buffer_info info_ang = ang.request();
+            if ((info_x.size != info_y.size) ||
+                (info_x.size != info_ang.size)) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * xraw = reinterpret_cast <double *> (info_x.ptr);
+            double * yraw = reinterpret_cast <double *> (info_y.ptr);
+            double * angraw = reinterpret_cast <double *> (info_ang.ptr);
+            toast::vatan2(info_x.size, yraw, xraw, angraw);
+            return;
+        }, py::arg("y"), py::arg("x"), py::arg(
+            "ang"), R"(
+        Compute the arctangent of the y and x values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            y (array_like):  1D array of float64 values.
+            x (array_like):  1D array of float64 values.
+            ang (array_like):  output angles as 1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vatan2", [](py::buffer y, py::buffer x) {
+            pybuffer_check_1D <double> (y);
+            pybuffer_check_1D <double> (x);
+            py::buffer_info info_x = x.request();
+            py::buffer_info info_y = y.request();
+            if (info_x.size != info_y.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * xraw = reinterpret_cast <double *> (info_x.ptr);
+            double * yraw = reinterpret_cast <double *> (info_y.ptr);
+            AlignedF64 ang(info_x.size);
+            toast::vatan2(info_x.size, yraw, xraw, ang.data());
+            return py::cast(ang);
+        }, py::arg("y"), py::arg(
+            "x"), R"(
+        Compute the arctangent of the y and x values.
+
+        The results are stored in a new buffer.  To guarantee SIMD
+        vectorization, the input arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            y (array_like):  1D array of float64 values.
+            x (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer of angles.
+
+    )");
+
+    m.def(
+        "vsqrt", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vsqrt(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the sqrt an array of float64 values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vsqrt", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vsqrt(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the sqrt of an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vrsqrt", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vrsqrt(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the inverse sqrt an array of float64 values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vrsqrt", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vrsqrt(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the inverse sqrt of an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vexp", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vexp(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute e^x for an array of float64 values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vexp", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vexp(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute e^x for an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vlog", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vlog(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the natural log of an array of float64 values.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vlog", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vlog(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the natural log of an array of float64 values.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    // Now the "fast" / less accurate versions.
+
+    m.def(
+        "vfast_sin", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_sin(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the Sine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_sin", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_sin(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the Sine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_cos", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_cos(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the Cosine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_cos", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_cos(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the Cosine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_sincos", [](py::buffer in, py::buffer sinout,
+                           py::buffer cosout) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (sinout);
+            pybuffer_check_1D <double> (cosout);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_sinout = sinout.request();
+            py::buffer_info info_cosout = cosout.request();
+            if ((info_in.size != info_sinout.size) ||
+                (info_in.size != info_cosout.size)) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * sinoutraw = reinterpret_cast <double *> (info_sinout.ptr);
+            double * cosoutraw = reinterpret_cast <double *> (info_cosout.ptr);
+            toast::vfast_sincos(info_in.size, inraw, sinoutraw, cosoutraw);
+            return;
+        }, py::arg("in"), py::arg("sinout"), py::arg(
+            "cosout"), R"(
+        Compute the sine and cosine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffers.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            sinout (array_like):  1D array of float64 values.
+            cosout (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_sincos", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 sinout(info_in.size);
+            AlignedF64 cosout(info_in.size);
+            toast::vfast_sincos(info_in.size, inraw, sinout.data(),
+                                cosout.data());
+            return py::make_tuple(sinout, cosout);
+        }, py::arg(
+            "in"), R"(
+        Compute the sine and cosine for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in newly created output buffers.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (tuple): (sin, cos) AlignedF64 output buffers with results.
+
+    )");
+
+    m.def(
+        "vfast_atan2", [](py::buffer y, py::buffer x, py::buffer ang) {
+            pybuffer_check_1D <double> (y);
+            pybuffer_check_1D <double> (x);
+            pybuffer_check_1D <double> (ang);
+            py::buffer_info info_x = x.request();
+            py::buffer_info info_y = y.request();
+            py::buffer_info info_ang = ang.request();
+            if ((info_x.size != info_y.size) ||
+                (info_x.size != info_ang.size)) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * xraw = reinterpret_cast <double *> (info_x.ptr);
+            double * yraw = reinterpret_cast <double *> (info_y.ptr);
+            double * angraw = reinterpret_cast <double *> (info_ang.ptr);
+            toast::vfast_atan2(info_x.size, yraw, xraw, angraw);
+            return;
+        }, py::arg("y"), py::arg("x"), py::arg(
+            "ang"), R"(
+        Compute the arctangent of the y and x values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            y (array_like):  1D array of float64 values.
+            x (array_like):  1D array of float64 values.
+            ang (array_like):  output angles as 1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_atan2", [](py::buffer y, py::buffer x) {
+            pybuffer_check_1D <double> (y);
+            pybuffer_check_1D <double> (x);
+            py::buffer_info info_x = x.request();
+            py::buffer_info info_y = y.request();
+            if (info_x.size != info_y.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * xraw = reinterpret_cast <double *> (info_x.ptr);
+            double * yraw = reinterpret_cast <double *> (info_y.ptr);
+            AlignedF64 ang(info_x.size);
+            toast::vfast_atan2(info_x.size, yraw, xraw, ang.data());
+            return py::cast(ang);
+        }, py::arg("y"), py::arg(
+            "x"), R"(
+        Compute the arctangent of the y and x values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a new buffer.  To guarantee SIMD
+        vectorization, the input arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            y (array_like):  1D array of float64 values.
+            x (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer of angles.
+
+    )");
+
+    m.def(
+        "vfast_sqrt", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_sqrt(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the sqrt an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_sqrt", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_sqrt(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the sqrt of an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_rsqrt", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_rsqrt(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the inverse sqrt an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_rsqrt", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_rsqrt(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the inverse sqrt of an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_exp", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_exp(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute e^x for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_exp", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_exp(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute e^x for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_log", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_log(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the natural log of an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_log", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_log(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the natural log of an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
+
+    m.def(
+        "vfast_erfinv", [](py::buffer in, py::buffer out) {
+            pybuffer_check_1D <double> (in);
+            pybuffer_check_1D <double> (out);
+            py::buffer_info info_in = in.request();
+            py::buffer_info info_out = out.request();
+            if (info_in.size != info_out.size) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Input and output buffers are different sizes";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            double * outraw = reinterpret_cast <double *> (info_out.ptr);
+            toast::vfast_erfinv(info_in.size, inraw, outraw);
+            return;
+        }, py::arg("in"), py::arg(
+            "out"), R"(
+        Compute the inverse error function for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in the output buffer.  To guarantee SIMD
+        vectorization, the input and output arrays should be aligned
+        (i.e. use an AlignedF64).
+
+        Args:
+            in (array_like):  1D array of float64 values.
+            out (array_like):  1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "vfast_erfinv", [](py::buffer in) {
+            pybuffer_check_1D <double> (in);
+            py::buffer_info info_in = in.request();
+            double * inraw = reinterpret_cast <double *> (info_in.ptr);
+            AlignedF64 out(info_in.size);
+            toast::vfast_erfinv(info_in.size, inraw, out.data());
+            return py::cast(out);
+        }, py::arg(
+            "in"), R"(
+        Compute the inverse error function for an array of float64 values.
+
+        "Fast" version:  this function may run much faster than the
+        standard version at the expense of errors in the least significant
+        bits.
+
+        The results are stored in a newly created output buffer.  To guarantee
+        SIMD vectorization, the input array should be aligned.
+
+        Args:
+            in (array_like):  1D array of float64 values.
+
+        Returns:
+            (AlignedF64):  aligned output buffer with results.
+
+    )");
 }

@@ -1,8 +1,6 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
-from ..mpi import MPI
 
 import os
 import sys
@@ -14,8 +12,8 @@ from contextlib import contextmanager
 from ..dist import Comm, Data
 from .. import qarray as qa
 
-# These are helper routines for common operations used in the unit tests.
 
+# These are helper routines for common operations used in the unit tests.
 
 def create_outdir(mpicomm, subdir=None):
     """Create the top level output directory and per-test subdir.
@@ -33,12 +31,13 @@ def create_outdir(mpicomm, subdir=None):
     retdir = testdir
     if subdir is not None:
         retdir = os.path.join(testdir, subdir)
-    if mpicomm.rank == 0:
+    if (mpicomm is None) or (mpicomm.rank == 0):
         if not os.path.isdir(testdir):
             os.mkdir(testdir)
         if not os.path.isdir(retdir):
             os.mkdir(retdir)
-    mpicomm.barrier()
+    if mpicomm is not None:
+        mpicomm.barrier()
     return retdir
 
 
@@ -55,11 +54,15 @@ def create_comm(mpicomm):
         toast.Comm: the 2-level toast communicator.
 
     """
-    worldsize = mpicomm.size
-    groupsize = 1
-    if (worldsize >= 2):
-        groupsize = worldsize // 2
-    toastcomm = Comm(world=mpicomm, groupsize=groupsize)
+    toastcomm = None
+    if mpicomm is None:
+        toastcomm = Comm(world=mpicomm)
+    else:
+        worldsize = mpicomm.size
+        groupsize = 1
+        if (worldsize >= 2):
+            groupsize = worldsize // 2
+        toastcomm = Comm(world=mpicomm, groupsize=groupsize)
     return toastcomm
 
 
@@ -112,7 +115,7 @@ def uniform_chunks(samples, nchunk=100):
 
 
 def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
-    alpha=1.0, fknee=0.05):
+                         alpha=1.0, fknee=0.05):
     """Create a set of detectors at the boresight.
 
     This creates multiple detectors at the boresight, oriented in evenly
@@ -123,32 +126,32 @@ def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
 
 
     Returns:
-        tuple: names(list), quat(dict), fmin(dict), rate(dict), fknee(dict),
+        (tuple): names(list), quat(dict), fmin(dict), rate(dict), fknee(dict),
             alpha(dict), netd(dict)
 
     """
-    names = [ "d{:02d}".format(x) for x in range(ndet) ]
-    pol = { "d{:02d}".format(x) : (x * 2 * np.pi / ndet) for x in range(ndet) }
+    names = ["d{:02d}".format(x) for x in range(ndet)]
+    pol = {"d{:02d}".format(x): (x * 2 * np.pi / ndet) for x in range(ndet)}
 
-    quat = { "d{:02d}".format(x) : qa.rotation([0.0, 0.0, 0.0, 1.0],
-        pol["d{:02d}".format(x)]) for x in range(ndet) }
+    quat = {"d{:02d}".format(x): qa.rotation([0.0, 0.0, 0.0, 1.0],
+            pol["d{:02d}".format(x)]) for x in range(ndet)}
 
-    det_eps = { "d{:02d}".format(x) : epsilon for x in range(ndet) }
+    det_eps = {"d{:02d}".format(x): epsilon for x in range(ndet)}
 
-    det_fmin = { "d{:02d}".format(x) : fmin for x in range(ndet) }
-    det_rate = { "d{:02d}".format(x) : samplerate for x in range(ndet) }
-    det_alpha = { "d{:02d}".format(x) : alpha for x in range(ndet) }
-    det_net = { "d{:02d}".format(x) : net for x in range(ndet) }
+    det_fmin = {"d{:02d}".format(x): fmin for x in range(ndet)}
+    det_rate = {"d{:02d}".format(x): samplerate for x in range(ndet)}
+    det_alpha = {"d{:02d}".format(x): alpha for x in range(ndet)}
+    det_net = {"d{:02d}".format(x): net for x in range(ndet)}
 
     det_fknee = None
     if np.isscalar(fknee):
-        det_fknee = { "d{:02d}".format(x) : fknee for x in range(ndet) }
+        det_fknee = {"d{:02d}".format(x): fknee for x in range(ndet)}
     else:
         # This must be an array or list of correct length
         if len(fknee) != ndet:
             raise RuntimeError("length of knee frequencies must equal ndet")
-        det_fknee = { "d{:02d}".format(x) : y \
-            for x, y in zip(range(ndet), fknee) }
+        det_fknee = {"d{:02d}".format(x): y
+                     for x, y in zip(range(ndet), fknee)}
 
     return names, quat, det_eps, det_rate, det_net, det_fmin, \
         det_fknee, det_alpha

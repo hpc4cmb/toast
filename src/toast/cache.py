@@ -6,9 +6,9 @@ import re
 import ctypes
 import numpy as np
 
-from .utils import Logger
-
-from ._libtoast import AlignedArray
+from .utils import (Logger, AlignedI8, AlignedU8, AlignedI16, AlignedU16,
+                    AlignedI32, AlignedU32, AlignedI64, AlignedU64,
+                    AlignedF32, AlignedF64)
 
 
 class Cache(object):
@@ -70,6 +70,7 @@ class Cache(object):
             (array): a reference to the allocated array.
 
         """
+        log = Logger.get()
         if name is None:
             raise ValueError("Cache name cannot be None")
         if type is None:
@@ -83,9 +84,43 @@ class Cache(object):
         if self._pymem:
             self._buffers[name] = np.zeros(shape, dtype=ttype)
         else:
-            # Note:  AlignedArray constructor zeros the memory.
-            self._buffers[name] = np.frombuffer(
-                AlignedArray(shape, ttype), dtype=ttype).reshape(shape)
+            flatshape = 1
+            for dim in shape:
+                flatshape *= dim
+            if ttype.char == "b":
+                self._buffers[name] = np.frombuffer(
+                    AlignedI8.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif ttype.char == "B":
+                self._buffers[name] = np.frombuffer(
+                    AlignedU8.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif ttype.char == "h":
+                self._buffers[name] = np.frombuffer(
+                    AlignedI16.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif ttype.char == "H":
+                self._buffers[name] = np.frombuffer(
+                    AlignedU16.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif ttype.char == "i":
+                self._buffers[name] = np.frombuffer(
+                    AlignedI32.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif ttype.char == "I":
+                self._buffers[name] = np.frombuffer(
+                    AlignedU32.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif (ttype.char == "l") or (ttype.char == "l"):
+                self._buffers[name] = np.frombuffer(
+                    AlignedI64.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif (ttype.char == "L") or (ttype.char == "L"):
+                self._buffers[name] = np.frombuffer(
+                    AlignedU64.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif (ttype.char == "f"):
+                self._buffers[name] = np.frombuffer(
+                    AlignedF32.zeros(flatshape), dtype=ttype).reshape(shape)
+            elif (ttype.char == "d"):
+                self._buffers[name] = np.frombuffer(
+                    AlignedF64.zeros(flatshape), dtype=ttype).reshape(shape)
+            else:
+                msg = "Unsupported data typecode '{}'".format(ttype.char)
+                log.error(msg)
+                raise ValueError(msg)
         self._dtypes[name] = ttype
         self._shapes[name] = shape
         return self._buffers[name]

@@ -666,32 +666,51 @@ void toast::qa_ln(size_t n, double const * q_in, double * q_out) {
 
 // Real power of quaternion array
 
-void toast::qa_pow(size_t n, double const * p, double const * q_in,
+void toast::qa_pow(size_t nq, size_t np, double const * p, double const * q_in,
                    double * q_out) {
-    toast::AlignedVector <double> q_tmp(4 * n);
+    toast::AlignedVector <double> q_tmp(4 * nq);
 
-    toast::qa_ln(n, q_in, q_tmp.data());
+    toast::qa_ln(nq, q_in, q_tmp.data());
 
-    if (toast::is_aligned(p)) {
+    if (np == 1) {
         #pragma omp simd
-        for (size_t i = 0; i < n; ++i) {
+        for (size_t i = 0; i < nq; ++i) {
             size_t off = 4 * i;
-            q_tmp[off] *= p[i];
-            q_tmp[off + 1] *= p[i];
-            q_tmp[off + 2] *= p[i];
-            q_tmp[off + 3] *= p[i];
+            q_tmp[off] *= p[0];
+            q_tmp[off + 1] *= p[0];
+            q_tmp[off + 2] *= p[0];
+            q_tmp[off + 3] *= p[0];
+        }
+    } else if (np == nq) {
+        if (toast::is_aligned(p)) {
+            #pragma omp simd
+            for (size_t i = 0; i < nq; ++i) {
+                size_t off = 4 * i;
+                q_tmp[off] *= p[i];
+                q_tmp[off + 1] *= p[i];
+                q_tmp[off + 2] *= p[i];
+                q_tmp[off + 3] *= p[i];
+            }
+        } else {
+            for (size_t i = 0; i < nq; ++i) {
+                size_t off = 4 * i;
+                q_tmp[off] *= p[i];
+                q_tmp[off + 1] *= p[i];
+                q_tmp[off + 2] *= p[i];
+                q_tmp[off + 3] *= p[i];
+            }
         }
     } else {
-        for (size_t i = 0; i < n; ++i) {
-            size_t off = 4 * i;
-            q_tmp[off] *= p[i];
-            q_tmp[off + 1] *= p[i];
-            q_tmp[off + 2] *= p[i];
-            q_tmp[off + 3] *= p[i];
-        }
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg(
+            "Length of power exponent must be one or equal to\
+                         the number of quaternions");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
-    toast::qa_exp(n, q_tmp.data(), q_out);
+    toast::qa_exp(nq, q_tmp.data(), q_out);
 
     return;
 }
@@ -700,8 +719,8 @@ void toast::qa_pow(size_t n, double const * p, double const * q_in,
 // normalized]
 // axis is an n by 3 array, angle is a n-array, q_out is a n by 4 array
 
-void toast::qa_from_axisangle_one(double const * axis,
-                                  double angle, double * q_out) {
+void toast::qa_from_axisangle_one_one(double const * axis,
+                                      double angle, double * q_out) {
     double half = 0.5 * angle;
     double sin_a = ::sin(half);
     q_out[0] = axis[0] * sin_a;
@@ -711,8 +730,76 @@ void toast::qa_from_axisangle_one(double const * axis,
     return;
 }
 
-void toast::qa_from_axisangle(size_t n, double const * axis,
-                              double const * angle, double * q_out) {
+void toast::qa_from_axisangle_one_many(size_t nang, double const * axis,
+                                       double const * angle, double * q_out) {
+    toast::AlignedVector <double> a(nang);
+    if (toast::is_aligned(angle)) {
+        #pragma omp simd
+        for (size_t i = 0; i < nang; ++i) {
+            a[i] = 0.5 * angle[i];
+        }
+    } else {
+        for (size_t i = 0; i < nang; ++i) {
+            a[i] = 0.5 * angle[i];
+        }
+    }
+
+    toast::AlignedVector <double> sin_a(nang);
+    toast::AlignedVector <double> cos_a(nang);
+
+    toast::vsincos(nang, a.data(), sin_a.data(), cos_a.data());
+
+    if (toast::is_aligned(axis) && toast::is_aligned(q_out)) {
+        #pragma omp simd
+        for (size_t i = 0; i < nang; ++i) {
+            size_t off = 4 * i;
+            q_out[off] = axis[0] * sin_a[i];
+            q_out[off + 1] = axis[1] * sin_a[i];
+            q_out[off + 2] = axis[2] * sin_a[i];
+            q_out[off + 3] = cos_a[i];
+        }
+    } else {
+        for (size_t i = 0; i < nang; ++i) {
+            size_t off = 4 * i;
+            q_out[off] = axis[0] * sin_a[i];
+            q_out[off + 1] = axis[1] * sin_a[i];
+            q_out[off + 2] = axis[2] * sin_a[i];
+            q_out[off + 3] = cos_a[i];
+        }
+    }
+    return;
+}
+
+void toast::qa_from_axisangle_many_one(size_t naxis, double const * axis,
+                                       double angle, double * q_out) {
+    double sin_a = ::sin(0.5 * angle);
+    double cos_a = ::cos(0.5 * angle);
+
+    if (toast::is_aligned(axis) && toast::is_aligned(q_out)) {
+        #pragma omp simd
+        for (size_t i = 0; i < naxis; ++i) {
+            size_t off = 4 * i;
+            size_t voff = 3 * i;
+            q_out[off] = axis[voff] * sin_a;
+            q_out[off + 1] = axis[voff + 1] * sin_a;
+            q_out[off + 2] = axis[voff + 2] * sin_a;
+            q_out[off + 3] = cos_a;
+        }
+    } else {
+        for (size_t i = 0; i < naxis; ++i) {
+            size_t off = 4 * i;
+            size_t voff = 3 * i;
+            q_out[off] = axis[voff] * sin_a;
+            q_out[off + 1] = axis[voff + 1] * sin_a;
+            q_out[off + 2] = axis[voff + 2] * sin_a;
+            q_out[off + 3] = cos_a;
+        }
+    }
+    return;
+}
+
+void toast::qa_from_axisangle_many_many(size_t n, double const * axis,
+                                        double const * angle, double * q_out) {
     toast::AlignedVector <double> a(n);
 
     if (toast::is_aligned(angle)) {
@@ -751,7 +838,28 @@ void toast::qa_from_axisangle(size_t n, double const * axis,
             q_out[off + 3] = cos_a[i];
         }
     }
+    return;
+}
 
+void toast::qa_from_axisangle(size_t naxis, double const * axis, size_t nang,
+                              double const * angle, double * q_out) {
+    if ((naxis == 1) && (nang == 1)) {
+        toast::qa_from_axisangle_one_one(axis, angle[0], q_out);
+    } else if (naxis == 1) {
+        toast::qa_from_axisangle_one_many(nang, axis, angle, q_out);
+    } else if (nang == 1) {
+        toast::qa_from_axisangle_many_one(naxis, axis, angle[0], q_out);
+    } else if (naxis == nang) {
+        toast::qa_from_axisangle_many_many(naxis, axis, angle, q_out);
+    } else {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg(
+            "number of axes and angles must either match or\
+                        one of them must have a single element");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
     return;
 }
 
@@ -1125,6 +1233,70 @@ void toast::qa_to_angles(size_t n, double const * quat, double * theta,
 }
 
 // Convert quaternions to latitude and longitude
+
+void toast::qa_from_position(size_t n, double const * theta,
+                             double const * phi, double * quat) {
+    if (toast::is_aligned(theta) && toast::is_aligned(phi)
+        && toast::is_aligned(quat)) {
+        #pragma omp simd
+        for (size_t i = 0; i < n; ++i) {
+            size_t qf = 4 * i;
+            double qR[4];
+            double qD[4];
+
+            // phi rotation around z-axis
+
+            double angR = 0.5 * (phi[i] + toast::PI_2);
+
+            qR[0] = 0.0;
+            qR[1] = 0.0;
+            qR[2] = ::sin(angR);
+            qR[3] = ::cos(angR);
+
+            // theta rotation around x-axis
+
+            double angD = 0.5 * theta[i];
+
+            qD[0] = ::sin(angD);
+            qD[1] = 0.0;
+            qD[2] = 0.0;
+            qD[3] = ::cos(angD);
+
+            toast::qa_mult_one_one(qR, qD, &(quat[qf]));
+            toast::qa_normalize_inplace_one(4, &(quat[qf]));
+        }
+    } else {
+        for (size_t i = 0; i < n; ++i) {
+            size_t qf = 4 * i;
+            double qR[4];
+            double qD[4];
+            double qtemp[4];
+
+            // phi rotation around z-axis
+
+            double angR = 0.5 * (phi[i] + toast::PI_2);
+
+            qR[0] = 0.0;
+            qR[1] = 0.0;
+            qR[2] = ::sin(angR);
+            qR[3] = ::cos(angR);
+
+            // theta rotation around x-axis
+
+            double angD = 0.5 * theta[i];
+
+            qD[0] = ::sin(angD);
+            qD[1] = 0.0;
+            qD[2] = 0.0;
+            qD[3] = ::cos(angD);
+
+            toast::qa_mult_one_one(qR, qD, &(quat[qf]));
+            toast::qa_normalize_inplace_one(4, &(quat[qf]));
+        }
+    }
+
+    return;
+}
 
 void toast::qa_to_position(size_t n, double const * quat, double * theta,
                            double * phi) {

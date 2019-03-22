@@ -65,14 +65,23 @@ void qa_exp(size_t n, double const * q_in, double * q_out);
 
 void qa_ln(size_t n, double const * q_in, double * q_out);
 
-void qa_pow(size_t n, double const * p, double const * q_in,
+void qa_pow(size_t nq, size_t np, double const * p, double const * q_in,
             double * q_out);
 
-void qa_from_axisangle_one(double const * axis, double angle,
-                           double * q_out);
+void qa_from_axisangle_one_one(double const * axis, double angle,
+                               double * q_out);
 
-void qa_from_axisangle(size_t n, double const * axis, double const * angle,
-                       double * q_out);
+void qa_from_axisangle_one_many(size_t nang, double const * axis,
+                                double const * angle, double * q_out);
+
+void qa_from_axisangle_many_one(size_t naxis, double const * axis,
+                                double angle, double * q_out);
+
+void qa_from_axisangle_many_many(size_t n, double const * axis,
+                                 double const * angle, double * q_out);
+
+void qa_from_axisangle(size_t naxis, double const * axis, size_t nang,
+                       double const * angle, double * q_out);
 
 void qa_to_axisangle_one(double const * q, double * axis, double * angle);
 
@@ -91,6 +100,9 @@ void qa_from_angles(size_t n, double const * theta, double const * phi,
 
 void qa_to_angles(size_t n, double const * quat, double * theta,
                   double * phi, double * pa, bool IAU = false);
+
+void qa_from_position(size_t n, double const * theta, double const * phi,
+                      double * quat);
 
 void qa_to_position(size_t n, double const * quat, double * theta,
                     double * phi);

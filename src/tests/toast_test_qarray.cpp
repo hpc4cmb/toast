@@ -219,7 +219,7 @@ TEST_F(TOASTqarrayTest, rotation) {
     toast::AlignedVector <double> axis = {0.0, 0.0, 1.0};
     double ang = toast::PI * 30.0 / 180.0;
 
-    toast::qa_from_axisangle(1, axis.data(), &ang, result.data());
+    toast::qa_from_axisangle(1, axis.data(), 1, &ang, result.data());
 
     EXPECT_FLOAT_EQ(0.0, result[0]);
     EXPECT_FLOAT_EQ(0.0, result[1]);
@@ -285,7 +285,7 @@ TEST_F(TOASTqarrayTest, pow) {
 
     p[0] = 3.0;
     p[1] = 3.0;
-    toast::qa_pow(2, p.data(), qeasy.data(), result.data());
+    toast::qa_pow(2, 2, p.data(), qeasy.data(), result.data());
 
     for (size_t i = 0; i < 8; ++i) {
         EXPECT_FLOAT_EQ(check1[i], result[i]);
@@ -293,7 +293,7 @@ TEST_F(TOASTqarrayTest, pow) {
 
     p[0] = 0.1;
     p[1] = 0.1;
-    toast::qa_pow(2, p.data(), qeasy.data(), result.data());
+    toast::qa_pow(2, 2, p.data(), qeasy.data(), result.data());
 
     for (size_t i = 0; i < 8; ++i) {
         EXPECT_FLOAT_EQ(check2[i], result[i]);

@@ -25,6 +25,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_sys.cpp
     _libtoast_math_sf.cpp
     _libtoast_math_rng.cpp
+    _libtoast_math_qarray.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
 
@@ -46,6 +47,8 @@ install(FILES
     dist.py
     op.py
     vis.py
+    rng.py
+    qarray.py
     DESTINATION ${PYTHON_SITE}/toast
 )
 

@@ -1,453 +1,424 @@
-# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
-import collections
+# This file provides a simplified interface to quaternion operations.
 
 import numpy as np
 
-from . import ctoast as ctoast
-from . import timing as timing
+from .utils import Logger, AlignedF64, ensure_buffer_f64, object_ndim
 
-
-def arraylist_dot(a, b):
-    """Dot product of lists of arrays, returns a column array"""
-    autotimer = timing.auto_timer()
-    if not isinstance(a, np.ndarray):
-        a = np.array(a, dtype=np.float64)
-    if not isinstance(b, np.ndarray):
-        b = np.array(b, dtype=np.float64)
-    na = None
-    ma = None
-    if a.ndim == 1:
-        na = 1
-        ma = a.shape[0]
-    else:
-        na = a.shape[0]
-        ma = a.shape[1]
-    nb = None
-    mb = None
-    if b.ndim == 1:
-        nb = 1
-        mb = b.shape[0]
-    else:
-        nb = b.shape[0]
-        mb = b.shape[1]
-
-    if ma != mb:
-        raise RuntimeError("vector elements of both arrays must "
-                           "have the same length.")
-    if na > 1 and nb > 1 and na != nb:
-        raise RuntimeError("vector arrays must have length one or "
-                           "matching lengths.")
-    n = np.max([na, nb])
-
-    aa = a
-    if na != n:
-        aa = np.tile(a, n)
-    bb = b
-    if nb != n:
-        bb = np.tile(b, n)
-
-    return ctoast.qarray_list_dot(
-        n, ma, ma, aa.flatten().astype(np.float64, copy=False),
-        bb.flatten().astype(np.float64, copy=False))
+from ._libtoast import (qa_inv, qa_amplitude, qa_normalize,
+                        qa_normalize_inplace, qa_rotate, qa_mult, qa_slerp,
+                        qa_exp, qa_ln, qa_pow, qa_from_axisangle,
+                        qa_to_axisangle, qa_to_rotmat, qa_from_rotmat,
+                        qa_from_vectors, qa_from_angles, qa_to_angles,
+                        qa_to_position)
 
 
 def inv(q):
-    """Inverse of quaternion array q"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
+    """Invert a quaternion array.
+
+    Args:
+        q (array_like):  The quaternion array to invert.
+
+    Returns:
+        (array):  The inverse.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = AlignedF64(len(qin))
+    out[:] = qin
+    qa_inv(out)
+    if len(out) == 4:
+        if object_ndim(q) == 2:
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
     else:
-        nq = q.shape[0]
-    ret = ctoast.qarray_inv(nq, q.flatten().astype(np.float64, copy=False))
-    if q.ndim != 1:
-        ret = ret.reshape((-1, 4))
-    return ret
+        return np.frombuffer(out).reshape((-1, 4))
 
 
-def amplitude(v):
-    """Amplitude of a vector array"""
-    autotimer = timing.auto_timer()
-    if not isinstance(v, np.ndarray):
-        v = np.array(v, dtype=np.float64)
-    nv = None
-    nm = None
-    if v.ndim == 1:
-        nv = 1
-        nm = v.shape[0]
+def amplitude(q):
+    """Amplitude of a quaternion array
+
+    Args:
+        q (array_like):  The quaternion array.
+
+    Returns:
+        (array):  The array of amplitudes.
+
+    """
+    qin = ensure_buffer_f64(q)
+    amp = qa_amplitude(qin)
+    if len(amp) == 1:
+        if object_ndim(q) == 2:
+            return np.frombuffer(amp)
+        else:
+            return float(amp[0])
     else:
-        nv = v.shape[0]
-        nm = v.shape[1]
-    ret = ctoast.qarray_amplitude(
-        nv, nm, nm, v.flatten().astype(np.float64, copy=False))
-    if v.ndim == 1:
-        ret = ret[0]
-    return ret
+        return np.frombuffer(amp)
 
 
 def norm(q):
-    """Normalize quaternion array to unit quaternions"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
+    """Normalize quaternion array.
+
+    Args:
+        q (array_like):  The quaternion array.
+
+    Returns:
+        (array):  The normalized array.
+
+    """
+    qin = ensure_buffer_f64(q)
+    nrm = qa_normalize(qin)
+    if len(qin) == 4:
+        if object_ndim(q) == 2:
+            return np.frombuffer(nrm).reshape((1, 4))
+        else:
+            return np.frombuffer(nrm)
     else:
-        nq = q.shape[0]
-    ret = ctoast.qarray_normalize(
-        nq, 4, 4, q.flatten().astype(np.float64, copy=False))
-    if q.ndim != 1:
-        ret = ret.reshape((-1, 4))
-    return ret
+        return np.frombuffer(nrm).reshape((-1, 4))
 
 
 def rotate(q, v):
-    """
-    Use a quaternion or array of quaternions (q) to rotate a vector or
-    array of vectors (v).
-    """
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    if not isinstance(v, np.ndarray):
-        v = np.array(v, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    nv = None
-    if v.ndim == 1:
-        nv = 1
-    else:
-        nv = v.shape[0]
+    """Rotate vectors with quaternions.
 
-    if nq > 1 and nv > 1 and nq != nv:
-        raise RuntimeError("quaternion and vector arrays must have length "
-                           "one or matching lengths.")
+    The number of quaternions and vectors should either be equal or one of
+    the arrays should be a single quaternion or vector.
 
-    ret = ctoast.qarray_rotate(
-        nq, q.flatten().astype(np.float64, copy=False),
-        nv, v.flatten().astype(np.float64, copy=False))
-    if q.ndim != 1 or v.ndim != 1:
-        ret = ret.reshape((-1, 3))
-    return ret
+    Args:
+        q (array_like):  The quaternion array.
+        v (array_like):  The vector array.
+
+    Returns:
+        (array):  The rotated vectors.
+
+    """
+    qin = ensure_buffer_f64(q)
+    vin = ensure_buffer_f64(v)
+    out = qa_rotate(qin, vin)
+    if len(out) == 3:
+        if (object_ndim(q) == 2) or (object_ndim(v) == 2):
+            return np.frombuffer(out).reshape(1, 3)
+        else:
+            return np.frombuffer(out)
+    else:
+        return np.frombuffer(out).reshape((-1, 3))
 
 
 def mult(p, q):
-    """Multiply arrays of quaternions, see:
-    http://en.wikipedia.org/wiki/Quaternions#Quaternions_and_the_geometry_of_R3
+    """Multiply arrays of quaternions.
+
+    The number of quaternions in the input arrays should either be equal or
+    one.
+
+    Args:
+        p (array_like):  The first quaternion array.
+        q (array_like):  The second quaternion array.
+
+    Returns:
+        (array):  The product.
+
     """
-    autotimer = timing.auto_timer()
-    if not isinstance(p, np.ndarray):
-        p = np.array(p, dtype=np.float64)
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
+    pin = ensure_buffer_f64(p)
+    qin = ensure_buffer_f64(q)
+    out = qa_mult(pin, qin)
+    if len(out) == 4:
+        if (object_ndim(p) == 2) or (object_ndim(q) == 2):
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
     else:
-        nq = q.shape[0]
-    pn = None
-    if p.ndim == 1:
-        pn = 1
-    else:
-        pn = p.shape[0]
-
-    if nq > 1 and pn > 1 and nq != pn:
-        raise RuntimeError(
-            "quaternion arrays must have length one or matching lengths.")
-
-    ret = ctoast.qarray_mult(
-        pn, p.flatten().astype(np.float64, copy=False),
-        nq, q.flatten().astype(np.float64, copy=False))
-
-    if p.ndim != 1 or q.ndim != 1:
-        ret = ret.reshape((-1, 4))
-    return ret
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def slerp(targettime, time, q):
-    """Slerp, q quaternion array interpolated from time to targettime"""
-    autotimer = timing.auto_timer()
-    ttime = targettime
-    if not isinstance(ttime, np.ndarray):
-        ttime = np.array(ttime, dtype=np.float64, ndmin=1)
-    if not isinstance(time, np.ndarray):
-        time = np.array(time, dtype=np.float64)
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    n_time = len(time)
-    n_targettime = len(ttime)
-    nq = len(q.flatten())
-    if nq != 4*n_time:
-        raise RuntimeError("input quaternion and time arrays have different "
-                           "numbers of elements")
-    ret = ctoast.qarray_slerp(
-        n_time, n_targettime, time, ttime,
-        q.flatten().astype(np.float64, copy=False))
+    """Spherical Linear Interpolation (SLERP) of a quaternion array.
 
-    if isinstance(targettime, collections.Iterable):
-        ret = ret.reshape((-1, 4))
-    return ret
+    The input quaternions are specified at time stamps, and the output is
+    interpolated to the target times.
+
+    Args:
+        targettime (array_like):  The output target times.
+        time (array_like):  The input times.
+        q (array_like):  The quaternion array.
+
+    Returns:
+        (array):  The interpolated quaternions.
+
+    """
+    tgt = ensure_buffer_f64(targettime)
+    t = ensure_buffer_f64(time)
+    qin = ensure_buffer_f64(q)
+    log = Logger.get()
+    if len(t) < 2:
+        msg = "SLERP input times must have at least two values"
+        log.error(msg)
+        raise RuntimeError(msg)
+    out = qa_slerp(t, tgt, qin)
+    if len(out) == 4:
+        if object_ndim(targettime) == 1:
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
+    else:
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def exp(q):
-    """Exponential of a quaternion array"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
+    """Exponential of a quaternion array.
+
+    Args:
+        q (array_like):  The quaternion array.
+
+    Returns:
+        (array):  The result.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_exp(qin)
+    if len(out) == 4:
+        if object_ndim(q) == 2:
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
     else:
-        nq = q.shape[0]
-    ret = ctoast.qarray_exp(nq, q.flatten().astype(np.float64, copy=False))
-    if q.ndim == 1:
-        return ret
-    else:
-        return ret.reshape((-1, 4))
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def ln(q):
-    """Natural logarithm of a quaternion array"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    ret = ctoast.qarray_ln(nq, q.flatten().astype(np.float64, copy=False))
-    if q.ndim != 1:
-        ret = ret.reshape((-1, 4))
-    return ret
+    """Natural logarithm of a quaternion array.
 
+    Args:
+        q (array_like):  The quaternion array.
 
-def pow(q, p):
-    """Real power of a quaternion array"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    pn = None
-    if isinstance(p, np.ndarray):
-        pn = p.shape[0]
-    else:
-        pn = 1
+    Returns:
+        (array):  The result.
 
-    if nq > 1 and pn > 1 and nq != pn:
-        raise RuntimeError("quaternion array and power must have length "
-                           "one or matching lengths.")
-    n = np.max([nq, pn])
-
-    pp = None
-    if isinstance(p, np.ndarray):
-        if pn != n:
-            pp = np.tile(p, n)
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_ln(qin)
+    if len(out) == 4:
+        if object_ndim(q) == 2:
+            return np.frombuffer(out).reshape((1, 4))
         else:
-            pp = p
+            return np.frombuffer(out)
     else:
-        pp = np.tile(p, n)
+        return np.frombuffer(out).reshape((-1, 4))
 
-    qq = q
-    if nq != n:
-        qq = np.tile(q, n)
 
-    ret = ctoast.qarray_pow(n, pp.flatten().astype(np.float64, copy=False),
-                            qq.flatten().astype(np.float64, copy=False))
-    if q.ndim != 1 or isinstance(p, collections.Iterable):
-        ret = ret.reshape((-1, 4))
+def pow(q, pw):
+    """Real power of a quaternion array.
 
-    return ret
+    Args:
+        q (array_like):  The quaternion array.
+        pw (array_like):  The power.
+
+    Returns:
+        (array):  The result.
+
+    """
+    qin = ensure_buffer_f64(q)
+    pwin = ensure_buffer_f64(pw)
+    out = qa_pow(qin, pwin)
+    if len(out) == 4:
+        if (object_ndim(q) == 2) or (object_ndim(pw) == 1):
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
+    else:
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def rotation(axis, angle):
-    """Rotation quaternions of angles [rad] around axes [already normalized]"""
-    autotimer = timing.auto_timer()
-    if not isinstance(axis, np.ndarray):
-        axis = np.array(axis, dtype=np.float64)
-    nax = None
-    if axis.ndim == 1:
-        nax = 1
-    else:
-        nax = axis.shape[0]
-    nang = None
-    if isinstance(angle, np.ndarray):
-        nang = angle.shape[0]
-    else:
-        nang = 1
+    """Create quaternions from axis / angle information.
 
-    if nax > 1 and nang > 1 and nax != nang:
-        raise RuntimeError(
-            "axis and angle arrays must have length one or matching lengths.")
-    n = np.max([nax, nang])
+    Args:
+        axis (array_like):  The array of normalized axis vectors.
+        angle (array_like):  The array of angles (in radians).
 
-    ax = axis
-    if nax != n:
-        ax = np.tile(axis, n)
+    Returns:
+        (array):  The result.
 
-    ang = None
-    if isinstance(angle, np.ndarray):
-        if nang != n:
-            ang = np.tile(angle, n)
+    """
+    axin = ensure_buffer_f64(axis)
+    angin = ensure_buffer_f64(angle)
+    out = qa_from_axisangle(axin, angin)
+    if len(out) == 4:
+        if (object_ndim(axis) == 2) or (object_ndim(angle) == 1):
+            return np.frombuffer(out).reshape((1, 4))
         else:
-            ang = angle
+            return np.frombuffer(out)
     else:
-        ang = np.tile(angle, n)
-
-    ret = ctoast.qarray_from_axisangle(
-        n, ax.flatten().astype(np.float64, copy=False),
-        ang.flatten().astype(np.float64, copy=False))
-
-    if axis.ndim != 1 or isinstance(angle, collections.Iterable):
-        ret = ret.reshape((-1, 4))
-
-    return ret
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def to_axisangle(q):
-    """To Axis Angle"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    (axis, angle) = ctoast.qarray_to_axisangle(
-        nq, q.flatten().astype(np.float64, copy=False))
+    """Convert quaterions to axis / angle form.
 
-    if q.ndim == 1:
-        angle = angle[0]
-    else:
-        axis = axis.reshape((-1, 3))
+    Args:
+        q (array_like):  The input quaternions.
 
-    return (axis, angle)
+    Returns:
+        (tuple):  The (axis, angle) results.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_to_axisangle(qin)
+    if len(out[0]) == 3:
+        if object_ndim(q) == 2:
+            return (np.frombuffer(out[0]).reshape((1, 3)),
+                    np.frombuffer(out[1]))
+        else:
+            return (np.frombuffer(out[0]), float(out[1][0]))
+    else:
+        return (np.frombuffer(out[0]).reshape((-1, 3)), np.frombuffer(out[1]))
 
 
 def to_rotmat(q):
-    """Rotation matrix"""
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    if q.ndim != 1:
-        raise ValueError('to_rotmat is not vectorized')
-    return ctoast.qarray_to_rotmat(
-        q.flatten().astype(np.float64, copy=False)).reshape((3, 3))
+    """Convert quaternions to rotation matrices.
+
+    Args:
+        q (array_like):  The input quaternions.
+
+    Returns:
+        (array):  The rotation matrices.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_to_rotmat(qin)
+    if len(out) == 9:
+        if object_ndim(q) == 2:
+            return np.frombuffer(out).reshape((1, 3, 3))
+        else:
+            return np.frombuffer(out).reshape((3, 3))
+    else:
+        return np.frombuffer(out).reshape((-1, 3, 3))
 
 
 def from_rotmat(rotmat):
-    autotimer = timing.auto_timer()
-    if not isinstance(rotmat, np.ndarray):
-        rotmat = np.array(rotmat, dtype=np.float64)
-    if rotmat.ndim != 2:
-        raise ValueError('from_rotmat is not vectorized')
-    return ctoast.qarray_from_rotmat(
-        rotmat.flatten().astype(np.float64, copy=False))
+    """Create quaternions from rotation matrices.
+
+    Args:
+        rotmat (array_like):  The input 3x3 rotation matrices.
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+    rot = ensure_buffer_f64(rotmat)
+    out = qa_from_rotmat(rot)
+    if len(out) == 4:
+        if object_ndim(rotmat) == 3:
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
+    else:
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def from_vectors(v1, v2):
-    autotimer = timing.auto_timer()
-    if not isinstance(v1, np.ndarray):
-        v1 = np.array(v1, dtype=np.float64)
-    if not isinstance(v2, np.ndarray):
-        v2 = np.array(v2, dtype=np.float64)
+    """Create quaternions from pairs of vectors.
 
-    nv1 = None
-    if v1.ndim == 1:
-        nv1 = 1
+    Args:
+        v1 (array_like):  The input starting vectors.
+        v2 (array_like):  The input ending vectors.
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+    v1in = ensure_buffer_f64(v1)
+    v2in = ensure_buffer_f64(v2)
+    out = qa_from_vectors(v1in, v2in)
+    if len(out) == 4:
+        if (object_ndim(v1) == 2) or (object_ndim(v2) == 2):
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
     else:
-        nv1 = v1.shape[0]
-
-    nv2 = None
-    if v2.ndim == 1:
-        nv2 = 1
-    else:
-        nv2 = v2.shape[0]
-
-    if nv1 != nv2:
-        raise ValueError("Length of input vectors must be the same")
-
-    q = ctoast.qarray_from_vectors(nv1,
-        v1.flatten().astype(np.float64, copy=False),
-        v2.flatten().astype(np.float64, copy=False))
-
-    if nv1 > 1:
-        q = q.reshape((-1, 4))
-    else:
-        q = q.flatten()
-    return q
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def from_angles(theta, phi, pa, IAU=False):
-    autotimer = timing.auto_timer()
-    iterable = (isinstance(theta, collections.Iterable) or
-                isinstance(phi, collections.Iterable) or
-                isinstance(pa, collections.Iterable))
+    """Create quaternions from spherical coordinates.
 
-    if not isinstance(theta, np.ndarray):
-        theta = np.array(theta, dtype=np.float64, ndmin=1)
-    nt = theta.shape[0]
+    The theta angle is measured down from the North pole and phi is
+    measured from the prime meridian.  The position angle is with respect
+    to the local meridian at the point described by the theta / phi
+    coordinates.
 
-    if not isinstance(phi, np.ndarray):
-        phi = np.array(phi, dtype=np.float64, ndmin=1)
-    nph = phi.shape[0]
+    Args:
+        theta (array_like):  The input theta angles.
+        phi (array_like):  The input phi vectors.
+        pa (array_like):  The input position angle vectors.
+        IAU (bool):  If True, use IAU convention.
 
-    if not isinstance(pa, np.ndarray):
-        pa = np.array(pa, dtype=np.float64, ndmin=1)
-    npa = pa.shape[0]
+    Returns:
+        (array):  The quaternions.
 
-    if nt != nph or nt != npa or nph != npa:
-        raise RuntimeError("all input angle arrays must have the same length")
-
-    q = ctoast.qarray_from_angles(nt, theta, phi, pa, IAU)
-
-    if iterable:
-        q = q.reshape((-1, 4))
+    """
+    thetain = ensure_buffer_f64(theta)
+    phiin = ensure_buffer_f64(phi)
+    pain = ensure_buffer_f64(pa)
+    out = qa_from_angles(thetain, phiin, pain, IAU)
+    if len(out) == 4:
+        if (object_ndim(theta) == 1) or (object_ndim(phi) == 1) \
+                or (object_ndim(pa) == 1):
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
     else:
-        q = q.flatten()
-    return q
+        return np.frombuffer(out).reshape((-1, 4))
+
 
 def to_angles(q, IAU=False):
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    theta, phi, psi = ctoast.qarray_to_angles(
-        nq, q.flatten().astype(np.float64, copy=False), IAU)
-    if q.ndim == 1:
-        theta, phi, psi = (theta[0], phi[0], psi[0])
-    return (theta, phi, psi)
+    """Convert quaternions to spherical coordinates and position angle.
+
+    The theta angle is measured down from the North pole and phi is
+    measured from the prime meridian.  The position angle is with respect
+    to the local meridian at the point described by the theta / phi
+    coordinates.
+
+    Args:
+        q (array_like):  The input quaternions.
+        IAU (bool):  If True, use IAU convention.
+
+    Returns:
+        (tuple):  The (theta, phi, pa) arrays.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_to_angles(qin, IAU)
+    if len(qin) == 4:
+        if object_ndim(q) == 2:
+            return (np.frombuffer(out[0]), np.frombuffer(out[1]),
+                    np.frombuffer(out[2]))
+        else:
+            return (float(out[0][0]), float(out[1][0]), float(out[2][0]))
+    return (np.frombuffer(out[0]), np.frombuffer(out[1]),
+            np.frombuffer(out[2]))
+
 
 def to_position(q):
-    autotimer = timing.auto_timer()
-    if not isinstance(q, np.ndarray):
-        q = np.array(q, dtype=np.float64)
-    nq = None
-    if q.ndim == 1:
-        nq = 1
-    else:
-        nq = q.shape[0]
-    theta, phi = ctoast.qarray_to_position(
-        nq, q.flatten().astype(np.float64, copy=False))
-    if q.ndim == 1:
-        theta, phi = (theta[0], phi[0])
-    return (theta, phi)
+    """Convert quaternions to spherical coordinates.
+
+    The theta angle is measured down from the North pole and phi is
+    measured from the prime meridian.
+
+    Args:
+        q (array_like):  The input quaternions.
+
+    Returns:
+        (tuple):  The (theta, phi) arrays.
+
+    """
+    qin = ensure_buffer_f64(q)
+    out = qa_to_position(qin)
+    if len(qin) == 4:
+        if object_ndim(q) == 2:
+            return (np.frombuffer(out[0]), np.frombuffer(out[1]))
+        else:
+            return (float(out[0][0]), float(out[1][0]))
+    return (np.frombuffer(out[0]), np.frombuffer(out[1]))
