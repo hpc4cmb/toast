@@ -244,7 +244,8 @@ class OpNoiseEstim:
         """ Subtract a signal estimate from the TOD and update the
         flags for noise estimation.
         """
-
+        if mapsampler is None and masksampler is None:
+            return
         start_signal_subtract = MPI.Wtime()
         if comm.rank == 0:
             print("Subtracting signal", flush=True)
