@@ -44,14 +44,17 @@ from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
 from ..tod import tidas_available
+
 if tidas_available:
     from . import tidas as testtidas
 
 from ..tod import spt3g_available
+
 if spt3g_available:
     from . import spt3g as testspt3g
 
 from ..map import libsharp_available
+
 if libsharp_available:
     from . import ops_sim_pysm as testopspysm
     from . import smooth as testsmooth
@@ -72,7 +75,7 @@ def test(name=None, verbosity=2):
 
     outdir = comm.bcast(outdir, root=0)
 
-    if (name is None) or (name == "ctoast") :
+    if (name is None) or (name == "ctoast"):
         # Run tests from the compiled library.  This separately uses
         # MPI_COMM_WORLD.
         test_ctoast()
@@ -84,38 +87,38 @@ def test(name=None, verbosity=2):
     suite = unittest.TestSuite()
 
     if name is None:
-        suite.addTest( loader.loadTestsFromModule(testcbuffer) )
-        suite.addTest( loader.loadTestsFromModule(testcache) )
-        suite.addTest( loader.loadTestsFromModule(testtiming) )
-        suite.addTest( loader.loadTestsFromModule(testrng) )
-        suite.addTest( loader.loadTestsFromModule(testfft) )
-        suite.addTest( loader.loadTestsFromModule(testdist) )
-        suite.addTest( loader.loadTestsFromModule(testqarray) )
-        suite.addTest( loader.loadTestsFromModule(testtod) )
-        suite.addTest( loader.loadTestsFromModule(testtodsat) )
-        suite.addTest( loader.loadTestsFromModule(testpsdmath) )
-        suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
-        suite.addTest( loader.loadTestsFromModule(testintervals) )
-        suite.addTest( loader.loadTestsFromModule(testopspmat) )
-        suite.addTest( loader.loadTestsFromModule(testcov) )
-        suite.addTest( loader.loadTestsFromModule(testopsdipole) )
-        suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
-        suite.addTest( loader.loadTestsFromModule(testopspolyfilter) )
-        suite.addTest( loader.loadTestsFromModule(testopsgroundfilter) )
-        suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
-        suite.addTest( loader.loadTestsFromModule(testopsapplygain) )
-        suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
-        suite.addTest( loader.loadTestsFromModule(testopsmadam) )
-        suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
-        suite.addTest( loader.loadTestsFromModule(testmapground) )
-        suite.addTest( loader.loadTestsFromModule(testbinned) )
+        suite.addTest(loader.loadTestsFromModule(testcbuffer))
+        suite.addTest(loader.loadTestsFromModule(testcache))
+        suite.addTest(loader.loadTestsFromModule(testtiming))
+        suite.addTest(loader.loadTestsFromModule(testrng))
+        suite.addTest(loader.loadTestsFromModule(testfft))
+        suite.addTest(loader.loadTestsFromModule(testdist))
+        suite.addTest(loader.loadTestsFromModule(testqarray))
+        suite.addTest(loader.loadTestsFromModule(testtod))
+        suite.addTest(loader.loadTestsFromModule(testtodsat))
+        suite.addTest(loader.loadTestsFromModule(testpsdmath))
+        suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
+        suite.addTest(loader.loadTestsFromModule(testintervals))
+        suite.addTest(loader.loadTestsFromModule(testopspmat))
+        suite.addTest(loader.loadTestsFromModule(testcov))
+        suite.addTest(loader.loadTestsFromModule(testopsdipole))
+        suite.addTest(loader.loadTestsFromModule(testopssimnoise))
+        suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
+        suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
+        suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
+        suite.addTest(loader.loadTestsFromModule(testopsapplygain))
+        suite.addTest(loader.loadTestsFromModule(testopsmemorycounter))
+        suite.addTest(loader.loadTestsFromModule(testopsmadam))
+        suite.addTest(loader.loadTestsFromModule(testmapsatellite))
+        suite.addTest(loader.loadTestsFromModule(testmapground))
+        suite.addTest(loader.loadTestsFromModule(testbinned))
         if tidas_available:
-            suite.addTest( loader.loadTestsFromModule(testtidas) )
+            suite.addTest(loader.loadTestsFromModule(testtidas))
         if spt3g_available:
-            suite.addTest( loader.loadTestsFromModule(testspt3g) )
+            suite.addTest(loader.loadTestsFromModule(testspt3g))
         if libsharp_available:
-            suite.addTest( loader.loadTestsFromModule(testopspysm) )
-            suite.addTest( loader.loadTestsFromModule(testsmooth) )
+            suite.addTest(loader.loadTestsFromModule(testopspysm))
+            suite.addTest(loader.loadTestsFromModule(testsmooth))
     elif name != "ctoast":
         if (name == "tidas") and (not tidas_available):
             print("Cannot run TIDAS tests- package not available")
@@ -125,7 +128,20 @@ def test(name=None, verbosity=2):
             return
         else:
             modname = "toast.tests.{}".format(name)
-            suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
+            if modname not in sys.modules:
+                valid_names = ["ctoast", "tidas", "spt3g"] + [
+                    n.replace("toast.tests.", "")
+                    for n in sys.modules
+                    if "toast.tests." in n
+                ]
+                for n in ["runner", "_helpers"]:
+                    valid_names.remove(n)
+                raise RuntimeError(
+                    "'{}' is not a valid test name.  Valid names are: {}".format(
+                        name, valid_names
+                    )
+                )
+            suite.addTest(loader.loadTestsFromModule(sys.modules[modname]))
 
     ret = 0
     _ret = mpirunner.run(suite)
