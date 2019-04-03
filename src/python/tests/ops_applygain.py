@@ -63,7 +63,7 @@ class TestApplyGain(MPITestCase):
                 tod.write(detector=det, data=np.ones(tod.local_samples[1]))
 
 
-        op_apply_gain = OpApplyGain(self.gain, name="toast_tod_detdata")
+        op_apply_gain = OpApplyGain(self.gain)
         op_apply_gain.exec(self.data)
 
         # compare calibrated timelines
