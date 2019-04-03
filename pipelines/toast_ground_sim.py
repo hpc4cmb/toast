@@ -118,7 +118,7 @@ def parse_arguments(comm):
         required=False,
         default=30.0,
         type=np.float,
-        help="Minimum azimuthal distance between the Sun and " "the bore sight [deg]",
+        help="Minimum azimuthal distance between the Sun and the bore sight [deg]",
     )
 
     parser.add_argument(
@@ -145,10 +145,7 @@ def parse_arguments(comm):
     )
 
     parser.add_argument(
-        "--wbin_ground",
-        required=False,
-        type=np.float,
-        help="Ground template bin width [degrees]",
+        "--groundorder", required=False, type=np.int, help="Ground template order"
     )
 
     parser.add_argument(
@@ -166,14 +163,14 @@ def parse_arguments(comm):
         "--hwpstep",
         required=False,
         default=None,
-        help="For stepped HWP, the angle in degrees " "of each step",
+        help="For stepped HWP, the angle in degrees of each step",
     )
     parser.add_argument(
         "--hwpsteptime",
         required=False,
         default=0.0,
         type=np.float,
-        help="For stepped HWP, the the time in seconds " "between steps",
+        help="For stepped HWP, the time in seconds between steps",
     )
 
     parser.add_argument("--input_map", required=False, help="Input map for signal")
@@ -197,6 +194,18 @@ def parse_arguments(comm):
         default=False,
         action="store_true",
         help="Disable simulating the atmosphere.",
+    )
+    parser.add_argument(
+        "--elevation_noise_a",
+        required=False,
+        type=np.float,
+        help="a/sin(el)+b noise parameter",
+    )
+    parser.add_argument(
+        "--elevation_noise_b",
+        required=False,
+        type=np.float,
+        help="a/sin(el)+b noise parameter",
     )
     parser.add_argument(
         "--skip_noise",
@@ -469,7 +478,7 @@ def parse_arguments(comm):
     parser.add_argument(
         "--freq",
         required=True,
-        help="Comma-separated list of frequencies with " "identical focal planes",
+        help="Comma-separated list of frequencies with identical focal planes",
     )
     parser.add_argument(
         "--tidas", required=False, default=None, help="Output TIDAS export path"
@@ -485,11 +494,11 @@ def parse_arguments(comm):
         # scanned signal.
         if args.input_map:
             raise RuntimeError(
-                "Multiple frequencies are not supported when " "scanning from a map"
+                "Multiple frequencies are not supported when scanning from a map"
             )
 
     if not args.skip_atmosphere and args.weather is None:
-        raise RuntimeError("Cannot simulate atmosphere without a TOAST " "weather file")
+        raise RuntimeError("Cannot simulate atmosphere without a TOAST weather file")
 
     if args.tidas is not None:
         if not tt.tidas_available:
@@ -758,6 +767,50 @@ def get_analytic_noise(args, focalplane):
     )
 
 
+def get_elevation_noise(args, comm, data, key="noise"):
+    """ Insert elevation-dependent noise
+
+    """
+    if args.elevation_noise_a is None:
+        return
+    autotimer = timing.auto_timer()
+    start = MPI.Wtime()
+    a = args.elevation_noise_a
+    b = args.elevation_noise_b
+    fsample = args.samplerate
+    for obs in data.obs:
+        tod = obs["tod"]
+        noise = obs[key]
+        for det in tod.local_dets:
+            if det not in noise.keys:
+                raise RuntimeError(
+                    'Detector "{}" does not have a PSD in the noise object'.format(det)
+                )
+            # freq = noise.freq[det]
+            psd = noise.psd(det)
+            try:
+                # Some TOD classes provide a shortcut to Az/El
+                _, el = tod.read_azel(detector=det)
+            except Exception as e:
+                azelquat = tod.read_pntg(detector=det, azel=True)
+                # Convert Az/El quaternion of the detector back into
+                # angles for the simulation.
+                theta, _ = qa.to_position(azelquat)
+                el = np.pi / 2 - theta
+            # The model evaluates to uK / sqrt(Hz)
+            # Translate it to K_CMB ** 2
+            el = np.median(el)
+            psd[:] = (a / np.sin(el) + b) ** 2 * fsample * 1e-12
+    stop = MPI.Wtime()
+    if comm.comm_world.rank == 0:
+        print(
+            "Elevation noise took {:.2f} seconds".format(stop - start), flush=args.flush
+        )
+
+    del autotimer
+    return
+
+
 def get_breaks(comm, all_ces, nces, args):
     """ List operational day limits in the list of CES:s.
 
@@ -934,9 +987,6 @@ def create_observations(args, comm, schedules, mem_counter):
         for d in detectors:
             detquats[d] = focalplane[d]["quat"]
 
-        # Noise model for this schedule
-        noise = get_analytic_noise(args, focalplane)
-
         all_ces_tot = []
         nces = len(all_ces)
         for ces in all_ces:
@@ -949,10 +999,12 @@ def create_observations(args, comm, schedules, mem_counter):
         group_numobs = groupdist[comm.group][1]
 
         for ices in range(group_firstobs, group_firstobs + group_numobs):
+            # Noise model for this CES
+            noise = get_analytic_noise(args, focalplane)
             obs = create_observation(args, comm, all_ces_tot, ices, noise)
             data.obs.append(obs)
 
-    if args.skip_atmosphere:
+    if args.skip_atmosphere and args.elevation_noise_a is None:
         for ob in data.obs:
             tod = ob["tod"]
             tod.free_azel_quats()
@@ -975,8 +1027,7 @@ def create_observations(args, comm, schedules, mem_counter):
     stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
         print(
-            "Simulated scans in {:.2f} seconds" "".format(stop - start),
-            flush=args.flush,
+            "Simulated scans in {:.2f} seconds".format(stop - start), flush=args.flush
         )
 
     # Split the data object for each telescope for separate mapmaking.
@@ -1166,7 +1217,7 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
         stop = MPI.Wtime()
         if comm.comm_world.rank == 0:
             print(
-                "Read and sampled input map:  {:.2f} seconds" "".format(stop - start),
+                "Read and sampled input map:  {:.2f} seconds".format(stop - start),
                 flush=args.flush,
             )
         signalname = "signal"
@@ -1554,13 +1605,13 @@ def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
 
 
 def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
-    if args.wbin_ground:
+    if args.groundorder is not None:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print("Ground filtering signal", flush=args.flush)
         start = MPI.Wtime()
         groundfilter = tt.OpGroundFilter(
-            wbin=args.wbin_ground,
+            filter_order=args.groundorder,
             name=totalname_freq,
             common_flag_mask=args.common_flag_mask,
         )
@@ -1874,6 +1925,10 @@ def main():
 
     expand_pointing(args, comm, data, mem_counter)
 
+    # Optionally rewrite the noise PSD:s in each observation to include
+    # elevation-dependence
+    get_elevation_noise(args, comm, data)
+
     # Prepare auxiliary information for distributed map objects
 
     _, localsm, subnpix = get_submaps(args, comm, data)
@@ -1954,7 +2009,7 @@ def main():
                 first_call=True,
             )
 
-            if args.polyorder or args.wbin_ground:
+            if args.polyorder is not None or args.ground_order is not None:
 
                 # Filter signal
 
