@@ -31,7 +31,7 @@ class AnalyticNoise(Noise):
 
     """
 
-    def __init__(self, *, detectors, rate, fmin, fknee, alpha, NET):
+    def __init__(self, *, detectors, rate, fmin, fknee, alpha, NET, indices=None):
 
         self._rate = rate
         self._fmin = fmin
@@ -42,7 +42,8 @@ class AnalyticNoise(Noise):
         for d in detectors:
             if self._alpha[d] < 0.0:
                 raise RuntimeError(
-                    "alpha exponents should be positive in this formalism")
+                    "alpha exponents should be positive in this formalism"
+                )
 
         freqs = {}
         psds = {}
@@ -51,8 +52,9 @@ class AnalyticNoise(Noise):
 
         for d in detectors:
             if (self._fknee[d] > 0.0) and (self._fknee[d] < self._fmin[d]):
-                raise RuntimeError("If knee frequency is non-zero, it must "
-                                   "be greater than f_min")
+                raise RuntimeError(
+                    "If knee frequency is non-zero, it must be greater than f_min"
+                )
 
             nyquist = self._rate[d] / 2.0
             if nyquist != last_nyquist:
@@ -80,38 +82,33 @@ class AnalyticNoise(Noise):
                 mtemp = np.power(self._fmin[d], self._alpha[d])
                 temp = np.power(freqs[d], self._alpha[d])
                 psds[d] = (temp + ktemp) / (temp + mtemp)
-                psds[d] *= (self._NET[d] * self._NET[d])
+                psds[d] *= self._NET[d] * self._NET[d]
             else:
                 psds[d] = np.ones_like(freqs[d])
-                psds[d] *= (self._NET[d] * self._NET[d])
+                psds[d] *= self._NET[d] * self._NET[d]
 
         # call the parent class constructor to store the psds
-        super().__init__(detectors=detectors, freqs=freqs, psds=psds)
-
+        super().__init__(detectors=detectors, freqs=freqs, psds=psds, indices=indices)
 
     def rate(self, det):
         """(float): the sample rate in Hz.
         """
         return self._rate[det]
 
-
     def fmin(self, det):
         """(float): the minimum frequency in Hz, used as a high pass.
         """
         return self._fmin[det]
-
 
     def fknee(self, det):
         """(float): the knee frequency in Hz.
         """
         return self._fknee[det]
 
-
     def alpha(self, det):
         """(float): the (positive!) slope exponent.
         """
         return self._alpha[det]
-
 
     def NET(self, det):
         """(float): the NET.
