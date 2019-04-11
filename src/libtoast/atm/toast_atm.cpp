@@ -4,9 +4,9 @@
   a BSD-style license that can be found in the LICENSE file.
 */
 
-#if !defined(DEBUG)
-#   define DEBUG
-#endif
+//#if !defined(DEBUG)
+//#   define DEBUG
+//#endif
 
 #include <toast_atm_internal.hpp>
 
@@ -592,6 +592,7 @@ void toast::tatm::sim::get_slice( long &ind_start, long &ind_stop ) {
 
     // Identify a manageable slice of compressed indices to simulate next
 
+    // Move element counter to the end of the most recent simulated slice
     ind_start = ind_stop;
 
     long ix_start = (*full_index)[ind_start] * xstrideinv;
@@ -599,19 +600,26 @@ void toast::tatm::sim::get_slice( long &ind_start, long &ind_stop ) {
     long ix2;
 
     while ( true ) {
+        // Advance element counter by one layer of elements
         ix2 = ix1;
         while ( ix1 == ix2 ) {
             ++ind_stop;
             if ( ind_stop == nelem ) break;
             ix2 = (*full_index)[ind_stop] * xstrideinv;
         }
+        // Check if there are no more elements
         if ( ind_stop == nelem ) break;
-        if ( ind_stop - ind_start > nelem_sim_max ) break;
+        // Check if we have enough to meet the minimum number of elements
+        if ( ind_stop - ind_start >= nelem_sim_max ) break;
+        // Check if we have enough layers
+        // const int nlayer_sim_max = 10;
+        // if ( ix2 - ix_start >= nlayer_sim_max ) break;
         ix1 = ix2;
     }
 
     if ( rank == 0 && verbosity > 0 ) {
         std::cerr << "X-slice: " << ix_start*xstep << " -- " << ix2*xstep
+                  << "(" << ix2 - ix_start <<  " " << xstep << " m layers)"
                   << " m out of  " << nx*xstep << " m"
                   << " indices " << ind_start << " -- "<< ind_stop
                   << " ( " << ind_stop - ind_start << " )"
@@ -1303,6 +1311,10 @@ void toast::tatm::sim::compress_volume() {
 
     double t1 = MPI_Wtime();
 
+    if ( rank == 0 && verbosity > 0 ) {
+        std::cerr << "Compressing volume, N = " << nn << std::endl;
+    }
+
     std::vector<unsigned char> hit;
     try {
         compressed_index = new mpi_shmem_long( nn, comm );
@@ -1340,6 +1352,10 @@ void toast::tatm::sim::compress_volume() {
                 }
             }
         }
+    }
+
+    if ( rank == 0 && verbosity > 0 ) {
+        std::cerr << "Flagged hits, flagging neighbors" << std::endl;
     }
 
     // For extra margin, flag all the neighbors of the hit elements
@@ -1394,6 +1410,10 @@ void toast::tatm::sim::compress_volume() {
     if ( MPI_Allreduce( MPI_IN_PLACE, hit.data(), (int)nn,
                         MPI_UNSIGNED_CHAR, MPI_LOR, comm ) )
         throw std::runtime_error( "Failed to gather hits" );
+
+    if ( rank == 0 && verbosity > 0 ) {
+        std::cerr << "Creating compression table" << std::endl;
+    }
 
     // Then create the mappings between the compressed and full indices
 
@@ -1756,6 +1776,15 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
     {
         std::vector<int> myrows, mycols;
         std::vector<double> myvals;
+        std::vector<double> diagonal(nelem);
+
+#pragma omp for schedule(static, 10)
+        for (int i=0; i<nelem; ++i) {
+            double coord[3];
+            ind2coord(i + ind_start, coord);
+            diagonal[i] = cov_eval(coord, coord);
+        }
+
 
 #pragma omp for schedule(static, 10)
         for (int icol=0; icol<nelem; ++icol) {
@@ -1774,7 +1803,8 @@ cholmod_sparse *toast::tatm::sim::build_sparse_covariance(long ind_start,
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
-                if (val > 1e-30) {
+                double corr = val * pow(diagonal[icol] * diagonal[irow], -.5);
+                if (corr > 1e-3) {
                     myrows.push_back(irow);
                     mycols.push_back(icol);
                     myvals.push_back(val);
@@ -1924,7 +1954,7 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
     }
 
     cholmod_factor *factorization;
-    const int ntry = 3;
+    const int ntry = 4;
     for (int itry = 0; itry < ntry; ++itry) {
         factorization = cholmod_analyze(cov, chcommon);
         if (chcommon->status != CHOLMOD_OK)
@@ -1935,14 +1965,25 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
         }
         cholmod_factorize(cov, factorization, chcommon);
         if (chcommon->status != CHOLMOD_OK) {
+            cholmod_free_factor(&factorization, chcommon);
             if (itry < ntry - 1 ) {
-                // Extract the diagonal of the matrix and try
+                // Extract band diagonal of the matrix and try
                 // factorizing again
-                int ndiag = ntry - itry - 1;
+                // int ndiag = ntry - itry - 1;
+                int ndiag = nelem - nelem * (itry + 1) / ntry;
+                if (ndiag < 3) ndiag = 3;
                 int iupper = ndiag - 1;
                 int ilower = -iupper;
                 if (verbosity > 0) {
                     cholmod_print_sparse(cov, "Covariance matrix", chcommon);
+                    // DEBUG begin
+                    if (itry > 2) {
+                        FILE *covfile = fopen("failed_covmat.mtx", "w");
+                        cholmod_write_sparse(covfile, cov, NULL, NULL, chcommon);
+                        fclose(covfile);
+                        exit(-1);
+                    }
+                    // DEBUG end
                     std::cerr << rank
                               << " : Factorization failed, trying a band "
                               << "diagonal matrix. ndiag = " << ndiag

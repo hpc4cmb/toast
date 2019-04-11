@@ -321,11 +321,11 @@ def parse_arguments(comm):
         help="controls the size of the simulation slices",
     )
     parser.add_argument(
-        "--atm_wind_time",
+        "--atm_wind_dist",
         required=False,
-        default=36000.0,
+        default=10000.0,
         type=np.float,
-        help="Maximum time to simulate without discontinuity",
+        help="Maximum wind drift to simulate without discontinuity",
     )
     parser.add_argument(
         "--atm_z0_center",
@@ -1482,7 +1482,7 @@ def simulate_atmosphere(args, comm, data, mc, mem_counter, totalname):
             common_flag_mask=args.common_flag_mask,
             cachedir=args.atm_cache,
             flush=args.flush,
-            wind_time=args.atm_wind_time,
+            wind_dist=args.atm_wind_dist,
         )
 
         atm.exec(data)

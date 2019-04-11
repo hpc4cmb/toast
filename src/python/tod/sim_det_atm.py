@@ -72,8 +72,8 @@ class OpSimAtmosphere(Operator):
              simulated.
         report_timing (bool):  Print out time taken to initialize,
              simulate and observe
-        wind_time (float):  Maximum time to simulate before
-            discarding the volume and creating a new one [seconds].
+        wind_dist (float):  Maximum wind drift before discarding the
+            volume and creating a new one [meters].
         cachedir (str):  Directory to use for loading and saving
             atmosphere realizations.  Set to None to disable caching.
         flush (bool):  Flush all print statements
@@ -105,7 +105,7 @@ class OpSimAtmosphere(Operator):
         flag_name=None,
         flag_mask=255,
         report_timing=True,
-        wind_time=3600,
+        wind_dist=10000,
         cachedir=".",
         flush=False,
         freq=None,
@@ -142,7 +142,8 @@ class OpSimAtmosphere(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._report_timing = report_timing
-        self._wind_time = wind_time
+        self._wind_dist = wind_dist
+        self._wind_time = None
 
     def exec(self, data):
         """
@@ -204,13 +205,6 @@ class OpSimAtmosphere(Operator):
             istart = 0
             counter1start = counter1
             while tmin < tmax_tot:
-                istart, istop, tmax = self._get_time_range(
-                    tmin, istart, times, tmax_tot, common_ref, tod
-                )
-
-                ind = slice(istart, istop)
-                nind = istop - istart
-
                 if self._report_timing:
                     comm.Barrier()
                     tstart = MPI.Wtime()
@@ -222,6 +216,13 @@ class OpSimAtmosphere(Operator):
                         "".format(tmin - tmin_tot),
                         flush=self._flush,
                     )
+                istart, istop, tmax = self._get_time_range(
+                    tmin, istart, times, tmax_tot, common_ref, tod, weather
+                )
+
+                ind = slice(istart, istop)
+                nind = istop - istart
+
                 comm.Barrier()
 
                 rmin = 0
@@ -561,9 +562,15 @@ class OpSimAtmosphere(Operator):
 
         return azmin, azmax, elmin, elmax
 
-    def _get_time_range(self, tmin, istart, times, tmax_tot, common_ref, tod):
+    def _get_time_range(self, tmin, istart, times, tmax_tot, common_ref, tod, weather):
         while times[istart] < tmin:
             istart += 1
+
+        # Translate the wind speed to time span of a correlated interval
+        wx = weather.west_wind
+        wy = weather.south_wind
+        w = np.sqrt(wx ** 2 + wy ** 2)
+        self._wind_time = self._wind_dist / w
 
         tmax = tmin + self._wind_time
         if tmax < tmax_tot:
