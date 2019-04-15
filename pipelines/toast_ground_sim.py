@@ -145,7 +145,7 @@ def parse_arguments(comm):
     )
 
     parser.add_argument(
-        "--groundorder", required=False, type=np.int, help="Ground template order"
+        "--ground_order", required=False, type=np.int, help="Ground template order"
     )
 
     parser.add_argument(
