@@ -103,21 +103,28 @@ def compute_file_frames(bytes_per_sample, frame_sizes, file_size=500000000):
         file_size (int): the target file size in bytes.
 
     Returns:
-        (tuple): the sample offsets and frame offsets of each file.
+        (tuple): the sample offsets and frame offsets of each file and the
+            sample offsets of each frame.
 
     """
     sample_offs = list()
     frame_offs = list()
+    frame_sample_offs = list()
 
     filebytes = 0
     filesamps = 0
     fileframes = 0
-
     fileoff = 0
     fileframeoff = 0
+    sampoff = 0
 
     for fr in frame_sizes:
-        frbytes = fr * sample_bytes
+        frbytes = fr * bytes_per_sample
+        if frbytes > file_size:
+            msg = "A single frame ({}) is larger than the target"\
+                " frame file size ({}).  Increase the target"\
+                "size.".format(frbytes, file_size)
+            raise RuntimeError(msg)
         if filebytes + frbytes > file_size:
             # Start a new file
             sample_offs.append(fileoff)
@@ -131,13 +138,16 @@ def compute_file_frames(bytes_per_sample, frame_sizes, file_size=500000000):
         filesamps += fr
         fileframes += 1
         filebytes += frbytes
+        frame_sample_offs.append(sampoff)
+        sampoff += fr
 
     # process the last file
     sample_offs.append(fileoff)
     frame_offs.append(fileframeoff)
 
     return (np.array(sample_offs, dtype=np.int64),
-            np.array(frame_offs, dtype=np.int64))
+            np.array(frame_offs, dtype=np.int64),
+            np.array(frame_sample_offs, dtype=np.int64))
 
 
 def local_frame_indices(local_first, nlocal, frame_offset, frame_size):

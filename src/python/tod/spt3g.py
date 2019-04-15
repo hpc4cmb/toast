@@ -202,47 +202,17 @@ class TOD3G(TOD):
                 self._units = units
                 self._frame_sizes = framesizes
                 if self._frame_sizes is None:
-                    self._frame_sizes = [ nsamp ]
-                self._frame_sample_offs = list()
-                self._file_sample_offs = list()
-                self._file_frame_offs = list()
+                    self._frame_sizes = [nsamp]
 
                 # Compute the future frame file breaks that would be used
                 # if exporting the data.  We ignore the observation frame since
                 # it is small.
                 sampbytes = bytes_per_sample(len(dets), azel)
-                filebytes = 0
-                filesamps = 0
-                fileframes = 0
-                fileoff = 0
-                fileframeoff = 0
-                sampoff = 0
 
-                for fr in self._frame_sizes:
-                    frbytes = fr * sampbytes
-                    if frbytes > TARGET_FRAMEFILE_SIZE:
-                        msg = "A single frame ({}) is larger than the target"\
-                            " frame file size ({}).  Increase the target size."\
-                            .format(frbytes, TARGET_FRAMEFILE_SIZE)
-                        raise RuntimeError(msg)
-                    if filebytes + frbytes > TARGET_FRAMEFILE_SIZE:
-                        # Start a new file
-                        self._file_sample_offs.append(fileoff)
-                        self._file_frame_offs.append(fileframeoff)
-                        fileoff += filesamps
-                        fileframeoff += fileframes
-                        filesamps = 0
-                        fileframes = 0
-                        filebytes = 0
-                    # Append frame to current file
-                    filesamps += fr
-                    fileframes += 1
-                    filebytes += frbytes
-                    self._frame_sample_offs.append(sampoff)
-                    sampoff += fr
-                # process the last file
-                self._file_sample_offs.append(fileoff)
-                self._file_frame_offs.append(fileframeoff)
+                (self._file_sample_offs, self._file_frame_offs,
+                 self._frame_sample_offs) = s3utils.compute_file_frames(
+                    sampbytes, self._frame_sizes,
+                    file_size=TARGET_FRAMEFILE_SIZE)
             else:
                 # We must have existing data
                 self._frame_sizes = list()
@@ -265,11 +235,7 @@ class TOD3G(TOD):
                             # observation frame.
                             if nsamp is None:
                                 obs, props, dets, nsamp = read_spt3g_obs(ffile)
-                                #print("Read obs:")
-                                #print(obs, flush=True)
                                 props.update(obs)
-                                #print("Read props:")
-                                #print(props, flush=True)
                                 if "units" in props:
                                     self._units = props["units"]
                                 if "have_azel" in props:
@@ -277,7 +243,9 @@ class TOD3G(TOD):
 
                             fsampoff = int(fmat.group(1))
                             if fsampoff != checkoff:
-                                raise RuntimeError("frame file {} is at sample offset {}, are some files missing?".format(ffile, checkoff))
+                                raise RuntimeError("frame file {} is at \
+                                    sample offset {}, are some files\
+                                    missing?".format(ffile, checkoff))
 
                             self._files.append(ffile)
                             self._file_sample_offs.append(fsampoff)
@@ -294,8 +262,8 @@ class TOD3G(TOD):
                     break
                 if len(self._files) == 0:
                     raise RuntimeError(
-                        "No frames found at '{}' with prefix '{}'".\
-                        format(path, prefix))
+                        "No frames found at '{}' with prefix '{}'"
+                        .format(path, prefix))
 
                 # print(self._files)
                 # print(self._file_frame_offs)
@@ -305,7 +273,16 @@ class TOD3G(TOD):
 
                 # check that the total samples match the obs frame
                 if nsamp != checkoff:
-                    raise RuntimeError("observation frame specifies {} samples, but sum of frame files is {} samples".format(nsamp, checkoff))
+                    raise RuntimeError("observation frame specifies {}\
+                        samples, but sum of frame files is {}\
+                        samples".format(nsamp, checkoff))
+
+                self._file_sample_offs = \
+                    np.array(self._file_sample_offs, dtype=np.int64)
+                self._file_frame_offs = \
+                    np.array(self._file_frame_offs, dtype=np.int64)
+                self._frame_sample_offs = \
+                    np.array(self._frame_sample_offs, dtype=np.int64)
 
         dets = mpicomm.bcast(dets, root=0)
         self._detquats = dets
@@ -317,7 +294,8 @@ class TOD3G(TOD):
         self._file_sample_offs = mpicomm.bcast(self._file_sample_offs, root=0)
         self._file_frame_offs = mpicomm.bcast(self._file_frame_offs, root=0)
         self._frame_sizes = mpicomm.bcast(self._frame_sizes, root=0)
-        self._frame_sample_offs = mpicomm.bcast(self._frame_sample_offs, root=0)
+        self._frame_sample_offs = mpicomm.bcast(
+            self._frame_sample_offs, root=0)
 
         # We need to assign a unique integer index to each detector.  This
         # is used when seeding the streamed RNG in order to simulate
@@ -333,12 +311,14 @@ class TOD3G(TOD):
                 ind = int.from_bytes(bdet, byteorder="little")
                 uid = int(ind & 0xFFFFFFFF)
             except:
-                raise RuntimeError("Cannot convert detector name {} to a "
-                    "unique integer- maybe it is too long?".format(det))
+                raise RuntimeError(
+                    "Cannot convert detector name {} to a unique integer-\
+                    maybe it is too long?".format(det))
             self._detindx[det] = uid
 
         # call base class constructor to distribute data
-        super().__init__(mpicomm, list(sorted(dets.keys())), nsamp,
+        super().__init__(
+            mpicomm, list(sorted(dets.keys())), nsamp,
             detindx=self._detindx, detranks=detranks, detbreaks=detbreaks,
             sampsizes=self._frame_sizes, meta=props)
 
@@ -351,9 +331,7 @@ class TOD3G(TOD):
             # We are reading existing data into cache.  Create our local pieces
             # of the data.
             self.load_frames()
-
         return
-
 
     def _cache_init(self):
         if not self._done_cache_init:
@@ -385,11 +363,10 @@ class TOD3G(TOD):
 
         return
 
-
     def load_frames(self):
         self._cache_init()
-        for ifile, (ffile, foff) in enumerate(zip(self._files,
-            self._file_frame_offs)):
+        for ifile, (ffile, foff) in enumerate(
+                zip(self._files, self._file_frame_offs)):
             nframes = None
             if ifile == len(self._files) - 1:
                 # we are at the last file
@@ -402,7 +379,7 @@ class TOD3G(TOD):
 
             # nframes includes only the scan frames.  We add one here to
             # get the total including the observation frame.
-            gfile = [ None for x in range(nframes + 1) ]
+            gfile = [None for x in range(nframes + 1)]
             if self.mpicomm.rank == 0:
                 gfile = c3g.G3File(ffile)
 

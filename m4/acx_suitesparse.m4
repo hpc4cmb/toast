@@ -76,7 +76,7 @@ AC_ARG_WITH(suitesparse, [AC_HELP_STRING([--with-suitesparse=<PATH>], [use the S
 
 if test x"$with_suitesparse" != x; then
    if test x"$with_suitesparse" != xno; then
-      SUITESPARSE_CPPFLAGS="-I$with_suitesparse/include"
+      SUITESPARSE_CPPFLAGS="-I$with_suitesparse/include -I$with_suitesparse/include/suitesparse"
       SUITESPARSE_LDFLAGS="-L$with_suitesparse/lib64 -L$with_suitesparse/lib"
    else
       acx_suitesparse_ok=disable
@@ -96,6 +96,7 @@ else
    SUITESPARSE="$SUITESPARSE_LDFLAGS $SUITESPARSE_LIBS"
    LIBS="$SUITESPARSE $acx_suitesparse_save_LIBS $LAPACK_LIBS $BLAS_LIBS $LIBS $FCLIBS -lm $OPENMP_CXXFLAGS"
 
+   AC_MSG_CHECKING([for cholmod.h in $CPPFLAGS])
    AC_CHECK_HEADERS([cholmod.h])
 
    AC_MSG_CHECKING([for cholmod_start in $SUITESPARSE])
