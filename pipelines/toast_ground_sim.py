@@ -792,7 +792,10 @@ def get_elevation_noise(args, comm, data, key="noise"):
                 # Some TOD classes provide a shortcut to Az/El
                 _, el = tod.read_azel(detector=det)
             except Exception as e:
-                azelquat = tod.read_pntg(detector=det, azel=True)
+                nlocal = tod.local_samples[1]
+                local_start = nlocal // 2 - nlocal // 20
+                n = nlocal // 10
+                azelquat = tod.read_pntg(detector=det, local_start=local_start, n=n, azel=True)
                 # Convert Az/El quaternion of the detector back into
                 # angles for the simulation.
                 theta, _ = qa.to_position(azelquat)
