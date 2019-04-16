@@ -44,6 +44,99 @@ if "TOAST_STARTUP_DELAY" in os.environ:
     #      flush=True)
     time.sleep(wait)
 
+# DEBUG begin
+
+import gc
+
+try:
+    import psutil
+
+    def memreport(comm=None, msg=""):
+        """ Gather and report the amount of allocated, free and swapped system memory
+        """
+        if psutil is None:
+            return
+        vmem = psutil.virtual_memory()._asdict()
+        gc.collect()
+        vmem2 = psutil.virtual_memory()._asdict()
+        memstr = "Memory usage {}\n".format(msg)
+        for key, value in vmem.items():
+            value2 = vmem2[key]
+            if comm is None:
+                vlist = [value]
+                vlist2 = [value2]
+            else:
+                vlist = comm.gather(value)
+                vlist2 = comm.gather(value2)
+            if comm is None or comm.rank == 0:
+                vlist = np.array(vlist, dtype=np.float64)
+                vlist2 = np.array(vlist2, dtype=np.float64)
+                if key != "percent":
+                    # From bytes to better units
+                    if np.amax(vlist) < 2 ** 20:
+                        vlist /= 2 ** 10
+                        vlist2 /= 2 ** 10
+                        unit = "kB"
+                    elif np.amax(vlist) < 2 ** 30:
+                        vlist /= 2 ** 20
+                        vlist2 /= 2 ** 20
+                        unit = "MB"
+                    else:
+                        vlist /= 2 ** 30
+                        vlist2 /= 2 ** 30
+                        unit = "GB"
+                else:
+                    unit = "% "
+                if comm is None or comm.size == 1:
+                    memstr += "{:>12} : {:8.3f} {}\n".format(key, vlist[0], unit)
+                    if np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
+                        memstr += "{:>12} : {:8.3f} {} (after GC)\n".format(
+                            key, vlist2[0], unit
+                        )
+                else:
+                    med1 = np.median(vlist)
+                    memstr += (
+                        "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
+                        "< {:8.3f} {}\n".format(
+                            key,
+                            np.amin(vlist),
+                            unit,
+                            med1,
+                            np.std(vlist),
+                            unit,
+                            np.amax(vlist),
+                            unit,
+                        )
+                    )
+                    med2 = np.median(vlist2)
+                    if np.abs(med2 - med1) / med1 > 1e-3:
+                        memstr += (
+                            "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
+                            "< {:8.3f} {} (after GC)\n".format(
+                                key,
+                                np.amin(vlist2),
+                                unit,
+                                med2,
+                                np.std(vlist2),
+                                unit,
+                                np.amax(vlist2),
+                                unit,
+                            )
+                        )
+        if comm is None or comm.rank == 0:
+            print(memstr, flush=True)
+        if comm is not None:
+            comm.Barrier()
+        return
+
+
+except:
+
+    def memreport(comm=None, msg=""):
+        return
+
+
+# DEBUG end
 # import warnings
 # warnings.filterwarnings('error')
 # warnings.simplefilter('ignore', ImportWarning)
@@ -1880,6 +1973,8 @@ def main():
     # there is just one group which spans MPI_COMM_WORLD.
     comm = toast.Comm()
 
+    memreport(comm.comm_world, 'Beginning of pipeline')
+
     if comm.comm_world.rank == 0:
         print(
             "Running with {} processes at {}".format(
@@ -1919,6 +2014,8 @@ def main():
 
     data, telescope_data = create_observations(args, comm, schedules, mem_counter)
 
+    memreport(comm.comm_world, 'After creating observations')
+
     # Split the communicator for day and season mapmaking
 
     time_comms = get_time_communicators(comm, data)
@@ -1928,6 +2025,8 @@ def main():
 
     expand_pointing(args, comm, data, mem_counter)
 
+    memreport(comm.comm_world, 'After pointing')
+
     # Optionally rewrite the noise PSD:s in each observation to include
     # elevation-dependence
     get_elevation_noise(args, comm, data)
@@ -1936,12 +2035,16 @@ def main():
 
     _, localsm, subnpix = get_submaps(args, comm, data)
 
+    memreport(comm.comm_world, 'After submaps')
+
     if args.input_pysm_model:
         signalname = simulate_sky_signal(
             args, comm, data, mem_counter, schedules, subnpix, localsm
         )
     else:
         signalname = scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix)
+
+    memreport(comm.comm_world, 'After PySM')
 
     # Set up objects to take copies of the TOD at appropriate times
 
@@ -1958,6 +2061,8 @@ def main():
     for mc in range(firstmc, firstmc + nmc):
 
         simulate_atmosphere(args, comm, data, mc, mem_counter, totalname)
+
+        memreport(comm.comm_world, 'After atmosphere')
 
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
@@ -1982,6 +2087,8 @@ def main():
             mcoffset = ifreq * 1000000
 
             simulate_noise(args, comm, data, mc + mcoffset, mem_counter, totalname_freq)
+
+            memreport(comm.comm_world, 'After noise')
 
             scramble_gains(args, comm, data, mc + mcoffset, mem_counter, totalname_freq)
 
@@ -2012,6 +2119,8 @@ def main():
                 first_call=True,
             )
 
+            memreport(comm.comm_world, 'After Madam')
+
             if args.polyorder is not None or args.ground_order is not None:
 
                 # Filter signal
@@ -2019,6 +2128,8 @@ def main():
                 apply_polyfilter(args, comm, data, mem_counter, totalname_freq)
 
                 apply_groundfilter(args, comm, data, mem_counter, totalname_freq)
+
+                memreport(comm.comm_world, 'After filter')
 
                 # Bin maps
 
@@ -2040,6 +2151,8 @@ def main():
                     extra_prefix="filtered",
                 )
 
+                memreport(comm.comm_world, 'After filter & bin')
+
     mem_counter.exec(data)
 
     comm.comm_world.barrier()
@@ -2047,6 +2160,8 @@ def main():
         global_timer.stop()
         if comm.comm_world.rank == 0:
             global_timer.report()
+
+    memreport(comm.comm_world, 'After pipeline')
 
     del autotimer
     return
