@@ -21,6 +21,9 @@ void healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
 class HealpixPixels {
     public:
 
+        typedef std::shared_ptr <HealpixPixels> pshr;
+        typedef std::unique_ptr <HealpixPixels> puniq;
+
         HealpixPixels();
         HealpixPixels(int64_t nside);
         ~HealpixPixels() {}

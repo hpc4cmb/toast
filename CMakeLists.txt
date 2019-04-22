@@ -34,6 +34,10 @@ include(GNUInstallDirs)
 # Build defaults
 include(BuildType)
 
+# We are building libraries that will eventually be linked into shared
+# modules.  All code should be built with PIC.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # External packages
 
 find_package(OpenMP)

@@ -12,37 +12,6 @@ void init_math_rng(py::module & m) {
     m.def(
         "rng_dist_uint64", [](uint64_t key1, uint64_t key2,
                               uint64_t counter1, uint64_t counter2,
-                              py::ssize_t n) {
-            AlignedU64 out(n);
-            toast::rng_dist_uint64(n, key1, key2, counter1, counter2,
-                                   out.data());
-            return py::cast(out);
-        }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
-        py::arg("counter2"), py::arg(
-            "n"), R"(
-        Generate random unsigned 64bit integers.
-
-        A new aligned-memory array is created for the result and returned.
-        For each sample, the key1, key2, and counter1 values remain fixed
-        and the counter2 value is incremented.
-
-        Args:
-            key1 (uint64):  The first element of the key.
-            key2 (uint64):  The second element of the key.
-            counter1 (uint64):  The first element of the counter.
-            counter2 (uint64):  The second element of the counter.  This is
-                effectively the sample index in the stream defined by the
-                other 3 values.
-            n (int):  The number of samples to generate.
-
-        Returns:
-            (AlignedU64):  a new array with the result.
-
-    )");
-
-    m.def(
-        "rng_dist_uint64", [](uint64_t key1, uint64_t key2,
-                              uint64_t counter1, uint64_t counter2,
                               py::buffer data) {
             pybuffer_check_1D <uint64_t> (data);
             py::buffer_info info = data.request();
@@ -71,37 +40,6 @@ void init_math_rng(py::module & m) {
 
         Returns:
             None.
-
-    )");
-
-    m.def(
-        "rng_dist_uniform_01", [](uint64_t key1, uint64_t key2,
-                                  uint64_t counter1, uint64_t counter2,
-                                  py::ssize_t n) {
-            AlignedF64 out(n);
-            toast::rng_dist_uniform_01(n, key1, key2, counter1, counter2,
-                                       out.data());
-            return py::cast(out);
-        }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
-        py::arg("counter2"), py::arg(
-            "n"), R"(
-        Generate uniform randoms on the interval [0.0, 1.0].
-
-        A new aligned-memory array is created for the result and returned.
-        For each sample, the key1, key2, and counter1 values remain fixed
-        and the counter2 value is incremented.
-
-        Args:
-            key1 (uint64):  The first element of the key.
-            key2 (uint64):  The second element of the key.
-            counter1 (uint64):  The first element of the counter.
-            counter2 (uint64):  The second element of the counter.  This is
-                effectively the sample index in the stream defined by the
-                other 3 values.
-            n (int):  The number of samples to generate.
-
-        Returns:
-            (AlignedF64):  a new array with the result.
 
     )");
 
@@ -142,37 +80,6 @@ void init_math_rng(py::module & m) {
     m.def(
         "rng_dist_uniform_11", [](uint64_t key1, uint64_t key2,
                                   uint64_t counter1, uint64_t counter2,
-                                  py::ssize_t n) {
-            AlignedF64 out(n);
-            toast::rng_dist_uniform_11(n, key1, key2, counter1, counter2,
-                                       out.data());
-            return py::cast(out);
-        }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
-        py::arg("counter2"), py::arg(
-            "n"), R"(
-        Generate uniform randoms on the interval [-1.0, 1.0].
-
-        A new aligned-memory array is created for the result and returned.
-        For each sample, the key1, key2, and counter1 values remain fixed
-        and the counter2 value is incremented.
-
-        Args:
-            key1 (uint64):  The first element of the key.
-            key2 (uint64):  The second element of the key.
-            counter1 (uint64):  The first element of the counter.
-            counter2 (uint64):  The second element of the counter.  This is
-                effectively the sample index in the stream defined by the
-                other 3 values.
-            n (int):  The number of samples to generate.
-
-        Returns:
-            (AlignedF64):  a new array with the result.
-
-    )");
-
-    m.def(
-        "rng_dist_uniform_11", [](uint64_t key1, uint64_t key2,
-                                  uint64_t counter1, uint64_t counter2,
                                   py::buffer data) {
             pybuffer_check_1D <double> (data);
             py::buffer_info info = data.request();
@@ -201,37 +108,6 @@ void init_math_rng(py::module & m) {
 
         Returns:
             None.
-
-    )");
-
-    m.def(
-        "rng_dist_normal", [](uint64_t key1, uint64_t key2,
-                              uint64_t counter1, uint64_t counter2,
-                              py::ssize_t n) {
-            AlignedF64 out(n);
-            toast::rng_dist_normal(n, key1, key2, counter1, counter2,
-                                   out.data());
-            return py::cast(out);
-        }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
-        py::arg("counter2"), py::arg(
-            "n"), R"(
-        Generate samples from a unit-variance gaussian distribution.
-
-        A new aligned-memory array is created for the result and returned.
-        For each sample, the key1, key2, and counter1 values remain fixed
-        and the counter2 value is incremented.
-
-        Args:
-            key1 (uint64):  The first element of the key.
-            key2 (uint64):  The second element of the key.
-            counter1 (uint64):  The first element of the counter.
-            counter2 (uint64):  The second element of the counter.  This is
-                effectively the sample index in the stream defined by the
-                other 3 values.
-            n (int):  The number of samples to generate.
-
-        Returns:
-            (AlignedF64):  a new array with the result.
 
     )");
 

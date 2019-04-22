@@ -40,7 +40,7 @@ def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian",
             and many threads.
 
     Returns:
-        (AlignedF64): The random values of appropriate type for the sampler.
+        (Aligned array): The random values of appropriate type for the sampler.
 
     """
     env = Environment.get()
@@ -50,17 +50,17 @@ def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian",
     if (not threads) or (samples < nthread):
         # Run serially
         if sampler == "gaussian":
-            ret = rng_dist_normal(key[0], key[1], counter[0], counter[1],
-                                  samples)
+            ret = AlignedF64(samples)
+            rng_dist_normal(key[0], key[1], counter[0], counter[1], ret)
         elif sampler == "uniform_01":
-            ret = rng_dist_uniform_01(key[0], key[1], counter[0], counter[1],
-                                      samples)
+            ret = AlignedF64(samples)
+            rng_dist_uniform_01(key[0], key[1], counter[0], counter[1], ret)
         elif sampler == "uniform_m11":
-            ret = rng_dist_uniform_11(key[0], key[1], counter[0], counter[1],
-                                      samples)
+            ret = AlignedF64(samples)
+            rng_dist_uniform_11(key[0], key[1], counter[0], counter[1], ret)
         elif sampler == "uniform_uint64":
-            ret = rng_dist_uint64(key[0], key[1], counter[0], counter[1],
-                                  samples)
+            ret = AlignedU64(samples)
+            rng_dist_uint64(key[0], key[1], counter[0], counter[1], ret)
         else:
             msg = "Undefined sampler. Choose among: gaussian, uniform_01,\
                    uniform_m11, uniform_uint64"

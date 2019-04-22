@@ -163,6 +163,7 @@ void toast::HealpixPixels::init() {
 
 toast::HealpixPixels::HealpixPixels() {
     init();
+    reset(1);
 }
 
 toast::HealpixPixels::HealpixPixels(int64_t nside) {

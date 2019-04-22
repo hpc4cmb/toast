@@ -44,29 +44,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vsin", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vsin(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the Sine for an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vcos", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -97,29 +74,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vcos", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vcos(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the Cosine for an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -163,30 +117,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vsincos", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 sinout(info_in.size);
-            AlignedF64 cosout(info_in.size);
-            toast::vsincos(info_in.size, inraw, sinout.data(), cosout.data());
-            return py::make_tuple(sinout, cosout);
-        }, py::arg(
-            "in"), R"(
-        Compute the sine and cosine for an array of float64 values.
-
-        The results are stored in newly created output buffers.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (tuple): (sin, cos) AlignedF64 output buffers with results.
-
-    )");
-
-    m.def(
         "vatan2", [](py::buffer y, py::buffer x, py::buffer ang) {
             pybuffer_check_1D <double> (y);
             pybuffer_check_1D <double> (x);
@@ -226,41 +156,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vatan2", [](py::buffer y, py::buffer x) {
-            pybuffer_check_1D <double> (y);
-            pybuffer_check_1D <double> (x);
-            py::buffer_info info_x = x.request();
-            py::buffer_info info_y = y.request();
-            if (info_x.size != info_y.size) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "Input and buffers are different sizes";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            double * xraw = reinterpret_cast <double *> (info_x.ptr);
-            double * yraw = reinterpret_cast <double *> (info_y.ptr);
-            AlignedF64 ang(info_x.size);
-            toast::vatan2(info_x.size, yraw, xraw, ang.data());
-            return py::cast(ang);
-        }, py::arg("y"), py::arg(
-            "x"), R"(
-        Compute the arctangent of the y and x values.
-
-        The results are stored in a new buffer.  To guarantee SIMD
-        vectorization, the input arrays should be aligned
-        (i.e. use an AlignedF64).
-
-        Args:
-            y (array_like):  1D array of float64 values.
-            x (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer of angles.
-
-    )");
-
-    m.def(
         "vsqrt", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -291,29 +186,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vsqrt", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vsqrt(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the sqrt of an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -352,29 +224,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vrsqrt", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vrsqrt(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the inverse sqrt of an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vexp", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -409,29 +258,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vexp", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vexp(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute e^x for an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vlog", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -462,29 +288,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vlog", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vlog(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the natural log of an array of float64 values.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -529,33 +332,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vfast_sin", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_sin(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the Sine for an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vfast_cos", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -590,33 +366,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vfast_cos", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_cos(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the Cosine for an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -665,35 +414,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vfast_sincos", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 sinout(info_in.size);
-            AlignedF64 cosout(info_in.size);
-            toast::vfast_sincos(info_in.size, inraw, sinout.data(),
-                                cosout.data());
-            return py::make_tuple(sinout, cosout);
-        }, py::arg(
-            "in"), R"(
-        Compute the sine and cosine for an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in newly created output buffers.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (tuple): (sin, cos) AlignedF64 output buffers with results.
-
-    )");
-
-    m.def(
         "vfast_atan2", [](py::buffer y, py::buffer x, py::buffer ang) {
             pybuffer_check_1D <double> (y);
             pybuffer_check_1D <double> (x);
@@ -737,45 +457,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vfast_atan2", [](py::buffer y, py::buffer x) {
-            pybuffer_check_1D <double> (y);
-            pybuffer_check_1D <double> (x);
-            py::buffer_info info_x = x.request();
-            py::buffer_info info_y = y.request();
-            if (info_x.size != info_y.size) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "Input and buffers are different sizes";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            double * xraw = reinterpret_cast <double *> (info_x.ptr);
-            double * yraw = reinterpret_cast <double *> (info_y.ptr);
-            AlignedF64 ang(info_x.size);
-            toast::vfast_atan2(info_x.size, yraw, xraw, ang.data());
-            return py::cast(ang);
-        }, py::arg("y"), py::arg(
-            "x"), R"(
-        Compute the arctangent of the y and x values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a new buffer.  To guarantee SIMD
-        vectorization, the input arrays should be aligned
-        (i.e. use an AlignedF64).
-
-        Args:
-            y (array_like):  1D array of float64 values.
-            x (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer of angles.
-
-    )");
-
-    m.def(
         "vfast_sqrt", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -810,33 +491,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vfast_sqrt", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_sqrt(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the sqrt of an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -879,33 +533,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vfast_rsqrt", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_rsqrt(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the inverse sqrt of an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vfast_exp", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -940,33 +567,6 @@ void init_math_sf(py::module & m) {
 
         Returns:
             None
-
-    )");
-
-    m.def(
-        "vfast_exp", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_exp(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute e^x for an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
 
     )");
 
@@ -1009,33 +609,6 @@ void init_math_sf(py::module & m) {
     )");
 
     m.def(
-        "vfast_log", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_log(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the natural log of an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-
-    m.def(
         "vfast_erfinv", [](py::buffer in, py::buffer out) {
             pybuffer_check_1D <double> (in);
             pybuffer_check_1D <double> (out);
@@ -1072,31 +645,3 @@ void init_math_sf(py::module & m) {
             None
 
     )");
-
-    m.def(
-        "vfast_erfinv", [](py::buffer in) {
-            pybuffer_check_1D <double> (in);
-            py::buffer_info info_in = in.request();
-            double * inraw = reinterpret_cast <double *> (info_in.ptr);
-            AlignedF64 out(info_in.size);
-            toast::vfast_erfinv(info_in.size, inraw, out.data());
-            return py::cast(out);
-        }, py::arg(
-            "in"), R"(
-        Compute the inverse error function for an array of float64 values.
-
-        "Fast" version:  this function may run much faster than the
-        standard version at the expense of errors in the least significant
-        bits.
-
-        The results are stored in a newly created output buffer.  To guarantee
-        SIMD vectorization, the input array should be aligned.
-
-        Args:
-            in (array_like):  1D array of float64 values.
-
-        Returns:
-            (AlignedF64):  aligned output buffer with results.
-
-    )");
-}

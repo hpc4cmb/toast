@@ -82,22 +82,22 @@ def ensure_buffer_f64(data):
 
     """
     return np.ascontiguousarray(data, dtype=np.float64).flatten()
-    if isinstance(data, np.ndarray):
-        print("ensure: found numpy array, shape=", data.shape, flush=True)
-        return np.ascontiguousarray(data.flatten(), dtype=np.float64)
-    try:
-        view = memoryview(data)
-        if view.ndim == 0:
-            # A single element...
-            print("ensure: converting scalar buffer", flush=True)
-            return np.array([view], dtype=np.float64)
-        elif (not view.c_contiguous) or (view.ndim != 1):
-            print("ensure: found non-contiguous memory view shape=", view.shape, flush=True)
-            return np.ascontiguousarray(view, dtype=np.float64)
-        else:
-            print("ensure: returning original data shape=", view.shape, flush=True)
-            return data
-    except TypeError:
-        # Does not support buffer protocol
-        print("ensure: converting non-buffer object ", data, flush=True)
-        return np.ascontiguousarray(data, dtype=np.float64)
+    # if isinstance(data, np.ndarray):
+    #     print("ensure: found numpy array, shape=", data.shape, flush=True)
+    #     return np.ascontiguousarray(data.flatten(), dtype=np.float64)
+    # try:
+    #     view = memoryview(data)
+    #     if view.ndim == 0:
+    #         # A single element...
+    #         print("ensure: converting scalar buffer", flush=True)
+    #         return np.array([view], dtype=np.float64)
+    #     elif (not view.c_contiguous) or (view.ndim != 1):
+    #         print("ensure: found non-contiguous memory view shape=", view.shape, flush=True)
+    #         return np.ascontiguousarray(view, dtype=np.float64)
+    #     else:
+    #         print("ensure: returning original data shape=", view.shape, flush=True)
+    #         return data
+    # except TypeError:
+    #     # Does not support buffer protocol
+    #     print("ensure: converting non-buffer object ", data, flush=True)
+    #     return np.ascontiguousarray(data, dtype=np.float64)

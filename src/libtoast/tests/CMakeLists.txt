@@ -22,7 +22,7 @@ add_executable(toast_test
 
 target_include_directories(toast_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
 )
 
 target_link_libraries(toast_test toast gtest gtest_main)

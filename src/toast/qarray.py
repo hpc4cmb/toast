@@ -9,11 +9,11 @@ import numpy as np
 from .utils import Logger, AlignedF64, ensure_buffer_f64, object_ndim
 
 from ._libtoast import (qa_inv, qa_amplitude, qa_normalize,
-                        qa_normalize_inplace, qa_rotate, qa_mult, qa_slerp,
+                        qa_rotate, qa_mult, qa_slerp,
                         qa_exp, qa_ln, qa_pow, qa_from_axisangle,
                         qa_to_axisangle, qa_to_rotmat, qa_from_rotmat,
                         qa_from_vectors, qa_from_angles, qa_to_angles,
-                        qa_to_position)
+                        qa_to_position, qa_from_position)
 
 
 def inv(q):
@@ -50,7 +50,9 @@ def amplitude(q):
 
     """
     qin = ensure_buffer_f64(q)
-    amp = qa_amplitude(qin)
+    lamp = len(qin) // 4
+    amp = AlignedF64(lamp)
+    qa_amplitude(qin, amp)
     if len(amp) == 1:
         if object_ndim(q) == 2:
             return np.frombuffer(amp)
@@ -71,7 +73,9 @@ def norm(q):
 
     """
     qin = ensure_buffer_f64(q)
-    nrm = qa_normalize(qin)
+    lq = len(qin)
+    nrm = AlignedF64(lq)
+    qa_normalize(qin, nrm)
     if len(qin) == 4:
         if object_ndim(q) == 2:
             return np.frombuffer(nrm).reshape((1, 4))
@@ -97,7 +101,9 @@ def rotate(q, v):
     """
     qin = ensure_buffer_f64(q)
     vin = ensure_buffer_f64(v)
-    out = qa_rotate(qin, vin)
+    lv = len(vin) // 3
+    out = AlignedF64(lv)
+    qa_rotate(qin, vin, out)
     if len(out) == 3:
         if (object_ndim(q) == 2) or (object_ndim(v) == 2):
             return np.frombuffer(out).reshape(1, 3)
@@ -123,7 +129,12 @@ def mult(p, q):
     """
     pin = ensure_buffer_f64(p)
     qin = ensure_buffer_f64(q)
-    out = qa_mult(pin, qin)
+    out = None
+    if len(pin) > len(qin):
+        out = AlignedF64(len(pin))
+    else:
+        out = AlignedF64(len(qin))
+    qa_mult(pin, qin, out)
     if len(out) == 4:
         if (object_ndim(p) == 2) or (object_ndim(q) == 2):
             return np.frombuffer(out).reshape((1, 4))
@@ -156,7 +167,8 @@ def slerp(targettime, time, q):
         msg = "SLERP input times must have at least two values"
         log.error(msg)
         raise RuntimeError(msg)
-    out = qa_slerp(t, tgt, qin)
+    out = AlignedF64(4 * len(tgt))
+    qa_slerp(t, tgt, qin, out)
     if len(out) == 4:
         if object_ndim(targettime) == 1:
             return np.frombuffer(out).reshape((1, 4))
@@ -177,7 +189,8 @@ def exp(q):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_exp(qin)
+    out = AlignedF64(len(qin))
+    qa_exp(qin, out)
     if len(out) == 4:
         if object_ndim(q) == 2:
             return np.frombuffer(out).reshape((1, 4))
@@ -198,7 +211,8 @@ def ln(q):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_ln(qin)
+    out = AlignedF64(len(qin))
+    qa_ln(qin, out)
     if len(out) == 4:
         if object_ndim(q) == 2:
             return np.frombuffer(out).reshape((1, 4))
@@ -221,7 +235,8 @@ def pow(q, pw):
     """
     qin = ensure_buffer_f64(q)
     pwin = ensure_buffer_f64(pw)
-    out = qa_pow(qin, pwin)
+    out = AlignedF64(len(qin))
+    qa_pow(qin, pwin, out)
     if len(out) == 4:
         if (object_ndim(q) == 2) or (object_ndim(pw) == 1):
             return np.frombuffer(out).reshape((1, 4))
@@ -244,7 +259,8 @@ def rotation(axis, angle):
     """
     axin = ensure_buffer_f64(axis)
     angin = ensure_buffer_f64(angle)
-    out = qa_from_axisangle(axin, angin)
+    out = AlignedF64(4 * len(angin))
+    qa_from_axisangle(axin, angin, out)
     if len(out) == 4:
         if (object_ndim(axis) == 2) or (object_ndim(angle) == 1):
             return np.frombuffer(out).reshape((1, 4))
@@ -265,15 +281,18 @@ def to_axisangle(q):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_to_axisangle(qin)
-    if len(out[0]) == 3:
+    lq = len(qin) // 4
+    ax = AlignedF64(lq)
+    ang = AlignedF64(3 * lq)
+    qa_to_axisangle(qin, ax, ang)
+    if len(ax) == 3:
         if object_ndim(q) == 2:
-            return (np.frombuffer(out[0]).reshape((1, 3)),
-                    np.frombuffer(out[1]))
+            return (np.frombuffer(ax).reshape((1, 3)),
+                    np.frombuffer(ang))
         else:
-            return (np.frombuffer(out[0]), float(out[1][0]))
+            return (np.frombuffer(ax), float(ang[0]))
     else:
-        return (np.frombuffer(out[0]).reshape((-1, 3)), np.frombuffer(out[1]))
+        return (np.frombuffer(ax).reshape((-1, 3)), np.frombuffer(ang))
 
 
 def to_rotmat(q):
@@ -287,7 +306,9 @@ def to_rotmat(q):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_to_rotmat(qin)
+    lq = len(qin) // 4
+    out = AlignedF64(9 * lq)
+    qa_to_rotmat(qin, out)
     if len(out) == 9:
         if object_ndim(q) == 2:
             return np.frombuffer(out).reshape((1, 3, 3))
@@ -308,7 +329,9 @@ def from_rotmat(rotmat):
 
     """
     rot = ensure_buffer_f64(rotmat)
-    out = qa_from_rotmat(rot)
+    lr = len(rot) // 9
+    out = AlignedF64(4 * lr)
+    qa_from_rotmat(rot, out)
     if len(out) == 4:
         if object_ndim(rotmat) == 3:
             return np.frombuffer(out).reshape((1, 4))
@@ -331,7 +354,9 @@ def from_vectors(v1, v2):
     """
     v1in = ensure_buffer_f64(v1)
     v2in = ensure_buffer_f64(v2)
-    out = qa_from_vectors(v1in, v2in)
+    lv = len(v1in) // 3
+    out = AlignedF64(4 * lv)
+    qa_from_vectors(v1in, v2in, out)
     if len(out) == 4:
         if (object_ndim(v1) == 2) or (object_ndim(v2) == 2):
             return np.frombuffer(out).reshape((1, 4))
@@ -362,7 +387,9 @@ def from_angles(theta, phi, pa, IAU=False):
     thetain = ensure_buffer_f64(theta)
     phiin = ensure_buffer_f64(phi)
     pain = ensure_buffer_f64(pa)
-    out = qa_from_angles(thetain, phiin, pain, IAU)
+    lt = len(thetain)
+    out = AlignedF64(4 * lt)
+    qa_from_angles(thetain, phiin, pain, out, IAU)
     if len(out) == 4:
         if (object_ndim(theta) == 1) or (object_ndim(phi) == 1) \
                 or (object_ndim(pa) == 1):
@@ -390,15 +417,47 @@ def to_angles(q, IAU=False):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_to_angles(qin, IAU)
+    lq = len(qin) // 4
+    theta = AlignedF64(lq)
+    phi = AlignedF64(lq)
+    pa = AlignedF64(lq)
+    qa_to_angles(qin, theta, phi, pa, IAU)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return (np.frombuffer(out[0]), np.frombuffer(out[1]),
-                    np.frombuffer(out[2]))
+            return (np.frombuffer(theta), np.frombuffer(phi),
+                    np.frombuffer(pa))
         else:
-            return (float(out[0][0]), float(out[1][0]), float(out[2][0]))
-    return (np.frombuffer(out[0]), np.frombuffer(out[1]),
-            np.frombuffer(out[2]))
+            return (float(theta[0]), float(phi[0]), float(pa[0]))
+    return (np.frombuffer(theta), np.frombuffer(phi),
+            np.frombuffer(pa))
+
+
+def from_position(theta, phi):
+    """Create quaternions from spherical coordinates.
+
+    The theta angle is measured down from the North pole and phi is
+    measured from the prime meridian.
+
+    Args:
+        theta (array_like):  The input theta angles.
+        phi (array_like):  The input phi vectors.
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+    thetain = ensure_buffer_f64(theta)
+    phiin = ensure_buffer_f64(phi)
+    lt = len(thetain)
+    out = AlignedF64(4 * lt)
+    qa_from_position(thetain, phiin, out)
+    if len(out) == 4:
+        if (object_ndim(theta) == 1) or (object_ndim(phi) == 1):
+            return np.frombuffer(out).reshape((1, 4))
+        else:
+            return np.frombuffer(out)
+    else:
+        return np.frombuffer(out).reshape((-1, 4))
 
 
 def to_position(q):
@@ -415,10 +474,13 @@ def to_position(q):
 
     """
     qin = ensure_buffer_f64(q)
-    out = qa_to_position(qin)
+    lq = len(qin) // 4
+    theta = AlignedF64(lq)
+    phi = AlignedF64(lq)
+    qa_to_position(qin, theta, phi)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return (np.frombuffer(out[0]), np.frombuffer(out[1]))
+            return (np.frombuffer(theta), np.frombuffer(phi))
         else:
-            return (float(out[0][0]), float(out[1][0]))
-    return (np.frombuffer(out[0]), np.frombuffer(out[1]))
+            return (float(theta[0]), float(phi[0]))
+    return (np.frombuffer(theta), np.frombuffer(phi))
