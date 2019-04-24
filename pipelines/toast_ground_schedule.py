@@ -1132,8 +1132,6 @@ def add_scan(
         fp_radius_eff = fp_radius / np.cos(el)
         azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
         azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
-        ces_start = to_UTC(t1)
-        ces_stop = to_UTC(t2)
         # Get the Sun and Moon locations at the beginning and end
         observer.date = to_DJD(t1)
         sun.compute(observer)
@@ -1158,6 +1156,8 @@ def add_scan(
             t2 = min(sun_time, moon_time)
             if sun_too_close or moon_too_close:
                 tstop = t2
+                if t1 == t2:
+                    break
         else:
             # For regular patches, this is a failure condition
             if sun_too_close:
@@ -1175,30 +1175,29 @@ def add_scan(
         moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
         moon_phase2 = moon.phase
         # Create an entry in the schedule
-        entries.append(
-            fout_fmt.format(
-                ces_start,
-                ces_stop,
-                to_MJD(t1),
-                to_MJD(t2),
-                patch.name,
-                azmin,
-                azmax,
-                el / degree,
-                rising_string,
-                sun_el1,
-                sun_az1,
-                sun_el2,
-                sun_az2,
-                moon_el1,
-                moon_az1,
-                moon_el2,
-                moon_az2,
-                0.005 * (moon_phase1 + moon_phase2),
-                patch.hits,
-                subscan,
+        entry =  fout_fmt.format(
+            to_UTC(t1),
+            to_UTC(t2),
+            to_MJD(t1),
+            to_MJD(t2),
+            patch.name,
+            azmin,
+            azmax,
+            el / degree,
+            rising_string,
+            sun_el1,
+            sun_az1,
+            sun_el2,
+            sun_az2,
+            moon_el1,
+            moon_az1,
+            moon_el2,
+            moon_az2,
+            0.005 * (moon_phase1 + moon_phase2),
+            patch.hits,
+            subscan,
             )
-        )
+        entries.append(entry)
         t1 = t2 + args.gap_small
 
     # Write the entries
