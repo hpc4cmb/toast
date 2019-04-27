@@ -19,5 +19,6 @@
 #include <toast/tod_pointing.hpp>
 #include <toast/tod_simmap.hpp>
 #include <toast/tod_simnoise.hpp>
+#include <toast/test.hpp>
 
 #endif // ifndef TOAST_HPP

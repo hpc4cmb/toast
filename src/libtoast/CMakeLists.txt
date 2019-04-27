@@ -88,7 +88,9 @@ set(gtest_force_shared_crt TRUE)
 add_subdirectory(gtest)
 include_directories("${gtest_SOURCE_DIR}/include")
 
-# Define the unit test internal library
+# Define the unit test internal library.  We keep this separate so that we
+# can link it with different options to ensure that all unit tests are
+# included in the library.
 
 set(toasttest_SOURCES
     tests/toast_test_runner.cpp
@@ -111,7 +113,7 @@ target_include_directories(toasttest PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
 )
 
-target_link_libraries(toasttest toastcore gtest gtest_main)
+target_link_libraries(toasttest gtest)
 
 
 # Define the full toast library
@@ -123,7 +125,13 @@ target_include_directories(toast PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(toast toasttest)
+if(APPLE)
+    SET(TOASTTESTLIB -Wl,-all_load toasttest -Wl,-noall_load)
+else()
+    SET(TOASTTESTLIB -Wl,--whole-archive toasttest -Wl,--no-whole-archive)
+endif(APPLE)
+
+target_link_libraries(toast ${TOASTTESTLIB} toastcore)
 
 # Installation
 

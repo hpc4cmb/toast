@@ -82,4 +82,6 @@ PYBIND11_MODULE(_libtoast, m) {
     init_math_sf(m);
     init_math_rng(m);
     init_math_qarray(m);
+    init_math_healpix(m);
+    init_math_fft(m);
 }

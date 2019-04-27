@@ -6,9 +6,8 @@
 #include <toast_test.hpp>
 
 
-int toast::test::runner(int argc, char * argv[]) {
+int toast::test_runner(int argc, char ** argv) {
     ::testing::GTEST_FLAG(filter) = std::string("TOAST*");
     ::testing::InitGoogleTest(&argc, argv);
-    int result = RUN_ALL_TESTS();
-    return result;
+    return RUN_ALL_TESTS();
 }

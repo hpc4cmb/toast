@@ -3,19 +3,13 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_TEST_HPP
-#define TOAST_TEST_HPP
+#ifndef TOAST_TEST_TEST_HPP
+#define TOAST_TEST_TEST_HPP
 
 #include <toast.hpp>
 
 #include <gtest/gtest.h>
 
-
-namespace toast { namespace test {
-
-int runner(int argc, char * argv[]);
-
-} }
 
 class TOASTenvTest : public ::testing::Test {
     public:

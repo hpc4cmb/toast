@@ -7,12 +7,13 @@
 #define TOAST_TOD_SIMMAP_HPP
 
 namespace toast {
+
 template <typename T>
 void scan_map(int64_t const * submap, int64_t subnpix, double const * weights,
               int64_t nmap, int64_t * subpix, T const * map, double * tod,
               int64_t nsamp) {
     #pragma \
-    omp for schedule(static) default(none) shared(submap, subnpix, weights, nmap, subpix, map, tod, nsamp)
+    omp parallel for schedule(static) default(none) shared(submap, subnpix, weights, nmap, subpix, map, tod, nsamp)
     for (int64_t i = 0; i < nsamp; ++i) {
         tod[i] = 0.0;
         int64_t offset = (submap[i] * subnpix + subpix[i]) * nmap;
@@ -24,6 +25,7 @@ void scan_map(int64_t const * submap, int64_t subnpix, double const * weights,
 
     return;
 }
+
 }
 
 #endif // ifndef TOAST_TOD_SIMMAP_HPP

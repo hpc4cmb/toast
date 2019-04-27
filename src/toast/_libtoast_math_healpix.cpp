@@ -77,7 +77,7 @@ void init_math_healpix(py::module & m) {
             return;
         }, py::arg("vec"), py::arg("theta"), py::arg(
             "phi"), R"(
-        Convert spherical coordinates to a unit vector.
+        Convert unit vectors to spherical coordinates.
 
         The theta angle is measured down from the North pole and phi is
         measured from the prime meridian.
@@ -109,7 +109,7 @@ void init_math_healpix(py::module & m) {
             py::buffer_info info_phi = phi.request();
             py::buffer_info info_pa = pa.request();
             py::buffer_info info_vec = vec.request();
-            size_t nvec = (size_t)(info_vec.size / 3);
+            size_t nvec = (size_t)(info_vec.size / 6);
             if ((info_theta.size != info_phi.size) ||
                 (info_theta.size != info_pa.size) ||
                 (info_theta.size != nvec)) {
@@ -128,7 +128,11 @@ void init_math_healpix(py::module & m) {
             return;
         }, py::arg("vec"), py::arg("theta"), py::arg("phi"), py::arg(
             "pa"), R"(
-        Convert spherical coordinates to a unit vector.
+        Convert direction / orientation unit vectors.
+
+        The inputs are flat-packed pairs of direction and orientation unit
+        vectors (6 float64 values total per sample).  The outputs are the
+        theta, phi, and position angle of the location on the sphere.
 
         The theta angle is measured down from the North pole and phi is
         measured from the prime meridian.  The position angle is with respect
@@ -140,7 +144,8 @@ void init_math_healpix(py::module & m) {
         (i.e. use an AlignedF64).
 
         Args:
-            vec (array_like):  The array of input vectors.
+            vec (array_like):  The array of packed input direction and
+                orientation vectors.
             theta (array_like): Output spherical coordinate theta angles in
                 radians.
             phi (array like): Output spherical coordinate phi angles in
@@ -177,52 +182,384 @@ void init_math_healpix(py::module & m) {
         Returns:
             None
 
-    )");
+    )")
+    .def("ang2nest", [](toast::HealpixPixels & self, py::buffer theta,
+                        py::buffer phi, py::buffer pix) {
+             pybuffer_check_1D <double> (theta);
+             pybuffer_check_1D <double> (phi);
+             pybuffer_check_1D <int64_t> (pix);
+             py::buffer_info info_theta = theta.request();
+             py::buffer_info info_phi = phi.request();
+             py::buffer_info info_pix = pix.request();
+             if ((info_theta.size != info_phi.size) ||
+                 (info_theta.size != info_pix.size)) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             double * rawtheta = reinterpret_cast <double *> (info_theta.ptr);
+             double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
+             int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
+             self.ang2nest(info_theta.size, rawtheta, rawphi, rawpix);
+             return;
+         }, py::arg("theta"), py::arg("phi"), py::arg(
+             "pix"), R"(
+            Convert spherical coordinates to pixels in NESTED ordering.
+
+            The theta angle is measured down from the North pole and phi is
+            measured from the prime meridian.
+
+            The results are stored in the output buffers.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                theta (array_like): Input spherical coordinate theta angles in
+                    radians.
+                phi (array like): Input spherical coordinate phi angles in
+                    radians.
+                pix (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("ang2ring", [](toast::HealpixPixels & self, py::buffer theta,
+                        py::buffer phi, py::buffer pix) {
+             pybuffer_check_1D <double> (theta);
+             pybuffer_check_1D <double> (phi);
+             pybuffer_check_1D <int64_t> (pix);
+             py::buffer_info info_theta = theta.request();
+             py::buffer_info info_phi = phi.request();
+             py::buffer_info info_pix = pix.request();
+             if ((info_theta.size != info_phi.size) ||
+                 (info_theta.size != info_pix.size)) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             double * rawtheta = reinterpret_cast <double *> (info_theta.ptr);
+             double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
+             int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
+             self.ang2ring(info_theta.size, rawtheta, rawphi, rawpix);
+             return;
+         }, py::arg("theta"), py::arg("phi"), py::arg(
+             "pix"), R"(
+            Convert spherical coordinates to pixels in RING ordering.
+
+            The theta angle is measured down from the North pole and phi is
+            measured from the prime meridian.
+
+            The results are stored in the output buffers.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                theta (array_like): Input spherical coordinate theta angles in
+                    radians.
+                phi (array like): Input spherical coordinate phi angles in
+                    radians.
+                pix (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("vec2nest", [](toast::HealpixPixels & self, py::buffer vec,
+                        py::buffer pix) {
+             pybuffer_check_1D <double> (vec);
+             pybuffer_check_1D <int64_t> (pix);
+             py::buffer_info info_vec = vec.request();
+             py::buffer_info info_pix = pix.request();
+             size_t nvec = (size_t)(info_vec.size / 3);
+             if (nvec != info_pix.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
+             int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
+             self.vec2nest(nvec, rawvec, rawpix);
+             return;
+         }, py::arg("vec"), py::arg(
+             "pix"), R"(
+            Convert unit vectors to pixels in NESTED ordering.
+
+            The theta angle is measured down from the North pole and phi is
+            measured from the prime meridian.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                vec (array_like): Input packed unit vectors.
+                pix (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("vec2ring", [](toast::HealpixPixels & self, py::buffer vec,
+                        py::buffer pix) {
+             pybuffer_check_1D <double> (vec);
+             pybuffer_check_1D <int64_t> (pix);
+             py::buffer_info info_vec = vec.request();
+             py::buffer_info info_pix = pix.request();
+             size_t nvec = (size_t)(info_vec.size / 3);
+             if (nvec != info_pix.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
+             int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
+             self.vec2nest(nvec, rawvec, rawpix);
+             return;
+         }, py::arg("vec"), py::arg(
+             "pix"), R"(
+            Convert unit vectors to pixels in RING ordering.
+
+            The theta angle is measured down from the North pole and phi is
+            measured from the prime meridian.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                vec (array_like): Input packed unit vectors.
+                pix (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("ring2nest", [](toast::HealpixPixels & self, py::buffer in,
+                         py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.ring2nest(info_in.size, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Convert RING ordered pixel numbers into NESTED ordering.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("nest2ring", [](toast::HealpixPixels & self, py::buffer in,
+                         py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.nest2ring(info_in.size, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Convert NESTED ordered pixel numbers into RING ordering.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("degrade_ring", [](toast::HealpixPixels & self, int factor,
+                            py::buffer in, py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.degrade_ring(info_in.size, factor, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Degrade RING ordered pixel numbers.
+
+            Each 'factor' is one division by two in the NSIDE resolution.  So
+            a factor of '3' would divide the NSIDE value by 8.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                factor (int):  The degrade factor.
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("degrade_nest", [](toast::HealpixPixels & self, int factor,
+                            py::buffer in, py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.degrade_nest(info_in.size, factor, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Degrade NESTED ordered pixel numbers.
+
+            Each 'factor' is one division by two in the NSIDE resolution.  So
+            a factor of '3' would divide the NSIDE value by 8.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                factor (int):  The degrade factor.
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("upgrade_ring", [](toast::HealpixPixels & self, int factor,
+                            py::buffer in, py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.upgrade_ring(info_in.size, factor, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Upgrade RING ordered pixel numbers.
+
+            Each 'factor' is one multiplication by two in the NSIDE
+            resolution.  So a factor of '3' would multiply the NSIDE value
+            by 8.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                factor (int):  The upgrade factor.
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )")
+    .def("upgrade_nest", [](toast::HealpixPixels & self, int factor,
+                            py::buffer in, py::buffer out) {
+             pybuffer_check_1D <int64_t> (in);
+             pybuffer_check_1D <int64_t> (out);
+             py::buffer_info info_in = in.request();
+             py::buffer_info info_out = out.request();
+             if (info_in.size != info_out.size) {
+                 auto log = toast::Logger::get();
+                 std::ostringstream o;
+                 o << "Buffer sizes are not consistent.";
+                 log.error(o.str().c_str());
+                 throw std::runtime_error(o.str().c_str());
+             }
+             int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
+             int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
+             self.degrade_nest(info_in.size, factor, rawin, rawout);
+             return;
+         }, py::arg("in"), py::arg(
+             "out"), R"(
+            Upgrade NESTED ordered pixel numbers.
+
+            Each 'factor' is one multiplication by two in the NSIDE
+            resolution.  So a factor of '3' would multiply the NSIDE value
+            by 8.
+
+            The results are stored in the output buffer.  To guarantee SIMD
+            vectorization, the input and output arrays should be aligned
+            (i.e. use AlignedF64 / AlignedI64).
+
+            Args:
+                factor (int):  The upgrade factor.
+                in (array_like): Input pixel indices.
+                out (array like): Output pixel indices.
+
+            Returns:
+                None.
+
+        )");
 
 
     return;
 }
-
-//
-//         void vec2zphi(int64_t n, double const * vec, double * phi,
-//                       int * region, double * z, double * rtz) const;
-//
-//         void theta2z(int64_t n, double const * theta, int * region, double *
-// z,
-//                      double * rtz) const;
-//
-//         void zphi2nest(int64_t n, double const * phi, int const * region,
-//                        double const * z, double const * rtz,
-//                        int64_t * pix) const;
-//
-//         void zphi2ring(int64_t n, double const * phi, int const * region,
-//                        double const * z, double const * rtz,
-//                        int64_t * pix) const;
-//
-//         void ang2nest(int64_t n, double const * theta, double const * phi,
-//                       int64_t * pix) const;
-//
-//         void ang2ring(int64_t n, double const * theta, double const * phi,
-//                       int64_t * pix) const;
-//
-//         void vec2nest(int64_t n, double const * vec, int64_t * pix) const;
-//
-//         void vec2ring(int64_t n, double const * vec, int64_t * pix) const;
-//
-//         void ring2nest(int64_t n, int64_t const * ringpix,
-//                        int64_t * nestpix) const;
-//
-//         void nest2ring(int64_t n, int64_t const * nestpix,
-//                        int64_t * ringpix) const;
-//
-//         void degrade_ring(int factor, int64_t n, int64_t const * inpix,
-//                           int64_t * outpix) const;
-//
-//         void degrade_nest(int factor, int64_t n, int64_t const * inpix,
-//                           int64_t * outpix) const;
-//
-//         void upgrade_ring(int factor, int64_t n, int64_t const * inpix,
-//                           int64_t * outpix) const;
-//
-//         void upgrade_nest(int factor, int64_t n, int64_t const * inpix,
-//                           int64_t * outpix) const;

@@ -22,7 +22,7 @@ enum class fft_direction {
 };
 
 
-class FFTPlanReal1D {
+class FFTPlanReal1D : public std::enable_shared_from_this <FFTPlanReal1D> {
     public:
 
         typedef std::shared_ptr <FFTPlanReal1D> pshr;

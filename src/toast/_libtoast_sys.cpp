@@ -34,7 +34,8 @@ void init_sys(py::module & m) {
             Return the current source code version string.
         )")
     .def("set_log_level", &toast::Environment::set_log_level,
-         R"(
+         py::arg(
+             "level"), R"(
             Set the Logging level.
 
             Args:
