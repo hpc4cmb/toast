@@ -42,6 +42,7 @@ target_include_directories(toasttest_mpi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/tests"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/gtest/googletest/include"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
@@ -51,7 +52,7 @@ target_include_directories(toasttest_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 
 target_compile_options(toasttest_mpi PRIVATE "${mpi_comp_flags}")
 
-target_link_libraries(toasttest_mpi toastcore_mpi)
+target_link_libraries(toasttest_mpi)
 
 
 # Define the full toast MPI library
@@ -75,7 +76,13 @@ target_include_directories(toast_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 
 target_compile_options(toast_mpi PRIVATE "${mpi_comp_flags}")
 
-target_link_libraries(toast_mpi toasttest_mpi)
+if(APPLE)
+    SET(TOASTMPITESTLIB -Wl,-all_load toasttest_mpi -Wl,-noall_load)
+else()
+    SET(TOASTMPITESTLIB -Wl,--whole-archive toasttest_mpi -Wl,--no-whole-archive)
+endif(APPLE)
+
+target_link_libraries(toast_mpi ${TOASTMPITESTLIB} toastcore_mpi)
 
 # Public headers
 install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")

@@ -6,7 +6,7 @@
 #include <toast_mpi_test.hpp>
 
 
-int toast::test::mpi_runner(int argc, char * argv[]) {
+int toast::test_mpi_runner(int argc, char * argv[]) {
     ::testing::GTEST_FLAG(filter) = std::string("MPITOAST*");
     ::testing::InitGoogleTest(&argc, argv);
 

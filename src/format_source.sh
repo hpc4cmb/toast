@@ -33,7 +33,7 @@ unrun="-c ${uncfg} --replace --no-backup"
 untest="-c ${uncfg} --check"
 
 # Black runtime options
-blkrun=""
+blkrun="-l 88"
 
 # Black test options
 blktest="--check"

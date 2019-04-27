@@ -11,6 +11,7 @@
 #include <toast.hpp>
 
 #include <toast/mpi_shmem.hpp>
+#include <toast/mpi_test.hpp>
 
 
 namespace toast {
