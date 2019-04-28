@@ -81,10 +81,12 @@ class Timer {
         typedef std::unique_ptr <Timer> puniq;
 
         Timer();
+        Timer(double init_time, size_t init_calls);
         void start();
         void stop();
         void clear();
         double seconds() const;
+        size_t calls() const;
         void report(char const * message);
         bool is_running() const;
 
@@ -111,6 +113,7 @@ class GlobalTimers {
         void stop(std::string const & name);
         void clear(std::string const & name);
         double seconds(std::string const & name) const;
+        size_t calls(std::string const & name) const;
         bool is_running(std::string const & name) const;
 
         void stop_all();

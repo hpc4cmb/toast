@@ -44,6 +44,14 @@ toast::Timer::Timer() {
     clear();
 }
 
+toast::Timer::Timer(double init_time, size_t init_calls) {
+    start_ = time_point();
+    stop_ = time_point();
+    running_ = false;
+    total_ = init_time;
+    calls_ = init_calls;
+}
+
 void toast::Timer::start() {
     if (!running_) {
         start_ = std::chrono::high_resolution_clock::now();
@@ -83,6 +91,17 @@ double toast::Timer::seconds() const {
         throw std::runtime_error(msg.c_str());
     }
     return total_;
+}
+
+size_t toast::Timer::calls() const {
+    if (running_) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("Timer is still running!");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return calls_;
 }
 
 bool toast::Timer::is_running() const {
@@ -157,6 +176,19 @@ double toast::GlobalTimers::seconds(std::string const & name) const {
         throw std::runtime_error(o.str().c_str());
     }
     return data.at(name).seconds();
+}
+
+size_t toast::GlobalTimers::calls(std::string const & name) const {
+    if (data.count(name) == 0) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::ostringstream o;
+        o << "Cannot get seconds for timer " << name
+          << " which does not exist";
+        log.error(o.str().c_str(), here);
+        throw std::runtime_error(o.str().c_str());
+    }
+    return data.at(name).calls();
 }
 
 bool toast::GlobalTimers::is_running(std::string const & name) const {

@@ -59,6 +59,10 @@ void init_sys(py::module & m) {
             Return True if TOAST was compiled with MPI support **and** MPI
             is supported in the current runtime environment.
         )")
+    .def("func_timers", &toast::Environment::func_timers,
+         R"(
+            Return True if function timing has been enabled.
+        )")
     .def("max_threads", &toast::Environment::max_threads,
          R"(
             Returns the maximum number of threads used by compiled code.
@@ -77,6 +81,18 @@ void init_sys(py::module & m) {
 
         )")
     .def(py::init <> ())
+    .def(py::init <double, size_t> (), py::arg("init_time"), py::arg(
+             "init_calls"), R"(
+           Create the timer with some initial state.
+
+           Used mainly when pickling / communicating the timer.  The timer is created
+           in the "stopped" state.
+
+           Args:
+               init_time (float):  Initial elapsed seconds.
+               init_calls (int):  Inital number of calls.
+
+       )")
     .def("start", &toast::Timer::start,
          R"(
             Start the timer.
@@ -111,6 +127,20 @@ void init_sys(py::module & m) {
                 (float): The elapsed seconds (if timer is stopped) else -1.
 
         )")
+    .def("calls",
+         [](toast::Timer const & self) {
+             if (self.is_running()) {
+                 return size_t();
+             } else {
+                 return self.calls();
+             }
+         }, R"(
+            Return the number of calls.
+
+            Returns:
+                (int): The number of calls (if timer is stopped) else 0.
+
+        )")
     .def("report", &toast::Timer::report, py::arg(
              "message"),
          R"(
@@ -137,7 +167,20 @@ void init_sys(py::module & m) {
              }
              o << ">";
              return o.str();
-         });
+         })
+    .def(
+        py::pickle(
+            [](toast::Timer const & p) { // __getstate__
+                double current = p.seconds();
+                size_t calls = p.calls();
+                return py::make_tuple(current, calls);
+            },
+            [](py::tuple t) { // __setstate__
+                return new toast::Timer(
+                    t[0].cast <double>(),
+                    t[0].cast <size_t>()
+                    );
+            }));
 
 
     py::class_ <toast::GlobalTimers,
@@ -222,6 +265,23 @@ void init_sys(py::module & m) {
     .def("report", &toast::GlobalTimers::report,
          R"(
         Report results of all global timers to STDOUT.
+        )")
+    .def("collect", [](toast::GlobalTimers & self) {
+             self.stop_all();
+             py::dict result;
+             for (auto const & nm : self.names()) {
+                 auto cur = self.seconds(nm);
+                 auto cal = self.calls(nm);
+                 result[py::cast(nm)] = toast::Timer(cur,
+                                                     cal);
+             }
+             return result;
+         }, R"(
+            Stop all timers and return the current state.
+
+            Returns:
+                (dict):  A dictionary of Timers.
+
         )");
 
 

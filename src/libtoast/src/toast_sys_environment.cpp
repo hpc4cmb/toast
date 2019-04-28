@@ -140,6 +140,13 @@ toast::Environment::Environment() {
         }
     }
 
+    // See if we should enable function timers.
+    bool func_timers_ = false;
+    envval = ::getenv("TOAST_FUNCTIME");
+    if (envval != NULL) {
+        func_timers_ = true;
+    }
+
     // OpenMP
     max_threads_ = 1;
     #ifdef _OPENMP
@@ -222,6 +229,10 @@ void toast::Environment::set_log_level(char const * level) {
 
 bool toast::Environment::use_mpi() const {
     return use_mpi_;
+}
+
+bool toast::Environment::func_timers() const {
+    return func_timers_;
 }
 
 int toast::Environment::max_threads() const {

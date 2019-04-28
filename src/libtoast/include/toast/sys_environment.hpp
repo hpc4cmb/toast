@@ -26,6 +26,7 @@ class Environment {
         std::vector <std::string> signals() const;
         void print() const;
         bool use_mpi() const;
+        bool func_timers() const;
         int max_threads() const;
         std::string version() const;
 
@@ -40,6 +41,7 @@ class Environment {
         std::map <std::string, bool> signals_enabled_;
         bool have_mpi_;
         bool use_mpi_;
+        bool func_timers_;
         bool at_nersc_;
         bool in_slurm_;
         int max_threads_;
