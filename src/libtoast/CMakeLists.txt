@@ -50,21 +50,17 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(toastcore "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
 
-if(LAPACK_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_LAPACK=1)
-    target_compile_definitions(toastcore PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toastcore PROPERTIES LINK_FLAGS
-        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
-    )
-    target_link_libraries(toastcore "${LAPACK_LIBRARIES}")
-    target_link_libraries(toastcore "${BLAS_LIBRARIES}")
-endif(LAPACK_FOUND)
-
 if(AATM_FOUND)
     target_compile_definitions(toastcore PRIVATE HAVE_AATM=1)
     target_include_directories(toastcore PUBLIC "${AATM_INCLUDE_DIRS}")
     target_link_libraries(toastcore "${AATM_LIBRARIES}")
 endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(toastcore PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(toastcore PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+    target_link_libraries(toastcore "${CHOLMOD_LIBRARY}")
+endif(CHOLMOD_FOUND)
 
 if(FFTW_FOUND)
     target_compile_definitions(toastcore PRIVATE HAVE_FFTW=1)
@@ -74,6 +70,16 @@ if(FFTW_FOUND)
         target_compile_definitions(toastcore PRIVATE HAVE_FFTW_THREADS=1)
     endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
 endif(FFTW_FOUND)
+
+if(LAPACK_FOUND)
+    target_compile_definitions(toastcore PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(toastcore PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+    set_target_properties(toastcore PROPERTIES LINK_FLAGS
+        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
+    )
+    target_link_libraries(toastcore "${LAPACK_LIBRARIES}")
+    target_link_libraries(toastcore "${BLAS_LIBRARIES}")
+endif(LAPACK_FOUND)
 
 # FIXME: restore MKL linking here after testing on a machine with Intel
 # compilers.

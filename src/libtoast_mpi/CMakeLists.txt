@@ -8,7 +8,7 @@ string(STRIP "${MPI_CXX_LINK_FLAGS}" mpi_link_flags)
 
 set(toastcore_mpi_SOURCES
     src/toast_mpi.cpp
-    src/toast_mpi_shmem.cpp
+    src/toast_mpi_atm.cpp
 )
 
 add_library(toastcore_mpi ${toastcore_mpi_SOURCES})
