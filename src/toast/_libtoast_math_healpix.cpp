@@ -99,8 +99,8 @@ void init_math_healpix(py::module & m) {
     )");
 
     m.def(
-        "healpix_vec2angpa", [](py::buffer vec, py::buffer theta,
-                                py::buffer phi, py::buffer pa) {
+        "healpix_vecs2angpa", [](py::buffer vec, py::buffer theta,
+                                 py::buffer phi, py::buffer pa) {
             pybuffer_check_1D <double> (theta);
             pybuffer_check_1D <double> (phi);
             pybuffer_check_1D <double> (pa);
@@ -123,8 +123,7 @@ void init_math_healpix(py::module & m) {
             double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
             double * rawpa = reinterpret_cast <double *> (info_pa.ptr);
             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
-            toast::healpix_vec2ang(info_theta.size, rawvec, rawtheta, rawphi,
-                                   rawpa);
+            toast::healpix_vecs2angpa(info_theta.size, rawvec, rawtheta, rawphi, rawpa);
             return;
         }, py::arg("vec"), py::arg("theta"), py::arg("phi"), py::arg(
             "pa"), R"(
@@ -426,7 +425,7 @@ void init_math_healpix(py::module & m) {
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_ring(info_in.size, factor, rawin, rawout);
              return;
-         }, py::arg("in"), py::arg(
+         }, py::arg("factor"), py::arg("in"), py::arg(
              "out"), R"(
             Degrade RING ordered pixel numbers.
 
@@ -463,7 +462,7 @@ void init_math_healpix(py::module & m) {
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_nest(info_in.size, factor, rawin, rawout);
              return;
-         }, py::arg("in"), py::arg(
+         }, py::arg("factor"), py::arg("in"), py::arg(
              "out"), R"(
             Degrade NESTED ordered pixel numbers.
 
@@ -500,7 +499,7 @@ void init_math_healpix(py::module & m) {
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.upgrade_ring(info_in.size, factor, rawin, rawout);
              return;
-         }, py::arg("in"), py::arg(
+         }, py::arg("factor"), py::arg("in"), py::arg(
              "out"), R"(
             Upgrade RING ordered pixel numbers.
 
@@ -538,7 +537,7 @@ void init_math_healpix(py::module & m) {
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_nest(info_in.size, factor, rawin, rawout);
              return;
-         }, py::arg("in"), py::arg(
+         }, py::arg("factor"), py::arg("in"), py::arg(
              "out"), R"(
             Upgrade NESTED ordered pixel numbers.
 

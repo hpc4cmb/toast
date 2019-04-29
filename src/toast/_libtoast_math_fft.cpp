@@ -7,22 +7,21 @@
 
 
 void init_math_fft(py::module & m) {
-    py::enum_ <toast::fft_plan_type> (m, "FFTPlanType", py::arithmetic(),
-                                      "FFT Plan Type")
+    py::enum_ <toast::fft_plan_type> (m, "FFTPlanType", "FFT Plan Type")
     .value("fast", toast::fft_plan_type::fast)
     .value("best", toast::fft_plan_type::best);
 
-    py::enum_ <toast::fft_direction> (m, "FFTDirection", py::arithmetic(),
-                                      "FFT Direction")
+    py::enum_ <toast::fft_direction> (m, "FFTDirection", "FFT Direction")
     .value("forward", toast::fft_direction::forward)
     .value("backward", toast::fft_direction::backward);
 
 
     py::class_ <toast::FFTPlanReal1D, toast::FFTPlanReal1D::pshr> (
-        m, "FFTPlanReal1D", py::arg("length"), py::arg("n"), py::arg("type"),
-        py::arg("dir"), py::arg(
-            "scale"), R"(
-        FFT plan for one dimensional real transforms.
+        m, "FFTPlanReal1D")
+    .def_static("create", &toast::FFTPlanReal1D::create, py::arg("length"),
+                py::arg("n"), py::arg("type"), py::arg("dir"), py::arg(
+                    "scale"), R"(
+        Create FFT plan for one dimensional real transforms.
 
         The plan is valid for a particular length and for a batch of a
         fixed number of data buffers.
@@ -34,16 +33,10 @@ void init_math_fft(py::module & m) {
             dir (FFTDirection):  The direction of the transform.
             scale (float):  The scale factor to apply to the result.
 
-        )")
-    .def(
-        py::init(
-            [](int64_t length, int64_t n, toast::fft_plan_type type,
-               toast::fft_direction dir, double scale) {
-                return toast::FFTPlanReal1D::pshr(
-                    toast::FFTPlanReal1D::create(
-                        length, n, type, dir, scale));
-            })
-        )
+        Returns:
+            (FFTPlanReal1D):  The plan.
+
+    )")
     .def("exec", &toast::FFTPlanReal1D::exec,
          R"(
         Execute the plan on the current state of the data buffers.
@@ -95,7 +88,8 @@ void init_math_fft(py::module & m) {
 
 
     py::class_ <toast::FFTPlanReal1DStore,
-                std::unique_ptr <toast::FFTPlanReal1DStore, py::nodelete> > (
+                std::unique_ptr <toast::FFTPlanReal1DStore, py::nodelete> >
+    (
         m, "FFTPlanReal1DStore",
         R"(
         Global cache of FFT plans.
@@ -105,7 +99,8 @@ void init_math_fft(py::module & m) {
 
         )")
     .def("get", []() {
-             return std::unique_ptr <toast::FFTPlanReal1DStore, py::nodelete>
+             return std::unique_ptr <toast::FFTPlanReal1DStore,
+                                     py::nodelete>
              (
                  &toast::FFTPlanReal1DStore::get());
          }, R"(
@@ -115,7 +110,7 @@ void init_math_fft(py::module & m) {
          R"(
         Clear all plans in the store.
         )")
-    .def("cache", &toast::FFTPlanReal1DStore::cache, py::args("length"),
+    .def("cache", &toast::FFTPlanReal1DStore::cache, py::arg("length"),
          py::arg(
              "n"),  R"(
             Add a plan to the store.
@@ -130,7 +125,7 @@ void init_math_fft(py::module & m) {
                 None
 
         )")
-    .def("forward", &toast::FFTPlanReal1DStore::forward, py::args("length"),
+    .def("forward", &toast::FFTPlanReal1DStore::forward, py::arg("length"),
          py::arg(
              "n"),  R"(
             Retrieve a plan from the store.
@@ -146,7 +141,8 @@ void init_math_fft(py::module & m) {
                 (FFTPlanReal1D):  The plan.
 
         )")
-    .def("backward", &toast::FFTPlanReal1DStore::backward, py::args("length"),
+    .def("backward", &toast::FFTPlanReal1DStore::backward,
+         py::arg("length"),
          py::arg(
              "n"),  R"(
             Retrieve a plan from the store.

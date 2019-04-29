@@ -12,5 +12,7 @@
 // contain types that are conditin
 
 #include <toast/atm.hpp>
+#include <toast/math_fft_fftw.hpp>
+#include <toast/math_fft_mkl.hpp>
 
 #endif // ifndef TOAST_INTERNAL_HPP

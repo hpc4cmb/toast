@@ -7,7 +7,9 @@
 // #   define DEBUG
 // #endif
 
-#include <toast_atm_internal.hpp>
+#include <toast/sys_utils.hpp>
+#include <toast/sys_environment.hpp>
+#include <toast/atm.hpp>
 
 #include <sstream>
 #include <iostream>

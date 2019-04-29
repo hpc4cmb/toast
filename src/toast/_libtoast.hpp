@@ -11,7 +11,7 @@
 
 #include <pybind11/stl_bind.h>
 
-#include <toast.hpp>
+#include <toast_internal.hpp>
 
 #include <string>
 #include <sstream>
