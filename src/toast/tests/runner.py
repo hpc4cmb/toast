@@ -12,6 +12,8 @@ from .mpi import MPITestRunner
 
 from ..vis import set_backend
 
+from .._libtoast import libtoast_tests
+
 from . import cache as testcache
 # from . import timing as testtiming
 from . import rng as testrng
@@ -68,10 +70,9 @@ def test(name=None, verbosity=2):
 
     outdir = comm.bcast(outdir, root=0)
 
-    # if (name is None) or (name == "ctoast"):
-    #     # Run tests from the compiled library.  This separately uses
-    #     # MPI_COMM_WORLD.
-    #     test_ctoast()
+    if (name is None) or (name == "libtoast"):
+        # Run tests from the serial compiled library.
+        libtoast_tests(list(sys.argv))
 
     # Run python tests.
 
@@ -111,7 +112,7 @@ def test(name=None, verbosity=2):
         # if libsharp_available:
         #     suite.addTest( loader.loadTestsFromModule(testopspysm) )
         #     suite.addTest( loader.loadTestsFromModule(testsmooth) )
-    # elif name != "ctoast":
+    # elif name != "libtoast":
     #     if (name == "tidas") and (not tidas_available):
     #         print("Cannot run TIDAS tests- package not available")
     #         return

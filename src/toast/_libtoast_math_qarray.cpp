@@ -141,6 +141,7 @@ void init_math_qarray(py::module & m) {
                 auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "Buffer sizes are not consistent.";
+                o << " " << nquat << " " << nvec << " " << nout;
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
@@ -181,7 +182,7 @@ void init_math_qarray(py::module & m) {
             py::buffer_info info_out = out.request();
             size_t np = (size_t)(info_pin.size / 4);
             size_t nq = (size_t)(info_qin.size / 4);
-            size_t nout = (size_t)(info_out.size / 3);
+            size_t nout = (size_t)(info_out.size / 4);
             size_t check = (np > nq) ? np : nq;
             if (nout != check) {
                 auto log = toast::Logger::get();

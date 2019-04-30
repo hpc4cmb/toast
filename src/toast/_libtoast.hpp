@@ -17,6 +17,7 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <vector>
 
 namespace py = pybind11;
 

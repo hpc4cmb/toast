@@ -84,4 +84,31 @@ PYBIND11_MODULE(_libtoast, m) {
     init_math_qarray(m);
     init_math_healpix(m);
     init_math_fft(m);
+
+    // Internal unit test runner
+    m.def(
+        "libtoast_tests", [](py::list argv) {
+            size_t narg = argv.size();
+            std::vector <std::string> argbuffer;
+            for (auto const & a : argv) {
+                argbuffer.push_back(py::cast <std::string> (a));
+            }
+            char ** carg = (char **)std::malloc(narg * sizeof(char *));
+            for (size_t i = 0; i < narg; ++i) {
+                carg[i] = &(argbuffer[i][0]);
+            }
+            toast::test_runner(narg, carg);
+            free(carg);
+            return;
+        }, py::arg(
+            "argv"), R"(
+        Run serial compiled tests from the internal libtoast.
+
+        Args:
+            argv (list):  The sys.argv or compatible list.
+
+        Returns:
+            None
+
+    )");
 }

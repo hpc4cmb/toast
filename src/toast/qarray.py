@@ -100,9 +100,15 @@ def rotate(q, v):
 
     """
     qin = ensure_buffer_f64(q)
+    nq = len(qin) // 4
     vin = ensure_buffer_f64(v)
-    lv = len(vin) // 3
-    out = AlignedF64(lv)
+    nv = len(vin) // 3
+    nout = None
+    if nq > nv:
+        nout = nq
+    else:
+        nout = nv
+    out = AlignedF64(3 * nout)
     qa_rotate(qin, vin, out)
     if len(out) == 3:
         if (object_ndim(q) == 2) or (object_ndim(v) == 2):
@@ -282,8 +288,8 @@ def to_axisangle(q):
     """
     qin = ensure_buffer_f64(q)
     lq = len(qin) // 4
-    ax = AlignedF64(lq)
-    ang = AlignedF64(3 * lq)
+    ax = AlignedF64(3 * lq)
+    ang = AlignedF64(lq)
     qa_to_axisangle(qin, ax, ang)
     if len(ax) == 3:
         if object_ndim(q) == 2:
