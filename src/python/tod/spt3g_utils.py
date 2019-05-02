@@ -121,9 +121,10 @@ def compute_file_frames(bytes_per_sample, frame_sizes, file_size=500000000):
     for fr in frame_sizes:
         frbytes = fr * bytes_per_sample
         if frbytes > file_size:
-            msg = "A single frame ({}) is larger than the target"\
-                " frame file size ({}).  Increase the target"\
-                "size.".format(frbytes, file_size)
+            msg = "A single frame ({}) is larger than the target" \
+                " frame file size ({}). samples = {}, bytes/sample {}.  " \
+                "Increase the target" \
+                "size.".format(frbytes, file_size, fr, bytes_per_sample)
             raise RuntimeError(msg)
         if filebytes + frbytes > file_size:
             # Start a new file
