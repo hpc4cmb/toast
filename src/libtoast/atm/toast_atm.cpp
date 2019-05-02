@@ -489,6 +489,15 @@ int toast::tatm::sim::simulate( bool use_cache ) {
 
     if ( cached ) return 0;
 
+    unsigned char ok;
+    double t1, t2;
+
+    // Simulate the atmosphere in indepedent slices, each slice
+    // assigned to one process
+
+    std::vector<int> slice_starts;
+    std::vector<int> slice_stops;
+
     try {
         draw();
 
@@ -510,15 +519,9 @@ int toast::tatm::sim::simulate( bool use_cache ) {
             throw;
         }
 
-        double t1 = MPI_Wtime();
+        t1 = MPI_Wtime();
 
         long ind_start = 0, ind_stop = 0, slice = 0;
-
-        // Simulate the atmosphere in indepedent slices, each slice
-        // assigned to one process
-
-        std::vector<int> slice_starts;
-        std::vector<int> slice_stops;
 
         while (true) {
             get_slice(ind_start, ind_stop);
@@ -543,40 +546,47 @@ int toast::tatm::sim::simulate( bool use_cache ) {
             ++slice;
         }
 
-        // Gather the slices
-
-        for ( size_t slice=0; slice < slice_starts.size(); ++slice ) {
-            ind_start = slice_starts[slice];
-            ind_stop = slice_stops[slice];
-            int nind = ind_stop - ind_start;
-            int root = slice % ntask;
-            std::vector<double> tempvec(nind);
-            if ( rank == root ) {
-                std::memcpy( tempvec.data(), realization->data()+ind_start,
-                             sizeof(double) * nind );
-            }
-            if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) ) {
-                throw std::runtime_error("Failed to broadcast the realization");
-            }
-            if ( realization->rank() == 0 ) {
-                std::memcpy( realization->data()+ind_start, tempvec.data(),
-                             sizeof(double) * nind );
-            }
-        }
-
-        //smooth();
-
-        MPI_Barrier( comm );
-        double t2 = MPI_Wtime();
-
-        if ( rank == 0 && verbosity > 0 ) {
-            std::cerr << std::endl;
-            std::cerr << "Realization constructed in " << t2-t1 << " s."
-                      << std::endl;
-        }
-
+        ok = 1;
     } catch ( const std::exception& e ) {
-        std::cerr << "WARNING: atm::simulate failed with: " << e.what()
+        std::cerr << "ERROR: atm::simulate failed with: " << e.what()
+                  << std::endl;
+        ok = 0;
+    }
+
+    MPI_Allreduce(MPI_IN_PLACE, &ok, 1, MPI_UNSIGNED_CHAR, MPI_LAND, comm);
+    if ( !ok ) {
+        throw std::runtime_error( "Failed to gather hits" );
+    }
+
+    // Gather the slices
+
+    for ( size_t slice=0; slice < slice_starts.size(); ++slice ) {
+        long ind_start = slice_starts[slice];
+        long ind_stop = slice_stops[slice];
+        int nind = ind_stop - ind_start;
+        int root = slice % ntask;
+        std::vector<double> tempvec(nind);
+        if ( rank == root ) {
+            std::memcpy( tempvec.data(), realization->data()+ind_start,
+                         sizeof(double) * nind );
+        }
+        if ( MPI_Bcast( tempvec.data(), nind, MPI_DOUBLE, root, comm ) ) {
+            throw std::runtime_error("Failed to broadcast the realization");
+        }
+        if ( realization->rank() == 0 ) {
+            std::memcpy( realization->data()+ind_start, tempvec.data(),
+                         sizeof(double) * nind );
+        }
+    }
+
+    //smooth();
+
+    MPI_Barrier( comm );
+    t2 = MPI_Wtime();
+
+    if ( rank == 0 && verbosity > 0 ) {
+        std::cerr << std::endl;
+        std::cerr << "Realization constructed in " << t2 - t1 << " s."
                   << std::endl;
     }
 
@@ -1970,7 +1980,7 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
                 // Extract band diagonal of the matrix and try
                 // factorizing again
                 // int ndiag = ntry - itry - 1;
-                int ndiag = nelem - nelem * (itry + 1) / ntry;
+                int ndiag = nelem - nelem * (itry + 1) / (ntry - 1);
                 if (ndiag < 3) ndiag = 3;
                 int iupper = ndiag - 1;
                 int ilower = -iupper;
@@ -1991,10 +2001,18 @@ cholmod_sparse *toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse *cov,
                 }
                 int mode = 1;  // Numerical (not pattern) matrix
                 cholmod_band_inplace(ilower, iupper, mode, cov, chcommon);
-                if (chcommon->status != CHOLMOD_OK)
+                if (chcommon->status != CHOLMOD_OK) {
                     throw std::runtime_error("cholmod_band_inplace failed.");
-            } else
-                throw std::runtime_error("cholmod_factorize failed.");
+                }
+            } else {
+                // DEBUG begin
+                FILE *covfile = fopen("failed_covmat.mtx", "w");
+                cholmod_write_sparse(covfile, cov, NULL, NULL, chcommon);
+                fclose(covfile);
+                exit(-1);
+                // DEBUG end
+               throw std::runtime_error("cholmod_factorize failed.");
+            }
         } else {
             break;
         }
