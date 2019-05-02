@@ -1448,11 +1448,6 @@ def atm_sim_alloc(
     else:
         cdir = None
 
-    print(
-        "Calling lib.ctoast_atm_sim_alloc with rmin = {}, rmax = {}".format(rmin, rmax),
-        flush=True,
-    )
-
     return lib.ctoast_atm_sim_alloc(
         azmin,
         azmax,
