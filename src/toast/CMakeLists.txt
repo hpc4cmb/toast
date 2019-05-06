@@ -45,12 +45,14 @@ install(FILES
     __init__.py
     utils.py
     mpi.py
+    timing.py
     cache.py
     dist.py
     op.py
     vis.py
     rng.py
     qarray.py
+    fft.py
     DESTINATION ${PYTHON_SITE}/toast
 )
 

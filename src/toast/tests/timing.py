@@ -6,9 +6,11 @@ import sys
 import os
 import time
 
-from ..mpi import MPI
 from .mpi import MPITestCase
-from .. import timing as timing
+
+from ..timing import (Timer, GlobalTimers, functime)
+
+from ._helpers import (create_outdir)
 
 
 def fibonacci(n):
@@ -20,9 +22,108 @@ def fibonacci(n):
 class TimingTest(MPITestCase):
 
     def setUp(self):
-        self.outdir = "toast_test_output"
-        timing.timing_manager.use_timers = True
-        timing.timing_manager.serial_report = True
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, fixture_name)
+
+
+
+TEST_F(TOASTutilsTest, singletimer) {
+    int incr = 200;
+    double dincr = (double)incr / 1000.0;
+    double prec = 1.0e-2;
+    toast::Timer tm;
+    EXPECT_EQ(false, tm.is_running());
+    tm.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(incr));
+    tm.stop();
+    ASSERT_NEAR(dincr, tm.seconds(), prec);
+    tm.report("Test timer stopped");
+    tm.clear();
+    tm.start();
+    try {
+        tm.report("This should throw since timer not stopped...");
+    } catch (std::runtime_error & e) {
+        std::cout << "This should throw since timer not stopped..."
+                  << std::endl;
+        std::cout << e.what() << std::endl;
+    }
+    EXPECT_EQ(true, tm.is_running());
+    tm.stop();
+}
+
+
+TEST_F(TOASTutilsTest, globaltimer) {
+    int incr = 200;
+    double dincr = (double)incr / 1000.0;
+    double prec = 1.0e-2;
+    auto & gtm = toast::GlobalTimers::get();
+
+    std::vector <std::string> tnames = {
+        "timer1",
+        "timer2",
+        "timer3"
+    };
+
+    for (auto const & tname : tnames) {
+        try {
+            gtm.stop(tname);
+        } catch (std::runtime_error & e) {
+            std::cout << "This should throw since timer " << tname
+                      << " not yet created" << std::endl;
+            std::cout << e.what() << std::endl;
+        }
+    }
+
+    for (auto const & tname : tnames) {
+        gtm.start(tname);
+    }
+
+    for (auto const & tname : tnames) {
+        EXPECT_EQ(true, gtm.is_running(tname));
+        try {
+            gtm.stop(tname);
+        } catch (std::runtime_error & e) {
+            std::cout << "This should throw since timer " << tname
+                      << " still running" << std::endl;
+            std::cout << e.what() << std::endl;
+        }
+    }
+
+    gtm.stop_all();
+    gtm.clear_all();
+    for (auto const & tname : tnames) {
+        gtm.start(tname);
+    }
+
+    for (auto const & tname : tnames) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(incr));
+        gtm.stop(tname);
+    }
+
+    size_t offset = 1;
+    for (auto const & tname : tnames) {
+        ASSERT_NEAR((double)offset * dincr, gtm.seconds(tname), prec);
+        offset++;
+    }
+
+    gtm.report();
+    gtm.clear_all();
+
+    for (auto const & tname : tnames) {
+        gtm.start(tname);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(incr));
+
+    gtm.stop_all();
+    for (auto const & tname : tnames) {
+        ASSERT_NEAR(dincr, gtm.seconds(tname), prec);
+    }
+
+    gtm.report();
+}
+
+
 
 
     def test_timing(self):

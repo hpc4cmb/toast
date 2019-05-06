@@ -37,12 +37,12 @@ class FFTPlanReal1D : public std::enable_shared_from_this <FFTPlanReal1D> {
             return;
         }
 
-        virtual std::vector <double *> tdata() {
-            return std::vector <double *> ();
+        virtual double * tdata(int64_t indx) {
+            return NULL;
         }
 
-        virtual std::vector <double *> fdata() {
-            return std::vector <double *> ();
+        virtual double * fdata(int64_t indx) {
+            return NULL;
         }
 
         int64_t length();

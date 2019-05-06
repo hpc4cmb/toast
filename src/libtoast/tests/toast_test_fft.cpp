@@ -27,10 +27,10 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
 
     for (int64_t i = 0; i < nbatch; ++i) {
         toast::rng_dist_normal(length, 0, 0, 0, i * length,
-                               forward->tdata()[i]);
+                               forward->tdata(i));
         compare[i].resize(length);
         for (int64_t j = 0; j < length; ++j) {
-            compare[i][j] = forward->tdata()[i][j];
+            compare[i][j] = forward->tdata(i)[j];
         }
     }
 
@@ -46,7 +46,7 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
     for (int64_t i = 0; i < nbatch; ++i) {
         double mean = 0.0;
         for (int64_t j = 0; j < length; ++j) {
-            mean += forward->fdata()[i][j];
+            mean += forward->fdata(i)[j];
         }
         mean /= (double)length;
         if (debug) {
@@ -55,8 +55,8 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
 
         double var = 0.0;
         for (int64_t j = 0; j < length; ++j) {
-            var += (forward->fdata()[i][j] - mean) *
-                   (forward->fdata()[i][j] - mean);
+            var += (forward->fdata(i)[j] - mean) *
+                   (forward->fdata(i)[j] - mean);
         }
         var /= (double)length;
 
@@ -77,8 +77,8 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
     // Copy data to reverse transform
 
     for (int64_t i = 0; i < nbatch; ++i) {
-        std::copy(forward->fdata()[i],
-                  forward->fdata()[i] + length, reverse->fdata()[i]);
+        std::copy(forward->fdata(i),
+                  forward->fdata(i) + length, reverse->fdata(i));
     }
 
     // Do reverse transform
@@ -94,10 +94,10 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
         for (int64_t j = 0; j < length; ++j) {
             if (debug) {
                 std::cout << "    (" << j << ")" << compare[i][j] << " " <<
-                    forward->fdata()[i][j] << " " << reverse->tdata()[i][j] <<
+                    forward->fdata(i)[j] << " " << reverse->tdata(i)[j] <<
                     std::endl;
             } else {
-                EXPECT_FLOAT_EQ(compare[i][j], reverse->tdata()[i][j]);
+                EXPECT_FLOAT_EQ(compare[i][j], reverse->tdata(i)[j]);
             }
         }
     }

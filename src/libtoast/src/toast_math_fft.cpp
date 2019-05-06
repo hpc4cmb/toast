@@ -116,12 +116,26 @@ void toast::FFTPlanReal1DFFTW::exec() {
     return;
 }
 
-std::vector <double *> toast::FFTPlanReal1DFFTW::tdata() {
-    return tview_;
+double * toast::FFTPlanReal1DFFTW::tdata(int64_t indx) {
+    if ((indx < 0) || (indx >= n_)) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg = "batch index out of range";
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return tview_[indx];
 }
 
-std::vector <double *> toast::FFTPlanReal1DFFTW::fdata() {
-    return fview_;
+double * toast::FFTPlanReal1DFFTW::fdata(int64_t indx) {
+    if ((indx < 0) || (indx >= n_)) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg = "batch index out of range";
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return fview_[indx];
 }
 
 #endif // ifdef HAVE_FFTW
@@ -280,12 +294,26 @@ void toast::FFTPlanReal1DMKL::exec() {
     return;
 }
 
-std::vector <double *> toast::FFTPlanReal1DMKL::tdata() {
-    return tview_;
+double * toast::FFTPlanReal1DMKL::tdata(int64_t indx) {
+    if ((indx < 0) || (indx >= n_)) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg = "batch index out of range";
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return tview_[indx];
 }
 
-std::vector <double *> toast::FFTPlanReal1DMKL::fdata() {
-    return fview_;
+double * toast::FFTPlanReal1DMKL::fdata(int64_t indx) {
+    if ((indx < 0) || (indx >= n_)) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg = "batch index out of range";
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return fview_[indx];
 }
 
 void toast::FFTPlanReal1DMKL::check_status(FILE * fp, MKL_LONG status) {

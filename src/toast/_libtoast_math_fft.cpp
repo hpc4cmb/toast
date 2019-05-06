@@ -55,32 +55,42 @@ void init_math_fft(py::module & m) {
         Returns:
             (int): The number of FFTs.
         )")
-    .def("tdata", [](toast::FFTPlanReal1D & self) {
-             auto raw = self.tdata();
-             int64_t leng = self.length();
-             py::list ret;
-             for (auto & raw_p : raw) {
-                 ret.append(py::array_t <double> ({leng}, {8},
-                                                  raw_p));
-             }
+    .def("tdata", [](toast::FFTPlanReal1D & self, int64_t indx) {
+             int64_t len = self.length();
+             double * raw = self.tdata(
+                 indx);
+             py::array_t <double> ret({len}, {sizeof(double)},
+                                      raw,
+                                      py::cast(
+                                          self));
              return ret;
-         }, R"(
-        Return references to the time domain buffers.
+         },
+         py::return_value_policy::reference_internal,
+         R"(
+        Return a reference to a time domain buffers.
+
+        Args:
+            indx (int): The FFT vector within the batch.
 
         Returns:
             (list): List of arrays which are a view of the internal buffers.
         )")
-    .def("fdata", [](toast::FFTPlanReal1D & self) {
-             auto raw = self.fdata();
-             int64_t leng = self.length();
-             py::list ret;
-             for (auto & raw_p : raw) {
-                 ret.append(py::array_t <double> ({leng}, {8},
-                                                  raw_p));
-             }
+    .def("fdata", [](toast::FFTPlanReal1D & self, int64_t indx) {
+             int64_t len = self.length();
+             double * raw = self.fdata(
+                 indx);
+             py::array_t <double> ret({len}, {sizeof(double)},
+                                      raw,
+                                      py::cast(
+                                          self));
              return ret;
-         }, R"(
-        Return references to the frequency domain buffers.
+         },
+         py::return_value_policy::reference_internal,
+         R"(
+        Return a reference to a Fourier domain buffers.
+
+        Args:
+            indx (int): The FFT vector within the batch.
 
         Returns:
             (list): List of arrays which are a view of the internal buffers.

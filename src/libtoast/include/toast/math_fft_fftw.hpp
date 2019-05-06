@@ -24,8 +24,8 @@ class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
 
         void exec();
 
-        std::vector <double *> tdata();
-        std::vector <double *> fdata();
+        double * tdata(int64_t indx);
+        double * fdata(int64_t indx);
 
     private:
 

@@ -10,5 +10,6 @@ install(FILES
     cache.py
     rng.py
     qarray.py
+    fft.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

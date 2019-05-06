@@ -173,7 +173,7 @@ void toast::tod_sim_noise_timestream(
     auto & store = toast::FFTPlanReal1DStore::get();
     auto plan = store.backward(fftlen, 1);
 
-    double * pdata = plan->fdata()[0];
+    double * pdata = plan->fdata(0);
     std::copy(rngdata.begin(), rngdata.end(), pdata);
 
     pdata[0] *= interp_psd[0];
@@ -187,7 +187,7 @@ void toast::tod_sim_noise_timestream(
     plan->exec();
 
     int64_t offset = (fftlen - samples) / 2;
-    pdata = plan->tdata()[0] + offset;
+    pdata = plan->tdata(0) + offset;
     std::copy(pdata, (pdata + samples), noise);
 
     // subtract the DC level
