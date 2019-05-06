@@ -12,7 +12,7 @@ from ._libtoast import (Timer, GlobalTimers)
 from .utils import Environment
 
 
-def functime(f):
+def function_timer(f):
     env = Environment.get()
     ft = env.func_timers()
     if ft:
@@ -21,7 +21,7 @@ def functime(f):
             nm = f.__self__.__name__
         else:
             nm = f.__name__
-        tnm = "functime:  {}".format(nm)
+        tnm = "function_timer:  {}".format(nm)
 
         @wraps(f)
         def df(*args, **kwargs):

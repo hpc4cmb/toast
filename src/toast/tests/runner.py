@@ -15,7 +15,7 @@ from ..vis import set_backend
 from .._libtoast import libtoast_tests
 
 from . import cache as testcache
-# from . import timing as testtiming
+from . import timing as testtiming
 from . import rng as testrng
 from . import fft as testfft
 from . import dist as testdist
@@ -82,7 +82,7 @@ def test(name=None, verbosity=2):
 
     if name is None:
         suite.addTest(loader.loadTestsFromModule(testcache))
-        # suite.addTest( loader.loadTestsFromModule(testtiming) )
+        suite.addTest( loader.loadTestsFromModule(testtiming) )
         suite.addTest(loader.loadTestsFromModule(testrng))
         suite.addTest(loader.loadTestsFromModule(testfft))
         suite.addTest(loader.loadTestsFromModule(testdist))

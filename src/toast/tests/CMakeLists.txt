@@ -7,6 +7,7 @@ install(FILES
     runner.py
     mpi.py
     dist.py
+    timing.py
     cache.py
     rng.py
     qarray.py
