@@ -59,7 +59,7 @@ void init_sys(py::module & m) {
             Return True if TOAST was compiled with MPI support **and** MPI
             is supported in the current runtime environment.
         )")
-    .def("func_timers", &toast::Environment::func_timers,
+    .def("function_timers", &toast::Environment::function_timers,
          R"(
             Return True if function timing has been enabled.
         )")
@@ -130,7 +130,7 @@ void init_sys(py::module & m) {
     .def("calls",
          [](toast::Timer const & self) {
              if (self.is_running()) {
-                 return size_t();
+                 return size_t(0);
              } else {
                  return self.calls();
              }
@@ -171,15 +171,21 @@ void init_sys(py::module & m) {
     .def(
         py::pickle(
             [](toast::Timer const & p) { // __getstate__
-                double current = p.seconds();
-                size_t calls = p.calls();
-                return py::make_tuple(current, calls);
+                return py::make_tuple(p.seconds(), p.calls());
             },
-            [](py::tuple t) { // __setstate__
-                return new toast::Timer(
+            [](py::tuple t) {            // __setstate__
+                if (t.size() != 2) {
+                    auto log = toast::Logger::get();
+                    std::ostringstream o;
+                    o << "Unpickling: wrong number of tuple members";
+                    log.error(o.str().c_str());
+                    throw std::runtime_error(o.str().c_str());
+                }
+                toast::Timer ret(
                     t[0].cast <double>(),
-                    t[0].cast <size_t>()
+                    t[1].cast <size_t>()
                     );
+                return ret;
             }));
 
 
@@ -272,8 +278,8 @@ void init_sys(py::module & m) {
              for (auto const & nm : self.names()) {
                  auto cur = self.seconds(nm);
                  auto cal = self.calls(nm);
-                 result[py::cast(nm)] = toast::Timer(cur,
-                                                     cal);
+                 result[py::cast(nm)] = py::cast(toast::Timer(cur,
+                                                              cal));
              }
              return result;
          }, R"(

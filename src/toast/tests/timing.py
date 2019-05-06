@@ -5,11 +5,13 @@
 import os
 import time
 
+import pickle
+
 import numpy as np
 
 from .mpi import MPITestCase
 
-from ..timing import (Timer, GlobalTimers, function_timer, gather_timers)
+from ..timing import (Timer, GlobalTimers, function_timer, gather_timers, dump)
 
 from ._helpers import (create_outdir)
 
@@ -36,16 +38,22 @@ class TimingTest(MPITestCase):
         tm.start()
         time.sleep(dincr)
         tm.stop()
-        np.testing.assert_almost_equal(tm.seconds(), dincr, decimal=2)
+        np.testing.assert_almost_equal(tm.seconds(), dincr, decimal=prec)
         tm.report("Test timer stopped")
         tm.clear()
         tm.start()
+        time.sleep(dincr)
         try:
             tm.report("This should raise since timer not stopped...")
         except:
-            print("Successfully exception:  report running timer")
+            print("Successful exception:  report running timer")
         self.assertTrue(tm.is_running())
         tm.stop()
+        # Test pickling
+        pkl = pickle.dumps(tm, 2)
+        newtm = pickle.loads(pkl)
+        tm.report("original")
+        newtm.report("pickle roundtrip")
 
     def test_global(self):
         incr = 200
@@ -58,7 +66,7 @@ class TimingTest(MPITestCase):
                 gt.stop(nm)
                 tm.report("This should raise since timer not started...")
             except:
-                print("Successfully exception:  stop an already stopped timer")
+                print("Successful exception:  stop an already stopped timer")
         for nm in tnames:
             gt.start(nm)
         for nm in tnames:
@@ -66,7 +74,7 @@ class TimingTest(MPITestCase):
             try:
                 s = gt.seconds(nm)
             except:
-                print("Successfully exception:  seconds() on running timer")
+                print("Successful exception:  seconds() on running timer")
         gt.stop_all()
         gt.clear_all()
         for nm in tnames:
@@ -76,14 +84,13 @@ class TimingTest(MPITestCase):
             gt.stop(nm)
         offset = 1
         for nm in tnames:
-            np.testing.assert_almost_equal(gt.seconds(nm), offset * dincr, decimal=2)
+            np.testing.assert_almost_equal(gt.seconds(nm), offset * dincr, decimal=prec)
             offset += 1
         gt.report()
 
-
     def test_comm(self):
         gt = GlobalTimers.get()
-        for i in [27, 23, 31]:
+        for i in [10, 7, 11]:
             fibonacci(i - 2)
             fibonacci(i - 1)
             fibonacci(i)
@@ -107,4 +114,6 @@ class TimingTest(MPITestCase):
                 print("{} timing:".format(nm), flush=True)
                 props = result[nm]
                 for k in sorted(props.keys()):
-                    print("  {} = {} s".format(k, props[k]), flush=True)
+                    print("  {} = {}".format(k, props[k]), flush=True)
+            out = os.path.join(self.outdir, "test_dump")
+            dump(result, out)

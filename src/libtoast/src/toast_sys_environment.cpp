@@ -141,7 +141,7 @@ toast::Environment::Environment() {
     }
 
     // See if we should enable function timers.
-    bool func_timers_ = false;
+    func_timers_ = false;
     envval = ::getenv("TOAST_FUNCTIME");
     if (envval != NULL) {
         func_timers_ = true;
@@ -231,7 +231,7 @@ bool toast::Environment::use_mpi() const {
     return use_mpi_;
 }
 
-bool toast::Environment::func_timers() const {
+bool toast::Environment::function_timers() const {
     return func_timers_;
 }
 

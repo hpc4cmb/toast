@@ -2,8 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import inspect
 from functools import wraps
+
+import csv
+
+from collections import OrderedDict
 
 import numpy as np
 
@@ -14,14 +19,14 @@ from .utils import Environment
 
 def function_timer(f):
     env = Environment.get()
-    ft = env.func_timers()
+    ft = env.function_timers()
     if ft:
         nm = None
         if inspect.ismethod(f):
             nm = f.__self__.__name__
         else:
             nm = f.__name__
-        tnm = "function_timer:  {}".format(nm)
+        tnm = "{} (function_timer)".format(nm)
 
         @wraps(f)
         def df(*args, **kwargs):
@@ -52,17 +57,17 @@ def compute_stats(plist, full=False):
 
     """
     # First build the set of all timers
+    nproc = len(plist)
     allnames = set()
     for p in plist:
         for k in p.keys():
             allnames.add(k)
-    nall = len(allnames)
     # Repack the timer values and call count into arrays:
     seconds = dict()
     calls = dict()
     for nm in allnames:
-        seconds[nm] = np.array(nall, dtype=np.float64)
-        calls[nm] = np.array(nall, dtype=np.int64)
+        seconds[nm] = np.empty(nproc, dtype=np.float64)
+        calls[nm] = np.empty(nproc, dtype=np.int64)
     idx = 0
     for p in plist:
         for nm in allnames:
@@ -114,3 +119,38 @@ def gather_timers(comm=None, root=0):
     if (comm is None) or (comm.rank == root):
         result = compute_stats(all)
     return result
+
+
+def dump(results, path):
+    """Write out timing results to a format suitable for further processing.
+
+    Args:
+        results (dict):  The results as returned by compute_stats().
+        path (str):  File root name to dump.
+
+    Returns:
+        None
+
+    """
+    cols = OrderedDict([
+        ("Timer", "Name"),
+        ("Processes", "participating"),
+        ("Minimum Calls", "call_min"),
+        ("Maximum Calls", "call_max"),
+        ("Minimum Time", "time_min"),
+        ("Maximum Time", "time_max"),
+        ("Mean Time", "time_mean"),
+        ("Median Time", "time_median"),
+    ])
+    outpath = "{}.csv".format(path)
+    with open(outpath, "w", newline="") as f:
+        w = csv.writer(f, delimiter=",", quotechar="'")
+        w.writerow(cols.keys())
+        for nm, props in results.items():
+            row = [nm]
+            for k, v in cols.items():
+                if k == "Timer":
+                    continue
+                row.append(props[v])
+            w.writerow(row)
+    return

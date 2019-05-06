@@ -106,6 +106,7 @@ TEST_F(TOASTutilsTest, singletimer) {
     tm.report("Test timer stopped");
     tm.clear();
     tm.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(incr));
     try {
         tm.report("This should throw since timer not stopped...");
     } catch (std::runtime_error & e) {
@@ -115,6 +116,11 @@ TEST_F(TOASTutilsTest, singletimer) {
     }
     EXPECT_EQ(true, tm.is_running());
     tm.stop();
+    tm.report("Original");
+    double seconds = tm.seconds();
+    size_t calls = tm.calls();
+    toast::Timer newtm(seconds, calls);
+    newtm.report("Copied");
 }
 
 

@@ -26,7 +26,7 @@ class Environment {
         std::vector <std::string> signals() const;
         void print() const;
         bool use_mpi() const;
-        bool func_timers() const;
+        bool function_timers() const;
         int max_threads() const;
         std::string version() const;
 
