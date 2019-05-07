@@ -53,6 +53,7 @@ install(FILES
     rng.py
     qarray.py
     fft.py
+    healpix.py
     DESTINATION ${PYTHON_SITE}/toast
 )
 

@@ -67,6 +67,23 @@ def object_ndim(x):
                 return 0
 
 
+def ensure_buffer_i64(data):
+    """Return a flattened object that supports the buffer protocol.
+
+    Numpy arrays and objects supporting the buffer protocol are flattened and
+    copied to contiguous memory if needed.  Scalars and lists are converted
+    to numpy arrays.
+
+    Args:
+        data (object):  A scalar or iterable.
+
+    Returns:
+        (array):  The input unmodified or converted to an array.
+
+    """
+    return np.ascontiguousarray(data, dtype=np.int64).flatten()
+
+
 def ensure_buffer_f64(data):
     """Return a flattened object that supports the buffer protocol.
 
