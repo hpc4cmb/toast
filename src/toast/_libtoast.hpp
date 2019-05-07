@@ -128,6 +128,11 @@ void register_aligned(py::module & m, char const * name) {
     .def("resize", (void (C::*)(typename C::size_type count)) & C::resize)
     .def("size", &C::size)
     .def("clear", &C::clear)
+    .def("weakref", [](C & self) -> py::array_t <C::value_type> {
+             py::array_t <C::value_type> ret({self.size()}, {sizeof(C::value_type)},
+                                             self.data(), py::cast(self));
+             return ret;
+         })
     .def_buffer(
         [](C & self) -> py::buffer_info {
             std::string format = align_format <typename C::value_type> ();

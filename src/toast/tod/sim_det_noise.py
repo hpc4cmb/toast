@@ -12,6 +12,7 @@ import numpy as np
 from ..op import Operator
 
 from ..ctoast import sim_noise_sim_noise_timestream as sim_noise_timestream
+from ..ctoast import fft_r1d_store_get, fft_r1d_store_clear
 from .. import timing as timing
 
 
@@ -176,5 +177,9 @@ class OpSimNoise(Operator):
                                            (tod.local_samples[1], ))
                 ref[local_offset : local_offset+chunk_samp] += weight*nsedata
                 del ref
+
+        # release the work space allocated in the FFT plan store for this
+        # particular length of FFT
+        fft_r1d_store_clear(fft_r1d_store_get())
 
         return chunk_samp

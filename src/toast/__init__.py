@@ -26,3 +26,13 @@ except ImportError:
     with open(relfile, "r") as rel:
         if __version__ is None:
             __version__ = rel.readline().rstrip()
+
+# Namespace imports
+from .mpi import Comm
+
+from .dist import (Data, distribute_uniform, distribute_discrete,
+                   distribute_samples)
+
+from .op import Operator
+
+from .weather import Weather

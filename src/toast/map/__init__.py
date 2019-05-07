@@ -15,3 +15,5 @@ from .smooth import available as libsharp_available
 
 from .noise import (OpAccumDiag, covariance_invert, covariance_rcond, 
     covariance_multiply, covariance_apply)
+
+from .mapsampler import MapSampler
