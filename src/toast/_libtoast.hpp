@@ -289,3 +289,5 @@ void init_math_rng(py::module & m);
 void init_math_qarray(py::module & m);
 void init_math_healpix(py::module & m);
 void init_math_fft(py::module & m);
+void init_math_healpix(py::module & m);
+void init_fod_psd(py::module & m);

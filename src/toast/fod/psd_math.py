@@ -1,17 +1,20 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
 
-from .. import timing as timing
-from ..ctoast import fod_autosums, fod_crosssums
 from ..mpi import MPI
+
+from ..timing import function_timer
+
+from .._libtoast import fod_autosums, fod_crosssums
 
 
 def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
                 comm=None):
-    """
+    """Compute the sample autocovariance.
+
     Compute the sample autocovariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
     are distributed across the communicator as tuples of
@@ -25,14 +28,22 @@ def autocov_psd(times, signal, flags, lagmax, stationary_period, fsample,
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
+        comm (MPI.Comm):  The MPI communicator or None.
+
+    Returns:
+        (list):  List of local tuples of (start_time, stop_time, bin_frequency,
+            bin_value)
+
     """
     return crosscov_psd(times, signal, None, flags, lagmax, stationary_period,
                         fsample, comm)
 
 
+@function_timer
 def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
                  fsample, comm=None):
-    """
+    """Compute the sample (cross)covariance.
+
     Compute the sample (cross)covariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
     are distributed across the communicator as tuples of
@@ -47,18 +58,20 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
+        comm (MPI.Comm):  The MPI communicator or None.
+
+    Returns:
+        (list):  List of local tuples of (start_time, stop_time, bin_frequency,
+            bin_value)
+
     """
-    autotimer = timing.auto_timer()
-    if comm is None:
-        rank = 0
-        ntask = 1
-        comm = MPI.COMM_SELF
-    else:
+    rank = 0
+    ntask = 1
+    if comm is not None:
         rank = comm.rank
         ntask = comm.size
-
-    time_start = comm.bcast(times[0], root=0)
-    time_stop = comm.bcast(times[-1], root=ntask - 1)
+        time_start = comm.bcast(times[0], root=0)
+        time_stop = comm.bcast(times[-1], root=ntask - 1)
 
     nreal = np.int(np.ceil((time_stop - time_start) / stationary_period))
 
@@ -69,8 +82,8 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
 
     if lagmax > nsamp:
         raise RuntimeError(
-            'crosscov_psd: Communicating TOD beyond nearest neighbors is not '
-            'implemented. Reduce lagmax or the size of the MPI communicator.')
+            "crosscov_psd: Communicating TOD beyond nearest neighbors is not "
+            "implemented. Reduce lagmax or the size of the MPI communicator.")
 
     if rank != ntask - 1:
         nextend = lagmax
@@ -89,25 +102,26 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
     extended_flags[:nsamp] = flags
     extended_times[:nsamp] = times
 
-    for evenodd in range(2):
-        if rank % 2 == evenodd % 2:
-            # Send
-            if rank == 0:
-                continue
-            comm.send(signal1[:lagmax], dest=rank - 1, tag=0)
-            if signal2 is not None:
-                comm.send(signal1[:lagmax], dest=rank - 1, tag=3)
-            comm.send(flags[:lagmax], dest=rank - 1, tag=1)
-            comm.send(times[:lagmax], dest=rank - 1, tag=2)
-        else:
-            # Receive
-            if rank == ntask - 1:
-                continue
-            extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=0)
-            if signal2 is not None:
-                extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=3)
-            extended_flags[-lagmax:] = comm.recv(source=rank + 1, tag=1)
-            extended_times[-lagmax:] = comm.recv(source=rank + 1, tag=2)
+    if comm is not None:
+        for evenodd in range(2):
+            if rank % 2 == evenodd % 2:
+                # Send
+                if rank == 0:
+                    continue
+                comm.send(signal1[:lagmax], dest=rank - 1, tag=0)
+                if signal2 is not None:
+                    comm.send(signal1[:lagmax], dest=rank - 1, tag=3)
+                comm.send(flags[:lagmax], dest=rank - 1, tag=1)
+                comm.send(times[:lagmax], dest=rank - 1, tag=2)
+            else:
+                # Receive
+                if rank == ntask - 1:
+                    continue
+                extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=0)
+                if signal2 is not None:
+                    extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=3)
+                extended_flags[-lagmax:] = comm.recv(source=rank + 1, tag=1)
+                extended_times[-lagmax:] = comm.recv(source=rank + 1, tag=2)
 
     realization = ((extended_times - time_start)
                    / stationary_period).astype(np.int64)
@@ -134,11 +148,11 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
         sig1 = extended_signal1[realflg].copy()
         sig1[good] -= np.mean(sig1[good])
         if signal2 is None:
-            (cov, cov_hits) = fod_autosums(sig1, good.astype(np.int8), lagmax)
+            (cov, cov_hits) = fod_autosums(sig1, good.astype(np.uint8), lagmax)
         else:
             sig2 = extended_signal2[realflg].copy()
             sig2[good] -= np.mean(sig2[good])
-            (cov, cov_hits) = fod_crosssums(sig1, sig2, good.astype(np.int8),
+            (cov, cov_hits) = fod_crosssums(sig1, sig2, good.astype(np.uint8),
                                             lagmax)
 
         covs[ireal] = (cov_hits, cov)
@@ -148,24 +162,33 @@ def crosscov_psd(times, signal1, signal2, flags, lagmax, stationary_period,
     my_covs = {}
     nreal_task = np.int(np.ceil(nreal / ntask))
 
-    for ireal in range(nreal):
+    if comm is None:
+        for ireal in range(nreal):
+            if ireal in covs:
+                cov_hits, cov = covs[ireal]
+            else:
+                cov_hits = np.zeros(lagmax, dtype=np.int64)
+                cov = np.zeros(lagmax, dtype=np.float64)
+            my_covs[ireal] = (cov_hits, cov)
+    else:
+        for ireal in range(nreal):
 
-        owner = ireal // nreal_task
+            owner = ireal // nreal_task
 
-        if ireal in covs:
-            cov_hits, cov = covs[ireal]
-        else:
-            cov_hits = np.zeros(lagmax, dtype=np.int64)
-            cov = np.zeros(lagmax, dtype=np.float64)
+            if ireal in covs:
+                cov_hits, cov = covs[ireal]
+            else:
+                cov_hits = np.zeros(lagmax, dtype=np.int64)
+                cov = np.zeros(lagmax, dtype=np.float64)
 
-        cov_hits_total = np.zeros(lagmax, dtype=np.int64)
-        cov_total = np.zeros(lagmax, dtype=np.float64)
+            cov_hits_total = np.zeros(lagmax, dtype=np.int64)
+            cov_total = np.zeros(lagmax, dtype=np.float64)
 
-        comm.Reduce(cov_hits, cov_hits_total, op=MPI.SUM, root=owner)
-        comm.Reduce(cov, cov_total, op=MPI.SUM, root=owner)
+            comm.Reduce(cov_hits, cov_hits_total, op=MPI.SUM, root=owner)
+            comm.Reduce(cov, cov_total, op=MPI.SUM, root=owner)
 
-        if rank == owner:
-            my_covs[ireal] = (cov_hits_total, cov_total)
+            if rank == owner:
+                my_covs[ireal] = (cov_hits_total, cov_total)
 
     # Now process the ones this task owns
 

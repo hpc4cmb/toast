@@ -28,6 +28,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_math_qarray.cpp
     _libtoast_math_fft.cpp
     _libtoast_math_healpix.cpp
+    _libtoast_fod_psd.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
 
