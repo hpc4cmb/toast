@@ -1,0 +1,24 @@
+"*":
+  "atom-beautify":
+    c:
+      beautify_on_save: false
+      configPath: "src/uncrustify.cfg"
+    cpp:
+      beautify_on_save: false
+      configPath: "src/uncrustify.cfg"
+    python: {}
+  editor:
+    autoIndentOnPaste: false
+    fontSize: 18
+    preferredLineLength: 88
+    scrollPastEnd: true
+    showInvisibles: true
+    softWrap: true
+    softWrapAtPreferredLineLength: true
+    tabLength: 4
+    tabType: "soft"
+  "linter-flake8":
+    maxLineLength: 88
+  "python-black":
+    fmtOnSave: false
+    lineLength: 88

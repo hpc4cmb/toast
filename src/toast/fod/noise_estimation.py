@@ -1,8 +1,9 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import copy
+
 import os
 
 import astropy.io.fits as pf
@@ -15,6 +16,7 @@ from ..map import MapSampler
 from ..tod import flagged_running_average, Interval
 
 from .psd_math import autocov_psd, crosscov_psd
+
 from .. import timing as timing
 
 
@@ -88,9 +90,8 @@ class OpNoiseEstim:
         self._naverage = naverage
         self._save_cov = save_cov
 
+    @function_timer
     def exec(self, data):
-        autotimer = timing.auto_timer(type(self).__name__)
-
         comm = data.comm.comm_group
 
         masksampler = None
@@ -206,7 +207,6 @@ class OpNoiseEstim:
                     intervals,
                 )
 
-        del autotimer
         return
 
     def highpass_signal(self, tod, comm, intervals):
@@ -306,7 +306,6 @@ class OpNoiseEstim:
 
     def decimate(self, x, flg, gapflg, intervals):
         # Low-pass filter with running average, then downsample
-        autotimer = timing.auto_timer(type(self).__name__)
         xx = x.copy()
         flags = flg.copy()
         for ival in intervals:
@@ -314,13 +313,11 @@ class OpNoiseEstim:
             xx[ind], flags[ind] = flagged_running_average(
                 x[ind], flg[ind], self._naverage, return_flags=True
             )
-        del autotimer
         return xx[:: self._nsum].copy(), (flags + gapflg)[:: self._nsum].copy()
 
     """
     def highpass(self, x, flg):
         # Flagged real-space high pass filter
-        autotimer = timing.auto_timer(type(self).__name__)
         xx = x.copy()
 
         j = 0
@@ -336,12 +333,10 @@ class OpNoiseEstim:
                 j = i
 
         xx /= alpha
-        del autotimer
         return xx
     """
 
     def log_bin(self, freq, nbin=100, fmin=None, fmax=None):
-        autotimer = timing.auto_timer(type(self).__name__)
         if np.any(freq == 0):
             raise Exception("Logarithmic binning should not include " "zero frequency")
 
@@ -359,11 +354,9 @@ class OpNoiseEstim:
         hits = np.zeros(nbin + 2, dtype=np.int32)
         for loc in locs:
             hits[loc] += 1
-        del autotimer
         return locs, hits
 
     def bin_psds(self, my_psds, fmin=None, fmax=None):
-        autotimer = timing.auto_timer(type(self).__name__)
         my_binned_psds = []
         my_times = []
         binfreq0 = None
@@ -401,12 +394,9 @@ class OpNoiseEstim:
 
             my_times.append(t0)
             my_binned_psds.append(binpsd)
-        del autotimer
         return my_binned_psds, my_times, binfreq0
 
     def discard_outliers(self, binfreq, all_psds, all_times, all_cov):
-        autotimer = timing.auto_timer(type(self).__name__)
-
         all_psds = copy.deepcopy(all_psds)
         all_times = copy.deepcopy(all_times)
         if self._save_cov:
@@ -477,13 +467,11 @@ class OpNoiseEstim:
 
             if nbad > 0:
                 print("Masked extra {} psds due to outliers." "".format(nbad))
-        del autotimer
         return all_psds, all_times, nempty + nbad, all_cov
 
     def save_psds(
         self, binfreq, all_psds, all_times, det1, det2, fsample, rootname, all_cov
     ):
-        autotimer = timing.auto_timer(type(self).__name__)
         if det1 == det2:
             fn_out = os.path.join(self._out, "{}_{}.fits".format(rootname, det1))
         else:
@@ -543,7 +531,6 @@ class OpNoiseEstim:
             os.remove(fn_out)
         hdulist.writeto(fn_out, overwrite=True)
         print("Detector {} vs. {} PSDs stored in {}".format(det1, det2, fn_out))
-        del autotimer
         return
 
     def process_downsampled_noise_estimate(
@@ -660,7 +647,6 @@ class OpNoiseEstim:
         det2,
         local_intervals,
     ):
-        autotimer = timing.auto_timer(type(self).__name__)
         # High pass filter the signal to avoid aliasing
         # self.highpass(signal1, noise_flags)
         # self.highpass(signal2, noise_flags)
@@ -843,5 +829,4 @@ class OpNoiseEstim:
                     fileroot + "_good",
                     good_cov,
                 )
-        del autotimer
         return
