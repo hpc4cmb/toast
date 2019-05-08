@@ -20,12 +20,15 @@ from ..tod.sim_noise import *
 from ..tod.sim_det_noise import *
 from ..tod.sim_tod import *
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class OpGroundFilterTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -40,15 +43,19 @@ class OpGroundFilterTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET,
-            fmin=1.0e-5, fknee=np.linspace(0.0, 0.1, num=self.ndet))
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet,
+            samplerate=self.rate,
+            net=self.NET,
+            fmin=1.0e-5,
+            fknee=np.linspace(0.0, 0.1, num=self.ndet),
+        )
 
         # Samples per observation
         self.totsamp = 100000
 
         # bin size
-        self.wbin = 0.01 # in degrees
+        self.order = 3
 
         # Populate the observation
         tod = TODGround(
@@ -60,7 +67,8 @@ class OpGroundFilterTest(MPITestCase):
             rate=self.rate,
             azmin=45,
             azmax=55,
-            el=45)
+            el=45,
+        )
 
         # construct an analytic noise model
         nse = AnalyticNoise(
@@ -69,12 +77,11 @@ class OpGroundFilterTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
-
 
     def test_filter(self):
         # generate timestreams
@@ -96,7 +103,7 @@ class OpGroundFilterTest(MPITestCase):
             old_rms.append(orms)
 
         # Filter timestreams
-        op = OpGroundFilter(name='noise', wbin=self.wbin, common_flag_mask=0)
+        op = OpGroundFilter(name="noise", filter_order=self.order, common_flag_mask=0)
         op.exec(self.data)
 
         # Ensure all timestreams are zeroed out by the filter
@@ -108,7 +115,8 @@ class OpGroundFilterTest(MPITestCase):
                 rms = np.std(y)
                 old = orms[det]
                 if np.abs(rms / old) > 1.0e-3:
-                    raise RuntimeError("det {} old rms = {}, new rms = {}"
-                                       "".format(det, old, rms))
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}" "".format(det, old, rms)
+                    )
                 del y
         return
