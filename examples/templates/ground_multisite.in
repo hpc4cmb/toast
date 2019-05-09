@@ -78,7 +78,7 @@ if [ ! -e "${schedulefile_atacama}" ]; then
     echo "Running toast_ground_schedule.py (atacama)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
          --disable-timer-serialization \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_actcama" \
+         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_atacama" \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
          --operational_days $operational_days
 fi

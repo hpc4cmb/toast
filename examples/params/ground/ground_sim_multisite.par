@@ -8,8 +8,6 @@
 3
 --zip
 --flush
---atm_gangsize
-1
 --atm_lmax_center
 100
 --atm_lmax_sigma
