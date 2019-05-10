@@ -2,8 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
 import inspect
+
 from functools import wraps
 
 import csv
@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from ._libtoast import (Timer, GlobalTimers)
+from ._libtoast import Timer, GlobalTimers
 
 from .utils import Environment
 
@@ -35,10 +35,13 @@ def function_timer(f):
             result = f(*args, **kwargs)
             gt.stop(tnm)
             return result
+
     else:
+
         @wraps(f)
         def df(*args, **kwargs):
             return f(*args, **kwargs)
+
     return df
 
 
@@ -81,7 +84,7 @@ def compute_stats(plist, full=False):
     result = dict()
     for nm in allnames:
         result[nm] = dict()
-        good = (calls[nm] >= 0)
+        good = calls[nm] >= 0
         result[nm]["participating"] = np.sum(good)
         result[nm]["call_min"] = np.min(calls[nm][good])
         result[nm]["call_max"] = np.max(calls[nm][good])
@@ -132,16 +135,18 @@ def dump(results, path):
         None
 
     """
-    cols = OrderedDict([
-        ("Timer", "Name"),
-        ("Processes", "participating"),
-        ("Minimum Calls", "call_min"),
-        ("Maximum Calls", "call_max"),
-        ("Minimum Time", "time_min"),
-        ("Maximum Time", "time_max"),
-        ("Mean Time", "time_mean"),
-        ("Median Time", "time_median"),
-    ])
+    cols = OrderedDict(
+        [
+            ("Timer", "Name"),
+            ("Processes", "participating"),
+            ("Minimum Calls", "call_min"),
+            ("Maximum Calls", "call_max"),
+            ("Minimum Time", "time_min"),
+            ("Maximum Time", "time_max"),
+            ("Mean Time", "time_mean"),
+            ("Median Time", "time_median"),
+        ]
+    )
     outpath = "{}.csv".format(path)
     with open(outpath, "w", newline="") as f:
         w = csv.writer(f, delimiter=",", quotechar="'")

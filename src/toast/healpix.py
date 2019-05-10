@@ -2,17 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .utils import (Logger, AlignedF64, AlignedI64, ensure_buffer_f64,
-                    ensure_buffer_i64, object_ndim)
+from .utils import (
+    Logger,
+    AlignedF64,
+    AlignedI64,
+    ensure_buffer_f64,
+    ensure_buffer_i64,
+    object_ndim,
+)
 
-from ._libtoast import (healpix_ang2vec, healpix_vec2ang, healpix_vecs2angpa,
-                        HealpixPixels)
+from ._libtoast import (
+    healpix_ang2vec,
+    healpix_vec2ang,
+    healpix_vecs2angpa,
+    HealpixPixels,
+)
 
 
 import numpy as np
 
-from . import ctoast as ctoast
-from . import timing as timing
+from .timing import function_timer
 
 
 def ang2vec(theta, phi):
@@ -66,7 +75,7 @@ def vec2ang(vec):
     phi = AlignedF64(n)
     healpix_vec2ang(invec, theta, phi)
     if len(vec) == 3:
-        if (object_ndim(vec) == 2):
+        if object_ndim(vec) == 2:
             return (np.frombuffer(theta), np.frombuffer(theta))
         else:
             return (theta[0], phi[0])
@@ -101,7 +110,7 @@ def vecs2angpa(vec):
     pa = AlignedF64(n)
     healpix_vecs2angpa(invec, theta, phi, pa)
     if len(vec) == 6:
-        if (object_ndim(vec) == 2):
+        if object_ndim(vec) == 2:
             return (np.frombuffer(theta), np.frombuffer(theta), np.frombuffer(pa))
         else:
             return (theta[0], phi[0], pa[0])
@@ -122,6 +131,7 @@ class Pixels(object):
         nside (int): the map NSIDE.
 
     """
+
     def __init__(self, nside=1):
         self.hpix = HealpixPixels(nside)
 
@@ -224,7 +234,7 @@ class Pixels(object):
         pix = AlignedI64(n)
         self.hpix.vec2nest(invec, pix)
         if len(vec) == 3:
-            if (object_ndim(vec) == 2):
+            if object_ndim(vec) == 2:
                 return np.frombuffer(pix)
             else:
                 return pix[0]
@@ -249,7 +259,7 @@ class Pixels(object):
         pix = AlignedI64(n)
         self.hpix.vec2ring(invec, pix)
         if len(vec) == 3:
-            if (object_ndim(vec) == 2):
+            if object_ndim(vec) == 2:
                 return np.frombuffer(pix)
             else:
                 return pix[0]
@@ -271,7 +281,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.ring2nest(inpix, out)
         if n == 1:
-            if (object_ndim(ringpix) == 1):
+            if object_ndim(ringpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]
@@ -293,7 +303,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.ring2nest(inpix, out)
         if n == 1:
-            if (object_ndim(nestpix) == 1):
+            if object_ndim(nestpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]
@@ -319,7 +329,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.degrade_ring(factor, inp, out)
         if n == 1:
-            if (object_ndim(inpix) == 1):
+            if object_ndim(inpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]
@@ -345,7 +355,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.degrade_nest(factor, inp, out)
         if n == 1:
-            if (object_ndim(inpix) == 1):
+            if object_ndim(inpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]
@@ -372,7 +382,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.upgrade_ring(factor, inp, out)
         if n == 1:
-            if (object_ndim(inpix) == 1):
+            if object_ndim(inpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]
@@ -399,7 +409,7 @@ class Pixels(object):
         out = AlignedI64(n)
         self.hpix.upgrade_nest(factor, inp, out)
         if n == 1:
-            if (object_ndim(inpix) == 1):
+            if object_ndim(inpix) == 1:
                 return np.frombuffer(out)
             else:
                 return out[0]

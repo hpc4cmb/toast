@@ -47,6 +47,7 @@ def highpass_flagged_signal(sig, good, naverage):
     return sig
 
 
+@function_timer
 def autocov_psd(
     times,
     signal,
@@ -85,6 +86,7 @@ def autocov_psd(
     )
 
 
+@function_timer
 def crosscov_psd(
     times,
     signal1,

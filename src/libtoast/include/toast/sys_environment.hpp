@@ -28,6 +28,8 @@ class Environment {
         bool use_mpi() const;
         bool function_timers() const;
         int max_threads() const;
+        int current_threads() const;
+        void set_threads(int nthread);
         std::string version() const;
 
     private:
@@ -45,6 +47,7 @@ class Environment {
         bool at_nersc_;
         bool in_slurm_;
         int max_threads_;
+        int cur_threads_;
         std::string git_version_;
         std::string release_version_;
         std::string version_;

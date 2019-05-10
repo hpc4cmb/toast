@@ -4,8 +4,7 @@
 
 
 class Operator(object):
-    """
-    Base class for an operator that acts on collections of observations.
+    """Base class for an operator that acts on collections of observations.
 
     An operator takes as input a toast.dist.Data object and returns a
     new instance of the same size.  For each observation in the distributed
@@ -14,6 +13,7 @@ class Operator(object):
 
     Args:
         None
+
     """
 
     def __init__(self):

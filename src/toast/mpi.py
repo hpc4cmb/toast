@@ -17,9 +17,11 @@ if use_mpi:
     try:
         import mpi4py.MPI as MPI
     except ImportError:
-        raise ImportError("TOAST built with MPI + mpi4py support, but mpi4py "
-                          "not found at run time.  Is mpi4py currently in "
-                          "your python search path?")
+        raise ImportError(
+            "TOAST built with MPI + mpi4py support, but mpi4py "
+            "not found at run time.  Is mpi4py currently in "
+            "your python search path?"
+        )
     try:
         if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
             MPI_Comm = ct.c_int
@@ -28,8 +30,8 @@ if use_mpi:
     except Exception as e:
         raise Exception(
             "Failed to set the portable MPI communicator datatype. MPI4py is "
-            "probably too old. You need to have at least version 2.0. ({})"
-            .format(e))
+            "probably too old. You need to have at least version 2.0. ({})".format(e)
+        )
 
 
 class Comm(object):
@@ -51,6 +53,7 @@ class Comm(object):
         group (int): the size of each process group.
 
     """
+
     def __init__(self, world=None, groupsize=0):
         log = Logger.get()
         if world is None:
@@ -65,13 +68,17 @@ class Comm(object):
                 # We were passed a communicator to use. Check that it is
                 # actually a communicator, otherwise fall back to COMM_WORLD.
                 if not isinstance(world, MPI.Comm):
-                    log.warning("Specified world communicator is not a valid "
-                                "mpi4py.MPI.Comm object.  Using COMM_WORLD.")
+                    log.warning(
+                        "Specified world communicator is not a valid "
+                        "mpi4py.MPI.Comm object.  Using COMM_WORLD."
+                    )
                     world = MPI.COMM_WORLD
             else:
-                log.warning("World communicator specified even though "
-                            "MPI is disabled.  Ignoring this constructor "
-                            "argument.")
+                log.warning(
+                    "World communicator specified even though "
+                    "MPI is disabled.  Ignoring this constructor "
+                    "argument."
+                )
                 world = None
 
         self._wcomm = world
@@ -83,10 +90,13 @@ class Comm(object):
 
         self._gsize = groupsize
 
-        if ((self._gsize < 0) or (self._gsize > self._wsize)):
-            log.warning("Invalid groupsize ({}).  Should be between {} "
-                        "and {}.  Using single process group instead."
-                        .format(groupsize, 0, self._wsize))
+        if (self._gsize < 0) or (self._gsize > self._wsize):
+            log.warning(
+                "Invalid groupsize ({}).  Should be between {} "
+                "and {}.  Using single process group instead.".format(
+                    groupsize, 0, self._wsize
+                )
+            )
             self._gsize = 0
 
         if self._gsize == 0:
@@ -95,9 +105,10 @@ class Comm(object):
         self._ngroups = self._wsize // self._gsize
 
         if self._ngroups * self._gsize != self._wsize:
-            msg = "World communicator size ({}) is not evenly divisible "\
-                  "by requested group size ({})."\
-                  .format(self._wsize, self._gsize)
+            msg = (
+                "World communicator size ({}) is not evenly divisible "
+                "by requested group size ({}).".format(self._wsize, self._gsize)
+            )
             log.error(msg)
             raise RuntimeError(msg)
 

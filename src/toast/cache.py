@@ -6,9 +6,19 @@ import re
 import ctypes
 import numpy as np
 
-from .utils import (Logger, AlignedI8, AlignedU8, AlignedI16, AlignedU16,
-                    AlignedI32, AlignedU32, AlignedI64, AlignedU64,
-                    AlignedF32, AlignedF64)
+from .utils import (
+    Logger,
+    AlignedI8,
+    AlignedU8,
+    AlignedI16,
+    AlignedU16,
+    AlignedI32,
+    AlignedU32,
+    AlignedI64,
+    AlignedU64,
+    AlignedF32,
+    AlignedF64,
+)
 
 
 class Cache(object):
@@ -21,6 +31,7 @@ class Cache(object):
         pymem (bool): if True, use python memory rather than external
             allocations in C.  Only used for testing.
     """
+
     def __init__(self, pymem=False):
         self._pymem = pymem
         self._buffers = dict()
@@ -78,8 +89,7 @@ class Cache(object):
         if shape is None:
             raise ValueError("Cache shape cannot be None")
         if self.exists(name):
-            raise RuntimeError("Data buffer or alias {} already exists"
-                               .format(name))
+            raise RuntimeError("Data buffer or alias {} already exists".format(name))
         ttype = np.dtype(type)
         if self._pymem:
             self._buffers[name] = np.zeros(shape, dtype=ttype)
@@ -89,34 +99,44 @@ class Cache(object):
                 flatshape *= dim
             if ttype.char == "b":
                 self._buffers[name] = np.frombuffer(
-                    AlignedI8.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedI8.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif ttype.char == "B":
                 self._buffers[name] = np.frombuffer(
-                    AlignedU8.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedU8.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif ttype.char == "h":
                 self._buffers[name] = np.frombuffer(
-                    AlignedI16.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedI16.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif ttype.char == "H":
                 self._buffers[name] = np.frombuffer(
-                    AlignedU16.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedU16.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif ttype.char == "i":
                 self._buffers[name] = np.frombuffer(
-                    AlignedI32.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedI32.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif ttype.char == "I":
                 self._buffers[name] = np.frombuffer(
-                    AlignedU32.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedU32.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif (ttype.char == "l") or (ttype.char == "l"):
                 self._buffers[name] = np.frombuffer(
-                    AlignedI64.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedI64.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             elif (ttype.char == "L") or (ttype.char == "L"):
                 self._buffers[name] = np.frombuffer(
-                    AlignedU64.zeros(flatshape), dtype=ttype).reshape(shape)
-            elif (ttype.char == "f"):
+                    AlignedU64.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
+            elif ttype.char == "f":
                 self._buffers[name] = np.frombuffer(
-                    AlignedF32.zeros(flatshape), dtype=ttype).reshape(shape)
-            elif (ttype.char == "d"):
+                    AlignedF32.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
+            elif ttype.char == "d":
                 self._buffers[name] = np.frombuffer(
-                    AlignedF64.zeros(flatshape), dtype=ttype).reshape(shape)
+                    AlignedF64.zeros(flatshape), dtype=ttype
+                ).reshape(shape)
             else:
                 msg = "Unsupported data typecode '{}'".format(ttype.char)
                 log.error(msg)
@@ -161,12 +181,17 @@ class Cache(object):
                 ref = self.reference(realname)
                 p_ref = ref.ctypes.data_as(ctypes.POINTER(ctypes.c_void))
                 p_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_void))
-                if ((p_ref == p_data) and (ref.shape == data.shape) and
-                        (ref.dtype == data.dtype)):
+                if (
+                    (p_ref == p_data)
+                    and (ref.shape == data.shape)
+                    and (ref.dtype == data.dtype)
+                ):
                     return ref
             if not replace:
-                raise RuntimeError("Cache buffer named {} already exists "
-                                   "and replace is False.".foramt(name))
+                raise RuntimeError(
+                    "Cache buffer named {} already exists "
+                    "and replace is False.".foramt(name)
+                )
             # At this point we have an existing memory buffer or alias with
             # the same name, and which is not identical to the input.  If this
             # is an alias, just delete it.
@@ -199,12 +224,13 @@ class Cache(object):
             raise ValueError("Cache name or alias cannot be None")
         names = list(self._buffers.keys())
         if name not in names:
-            raise RuntimeError("Data buffer {} does not exist for alias {}"
-                               .format(name, alias))
+            raise RuntimeError(
+                "Data buffer {} does not exist for alias {}".format(name, alias)
+            )
         if alias in names:
             raise RuntimeError(
-                "Proposed alias {} would shadow existing buffer."
-                .format(alias))
+                "Proposed alias {} would shadow existing buffer.".format(alias)
+            )
         self._aliases[alias] = name
         return
 
@@ -280,8 +306,7 @@ class Cache(object):
         """
         # First check that it exists
         if not self.exists(name):
-            raise RuntimeError("Data buffer (nor alias) {} does not exist"
-                               .format(name))
+            raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
         realname = name
         if name in self._aliases:
             # This is an alias
@@ -326,7 +351,7 @@ class Cache(object):
             del ref
             tot += sz
             if not silent:
-                log.info(" - {:25} {:5.2f} MB".format(key, sz/2**20))
+                log.info(" - {:25} {:5.2f} MB".format(key, sz / 2 ** 20))
         if not silent:
-            log.info(" {:27} {:5.2f} MB".format("TOTAL", tot/2**20))
+            log.info(" {:27} {:5.2f} MB".format("TOTAL", tot / 2 ** 20))
         return tot

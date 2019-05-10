@@ -4,17 +4,34 @@
 
 import numpy as np
 
-from ._libtoast import (Environment, Timer, GlobalTimers, Logger)
+from ._libtoast import Environment, Timer, GlobalTimers, Logger
 
-from ._libtoast import (AlignedI8, AlignedU8, AlignedI16, AlignedU16,
-                        AlignedI32, AlignedU32, AlignedI64, AlignedU64,
-                        AlignedF32, AlignedF64)
+from ._libtoast import (
+    AlignedI8,
+    AlignedU8,
+    AlignedI16,
+    AlignedU16,
+    AlignedI32,
+    AlignedU32,
+    AlignedI64,
+    AlignedU64,
+    AlignedF32,
+    AlignedF64,
+)
 
-from ._libtoast import (vsin, vcos, vsincos, vatan2, vsqrt, vrsqrt, vexp, vlog)
+from ._libtoast import vsin, vcos, vsincos, vatan2, vsqrt, vrsqrt, vexp, vlog
 
-from ._libtoast import (vfast_sin, vfast_cos, vfast_sincos, vfast_atan2,
-                        vfast_sqrt, vfast_rsqrt, vfast_exp, vfast_log,
-                        vfast_erfinv)
+from ._libtoast import (
+    vfast_sin,
+    vfast_cos,
+    vfast_sincos,
+    vfast_atan2,
+    vfast_sqrt,
+    vfast_rsqrt,
+    vfast_exp,
+    vfast_log,
+    vfast_erfinv,
+)
 
 
 def object_ndim(x):
@@ -44,16 +61,16 @@ def object_ndim(x):
         except TypeError:
             # Does not support buffer protocol...
             try:
-                l = len(x)
+                lg = len(x)
                 # It's a list!
                 nd = 1
                 cur = x[0]
                 try:
-                    l = len(cur)
+                    lg = len(cur)
                     nd += 1
                     cur = cur[0]
                     try:
-                        l = len(cur)
+                        lg = len(cur)
                         nd += 1
                         # Using lists of more than 3 dimensions (rather than
                         # a numpy array) is kind of crazy...

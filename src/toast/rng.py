@@ -4,20 +4,26 @@
 
 import numpy as np
 
-# from . import timing as timing
-
 from .utils import Logger, Environment, AlignedU64, AlignedF64
 
 from .dist import distribute_uniform
 
-from ._libtoast import (rng_dist_uint64, rng_dist_uniform_01,
-                        rng_dist_uniform_11, rng_dist_normal,
-                        rng_multi_dist_uint64, rng_multi_dist_uniform_01,
-                        rng_multi_dist_uniform_11, rng_multi_dist_normal)
+from .timing import function_timer
+
+from ._libtoast import (
+    rng_dist_uint64,
+    rng_dist_uniform_01,
+    rng_dist_uniform_11,
+    rng_dist_normal,
+    rng_multi_dist_uint64,
+    rng_multi_dist_uniform_01,
+    rng_multi_dist_uniform_11,
+    rng_multi_dist_normal,
+)
 
 
-def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian",
-           threads=False):
+@function_timer
+def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian", threads=False):
     """Generate random samples from a distribution for one stream.
 
     This returns values from a single stream drawn from the specified
@@ -83,22 +89,22 @@ def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian",
             chunks = rng_multi_dist_normal(k1, k2, c1, c2, lengths)
             ret = AlignedF64(samples)
             for t in range(nthread):
-                ret[dst[t][0]:dst[t][0]+dst[t][1]] = chunks[t]
+                ret[dst[t][0] : dst[t][0] + dst[t][1]] = chunks[t]
         elif sampler == "uniform_01":
             chunks = rng_multi_dist_uniform_01(k1, k2, c1, c2, lengths)
             ret = AlignedF64(samples)
             for t in range(nthread):
-                ret[dst[t][0]:dst[t][0]+dst[t][1]] = chunks[t]
+                ret[dst[t][0] : dst[t][0] + dst[t][1]] = chunks[t]
         elif sampler == "uniform_m11":
             chunks = rng_multi_dist_uniform_11(k1, k2, c1, c2, lengths)
             ret = AlignedF64(samples)
             for t in range(nthread):
-                ret[dst[t][0]:dst[t][0]+dst[t][1]] = chunks[t]
+                ret[dst[t][0] : dst[t][0] + dst[t][1]] = chunks[t]
         elif sampler == "uniform_uint64":
             chunks = rng_multi_dist_uint64(k1, k2, c1, c2, lengths)
             ret = AlignedU64(samples)
             for t in range(nthread):
-                ret[dst[t][0]:dst[t][0]+dst[t][1]] = chunks[t]
+                ret[dst[t][0] : dst[t][0] + dst[t][1]] = chunks[t]
         else:
             msg = "Undefined sampler. Choose among: gaussian, uniform_01,\
                    uniform_m11, uniform_uint64"
@@ -107,6 +113,7 @@ def random(samples, key=(0, 0), counter=(0, 0), sampler="gaussian",
     return ret
 
 
+@function_timer
 def random_multi(samples, keys, counters, sampler="gaussian"):
     """Generate random samples from multiple streams.
 

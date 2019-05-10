@@ -8,12 +8,26 @@ import numpy as np
 
 from .utils import Logger, AlignedF64, ensure_buffer_f64, object_ndim
 
-from ._libtoast import (qa_inv, qa_amplitude, qa_normalize,
-                        qa_rotate, qa_mult, qa_slerp,
-                        qa_exp, qa_ln, qa_pow, qa_from_axisangle,
-                        qa_to_axisangle, qa_to_rotmat, qa_from_rotmat,
-                        qa_from_vectors, qa_from_angles, qa_to_angles,
-                        qa_to_position, qa_from_position)
+from ._libtoast import (
+    qa_inv,
+    qa_amplitude,
+    qa_normalize,
+    qa_rotate,
+    qa_mult,
+    qa_slerp,
+    qa_exp,
+    qa_ln,
+    qa_pow,
+    qa_from_axisangle,
+    qa_to_axisangle,
+    qa_to_rotmat,
+    qa_from_rotmat,
+    qa_from_vectors,
+    qa_from_angles,
+    qa_to_angles,
+    qa_to_position,
+    qa_from_position,
+)
 
 
 def inv(q):
@@ -293,8 +307,7 @@ def to_axisangle(q):
     qa_to_axisangle(qin, ax, ang)
     if len(ax) == 3:
         if object_ndim(q) == 2:
-            return (np.frombuffer(ax).reshape((1, 3)),
-                    np.frombuffer(ang))
+            return (np.frombuffer(ax).reshape((1, 3)), np.frombuffer(ang))
         else:
             return (np.frombuffer(ax), float(ang[0]))
     else:
@@ -397,8 +410,11 @@ def from_angles(theta, phi, pa, IAU=False):
     out = AlignedF64(4 * lt)
     qa_from_angles(thetain, phiin, pain, out, IAU)
     if len(out) == 4:
-        if (object_ndim(theta) == 1) or (object_ndim(phi) == 1) \
-                or (object_ndim(pa) == 1):
+        if (
+            (object_ndim(theta) == 1)
+            or (object_ndim(phi) == 1)
+            or (object_ndim(pa) == 1)
+        ):
             return np.frombuffer(out).reshape((1, 4))
         else:
             return np.frombuffer(out)
@@ -430,12 +446,10 @@ def to_angles(q, IAU=False):
     qa_to_angles(qin, theta, phi, pa, IAU)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return (np.frombuffer(theta), np.frombuffer(phi),
-                    np.frombuffer(pa))
+            return (np.frombuffer(theta), np.frombuffer(phi), np.frombuffer(pa))
         else:
             return (float(theta[0]), float(phi[0]), float(pa[0]))
-    return (np.frombuffer(theta), np.frombuffer(phi),
-            np.frombuffer(pa))
+    return (np.frombuffer(theta), np.frombuffer(phi), np.frombuffer(pa))
 
 
 def from_position(theta, phi):

@@ -239,6 +239,27 @@ int toast::Environment::max_threads() const {
     return max_threads_;
 }
 
+int toast::Environment::current_threads() const {
+    return cur_threads_;
+}
+
+void toast::Environment::set_threads(int nthread) {
+    if (nthread > max_threads_) {
+        auto & log = toast::Logger::get();
+        std::ostringstream o;
+        o << "Requested number of threads (" << nthread
+            << ") is greater than the maximum (" << max_threads_
+            << ") using " << max_threads_ << " instead";
+        log.warning(o.str().c_str());
+        nthread = max_threads_;
+    }
+    #ifdef _OPENMP
+    omp_set_num_threads(nthread);
+    #endif
+    cur_threads_ = nthread;
+    return;
+}
+
 std::vector <std::string> toast::Environment::signals() const {
     return signals_avail_;
 }

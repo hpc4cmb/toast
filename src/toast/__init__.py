@@ -17,6 +17,7 @@ import os
 __version__ = None
 try:
     from ._libtoast import Environment
+
     env = Environment.get()
     __version__ = env.version()
 except ImportError:
@@ -30,8 +31,7 @@ except ImportError:
 # Namespace imports
 from .mpi import Comm
 
-from .dist import (Data, distribute_uniform, distribute_discrete,
-                   distribute_samples)
+from .dist import Data, distribute_uniform, distribute_discrete, distribute_samples
 
 from .op import Operator
 

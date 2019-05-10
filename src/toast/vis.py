@@ -10,5 +10,6 @@ def set_backend(backend="agg"):
     if _matplotlib_backend is None:
         _matplotlib_backend = backend
         import matplotlib
+
         matplotlib.use(_matplotlib_backend)
     return

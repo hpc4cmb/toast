@@ -20,5 +20,5 @@
   "linter-flake8":
     maxLineLength: 88
   "python-black":
-    fmtOnSave: false
+    fmtOnSave: true
     lineLength: 88
