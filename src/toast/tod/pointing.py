@@ -1,62 +1,18 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
 import numpy as np
 
-from .. import healpix as hp
+from ..utils import Environment
 
-from .. import qarray as qa
+from ..healpix import HealpixPixels
 
 from ..op import Operator
-from ..dist import Comm, Data
-from .tod import TOD
 
-from .. import ctoast as ct
-from .. import timing as timing
+from ..timing import function_timer
 
-# FIXME: Once the global package control interface is added,
-# move this to that unified location.
-tod_buffer_length = 1048576
-
-
-def healpix_pointing_matrix(hpix, nest, mode, pdata, pixels, weights,
-                            hwpang=None, flags=None, eps=0.0, cal=1.0):
-    """
-    Compute the HEALPix pointing matrix for one detector.
-
-    This takes an array of quaternions and computes the healpix pixel
-    indices and weights.  The weights are computed based on a response model
-    that includes a perfect HWP and optional cross polar reponse and
-    calibration.
-
-    For memory efficiency, this function takes pre-allocated arrays for the
-    pixels and weights.  When calling this function for many detectors, you
-    should allocate those memory buffers once, if possible.
-
-    Args:
-        hpix (healpix.Pixels): the healpix class for this projection
-        nest (bool): if True, use NESTED ordering
-        mode (str): either "I" or "IQU"
-        pdata (array): a 2D array of size number of samples by 4
-        pixels (array): a 1D array of numpy.int64
-        weights (array): a 2D array of contiguous memory, with size
-            samples x NNZ, where NNZ is either one or three, depending on mode.
-        hwpang (array): optional array of HWP angles in radians
-        flags (array): optional array of flags (type = numpy.uint8) to apply
-        eps (float): cross polar response (0 == no crosspol, 1 == unpolarized)
-        cal (float): extra calibration factor to apply to the weights
-
-    Returns:
-        Nothing.
-
-    """
-    ct.pointing_healpix_matrix(hpix.hpix, nest, eps, cal, mode, pdata, hwpang, flags,
-    pixels, weights)
-
-    return
-
+from .._libtoast import pointing_matrix_healpix
 
 
 class OpPointingHpix(Operator):
@@ -105,10 +61,23 @@ class OpPointingHpix(Operator):
             with the common_flag_mask, and then flag the pointing matrix.
     """
 
-    def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False,
-                 mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None,
-                 hwpsteptime=None, common_flag_name=None, common_flag_mask=255,
-                 apply_flags=False, keep_quats=False):
+    def __init__(
+        self,
+        pixels="pixels",
+        weights="weights",
+        nside=64,
+        nest=False,
+        mode="I",
+        cal=None,
+        epsilon=None,
+        hwprpm=None,
+        hwpstep=None,
+        hwpsteptime=None,
+        common_flag_name=None,
+        common_flag_mask=255,
+        apply_flags=False,
+        keep_quats=False,
+    ):
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -122,12 +91,12 @@ class OpPointingHpix(Operator):
         self._keep_quats = keep_quats
 
         if (hwprpm is not None) and (hwpstep is not None):
-            raise RuntimeError("choose either continuously rotating or stepped "
-                               "HWP")
+            raise RuntimeError("choose either continuously rotating or stepped " "HWP")
 
         if (hwpstep is not None) and (hwpsteptime is None):
-            raise RuntimeError("for a stepped HWP, you must specify the time "
-                               "between steps")
+            raise RuntimeError(
+                "for a stepped HWP, you must specify the time " "between steps"
+            )
 
         if hwprpm is not None:
             # convert to radians / second
@@ -144,7 +113,7 @@ class OpPointingHpix(Operator):
             self._hwpsteptime = None
 
         # initialize the healpix pixels object
-        self.hpix = hp.Pixels(self._nside)
+        self.hpix = HealpixPixels(self._nside)
 
         if self._mode == "I":
             self._nnz = 1
@@ -156,31 +125,27 @@ class OpPointingHpix(Operator):
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
-
     @property
     def nside(self):
-        """
-        (int): the HEALPix NSIDE value used.
+        """(int): the HEALPix NSIDE value used.
         """
         return self._nside
 
     @property
     def nest(self):
-        """
-        (bool): if True, the pointing is NESTED ordering.
+        """(bool): if True, the pointing is NESTED ordering.
         """
         return self._nest
 
     @property
     def mode(self):
-        """
-        (str): the pointing mode "I", "IQU", etc.
+        """(str): the pointing mode "I", "IQU", etc.
         """
         return self._mode
 
+    @function_timer
     def exec(self, data):
-        """
-        Create pixels and weights.
+        """Create pixels and weights.
 
         This iterates over all observations and detectors, and creates
         the pixel and weight arrays representing the pointing matrix.
@@ -188,25 +153,13 @@ class OpPointingHpix(Operator):
 
         Args:
             data (toast.Data): The distributed data.
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
-        xaxis = np.array([1,0,0], dtype=np.float64)
-        yaxis = np.array([0,1,0], dtype=np.float64)
-        zaxis = np.array([0,0,1], dtype=np.float64)
-        nullquat = np.array([0,0,0,1], dtype=np.float64)
+        """
+        env = Environment.get()
+        tod_buffer_length = env.tod_buffer_length()
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
 
             # compute effective sample rate
 
@@ -225,7 +178,7 @@ class OpPointingHpix(Operator):
                 # HWP increment per sample is:
                 # (hwprate / samplerate)
                 hwpincr = self._hwprate / rate
-                startang = np.fmod(offset * hwpincr, 2*np.pi)
+                startang = np.fmod(offset * hwpincr, 2 * np.pi)
                 hwpang = hwpincr * np.arange(nsamp, dtype=np.float64)
                 hwpang += startang
             elif self._hwpstep is not None:
@@ -234,10 +187,10 @@ class OpPointingHpix(Operator):
                 stepsamples = int(self._hwpsteptime * rate)
                 wholesteps = int(offset / stepsamples)
                 remsamples = offset - wholesteps * stepsamples
-                curang = np.fmod(wholesteps * self._hwpstep, 2*np.pi)
+                curang = np.fmod(wholesteps * self._hwpstep, 2 * np.pi)
                 curoff = 0
                 fill = remsamples
-                while (curoff < nsamp):
+                while curoff < nsamp:
                     if curoff + fill > nsamp:
                         fill = nsamp - curoff
                     hwpang[curoff:fill] *= curang
@@ -250,7 +203,7 @@ class OpPointingHpix(Operator):
             common = None
             if self._apply_flags:
                 common = tod.local_common_flags(self._common_flag_name)
-                common = (common & self._common_flag_mask)
+                common = common & self._common_flag_mask
 
             for det in tod.local_dets:
                 eps = 0.0
@@ -272,14 +225,14 @@ class OpPointingHpix(Operator):
                 if tod.cache.exists(pixelsname):
                     pixelsref = tod.cache.reference(pixelsname)
                 else:
-                    pixelsref = tod.cache.create(pixelsname, np.int64,
-                                                 (nsamp, ))
+                    pixelsref = tod.cache.create(pixelsname, np.int64, (nsamp,))
 
                 if tod.cache.exists(weightsname):
                     weightsref = tod.cache.reference(weightsname)
                 else:
-                    weightsref = tod.cache.create(weightsname, np.float64,
-                        (nsamp, self._nnz))
+                    weightsref = tod.cache.create(
+                        weightsname, np.float64, (nsamp, self._nnz)
+                    )
 
                 pdata = None
                 if self._keep_quats:
@@ -297,11 +250,10 @@ class OpPointingHpix(Operator):
                     detp = None
                     if pdata is None:
                         # Read and discard
-                        detp = tod.read_pntg(detector=det, local_start=buf_off,
-                                             n=buf_n)
+                        detp = tod.read_pntg(detector=det, local_start=buf_off, n=buf_n)
                     else:
                         # Use cached version
-                        detp = pdata[bslice,:]
+                        detp = pdata[bslice, :]
 
                     hslice = None
                     if hwpang is not None:
@@ -311,10 +263,18 @@ class OpPointingHpix(Operator):
                     if common is not None:
                         fslice = common[bslice]
 
-                    healpix_pointing_matrix(self.hpix, self._nest, self._mode,
-                        detp, pixelsref[bslice],
-                        weightsref[bslice,:], hwpang=hslice,
-                        flags=fslice, eps=eps, cal=cal)
+                    pointing_matrix_healpix(
+                        self.hpix,
+                        self._nest,
+                        eps,
+                        cal,
+                        self._mode,
+                        detp,
+                        hslice,
+                        fslice,
+                        pixelsref[bslice],
+                        weightsref[bslice, :],
+                    )
                     buf_off += buf_n
 
                 del pixelsref

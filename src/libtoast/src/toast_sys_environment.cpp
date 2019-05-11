@@ -207,6 +207,19 @@ toast::Environment::Environment() {
     } else {
         version_ = git_version_;
     }
+
+    // Set the buffer length for TOD operations that require large intermediate
+    // data products.
+    envval = ::getenv("TOAST_TOD_BUFFER");
+    if (envval != NULL) {
+        try {
+            tod_buffer_length_ = ::atol(envval);
+        } catch (...) {
+            tod_buffer_length_ = 1048576;
+        }
+    } else {
+        tod_buffer_length_ = 1048576;
+    }
 }
 
 toast::Environment & toast::Environment::get() {
@@ -235,6 +248,10 @@ bool toast::Environment::function_timers() const {
     return func_timers_;
 }
 
+int64_t toast::Environment::tod_buffer_length() const {
+    return tod_buffer_length_;
+}
+
 int toast::Environment::max_threads() const {
     return max_threads_;
 }
@@ -248,14 +265,14 @@ void toast::Environment::set_threads(int nthread) {
         auto & log = toast::Logger::get();
         std::ostringstream o;
         o << "Requested number of threads (" << nthread
-            << ") is greater than the maximum (" << max_threads_
-            << ") using " << max_threads_ << " instead";
+          << ") is greater than the maximum (" << max_threads_
+          << ") using " << max_threads_ << " instead";
         log.warning(o.str().c_str());
         nthread = max_threads_;
     }
     #ifdef _OPENMP
     omp_set_num_threads(nthread);
-    #endif
+    #endif // ifdef _OPENMP
     cur_threads_ = nthread;
     return;
 }

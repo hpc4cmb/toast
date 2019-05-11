@@ -1,24 +1,25 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
 
 import numpy as np
 
 from ..op import Operator
-from .. import timing as timing
+
+from ..timing import function_timer
 
 
 class Interval(object):
-    """
-    Class storing a time and sample range.
+    """Class storing a time and sample range.
 
     Args:
         start (float): The start time of the interval in seconds.
         stop (float): The stop time of the interval in seconds.
         first (int): The first sample index of the interval.
         last (int): The last sample index (inclusive) of the interval.
+
     """
+
     def __init__(self, start=None, stop=None, first=None, last=None):
         self._start = start
         self._stop = stop
@@ -26,13 +27,13 @@ class Interval(object):
         self._last = last
 
     def __repr__(self):
-        return '<Interval {} - {} ({} - {})>'.format(
-            self._start, self._stop, self._first, self._last)
+        return "<Interval {} - {} ({} - {})>".format(
+            self._start, self._stop, self._first, self._last
+        )
 
     @property
     def start(self):
-        """
-        (float): the start time of the interval.
+        """(float): the start time of the interval.
         """
         if self._start is None:
             raise RuntimeError("Start time is not yet assigned")
@@ -46,8 +47,7 @@ class Interval(object):
 
     @property
     def stop(self):
-        """
-        (float): the start time of the interval.
+        """(float): the start time of the interval.
         """
         if self._stop is None:
             raise RuntimeError("Stop time is not yet assigned")
@@ -61,8 +61,7 @@ class Interval(object):
 
     @property
     def first(self):
-        """
-        (int): the first sample of the interval.
+        """(int): the first sample of the interval.
         """
         if self._first is None:
             raise RuntimeError("First sample is not yet assigned")
@@ -76,8 +75,7 @@ class Interval(object):
 
     @property
     def last(self):
-        """
-        (int): the first sample of the interval.
+        """(int): the first sample of the interval.
         """
         if self._last is None:
             raise RuntimeError("Last sample is not yet assigned")
@@ -91,26 +89,23 @@ class Interval(object):
 
     @property
     def range(self):
-        """
-        (float): the number seconds in the interval.
+        """(float): the number seconds in the interval.
         """
         b = self.start
         e = self.stop
-        return (e - b)
+        return e - b
 
     @property
     def samples(self):
-        """
-        (int): the number samples in the interval.
+        """(int): the number samples in the interval.
         """
         b = self.first
         e = self.last
-        return (e - b + 1)
+        return e - b + 1
 
 
 class OpFlagGaps(Operator):
-    """
-    Operator which applies common flags to gaps between valid intervals.
+    """Operator which applies common flags to gaps between valid intervals.
 
     Args:
         common_flag_name (str): the name of the cache object
@@ -118,38 +113,30 @@ class OpFlagGaps(Operator):
         common_flag_value (int): the integer bit mask (0-255)
             that should be bitwise ORed with the existing flags.
         intervals (str):  Name of the valid intervals in observation.
+
     """
 
-    def __init__(self, common_flag_name=None, common_flag_value=1,
-                 intervals='intervals'):
+    def __init__(
+        self, common_flag_name=None, common_flag_value=1, intervals="intervals"
+    ):
         self._common_flag_name = common_flag_name
         self._common_flag_value = common_flag_value
         self._intervals = intervals
         super().__init__()
 
+    @function_timer
     def exec(self, data):
-        """
-        Flag samples between valid intervals.
+        """Flag samples between valid intervals.
 
         This iterates over all observations and flags samples
         which lie outside the list of intervals.
 
         Args:
             data (toast.Data): The distributed data.
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
+        """
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
             if self._intervals:
                 intervals = obs[self._intervals]
             else:
@@ -165,7 +152,7 @@ class OpFlagGaps(Operator):
             for ival in local_intervals:
                 local_start = ival.first
                 local_stop = ival.last
-                gapflags[local_start:local_stop+1] = 0
+                gapflags[local_start : local_stop + 1] = 0
 
             commonflags = tod.local_common_flags(self._common_flag_name)
             commonflags[:] |= gapflags

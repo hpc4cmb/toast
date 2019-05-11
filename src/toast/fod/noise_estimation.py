@@ -6,45 +6,27 @@ import copy
 
 import os
 
-import astropy.io.fits as pf
 import numpy as np
+
 import scipy.signal
 
+import astropy.io.fits as pf
+
 from .. import qarray as qa
-from ..mpi import MPI
+
+from ..timing import Timer, function_timer
+
 from ..map import MapSampler
+
 from ..tod import flagged_running_average, Interval
 
 from .psd_math import autocov_psd, crosscov_psd
 
-from .. import timing as timing
-
 
 class OpNoiseEstim:
-    def __init__(
-        self,
-        signal=None,
-        flags=None,
-        detmask=1,
-        commonmask=1,
-        out=None,
-        maskfile=None,
-        mapfile=None,
-        pol=True,
-        nbin_psd=1000,
-        lagmax=10000,
-        stationary_period=86400.0,
-        nosingle=False,
-        nocross=True,
-        calibrate_signal_estimate=False,
-        nsum=10,
-        naverage=100,
-        apply_intervals=False,
-        pairs=None,
-        save_cov=False,
-    ):
-        """
-        Args:
+    """Noise estimation operator.
+
+    Args:
         signal(str):  Cache object name to analyze
         flags(str):  Cached flags to apply
         detmask(byte):  Flag bits to consider
@@ -68,7 +50,31 @@ class OpNoiseEstim:
         pairs(iterable):  Detector pairs to estimate noise for.  Overrides
             nosingle and nocross.
         save_cov(bool):  Save also the sample covariance.
-        """
+
+    """
+
+    def __init__(
+        self,
+        signal=None,
+        flags=None,
+        detmask=1,
+        commonmask=1,
+        out=None,
+        maskfile=None,
+        mapfile=None,
+        pol=True,
+        nbin_psd=1000,
+        lagmax=10000,
+        stationary_period=86400.0,
+        nosingle=False,
+        nocross=True,
+        calibrate_signal_estimate=False,
+        nsum=10,
+        naverage=100,
+        apply_intervals=False,
+        pairs=None,
+        save_cov=False,
+    ):
         self._signal = signal
         self._flags = flags
         self._detmask = detmask
@@ -213,9 +219,12 @@ class OpNoiseEstim:
         """ Suppress the sub-harmonic modes in the TOD by high-pass
         filtering.
         """
-
-        start_signal_subtract = MPI.Wtime()
-        if comm.rank == 0:
+        tm = Timer()
+        tm.start()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        if rank == 0:
             print("High-pass-filtering signal", flush=True)
         for det in tod.local_dets:
             signal = tod.local_signal(det, name=self._signal)
@@ -229,15 +238,11 @@ class OpNoiseEstim:
                     sig, flg, self._lagmax, return_flags=False
                 )
                 sig -= trend
-        comm.barrier()
-        stop_signal_subtract = MPI.Wtime()
-        if comm.rank == 0:
-            print(
-                "TOD high-passed in {:.2f} s".format(
-                    stop_signal_subtract - start_signal_subtract
-                ),
-                flush=True,
-            )
+        if comm is not None:
+            comm.barrier()
+        tm.stop()
+        if rank == 0:
+            tm.report("TOD high pass")
         return
 
     def subtract_signal(self, tod, comm, masksampler, mapsampler, intervals):
@@ -246,8 +251,12 @@ class OpNoiseEstim:
         """
         if mapsampler is None and masksampler is None:
             return
-        start_signal_subtract = MPI.Wtime()
-        if comm.rank == 0:
+        tm = Timer()
+        tm.start()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        if rank == 0:
             print("Subtracting signal", flush=True)
         for det in tod.local_dets:
             if det.endswith("-diff") and not self._pol:
@@ -293,15 +302,11 @@ class OpNoiseEstim:
                             coeff = np.dot(cov, proj)
                             bg = coeff[0] + coeff[1] * bg
                     sig -= bg
-        comm.barrier()
-        stop_signal_subtract = MPI.Wtime()
-        if comm.rank == 0:
-            print(
-                "TOD signal-subtracted in {:.2f} s".format(
-                    stop_signal_subtract - start_signal_subtract
-                ),
-                flush=True,
-            )
+        if comm is not None:
+            comm.barrier()
+        tm.stop()
+        if rank == 0:
+            tm.report("TOD signal subtraction")
         return
 
     def decimate(self, x, flg, gapflg, intervals):
@@ -315,26 +320,24 @@ class OpNoiseEstim:
             )
         return xx[:: self._nsum].copy(), (flags + gapflg)[:: self._nsum].copy()
 
-    """
-    def highpass(self, x, flg):
-        # Flagged real-space high pass filter
-        xx = x.copy()
-
-        j = 0
-        while j < x.size and flg[j]: j += 1
-
-        alpha = .999
-
-        for i in range(j+1, x.size):
-            if flg[i]:
-                xx[i] = x[j]
-            else:
-                xx[i] = alpha*(xx[j] + x[i] - x[j])
-                j = i
-
-        xx /= alpha
-        return xx
-    """
+    # def highpass(self, x, flg):
+    #     # Flagged real-space high pass filter
+    #     xx = x.copy()
+    #
+    #     j = 0
+    #     while j < x.size and flg[j]: j += 1
+    #
+    #     alpha = .999
+    #
+    #     for i in range(j+1, x.size):
+    #         if flg[i]:
+    #             xx[i] = x[j]
+    #         else:
+    #             xx[i] = alpha*(xx[j] + x[i] - x[j])
+    #             j = i
+    #
+    #     xx /= alpha
+    #     return xx
 
     def log_bin(self, freq, nbin=100, fmin=None, fmax=None):
         if np.any(freq == 0):
@@ -654,7 +657,12 @@ class OpNoiseEstim:
         # Compute the autocovariance function and the matching
         # PSD for each stationary interval
 
-        start = MPI.Wtime()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+
+        tm = Timer()
+        tm.start()
         if signal2 is None:
             result = autocov_psd(
                 timestamps,
@@ -697,24 +705,23 @@ class OpNoiseEstim:
                 comm,
             )
 
-        stop = MPI.Wtime()
-
-        if comm.rank == 0:
-            print(
-                "Correlators and PSDs computed in {:.2f} s" "".format(stop - start),
-                flush=True,
-            )
+        tm.stop()
+        if rank == 0:
+            tm.report("Compute Correlators and PSDs")
 
         # Now bin the PSDs
 
         fmin = 1 / self._stationary_period
         fmax = fsample / 2
 
-        start = MPI.Wtime()
+        tm.clear()
+        tm.start()
         my_binned_psds1, my_times1, binfreq10 = self.bin_psds(my_psds1, fmin, fmax)
         if self._nsum > 1:
             my_binned_psds2, _, binfreq20 = self.bin_psds(my_psds2, fmin, fmax)
-        stop = MPI.Wtime()
+        tm.stop()
+        if rank == 0:
+            tm.report("Bin PSDs")
 
         # concatenate
 
@@ -742,49 +749,61 @@ class OpNoiseEstim:
         # Collect and write the PSDs.  Start by determining the first
         # process to have a valid PSD to determine binning
 
-        start = MPI.Wtime()
+        tm.clear()
+        tm.start()
         have_bins = binfreq0 is not None
-        have_bins_all = comm.allgather(have_bins)
+        have_bins_all = None
+        if comm is None:
+            have_bins_all = [have_bins]
+        else:
+            have_bins_all = comm.allgather(have_bins)
         root = 0
         if np.any(have_bins_all):
             while not have_bins_all[root]:
                 root += 1
         else:
             raise RuntimeError("None of the processes have valid PSDs")
-        binfreq = comm.bcast(binfreq0, root=root)
+        binfreq = None
+        if comm is None:
+            binfreq = binfreq0
+        else:
+            binfreq = comm.bcast(binfreq0, root=root)
         if binfreq0 is not None and np.any(binfreq != binfreq0):
             raise Exception(
                 "{:4} : Binned PSD frequencies change. len(binfreq0)={}"
                 ", len(binfreq)={}, binfreq0={}, binfreq={}. "
                 "len(my_psds)={}".format(
-                    comm.rank,
-                    binfreq0.size,
-                    binfreq.size,
-                    binfreq0,
-                    binfreq,
-                    len(my_psds1),
+                    rank, binfreq0.size, binfreq.size, binfreq0, binfreq, len(my_psds1)
                 )
             )
         if len(my_times) != len(my_binned_psds):
             raise Exception(
                 "ERROR: Process {} has len(my_times) = {}, len(my_binned_psds)"
-                " = {}".format(comm.rank, len(my_times), len(my_binned_psds))
+                " = {}".format(rank, len(my_times), len(my_binned_psds))
             )
-        all_times = comm.gather(my_times, root=0)
-        all_psds = comm.gather(my_binned_psds, root=0)
-        if self._save_cov:
-            all_cov = comm.gather(my_cov, root=0)
+        all_times = None
+        all_psds = None
+        if comm is None:
+            all_times = [my_times]
+            all_psds = [my_binned_psds]
         else:
-            all_cov = None
-        stop = MPI.Wtime()
+            all_times = comm.gather(my_times, root=0)
+            all_psds = comm.gather(my_binned_psds, root=0)
+        all_cov = None
+        if self._save_cov:
+            if comm is None:
+                all_cov = [my_cov]
+            else:
+                all_cov = comm.gather(my_cov, root=0)
+        tm.stop()
 
-        if comm.rank == 0:
+        if rank == 0:
+            # FIXME: original code had no timing report here for the previous block.
+            # Was one intended?
             if len(all_times) != len(all_psds):
                 raise Exception(
                     "ERROR: Process {} has len(all_times) = {}, len(all_psds)"
-                    " = {} before deglitch".format(
-                        comm.rank, len(all_times), len(all_psds)
-                    )
+                    " = {} before deglitch".format(rank, len(all_times), len(all_psds))
                 )
             # De-glitch the binned PSDs and write them to file
             i = 0
@@ -800,9 +819,7 @@ class OpNoiseEstim:
             if len(all_times) != len(all_psds):
                 raise Exception(
                     "ERROR: Process {} has len(all_times) = {}, len(all_psds)"
-                    " = {} AFTER deglitch".format(
-                        comm.rank, len(all_times), len(all_psds)
-                    )
+                    " = {} AFTER deglitch".format(rank, len(all_times), len(all_psds))
                 )
 
             all_times = list(np.hstack(all_times))

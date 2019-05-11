@@ -1,18 +1,20 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI
-from toast.op import Operator
+from ..mpi import MPI
 
 import numpy as np
+
 from numpy.polynomial.chebyshev import chebval
-import toast.timing as timing
+
+from ..op import Operator
+
+from ..timing import function_timer
 
 
 class OpGroundFilter(Operator):
-    """
-    Operator which applies ground template filtering to constant
+    """Operator which applies ground template filtering to constant
     elevation scans.
 
     Args:
@@ -41,6 +43,7 @@ class OpGroundFilter(Operator):
         intervals (str):  Name of the valid intervals in observation
         split_template (bool):  Apply a different template for left and
              right scans
+
     """
 
     def __init__(
@@ -57,7 +60,6 @@ class OpGroundFilter(Operator):
         intervals="intervals",
         split_template=False,
     ):
-
         self._name = name
         self._common_flag_name = common_flag_name
         self._common_flag_mask = common_flag_mask
@@ -70,10 +72,16 @@ class OpGroundFilter(Operator):
         self._intervals = intervals
         self._split_template = split_template
 
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor.
         super().__init__()
 
     def fit_templates(self, tod, det, templates, ref, good):
+        log = Logger.get()
+        comm = tod.mpicomm
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        detranks, sampranks = tod.grid_size
 
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
@@ -90,20 +98,21 @@ class OpGroundFilter(Operator):
                     if i != j:
                         invcov[j, i] = invcov[i, j]
 
-        if tod._sampranks > 1:
-            # Reduce the binned data.  The detector signals is
-            # distributed across the group communicator.
-            cgroup.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
-            cgroup.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
+        if comm is not None:
+            if sampranks > 1:
+                # Reduce the binned data.  The detector signals is
+                # distributed across the group communicator.
+                comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
+                comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
 
         # Assemble the joint template
-
         if det in tod.local_dets:
             try:
                 cov = np.linalg.inv(invcov)
                 coeff = np.dot(cov, proj)
             except np.linalg.LinAlgError as e:
-                print('linalg.inv failed: "{}"'.format(e), flush=True)
+                msg = 'linalg.inv failed with "{}"'.format(e)
+                log.warning(msg)
                 # np.linalg.lstsq will find a least squares minimum
                 # even if the covariance matrix is not invertible
                 coeff = np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
@@ -114,21 +123,15 @@ class OpGroundFilter(Operator):
 
         return coeff
 
+    @function_timer
     def exec(self, data):
-        """
-        Apply the ground filter to the signal.
+        """Apply the ground filter to the signal.
 
         Args:
             data (toast.Data): The distributed data.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        # the two-level pytoast communicator
-        comm = data.comm
-        # the communicator within the group
-        cgroup = comm.comm_group
-
         # Each group loops over its own CES:es
-
         for obs in data.obs:
             tod = obs["tod"]
             nsamp_tot = tod.total_samples

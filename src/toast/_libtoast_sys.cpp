@@ -63,15 +63,21 @@ void init_sys(py::module & m) {
          R"(
             Return True if function timing has been enabled.
         )")
+    .def("tod_buffer_length", &toast::Environment::tod_buffer_length,
+         R"(
+            Returns the number of samples to buffer for TOD operations.
+        )")
     .def("max_threads", &toast::Environment::max_threads,
          R"(
             Returns the maximum number of threads used by compiled code.
         )")
-    .def("current_threads", &toast::Environment::current_threads, R"(
+    .def("current_threads", &toast::Environment::current_threads,
+         R"(
             Return the current threading concurrency in use.
         )")
     .def("set_threads", &toast::Environment::set_threads,
-            py::arg("nthread"), R"(
+         py::arg(
+             "nthread"), R"(
             Set the number of threads in use.
 
             Args:

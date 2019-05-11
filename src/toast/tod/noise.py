@@ -1,19 +1,12 @@
-# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""
-noise.py implements the Noise class for storing noise PSDs.
-
-"""
-
 import numpy as np
-from .. import timing as timing
 
 
 class Noise(object):
-    """
-    Noise objects act as containers for noise PSDs.
+    """Noise objects act as containers for noise PSDs.
 
     Noise is a base class for an object that describes the noise
     properties of all detectors for a single observation.
@@ -71,8 +64,7 @@ class Noise(object):
 
         for key in self._keys:
             if psds[key].shape[0] != freqs[key].shape[0]:
-                raise ValueError(
-                    'PSD length must match the number of frequencies')
+                raise ValueError("PSD length must match the number of frequencies")
             self._freqs[key] = np.copy(freqs[key])
             self._psds[key] = np.copy(psds[key])
             # last frequency point should be Nyquist
@@ -80,25 +72,23 @@ class Noise(object):
 
     @property
     def detectors(self):
-        """
-        (list): list of strings containing the detector names.
+        """(list): list of strings containing the detector names.
         """
         return self._dets
 
     @property
     def keys(self):
-        """
-        (list): list of strings containing the PSD names.
+        """(list): list of strings containing the PSD names.
         """
         return self._keys
 
     def multiply_ntt(self, key, data):
         """Filter the data with noise covariance."""
-        raise NotImplementedError('multiply_ntt not yet implemented')
+        raise NotImplementedError("multiply_ntt not yet implemented")
 
     def multiply_invntt(self, key, data):
         """Filter the data with inverse noise covariance."""
-        raise NotImplementedError('multiply_invntt not yet implemented')
+        raise NotImplementedError("multiply_invntt not yet implemented")
 
     def weight(self, det, key):
         """Return the mixing weight for noise `key` in `det`.

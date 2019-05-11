@@ -1,15 +1,15 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-
 import numpy as np
 
-from .. import qarray as qa
-from .. import timing as timing
-
 from scipy.constants import c
+
+from .. import qarray as qa
+
+from ..timing import function_timer
+
 
 cinv = 1e3 / c  # Inverse light speed in km / s ( the assumed unit for velocity )
 
@@ -69,9 +69,9 @@ coordmat_J2000ecl2gal = np.array(
 quat_ecl2gal = qa.from_rotmat(coordmat_J2000ecl2gal)
 
 
+@function_timer
 def aberrate(quat, vel, inplace=True):
-    """
-    Apply velocity aberration to the orientation quaternions.
+    """Apply velocity aberration to the orientation quaternions.
 
     Args:
         quat (float):  Normalized quaternions.
@@ -79,10 +79,10 @@ def aberrate(quat, vel, inplace=True):
 
     Returns:
         Corrected quaternions either in the orinal container or a 2D ndarray.
+
     """
-    autotimer = timing.auto_timer()
     vec = qa.rotate(quat, zaxis)
-    abvec = np.cross(vec, vel[ind])
+    abvec = np.cross(vec, vel)
     lens = np.linalg.norm(abvec, axis=1)
     ang = lens * cinv
     abvec /= np.tile(lens, (3, 1)).T  # Normalize for direction

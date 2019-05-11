@@ -1,10 +1,10 @@
 "*":
   "atom-beautify":
     c:
-      beautify_on_save: false
+      beautify_on_save: true
       configPath: "src/uncrustify.cfg"
     cpp:
-      beautify_on_save: false
+      beautify_on_save: true
       configPath: "src/uncrustify.cfg"
     python: {}
   editor:

@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <sstream>
+
+#include <toast/sys_utils.hpp>
 
 
 namespace toast {
@@ -31,6 +34,7 @@ class Environment {
         int current_threads() const;
         void set_threads(int nthread);
         std::string version() const;
+        int64_t tod_buffer_length() const;
 
     private:
 
@@ -51,6 +55,7 @@ class Environment {
         std::string git_version_;
         std::string release_version_;
         std::string version_;
+        int64_t tod_buffer_length_;
 };
 
 }

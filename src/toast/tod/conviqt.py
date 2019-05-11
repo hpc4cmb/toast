@@ -1,35 +1,28 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, MPI_Comm
+from ..mpi import use_mpi
 
-import os
-
-import ctypes as ct
-from ctypes.util import find_library
-
-import healpy as hp
 import numpy as np
-import numpy.ctypeslib as npc
 
 from .. import qarray as qa
-from ..dist import Comm, Data
+
 from ..op import Operator
-from ..tod import TOD
-from ..tod import Interval
 
-from .. import timing as timing
+from ..timing import function_timer, Timer
 
-try:
-    import libconviqt_wrapper as conviqt
-except:
-    conviqt = None
+conviqt = None
+
+if use_mpi:
+    try:
+        import libconviqt_wrapper as conviqt
+    except ImportError:
+        pass
 
 
 class OpSimConviqt(Operator):
-    """
-    Operator which uses libconviqt to generate beam-convolved timestreams.
+    """Operator which uses libconviqt to generate beam-convolved timestreams.
 
     This passes through each observation and loops over each detector.
     For each detector, it produces the beam-convolved timestream.
@@ -52,6 +45,7 @@ class OpSimConviqt(Operator):
             corrected for the polarization angle.
         out (str): the name of the cache object (<name>_<detector>) to
             use for output of the detector timestream.
+
     """
 
     def __init__(
@@ -76,7 +70,7 @@ class OpSimConviqt(Operator):
         normalize_beam=False,
         verbosity=0,
     ):
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor
         super().__init__()
 
         self._lmax = lmax
@@ -104,38 +98,42 @@ class OpSimConviqt(Operator):
 
     @property
     def available(self):
-        """
-        (bool): True if libconviqt is found in the library search path.
+        """Return True if libconviqt is found in the library search path.
         """
         return conviqt is not None and conviqt.available
 
+    @function_timer
     def exec(self, data):
-        """
-        Loop over all observations and perform the convolution.
+        """Loop over all observations and perform the convolution.
 
         This is done one detector at a time.  For each detector, all data
         products are read from disk.
 
         Args:
             data (toast.Data): The distributed data.
+
         """
         if not self.available:
             raise RuntimeError("libconviqt is not available")
 
-        autotimer = timing.auto_timer(type(self).__name__)
-
         xaxis, yaxis, zaxis = np.eye(3)
-        nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
+
+        tmobs = Timer()
+        tmdet = Timer()
 
         for obs in data.obs:
-            tstart_obs = MPI.Wtime()
+            tmobs.clear()
+            tmobs.start()
             tod = obs["tod"]
             comm = tod.mpicomm
-            intrvl = obs["intervals"]
+            rank = 0
+            if comm is not None:
+                rank = comm.rank
             offset, nsamp = tod.local_samples
 
             for det in tod.local_dets:
-                tstart_det = MPI.Wtime()
+                tmdet.clear()
+                tmdet.start()
                 try:
                     skyfile, beamfile, epsilon, psipol = self._detectordata[det]
                 except:
@@ -176,46 +174,48 @@ class OpSimConviqt(Operator):
                 del beam
                 del sky
 
-                tstop = MPI.Wtime()
-                if self._verbosity > 0 and tod.mpicomm.rank == 0:
-                    print(
-                        "{} processed in {:.2f}s".format(det, tstop - tstart_det),
-                        flush=True,
-                    )
+                tmdet.stop()
+                if self._verbosity > 0 and rank == 0:
+                    msg = "conviqt process detector {}".format(det)
+                    tmdet.report(msg)
 
-            tstop = MPI.Wtime()
-            if self._verbosity > 0 and tod.mpicomm.rank == 0:
-                print(
-                    "{} convolved in {:.2f}s".format("observation", tstop - tstart_obs),
-                    flush=True,
-                )
+            tmobs.stop()
+            if self._verbosity > 0 and rank == 0:
+                msg = "conviqt process observation {}".format(obs["name"])
+                tmobs.report(msg)
 
         return
 
     def get_sky(self, skyfile, comm, det, tod):
-        tstart = MPI.Wtime()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        tm = Timer()
+        tm.start()
         sky = conviqt.Sky(self._lmax, self._pol, skyfile, self._fwhm, comm)
         if self._remove_monopole:
             sky.remove_monopole()
         if self._remove_dipole:
             sky.remove_dipole()
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print(
-                "{} sky initialized in {:.2f}s".format(det, tstop - tstart), flush=True
-            )
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "initialize sky for detector {}".format(det)
+            tm.report(msg)
         return sky
 
     def get_beam(self, beamfile, comm, det, tod):
-        tstart = MPI.Wtime()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        tm = Timer()
+        tm.start()
         beam = conviqt.Beam(self._lmax, self._beammmax, self._pol, beamfile, comm)
         if self._normalize_beam:
             beam.normalize()
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print(
-                "{} beam initialized in {:.2f}s".format(det, tstop - tstart), flush=True
-            )
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "initialize beam for detector {}".format(det)
+            tm.report(msg)
         return beam
 
     def get_detector(self, det, epsilon):
@@ -225,14 +225,21 @@ class OpSimConviqt(Operator):
     def get_pointing(self, tod, det, psipol):
         # We need the three pointing angles to describe the
         # pointing. local_pointing returns the attitude quaternions.
-        tstart = MPI.Wtime()
+        nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
+        rank = 0
+        if tod.comm is not None:
+            rank = tod.comm.rank
+        tm = Timer()
+        tm.start()
         pdata = tod.local_pointing(det, self._quat_name)
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print("{} pointing read in {:.2f}s".format(det, tstop - tstart), flush=True)
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "get detector pointing for {}".format(det)
+            tm.report(msg)
 
         if self._apply_flags:
-            tstart = MPI.Wtime()
+            tm.clear()
+            tm.start()
             common = tod.local_common_flags(self._common_flag_name)
             flags = tod.local_flags(det, self._flag_name)
             common = common & self._common_flag_mask
@@ -241,47 +248,49 @@ class OpSimConviqt(Operator):
             totflags |= common
             pdata = pdata.copy()
             pdata[totflags != 0] = nullquat
-            tstop = MPI.Wtime()
-            if self._verbosity > 0 and tod.mpicomm.rank == 0:
-                print(
-                    "{} flags initialized in {:.2f}s".format(det, tstop - tstart),
-                    flush=True,
-                )
+            tm.stop()
+            if self._verbosity > 0 and rank == 0:
+                msg = "initialize flags for detector {}".format(det)
+                tm.report(msg)
 
-        tstart = MPI.Wtime()
+        tm.clear()
+        tm.start()
         theta, phi, psi = qa.to_angles(pdata)
         # Is the psi angle in Pxx or Dxx? Pxx will include the
         # detector polarization angle, Dxx will not.
         if self._dxx:
             psi -= psipol
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print(
-                "{} pointing angles computed in {:.2f}s".format(det, tstop - tstart),
-                flush=True,
-            )
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "compute pointing angles for detector {}".format(det)
+            tm.report(msg)
         return theta, phi, psi
 
     def get_buffer(self, theta, phi, psi, tod, nsamp, det):
+        """Pack the pointing into the conviqt pointing array
         """
-        Pack the pointing into the conviqt pointing array
-        """
-        tstart = MPI.Wtime()
+        rank = 0
+        if tod.comm is not None:
+            rank = tod.comm.rank
+        tm = Timer()
+        tm.start()
         pnt = conviqt.Pointing(nsamp)
         arr = pnt.data()
         arr[:, 0] = phi
         arr[:, 1] = theta
         arr[:, 2] = psi
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print(
-                "{} input array packed in {:.2f}s".format(det, tstop - tstart),
-                flush=True,
-            )
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "pack input array for detector {}".format(det)
+            tm.report(msg)
         return pnt
 
     def convolve(self, sky, beam, detector, comm, pnt, tod, nsamp, det):
-        tstart = MPI.Wtime()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        tm = Timer()
+        tm.start()
         convolver = conviqt.Convolver(
             sky,
             beam,
@@ -294,22 +303,22 @@ class OpSimConviqt(Operator):
             comm,
         )
         convolver.convolve(pnt, self._calibrate)
-        tstop = MPI.Wtime()
-        if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print("{} convolved in {:.2f}s".format(det, tstop - tstart), flush=True)
+        tm.stop()
+        if self._verbosity > 0 and rank == 0:
+            msg = "convolve detector {}".format(det)
+            tm.report(msg)
 
         # The pointer to the data will have changed during
         # the convolution call ...
 
-        tstart = MPI.Wtime()
+        tm.clear()
+        tm.start()
         arr = pnt.data()
         convolved_data = arr[:, 3].astype(np.float64)
-        tstop = MPI.Wtime()
+        tm.stop()
         if self._verbosity > 0 and tod.mpicomm.rank == 0:
-            print(
-                "{} convolved data extracted in {:.2f}s".format(det, tstop - tstart),
-                flush=True,
-            )
+            msg = "extract convolved data for {}".format(det)
+            tm.report(msg)
 
         del convolver
 
