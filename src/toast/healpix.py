@@ -49,11 +49,11 @@ def ang2vec(theta, phi):
     healpix_ang2vec(intheta, inphi, vec)
     if len(vec) == 3:
         if (object_ndim(theta) == 1) or (object_ndim(phi) == 1):
-            return np.frombuffer(vec).reshape(1, 3)
+            return vec.array().reshape(1, 3)
         else:
-            return np.frombuffer(vec)
+            return vec.array()
     else:
-        return np.frombuffer(vec).reshape((-1, 3))
+        return vec.array().reshape((-1, 3))
 
 
 def vec2ang(vec):
@@ -76,11 +76,11 @@ def vec2ang(vec):
     healpix_vec2ang(invec, theta, phi)
     if len(vec) == 3:
         if object_ndim(vec) == 2:
-            return (np.frombuffer(theta), np.frombuffer(theta))
+            return (theta.array(), phi.array())
         else:
             return (theta[0], phi[0])
     else:
-        return (np.frombuffer(theta), np.frombuffer(theta))
+        return (theta.array(), phi.array())
 
 
 def vecs2angpa(vec):
@@ -111,11 +111,11 @@ def vecs2angpa(vec):
     healpix_vecs2angpa(invec, theta, phi, pa)
     if len(vec) == 6:
         if object_ndim(vec) == 2:
-            return (np.frombuffer(theta), np.frombuffer(theta), np.frombuffer(pa))
+            return (theta.array(), phi.array(), pa.array())
         else:
             return (theta[0], phi[0], pa[0])
     else:
-        return (np.frombuffer(theta), np.frombuffer(theta), np.frombuffer(pa))
+        return (theta.array(), phi.array(), pa.array())
 
 
 class Pixels(object):
@@ -178,11 +178,11 @@ class Pixels(object):
         self.hpix.ang2nest(intheta, inphi, pix)
         if nphi == 1:
             if (object_ndim(theta) == 1) or (object_ndim(phi) == 1):
-                return np.frombuffer(pix)
+                return pix.array()
             else:
                 return pix[0]
         else:
-            return np.frombuffer(pix)
+            return pix.array()
 
     def ang2ring(self, theta, phi):
         """Convert spherical coordinates to pixels in RING ordering.
@@ -210,11 +210,11 @@ class Pixels(object):
         self.hpix.ang2ring(intheta, inphi, pix)
         if nphi == 1:
             if (object_ndim(theta) == 1) or (object_ndim(phi) == 1):
-                return np.frombuffer(pix)
+                return pix.array()
             else:
                 return pix[0]
         else:
-            return np.frombuffer(pix)
+            return pix.array()
 
     def vec2nest(self, vec):
         """Convert unit vectors to pixels in NESTED ordering.
@@ -235,11 +235,11 @@ class Pixels(object):
         self.hpix.vec2nest(invec, pix)
         if len(vec) == 3:
             if object_ndim(vec) == 2:
-                return np.frombuffer(pix)
+                return pix.array()
             else:
                 return pix[0]
         else:
-            return np.frombuffer(pix)
+            return pix.array()
 
     def vec2ring(self, vec):
         """Convert unit vectors to pixels in RING ordering.
@@ -260,11 +260,11 @@ class Pixels(object):
         self.hpix.vec2ring(invec, pix)
         if len(vec) == 3:
             if object_ndim(vec) == 2:
-                return np.frombuffer(pix)
+                return pix.array()
             else:
                 return pix[0]
         else:
-            return np.frombuffer(pix)
+            return pix.array()
 
     def ring2nest(self, ringpix):
         """Convert RING ordered pixel numbers into NESTED ordering.
@@ -282,11 +282,11 @@ class Pixels(object):
         self.hpix.ring2nest(inpix, out)
         if n == 1:
             if object_ndim(ringpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()
 
     def nest2ring(self, nestpix):
         """Convert NESTED ordered pixel numbers into RING ordering.
@@ -304,11 +304,11 @@ class Pixels(object):
         self.hpix.ring2nest(inpix, out)
         if n == 1:
             if object_ndim(nestpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()
 
     def degrade_ring(self, factor, inpix):
         """Degrade RING ordered pixel numbers.
@@ -330,11 +330,11 @@ class Pixels(object):
         self.hpix.degrade_ring(factor, inp, out)
         if n == 1:
             if object_ndim(inpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()
 
     def degrade_nest(self, factor, inpix):
         """Degrade NESTED ordered pixel numbers.
@@ -356,11 +356,11 @@ class Pixels(object):
         self.hpix.degrade_nest(factor, inp, out)
         if n == 1:
             if object_ndim(inpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()
 
     def upgrade_ring(self, factor, inpix):
         """Upgrade RING ordered pixel numbers.
@@ -383,11 +383,11 @@ class Pixels(object):
         self.hpix.upgrade_ring(factor, inp, out)
         if n == 1:
             if object_ndim(inpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()
 
     def upgrade_nest(self, factor, inpix):
         """Upgrade RING ordered pixel numbers.
@@ -410,8 +410,8 @@ class Pixels(object):
         self.hpix.upgrade_nest(factor, inp, out)
         if n == 1:
             if object_ndim(inpix) == 1:
-                return np.frombuffer(out)
+                return out.array()
             else:
                 return out[0]
         else:
-            return np.frombuffer(out)
+            return out.array()

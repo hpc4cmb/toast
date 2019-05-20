@@ -1,31 +1,27 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-from .mpi import MPITestCase
-
-import sys
 import os
+
 import numpy as np
 
 import healpy as hp
 
-from ..dist import Comm
+from .mpi import MPITestCase
+
+from ..mpi import MPI
 
 from .. import healpix as hpx
 
 from .. import qarray as qa
 
-from ..tod.sim_tod import (slew_precession_axis, satellite_scanning,
-    TODSatellite)
+from ..tod.sim_tod import slew_precession_axis, satellite_scanning, TODSatellite
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 
 class TODSatelliteTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -33,7 +29,7 @@ class TODSatelliteTest(MPITestCase):
         # Create 366 observations, divided evenly between groups
         self.nobs = 366
         opg = self.nobs
-        if self.comm.size >= 2:
+        if (self.comm is not None) and (self.comm.size >= 2):
             opg = self.nobs // 2
         self.data = create_distdata(self.comm, obs_per_group=opg)
 
@@ -41,8 +37,9 @@ class TODSatelliteTest(MPITestCase):
         self.ndet = 1
         self.rate = 1.0 / 60.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate)
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet, samplerate=self.rate
+        )
 
         # Scan strategy.
         # Choose scan parameters so that we return to the origin.
@@ -62,19 +59,20 @@ class TODSatelliteTest(MPITestCase):
         # final observation.
 
         daysamps = 24 * 60
-        #goodsamps = 24 * 60
+        # goodsamps = 24 * 60
         goodsamps = 22 * 60
         badsamps = daysamps - goodsamps
 
         # Populate the observations
-
         for oid, obs in enumerate(self.data.obs):
             firstsamp = oid * daysamps + badsamps
 
             # On the last observation, simulate one extra sample so we get
             # back to the starting point.
             nsim = goodsamps
-            if (oid == len(self.data.obs) - 1) and (self.data.comm.group == 1):
+            if (oid == len(self.data.obs) - 1) and (
+                self.data.comm.group == self.data.comm.ngroups - 1
+            ):
                 nsim += 1
 
             tod = TODSatellite(
@@ -88,28 +86,30 @@ class TODSatelliteTest(MPITestCase):
                 spinperiod=spinperiod,
                 spinangle=spinangle,
                 precperiod=precperiod,
-                precangle=precangle
+                precangle=precangle,
             )
 
-            qprec = np.empty(4 * tod.local_samples[1],
-                dtype=np.float64).reshape((-1, 4))
+            qprec = np.empty(4 * tod.local_samples[1], dtype=np.float64).reshape(
+                (-1, 4)
+            )
 
-            slew_precession_axis(qprec,
+            slew_precession_axis(
+                qprec,
                 firstsamp=(firstsamp + tod.local_samples[0]),
-                samplerate=self.rate, degday=degday)
+                samplerate=self.rate,
+                degday=degday,
+            )
 
             tod.set_prec_axis(qprec=qprec)
 
             obs["tod"] = tod
 
-
     def tearDown(self):
         pass
 
-
     def test_precession(self):
         # Test precession axis slew
-        slewrate = 1.0 / (24.0*3600.0)
+        slewrate = 1.0 / (24.0 * 3600.0)
         nobs = 366
         degday = 360.0 / nobs
 
@@ -118,8 +118,7 @@ class TODSatelliteTest(MPITestCase):
 
         qprec = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
 
-        slew_precession_axis(qprec, firstsamp=0,
-            samplerate=slewrate, degday=degday)
+        slew_precession_axis(qprec, firstsamp=0, samplerate=slewrate, degday=degday)
 
         zaxis = np.array([0.0, 0.0, 1.0])
 
@@ -128,7 +127,6 @@ class TODSatelliteTest(MPITestCase):
         dotprod = v[0][0] * v[-1][0] + v[0][1] * v[-1][1] + v[0][2] * v[-1][2]
         np.testing.assert_almost_equal(dotprod, 1.0)
         return
-
 
     def test_phase(self):
         # Choose scan parameters so that we return to the origin.
@@ -145,13 +143,13 @@ class TODSatelliteTest(MPITestCase):
 
         daysamps = 24 * 60
         goodsamps = 24 * 60
-        #goodsamps = 22 * 60
+        # goodsamps = 22 * 60
         badsamps = daysamps - goodsamps
 
         # hit map
         nside = 32
         pix = hpx.Pixels(nside)
-        pdata = np.zeros(12*nside*nside, dtype=np.int32)
+        pdata = np.zeros(12 * nside * nside, dtype=np.int32)
 
         # Only simulate 22 out of 24 hours per observation, in order to test
         # that the starting phase is propagated.  Put the "gap" at the start
@@ -172,27 +170,34 @@ class TODSatelliteTest(MPITestCase):
                 nsim += 1
 
             qprec = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
-            slew_precession_axis(qprec, firstsamp=firstsamp,
-                samplerate=samplerate, degday=degday)
+            slew_precession_axis(
+                qprec, firstsamp=firstsamp, samplerate=samplerate, degday=degday
+            )
 
             boresight = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
-            satellite_scanning(boresight, firstsamp=firstsamp,
-                samplerate=samplerate, qprec=qprec, spinperiod=spinperiod,
-                spinangle=spinangle, precperiod=precperiod, precangle=precangle)
+            satellite_scanning(
+                boresight,
+                firstsamp=firstsamp,
+                samplerate=samplerate,
+                qprec=qprec,
+                spinperiod=spinperiod,
+                spinangle=spinangle,
+                precperiod=precperiod,
+                precangle=precangle,
+            )
 
             v = qa.rotate(boresight, zaxis)
             p = pix.vec2ring(v)
             pdata[p] += 1
             vlast = v[-1]
 
-        if self.comm.rank == 0:
+        if self.data.comm.world_rank == 0:
             import matplotlib.pyplot as plt
-            hitsfile = os.path.join(self.outdir, 'tod_satellite_hits.fits')
-            if self.comm.rank == 0:
-                if os.path.isfile(hitsfile):
-                    os.remove(hitsfile)
-            hp.write_map(hitsfile, pdata, nest=False, dtype=np.int32)
 
+            hitsfile = os.path.join(self.outdir, "tod_satellite_hits.fits")
+            if os.path.isfile(hitsfile):
+                os.remove(hitsfile)
+            hp.write_map(hitsfile, pdata, nest=False, dtype=np.int32)
             outfile = "{}.png".format(hitsfile)
             hp.mollview(pdata, xsize=1600, nest=False)
             plt.savefig(outfile)
@@ -203,12 +208,11 @@ class TODSatelliteTest(MPITestCase):
         np.testing.assert_almost_equal(vlast[2], 0.0)
         return
 
-
     def test_todclass(self):
         # Hit map
         nside = 32
         pix = hpx.Pixels(nside)
-        pdata = np.zeros(12*nside*nside, dtype=np.int32)
+        pdata = np.zeros(12 * nside * nside, dtype=np.int32)
 
         # Compute the boresight hitmap
 
@@ -224,13 +228,17 @@ class TODSatelliteTest(MPITestCase):
             vlast = v[-1]
 
         allpdata = None
-        if self.comm.rank == 0:
-            allpdata = np.zeros_like(pdata)
-        self.comm.Reduce(pdata, allpdata, op=MPI.SUM, root=0)
+        if self.data.comm.comm_world is None:
+            allpdata = pdata
+        else:
+            if self.data.comm.world_rank == 0:
+                allpdata = np.zeros_like(pdata)
+            self.data.comm.comm_world.Reduce(pdata, allpdata, op=MPI.SUM, root=0)
 
-        if self.comm.rank == 0:
+        if self.data.comm.world_rank == 0:
             import matplotlib.pyplot as plt
-            hitsfile = os.path.join(self.outdir, 'tod_satellite_classhits.fits')
+
+            hitsfile = os.path.join(self.outdir, "tod_satellite_classhits.fits")
             if os.path.isfile(hitsfile):
                 os.remove(hitsfile)
             hp.write_map(hitsfile, allpdata, nest=False, dtype=np.int32)
@@ -242,12 +250,13 @@ class TODSatelliteTest(MPITestCase):
 
         # The last sample on the last process should be back to the origin
         lastpass = True
-        lastproc = (self.comm.size - 1)
-        if self.comm.rank == lastproc:
+        lastproc = self.data.comm.world_size - 1
+        if self.data.comm.world_rank == lastproc:
             lastpass = np.allclose(vlast[0], 0.0)
             lastpass = np.allclose(vlast[1], -1.0)
             lastpass = np.allclose(vlast[2], 0.0)
-        lastpass = self.comm.bcast(lastpass, root=lastproc)
+        if self.data.comm.comm_world is not None:
+            lastpass = self.data.comm.comm_world.bcast(lastpass, root=lastproc)
         self.assertTrue(lastpass)
 
         return

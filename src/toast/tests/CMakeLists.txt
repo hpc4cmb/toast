@@ -14,5 +14,6 @@ install(FILES
     fft.py
     tod.py
     intervals.py
+    tod_satellite.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

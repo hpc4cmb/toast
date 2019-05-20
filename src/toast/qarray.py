@@ -46,11 +46,11 @@ def inv(q):
     qa_inv(out)
     if len(out) == 4:
         if object_ndim(q) == 2:
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def amplitude(q):
@@ -69,11 +69,11 @@ def amplitude(q):
     qa_amplitude(qin, amp)
     if len(amp) == 1:
         if object_ndim(q) == 2:
-            return np.frombuffer(amp)
+            return amp.array()
         else:
             return float(amp[0])
     else:
-        return np.frombuffer(amp)
+        return amp.array()
 
 
 def norm(q):
@@ -92,11 +92,11 @@ def norm(q):
     qa_normalize(qin, nrm)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return np.frombuffer(nrm).reshape((1, 4))
+            return nrm.array().reshape((1, 4))
         else:
-            return np.frombuffer(nrm)
+            return nrm.array()
     else:
-        return np.frombuffer(nrm).reshape((-1, 4))
+        return nrm.array().reshape((-1, 4))
 
 
 def rotate(q, v):
@@ -126,11 +126,11 @@ def rotate(q, v):
     qa_rotate(qin, vin, out)
     if len(out) == 3:
         if (object_ndim(q) == 2) or (object_ndim(v) == 2):
-            return np.frombuffer(out).reshape(1, 3)
+            return out.array().reshape(1, 3)
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 3))
+        return out.array().reshape((-1, 3))
 
 
 def mult(p, q):
@@ -157,11 +157,11 @@ def mult(p, q):
     qa_mult(pin, qin, out)
     if len(out) == 4:
         if (object_ndim(p) == 2) or (object_ndim(q) == 2):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def slerp(targettime, time, q):
@@ -191,11 +191,11 @@ def slerp(targettime, time, q):
     qa_slerp(t, tgt, qin, out)
     if len(out) == 4:
         if object_ndim(targettime) == 1:
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def exp(q):
@@ -213,11 +213,11 @@ def exp(q):
     qa_exp(qin, out)
     if len(out) == 4:
         if object_ndim(q) == 2:
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def ln(q):
@@ -235,11 +235,11 @@ def ln(q):
     qa_ln(qin, out)
     if len(out) == 4:
         if object_ndim(q) == 2:
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def pow(q, pw):
@@ -259,11 +259,11 @@ def pow(q, pw):
     qa_pow(qin, pwin, out)
     if len(out) == 4:
         if (object_ndim(q) == 2) or (object_ndim(pw) == 1):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def rotation(axis, angle):
@@ -283,11 +283,11 @@ def rotation(axis, angle):
     qa_from_axisangle(axin, angin, out)
     if len(out) == 4:
         if (object_ndim(axis) == 2) or (object_ndim(angle) == 1):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def to_axisangle(q):
@@ -307,11 +307,11 @@ def to_axisangle(q):
     qa_to_axisangle(qin, ax, ang)
     if len(ax) == 3:
         if object_ndim(q) == 2:
-            return (np.frombuffer(ax).reshape((1, 3)), np.frombuffer(ang))
+            return (ax.array().reshape((1, 3)), ang.array())
         else:
-            return (np.frombuffer(ax), float(ang[0]))
+            return (ax.array(), float(ang[0]))
     else:
-        return (np.frombuffer(ax).reshape((-1, 3)), np.frombuffer(ang))
+        return (ax.array().reshape((-1, 3)), ang.array())
 
 
 def to_rotmat(q):
@@ -330,11 +330,11 @@ def to_rotmat(q):
     qa_to_rotmat(qin, out)
     if len(out) == 9:
         if object_ndim(q) == 2:
-            return np.frombuffer(out).reshape((1, 3, 3))
+            return out.array().reshape((1, 3, 3))
         else:
-            return np.frombuffer(out).reshape((3, 3))
+            return out.array().reshape((3, 3))
     else:
-        return np.frombuffer(out).reshape((-1, 3, 3))
+        return out.array().reshape((-1, 3, 3))
 
 
 def from_rotmat(rotmat):
@@ -353,11 +353,11 @@ def from_rotmat(rotmat):
     qa_from_rotmat(rot, out)
     if len(out) == 4:
         if object_ndim(rotmat) == 3:
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def from_vectors(v1, v2):
@@ -378,11 +378,11 @@ def from_vectors(v1, v2):
     qa_from_vectors(v1in, v2in, out)
     if len(out) == 4:
         if (object_ndim(v1) == 2) or (object_ndim(v2) == 2):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def from_angles(theta, phi, pa, IAU=False):
@@ -415,11 +415,11 @@ def from_angles(theta, phi, pa, IAU=False):
             or (object_ndim(phi) == 1)
             or (object_ndim(pa) == 1)
         ):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def to_angles(q, IAU=False):
@@ -446,10 +446,10 @@ def to_angles(q, IAU=False):
     qa_to_angles(qin, theta, phi, pa, IAU)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return (np.frombuffer(theta), np.frombuffer(phi), np.frombuffer(pa))
+            return (theta.array(), phi.array(), pa.array())
         else:
             return (float(theta[0]), float(phi[0]), float(pa[0]))
-    return (np.frombuffer(theta), np.frombuffer(phi), np.frombuffer(pa))
+    return (theta.array(), phi.array(), pa.array())
 
 
 def from_position(theta, phi):
@@ -473,11 +473,11 @@ def from_position(theta, phi):
     qa_from_position(thetain, phiin, out)
     if len(out) == 4:
         if (object_ndim(theta) == 1) or (object_ndim(phi) == 1):
-            return np.frombuffer(out).reshape((1, 4))
+            return out.array().reshape((1, 4))
         else:
-            return np.frombuffer(out)
+            return out.array()
     else:
-        return np.frombuffer(out).reshape((-1, 4))
+        return out.array().reshape((-1, 4))
 
 
 def to_position(q):
@@ -500,7 +500,7 @@ def to_position(q):
     qa_to_position(qin, theta, phi)
     if len(qin) == 4:
         if object_ndim(q) == 2:
-            return (np.frombuffer(theta), np.frombuffer(phi))
+            return (theta.array(), phi.array())
         else:
             return (float(theta[0]), float(phi[0]))
-    return (np.frombuffer(theta), np.frombuffer(phi))
+    return (theta.array(), phi.array())

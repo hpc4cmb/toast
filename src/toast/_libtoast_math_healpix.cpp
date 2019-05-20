@@ -321,7 +321,7 @@ void init_math_healpix(py::module & m) {
              }
              double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
              int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
-             self.vec2nest(nvec, rawvec, rawpix);
+             self.vec2ring(nvec, rawvec, rawpix);
              return;
          }, py::arg("vec"), py::arg(
              "pix"), R"(

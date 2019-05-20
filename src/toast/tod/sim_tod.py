@@ -1,12 +1,9 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
-import os
-
 import numpy as np
+
 from scipy.constants import degree
 
 import healpy as hp
@@ -17,15 +14,16 @@ except:
     ephem = None
 
 from .. import qarray as qa
-from .. import timing as timing
 
-from ..healpix import ang2vec, vec2ang
-from .tod import TOD
+from ..timing import function_timer, Timer
+
 from .interval import Interval
-from .noise import Noise
-from .pointing_math import (quat_equ2ecl, quat_equ2gal, quat_ecl2gal)
 
-from ..op import Operator
+from ..healpix import ang2vec
+
+from .tod import TOD
+
+from .pointing_math import quat_equ2ecl, quat_equ2gal, quat_ecl2gal
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -35,9 +33,9 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 tod_buffer_length = 1048576
 
 
+@function_timer
 def slew_precession_axis(result, firstsamp=0, samplerate=100.0, degday=1.0):
-    """
-    Generate quaternions for constantly slewing precession axis.
+    """Generate quaternions for constantly slewing precession axis.
 
     This constructs quaternions which rotates the Z coordinate axis
     to the X/Y plane, and then slowly rotates this.  This can be used
@@ -52,13 +50,12 @@ def slew_precession_axis(result, firstsamp=0, samplerate=100.0, degday=1.0):
         degday (float): The rotation rate in degrees per day.
 
     """
-    autotimer = timing.auto_timer()
     zaxis = np.array([0.0, 0.0, 1.0])
 
     # this is the increment in radians per sample
     angincr = degday * (np.pi / 180.0) / (24.0 * 3600.0 * samplerate)
 
-    if (result.shape[1] != 4):
+    if result.shape[1] != 4:
         raise RuntimeError("Result array has wrong dimensions")
 
     nsim = result.shape[0]
@@ -78,28 +75,37 @@ def slew_precession_axis(result, firstsamp=0, samplerate=100.0, degday=1.0):
         satang = np.arange(buf_n, dtype=np.float64)
         satang *= angincr
         satang += angincr * (buf_off + firstsamp)
-        #satang += angincr * firstsamp + (np.pi / 2)
+        # satang += angincr * firstsamp + (np.pi / 2)
 
         cang = np.cos(satang)
         sang = np.sin(satang)
 
         # this is the time-varying rotation axis
-        sataxis = np.concatenate((cang.reshape(-1, 1), sang.reshape(-1, 1),
-                                  np.zeros((buf_n, 1))), axis=1)
+        sataxis = np.concatenate(
+            (cang.reshape(-1, 1), sang.reshape(-1, 1), np.zeros((buf_n, 1))), axis=1
+        )
 
-        result[bslice,:] = qa.from_vectors(\
-            np.tile(zaxis, buf_n).reshape(-1, 3), sataxis)
+        result[bslice, :] = qa.from_vectors(
+            np.tile(zaxis, buf_n).reshape(-1, 3), sataxis
+        )
 
         buf_off += buf_n
 
     return
 
 
-def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
-                       spinperiod=1.0, spinangle=85.0, precperiod=0.0,
-                       precangle=0.0):
-    """
-    Generate boresight quaternions for a generic satellite.
+@function_timer
+def satellite_scanning(
+    result,
+    firstsamp=0,
+    samplerate=100.0,
+    qprec=None,
+    spinperiod=1.0,
+    spinangle=85.0,
+    precperiod=0.0,
+    precangle=0.0,
+):
+    """Generate boresight quaternions for a generic satellite.
 
     Given scan strategy parameters and the relevant angles
     and rates, generate an array of quaternions representing
@@ -129,7 +135,6 @@ def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
             of the spin axis from the precession axis.
 
     """
-    autotimer = timing.auto_timer()
     if spinperiod > 0.0:
         spinrate = 1.0 / (60.0 * spinperiod)
     else:
@@ -142,11 +147,11 @@ def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
         precrate = 0.0
     precangle = precangle * np.pi / 180.0
 
-    xaxis = np.array([1,0,0], dtype=np.float64)
-    yaxis = np.array([0,1,0], dtype=np.float64)
-    zaxis = np.array([0,0,1], dtype=np.float64)
+    xaxis = np.array([1, 0, 0], dtype=np.float64)
+    yaxis = np.array([0, 1, 0], dtype=np.float64)
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
 
-    if (result.shape[1] != 4):
+    if result.shape[1] != 4:
         raise RuntimeError("Result array has wrong dimensions")
     nsim = result.shape[0]
 
@@ -165,33 +170,34 @@ def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
         if qprec is None:
             # in this case, we just have a fixed precession axis, pointing
             # along the ecliptic X axis.
-            satrot[:,:] = np.tile(
-                qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi/2),
-                buf_n).reshape(-1, 4)
+            satrot[:, :] = np.tile(
+                qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi / 2), buf_n
+            ).reshape(-1, 4)
         elif qprec.flatten().shape[0] == 4:
             # we have a fixed precession axis.
-            satrot[:,:] = np.tile(qprec.flatten(), buf_n).reshape(-1,4)
+            satrot[:, :] = np.tile(qprec.flatten(), buf_n).reshape(-1, 4)
         else:
             # we have full vector of quaternions
-            satrot[:,:] = qprec[bslice,:]
+            satrot[:, :] = qprec[bslice, :]
 
         # Time-varying rotation about precession axis.
         # Increment per sample is
         # (2pi radians) X (precrate) / (samplerate)
         # Construct quaternion from axis / angle form.
 
-        #print("satrot = ", satrot[-1])
+        # print("satrot = ", satrot[-1])
 
         precang = np.arange(buf_n, dtype=np.float64)
         precang += float(buf_off + firstsamp)
         precang *= 2.0 * np.pi * precrate / samplerate
-        #print("precang = ", precang[-1])
+        # print("precang = ", precang[-1])
 
         cang = np.cos(0.5 * precang)
         sang = np.sin(0.5 * precang)
 
-        precaxis = np.multiply(sang.reshape(-1, 1),
-                               np.tile(zaxis, buf_n).reshape(-1, 3))
+        precaxis = np.multiply(
+            sang.reshape(-1, 1), np.tile(zaxis, buf_n).reshape(-1, 3)
+        )
 
         precrot = np.concatenate((precaxis, cang.reshape(-1, 1)), axis=1)
 
@@ -210,8 +216,9 @@ def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
         cang = np.cos(0.5 * spinang)
         sang = np.sin(0.5 * spinang)
 
-        spinaxis = np.multiply(sang.reshape(-1, 1),
-                               np.tile(zaxis, buf_n).reshape(-1, 3))
+        spinaxis = np.multiply(
+            sang.reshape(-1, 1), np.tile(zaxis, buf_n).reshape(-1, 3)
+        )
 
         spinrot = np.concatenate((spinaxis, cang.reshape(-1, 1)), axis=1)
 
@@ -221,16 +228,16 @@ def satellite_scanning(result, firstsamp=0, samplerate=100.0, qprec=None,
 
         # compose final rotation
 
-        result[bslice,:] = qa.mult(satrot, qa.mult(precrot, qa.mult(precopen,
-                                   qa.mult(spinrot, spinopen))))
+        result[bslice, :] = qa.mult(
+            satrot, qa.mult(precrot, qa.mult(precopen, qa.mult(spinrot, spinopen)))
+        )
         buf_off += buf_n
 
     return result
 
 
 class TODHpixSpiral(TOD):
-    """
-    Provide a simple generator of fake detector pointing.
+    """Provide a simple generator of fake detector pointing.
 
     Detector focalplane offsets are specified as a dictionary of 4-element
     ndarrays.  The boresight pointing is a simple looping over HealPix
@@ -238,7 +245,7 @@ class TODHpixSpiral(TOD):
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data are distributed.
+            data are distributed (or None).
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
         samples (int):  The total number of samples.
@@ -248,15 +255,22 @@ class TODHpixSpiral(TOD):
         Other keyword arguments are passed to the parent class constructor.
 
     """
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0,
-                 rate=100.0, nside=512, **kwargs):
+
+    def __init__(
+        self,
+        mpicomm,
+        detectors,
+        samples,
+        firsttime=0.0,
+        rate=100.0,
+        nside=512,
+        **kwargs
+    ):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
 
-        props = {
-            "nside": nside,
-        }
+        props = {"nside": nside}
         super().__init__(mpicomm, self._detlist, samples, meta=props, **kwargs)
 
         self._firsttime = firsttime
@@ -265,7 +279,7 @@ class TODHpixSpiral(TOD):
         self._npix = 12 * self._nside * self._nside
 
     def detoffset(self):
-        return { d : np.asarray(self._fp[d]) for d in self._detlist }
+        return {d: np.asarray(self._fp[d]) for d in self._detlist}
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
@@ -293,24 +307,26 @@ class TODHpixSpiral(TOD):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False,
-                             dtype=np.float64)
+        stamps = np.linspace(
+            start_time, stop_time, num=n, endpoint=False, dtype=np.float64
+        )
         return stamps
 
     def _put_times(self, start, stamps):
         raise RuntimeError("cannot write timestamps to simulated data streams")
         return
 
+    @function_timer
     def _get_boresight(self, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         # compute the absolute sample offset
         start_abs = self.local_samples[0] + start
 
         # pixel offset
         start_pix = int(start_abs % self._npix)
         pixels = np.linspace(start_pix, start_pix + n, num=n, endpoint=False)
-        pixels = np.mod(pixels,
-                        self._npix*np.ones(n, dtype=np.int64)).astype(np.int64)
+        pixels = np.mod(pixels, self._npix * np.ones(n, dtype=np.int64)).astype(
+            np.int64
+        )
 
         # the result of this is normalized
         x, y, z = hp.pix2vec(self._nside, pixels, nest=False)
@@ -345,8 +361,8 @@ class TODHpixSpiral(TOD):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
 
+    @function_timer
     def _get_pntg(self, detector, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         detquat = np.asarray(self._fp[detector])
         boresight = self._get_boresight(start, n)
         data = qa.mult(boresight, detquat)
@@ -372,15 +388,14 @@ class TODHpixSpiral(TOD):
 
 
 class TODSatellite(TOD):
-    """
-    Provide a simple generator of satellite detector pointing.
+    """Provide a simple generator of satellite detector pointing.
 
     Detector focalplane offsets are specified as a dictionary of 4-element
     ndarrays.  The boresight pointing is a generic 2-angle model.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data are distributed.
+            data are distributed (or None).
         detectors (dictionary): each key is the detector name, and each value
             is a quaternion tuple.
         samples (int):  The total number of samples.
@@ -401,9 +416,22 @@ class TODSatellite(TOD):
         All other keyword arguments are passed to the parent constructor.
 
     """
-    def __init__(self, mpicomm, detectors, samples, firstsamp=0, firsttime=0.0,
-        rate=100.0, spinperiod=1.0, spinangle=85.0, precperiod=0.0,
-        precangle=0.0, coord="E", **kwargs):
+
+    def __init__(
+        self,
+        mpicomm,
+        detectors,
+        samples,
+        firstsamp=0,
+        firsttime=0.0,
+        rate=100.0,
+        spinperiod=1.0,
+        spinangle=85.0,
+        precperiod=0.0,
+        precangle=0.0,
+        coord="E",
+        **kwargs
+    ):
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -422,7 +450,7 @@ class TODSatellite(TOD):
             "spinperiod": spinperiod,
             "spinangle": spinangle,
             "precperiod": precperiod,
-            "precangle": precangle
+            "precangle": precangle,
         }
 
         # call base class constructor to distribute data
@@ -435,8 +463,7 @@ class TODSatellite(TOD):
         self._earthspeed = self._radpersec * self._AU
 
     def set_prec_axis(self, qprec=None):
-        """
-        Set the fixed or time-varying precession axis.
+        """Set the fixed or time-varying precession axis.
 
         This function sets the precession axis for the locally assigned samples.
         It also triggers the generation and caching of the boresight pointing.
@@ -450,21 +477,25 @@ class TODSatellite(TOD):
                 precession axis.  If a 2D array of shape
                 (local samples, 4) is given, this is the time-varying
                 rotation of the Z axis to the precession axis.
+
         """
         if qprec is not None:
-            if (qprec.shape != (4,)) and \
-               (qprec.shape != (self.local_samples[1], 4)):
-                raise RuntimeError(
-                    "precession quaternion has incorrect dimensions")
+            if (qprec.shape != (4,)) and (qprec.shape != (self.local_samples[1], 4)):
+                raise RuntimeError("precession quaternion has incorrect dimensions")
 
         # generate and cache the boresight pointing
         nsim = self.local_samples[1]
-        self._boresight = np.empty(4*nsim, dtype=np.float64).reshape(-1, 4)
-        satellite_scanning(self._boresight,
+        self._boresight = np.empty(4 * nsim, dtype=np.float64).reshape(-1, 4)
+        satellite_scanning(
+            self._boresight,
             firstsamp=(self._firstsamp + self.local_samples[0]),
-            qprec=qprec, samplerate=self._rate, spinperiod=self._spinperiod,
-            spinangle=self._spinangle, precperiod=self._precperiod,
-            precangle=self._precangle)
+            qprec=qprec,
+            samplerate=self._rate,
+            spinperiod=self._spinperiod,
+            spinangle=self._spinangle,
+            precperiod=self._precperiod,
+            precangle=self._precangle,
+        )
 
         # Satellite pointing is expressed normally in Ecliptic coordinates.
         # convert coordinate systems in the boresight frame if necessary.
@@ -476,19 +507,18 @@ class TODSatellite(TOD):
                 rot = qa.inv(quat_equ2ecl)
                 self._boresight = qa.mult(rot, self._boresight)
             else:
-                raise RuntimeError(
-                    "Unknown coordinate system: {}".format(self._coord))
+                raise RuntimeError("Unknown coordinate system: {}".format(self._coord))
         return
 
-
     def detoffset(self):
-        return {d : np.asarray(self._fp[d]) for d in self._detlist}
+        return {d: np.asarray(self._fp[d]) for d in self._detlist}
 
     def _get_boresight(self, start, n):
         if self._boresight is None:
-            raise RuntimeError("you must set the precession axis before "
-                               "reading pointing")
-        return self._boresight[start:start+n]
+            raise RuntimeError(
+                "you must set the precession axis before " "reading pointing"
+            )
+        return self._boresight[start : start + n]
 
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
@@ -520,8 +550,9 @@ class TODSatellite(TOD):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False,
-                             dtype=np.float64)
+        stamps = np.linspace(
+            start_time, stop_time, num=n, endpoint=False, dtype=np.float64
+        )
         return stamps
 
     def _put_times(self, start, stamps):
@@ -560,7 +591,7 @@ class TODSatellite(TOD):
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
-        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5 * np.pi)
         x = self._earthspeed * np.cos(ang)
         y = self._earthspeed * np.sin(ang)
         z = np.zeros_like(x)
@@ -572,8 +603,7 @@ class TODSatellite(TOD):
 
 
 class TODGround(TOD):
-    """
-    Provide a simple generator of ground-based detector pointing.
+    """Provide a simple generator of ground-based detector pointing.
 
     Detector focalplane offsets are specified as a dictionary of
     4-element ndarrays.  The boresight pointing is a generic
@@ -581,7 +611,7 @@ class TODGround(TOD):
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data is distributed.
+            data is distributed (or None).
         detectors (dictionary): each key is the detector name, and each
             value is a quaternion tuple.
         samples (int):  The total number of samples.
@@ -608,6 +638,7 @@ class TODGround(TOD):
         report_timing (bool):  Report the time spent simulating the scan
             and translating the pointing.
         All other keyword arguments are passed to the parent constructor.
+
     """
 
     TURNAROUND = 1
@@ -618,38 +649,62 @@ class TODGround(TOD):
     SUN_UP = 8
     SUN_CLOSE = 16
 
-    def __init__(self, mpicomm, detectors, samples, firsttime=0.0, rate=100.0,
-                 site_lon=0, site_lat=0, site_alt=0, azmin=0, azmax=0, el=0,
-                 scanrate=1, scan_accel=0.1,
-                 CES_start=None, CES_stop=None, el_min=0, sun_angle_min=90,
-                 sampsizes=None, sampbreaks=None, coord="C",
-                 report_timing=True, **kwargs):
-        autotimer = timing.auto_timer(type(self).__name__)
-
+    @function_timer
+    def __init__(
+        self,
+        mpicomm,
+        detectors,
+        samples,
+        firsttime=0.0,
+        rate=100.0,
+        site_lon=0,
+        site_lat=0,
+        site_alt=0,
+        azmin=0,
+        azmax=0,
+        el=0,
+        scanrate=1,
+        scan_accel=0.1,
+        CES_start=None,
+        CES_stop=None,
+        el_min=0,
+        sun_angle_min=90,
+        sampsizes=None,
+        sampbreaks=None,
+        coord="C",
+        report_timing=True,
+        **kwargs
+    ):
         if samples < 1:
             raise RuntimeError(
                 "TODGround must be instantiated with a positive number of "
-                "samples, not samples == {}".format(samples))
+                "samples, not samples == {}".format(samples)
+            )
 
         if ephem is None:
-            raise RuntimeError("Cannot instantiate a TODGround object "
-                               "without pyephem.")
+            raise RuntimeError(
+                "Cannot instantiate a TODGround object " "without pyephem."
+            )
 
         if sampsizes is not None or sampbreaks is not None:
-            raise RuntimeError("TODGround will synthesize the sizes to match "
-                               "the subscans.")
+            raise RuntimeError(
+                "TODGround will synthesize the sizes to match " "the subscans."
+            )
 
         if CES_start is None:
             CES_start = firsttime
         elif firsttime < CES_start:
-            raise RuntimeError("TODGround: firsttime < CES_start: {} < {}"
-                               "".format(firsttime, CES_start))
+            raise RuntimeError(
+                "TODGround: firsttime < CES_start: {} < {}"
+                "".format(firsttime, CES_start)
+            )
         lasttime = firsttime + samples / rate
         if CES_stop is None:
             CES_stop = lasttime
         elif lasttime > CES_stop:
-            raise RuntimeError("TODGround: lasttime > CES_stop: {} > {}"
-                               "".format(lasttime, CES_stop))
+            raise RuntimeError(
+                "TODGround: lasttime > CES_stop: {} > {}" "".format(lasttime, CES_stop)
+            )
 
         self._firsttime = firsttime
         self._lasttime = lasttime
@@ -660,8 +715,7 @@ class TODGround(TOD):
         self._azmin = azmin * degree
         self._azmax = azmax * degree
         if el < 1 or el > 89:
-            raise RuntimeError(
-                "Impossible CES at {:.2f} degrees".format(el))
+            raise RuntimeError("Impossible CES at {:.2f} degrees".format(el))
         self._el = el * degree
         self._scanrate = scanrate * degree
         self._scan_accel = scan_accel * degree
@@ -677,9 +731,9 @@ class TODGround(TOD):
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
         self._observer.lat = self._site_lat
-        self._observer.elevation = self._site_alt # In meters
-        self._observer.epoch = ephem.J2000 # "2000"
-        #self._observer.epoch = -9786 # EOD
+        self._observer.elevation = self._site_alt  # In meters
+        self._observer.epoch = ephem.J2000  # "2000"
+        # self._observer.epoch = -9786 # EOD
         self._observer.compute_pressure()
 
         self._min_az = None
@@ -694,49 +748,55 @@ class TODGround(TOD):
 
         # Set the boresight pointing based on the given scan parameters
 
+        tm = Timer()
         if self._report_timing:
-            mpicomm.Barrier()
-            tstart = MPI.Wtime()
+            if mpicomm is not None:
+                mpicomm.Barrier()
+            tm.start()
 
         sizes, starts = self.simulate_scan(samples)
 
         if self._report_timing:
-            mpicomm.Barrier()
-            tstop = MPI.Wtime()
-            if mpicomm.rank == 0 and tstop-tstart > 1:
-                print("TODGround: Simulated scan in {:.2f} s"
-                      "".format(tstop - tstart), flush=True)
-            tstart = tstop
+            if mpicomm is not None:
+                mpicomm.Barrier()
+            tm.stop()
+            if (mpicomm is None) or (mpicomm.rank == 0):
+                tm.report("TODGround: simulate scan")
+            tm.clear()
+            tm.start()
 
         # Create a list of subscans that excludes the turnarounds.
         # All processes in the group still have all samples.
 
         self.subscans = []
-        self._subscan_min_length = 10 # in samples
+        self._subscan_min_length = 10  # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
-            if istop-istart < self._subscan_min_length:
+            if istop - istart < self._subscan_min_length:
                 self._commonflags[istart:istop] |= self.TURNAROUND
                 continue
             start = self._firsttime + istart / self._rate
             stop = self._firsttime + istop / self._rate
             self.subscans.append(
-                Interval(start=start, stop=stop, first=istart, last=istop-1))
+                Interval(start=start, stop=stop, first=istart, last=istop - 1)
+            )
 
         self._commonflags[istop:] |= self.TURNAROUND
 
         if np.sum((self._commonflags & self.TURNAROUND) == 0) == 0:
             raise RuntimeError(
-                'The entire TOD is flagged as turnaround. Samplerate too low '
-                '({} Hz) or scanrate too high ({} deg/s)?'
-                ''.format(rate, scanrate))
+                "The entire TOD is flagged as turnaround. Samplerate too low "
+                "({} Hz) or scanrate too high ({} deg/s)?"
+                "".format(rate, scanrate)
+            )
 
         if self._report_timing:
-            mpicomm.Barrier()
-            tstop = MPI.Wtime()
-            if mpicomm.rank == 0 and tstop-tstart > 1:
-                print("TODGround: Listed valid intervals in {:.2f} s"
-                      "".format(tstop - tstart), flush=True)
-            tstart = tstop
+            if mpicomm is not None:
+                mpicomm.Barrier()
+            tm.stop()
+            if (mpicomm is None) or (mpicomm.rank == 0):
+                tm.report("TODGround: list valid intervals")
+            tm.clear()
+            tm.start()
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -753,10 +813,17 @@ class TODGround(TOD):
             "scanrate": scanrate,
             "scan_accel": scan_accel,
             "el_min": el_min,
-            "sun_angle_min": sun_angle_min
+            "sun_angle_min": sun_angle_min,
         }
-        super().__init__(mpicomm, self._detlist, samples, sampsizes=[samples],
-                         sampbreaks=None, meta=props, **kwargs)
+        super().__init__(
+            mpicomm,
+            self._detlist,
+            samples,
+            sampsizes=[samples],
+            sampbreaks=None,
+            meta=props,
+            **kwargs
+        )
 
         self._AU = 149597870.7
         self._radperday = 0.01720209895
@@ -765,27 +832,27 @@ class TODGround(TOD):
         self._earthspeed = self._radpersec * self._AU
 
         if self._report_timing:
-            mpicomm.Barrier()
-            tstop = MPI.Wtime()
-            if mpicomm.rank == 0 and tstop-tstart > 1:
-                print("TODGround: Called parent constructor in {:.2f} s"
-                      "".format(tstop - tstart), flush=True)
-            tstart = tstop
+            if mpicomm is not None:
+                mpicomm.Barrier()
+            tm.stop()
+            if (mpicomm is None) or (mpicomm.rank == 0):
+                tm.report("TODGround: call base class constructor")
+            tm.clear()
+            tm.start()
 
         self.translate_pointing()
 
         self.crop_vectors()
 
         if self._report_timing:
-            mpicomm.Barrier()
-            tstop = MPI.Wtime()
-            if mpicomm.rank == 0 and tstop-tstart > 1:
-                print("TODGround: Translated scan pointing in {:.2f} s"
-                      "".format(tstop - tstart), flush=True)
+            if mpicomm is not None:
+                mpicomm.Barrier()
+            tm.stop()
+            if (mpicomm is None) or (mpicomm.rank == 0):
+                tm.report("TODGround: translate scan pointing")
 
+    @function_timer
     def __del__(self):
-        autotimer = timing.auto_timer(type(self).__name__)
-
         try:
             del self._boresight_azel
         except:
@@ -811,7 +878,7 @@ class TODGround(TOD):
         """
         Convert TOAST UTC time stamp to Julian date
         """
-        return t / 86400. + 2440587.5
+        return t / 86400.0 + 2440587.5
 
     def to_DJD(self, t):
         """
@@ -828,12 +895,12 @@ class TODGround(TOD):
         """
         return self._min_az, self._max_az, self._min_el, self._max_el
 
+    @function_timer
     def simulate_scan(self, samples):
         # simulate the scanning with turnarounds. Regardless of firsttime,
         # we must simulate from the beginning of the CES.
         # Generate matching common flags.
         # Sets self._boresight.
-        autotimer = timing.auto_timer(type(self).__name__)
 
         self._az = np.zeros(samples)
         self._commonflags = np.zeros(samples, dtype=np.uint8)
@@ -842,18 +909,18 @@ class TODGround(TOD):
         lim_right = self._azmax
         if lim_right < lim_left:
             # We are scanning across the zero meridian
-            lim_right += 2*np.pi
+            lim_right += 2 * np.pi
         az_last = lim_left
-        scanrate = self._scanrate / self._rate # per sample, not per second
+        scanrate = self._scanrate / self._rate  # per sample, not per second
         # Modulate scan rate so that the rate on sky is constant
         scanrate /= np.cos(self._el)
-        scan_accel = self._scan_accel / self._rate # per sample, not per second
+        scan_accel = self._scan_accel / self._rate  # per sample, not per second
         scan_accel /= np.cos(self._el)
         tol = self._rate / 10
         # the index, i, is relative to the start of the tod object.
         # If CES begun before the TOD, first values of i are negative.
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
-        starts = [0] # Subscan start indices
+        starts = [0]  # Subscan start indices
         self._stable_starts = []
         self._stable_stops = []
         while True:
@@ -862,80 +929,89 @@ class TODGround(TOD):
             #
             self._stable_starts.append(i)
             dazdt = scanrate
-            nstep = min(int((lim_right-az_last) // dazdt) + 1, samples-i)
+            nstep = min(int((lim_right - az_last) // dazdt) + 1, samples - i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
             if ngood > 0:
-                self._commonflags[offset_out:offset_out+ngood] \
-                    |= self.LEFTRIGHT_SCAN
-                self._az[offset_out:offset_out+ngood] \
-                    = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
+                self._commonflags[
+                    offset_out : offset_out + ngood
+                ] |= self.LEFTRIGHT_SCAN
+                self._az[offset_out : offset_out + ngood] = (
+                    az_last + np.arange(offset_in, offset_in + ngood) * dazdt
+                )
             i += nstep
             self._stable_stops.append(i)
             if i == samples:
                 break
-            az_last += dazdt*nstep
+            az_last += dazdt * nstep
             #
             # Left to right, turnaround
             #
-            nstep_full = int((2*scanrate) // scan_accel) + 1
-            nstep = min(int(nstep_full), samples-i)
+            nstep_full = int((2 * scanrate) // scan_accel) + 1
+            nstep = min(int(nstep_full), samples - i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
             if ngood > 0:
-                self._commonflags[offset_out:offset_out+ngood] \
-                    |= self.LEFTRIGHT_TURNAROUND
-                ii = np.arange(offset_in, offset_in+ngood)
-                self._az[offset_out:offset_out+ngood] \
-                    = az_last + ii*dazdt - 0.5*scan_accel*ii**2
-                halfway = i + nstep_full//2
+                self._commonflags[
+                    offset_out : offset_out + ngood
+                ] |= self.LEFTRIGHT_TURNAROUND
+                ii = np.arange(offset_in, offset_in + ngood)
+                self._az[offset_out : offset_out + ngood] = (
+                    az_last + ii * dazdt - 0.5 * scan_accel * ii ** 2
+                )
+                halfway = i + nstep_full // 2
                 if halfway > 0 and halfway < samples:
                     starts.append(halfway)
             i += nstep
             if i == samples:
                 break
-            az_last += dazdt*nstep - .5*scan_accel*nstep**2
+            az_last += dazdt * nstep - 0.5 * scan_accel * nstep ** 2
             #
             # Right to left, fixed rate
             #
             self._stable_starts.append(i)
             dazdt = -scanrate
-            nstep = min(int((lim_left-az_last) // dazdt) + 1, samples-i)
+            nstep = min(int((lim_left - az_last) // dazdt) + 1, samples - i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
             if ngood > 0:
-                self._commonflags[offset_out:offset_out+ngood] \
-                    |= self.RIGHTLEFT_SCAN
-                self._az[offset_out:offset_out+ngood] \
-                    = az_last + np.arange(offset_in, offset_in+ngood)*dazdt
+                self._commonflags[
+                    offset_out : offset_out + ngood
+                ] |= self.RIGHTLEFT_SCAN
+                self._az[offset_out : offset_out + ngood] = (
+                    az_last + np.arange(offset_in, offset_in + ngood) * dazdt
+                )
             i += nstep
             self._stable_stops.append(i)
-            if i == samples: break
-            az_last += dazdt*nstep
+            if i == samples:
+                break
+            az_last += dazdt * nstep
             #
             # Right to left, turnaround
             #
-            nstep_full = int((2*scanrate) // scan_accel) + 1
-            nstep = min(int(nstep_full), samples-i)
+            nstep_full = int((2 * scanrate) // scan_accel) + 1
+            nstep = min(int(nstep_full), samples - i)
             offset_in = max(0, -i)
             offset_out = max(0, i)
             ngood = nstep - offset_in
             if ngood > 0:
-                self._commonflags[offset_out:offset_out+ngood] \
-                    |= self.RIGHTLEFT_TURNAROUND
-                ii = np.arange(offset_in, offset_in+ngood)
-                self._az[offset_out:offset_out+ngood] \
-                    = az_last + ii*dazdt + 0.5*scan_accel*ii**2
-                halfway = i + nstep_full//2
+                self._commonflags[
+                    offset_out : offset_out + ngood
+                ] |= self.RIGHTLEFT_TURNAROUND
+                ii = np.arange(offset_in, offset_in + ngood)
+                self._az[offset_out : offset_out + ngood] = (
+                    az_last + ii * dazdt + 0.5 * scan_accel * ii ** 2
+                )
+                halfway = i + nstep_full // 2
                 if halfway > 0 and halfway < samples:
                     starts.append(halfway)
             i += nstep
             if i == samples:
                 break
-            az_last += dazdt*nstep + .5*scan_accel*nstep**2
+            az_last += dazdt * nstep + 0.5 * scan_accel * nstep ** 2
 
         starts.append(samples)
         sizes = np.diff(starts)
@@ -945,44 +1021,51 @@ class TODGround(TOD):
         # Store the scan range before discarding samples not assigned
         # to this process
 
-        self._az %= 2*np.pi
+        self._az %= 2 * np.pi
         if np.ptp(self._az) < np.pi:
             self._min_az = np.amin(self._az)
             self._max_az = np.amax(self._az)
         else:
             # Scanning across the zero azimuth.
-            self._min_az = np.amin(self._az[self._az > np.pi]) - 2*np.pi
+            self._min_az = np.amin(self._az[self._az > np.pi]) - 2 * np.pi
             self._max_az = np.amax(self._az[self._az < np.pi])
         self._min_el = self._el
         self._max_el = self._el
-
         return sizes, starts[:-1]
 
+    @function_timer
     def translate_pointing(self):
-        """ Translate Az/El into bore sight quaternions
+        """Translate Az/El into bore sight quaternions
 
         Translate the azimuth and elevation into bore sight quaternions.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-
         # At this point, all processes still have all of the scan
-
         nsamp = len(self._az)
-        rank = self._mpicomm.rank
-        ntask = self._mpicomm.size
+        rank = 0
+        ntask = 1
+        if self._mpicomm is not None:
+            rank = self._mpicomm.rank
+            ntask = self._mpicomm.size
         nsamp_task = nsamp // ntask + 1
         my_start = rank * nsamp_task
-        my_stop = min(my_start+nsamp_task, nsamp)
-        my_nsamp = max(0, my_stop-my_start)
+        my_stop = min(my_start + nsamp_task, nsamp)
+        my_nsamp = max(0, my_stop - my_start)
         my_ind = slice(my_start, my_stop)
 
         # Remember that the azimuth is measured clockwise and the
         # longitude counter-clockwise
         my_azelquats = qa.from_angles(
-            np.pi/2 - np.ones(my_nsamp)*self._el,
-            -self._az[my_ind], np.zeros(my_nsamp), IAU=False)
-        azelquats = np.vstack(self._mpicomm.allgather(my_azelquats))
+            np.pi / 2 - np.ones(my_nsamp) * self._el,
+            -self._az[my_ind],
+            np.zeros(my_nsamp),
+            IAU=False,
+        )
+        azelquats = None
+        if self._mpicomm is None:
+            azelquats = my_azelquats
+        else:
+            azelquats = np.vstack(self._mpicomm.allgather(my_azelquats))
         self._boresight_azel = azelquats
 
         my_times = self.local_times()[my_ind]
@@ -991,34 +1074,38 @@ class TODGround(TOD):
         my_quats = qa.mult(my_azel2radec_quats, my_azelquats)
         del my_azelquats
 
-        quats = np.vstack(self._mpicomm.allgather(my_quats))
+        quats = None
+        if self._mpicomm is None:
+            quats = my_quats
+        else:
+            quats = np.vstack(self._mpicomm.allgather(my_quats))
         self._boresight = quats
         del my_quats
-
         return
 
+    @function_timer
     def crop_vectors(self):
-        """ Crop the TOD vectors.
+        """Crop the TOD vectors.
 
         Crop the TOD vectors to match the sample range assigned to this task.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         offset, n = self.local_samples
-        ind = slice(offset, offset+n)
+        ind = slice(offset, offset + n)
 
         self._az = self.cache.put("az", self._az[ind])
         self._commonflags = self.cache.put(
-            "common_flags", self._commonflags[ind], replace=True)
-        self._boresight_azel = self.cache.put("boresight_azel",
-                                              self._boresight_azel[ind])
-        self._boresight = self.cache.put("boresight_radec",
-                                         self._boresight[ind])
-
+            "common_flags", self._commonflags[ind], replace=True
+        )
+        self._boresight_azel = self.cache.put(
+            "boresight_azel", self._boresight_azel[ind]
+        )
+        self._boresight = self.cache.put("boresight_radec", self._boresight[ind])
         return
 
+    @function_timer
     def _get_azel2radec_quats(self):
-        """ Construct a sparsely sampled vector of Az/El->Ra/Dec quaternions.
+        """Construct a sparsely sampled vector of Az/El->Ra/Dec quaternions.
 
         The interpolation times must be tied to the total observation so
         that the results do not change when data is distributed in time
@@ -1027,29 +1114,29 @@ class TODGround(TOD):
         """
         # One control point at least every 10 minutes.  Overkill but
         # costs nothing.
-        autotimer = timing.auto_timer(type(self).__name__)
-        n = max(2, 1 + int((self._lasttime-self._firsttime) / 600))
+        n = max(2, 1 + int((self._lasttime - self._firsttime) / 600))
         times = np.linspace(self._firsttime, self._lasttime, n)
         quats = np.zeros([n, 4])
         for i, t in enumerate(times):
             quats[i] = self._get_coord_quat(t)
             # Make sure we have a consistent branch in the quaternions.
             # Otherwise we'll get interpolation issues.
-            if i > 0 and (np.sum(np.abs(quats[i-1]+quats[i]))
-                          < np.sum(np.abs(quats[i-1]-quats[i]))):
+            if i > 0 and (
+                np.sum(np.abs(quats[i - 1] + quats[i]))
+                < np.sum(np.abs(quats[i - 1] - quats[i]))
+            ):
                 quats[i] *= -1
         quats = qa.norm(quats)
-
         return times, quats
 
+    @function_timer
     def _get_coord_quat(self, t):
-        """ Get the Az/El -> Ra/Dec conversion quaternion for boresight.
+        """Get the Az/El -> Ra/Dec conversion quaternion for boresight.
 
         We will apply atmospheric refraction and stellar aberration in
         the detector frame.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         self._observer.date = self.to_DJD(t)
         # Set pressure to zero to disable atmospheric refraction.
         pressure = self._observer.pressure
@@ -1061,18 +1148,19 @@ class TODGround(TOD):
         # PyEphem measures the azimuth East (clockwise) from North.
         # The direction is standard but opposite to ISO spherical coordinates.
         try:
-            xra, xdec = self._observer.radec_of(       0,       0, fixed=False)
-            yra, ydec = self._observer.radec_of(-np.pi/2,       0, fixed=False)
-            zra, zdec = self._observer.radec_of(       0, np.pi/2, fixed=False)
+            xra, xdec = self._observer.radec_of(0, 0, fixed=False)
+            yra, ydec = self._observer.radec_of(-np.pi / 2, 0, fixed=False)
+            zra, zdec = self._observer.radec_of(0, np.pi / 2, fixed=False)
         except Exception as e:
             # Modified pyephem not available.
             # Translated pointing will include stellar aberration.
-            xra, xdec = self._observer.radec_of(       0,       0)
-            yra, ydec = self._observer.radec_of(-np.pi/2,       0)
-            zra, zdec = self._observer.radec_of(       0, np.pi/2)
+            xra, xdec = self._observer.radec_of(0, 0)
+            yra, ydec = self._observer.radec_of(-np.pi / 2, 0)
+            zra, zdec = self._observer.radec_of(0, np.pi / 2)
         self._observer.pressure = pressure
-        xvec, yvec, zvec = ang2vec(np.pi/2-np.array([xdec, ydec, zdec]),
-                                   np.array([xra, yra, zra]))
+        xvec, yvec, zvec = ang2vec(
+            np.pi / 2 - np.array([xdec, ydec, zdec]), np.array([xra, yra, zra])
+        )
         # Orthonormalize for numerical stability
         xvec /= np.sqrt(np.dot(xvec, xvec))
         yvec -= np.dot(xvec, yvec) * xvec
@@ -1092,41 +1180,44 @@ class TODGround(TOD):
             a = np.sqrt(1 - b**2 - c**2 - d**2)
         else:
         """
-        d = np.sqrt(np.abs(Y * Z / X)) # Choose positive root
+        d = np.sqrt(np.abs(Y * Z / X))  # Choose positive root
         c = d * X / Y
         b = X / c
-        a = (xvec[1]/2 - b*c) / d
+        a = (xvec[1] / 2 - b * c) / d
         # qarray has the scalar part as the last index
         quat = qa.norm(np.array([b, c, d, a]))
         # DEBUG begin
-        errors = np.array([
-            np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
-            np.dot(qa.rotate(quat, [0, 1, 0]), yvec),
-            np.dot(qa.rotate(quat, [0, 0, 1]), zvec)])
+        errors = np.array(
+            [
+                np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
+                np.dot(qa.rotate(quat, [0, 1, 0]), yvec),
+                np.dot(qa.rotate(quat, [0, 0, 1]), zvec),
+            ]
+        )
         errors[errors > 1] = 1
         errors = np.degrees(np.arccos(errors))
         if np.any(errors > 1) or np.any(np.isnan(errors)):
-            raise RuntimeError('Quaternion is not right: ({}), ({} {} {})'
-                               ''.format(errors, X, Y, Z))
+            raise RuntimeError(
+                "Quaternion is not right: ({}), ({} {} {})" "".format(errors, X, Y, Z)
+            )
         # DEBUG end
         return quat
 
+    @function_timer
     def free_azel_quats(self):
-        autotimer = timing.auto_timer(type(self).__name__)
         self._boresight_azel = None
         self.cache.destroy("boresight_azel")
 
+    @function_timer
     def free_radec_quats(self):
-        autotimer = timing.auto_timer(type(self).__name__)
         self._boresight = None
         self.cache.destroy("boresight_radec")
 
+    @function_timer
     def radec2quat(self, ra, dec, pa):
-        autotimer = timing.auto_timer(type(self).__name__)
-
-        qR = qa.rotation(ZAXIS, ra+np.pi/2)
-        qD = qa.rotation(XAXIS, np.pi/2-dec)
-        qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
+        qR = qa.rotation(ZAXIS, ra + np.pi / 2)
+        qD = qa.rotation(XAXIS, np.pi / 2 - dec)
+        qP = qa.rotation(ZAXIS, pa)  # FIXME: double-check this
         q = qa.mult(qR, qa.mult(qD, qP))
 
         if self._coord != "C":
@@ -1136,13 +1227,11 @@ class TODGround(TOD):
             elif self._coord == "E":
                 q = qa.mult(quat_equ2ecl, q)
             else:
-                raise RuntimeError(
-                    "Unknown coordinate system: {}".format(self._coord))
-
+                raise RuntimeError("Unknown coordinate system: {}".format(self._coord))
         return q
 
     def detoffset(self):
-        return { d : np.asarray(self._fp[d]) for d in self._detlist }
+        return {d: np.asarray(self._fp[d]) for d in self._detlist}
 
     def _get(self, detector, start, n):
         # This class just returns data streams of zeros
@@ -1160,14 +1249,13 @@ class TODGround(TOD):
         return
 
     def _get_common_flags(self, start, n):
-        return self._commonflags[start:start+n]
+        return self._commonflags[start : start + n]
 
     def _put_common_flags(self, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
         return
 
     def _get_times(self, start, n):
-        autotimer = timing.auto_timer(type(self).__name__)
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         return start_time + np.arange(n) / self._rate
@@ -1180,11 +1268,11 @@ class TODGround(TOD):
         if azel:
             if self._boresight_azel is None:
                 raise RuntimeError("Boresight azel pointing was purged.")
-            return self._boresight_azel[start:start+n]
+            return self._boresight_azel[start : start + n]
         else:
             if self._boresight is None:
                 raise RuntimeError("Boresight radec pointing was purged.")
-            return self._boresight[start:start+n]
+            return self._boresight[start : start + n]
 
     def _get_boresight_azel(self, start, n):
         return self._get_boresight(start, n, azel=True)
@@ -1197,9 +1285,9 @@ class TODGround(TOD):
         raise RuntimeError("cannot write boresight to simulated data streams")
         return
 
+    @function_timer
     def read_boresight_az(self, local_start=0, n=0):
-        """
-        Read the boresight azimuth.
+        """Read the boresight azimuth.
 
         Args:
             local_start (int): the sample offset relative to the first locally
@@ -1209,23 +1297,27 @@ class TODGround(TOD):
         Returns:
             (array): a numpy array containing the timestamps.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
-            raise RuntimeError("cannot read boresight azimuth - process "
-                "has no assigned local samples")
+            raise RuntimeError(
+                "cannot read boresight azimuth - process "
+                "has no assigned local samples"
+            )
         if (local_start < 0) or (local_start + n > self.local_samples[1]):
-            raise ValueError("local sample range {} - {} is invalid".format(
-                local_start, local_start+n-1))
-        return self._az[local_start:local_start+n]
+            raise ValueError(
+                "local sample range {} - {} is invalid".format(
+                    local_start, local_start + n - 1
+                )
+            )
+        return self._az[local_start : local_start + n]
 
+    @function_timer
     def _get_pntg(self, detector, start, n, azel=False):
         # FIXME: this is where we will apply atmospheric refraction and
         # stellar aberration corrections in the detector frame.  For
         # simulations they will only matter if we want to simulate the
         # error coming from ignoring them.
-        autotimer = timing.auto_timer(type(self).__name__)
         boresight = self._get_boresight(start, n, azel=azel)
         detquat = self._fp[detector]
         return qa.mult(boresight, detquat)
@@ -1234,12 +1326,12 @@ class TODGround(TOD):
         raise RuntimeError("cannot write data to simulated pointing")
         return
 
+    @function_timer
     def _get_position(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        autotimer = timing.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
         ang = self._radinc * np.arange(n, dtype=np.float64) + rad
         x = self._AU * np.cos(ang)
@@ -1251,14 +1343,14 @@ class TODGround(TOD):
         raise RuntimeError("cannot write data to simulated position")
         return
 
+    @function_timer
     def _get_velocity(self, start, n):
         # For this simple class, assume that the Earth is located
         # along the X axis at time == 0.0s.  We also just use the
         # mean values for distance and angular speed.  Classes for
         # real experiments should obviously use ephemeris data.
-        autotimer = timing.auto_timer(type(self).__name__)
         rad = np.fmod((start - self._firsttime) * self._radpersec, 2.0 * np.pi)
-        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5*np.pi)
+        ang = self._radinc * np.arange(n, dtype=np.float64) + rad + (0.5 * np.pi)
         x = self._earthspeed * np.cos(ang)
         y = self._earthspeed * np.sin(ang)
         z = np.zeros_like(x)

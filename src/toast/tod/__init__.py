@@ -6,18 +6,19 @@
 
 from .tod import TOD, TODCache
 
-#
-# from .interval import Interval
-#
+
+from .interval import Interval
+
 # from .pointing import OpPointingHpix
-#
-# from .sim_tod import (
-#     satellite_scanning,
-#     TODHpixSpiral,
-#     TODSatellite,
-#     slew_precession_axis,
-#     TODGround,
-# )
+
+from .sim_tod import (
+    satellite_scanning,
+    TODHpixSpiral,
+    TODSatellite,
+    slew_precession_axis,
+    TODGround,
+)
+
 #
 # from .sim_noise import AnalyticNoise
 #
