@@ -29,6 +29,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_math_fft.cpp
     _libtoast_math_healpix.cpp
     _libtoast_fod_psd.cpp
+    _libtoast_tod_filter.cpp
     _libtoast_tod_pointing.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
@@ -56,6 +57,7 @@ install(FILES
     qarray.py
     fft.py
     healpix.py
+    weather.py
     DESTINATION ${PYTHON_SITE}/toast
 )
 
@@ -93,3 +95,7 @@ endif(MPI_FOUND AND MPI4PY_FOUND)
 
 # Process the sub directories
 add_subdirectory(tests)
+add_subdirectory(tod)
+add_subdirectory(fod)
+add_subdirectory(map)
+add_subdirectory(todmap)

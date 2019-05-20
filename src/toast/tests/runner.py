@@ -20,9 +20,11 @@ from . import rng as testrng
 from . import fft as testfft
 from . import dist as testdist
 from . import qarray as testqarray
-# from . import tod as testtod
+from . import tod as testtod
+
 # from . import psd_math as testpsdmath
-# from . import intervals as testintervals
+from . import intervals as testintervals
+
 # from . import cov as testcov
 # from . import ops_pmat as testopspmat
 # from . import ops_dipole as testopsdipole
@@ -82,21 +84,21 @@ def test(name=None, verbosity=2):
 
     if name is None:
         suite.addTest(loader.loadTestsFromModule(testcache))
-        suite.addTest( loader.loadTestsFromModule(testtiming) )
+        suite.addTest(loader.loadTestsFromModule(testtiming))
         suite.addTest(loader.loadTestsFromModule(testrng))
         suite.addTest(loader.loadTestsFromModule(testfft))
         suite.addTest(loader.loadTestsFromModule(testdist))
         suite.addTest(loader.loadTestsFromModule(testqarray))
-        # suite.addTest( loader.loadTestsFromModule(testtod) )
+        suite.addTest(loader.loadTestsFromModule(testtod))
         # suite.addTest( loader.loadTestsFromModule(testtodsat) )
         # suite.addTest( loader.loadTestsFromModule(testpsdmath) )
         # suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
-        # suite.addTest( loader.loadTestsFromModule(testintervals) )
+        suite.addTest(loader.loadTestsFromModule(testintervals))
         # suite.addTest( loader.loadTestsFromModule(testopspmat) )
         # suite.addTest( loader.loadTestsFromModule(testcov) )
         # suite.addTest( loader.loadTestsFromModule(testopsdipole) )
         # suite.addTest( loader.loadTestsFromModule(testopssimnoise) )
-        # suite.addTest( loader.loadTestsFromModule(testopspolyfilter) )
+        # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
         # suite.addTest( loader.loadTestsFromModule(testopsgroundfilter) )
         # suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
         # suite.addTest( loader.loadTestsFromModule(testopsapplygain) )

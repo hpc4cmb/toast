@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
+
 from .mpi import MPITestCase
 
 import sys
@@ -23,12 +24,15 @@ from ..tod.sim_tod import *
 
 from .. import rng as rng
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class OpPolyFilterTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -42,9 +46,13 @@ class OpPolyFilterTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate, net=10.0,
-            fmin=1.0e-5, fknee=np.linspace(0.01, 0.19, num=self.ndet))
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet,
+            samplerate=self.rate,
+            net=10.0,
+            fmin=1.0e-5,
+            fknee=np.linspace(0.01, 0.19, num=self.ndet),
+        )
 
         # Fitting order
         self.order = 5
@@ -61,7 +69,8 @@ class OpPolyFilterTest(MPITestCase):
             detranks=self.data.comm.comm_group.size,
             firsttime=0.0,
             rate=self.rate,
-            nside=512)
+            nside=512,
+        )
 
         # Construct an analytic noise model for the detectors
 
@@ -71,21 +80,25 @@ class OpPolyFilterTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         intervals = []
         interval_len = 1000
         for istart in range(0, self.totsamp, interval_len):
             istop = min(istart + interval_len, self.totsamp)
-            intervals.append(Interval(
-                start=istart/self.rate, stop=istop/self.rate,
-                first=istart, last=istop-1))
+            intervals.append(
+                Interval(
+                    start=istart / self.rate,
+                    stop=istop / self.rate,
+                    first=istart,
+                    last=istop - 1,
+                )
+            )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
         self.data.obs[0]["intervals"] = intervals
-
 
     def test_filter(self):
         # generate timestreams
@@ -125,7 +138,8 @@ class OpPolyFilterTest(MPITestCase):
                 rms = np.std(y)
                 old = orms[det]
                 if np.abs(rms / old) > 1e-6:
-                    raise RuntimeError("det {} old rms = {}, new rms = {}"
-                                       "".format(det, old, rms))
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}" "".format(det, old, rms)
+                    )
                 del y
         return

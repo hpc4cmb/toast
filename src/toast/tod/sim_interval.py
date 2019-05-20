@@ -1,19 +1,17 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
 import numpy as np
 
-from ..dist import distribute_uniform
-from .. import timing as timing
+from ..timing import function_timer
 
 from .interval import Interval
 
 
+@function_timer
 def regular_intervals(n, start, first, rate, duration, gap):
-    """
-    Function to generate simulated regular intervals.
+    """Function to generate simulated regular intervals.
 
     This creates a list of intervals, given a start time/sample and time
     span for the interval and the gap in time between intervals.  The
@@ -49,8 +47,8 @@ def regular_intervals(n, start, first, rate, duration, gap):
 
     Returns:
         (list): a list of Interval objects.
+
     """
-    autotimer = timing.auto_timer()
     invrate = 1.0 / rate
 
     # Compute the whole number of samples that fit within the
@@ -85,7 +83,6 @@ def regular_intervals(n, start, first, rate, duration, gap):
         istart = start + i * (totsamples * invrate)
         # The stop time is the timestamp of the last valid sample (thus the -1).
         istop = istart + ((dursamples - 1) * invrate)
-        intervals.append(Interval(start=istart, stop=istop, first=ifirst,
-            last=ilast))
+        intervals.append(Interval(start=istart, stop=istop, first=ifirst, last=ilast))
 
     return intervals

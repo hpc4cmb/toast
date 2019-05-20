@@ -321,11 +321,14 @@ class Data(object):
         wcomm = self._comm.comm_world
         rcomm = self._comm.comm_rank
 
-        if wcomm.rank == 0:
-            handle.write(
-                "Data distributed over {} processes in {} groups\n"
-                "".format(self._comm.world_size, self._comm.ngroups)
-            )
+        if wcomm is None:
+            handle.write("Data distributed over a single process (no MPI)")
+        else:
+            if wcomm.rank == 0:
+                handle.write(
+                    "Data distributed over {} processes in {} groups\n"
+                    "".format(self._comm.world_size, self._comm.ngroups)
+                )
 
         def _get_optional(k, dt):
             if k in dt:

@@ -84,8 +84,9 @@ PYBIND11_MODULE(_libtoast, m) {
     init_math_qarray(m);
     init_math_healpix(m);
     init_math_fft(m);
-    init_math_healpix(m);
     init_fod_psd(m);
+    init_tod_filter(m);
+    init_tod_pointing(m);
 
     // Internal unit test runner
     m.def(

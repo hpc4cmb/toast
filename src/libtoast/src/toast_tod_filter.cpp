@@ -8,13 +8,14 @@
 #include <toast/tod_filter.hpp>
 
 
-void toast::filter_polynomial(int64_t order, double ** signals,
-                              uint8_t * flags, size_t n, size_t nsignal,
-                              int64_t const * starts, int64_t const * stops,
-                              size_t nscan) {
+void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
+                              std::vector <double *> const & signals, size_t nscan,
+                              int64_t const * starts, int64_t const * stops) {
     // Process the signals, one subscan at a time.  There is only one
     // flag vector, because the flags must be identical to apply the
     // same template matrix.
+
+    size_t nsignal = signals.size();
 
     #pragma \
     omp parallel default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan)
@@ -121,7 +122,7 @@ void toast::filter_polynomial(int64_t order, double ** signals,
             toast::AlignedVector <double> coeff(norder);
             toast::AlignedVector <double> noise(scanlen);
 
-            for (int isignal = 0; isignal < nsignal; ++isignal) {
+            for (size_t isignal = 0; isignal < nsignal; ++isignal) {
                 double * signal = signals[isignal] + start;
 
                 // proj = templates x signal
@@ -152,7 +153,7 @@ void toast::filter_polynomial(int64_t order, double ** signals,
 
                 // Subtract noise
 
-                for (int i = 0; i < scanlen; ++i) signal[i] -= noise[i];
+                for (int64_t i = 0; i < scanlen; ++i) signal[i] -= noise[i];
             }
         }
     }

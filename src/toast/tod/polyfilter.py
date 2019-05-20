@@ -1,20 +1,22 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import re
 
-from toast.ctoast import filter_polyfilter
-from toast.op import Operator
-
 import numpy as np
-import toast.timing as timing
+
+from .._libtoast import filter_polynomial
+
+from ..op import Operator
+
+from ..timing import function_timer
 
 
 class OpPolyFilter(Operator):
-    """
-    Operator which applies polynomial filtering to the valid intervals
-    of the TOD.
+    """Operator which applies polynomial filtering to the TOD.
+
+    This applies polynomial filtering to the valid intervals of each TOD.
 
     Args:
         order (int):  Order of the filtering polynomial.
@@ -37,13 +39,21 @@ class OpPolyFilter(Operator):
         poly_flag_mask (byte):  Bitmask to use when adding flags based
            on polynomial filter failures.
         intervals (str):  Name of the valid intervals in observation.
+
     """
 
-    def __init__(self, order=1, pattern=r'.*', name=None,
-                 common_flag_name=None, common_flag_mask=255,
-                 flag_name=None, flag_mask=255, poly_flag_mask=1,
-                 intervals='intervals'):
-
+    def __init__(
+        self,
+        order=1,
+        pattern=r".*",
+        name=None,
+        common_flag_name=None,
+        common_flag_mask=255,
+        flag_name=None,
+        flag_mask=255,
+        poly_flag_mask=1,
+        intervals="intervals",
+    ):
         self._order = order
         self._pattern = pattern
         self._name = name
@@ -54,20 +64,19 @@ class OpPolyFilter(Operator):
         self._poly_flag_mask = poly_flag_mask
         self._intervals = intervals
 
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor.
         super().__init__()
 
+    @function_timer
     def exec(self, data):
-        """
-        Apply the polynomial filter to the signal.
+        """Apply the polynomial filter to the signal.
 
         Args:
             data (toast.Data): The distributed data.
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
 
+        """
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
             if self._intervals in obs:
                 intervals = obs[self._intervals]
             else:
@@ -79,8 +88,7 @@ class OpPolyFilter(Operator):
 
             for det in tod.local_dets:
                 # Test the detector pattern
-
-                if not pat.match(det):
+                if pat.match(det) is None:
                     continue
 
                 ref = tod.local_signal(det, self._name)
@@ -100,8 +108,7 @@ class OpPolyFilter(Operator):
                 flg = common_ref & self._common_flag_mask
                 flg |= flag_ref & self._flag_mask
 
-                filter_polyfilter(
-                    self._order, [ref], flg, local_starts, local_stops)
+                filter_polynomial(self._order, flg, [ref], local_starts, local_stops)
 
                 flag_ref[flg != 0] |= self._poly_flag_mask
 

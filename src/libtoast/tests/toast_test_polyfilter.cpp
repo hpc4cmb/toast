@@ -22,18 +22,17 @@ TEST_F(TOASTpolyfilterTest, filter) {
     vector <double> signal3(n);
     vector <uint8_t> flags(n, 0);
 
-    double * signals[3];
+    vector <double *> signals;
 
-    signals[0] = signal1.data();
-    signals[1] = signal2.data();
-    signals[2] = signal3.data();
+    signals.push_back(signal1.data());
+    signals.push_back(signal2.data());
+    signals.push_back(signal3.data());
 
     for (int i = 0; i < n; ++i) {
         signal1[i] = 1;
         signal2[i] = i;
         signal3[i] = i * i;
     }
-    size_t nsignal = 3;
 
     int64_t starts[] = {0, n / 2};
     int64_t stops[] = {n / 2 - 1, n - 1};
@@ -51,8 +50,7 @@ TEST_F(TOASTpolyfilterTest, filter) {
     rms2start = sqrt(rms2start / (double)n);
     rms3start = sqrt(rms3start / (double)n);
 
-    toast::filter_polynomial(order, signals, flags.data(), n, nsignal,
-                             starts, stops, nscan);
+    toast::filter_polynomial(order, n, flags.data(), signals, nscan, starts, stops);
 
     double rms1 = 0, rms2 = 0, rms3 = 0;
 
@@ -89,18 +87,17 @@ TEST_F(TOASTpolyfilterTest, filter_with_flags) {
         ngood++;
     }
 
-    double * signals[3];
+    vector <double *> signals;
 
-    signals[0] = signal1.data();
-    signals[1] = signal2.data();
-    signals[2] = signal3.data();
+    signals.push_back(signal1.data());
+    signals.push_back(signal2.data());
+    signals.push_back(signal3.data());
 
     for (int64_t i = 0; i < n; ++i) {
         signal1[i] = 1;
         signal2[i] = i;
         signal3[i] = i * i;
     }
-    size_t nsignal = 3;
 
     int64_t starts[] = {0, n / 2};
     int64_t stops[] = {n / 2 - 1, n - 1};
@@ -119,8 +116,7 @@ TEST_F(TOASTpolyfilterTest, filter_with_flags) {
     rms2start = sqrt(rms2start / (double)ngood);
     rms3start = sqrt(rms3start / (double)ngood);
 
-    toast::filter_polynomial(order, signals, flags.data(), n, nsignal,
-                             starts, stops, nscan);
+    toast::filter_polynomial(order, n, flags.data(), signals, nscan, starts, stops);
 
     double rms1 = 0, rms2 = 0, rms3 = 0;
 

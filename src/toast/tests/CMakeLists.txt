@@ -12,6 +12,7 @@ install(FILES
     rng.py
     qarray.py
     fft.py
-    healpix.py
+    tod.py
+    intervals.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

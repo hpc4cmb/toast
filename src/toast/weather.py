@@ -1,14 +1,14 @@
-# Copyright (c) 2017 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
 
 import astropy.io.fits as pf
 import datetime
 import numpy as np
 
 from . import rng as rng
-from . import timing as timing
+
+from .timing import function_timer
 
 
 class Weather(object):
@@ -43,14 +43,14 @@ class Weather(object):
             self.set_time(time)
         self._varindex = {}
 
-        hdulist = pf.open(self._fname, 'readonly')
+        hdulist = pf.open(self._fname, "readonly")
 
         # Build the probability axis of the cumulative distribution
         # function.  The CDF:s stored for every month, hour and variable
         # all assume the same probability axis.
-        prob_start = hdulist[1].header['probstrt']
-        prob_stop = hdulist[1].header['probstop']
-        nstep = hdulist[1].header['nstep']
+        prob_start = hdulist[1].header["probstrt"]
+        prob_stop = hdulist[1].header["probstop"]
+        nstep = hdulist[1].header["nstep"]
         self._prob = np.linspace(prob_start, prob_stop, nstep)
 
         # Load the CDF:s.  One entry per month.
@@ -58,7 +58,7 @@ class Weather(object):
         ivar = 0
         for month in range(12):
             self._monthly_cdf.append([])
-            hdu = hdulist[1+month]
+            hdu = hdulist[1 + month]
             # One entry for every hour
             for hour in range(24):
                 self._monthly_cdf[month].append({})
@@ -78,8 +78,7 @@ class Weather(object):
                     self._varindex[name] = ivar
                     ivar += 1
                 for hour in range(24):
-                    self._monthly_cdf[month][hour][name] \
-                        = hdu.data.field(name)[hour]
+                    self._monthly_cdf[month][hour][name] = hdu.data.field(name)[hour]
 
         hdulist.close()
 
@@ -96,7 +95,6 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         self.site = site
         self.realization = realization
         if time is not None:
@@ -126,17 +124,17 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         self._time = time
         self._date = datetime.datetime.utcfromtimestamp(self._time)
         self._doy = self._date.timetuple().tm_yday
         self._year = self._date.year
         self._hour = self._date.hour
         # This is the definition of month used in the weather files
-        self._month = int((self._doy-1) // 30.5)
+        self._month = int((self._doy - 1) // 30.5)
         self._reset_vars()
         return
 
+    @function_timer
     def _draw(self, name):
         """ Return a random parameter value.
 
@@ -147,16 +145,19 @@ class Weather(object):
 
         """
         if self._year is None:
-            raise RuntimeError('Weather object must be initialized by calling '
-                               'set_time(time)')
-        autotimer = timing.auto_timer(type(self).__name__)
+            raise RuntimeError(
+                "Weather object must be initialized by calling " "set_time(time)"
+            )
         # Set the RNG counters for this variable and time
         counter1 = self._varindex[name]
-        counter2 = (self._year*366 + self._doy)*24 + self._hour
+        counter2 = (self._year * 366 + self._doy) * 24 + self._hour
         # Get a uniform random number for inverse sampling
         x = rng.random(
-            1, sampler="uniform_01", key=(self.site, self.realization),
-            counter=(counter1, counter2))[0]
+            1,
+            sampler="uniform_01",
+            key=(self.site, self.realization),
+            counter=(counter1, counter2),
+        )[0]
         # Sample the variable from the inverse cumulative distribution function
         cdf = self._monthly_cdf[self._month][self._hour][name]
 
@@ -171,8 +172,7 @@ class Weather(object):
 
         """
         if self._ice_water is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._ice_water = self._draw('TQI')
+            self._ice_water = self._draw("TQI")
         return self._ice_water
 
     @property
@@ -184,8 +184,7 @@ class Weather(object):
 
         """
         if self._liquid_water is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._liquid_water = self._draw('TQL')
+            self._liquid_water = self._draw("TQL")
         return self._liquid_water
 
     @property
@@ -197,8 +196,7 @@ class Weather(object):
 
         """
         if self._pwv is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._pwv = self._draw('TQV')
+            self._pwv = self._draw("TQV")
         return self._pwv
 
     @property
@@ -210,8 +208,7 @@ class Weather(object):
 
         """
         if self._humidity is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._humidity = self._draw('QV10M')
+            self._humidity = self._draw("QV10M")
         return self._humidity
 
     @property
@@ -223,8 +220,7 @@ class Weather(object):
 
         """
         if self._surface_pressure is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._surface_pressure = self._draw('PS')
+            self._surface_pressure = self._draw("PS")
         return self._surface_pressure
 
     @property
@@ -236,8 +232,7 @@ class Weather(object):
 
         """
         if self._surface_temperature is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._surface_temperature = self._draw('TS')
+            self._surface_temperature = self._draw("TS")
         return self._surface_temperature
 
     @property
@@ -249,8 +244,7 @@ class Weather(object):
 
         """
         if self._air_temperature is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._air_temperature = self._draw('T10M')
+            self._air_temperature = self._draw("T10M")
         return self._air_temperature
 
     @property
@@ -262,8 +256,7 @@ class Weather(object):
 
         """
         if self._west_wind is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._west_wind = self._draw('U10M')
+            self._west_wind = self._draw("U10M")
         return self._west_wind
 
     @property
@@ -275,6 +268,5 @@ class Weather(object):
 
         """
         if self._south_wind is None:
-            autotimer = timing.auto_timer(type(self).__name__)
-            self._south_wind = self._draw('V10M')
+            self._south_wind = self._draw("V10M")
         return self._south_wind

@@ -8,10 +8,9 @@
 
 namespace toast {
 
-void filter_polynomial(int64_t order, double ** signals,
-                       uint8_t * flags, size_t n, size_t nsignal,
-                       int64_t const * starts, int64_t const * stops,
-                       size_t nscan);
+void filter_polynomial(int64_t order, size_t nsignal, uint8_t * flags,
+                       std::vector <double *> const & signals, size_t nscan,
+                       int64_t const * starts, int64_t const * stops);
 
 }
 

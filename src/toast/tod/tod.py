@@ -1,16 +1,19 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
 
-import os
-
 import numpy as np
 
 from ..dist import distribute_samples
+
 from ..cache import Cache
-from .. import timing as timing
+
+from .. import qarray as qa
+
+from ..timing import function_timer
+
 from .interval import Interval
 
 
@@ -35,13 +38,13 @@ class TOD(object):
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data is distributed.
+            data is distributed, or None.
         detectors (list):  The list of detector names.
         samples (int):  The total number of samples.
         detindx (dict): the detector indices for use in simulations.  Default is
             { x[0] : x[1] for x in zip(detectors, range(len(detectors))) }.
         detranks (int):  The dimension of the process grid in the detector
-            direction.  The MPI communicator size must be evenly divisible
+            direction.  If not None, the MPI communicator size must be evenly divisible
             by this number.
         detbreaks (list):  Optional list of hard breaks in the detector
             distribution.
@@ -69,30 +72,41 @@ class TOD(object):
         self._mpicomm = mpicomm
         self._detranks = detranks
 
-        if mpicomm.size % detranks != 0:
-            raise RuntimeError(
-                "The number of detranks ({}) does not divide evenly into the "
-                "communicator size ({})".format(detranks, mpicomm.size)
-            )
+        self._sampranks = 1
+        self._rank_det = 0
+        self._rank_samp = 0
+        self._comm_row = None
+        self._comm_col = None
 
-        self._sampranks = mpicomm.size // detranks
+        rank = 0
 
-        self._rank_det = mpicomm.rank // self._sampranks
-        self._rank_samp = mpicomm.rank % self._sampranks
-
-        # Split the main communicator into process row and column
-        # communicators, since this is useful for gathering data in some
-        # operations.
-
-        if self._sampranks == 1:
-            self._comm_row = MPI.COMM_SELF
+        if mpicomm is None:
+            if detranks != 1:
+                raise RuntimeError("MPI is disabled, so detranks must equal 1")
         else:
-            self._comm_row = self._mpicomm.Split(self._rank_det, self._rank_samp)
+            rank = mpicomm.rank
+            if mpicomm.size % detranks != 0:
+                raise RuntimeError(
+                    "The number of detranks ({}) does not divide evenly into the "
+                    "communicator size ({})".format(detranks, mpicomm.size)
+                )
+            self._sampranks = mpicomm.size // detranks
+            self._rank_det = mpicomm.rank // self._sampranks
+            self._rank_samp = mpicomm.rank % self._sampranks
 
-        if self._detranks == 1:
-            self._comm_col = MPI.COMM_SELF
-        else:
-            self._comm_col = self._mpicomm.Split(self._rank_samp, self._rank_det)
+            # Split the main communicator into process row and column
+            # communicators, since this is useful for gathering data in some
+            # operations.
+
+            if self._sampranks == 1:
+                self._comm_row = MPI.COMM_SELF
+            else:
+                self._comm_row = self._mpicomm.Split(self._rank_det, self._rank_samp)
+
+            if self._detranks == 1:
+                self._comm_col = MPI.COMM_SELF
+            else:
+                self._comm_col = self._mpicomm.Split(self._rank_samp, self._rank_det)
 
         self._dets = detectors
 
@@ -136,7 +150,7 @@ class TOD(object):
             # in this case, the chunks just come from the uniform distribution.
             self._sizes = [self._dist_samples[x][1] for x in range(self._sampranks)]
 
-        if self._mpicomm.rank == 0:
+        if rank == 0:
             # check that all processes have some data, otherwise print warning
             for d in range(self._detranks):
                 if len(self._dist_dets[d]) == 0:
@@ -463,7 +477,7 @@ class TOD(object):
     def grid_comm_row(self):
         """
         (mpi4py.MPI.Comm): a communicator across all detectors in the same
-            row of the process grid.
+            row of the process grid (or None).
         """
         return self._comm_row
 
@@ -471,7 +485,7 @@ class TOD(object):
     def grid_comm_col(self):
         """
         (mpi4py.MPI.Comm): a communicator across all detectors in the same
-            column of the process grid.
+            column of the process grid (or None).
         """
         return self._comm_col
 
@@ -561,9 +575,9 @@ class TOD(object):
 
     # Read and write the common timestamps
 
+    @function_timer
     def read_times(self, local_start=0, n=0, **kwargs):
-        """
-        Read timestamps.
+        """Read timestamps.
 
         This reads the common set of timestamps that apply to all detectors
         in the TOD.
@@ -575,8 +589,8 @@ class TOD(object):
 
         Returns:
             (array): a numpy array containing the timestamps.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -590,9 +604,9 @@ class TOD(object):
             )
         return self._get_times(local_start, n, **kwargs)
 
+    @function_timer
     def write_times(self, local_start=0, stamps=None, **kwargs):
-        """
-        Write timestamps.
+        """Write timestamps.
 
         This writes the common set of timestamps that apply to all detectors
         in the TOD.
@@ -601,8 +615,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             stamps (array): the array of timestamps to write.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if stamps is None:
             raise ValueError("you must specify the vector of time stamps")
         if self.local_samples[1] <= 0:
@@ -619,9 +633,9 @@ class TOD(object):
 
     # Read and write telescope boresight pointing
 
+    @function_timer
     def read_boresight(self, local_start=0, n=0, **kwargs):
-        """
-        Read boresight quaternion pointing.
+        """Read boresight quaternion pointing.
 
         This returns the pointing of the boresight in quaternions.
 
@@ -632,8 +646,8 @@ class TOD(object):
 
         Returns:
             A 2D array of shape (n, 4)
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -645,9 +659,9 @@ class TOD(object):
             )
         return self._get_boresight(local_start, n, **kwargs)
 
+    @function_timer
     def write_boresight(self, local_start=0, data=None, **kwargs):
-        """
-        Write boresight quaternion pointing.
+        """Write boresight quaternion pointing.
 
         This writes the quaternion pointing for the boresight.
 
@@ -655,8 +669,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if len(data.shape) != 2:
             raise ValueError("data should be a 2D array")
         if data.shape[1] != 4:
@@ -668,9 +682,9 @@ class TOD(object):
         self._put_boresight(local_start, data, **kwargs)
         return
 
+    @function_timer
     def read_boresight_azel(self, local_start=0, n=0, **kwargs):
-        """
-        Read boresight Azimuth / Elevation quaternion pointing.
+        """Read boresight Azimuth / Elevation quaternion pointing.
 
         This returns the pointing of the boresight in the horizontal coordinate
         system, if it exists.
@@ -687,7 +701,6 @@ class TOD(object):
             NotImplementedError: if the telescope is not on the Earth.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -699,6 +712,7 @@ class TOD(object):
             )
         return self._get_boresight_azel(local_start, n, **kwargs)
 
+    @function_timer
     def write_boresight_azel(self, local_start=0, data=None, **kwargs):
         """Write boresight Azimuth / Elevation quaternion pointing.
 
@@ -715,7 +729,6 @@ class TOD(object):
                 the Earth.
 
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if len(data.shape) != 2:
             raise ValueError("data should be a 2D array")
         if data.shape[1] != 4:
@@ -729,9 +742,9 @@ class TOD(object):
 
     # Read and write detector data
 
+    @function_timer
     def read(self, detector=None, local_start=0, n=0, **kwargs):
-        """
-        Read detector data.
+        """Read detector data.
 
         This returns the timestream data for a single detector.
 
@@ -743,8 +756,8 @@ class TOD(object):
 
         Returns:
             An array containing the data.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -760,9 +773,9 @@ class TOD(object):
             )
         return self._get(detector, local_start, n, **kwargs)
 
+    @function_timer
     def write(self, detector=None, local_start=0, data=None, **kwargs):
-        """
-        Write detector data.
+        """Write detector data.
 
         This writes the detector data.
 
@@ -771,8 +784,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             data (array): the data array.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -791,9 +804,9 @@ class TOD(object):
 
     # Read and write detector quaternion pointing
 
+    @function_timer
     def read_pntg(self, detector=None, local_start=0, n=0, **kwargs):
-        """
-        Read detector quaternion pointing.
+        """Read detector quaternion pointing.
 
         This returns the pointing for a single detector in quaternions.
 
@@ -805,8 +818,8 @@ class TOD(object):
 
         Returns:
             A 2D array of shape (n, 4)
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -824,9 +837,9 @@ class TOD(object):
             )
         return self._get_pntg(detector, local_start, n, **kwargs)
 
+    @function_timer
     def write_pntg(self, detector=None, local_start=0, data=None, **kwargs):
-        """
-        Write detector quaternion pointing.
+        """Write detector quaternion pointing.
 
         This writes the quaternion pointing for a single detector.
 
@@ -835,8 +848,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             data (array): 2D array of quaternions with shape[1] == 4.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -858,9 +871,9 @@ class TOD(object):
 
     # Read and write detector flags
 
+    @function_timer
     def read_flags(self, detector=None, local_start=0, n=0, **kwargs):
-        """
-        Read detector flags.
+        """Read detector flags.
 
         This returns the detector-specific flags.
 
@@ -872,8 +885,8 @@ class TOD(object):
 
         Returns:
             An array containing the detector flags.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -891,9 +904,9 @@ class TOD(object):
             )
         return self._get_flags(detector, local_start, n, **kwargs)
 
+    @function_timer
     def read_common_flags(self, local_start=0, n=0, **kwargs):
-        """
-        Read common flags.
+        """Read common flags.
 
         This reads the common set of flags that should be applied to all
         detectors.
@@ -905,8 +918,8 @@ class TOD(object):
 
         Returns:
             (array): a numpy array containing the flags.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if self.local_samples[1] <= 0:
             raise RuntimeError(
                 "cannot read common flags- process has no assigned local samples"
@@ -920,9 +933,9 @@ class TOD(object):
             )
         return self._get_common_flags(local_start, n, **kwargs)
 
+    @function_timer
     def write_common_flags(self, local_start=0, flags=None, **kwargs):
-        """
-        Write common flags.
+        """Write common flags.
 
         This writes the common set of flags that should be applied to all
         detectors.
@@ -931,8 +944,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             flags (array): array containing the flags to write.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if flags is None:
             raise ValueError("flags must be specified")
         if self.local_samples[1] <= 0:
@@ -948,9 +961,9 @@ class TOD(object):
         self._put_common_flags(local_start, flags, **kwargs)
         return
 
+    @function_timer
     def write_flags(self, detector=None, local_start=0, flags=None, **kwargs):
-        """
-        Write detector flags.
+        """Write detector flags.
 
         This writes the detector-specific flags.
 
@@ -959,8 +972,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             flags (array): the detector flags.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if detector is None:
             raise ValueError("you must specify the detector")
         if detector not in self.local_dets:
@@ -981,9 +994,9 @@ class TOD(object):
 
     # Read and write telescope position
 
+    @function_timer
     def read_position(self, local_start=0, n=0, **kwargs):
-        """
-        Read telescope position.
+        """Read telescope position.
 
         This reads the telescope position in solar system barycenter
         coordinates (in Kilometers).
@@ -996,8 +1009,8 @@ class TOD(object):
         Returns:
             (array): a 2D numpy array containing the x,y,z coordinates at each
                 sample.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -1011,9 +1024,9 @@ class TOD(object):
             )
         return self._get_position(local_start, n, **kwargs)
 
+    @function_timer
     def write_position(self, local_start=0, pos=None, **kwargs):
-        """
-        Write telescope position.
+        """Write telescope position.
 
         This writes the telescope position in solar system barycenter
         coordinates (in Kilometers).
@@ -1022,8 +1035,8 @@ class TOD(object):
             local_start (int): the sample offset relative to the first locally
                 assigned sample.
             pos (array): the 2D array of x,y,z coordinates at each sample.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if pos is None:
             raise ValueError("you must specify the array of coordinates")
         if self.local_samples[1] <= 0:
@@ -1040,9 +1053,9 @@ class TOD(object):
 
     # Read and write telescope velocity
 
+    @function_timer
     def read_velocity(self, local_start=0, n=0, **kwargs):
-        """
-        Read telescope velocity.
+        """Read telescope velocity.
 
         This reads the telescope velocity in solar system barycenter
         coordinates (in Kilometers/s).
@@ -1055,8 +1068,8 @@ class TOD(object):
         Returns:
             (array): a 2D numpy array containing the x,y,z velocity components
                 at each sample.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if n == 0:
             n = self.local_samples[1] - local_start
         if self.local_samples[1] <= 0:
@@ -1070,9 +1083,9 @@ class TOD(object):
             )
         return self._get_velocity(local_start, n, **kwargs)
 
+    @function_timer
     def write_velocity(self, local_start=0, vel=None, **kwargs):
-        """
-        Write telescope velocity.
+        """Write telescope velocity.
 
         This writes the telescope velocity in solar system barycenter
         coordinates (in Kilometers/s).
@@ -1082,8 +1095,8 @@ class TOD(object):
                 assigned sample.
             vel (array): the 2D array of x,y,z velocity components at each
                 sample.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         if vel is None:
             raise ValueError("you must specify the array of velocities.")
         if self.local_samples[1] <= 0:
@@ -1100,15 +1113,14 @@ class TOD(object):
 
 
 class TODCache(TOD):
-    """
-    TOD class that uses a memory cache for storage.
+    """TOD class that uses a memory cache for storage.
 
     This class simply uses a manually managed Cache object to store time
     ordered data.  You must "write" the data before you can "read" it.
 
     Args:
         mpicomm (mpi4py.MPI.Comm): the MPI communicator over which the
-            data is distributed.
+            data is distributed (or None).
         detectors (list):  The list of detector names.
         samples (int):  The total number of samples.
         detindx (dict): the detector indices for use in simulations.  Default is
@@ -1228,7 +1240,9 @@ class TODCache(TOD):
             # No detector-specific pointing written.  See if we have
             # boresight pointing and detector quaternions.
             if self.cache.exists(self._bore) and (self._detquats is not None):
-                return qa.mult()
+                return qa.mult(
+                    self._bore[start : start + n, :], self._detquats[detector]
+                )
             else:
                 raise ValueError(
                     "detector {}: pointing data not yet written, and boresight"

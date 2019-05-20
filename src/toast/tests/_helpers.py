@@ -3,23 +3,26 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import sys
-import traceback
+
 import numpy as np
 
-from contextlib import contextmanager
+# from contextlib import contextmanager
 
-from ..dist import Comm, Data
+from ..mpi import Comm
+
+from ..dist import Data
+
 from .. import qarray as qa
 
 
 # These are helper routines for common operations used in the unit tests.
 
+
 def create_outdir(mpicomm, subdir=None):
     """Create the top level output directory and per-test subdir.
 
     Args:
-        mpicomm (MPI.Comm): the MPI communicator.
+        mpicomm (MPI.Comm): the MPI communicator (or None).
         subdir (str): the sub directory for this test.
 
     Returns:
@@ -48,7 +51,7 @@ def create_comm(mpicomm):
     If less than 2 processes are used, create a single process group.
 
     Args:
-        mpicomm (MPI.Comm): the MPI communicator.
+        mpicomm (MPI.Comm): the MPI communicator (or None).
 
     Returns:
         toast.Comm: the 2-level toast communicator.
@@ -60,7 +63,7 @@ def create_comm(mpicomm):
     else:
         worldsize = mpicomm.size
         groupsize = 1
-        if (worldsize >= 2):
+        if worldsize >= 2:
             groupsize = worldsize // 2
         toastcomm = Comm(world=mpicomm, groupsize=groupsize)
     return toastcomm
@@ -73,7 +76,7 @@ def create_distdata(mpicomm, obs_per_group=1):
     each with some observations.
 
     Args:
-        mpicomm (MPI.Comm): the MPI communicator.
+        mpicomm (MPI.Comm): the MPI communicator (or None).
         obs_per_group (int): the number of observations assigned to each group.
 
     Returns:
@@ -84,8 +87,8 @@ def create_distdata(mpicomm, obs_per_group=1):
     data = Data(toastcomm)
     for obs in range(obs_per_group):
         ob = {}
-        ob['name'] = 'test-{}-{}'.format(toastcomm.group, obs)
-        ob['id'] = obs_per_group * toastcomm.group + obs
+        ob["name"] = "test-{}-{}".format(toastcomm.group, obs)
+        ob["id"] = obs_per_group * toastcomm.group + obs
         data.obs.append(ob)
     return data
 
@@ -114,8 +117,9 @@ def uniform_chunks(samples, nchunk=100):
     return chunks
 
 
-def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
-                         alpha=1.0, fknee=0.05):
+def boresight_focalplane(
+    ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0, alpha=1.0, fknee=0.05
+):
     """Create a set of detectors at the boresight.
 
     This creates multiple detectors at the boresight, oriented in evenly
@@ -133,8 +137,10 @@ def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
     names = ["d{:02d}".format(x) for x in range(ndet)]
     pol = {"d{:02d}".format(x): (x * 2 * np.pi / ndet) for x in range(ndet)}
 
-    quat = {"d{:02d}".format(x): qa.rotation([0.0, 0.0, 0.0, 1.0],
-            pol["d{:02d}".format(x)]) for x in range(ndet)}
+    quat = {
+        "d{:02d}".format(x): qa.rotation([0.0, 0.0, 0.0, 1.0], pol["d{:02d}".format(x)])
+        for x in range(ndet)
+    }
 
     det_eps = {"d{:02d}".format(x): epsilon for x in range(ndet)}
 
@@ -150,11 +156,10 @@ def boresight_focalplane(ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0,
         # This must be an array or list of correct length
         if len(fknee) != ndet:
             raise RuntimeError("length of knee frequencies must equal ndet")
-        det_fknee = {"d{:02d}".format(x): y
-                     for x, y in zip(range(ndet), fknee)}
+        det_fknee = {"d{:02d}".format(x): y for x, y in zip(range(ndet), fknee)}
 
-    return names, quat, det_eps, det_rate, det_net, det_fmin, \
-        det_fknee, det_alpha
+    return names, quat, det_eps, det_rate, det_net, det_fmin, det_fknee, det_alpha
+
 
 #
 # @contextmanager
