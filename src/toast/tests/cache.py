@@ -2,72 +2,83 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import sys
+
 import numpy as np
 
 from .mpi import MPITestCase
 
 from ..cache import Cache
 
+from ..utils import AlignedF64
+
 
 class CacheTest(MPITestCase):
-
     def setUp(self):
         self.nsamp = 1000
         self.cache = Cache(pymem=False)
         self.pycache = Cache(pymem=True)
         self.types = {
-            'f64': np.float64,
-            'f32': np.float32,
-            'i64': np.int64,
-            'u64': np.uint64,
-            'i32': np.int32,
-            'u32': np.uint32,
-            'i16': np.int16,
-            'u16': np.uint16,
-            'i8': np.int8,
-            'u8': np.uint8
+            "f64": np.float64,
+            "f32": np.float32,
+            "i64": np.int64,
+            "u64": np.uint64,
+            "i32": np.int32,
+            "u32": np.uint32,
+            "i16": np.int16,
+            "u16": np.uint16,
+            "i8": np.int8,
+            "u8": np.uint8,
         }
 
     def tearDown(self):
         del self.cache
         del self.pycache
 
+    def test_refcount(self):
+        buf = AlignedF64.zeros(self.nsamp)
+        # print("REFCNT: ", sys.getrefcount(buf), flush=True)
+        # wbuf1 = buf.weak()
+        # print("REFCNT 1: ", sys.getrefcount(buf), flush=True)
+        # wbuf2 = buf.weak()
+        # print("REFCNT 2: ", sys.getrefcount(buf), flush=True)
+
+        return
+
     def test_create(self):
         for k, v in self.types.items():
-            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp, 4))
+            ref = self.cache.create("test-{}".format(k), v, (self.nsamp, 4))
             del ref
 
         for k, v in self.types.items():
-            data = self.cache.reference('test-{}'.format(k))
-            data[:] += np.repeat(
-                np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
+            data = self.cache.reference("test-{}".format(k))
+            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
             del data
 
         for k, v in self.types.items():
-            ex = self.cache.exists('test-{}'.format(k))
+            ex = self.cache.exists("test-{}".format(k))
             self.assertTrue(ex)
 
         for k, v in self.types.items():
-            self.cache.destroy('test-{}'.format(k))
+            self.cache.destroy("test-{}".format(k))
 
         self.cache.clear()
 
         for k, v in self.types.items():
-            ref = self.pycache.create('test-{}'.format(k), v, (self.nsamp, 4))
+            ref = self.pycache.create("test-{}".format(k), v, (self.nsamp, 4))
             del ref
 
         for k, v in self.types.items():
-            data = self.pycache.reference('test-{}'.format(k))
-            data[:] += np.repeat(
-                np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
+            data = self.pycache.reference("test-{}".format(k))
+            data[:] += np.repeat(np.arange(self.nsamp, dtype=v), 4).reshape(-1, 4)
             del data
 
         for k, v in self.types.items():
-            ex = self.pycache.exists('test-{}'.format(k))
+            ex = self.pycache.exists("test-{}".format(k))
             self.assertTrue(ex)
 
         for k, v in self.types.items():
-            self.pycache.destroy('test-{}'.format(k))
+            self.pycache.destroy("test-{}".format(k))
 
         self.cache.clear()
         return
@@ -75,7 +86,7 @@ class CacheTest(MPITestCase):
     def test_create_none(self):
         try:
             ref = self.cache.create(None, np.float, (1, 10))
-            raise RuntimeError('Creating object with None key succeeded')
+            raise RuntimeError("Creating object with None key succeeded")
         except ValueError:
             pass
 
@@ -85,7 +96,7 @@ class CacheTest(MPITestCase):
     def test_put_none(self):
         try:
             ref = self.cache.put(None, np.float, np.arange(10))
-            raise RuntimeError('Putting an object with None key succeeded')
+            raise RuntimeError("Putting an object with None key succeeded")
         except ValueError:
             pass
 
@@ -94,28 +105,28 @@ class CacheTest(MPITestCase):
 
     def test_clear(self):
         for k, v in self.types.items():
-            ref = self.cache.create('test-{}'.format(k), v, (self.nsamp, 4))
+            ref = self.cache.create("test-{}".format(k), v, (self.nsamp, 4))
             del ref
         self.cache.clear()
         return
 
     def test_alias(self):
-        ref = self.cache.put('test', np.arange(10))
+        ref = self.cache.put("test", np.arange(10))
         del ref
 
-        self.cache.add_alias('test-alias', 'test')
-        self.cache.add_alias('test-alias-2', 'test')
+        self.cache.add_alias("test-alias", "test")
+        self.cache.add_alias("test-alias-2", "test")
 
-        data = self.cache.reference('test-alias')
+        data = self.cache.reference("test-alias")
         del data
 
-        self.cache.destroy('test-alias')
+        self.cache.destroy("test-alias")
 
-        data = self.cache.reference('test-alias-2')
+        data = self.cache.reference("test-alias-2")
         del data
 
-        self.cache.destroy('test')
+        self.cache.destroy("test")
 
-        ex = self.cache.exists('test-alias-2')
+        ex = self.cache.exists("test-alias-2")
         self.assertFalse(ex)
         return

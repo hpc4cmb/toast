@@ -182,6 +182,7 @@ void toast::tod_sim_noise_timestream(
         pdata[i] *= psdval;
         pdata[fftlen - i] *= psdval;
     }
+
     pdata[fftlen / 2] *= interp_psd[npsd - 1];
 
     plan->exec();

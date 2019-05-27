@@ -15,5 +15,7 @@ install(FILES
     tod.py
     intervals.py
     tod_satellite.py
+    ops_applygain.py
+    ops_simnoise.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

@@ -5,8 +5,9 @@
 # import functions in our public API
 
 # from .madam import OpMadam
-#
-# from .pixels import OpLocalPixels, DistPixels
+
+from .pixels import OpLocalPixels, DistPixels
+
 # from .rings import DistRings
 # from .pysm import PySMSky
 # from .smooth import LibSharpSmooth

@@ -87,6 +87,8 @@ PYBIND11_MODULE(_libtoast, m) {
     init_fod_psd(m);
     init_tod_filter(m);
     init_tod_pointing(m);
+    init_tod_simnoise(m);
+    init_tod_simmap(m);
 
     // Internal unit test runner
     m.def(

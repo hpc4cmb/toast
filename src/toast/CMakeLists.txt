@@ -31,6 +31,8 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_fod_psd.cpp
     _libtoast_tod_filter.cpp
     _libtoast_tod_pointing.cpp
+    _libtoast_tod_simnoise.cpp
+    _libtoast_tod_simmap.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
 

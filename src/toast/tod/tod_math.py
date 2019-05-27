@@ -1,25 +1,29 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
 import numpy as np
-import scipy.constants as constants
 
+import scipy.constants as constants
 import scipy.interpolate as si
 from scipy.signal import fftconvolve
 
-from .. import rng as rng
-from .. import qarray as qa
-from .. import fft as fft
-from .. import timing as timing
-
 from ..op import Operator
 
+from ..timing import function_timer
 
+from ..utils import Logger, AlignedF64
+
+from .. import rng as rng
+
+from .. import qarray as qa
+
+from .._libtoast import tod_sim_noise_timestream
+
+
+@function_timer
 def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
-    """
-    Interpolate the gains to TOI samples and apply them.
+    """Interpolate the gains to TOI samples and apply them.
 
     Args:
         toitimes (float): Increasing TOI sample times in same units as
@@ -34,13 +38,13 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
 
     Returns:
         calibrated timestream.
+
     """
-    autotimer = timing.auto_timer()
     if len(gaintimes) == 1:
         g = gains
     else:
         if order == 0:
-            ind = np.searchsorted(gaintimes, toitimes, side='right') - 1
+            ind = np.searchsorted(gaintimes, toitimes, side="right") - 1
             g = gains[ind]
         else:
             if len(gaintimes) <= order:
@@ -58,11 +62,22 @@ def calibrate(toitimes, toi, gaintimes, gains, order=0, inplace=False):
     return toi_out
 
 
-def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
-                         rate, firstsamp, samples, oversample, freq, psd,
-                         altfft=False):
-    """
-    Generate a noise timestream, given a starting RNG state.
+@function_timer
+def sim_noise_timestream(
+    realization,
+    telescope,
+    component,
+    obsindx,
+    detindx,
+    rate,
+    firstsamp,
+    samples,
+    oversample,
+    freq,
+    psd,
+    py=False,
+):
+    """Generate a noise timestream, given a starting RNG state.
 
     Use the RNG parameters to generate unit-variance Gaussian samples
     and then modify the Fourier domain amplitudes to match the desired
@@ -96,99 +111,92 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
             beyond the number of samples.
         freq (array): the frequency points of the PSD.
         psd (array): the PSD values.
+        py (bool): if True, use a pure-python implementation.  This is useful
+            for testing.  If True, also return the interpolated PSD.
 
-    Returns (tuple):
-        the timestream array, the interpolated PSD frequencies, and
-            the interpolated PSD values.
+    Returns:
+        (array):  the noise timestream.  If py=True, returns a tuple of timestream,
+            interpolated frequencies, and interpolated PSD.
+
     """
-    autotimer = timing.auto_timer()
-    fftlen = 2
-    while fftlen <= (oversample * samples):
-        fftlen *= 2
-    npsd = fftlen // 2 + 1
-    norm = rate * float(npsd - 1)
+    tdata = None
+    if py:
+        fftlen = 2
+        while fftlen <= (oversample * samples):
+            fftlen *= 2
+        npsd = fftlen // 2 + 1
+        norm = rate * float(npsd - 1)
 
-    interp_freq = np.fft.rfftfreq(fftlen, 1 / rate)
-    if interp_freq.size != npsd:
-        raise RuntimeError("interpolated PSD frequencies do not have expected "
-                           "length")
+        interp_freq = np.fft.rfftfreq(fftlen, 1 / rate)
+        if interp_freq.size != npsd:
+            raise RuntimeError(
+                "interpolated PSD frequencies do not have expected length"
+            )
 
-    # Ensure that the input frequency range includes all the frequencies
-    # we need.  Otherwise the extrapolation is not well defined.
+        # Ensure that the input frequency range includes all the frequencies
+        # we need.  Otherwise the extrapolation is not well defined.
 
-    if np.amin(freq) < 0.0:
-        raise RuntimeError("input PSD frequencies should be >= zero")
+        if np.amin(freq) < 0.0:
+            raise RuntimeError("input PSD frequencies should be >= zero")
 
-    if np.amin(psd) < 0.0:
-        raise RuntimeError("input PSD values should be >= zero")
+        if np.amin(psd) < 0.0:
+            raise RuntimeError("input PSD values should be >= zero")
 
-    increment = rate / fftlen
+        increment = rate / fftlen
 
-    if freq[0] > increment:
-        raise RuntimeError("input PSD does not go to low enough frequency to "
-                           "allow for interpolation")
+        if freq[0] > increment:
+            raise RuntimeError(
+                "input PSD does not go to low enough frequency to "
+                "allow for interpolation"
+            )
 
-    nyquist = rate / 2
-    if np.abs((freq[-1] - nyquist) / nyquist) > .01:
-        raise RuntimeError(
-            "last frequency element does not match Nyquist "
-            "frequency for given sample rate: {} != {}".format(
-                freq[-1], nyquist))
+        nyquist = rate / 2
+        if np.abs((freq[-1] - nyquist) / nyquist) > 0.01:
+            raise RuntimeError(
+                "last frequency element does not match Nyquist "
+                "frequency for given sample rate: {} != {}".format(freq[-1], nyquist)
+            )
 
-    # Perform a logarithmic interpolation.  In order to avoid zero values, we
-    # shift the PSD by a fixed amount in frequency and amplitude.
+        # Perform a logarithmic interpolation.  In order to avoid zero values, we
+        # shift the PSD by a fixed amount in frequency and amplitude.
 
-    psdshift = 0.01 * np.amin(psd[(psd > 0.0)])
-    freqshift = increment
+        psdshift = 0.01 * np.amin(psd[(psd > 0.0)])
+        freqshift = increment
 
-    loginterp_freq = np.log10(interp_freq + freqshift)
-    logfreq = np.log10(freq + freqshift)
-    logpsd = np.log10(psd + psdshift)
+        loginterp_freq = np.log10(interp_freq + freqshift)
+        logfreq = np.log10(freq + freqshift)
+        logpsd = np.log10(psd + psdshift)
 
-    interp = si.interp1d(logfreq, logpsd, kind='linear',
-                         fill_value='extrapolate')
+        interp = si.interp1d(logfreq, logpsd, kind="linear", fill_value="extrapolate")
 
-    loginterp_psd = interp(loginterp_freq)
-    interp_psd = np.power(10.0, loginterp_psd) - psdshift
+        loginterp_psd = interp(loginterp_freq)
+        interp_psd = np.power(10.0, loginterp_psd) - psdshift
 
-    scale = np.sqrt(interp_psd * norm)
+        # Zero out DC value
 
-    # Zero out DC value
+        interp_psd[0] = 0.0
 
-    interp_psd[0] = 0.0
+        scale = np.sqrt(interp_psd * norm)
 
-    # gaussian Re/Im randoms, packed into a complex valued array
+        # gaussian Re/Im randoms, packed into a complex valued array
 
-    key1 = realization * 4294967296 + telescope * 65536 + component
-    key2 = obsindx * 4294967296 + detindx
-    counter1 = 0
-    counter2 = firstsamp * oversample
+        key1 = realization * 4294967296 + telescope * 65536 + component
+        key2 = obsindx * 4294967296 + detindx
+        counter1 = 0
+        counter2 = firstsamp * oversample
 
-    rngdata = rng.random(2 * npsd, sampler="gaussian", key=(key1, key2),
-                         counter=(counter1, counter2))
+        rngdata = rng.random(
+            fftlen, sampler="gaussian", key=(key1, key2), counter=(counter1, counter2)
+        ).array()
 
-    # pack data differently depending on the FFT implementation
+        fdata = np.zeros(npsd, dtype=np.complex)
 
-    fdata = None
-    if altfft:
-        fdata = np.zeros(fftlen, dtype=np.float64)
-        fdata[:npsd] = rngdata[:npsd]
-        fdata[-1:npsd - 1:-1] = rngdata[npsd + 1:2 * npsd - 1]
-        # Nyquist frequency imaginary part is already excluded
-        # from the data vector in this packing scheme...
+        # Set the DC and Nyquist frequency imaginary part to zero
+        fdata[0] = rngdata[0] + 0.0j
+        fdata[-1] = rngdata[npsd - 1] + 0.0j
 
-        # scale by PSD
-        fdata[0:npsd] *= scale
-        fdata[-1:npsd - 1:-1] *= scale[1:npsd - 1]
-
-        # inverse FFT
-        tdata = fft.r1d_backward(fdata)
-
-    else:
-        fdata = rngdata[:npsd] + 1j * rngdata[npsd:]
-
-        # set the Nyquist frequency imaginary part to zero
-        fdata[-1] = fdata[-1].real + 0.0j
+        # Repack the other values.
+        fdata[1:-1] = rngdata[1 : npsd - 1] + 1j * rngdata[-1 : npsd - 1 : -1]
 
         # scale by PSD
         fdata *= scale
@@ -196,16 +204,28 @@ def sim_noise_timestream(realization, telescope, component, obsindx, detindx,
         # inverse FFT
         tdata = np.fft.irfft(fdata)
 
-    # subtract the DC level- for just the samples that we are returning
+        # subtract the DC level- for just the samples that we are returning
+        offset = (fftlen - samples) // 2
 
-    offset = (fftlen - samples) // 2
-
-    DC = np.mean(tdata[offset:offset + samples])
-    tdata[offset:offset + samples] -= DC
-
-    # return the timestream and interpolated PSD for debugging.
-
-    return (tdata[offset:offset + samples], interp_freq, interp_psd)
+        DC = np.mean(tdata[offset : offset + samples])
+        tdata[offset : offset + samples] -= DC
+        return (tdata[offset : offset + samples], interp_freq, interp_psd)
+    else:
+        tdata = AlignedF64(samples)
+        tod_sim_noise_timestream(
+            realization,
+            telescope,
+            component,
+            obsindx,
+            detindx,
+            rate,
+            firstsamp,
+            oversample,
+            freq,
+            psd,
+            tdata,
+        )
+        return tdata.array()
 
 
 def array_dot(u, v):
@@ -213,9 +233,9 @@ def array_dot(u, v):
     return np.sum(u * v, axis=1).reshape((-1, 1))
 
 
+@function_timer
 def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
-    """
-    Compute a dipole timestream.
+    """Compute a dipole timestream.
 
     This uses detector pointing, telescope velocity and the solar system
     motion to compute the observed dipole.  It is assumed that the detector
@@ -235,8 +255,8 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
     Returns:
         (array):  detector dipole timestream.
+
     """
-    autotimer = timing.auto_timer()
     zaxis = np.array([0, 0, 1], dtype=np.float64)
     nsamp = pntg.shape[0]
 
@@ -247,11 +267,11 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
         solar_speed = np.sqrt(np.sum(solar * solar, axis=0))
 
-        vpar = (array_dot(vel, solar) / solar_speed**2) * solar
+        vpar = (array_dot(vel, solar) / solar_speed ** 2) * solar
         vperp = vel - vpar
 
-        vdot = 1.0 / (1.0 + array_dot(solar, vel) * inv_light**2)
-        invgamma = np.sqrt(1.0 - (solar_speed * inv_light)**2)
+        vdot = 1.0 / (1.0 + array_dot(solar, vel) * inv_light ** 2)
+        invgamma = np.sqrt(1.0 - (solar_speed * inv_light) ** 2)
 
         vpar += solar
         vperp *= invgamma
@@ -271,7 +291,7 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
 
     dipoletod = None
     if freq == 0:
-        inv_gamma = np.sqrt(1.0 - beta**2)
+        inv_gamma = np.sqrt(1.0 - beta ** 2)
         num = 1.0 - beta * np.sum(v * direct, axis=1)
         dipoletod = cmb * (inv_gamma / num - 1.0)
     else:
@@ -279,14 +299,13 @@ def dipole(pntg, vel=None, solar=None, cmb=2.72548, freq=0):
         fx = constants.h * freq / (constants.k * cmb)
         fcor = (fx / 2) * (np.exp(fx) + 1) / (np.exp(fx) - 1)
         bt = beta * np.sum(v * direct, axis=1)
-        dipoletod = cmb * (bt + fcor * bt**2)
+        dipoletod = cmb * (bt + fcor * bt ** 2)
 
     return dipoletod
 
 
 class OpCacheCopy(Operator):
-    """
-    Operator which copies sets of timestreams between cache locations.
+    """Operator which copies sets of timestreams between cache locations.
 
     This simply copies data from one set of per-detector cache objects to
     another set.  At some point we will likely move away from persistent
@@ -298,90 +317,78 @@ class OpCacheCopy(Operator):
         out (str): copy data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
         force (bool): force creating the target cache object.
+
     """
 
     def __init__(self, input, output, force=False):
-
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor.
         super().__init__()
-
         self._in = input
         self._out = output
         self._force = force
 
+    @function_timer
     def exec(self, data):
-        """
-        Copy timestreams.
+        """Copy timestreams.
 
         This iterates over all observations and detectors and copies cache
         objects whose names match the specified pattern.
 
         Args:
             data (toast.Data): The distributed data.
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
-        comm = data.comm
 
+        """
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
             for det in tod.local_dets:
                 inref = tod.local_signal(det, self._in)
                 outname = "{}_{}".format(self._out, det)
                 outref = tod.cache.put(outname, inref, replace=self._force)
                 del outref
                 del inref
-
         return
 
 
 class OpCacheClear(Operator):
-    """
-    Operator which destroys cache objects matching the given pattern.
+    """Operator which destroys cache objects matching the given pattern.
 
     Args:
         name (str): use cache objects with name <name>_<detector>.
+
     """
 
     def __init__(self, name):
-
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor.
         super().__init__()
-
         self._name = name
 
+    @function_timer
     def exec(self, data):
-        """
-        Clear timestreams.
+        """Clear timestreams.
 
         This iterates over all observations and detectors and clears cache
         objects whose names match the specified pattern.
 
         Args:
             data (toast.Data): The distributed data.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        comm = data.comm
-
         for obs in data.obs:
-
-            tod = obs['tod']
-
+            tod = obs["tod"]
             for det in tod.local_dets:
-
                 # if the cache object exists, destroy it
-
                 name = "{}_{}".format(self._name, det)
-
                 if tod.cache.exists(name):
                     tod.cache.destroy(name)
-
         return
 
 
-def flagged_running_average(signal, flag, wkernel, return_flags=False,
-                            downsample=False):
-    """
-    Compute a running average considering only the unflagged samples.
+@function_timer
+def flagged_running_average(
+    signal, flag, wkernel, return_flags=False, downsample=False
+):
+    """Compute a running average considering only the unflagged samples.
+
     Args:
         signal (float)
         flag (bool)
@@ -389,12 +396,14 @@ def flagged_running_average(signal, flag, wkernel, return_flags=False,
         return_flags (bool):  If true, also return flags which are
             a subset of the input flags.
         downsample (bool):  If True, return a downsampled version of the
-            filtered timestream
+            filtered timestream.
+
+    Returns:
+        (array or tuple):  The filtered signal and optionally the flags.
 
     """
-    autotimer = timing.auto_timer()
     if len(signal) != len(flag):
-        raise Exception('Signal and flag lengths do not match.')
+        raise Exception("Signal and flag lengths do not match.")
 
     bad = flag != 0
     masked_signal = signal.copy()
@@ -405,8 +414,8 @@ def flagged_running_average(signal, flag, wkernel, return_flags=False,
 
     kernel = np.ones(wkernel, dtype=np.float64)
 
-    filtered_signal = fftconvolve(masked_signal, kernel, mode='same')
-    filtered_hits = fftconvolve(good, kernel, mode='same')
+    filtered_signal = fftconvolve(masked_signal, kernel, mode="same")
+    filtered_hits = fftconvolve(good, kernel, mode="same")
 
     hit = filtered_hits > 0.1
     nothit = np.logical_not(hit)
@@ -424,7 +433,6 @@ def flagged_running_average(signal, flag, wkernel, return_flags=False,
             filtered_flags[good][::wkernel]
         filtered_signal[good][::wkernel]
 
-    del autotimer
     if return_flags:
         return filtered_signal, filtered_flags
     else:

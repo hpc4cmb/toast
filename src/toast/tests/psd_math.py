@@ -8,7 +8,9 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..tod import TODCache
+from ..tod import TODHpixSpiral
+
+from ..tod import AnalyticNoise
 
 from ._helpers import (
     create_outdir,
@@ -31,6 +33,7 @@ import os
 import numpy as np
 
 from ..tod.tod import *
+
 from ..tod.pointing import *
 from ..tod.noise import *
 from ..tod.sim_noise import *
@@ -49,7 +52,8 @@ def log_bin(data, nbin=100):
     # Take a regularly sampled, ascending vector of values and bin it to
     # logaritmically narrowing bins
 
-    # To get the bin positions, you must call log_bin twice: first with x and then y vectors
+    # To get the bin positions, you must call log_bin twice: first with x and then
+    # y vectors
     n = len(data)
 
     ind = np.arange(n) + 1

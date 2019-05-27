@@ -6,11 +6,11 @@ import numpy as np
 
 from astropy.io import fits
 
-from toast.op import Operator
+from ..op import Operator
 
 from ..timing import function_timer
 
-from ..tod_math import calibrate
+from .tod_math import calibrate
 
 from ..utils import Logger
 

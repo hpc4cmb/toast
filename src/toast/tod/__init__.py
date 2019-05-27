@@ -9,7 +9,7 @@ from .tod import TOD, TODCache
 
 from .interval import Interval
 
-# from .pointing import OpPointingHpix
+from .pointing import OpPointingHpix
 
 from .sim_tod import (
     satellite_scanning,
@@ -19,12 +19,12 @@ from .sim_tod import (
     TODGround,
 )
 
-#
-# from .sim_noise import AnalyticNoise
-#
-# from .sim_interval import regular_intervals
-#
-# from .sim_det_noise import OpSimNoise
+from .sim_noise import AnalyticNoise
+
+from .sim_interval import regular_intervals
+
+from .sim_det_noise import OpSimNoise
+
 #
 # from .sim_det_map import OpSimGradient, OpSimScan
 #
@@ -40,27 +40,28 @@ from .sim_tod import (
 #     rhomb_pol_angles_qu,
 #     plot_focalplane,
 # )
-#
-# from .noise import Noise
-#
+
+from .noise import Noise
+
 # from ..ctoast import filter_polyfilter
 # from .polyfilter import OpPolyFilter
 # from .groundfilter import OpGroundFilter
 # from .gainscrambler import OpGainScrambler
-# from .applygain import OpApplyGain, write_calibration_file
+from .applygain import OpApplyGain, write_calibration_file
+
 # from .memorycounter import OpMemoryCounter
-#
-# from .pointing_math import aberrate
-#
-# from .tod_math import (
-#     calibrate,
-#     dipole,
-#     sim_noise_timestream,
-#     OpCacheCopy,
-#     OpCacheClear,
-#     flagged_running_average,
-# )
-#
+
+from .pointing_math import aberrate
+
+from .tod_math import (
+    calibrate,
+    dipole,
+    sim_noise_timestream,
+    OpCacheCopy,
+    OpCacheClear,
+    flagged_running_average,
+)
+
 # from .conviqt import OpSimConviqt
 #
 # from .tidas import available as tidas_available
