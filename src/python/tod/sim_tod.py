@@ -711,8 +711,11 @@ class TODGround(TOD):
         # Create a list of subscans that excludes the turnarounds.
         # All processes in the group still have all samples.
 
+        lengths = np.array(self._stable_stops) - np.array(self._stable_starts)
+        min_length = np.median(lengths) - np.int(2 * np.std(lengths))
+        self._subscan_min_length = min(min_length, 10)  # in samples
+
         self.subscans = []
-        self._subscan_min_length = 10 # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
             if istop-istart < self._subscan_min_length:
                 self._commonflags[istart:istop] |= self.TURNAROUND
@@ -843,13 +846,24 @@ class TODGround(TOD):
         if lim_right < lim_left:
             # We are scanning across the zero meridian
             lim_right += 2*np.pi
-        az_last = lim_left
+        az_last = lim_left  # Start scanning from the left edge
         scanrate = self._scanrate / self._rate # per sample, not per second
         # Modulate scan rate so that the rate on sky is constant
         scanrate /= np.cos(self._el)
         scan_accel = self._scan_accel / self._rate # per sample, not per second
         scan_accel /= np.cos(self._el)
         tol = self._rate / 10
+        # Consistency check, extreme scan acceleration coupled with low sampling
+        # rate will cause the telescope to overshoot the target azimuth range
+        dstep_turnaround = 2 * scanrate / scan_accel
+        nstep_turnaround = int(dstep_turnaround) + 1
+        throw = lim_right - lim_left
+        overstep = nstep_turnaround - dstep_turnaround
+        overshoot = -scanrate + .5 * scan_accel * overstep ** 2
+        if overshoot > .01 * throw:
+            # Manipulate the acceleration so each turnaround is one
+            # sample long
+            scan_accel = 2 * scanrate * 1.001
         # the index, i, is relative to the start of the tod object.
         # If CES begun before the TOD, first values of i are negative.
         i = int((self._CES_start - self._firsttime - tol) * self._rate)
@@ -857,7 +871,6 @@ class TODGround(TOD):
         self._stable_starts = []
         self._stable_stops = []
         while True:
-            #
             # Left to right, fixed rate
             #
             self._stable_starts.append(i)
@@ -1098,6 +1111,7 @@ class TODGround(TOD):
         a = (xvec[1]/2 - b*c) / d
         # qarray has the scalar part as the last index
         quat = qa.norm(np.array([b, c, d, a]))
+        """
         # DEBUG begin
         errors = np.array([
             np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
@@ -1109,6 +1123,7 @@ class TODGround(TOD):
             raise RuntimeError('Quaternion is not right: ({}), ({} {} {})'
                                ''.format(errors, X, Y, Z))
         # DEBUG end
+        """
         return quat
 
     def free_azel_quats(self):
