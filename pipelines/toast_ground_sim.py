@@ -1701,13 +1701,13 @@ def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
 
 
 def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
-    if args.groundorder is not None:
+    if args.ground_order is not None:
         autotimer = timing.auto_timer()
         if comm.comm_world.rank == 0:
             print("Ground filtering signal", flush=args.flush)
         start = MPI.Wtime()
         groundfilter = tt.OpGroundFilter(
-            filter_order=args.groundorder,
+            filter_order=args.ground_order,
             name=totalname_freq,
             common_flag_mask=args.common_flag_mask,
         )
