@@ -25,7 +25,8 @@ from . import tod as testtod
 # from . import psd_math as testpsdmath
 from . import intervals as testintervals
 
-# from . import cov as testcov
+from . import cov as testcov
+
 # from . import ops_pmat as testopspmat
 # from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
@@ -93,11 +94,11 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testqarray))
         suite.addTest(loader.loadTestsFromModule(testtod))
         suite.addTest(loader.loadTestsFromModule(testtodsat))
-        # suite.addTest( loader.loadTestsFromModule(testpsdmath) )
+        # suite.addTest(loader.loadTestsFromModule(testpsdmath))
         # suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
         suite.addTest(loader.loadTestsFromModule(testintervals))
         # suite.addTest( loader.loadTestsFromModule(testopspmat) )
-        # suite.addTest( loader.loadTestsFromModule(testcov) )
+        suite.addTest(loader.loadTestsFromModule(testcov))
         # suite.addTest( loader.loadTestsFromModule(testopsdipole) )
         suite.addTest(loader.loadTestsFromModule(testopssimnoise))
         # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))

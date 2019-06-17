@@ -102,6 +102,7 @@ TEST_F(TOASTcovTest, eigendecompose) {
     std::vector <double> checkdata(nsm * npix * block);
 
     std::vector <double> rowdata(nnz);
+    std::vector <double> cond(nsm * npix);
 
     for (int64_t k = 0; k < nnz; ++k) {
         rowdata[k] = 10.0 * (nnz - k);
@@ -120,10 +121,10 @@ TEST_F(TOASTcovTest, eigendecompose) {
         }
     }
 
-    toast::cov_eigendecompose_diag(nsm, npix, nnz, fakedata.data(), NULL,
-                                   threshold, 1, 0);
-    toast::cov_eigendecompose_diag(nsm, npix, nnz, fakedata.data(), NULL,
-                                   threshold, 1, 0);
+    toast::cov_eigendecompose_diag(nsm, npix, nnz, fakedata.data(), cond.data(),
+                                   threshold, true);
+    toast::cov_eigendecompose_diag(nsm, npix, nnz, fakedata.data(), cond.data(),
+                                   threshold, true);
 
     for (int64_t i = 0; i < (nsm * npix); ++i) {
         int64_t off = 0;
@@ -145,6 +146,7 @@ TEST_F(TOASTcovTest, matrixmultiply) {
     std::vector <double> data2(nsm * npix * block);
 
     std::vector <double> rowdata(nnz);
+    std::vector <double> cond(nsm * npix);
 
     for (int64_t k = 0; k < nnz; ++k) {
         rowdata[k] = 10.0 * (nnz - k);
@@ -164,7 +166,7 @@ TEST_F(TOASTcovTest, matrixmultiply) {
     }
 
     toast::cov_eigendecompose_diag(nsm, npix, nnz,
-                                   data2.data(), NULL, threshold, 1, 0);
+                                   data2.data(), cond.data(), threshold, true);
 
     toast::cov_mult_diag(nsm, npix, nnz, data1.data(), data2.data());
 

@@ -35,7 +35,7 @@ void cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
 
 void cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                              double * data, double * cond, double threshold,
-                             int32_t do_invert, int32_t do_rcond);
+                             bool invert);
 
 void cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                    double * data1, double const * data2);

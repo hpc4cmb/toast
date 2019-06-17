@@ -10,7 +10,7 @@ from .mpi import MPITestCase
 
 from ..tod import TODHpixSpiral
 
-from ..tod import AnalyticNoise
+from ..tod import AnalyticNoise, OpSimNoise
 
 from ._helpers import (
     create_outdir,
@@ -18,27 +18,6 @@ from ._helpers import (
     boresight_focalplane,
     uniform_chunks,
 )
-
-
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by
-# a BSD-style license that can be found in the LICENSE file.
-
-from ..mpi import MPI
-from .mpi import MPITestCase
-
-import sys
-import os
-
-import numpy as np
-
-from ..tod.tod import *
-
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_tod import *
 
 from ..fod import autocov_psd
 
@@ -169,7 +148,7 @@ class PSDTest(MPITestCase):
                     comm=tod.mpicomm,
                 )
 
-                if tod.mpicomm.rank == 0:
+                if (tod.mpicomm is None) or (tod.mpicomm.rank == 0):
                     # Plot the results for the single stationary interval
                     # assigned to one process.
                     import matplotlib.pyplot as plt

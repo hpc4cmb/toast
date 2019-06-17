@@ -43,8 +43,8 @@ void register_scan_map(py::module & m, char const * name) {
               T * rawmapdata = reinterpret_cast <T *> (info_mapdata.ptr);
               double * rawweights = reinterpret_cast <double *> (info_weights.ptr);
               double * rawtod = reinterpret_cast <double *> (info_tod.ptr);
-              toast::scan_map <T> (rawsubmap, subnpix, rawweights, nmap, rawsubpix,
-                                   rawmapdata, rawtod, nsamp);
+              toast::scan_local_map <T> (rawsubmap, subnpix, rawweights, nmap,
+                                         rawsubpix, rawmapdata, rawtod, nsamp);
               return;
           }, py::arg("subnpix"), py::arg("nmap"), py::arg("submap"), py::arg("subpix"),
           py::arg("mapdata"), py::arg("weights"), py::arg(
@@ -74,7 +74,7 @@ void register_scan_map(py::module & m, char const * name) {
     return;
 }
 
-void init_tod_simmap(py::module & m) {
+void init_todmap_scanning(py::module & m) {
     register_scan_map <double> (m, "scan_map_float64");
     register_scan_map <float> (m, "scan_map_float32");
     register_scan_map <int64_t> (m, "scan_map_int64");

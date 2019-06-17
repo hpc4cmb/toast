@@ -16,9 +16,9 @@
 #include <toast/math_healpix.hpp>
 #include <toast/fod_psd.hpp>
 #include <toast/map_cov.hpp>
+#include <toast/todmap_scanning.hpp>
 #include <toast/tod_filter.hpp>
 #include <toast/tod_pointing.hpp>
-#include <toast/tod_simmap.hpp>
 #include <toast/tod_simnoise.hpp>
 #include <toast/atm_utils.hpp>
 #include <toast/test.hpp>

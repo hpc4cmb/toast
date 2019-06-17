@@ -32,7 +32,8 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_tod_filter.cpp
     _libtoast_tod_pointing.cpp
     _libtoast_tod_simnoise.cpp
-    _libtoast_tod_simmap.cpp
+    _libtoast_todmap_scanning.cpp
+    _libtoast_map_cov.cpp
 )
 target_link_libraries(_libtoast PRIVATE toast)
 
@@ -89,10 +90,6 @@ if(MPI_FOUND AND MPI4PY_FOUND)
 
     install(TARGETS _libtoast_mpi DESTINATION ${PYTHON_SITE}/toast)
 
-    #install(FILES
-    #    mpi.py
-    #    DESTINATION ${PYTHON_SITE}/toast
-    #)
 endif(MPI_FOUND AND MPI4PY_FOUND)
 
 # Process the sub directories

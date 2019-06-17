@@ -17,5 +17,6 @@ install(FILES
     tod_satellite.py
     ops_applygain.py
     ops_simnoise.py
+    cov.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

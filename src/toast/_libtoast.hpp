@@ -299,4 +299,5 @@ void init_fod_psd(py::module & m);
 void init_tod_filter(py::module & m);
 void init_tod_pointing(py::module & m);
 void init_tod_simnoise(py::module & m);
-void init_tod_simmap(py::module & m);
+void init_todmap_scanning(py::module & m);
+void init_map_cov(py::module & m);

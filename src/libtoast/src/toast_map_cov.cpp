@@ -193,28 +193,14 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 
 void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                     double * data, double * cond,
-                                    double threshold, int32_t do_invert,
-                                    int32_t do_rcond) {
-    if ((do_invert == 0) && (do_rcond == 0)) {
-        return;
-    }
-
+                                    double threshold, bool invert) {
     if (nnz == 1) {
         // shortcut for NNZ == 1
-
-        if (do_invert == 0) {
+        if (!invert) {
+            // Not much point in calling this!
             for (int64_t i = 0; i < nsub; ++i) {
                 for (int64_t j = 0; j < subsize; ++j) {
                     cond[i * subsize + j] = 1.0;
-                }
-            }
-        } else if (do_rcond == 0) {
-            for (int64_t i = 0; i < nsub; ++i) {
-                for (int64_t j = 0; j < subsize; ++j) {
-                    int64_t dpx = (i * subsize) + j;
-                    if (data[dpx] != 0) {
-                        data[dpx] = 1.0 / data[dpx];
-                    }
                 }
             }
         } else {
@@ -234,7 +220,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // and each thread does some large number of small eigenvalue problems.
 
         #pragma \
-        omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, do_invert, do_rcond)
+        omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
         {
             // thread-private variables
             // We assume a large value here, since the work space needed
@@ -268,10 +254,8 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             toast::AlignedVector <double> evals(nnz);
             toast::AlignedVector <double> work(lwork);
 
-            // Here we "unroll" the loop over submaps and pixels within each
-            // submap.
-            // This allows us to distribute the total pixels across all
-            // threads.
+            // Here we "unroll" the loop over submaps and pixels within each submap.
+            // This allows us to distribute the total pixels across all threads.
 
             #pragma omp for schedule(static)
             for (int64_t i = 0; i < (nsub * subsize); ++i) {
@@ -288,7 +272,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                 }
 
                 // eigendecompose
-                if (do_invert == 0) {
+                if (!invert) {
                     toast::lapack_syev(&jobz_val, &uplo, &fnnz,
                                        fdata.data(), &fnnz, evals.data(),
                                        work.data(), &lwork, &info);
@@ -318,7 +302,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
                     // compare to threshold
                     if (rcond >= threshold) {
-                        if (do_invert != 0) {
+                        if (invert) {
                             for (int64_t k = 0; k < nnz; ++k) {
                                 evals[k] = 1.0 / evals[k];
                                 for (int64_t m = 0; m < nnz; ++m) {
@@ -346,7 +330,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     }
                 }
 
-                if (do_invert != 0) {
+                if (invert) {
                     if (info != 0) {
                         off = 0;
                         for (int64_t k = 0; k < nnz; ++k) {
@@ -357,10 +341,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                         }
                     }
                 }
-
-                if (do_rcond != 0) {
-                    cond[i] = rcond;
-                }
+                cond[i] = rcond;
             }
         }
     }

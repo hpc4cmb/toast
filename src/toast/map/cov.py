@@ -1,21 +1,28 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import numpy as np
 
-from ..dist import Comm, Data
+from ..timing import function_timer
+
 from ..op import Operator
+
+from .._libtoast import (
+    cov_accum_diag,
+    cov_accum_zmap,
+    cov_accum_diag_hits,
+    cov_accum_diag_invnpp,
+    cov_mult_diag,
+    cov_apply_diag,
+    cov_eigendecompose_diag,
+)
+
 from .pixels import DistPixels
 
-from .. import ctoast as ctoast
-from .. import timing as timing
 
 class OpAccumDiag(Operator):
-    """
-    Operator which accumulates the diagonal covariance and noise weighted map.
+    """Operator which accumulates the diagonal covariance and noise weighted map.
 
     This operator requires that the local pointing matrix has already been
     computed.  Each process has local pieces of the map products.  This
@@ -66,10 +73,20 @@ class OpAccumDiag(Operator):
     """
 
     def __init__(
-            self, zmap=None, hits=None, invnpp=None, detweights=None,
-            name=None, flag_name=None, flag_mask=255, common_flag_name=None,
-            common_flag_mask=255, pixels='pixels', weights='weights',
-            apply_flags=True):
+        self,
+        zmap=None,
+        hits=None,
+        invnpp=None,
+        detweights=None,
+        name=None,
+        flag_name=None,
+        flag_mask=255,
+        common_flag_name=None,
+        common_flag_mask=255,
+        pixels="pixels",
+        weights="weights",
+        apply_flags=True,
+    ):
 
         self._flag_name = flag_name
         self._flag_mask = flag_mask
@@ -116,29 +133,39 @@ class OpAccumDiag(Operator):
                 self._subsize = hits.submap
             else:
                 if self._nsub != hits.nsubmap:
-                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                    raise RuntimeError(
+                        "All pixel domain objects must have the same number of local submaps."
+                    )
                 if self._subsize != hits.submap:
-                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                    raise RuntimeError(
+                        "All pixel domain objects must have the same submap size."
+                    )
             if self._globloc is None:
                 self._globloc = self._hits
 
         if invnpp is not None:
             self._do_invn = True
             block = invnpp.nnz
-            blocknnz = int( ( (np.sqrt(8 * block) - 1) / 2 ) + 0.5 )
+            blocknnz = int(((np.sqrt(8 * block) - 1) / 2) + 0.5)
             if self._nsub is None:
                 self._nsub = invnpp.nsubmap
                 self._subsize = invnpp.submap
                 self._nnz = blocknnz
             else:
                 if self._nsub != invnpp.nsubmap:
-                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                    raise RuntimeError(
+                        "All pixel domain objects must have the same submap size."
+                    )
                 if self._subsize != invnpp.submap:
-                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                    raise RuntimeError(
+                        "All pixel domain objects must have the same submap size."
+                    )
                 if self._nnz is None:
                     self._nnz = blocknnz
                 elif self._nnz != blocknnz:
-                    raise RuntimeError("All pixel domain objects must have the same submap size.")
+                    raise RuntimeError(
+                        "All pixel domain objects must have the same submap size."
+                    )
             if self._globloc is None:
                 self._globloc = self._invnpp
 
@@ -147,23 +174,25 @@ class OpAccumDiag(Operator):
             self._nnz = 1
 
         if self._do_invn and (not self._do_hits):
-            raise RuntimeError("When accumulating the diagonal pixel covariance, you must also accumulate the hit map")
+            raise RuntimeError(
+                "When accumulating the diagonal pixel covariance, you must also accumulate the hit map"
+            )
 
         if self._do_z and (self._do_hits != self._do_invn):
-            raise RuntimeError("When accumulating the noise weighted map, you must accumulate either both the hits and covariance or neither.")
+            raise RuntimeError(
+                "When accumulating the noise weighted map, you must accumulate either both the hits and covariance or neither."
+            )
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
 
-
+    @function_timer
     def exec(self, data):
-        """
-        Iterate over all observations and detectors and accumulate.
+        """Iterate over all observations and detectors and accumulate.
 
         Args:
             data (toast.Data): The distributed data.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         # the two-level pytoast communicator
         comm = data.comm
         # the global communicator
@@ -175,14 +204,13 @@ class OpAccumDiag(Operator):
         crank = comm.comm_rank
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
 
             nsamp = tod.local_samples[1]
 
             commonflags = None
             if self._apply_flags:
-                commonflags = tod.local_common_flags(
-                    self._common_flag_name).copy()
+                commonflags = tod.local_common_flags(self._common_flag_name).copy()
                 commonflags &= self._common_flag_mask
 
             for det in tod.local_dets:
@@ -204,8 +232,9 @@ class OpAccumDiag(Operator):
 
                 if self._apply_flags:
                     detflags = tod.local_flags(det, self._flag_name)
-                    flags = np.logical_or((detflags & self._flag_mask) != 0,
-                                          commonflags != 0)
+                    flags = np.logical_or(
+                        (detflags & self._flag_mask) != 0, commonflags != 0
+                    )
 
                     del detflags
 
@@ -221,8 +250,9 @@ class OpAccumDiag(Operator):
 
                 if self._detweights is not None:
                     if det not in self._detweights.keys():
-                        raise RuntimeError("no detector weights found for {}"
-                                           "".format(det))
+                        raise RuntimeError(
+                            "no detector weights found for {}" "".format(det)
+                        )
                     detweight = self._detweights[det]
                     if detweight == 0:
                         continue
@@ -231,25 +261,51 @@ class OpAccumDiag(Operator):
                 # on which input pixel objects were given.
 
                 if self._do_invn and self._do_z:
-                    ctoast.cov_accumulate_diagonal(
-                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix,
-                        weights, detweight, signal, self._zmap.data,
-                        self._hits.data, self._invnpp.data)
+                    cov_accum_diag(
+                        self._nsub,
+                        self._subsize,
+                        self._nnz,
+                        sm,
+                        lpix,
+                        weights,
+                        detweight,
+                        signal,
+                        self._invnpp.data,
+                        self._hits.data,
+                        self._zmap.data,
+                    )
 
                 elif self._do_invn:
 
-                    ctoast.cov_accumulate_diagonal_invnpp(
-                        self._nsub, self._subsize, self._nnz, nsamp, sm, lpix,
-                        weights, detweight, self._hits.data, self._invnpp.data)
+                    cov_accum_diag_invnpp(
+                        self._nsub,
+                        self._subsize,
+                        self._nnz,
+                        sm,
+                        lpix,
+                        weights,
+                        detweight,
+                        self._invnpp.data,
+                        self._hits.data,
+                    )
 
                 elif self._do_z:
-                    ctoast.cov_accumulate_zmap(self._nsub, self._subsize,
-                        self._nnz, nsamp, sm, lpix, weights, detweight, signal,
-                        self._zmap.data)
+                    cov_accum_zmap(
+                        self._nsub,
+                        self._subsize,
+                        self._nnz,
+                        sm,
+                        lpix,
+                        weights,
+                        detweight,
+                        signal,
+                        self._zmap.data,
+                    )
 
                 elif self._do_hits:
-                    ctoast.cov_accumulate_diagonal_hits(self._nsub,
-                        self._subsize, self._nnz, nsamp, sm, lpix, self._hits.data)
+                    cov_accum_diag_hits(
+                        self._nsub, self._subsize, self._nnz, sm, lpix, self._hits.data
+                    )
 
                 # print("det {}:".format(det))
                 # if self._zmap is not None:
@@ -262,9 +318,9 @@ class OpAccumDiag(Operator):
         return
 
 
+@function_timer
 def covariance_invert(npp, threshold, rcond=None):
-    """
-    Invert a diagonal noise covariance.
+    """Invert a diagonal noise covariance.
 
     This does an inversion of the covariance.  The threshold is
     applied to the condition number of each block of the matrix.  Pixels
@@ -273,33 +329,43 @@ def covariance_invert(npp, threshold, rcond=None):
     Args:
         npp (DistPixels): The distributed covariance.
         threshold (float): The condition number threshold to apply.
-        rcond (DistPixels): (Optional) The distributed inverse condition number map to fill.
+        rcond (DistPixels): (Optional) The distributed inverse condition number map
+            to fill.
+
+    Returns:
+        None
+
     """
-    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
-    mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
+    mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
 
     if rcond is not None:
         if rcond.size != npp.size:
-            raise RuntimeError("covariance matrix and condition number map must have same number of pixels")
+            raise RuntimeError(
+                "covariance matrix and condition number map must have same number "
+                "of pixels"
+            )
         if rcond.submap != npp.submap:
-            raise RuntimeError("covariance matrix and condition number map must have same submap size")
+            raise RuntimeError(
+                "covariance matrix and condition number map must have same submap size"
+            )
         if rcond.nnz != 1:
             raise RuntimeError("condition number map should have NNZ = 1")
-        do_rcond = 1
 
-        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
-            npp.data, rcond.data, threshold, 1, 1)
+        cov_eigendecompose_diag(
+            npp.nsubmap, npp.submap, mapnnz, npp.data, rcond.data, threshold, True
+        )
 
     else:
-        temp = np.zeros(1, dtype=np.float64)
-        ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
-            npp.data, temp, threshold, 1, 0)
+        temp = np.zeros(npp.nsubmap * npp.submap, dtype=np.float64)
+        cov_eigendecompose_diag(
+            npp.nsubmap, npp.submap, mapnnz, npp.data, temp, threshold, True
+        )
     return
 
 
+@function_timer
 def covariance_multiply(npp1, npp2):
-    """
-    Multiply two diagonal noise covariances.
+    """Multiply two diagonal noise covariances.
 
     This does an in-place multiplication of the covariance.
     The data values of the first covariance (npp1) are replaced with
@@ -308,9 +374,12 @@ def covariance_multiply(npp1, npp2):
     Args:
         npp1 (3D array): The first distributed covariance.
         npp2 (3D array): The second distributed covariance.
+
+    Returns:
+        None
+
     """
-    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
-    mapnnz = int( ( (np.sqrt(8 * npp1.nnz) - 1) / 2 ) + 0.5 )
+    mapnnz = int(((np.sqrt(8 * npp1.nnz) - 1) / 2) + 0.5)
 
     if npp1.size != npp2.size:
         raise RuntimeError("covariance matrices must have same number of pixels")
@@ -319,14 +388,13 @@ def covariance_multiply(npp1, npp2):
     if npp1.nnz != npp2.nnz:
         raise RuntimeError("covariance matrices must have same NNZ values")
 
-    ctoast.cov_multiply_diagonal(npp1.nsubmap, npp1.submap, mapnnz,
-        npp1.data, npp2.data)
+    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1.data, npp2.data)
     return
 
 
+@function_timer
 def covariance_apply(npp, m):
-    """
-    Multiply a map by a diagonal noise covariance.
+    """Multiply a map by a diagonal noise covariance.
 
     This does an in-place multiplication of the covariance and a
     map.  The results are returned in place of the input map.
@@ -334,9 +402,12 @@ def covariance_apply(npp, m):
     Args:
         npp (DistPixels): The distributed covariance.
         m (DistPixels): The distributed map.
+
+    Returns:
+        None
+
     """
-    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
-    mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
+    mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
 
     if m.size != npp.size:
         raise RuntimeError("covariance matrix and map must have same number of pixels")
@@ -345,13 +416,13 @@ def covariance_apply(npp, m):
     if m.nnz != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
 
-    ctoast.cov_apply_diagonal(npp.nsubmap, npp.submap, mapnnz, npp.data, m.data)
+    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, npp.data, m.data)
     return
 
 
+@function_timer
 def covariance_rcond(npp):
-    """
-    Compute the inverse condition number map.
+    """Compute the inverse condition number map.
 
     This computes the inverse condition number map of the supplied
     covariance matrix.
@@ -362,15 +433,22 @@ def covariance_rcond(npp):
     Returns:
         rcond (DistPixels): The distributed inverse condition number map.
     """
-    autotimer = timing.auto_timer(timing.FILE(use_dirname = True))
-    mapnnz = int( ( (np.sqrt(8 * npp.nnz) - 1) / 2 ) + 0.5 )
+    mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
 
-    rcond = DistPixels(comm=npp.comm, size=npp.size, nnz=1, dtype=np.float64,
-        submap=npp.submap, local=npp.local, nest=npp.nested)
+    rcond = DistPixels(
+        comm=npp.comm,
+        size=npp.size,
+        nnz=1,
+        dtype=np.float64,
+        submap=npp.submap,
+        local=npp.local,
+        nest=npp.nested,
+    )
 
     threshold = np.finfo(np.float64).eps
 
-    ctoast.cov_eigendecompose_diagonal(npp.nsubmap, npp.submap, mapnnz,
-        npp.data, rcond.data, threshold, 0, 1)
+    cov_eigendecompose_diag(
+        npp.nsubmap, npp.submap, mapnnz, npp.data, rcond.data, threshold, False
+    )
 
     return rcond
