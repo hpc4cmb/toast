@@ -267,12 +267,12 @@ class OpAccumDiag(Operator):
                         self._nnz,
                         sm,
                         lpix,
-                        weights,
+                        weights.reshape(-1),
                         detweight,
                         signal,
-                        self._invnpp.data,
-                        self._hits.data,
-                        self._zmap.data,
+                        self._invnpp.flatdata,
+                        self._hits.flatdata,
+                        self._zmap.flatdata,
                     )
 
                 elif self._do_invn:
@@ -283,10 +283,10 @@ class OpAccumDiag(Operator):
                         self._nnz,
                         sm,
                         lpix,
-                        weights,
+                        weights.reshape(-1),
                         detweight,
-                        self._invnpp.data,
-                        self._hits.data,
+                        self._invnpp.flatdata,
+                        self._hits.flatdata,
                     )
 
                 elif self._do_z:
@@ -296,15 +296,20 @@ class OpAccumDiag(Operator):
                         self._nnz,
                         sm,
                         lpix,
-                        weights,
+                        weights.reshape(-1),
                         detweight,
                         signal,
-                        self._zmap.data,
+                        self._zmap.flatdata,
                     )
 
                 elif self._do_hits:
                     cov_accum_diag_hits(
-                        self._nsub, self._subsize, self._nnz, sm, lpix, self._hits.data
+                        self._nsub,
+                        self._subsize,
+                        self._nnz,
+                        sm,
+                        lpix,
+                        self._hits.flatdata,
                     )
 
                 # print("det {}:".format(det))
@@ -352,13 +357,19 @@ def covariance_invert(npp, threshold, rcond=None):
             raise RuntimeError("condition number map should have NNZ = 1")
 
         cov_eigendecompose_diag(
-            npp.nsubmap, npp.submap, mapnnz, npp.data, rcond.data, threshold, True
+            npp.nsubmap,
+            npp.submap,
+            mapnnz,
+            npp.flatdata,
+            rcond.flatdata,
+            threshold,
+            True,
         )
 
     else:
         temp = np.zeros(npp.nsubmap * npp.submap, dtype=np.float64)
         cov_eigendecompose_diag(
-            npp.nsubmap, npp.submap, mapnnz, npp.data, temp, threshold, True
+            npp.nsubmap, npp.submap, mapnnz, npp.flatdata, temp, threshold, True
         )
     return
 
@@ -388,7 +399,7 @@ def covariance_multiply(npp1, npp2):
     if npp1.nnz != npp2.nnz:
         raise RuntimeError("covariance matrices must have same NNZ values")
 
-    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1.data, npp2.data)
+    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1.flatdata, npp2.flatdata)
     return
 
 
@@ -416,7 +427,7 @@ def covariance_apply(npp, m):
     if m.nnz != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
 
-    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, npp.data, m.data)
+    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, npp.flatdata, m.flatdata)
     return
 
 
@@ -448,7 +459,7 @@ def covariance_rcond(npp):
     threshold = np.finfo(np.float64).eps
 
     cov_eigendecompose_diag(
-        npp.nsubmap, npp.submap, mapnnz, npp.data, rcond.data, threshold, False
+        npp.nsubmap, npp.submap, mapnnz, npp.flatdata, rcond.flatdata, threshold, False
     )
 
     return rcond

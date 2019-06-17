@@ -197,6 +197,8 @@ class OpPointingHpix(Operator):
                     curang += self._hwpstep
                     curoff += fill
                     fill = stepsamples
+            else:
+                hwpang = np.zeros(nsamp, dtype=np.float64)
 
             # read the common flags and apply bitmask
 
@@ -204,6 +206,8 @@ class OpPointingHpix(Operator):
             if self._apply_flags:
                 common = tod.local_common_flags(self._common_flag_name)
                 common = common & self._common_flag_mask
+            else:
+                common = np.zeros(nsamp, dtype=np.uint8)
 
             for det in tod.local_dets:
                 eps = 0.0
@@ -255,13 +259,8 @@ class OpPointingHpix(Operator):
                         # Use cached version
                         detp = pdata[bslice, :]
 
-                    hslice = None
-                    if hwpang is not None:
-                        hslice = hwpang[bslice]
-
-                    fslice = None
-                    if common is not None:
-                        fslice = common[bslice]
+                    hslice = hwpang[bslice].reshape(-1)
+                    fslice = common[bslice].reshape(-1)
 
                     pointing_matrix_healpix(
                         self.hpix,
@@ -269,11 +268,11 @@ class OpPointingHpix(Operator):
                         eps,
                         cal,
                         self._mode,
-                        detp,
+                        detp.reshape(-1),
                         hslice,
                         fslice,
-                        pixelsref[bslice],
-                        weightsref[bslice, :],
+                        pixelsref[bslice].reshape(-1),
+                        weightsref[bslice, :].reshape(-1),
                     )
                     buf_off += buf_n
 

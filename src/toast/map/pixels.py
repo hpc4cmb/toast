@@ -82,7 +82,7 @@ class OpLocalPixels(Operator):
 
                 if pixmin == 2 ** 60 and pixmax == -2 ** 60:
                     # No pixels
-                    return np.array([], dtype=np.int)
+                    return np.array([], dtype=np.int64)
 
             npix = pixmax - pixmin + 1
             hitmap = np.zeros(npix, dtype=np.bool)
@@ -154,9 +154,7 @@ class DistPixels(object):
         if localpix is not None:
             if local is not None:
                 raise RuntimeError("Must not set local with localpix")
-            allsm = np.floor_divide(localpix, self._submap)
-            sm = set(allsm)
-            local = np.array(sorted(sm), dtype=np.int64)
+            local = np.unique(np.floor_divide(localpix, self._submap))
 
         self._local = local
         self._nglob = self._size // self._submap
@@ -181,6 +179,8 @@ class DistPixels(object):
             self.data = self._cache.create(
                 "data", dtype, (self._nsub, self._submap, self._nnz)
             )
+            self.flatdata = self.data.view()
+            self.flatdata.shape = tuple([self._nsub * self._submap * self._nnz])
 
     def __del__(self):
         if self._glob2loc is not None:
@@ -249,7 +249,7 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
-        safe_gl = np.zeros_like(gl)
+        safe_gl = np.zeros(len(gl), dtype=np.int64)
         good = gl >= 0
         bad = gl < 0
         safe_gl[good] = gl[good]

@@ -4,9 +4,7 @@
 
 from .mpi import MPITestCase
 
-import sys
 import os
-import shutil
 
 import numpy as np
 
@@ -23,8 +21,9 @@ from ..map import (
     covariance_invert,
     covariance_rcond,
     covariance_multiply,
-    covariance_apply,
 )
+
+from ..map.cov import cov_accum_diag
 
 from ._helpers import (
     create_outdir,
@@ -125,7 +124,7 @@ class CovarianceTest(MPITestCase):
             nnz=nnz,
             dtype=np.float64,
             submap=npix,
-            local=np.arange(nsm),
+            local=np.arange(nsm, dtype=np.int64),
         )
         check = fake.duplicate()
 
@@ -135,7 +134,7 @@ class CovarianceTest(MPITestCase):
             nnz=1,
             dtype=np.int64,
             submap=npix,
-            local=np.arange(nsm),
+            local=np.arange(nsm, dtype=np.int64),
         )
         checkhits = hits.duplicate()
 
@@ -145,7 +144,7 @@ class CovarianceTest(MPITestCase):
             nnz=block,
             dtype=np.float64,
             submap=npix,
-            local=np.arange(nsm),
+            local=np.arange(nsm, dtype=np.int64),
         )
         checkinvn = invn.duplicate()
 
@@ -160,9 +159,34 @@ class CovarianceTest(MPITestCase):
                 wt[i * nnz + k] = float(k + 1)
 
         signal = np.random.normal(size=nsamp)
+        #
+        # print(
+        #     nsm,
+        #     npix,
+        #     nnz,
+        #     sm.dtype,
+        #     pix.dtype,
+        #     wt.dtype,
+        #     scale,
+        #     signal.dtype,
+        #     invn.flatdata.dtype,
+        #     hits.flatdata.dtype,
+        #     fake.flatdata.dtype,
+        #     flush=True,
+        # )
 
-        cov_accumulate_diagonal(
-            nsm, npix, nnz, sm, pix, wt, scale, signal, invn.data, hits.data, fake.data
+        cov_accum_diag(
+            nsm,
+            npix,
+            nnz,
+            sm,
+            pix,
+            wt,
+            scale,
+            signal,
+            invn.flatdata,
+            hits.flatdata,
+            fake.flatdata,
         )
 
         for i in range(nsamp):
@@ -206,7 +230,7 @@ class CovarianceTest(MPITestCase):
             nnz=nelem,
             dtype=np.float64,
             submap=npix,
-            local=np.arange(nsm),
+            local=np.arange(nsm, dtype=np.int64),
         )
         check = invn.duplicate()
 
@@ -292,9 +316,9 @@ class CovarianceTest(MPITestCase):
 
         # for i in range(invnpp.data.shape[0]):
         #     for j in range(invnpp.data.shape[1]):
-        #         print("sm {}, pix {}:  hits = {}".format(i, j, hits.data[i,j,0]))
+        #         print("sm {}, pix {}:  hits = {}".format(i, j, hits.data[i, j, 0]))
         #         for k in range(invnpp.data.shape[2]):
-        #             print("  {}".format(invnpp.data[i,j,k]))
+        #             print("  {}".format(invnpp.data[i, j, k]))
 
         invnpp.allreduce()
         hits.allreduce()

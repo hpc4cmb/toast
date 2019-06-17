@@ -27,8 +27,9 @@ from . import intervals as testintervals
 
 from . import cov as testcov
 
-# from . import ops_pmat as testopspmat
-# from . import ops_dipole as testopsdipole
+from . import ops_pmat as testopspmat
+
+from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
 
 # from . import ops_polyfilter as testopspolyfilter
@@ -86,25 +87,27 @@ def test(name=None, verbosity=2):
     suite = unittest.TestSuite()
 
     if name is None:
-        suite.addTest(loader.loadTestsFromModule(testcache))
-        suite.addTest(loader.loadTestsFromModule(testtiming))
-        suite.addTest(loader.loadTestsFromModule(testrng))
-        suite.addTest(loader.loadTestsFromModule(testfft))
-        suite.addTest(loader.loadTestsFromModule(testdist))
-        suite.addTest(loader.loadTestsFromModule(testqarray))
-        suite.addTest(loader.loadTestsFromModule(testtod))
-        suite.addTest(loader.loadTestsFromModule(testtodsat))
+        # suite.addTest(loader.loadTestsFromModule(testcache))
+        # suite.addTest(loader.loadTestsFromModule(testtiming))
+        # suite.addTest(loader.loadTestsFromModule(testrng))
+        # suite.addTest(loader.loadTestsFromModule(testfft))
+        # suite.addTest(loader.loadTestsFromModule(testdist))
+        # suite.addTest(loader.loadTestsFromModule(testqarray))
+        # suite.addTest(loader.loadTestsFromModule(testtod))
+        # suite.addTest(loader.loadTestsFromModule(testtodsat))
+        # suite.addTest(loader.loadTestsFromModule(testintervals))
+        # suite.addTest(loader.loadTestsFromModule(testopssimnoise))
+        # suite.addTest(loader.loadTestsFromModule(testopsapplygain))
+        # suite.addTest(loader.loadTestsFromModule(testopspmat))
+        # suite.addTest(loader.loadTestsFromModule(testcov))
+
+        suite.addTest(loader.loadTestsFromModule(testopsdipole))
+
         # suite.addTest(loader.loadTestsFromModule(testpsdmath))
         # suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
-        suite.addTest(loader.loadTestsFromModule(testintervals))
-        # suite.addTest( loader.loadTestsFromModule(testopspmat) )
-        suite.addTest(loader.loadTestsFromModule(testcov))
-        # suite.addTest( loader.loadTestsFromModule(testopsdipole) )
-        suite.addTest(loader.loadTestsFromModule(testopssimnoise))
         # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
         # suite.addTest( loader.loadTestsFromModule(testopsgroundfilter) )
         # suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
-        suite.addTest(loader.loadTestsFromModule(testopsapplygain))
         # suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
         # suite.addTest( loader.loadTestsFromModule(testopsmadam) )
         # suite.addTest( loader.loadTestsFromModule(testmapsatellite) )

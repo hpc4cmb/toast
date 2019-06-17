@@ -91,12 +91,12 @@ class Cache(object):
         if self.exists(name):
             raise RuntimeError("Data buffer or alias {} already exists".format(name))
         ttype = np.dtype(type)
+        flatshape = 1
+        for dim in shape:
+            flatshape *= dim
         if self._pymem:
-            self._buffers[name] = np.zeros(shape, dtype=ttype)
+            self._buffers[name] = np.zeros(flatshape, dtype=ttype).reshape(shape)
         else:
-            flatshape = 1
-            for dim in shape:
-                flatshape *= dim
             if ttype.char == "b":
                 self._buffers[name] = AlignedI8.zeros(flatshape).array().reshape(shape)
             elif ttype.char == "B":
@@ -109,9 +109,9 @@ class Cache(object):
                 self._buffers[name] = AlignedI32.zeros(flatshape).array().reshape(shape)
             elif ttype.char == "I":
                 self._buffers[name] = AlignedU32.zeros(flatshape).array().reshape(shape)
-            elif (ttype.char == "l") or (ttype.char == "l"):
+            elif (ttype.char == "q") or (ttype.char == "l"):
                 self._buffers[name] = AlignedI64.zeros(flatshape).array().reshape(shape)
-            elif (ttype.char == "L") or (ttype.char == "L"):
+            elif (ttype.char == "Q") or (ttype.char == "L"):
                 self._buffers[name] = AlignedU64.zeros(flatshape).array().reshape(shape)
             elif ttype.char == "f":
                 self._buffers[name] = AlignedF32.zeros(flatshape).array().reshape(shape)

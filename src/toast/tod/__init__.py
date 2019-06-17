@@ -25,11 +25,10 @@ from .sim_interval import regular_intervals
 
 from .sim_det_noise import OpSimNoise
 
-#
 # from .sim_det_map import OpSimGradient, OpSimScan
-#
-# from .sim_det_dipole import OpSimDipole
-#
+
+from .sim_det_dipole import OpSimDipole
+
 # from .sim_det_atm import OpSimAtmosphere
 #
 # from .sim_focalplane import (

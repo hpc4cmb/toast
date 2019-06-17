@@ -7,54 +7,57 @@
 
 using size_container = py::detail::any_container <ssize_t>;
 
+// FIXME: we could use configure checks to detect whether we are on a 64bit
+// system and whether "l" and "L" are equivalent to "q" and "Q".
+
 template <>
-std::string align_format <int8_t> () {
-    return std::string("b");
+std::vector <char> align_format <int8_t> () {
+    return std::vector <char> ({'b'});
 }
 
 template <>
-std::string align_format <int16_t> () {
-    return std::string("h");
+std::vector <char> align_format <int16_t> () {
+    return std::vector <char> ({'h'});
 }
 
 template <>
-std::string align_format <int32_t> () {
-    return std::string("i");
+std::vector <char> align_format <int32_t> () {
+    return std::vector <char> ({'i'});
 }
 
 template <>
-std::string align_format <int64_t> () {
-    return std::string("l");
+std::vector <char> align_format <int64_t> () {
+    return std::vector <char> ({'q', 'l'});
 }
 
 template <>
-std::string align_format <uint8_t> () {
-    return std::string("B");
+std::vector <char> align_format <uint8_t> () {
+    return std::vector <char> ({'B'});
 }
 
 template <>
-std::string align_format <uint16_t> () {
-    return std::string("H");
+std::vector <char> align_format <uint16_t> () {
+    return std::vector <char> ({'H'});
 }
 
 template <>
-std::string align_format <uint32_t> () {
-    return std::string("I");
+std::vector <char> align_format <uint32_t> () {
+    return std::vector <char> ({'I'});
 }
 
 template <>
-std::string align_format <uint64_t> () {
-    return std::string("L");
+std::vector <char> align_format <uint64_t> () {
+    return std::vector <char> ({'Q', 'L'});
 }
 
 template <>
-std::string align_format <float> () {
-    return std::string("f");
+std::vector <char> align_format <float> () {
+    return std::vector <char> ({'f'});
 }
 
 template <>
-std::string align_format <double> () {
-    return std::string("d");
+std::vector <char> align_format <double> () {
+    return std::vector <char> ({'d'});
 }
 
 // Helper functions to check numpy array data types and dimensions.

@@ -1,11 +1,9 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 
 import numpy as np
@@ -13,22 +11,22 @@ import numpy.testing as nt
 
 import healpy as hp
 
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_det_dipole import *
-from ..tod.sim_tod import *
-from ..tod.tod_math import *
-from ..map import *
+from .. import qarray as qa
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ..tod import TODHpixSpiral, OpPointingHpix, OpSimDipole, dipole
+
+from ..map import (
+    OpLocalPixels,
+    OpAccumDiag,
+    DistPixels,
+    covariance_invert,
+    covariance_apply,
+)
+
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 
 class OpSimDipoleTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -41,12 +39,13 @@ class OpSimDipoleTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate)
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet, samplerate=self.rate
+        )
 
         # Pixelization
         self.nside = 64
-        self.npix = 12 * self.nside**2
+        self.npix = 12 * self.nside ** 2
         self.subnside = 16
         if self.subnside > self.nside:
             self.subnside = self.nside
@@ -68,7 +67,9 @@ class OpSimDipoleTest(MPITestCase):
         self.dip_check = 0.00335673
 
         self.dip_max_pix = hp.ang2pix(self.nside, gal_theta, gal_phi, nest=False)
-        self.dip_min_pix = hp.ang2pix(self.nside, (np.pi - gal_theta), (np.pi + gal_phi), nest=False)
+        self.dip_min_pix = hp.ang2pix(
+            self.nside, (np.pi - gal_theta), (np.pi + gal_phi), nest=False
+        )
 
         # Populate the observations
 
@@ -79,14 +80,13 @@ class OpSimDipoleTest(MPITestCase):
             detranks=self.data.comm.comm_group.size,
             firsttime=0.0,
             rate=self.rate,
-            nside=self.nside)
+            nside=self.nside,
+        )
 
         self.data.obs[0]["tod"] = tod
 
-
     def tearDown(self):
         del self.data
-
 
     def test_dipole_func(self):
         # Verify that we get the right magnitude if we are pointed at the
@@ -95,41 +95,47 @@ class OpSimDipoleTest(MPITestCase):
         nt.assert_almost_equal(dtod, self.dip_check * np.ones_like(dtod))
         return
 
-
     def test_dipole_func_total(self):
         # Verify that we get the right magnitude if we are pointed at the
         # velocity maximum.
 
         quat = np.array(
-        [[ 0.5213338 , 0.47771442,-0.5213338 , 0.47771442],
-         [ 0.52143458, 0.47770023,-0.52123302, 0.4777286 ],
-         [ 0.52153535, 0.47768602,-0.52113222, 0.47774277],
-         [ 0.52163611, 0.4776718 ,-0.52103142, 0.47775692],
-         [ 0.52173686, 0.47765757,-0.52093061, 0.47777106]])
+            [
+                [0.5213338, 0.47771442, -0.5213338, 0.47771442],
+                [0.52143458, 0.47770023, -0.52123302, 0.4777286],
+                [0.52153535, 0.47768602, -0.52113222, 0.47774277],
+                [0.52163611, 0.4776718, -0.52103142, 0.47775692],
+                [0.52173686, 0.47765757, -0.52093061, 0.47777106],
+            ]
+        )
 
         v_sat = np.array(
-        [[  1.82378638e-15,  2.97846918e+01,  0.00000000e+00],
-         [ -1.48252084e-07,  2.97846918e+01,  0.00000000e+00],
-         [ -2.96504176e-07,  2.97846918e+01,  0.00000000e+00],
-         [ -4.44756262e-07,  2.97846918e+01,  0.00000000e+00],
-         [ -5.93008348e-07,  2.97846918e+01,  0.00000000e+00]])
+            [
+                [1.82378638e-15, 2.97846918e01, 0.00000000e00],
+                [-1.48252084e-07, 2.97846918e01, 0.00000000e00],
+                [-2.96504176e-07, 2.97846918e01, 0.00000000e00],
+                [-4.44756262e-07, 2.97846918e01, 0.00000000e00],
+                [-5.93008348e-07, 2.97846918e01, 0.00000000e00],
+            ]
+        )
 
-        v_sol = np.array([ -25.7213418,  -244.31203375,  275.33805175])
+        v_sol = np.array([-25.7213418, -244.31203375, 275.33805175])
 
         dtod = dipole(quat, vel=v_sat, solar=v_sol, cmb=2.725)
         # computed with github.com/zonca/dipole
-        expected = np.array([0.00196249,  0.00196203,  0.00196157,  0.00196111,  0.00196065])
+        expected = np.array(
+            [0.00196249, 0.00196203, 0.00196157, 0.00196111, 0.00196065]
+        )
         nt.assert_allclose(dtod, expected, rtol=1e-5)
         return
 
-
     def test_sim(self):
         # make a simple pointing matrix
-        pointing = OpPointingHpix(nside=self.nside, nest=False, mode='I')
+        pointing = OpPointingHpix(nside=self.nside, nest=False, mode="I")
         pointing.exec(self.data)
 
         # generate timestreams
-        op = OpSimDipole(mode='solar', coord='G')
+        op = OpSimDipole(mode="solar", coord="G")
         op.exec(self.data)
 
         # make a binned map
@@ -144,32 +150,51 @@ class OpSimDipoleTest(MPITestCase):
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(comm=self.data.comm.comm_world, size=self.npix,
-            nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm,
-            nest=False)
+        invnpp = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.npix,
+            nnz=1,
+            dtype=np.float64,
+            submap=self.subnpix,
+            local=localsm,
+            nest=False,
+        )
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(comm=self.data.comm.comm_world, size=self.npix,
-            nnz=1, dtype=np.float64, submap=self.subnpix, local=localsm,
-            nest=False)
+        zmap = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.npix,
+            nnz=1,
+            dtype=np.float64,
+            submap=self.subnpix,
+            local=localsm,
+            nest=False,
+        )
         zmap.data.fill(0.0)
 
-        hits = DistPixels(comm=self.data.comm.comm_world, size=self.npix,
-            nnz=1, dtype=np.int64, submap=self.subnpix, local=localsm,
-            nest=False)
+        hits = DistPixels(
+            comm=self.data.comm.comm_world,
+            size=self.npix,
+            nnz=1,
+            dtype=np.int64,
+            submap=self.subnpix,
+            local=localsm,
+            nest=False,
+        )
         hits.data.fill(0)
 
         # accumulate the inverse covariance and noise weighted map.
         # Use detector weights based on the analytic NET.
 
-        tod = self.data.obs[0]['tod']
+        tod = self.data.obs[0]["tod"]
 
         detweights = {}
         for d in tod.local_dets:
             detweights[d] = 1.0
 
-        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp,
-            hits=hits, zmap=zmap, name="dipole")
+        build_invnpp = OpAccumDiag(
+            detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="dipole"
+        )
         build_invnpp.exec(self.data)
 
         invnpp.allreduce()
@@ -193,17 +218,18 @@ class OpSimDipoleTest(MPITestCase):
         if self.comm.rank == 0:
             import matplotlib.pyplot as plt
 
-            mapfile = os.path.join(self.outdir, 'hits.fits')
+            mapfile = os.path.join(self.outdir, "hits.fits")
             data = hp.read_map(mapfile, nest=False)
-            nt.assert_almost_equal(data, self.data.comm.ngroups * self.ndet * \
-                np.ones_like(data))
+            nt.assert_almost_equal(
+                data, self.data.comm.ngroups * self.ndet * np.ones_like(data)
+            )
 
             outfile = "{}.png".format(mapfile)
             hp.mollview(data, xsize=1600, nest=False)
             plt.savefig(outfile)
             plt.close()
 
-            mapfile = os.path.join(self.outdir, 'binned.fits')
+            mapfile = os.path.join(self.outdir, "binned.fits")
             data = hp.read_map(mapfile, nest=False)
 
             # verify that the extrema are in the correct location

@@ -46,56 +46,70 @@ PYBIND11_MAKE_OPAQUE(AlignedF32);
 PYBIND11_MAKE_OPAQUE(AlignedF64);
 
 template <typename T>
-std::string align_format() {
-    return std::string("void");
+std::vector <char> align_format() {
+    return std::vector <char> ({'V'});
 }
 
 template <>
-std::string align_format <int8_t> ();
+std::vector <char> align_format <int8_t> ();
 
 template <>
-std::string align_format <int16_t> ();
+std::vector <char> align_format <int16_t> ();
 
 template <>
-std::string align_format <int32_t> ();
+std::vector <char> align_format <int32_t> ();
 
 template <>
-std::string align_format <int64_t> ();
+std::vector <char> align_format <int64_t> ();
 
 template <>
-std::string align_format <uint8_t> ();
+std::vector <char> align_format <uint8_t> ();
 
 template <>
-std::string align_format <uint16_t> ();
+std::vector <char> align_format <uint16_t> ();
 
 template <>
-std::string align_format <uint32_t> ();
+std::vector <char> align_format <uint32_t> ();
 
 template <>
-std::string align_format <uint64_t> ();
+std::vector <char> align_format <uint64_t> ();
 
 template <>
-std::string align_format <float> ();
+std::vector <char> align_format <float> ();
 
 template <>
-std::string align_format <double> ();
+std::vector <char> align_format <double> ();
 
 
 template <typename T>
 void pybuffer_check_1D(py::buffer data) {
     auto log = toast::Logger::get();
     py::buffer_info info = data.request();
-    std::string tp = align_format <T> ();
-    if (info.format != tp) {
+    std::vector <char> tp = align_format <T> ();
+    bool valid = false;
+    for (auto const & atp : tp) {
+        if (info.format[0] == atp) {
+            valid = true;
+        }
+    }
+    if (!valid) {
         std::ostringstream o;
         o << "Python buffer is type '" << info.format
-          << "', not type '" << tp << "'";
+          << "', which is not in compatible list {";
+        for (auto const & atp : tp) {
+            o << "'" << atp << "',";
+        }
+        o << "}";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
     if (info.ndim != 1) {
         std::ostringstream o;
-        o << "Python buffer is not one-dimensional";
+        o << "Python buffer has " << info.ndim
+          << " dimensions instead of one, shape = ";
+        for (auto const & d : info.shape) {
+            o << d << ", ";
+        }
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
@@ -136,7 +150,8 @@ void register_aligned(py::module & m, char const * name) {
          })
     .def_buffer(
         [](C & self) -> py::buffer_info {
-            std::string format = align_format <typename C::value_type> ();
+            std::string format =
+                py::format_descriptor <typename C::value_type>::format();
             return py::buffer_info(
                 static_cast <void *> (self.data()),
                 sizeof(typename C::value_type),
@@ -283,10 +298,6 @@ void register_aligned(py::module & m, char const * name) {
 
     return;
 }
-
-// Helper functions to check numpy array data types and dimensions.
-void pybuffer_check_double_1D(py::buffer data);
-void pybuffer_check_uint64_1D(py::buffer data);
 
 // Initialize all the pieces of the bindings.
 void init_sys(py::module & m);

@@ -1,24 +1,18 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
 
 import numpy as np
 
 import healpy as hp
 
-from .. import qarray as qa
-from .. import timing as timing
-
-from .tod import TOD
-
-from ..op import Operator
+from ..timing import function_timer
 
 from .tod_math import dipole
 
-# FIXME: Once the global package control interface is added,
-# move this to that unified location.
-tod_buffer_length = 1048576
+from ..op import Operator
+
+from ..utils import Environment
 
 
 class OpSimDipole(Operator):
@@ -58,10 +52,23 @@ class OpSimDipole(Operator):
             respect to the CMB rest frame.
         freq (float): optional observing frequency in Hz (not GHz).
     """
-    def __init__(self, mode='total', coord='C', subtract=False, out='dipole',
-                 cmb=2.72548, solar_speed=369.0, solar_gal_lat=48.26,
-                 solar_gal_lon=263.99, freq=0, keep_quats=False, keep_vel=False,
-                 flag_mask=255, common_flag_mask=255):
+
+    def __init__(
+        self,
+        mode="total",
+        coord="C",
+        subtract=False,
+        out="dipole",
+        cmb=2.72548,
+        solar_speed=369.0,
+        solar_gal_lat=48.26,
+        solar_gal_lon=263.99,
+        freq=0,
+        keep_quats=False,
+        keep_vel=False,
+        flag_mask=255,
+        common_flag_mask=255,
+    ):
         self._mode = mode
         self._coord = coord
         self._subtract = subtract
@@ -84,18 +91,17 @@ class OpSimDipole(Operator):
 
         # rotate solar system velocity to desired coordinate frame
 
-        if self._coord == 'G':
+        if self._coord == "G":
             self._solar_vel = self._solar_gal_vel
         else:
-            rotmat = hp.rotator.Rotator(coord=['G', self._coord]).mat
+            rotmat = hp.rotator.Rotator(coord=["G", self._coord]).mat
             self._solar_vel = np.ravel(np.dot(rotmat, self._solar_gal_vel))
 
         super().__init__()
 
-
+    @function_timer
     def exec(self, data):
-        """
-        Create the timestreams.
+        """Create the timestreams.
 
         This loops over all observations and detectors and uses the pointing,
         the telescope motion, and the solar system motion to compute the
@@ -103,8 +109,9 @@ class OpSimDipole(Operator):
 
         Args:
             data (toast.Data): The distributed data.
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        env = Environment.get()
         comm = data.comm
         # the global communicator
         cworld = comm.comm_world
@@ -117,17 +124,17 @@ class OpSimDipole(Operator):
         nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
 
             offset, nsamp = tod.local_samples
 
             vel = None
             sol = None
 
-            if (self._mode == 'solar') or (self._mode == 'total'):
+            if (self._mode == "solar") or (self._mode == "total"):
                 sol = self._solar_vel
 
-            if (self._mode == 'orbital') or (self._mode == 'total'):
+            if (self._mode == "orbital") or (self._mode == "total"):
                 if self._keep_vel:
                     vel = tod.local_velocity()
                 else:
@@ -138,7 +145,7 @@ class OpSimDipole(Operator):
             for det in tod.local_dets:
 
                 flags = tod.local_flags(det) & self._flag_mask
-                totflags = (flags | common)
+                totflags = flags | common
                 del flags
 
                 pdata = None
@@ -150,11 +157,11 @@ class OpSimDipole(Operator):
                 # Set up output cache
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):
-                    tod.cache.create(cachename, np.float64, (nsamp, ))
+                    tod.cache.create(cachename, np.float64, (nsamp,))
                 ref = tod.cache.reference(cachename)
 
                 buf_off = 0
-                buf_n = tod_buffer_length
+                buf_n = env.tod_buffer_length()
                 while buf_off < nsamp:
                     if buf_off + buf_n > nsamp:
                         buf_n = nsamp - buf_off
@@ -163,11 +170,10 @@ class OpSimDipole(Operator):
                     detp = None
                     if pdata is None:
                         # Read and discard
-                        detp = tod.read_pntg(detector=det, local_start=buf_off,
-                                             n=buf_n)
+                        detp = tod.read_pntg(detector=det, local_start=buf_off, n=buf_n)
                     else:
                         # Use cached version
-                        detp = pdata[bslice,:]
+                        detp = pdata[bslice, :]
 
                     # Make sure that flagged pointing is well defined
                     detp[(totflags[bslice] != 0), :] = nullquat
@@ -176,8 +182,9 @@ class OpSimDipole(Operator):
                     if vel is not None:
                         vslice = vel[bslice]
 
-                    dipoletod = dipole(detp, vel=vslice, solar=sol,
-                                       cmb=self._cmb, freq=self._freq)
+                    dipoletod = dipole(
+                        detp, vel=vslice, solar=sol, cmb=self._cmb, freq=self._freq
+                    )
                     if self._subtract:
                         ref[bslice] -= dipoletod
                     else:

@@ -18,5 +18,7 @@ install(FILES
     ops_applygain.py
     ops_simnoise.py
     cov.py
+    ops_pmat.py
+    ops_dipole.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
