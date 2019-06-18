@@ -20,5 +20,6 @@ install(FILES
     cov.py
     ops_pmat.py
     ops_dipole.py
+    ops_groundfilter.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

@@ -10,6 +10,8 @@ from numpy.polynomial.chebyshev import chebval
 
 from ..op import Operator
 
+from ..utils import Logger
+
 from ..timing import function_timer
 
 

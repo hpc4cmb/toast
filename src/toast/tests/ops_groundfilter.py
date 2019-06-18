@@ -1,31 +1,16 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 
 import numpy as np
-import numpy.testing as nt
-from scipy.constants import degree
 
-from ..tod import OpGroundFilter
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_tod import *
+from ..tod import OpGroundFilter, TODGround, AnalyticNoise, OpSimNoise
 
-from ._helpers import (
-    create_outdir,
-    create_distdata,
-    boresight_focalplane,
-    uniform_chunks,
-)
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 
 class OpGroundFilterTest(MPITestCase):

@@ -44,7 +44,8 @@ from .noise import Noise
 
 # from ..ctoast import filter_polyfilter
 # from .polyfilter import OpPolyFilter
-# from .groundfilter import OpGroundFilter
+from .groundfilter import OpGroundFilter
+
 # from .gainscrambler import OpGainScrambler
 from .applygain import OpApplyGain, write_calibration_file
 
