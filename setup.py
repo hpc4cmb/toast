@@ -22,12 +22,11 @@ class CMakeBuild(build_ext):
             out = subprocess.check_output(["cmake", "--version"])
         except OSError:
             raise RuntimeError(
-                "CMake must be installed to build the following extensions: " +
-                ", ".join(e.name for e in self.extensions))
+                "CMake must be installed to build the following extensions: "
+                + ", ".join(e.name for e in self.extensions)
+            )
 
-        cmake_args = [
-            "-DPYTHON_EXECUTABLE=" + sys.executable
-        ]
+        cmake_args = ["-DPYTHON_EXECUTABLE=" + sys.executable]
 
         cfg = "Debug" if self.debug else "Release"
         build_args = ["--config", cfg]
@@ -41,18 +40,19 @@ class CMakeBuild(build_ext):
 
         env = os.environ.copy()
         env["CXXFLAGS"] = "{} -DVERSION_INFO=\\'{}\\'".format(
-            env.get("CXXFLAGS", ""),
-            self.distribution.get_version())
+            env.get("CXXFLAGS", ""), self.distribution.get_version()
+        )
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
         # CMakeLists.txt is in the same directory as this setup.py file
         cmake_list_dir = os.path.abspath(os.path.dirname(__file__))
-        print("-"*10, "Running CMake prepare", "-"*40)
-        subprocess.check_call(["cmake", cmake_list_dir] + cmake_args,
-                              cwd=self.build_temp, env=env)
+        print("-" * 10, "Running CMake prepare", "-" * 40)
+        subprocess.check_call(
+            ["cmake", cmake_list_dir] + cmake_args, cwd=self.build_temp, env=env
+        )
 
-        print("-"*10, "Building extensions", "-"*40)
+        print("-" * 10, "Building extensions", "-" * 40)
         cmake_cmd = ["cmake", "--build", "."] + self.build_args
         subprocess.check_call(cmake_cmd, cwd=self.build_temp)
 
@@ -70,12 +70,11 @@ class CMakeBuild(build_ext):
         self.copy_file(source_path, dest_path)
 
 
-ext_modules = [
-    CMakeExtension("toast._libtoast")
-]
+ext_modules = [CMakeExtension("toast._libtoast")]
 
 try:
     from mpi4py import MPI
+
     # If we can import mpi4py, then assume that the MPI extension
     # will be built.
     ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
@@ -96,6 +95,7 @@ conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = version
 conf["provides"] = "toast"
 conf["python_requires"] = ">=3.4.0"
+conf["install_requires"] = ["cmake"]
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
