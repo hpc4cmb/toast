@@ -383,6 +383,10 @@ class DistPixels(object):
             None
 
         """
+        rank = 0
+        if self._comm is not None:
+            rank = self._comm.rank
+
         if comm_bytes is None:
             comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
@@ -397,7 +401,7 @@ class DistPixels(object):
         # that we can (hopefully) read through all columns in chunks such that
         # we only ever have a couple FITS blocks in memory.
         fdata = None
-        if (self._comm is None) or (self._comm.rank == 0):
+        if rank == 0:
             # Check that the file is in expected format
             errors = ""
             h = hp.fitsfunc.pf.open(path, "readonly")
@@ -455,7 +459,7 @@ class DistPixels(object):
                 copyrows = (comm_submap * self._submap) - out_off
                 islast = True
 
-            if (self._comm is None) or (self._comm.rank == 0):
+            if rank == 0:
                 for col in range(self._nnz):
                     coloff = (out_off * self._nnz) + col
                     buf[coloff : coloff + (copyrows * self._nnz) : self._nnz] = fdata[
@@ -505,6 +509,9 @@ class DistPixels(object):
             None
 
         """
+        rank = 0
+        if self._comm is not None:
+            rank = self._comm.rank
         if comm_bytes is None:
             comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
@@ -518,7 +525,7 @@ class DistPixels(object):
         # get a tuple of all columns in the table.  We choose memmap here so
         # that we can (hopefully) read through all columns in chunks such that
         # we only ever have a couple FITS blocks in memory.
-        if (self._comm is None) or (self._comm.rank == 0):
+        if rank == 0:
             if self._nnz == 1:
                 fdata = (fdata,)
 
@@ -540,7 +547,7 @@ class DistPixels(object):
                 copyrows = (comm_submap * self._submap) - out_off
                 islast = True
 
-            if (self._comm is None) or (self._comm.rank == 0):
+            if rank == 0:
                 for col in range(self._nnz):
                     coloff = (out_off * self._nnz) + col
                     buf[coloff : coloff + (copyrows * self._nnz) : self._nnz] = fdata[
@@ -589,6 +596,10 @@ class DistPixels(object):
             comm_bytes (int): The approximate message size to use.
 
         """
+        rank = 0
+        if self._comm is not None:
+            rank = self._comm.rank
+
         if comm_bytes is None:
             comm_bytes = self._commsize
 
@@ -625,7 +636,7 @@ class DistPixels(object):
 
         fdata = None
         temp = None
-        if (self._comm is None) or (self._comm.rank == 0):
+        if rank == 0:
             fdata = []
             temp = Cache()
             for col in range(self._nnz):
@@ -633,7 +644,28 @@ class DistPixels(object):
                 temp.create(name, self._dtype, (self._size,))
                 fdata.append(temp.reference(name))
 
-        if self._comm is not None:
+        if self._comm is None:
+            dbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
+            dview = dbuf.reshape(comm_submap, self._submap, self._nnz)
+
+            submap_off = 0
+            ncomm = comm_submap
+            while submap_off < nsubmap:
+                if submap_off + ncomm > nsubmap:
+                    ncomm = nsubmap - submap_off
+                if np.sum(allowners[submap_off : submap_off + ncomm]) != ncomm:
+                    # at least one submap has some hits
+                    for c in range(ncomm):
+                        dview[c, :, :] = self.data[self._glob2loc[submap_off + c], :, :]
+                    # copy into FITS buffers
+                    for c in range(ncomm):
+                        sampoff = (submap_off + c) * self._submap
+                        for col in range(self._nnz):
+                            fdata[col][sampoff : sampoff + self._submap] = dview[
+                                c, :, col
+                            ]
+                submap_off += ncomm
+        else:
             sendbuf = np.zeros(
                 comm_submap * self._submap * self._nnz, dtype=self._dtype
             )
@@ -641,7 +673,7 @@ class DistPixels(object):
 
             recvbuf = None
             recvview = None
-            if self._comm.rank == 0:
+            if rank == 0:
                 recvbuf = np.zeros(
                     comm_submap * self._submap * self._nnz, dtype=self._dtype
                 )
@@ -663,7 +695,7 @@ class DistPixels(object):
                                 self._glob2loc[submap_off + c], :, :
                             ]
                     self._comm.Reduce(sendbuf, recvbuf, op=MPI.SUM, root=0)
-                    if self._comm.rank == 0:
+                    if rank == 0:
                         # copy into FITS buffers
                         for c in range(ncomm):
                             sampoff = (submap_off + c) * self._submap
@@ -672,15 +704,17 @@ class DistPixels(object):
                                     c, :, col
                                 ]
                     sendbuf.fill(0)
-                    if self._comm.rank == 0:
+                    if rank == 0:
                         recvbuf.fill(0)
                 submap_off += ncomm
 
-        if (self._comm is None) or (self._comm.rank == 0):
+        if rank == 0:
             if os.path.isfile(path):
                 os.remove(path)
             hp.write_map(
                 path, fdata, dtype=self._dtype, fits_IDL=False, nest=self._nest
             )
+            del fdata
+            del temp
 
         return

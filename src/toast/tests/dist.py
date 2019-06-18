@@ -9,13 +9,12 @@ import os
 import numpy as np
 import numpy.testing as nt
 
-from ..dist import (distribute_uniform, distribute_discrete, Data)
+from ..dist import distribute_uniform, distribute_discrete, Data
 
-from ._helpers import (create_outdir, create_distdata)
+from ._helpers import create_outdir, create_distdata
 
 
 class DataTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -77,34 +76,37 @@ class DataTest(MPITestCase):
             38273,
             434126,
             40843,
-            431375
+            431375,
         ]
         self.totsamp1 = np.sum(self.sizes1)
 
-        self.sizes2 = [(int(3600*169.7)) for i in range(8640)]
+        self.sizes2 = [(int(3600 * 169.7)) for i in range(8640)]
         self.totsamp2 = np.sum(self.sizes2)
 
     def test_construction(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         dist_uni1 = distribute_uniform(self.totsamp1, self.ntask)
         # with open("test_uni_{}".format(self.comm.rank), "w") as f:
         #     for d in dist_uni:
         #         f.write("uniform:  {} {}\n".format(d[0], d[1]))
         n1 = np.sum(np.array(dist_uni1)[:, 1])
-        assert(n1 == self.totsamp1)
+        assert n1 == self.totsamp1
 
         n = self.totsamp1
-        breaks = [n//2+1000, n//4-1000000, n//2+1000, (3*n)//4]
-        dist_uni2 = distribute_uniform(
-            self.totsamp1, self.ntask, breaks=breaks)
+        breaks = [n // 2 + 1000, n // 4 - 1000000, n // 2 + 1000, (3 * n) // 4]
+        dist_uni2 = distribute_uniform(self.totsamp1, self.ntask, breaks=breaks)
 
         n2 = np.sum(np.array(dist_uni2)[:, 1])
-        assert(n2 == self.totsamp1)
+        assert n2 == self.totsamp1
 
         for offset, nsamp in dist_uni2:
             for brk in breaks:
-                if brk > offset and brk < offset+nsamp:
+                if brk > offset and brk < offset + nsamp:
                     raise Exception(
-                        "Uniform data distribution did not honor the breaks")
+                        "Uniform data distribution did not honor the breaks"
+                    )
 
         dist_disc1 = distribute_discrete(self.sizes1, self.ntask)
         # with open("test_disc_{}".format(self.comm.rank), "w") as f:
@@ -112,35 +114,35 @@ class DataTest(MPITestCase):
         #         f.write("discrete:  {} {}\n".format(d[0], d[1]))
 
         n = np.sum(np.array(dist_disc1)[:, 1])
-        assert(n == len(self.sizes1))
+        assert n == len(self.sizes1)
 
         n = len(self.sizes1)
-        breaks = [n//2, n//4, n//2, (3*n)//4]
-        dist_disc2 = distribute_discrete(
-            self.sizes1, self.ntask, breaks=breaks)
+        breaks = [n // 2, n // 4, n // 2, (3 * n) // 4]
+        dist_disc2 = distribute_discrete(self.sizes1, self.ntask, breaks=breaks)
 
         n = np.sum(np.array(dist_disc2)[:, 1])
-        assert(n == len(self.sizes1))
+        assert n == len(self.sizes1)
 
         for offset, nchunk in dist_disc2:
             for brk in breaks:
-                if brk > offset and brk < offset+nchunk:
+                if brk > offset and brk < offset + nchunk:
                     raise Exception(
-                        "Discrete data distribution did not honor the breaks")
+                        "Discrete data distribution did not honor the breaks"
+                    )
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(
-                os.path.join(self.outdir, "out_test_construct_info"), "w")
+        if rank == 0:
+            handle = open(os.path.join(self.outdir, "out_test_construct_info"), "w")
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         dist_disc3 = distribute_discrete(self.sizes2, 384)
 
-        if self.comm.rank == 0:
-            with open(os.path.join(
-                      self.outdir, "dist_discrete_8640x384.txt"), "w") as f:
+        if rank == 0:
+            with open(
+                os.path.join(self.outdir, "dist_discrete_8640x384.txt"), "w"
+            ) as f:
                 indx = 0
                 for d in dist_disc3:
                     f.write("{:04d} = ({}, {})\n".format(indx, d[0], d[1]))
@@ -167,7 +169,7 @@ class DataTest(MPITestCase):
         sum1 = 0
         for value, site_data in datasplit_site:
             for obs in site_data.obs:
-                assert("var1" not in obs)
+                assert "var1" not in obs
                 obs["var1"] = 1
                 sum1 += 1
 

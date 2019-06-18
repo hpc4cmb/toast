@@ -505,7 +505,10 @@ class Data(object):
                     "defined for all observations.".format(key)
                 )
             values.add(obs[key])
-        if self._comm.comm_world is not None:
+        all_values = None
+        if self._comm.comm_world is None:
+            all_values = [values]
+        else:
             all_values = self._comm.comm_world.allgather(values)
         for vals in all_values:
             values = values.union(vals)

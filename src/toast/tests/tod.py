@@ -18,10 +18,15 @@ class TODTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
+        rank = 0
+        nproc = 1
+        if self.comm is not None:
+            rank = self.comm.rank
+            nproc = self.comm.size
         self.dets = ["1a", "1b", "2a", "2b"]
         self.mynsamp = 10
-        self.myoff = self.mynsamp * self.comm.rank
-        self.totsamp = self.mynsamp * self.comm.size
+        self.myoff = self.mynsamp * rank
+        self.totsamp = self.mynsamp * nproc
         self.tod = TODCache(self.comm, self.dets, self.totsamp)
         self.rms = 10.0
         self.pntgvec = np.ravel(np.random.random((self.mynsamp, 4))).reshape(-1, 4)

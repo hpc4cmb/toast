@@ -130,6 +130,9 @@ class OpSimDipoleTest(MPITestCase):
         return
 
     def test_sim(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.nside, nest=False, mode="I")
         pointing.exec(self.data)
@@ -215,7 +218,7 @@ class OpSimDipoleTest(MPITestCase):
         covariance_apply(invnpp, zmap)
         zmap.write_healpix_fits(os.path.join(self.outdir, "binned.fits"))
 
-        if self.comm.rank == 0:
+        if rank == 0:
             import matplotlib.pyplot as plt
 
             mapfile = os.path.join(self.outdir, "hits.fits")
