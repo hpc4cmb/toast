@@ -95,7 +95,7 @@ conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = version
 conf["provides"] = "toast"
 conf["python_requires"] = ">=3.4.0"
-conf["install_requires"] = ["cmake"]
+conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib"]
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
