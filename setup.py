@@ -33,6 +33,11 @@ class CMakeBuild(build_ext):
 
         cmake_args += ["-DCMAKE_BUILD_TYPE=" + cfg]
 
+        # If a user is installing with setup.py (rather than using the actual
+        # cmake build system or conda packages), then it is unlikely that they have
+        # correctly installed MPI and a compatible mpi4py.  So we disable it here.
+        cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
+
         # Assuming Makefiles
         build_args += ["--", "-j2"]
 
@@ -95,7 +100,14 @@ conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = version
 conf["provides"] = "toast"
 conf["python_requires"] = ">=3.4.0"
-conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib"]
+conf["install_requires"] = [
+    "cmake",
+    "numpy",
+    "scipy",
+    "healpy",
+    "matplotlib",
+    "pyephem",
+]
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
