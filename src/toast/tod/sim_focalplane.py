@@ -1,7 +1,6 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
 
 import numpy as np
 
@@ -22,16 +21,16 @@ def cartesian_to_quat(offsets):
             about the Z axis.
 
     Returns:
-        list: list of quaternions for each item in the input list.
+        (list): list of quaternions for each item in the input list.
 
     """
     centers = list()
-    zaxis = np.array([0,0,1], dtype=np.float64)
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
     for off in offsets:
-        angrot = qa.rotation(zaxis, off[2]*np.pi/180.0)
-        wx = off[0]*np.pi/180.0
-        wy = off[1]*np.pi/180.0
-        wz = np.sqrt(1.0 - (wx*wx + wy*wy))
+        angrot = qa.rotation(zaxis, off[2] * np.pi / 180.0)
+        wx = off[0] * np.pi / 180.0
+        wy = off[1] * np.pi / 180.0
+        wz = np.sqrt(1.0 - (wx * wx + wy * wy))
         wdir = np.array([wx, wy, wz])
         posrot = qa.from_vectors(zaxis, wdir)
         centers.append(qa.mult(posrot, angrot))
@@ -49,7 +48,9 @@ def hex_nring(npix):
         test -= 6 * nrings
         nrings += 1
     if test != 0:
-        raise RuntimeError("{} is not a valid number of pixels for a hexagonal layout".format(npix))
+        raise RuntimeError(
+            "{} is not a valid number of pixels for a hexagonal layout".format(npix)
+        )
     return nrings
 
 
@@ -81,7 +82,7 @@ def hex_row_col(npix, pix):
         coloff = nrings - ring - 1
         if sector == 0:
             row = steps
-            col = coloff + 2*ring - steps
+            col = coloff + 2 * ring - steps
         elif sector == 1:
             row = ring
             col = coloff + ring - steps
@@ -101,8 +102,7 @@ def hex_row_col(npix, pix):
 
 
 def hex_pol_angles_qu(npix, offset=0.0):
-    """
-    Generates a vector of detector polarization angles.
+    """Generates a vector of detector polarization angles.
 
     The returned angles can be used to construct a hexagonal detector layout.
     This scheme alternates pixels between 0/90 and +/- 45 degrees.
@@ -111,8 +111,8 @@ def hex_pol_angles_qu(npix, offset=0.0):
         npix (int): the number of pixels locations in the hexagon.
         offset (float): the constant angle offset in degrees to apply.
 
-    Returns (array):
-        The detector polarization angles.
+    Returns:
+        (array):  The detector polarization angles.
 
     """
     pol = np.zeros(npix, dtype=np.float64)
@@ -127,8 +127,7 @@ def hex_pol_angles_qu(npix, offset=0.0):
 
 
 def hex_pol_angles_radial(npix, offset=0.0):
-    """
-    Generates a vector of detector polarization angles.
+    """Generates a vector of detector polarization angles.
 
     The returned angles can be used to construct a hexagonal detector layout.
     This scheme orients the bolometer along the radial direction of the
@@ -138,12 +137,12 @@ def hex_pol_angles_radial(npix, offset=0.0):
         npix (int): the number of pixels locations in the hexagon.
         offset (float): the constant angle offset in degrees to apply.
 
-    Returns (array):
-        The detector polarization angles.
+    Returns:
+        (array):  The detector polarization angles.
 
     """
-    sixty = np.pi/3.0
-    thirty = np.pi/6.0
+    sixty = np.pi / 3.0
+    thirty = np.pi / 6.0
     pol = np.zeros(npix, dtype=np.float64)
     pol[0] = 0.0
     for pix in range(1, npix):
@@ -162,10 +161,10 @@ def hex_pol_angles_radial(npix, offset=0.0):
     return pol
 
 
-def hex_layout(npix, angwidth, prefix, suffix, pol,
-    center=np.array([0,0,0,1], dtype=np.float64)):
-    """
-    Return detectors in a hexagon layout.
+def hex_layout(
+    npix, angwidth, prefix, suffix, pol, center=np.array([0, 0, 0, 1], dtype=np.float64)
+):
+    """Return detectors in a hexagon layout.
 
     This maps the physical positions of pixels into angular positions
     from the hexagon center.  The X axis in the hexagon frame is along
@@ -197,15 +196,15 @@ def hex_layout(npix, angwidth, prefix, suffix, pol,
             to the pixel location.
         center (ndarray): quaternion offset of the center of the layout.
 
-    Returns (dict):
-        A dictionary keyed on detector name, with each value itself a
+    Returns:
+        (dict) A dictionary keyed on detector name, with each value itself a
             dictionary of detector properties.
 
     """
-    zaxis = np.array([0,0,1], dtype=np.float64)
-    nullquat = np.array([0,0,0,1], dtype=np.float64)
-    sixty = np.pi/3.0
-    thirty = np.pi/6.0
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
+    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
+    sixty = np.pi / 3.0
+    thirty = np.pi / 6.0
     rtthree = np.sqrt(3.0)
     rtthreebytwo = 0.5 * rtthree
 
@@ -306,13 +305,12 @@ def hex_layout(npix, angwidth, prefix, suffix, pol,
     return dets
 
 
-
 def rhomb_dim(npix):
     """
     For a rhombus layout, return the dimension of one side.
     """
     dim = int(np.sqrt(float(npix)))
-    if dim**2 != npix:
+    if dim ** 2 != npix:
         raise ValueError("number of pixels for a rhombus wafer must be square")
     return dim
 
@@ -340,8 +338,7 @@ def rhomb_row_col(npix, pix):
 
 
 def rhomb_pol_angles_qu(npix, offset=0.0):
-    """
-    Generates a vector of detector polarization angles.
+    """Generates a vector of detector polarization angles.
 
     The returned angles can be used to construct a rhombus detector layout.
     This scheme alternates pixels between 0/90 and +/- 45 degrees.
@@ -350,8 +347,8 @@ def rhomb_pol_angles_qu(npix, offset=0.0):
         npix (int): the number of pixels locations in the rhombus.
         offset (float): the constant angle offset in degrees to apply.
 
-    Returns (array):
-        The detector polarization angles.
+    Returns:
+        (array): The detector polarization angles.
 
     """
     pol = np.zeros(npix, dtype=np.float64)
@@ -365,11 +362,15 @@ def rhomb_pol_angles_qu(npix, offset=0.0):
     return pol
 
 
-
-def rhombus_layout(npix, angwidth, prefix, suffix, polang,
-    center=np.array([0,0,0,1], dtype=np.float64)):
-    """
-    Return detectors in a rhombus layout.
+def rhombus_layout(
+    npix,
+    angwidth,
+    prefix,
+    suffix,
+    polang,
+    center=np.array([0, 0, 0, 1], dtype=np.float64),
+):
+    """Return detectors in a rhombus layout.
 
     This particular rhombus geometry is essentially a third of a
     hexagon.  In other words the aspect ratio of the rhombus is
@@ -409,13 +410,13 @@ def rhombus_layout(npix, angwidth, prefix, suffix, polang,
             to the pixel location.
         center (ndarray): quaternion offset of the center of the layout.
 
-    Returns (dict):
-        A dictionary keyed on detector name, with each value itself a
+    Returns:
+        (dict):  A dictionary keyed on detector name, with each value itself a
             dictionary of detector properties.
 
     """
-    zaxis = np.array([0,0,1], dtype=np.float64)
-    nullquat = np.array([0,0,0,1], dtype=np.float64)
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
+    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
     rtthree = np.sqrt(3.0)
 
     angwidth = angwidth * np.pi / 180.0
@@ -456,7 +457,7 @@ def rhombus_layout(npix, angwidth, prefix, suffix, polang,
         if pixrow >= dim:
             relrow = (2 * dim - 2) - pixrow
         colang = (float(pixcol) - float(relrow) / 2.0) * pixdiam
-        distang = np.sqrt(rowang**2 + colang**2)
+        distang = np.sqrt(rowang ** 2 + colang ** 2)
         zang = np.cos(distang)
         pixdir = np.array([colang, rowang, zang], dtype=np.float64)
         norm = np.sqrt(np.dot(pixdir, pixdir))
@@ -472,10 +473,10 @@ def rhombus_layout(npix, angwidth, prefix, suffix, polang,
     return dets
 
 
-def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
-    polcolor=None, labels=None):
-    """
-    Visualize a dictionary of detectors.
+def plot_focalplane(
+    dets, width, height, outfile, fwhm=None, facecolor=None, polcolor=None, labels=None
+):
+    """Visualize a dictionary of detectors.
 
     This makes a simple plot of the detector positions on the projected
     focalplane.
@@ -504,9 +505,13 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
             arrows.
         labels (dict): plot this text in the center of each pixel.
 
+    Returns:
+        None
+
     """
     if outfile is not None:
         import matplotlib
+
         # Force matplotlib to not use any Xwindows backend.
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -569,19 +574,34 @@ def plot_focalplane(dets, width, height, outfile, fwhm=None, facecolor=None,
         if polcolor is not None:
             detcolor = polcolor[d]
 
-        ax.arrow(xtail, ytail, dx, dy, width=0.1*detradius,
-            head_width=0.3*detradius, head_length=0.3*detradius, fc=detcolor,
-            ec=detcolor, length_includes_head=True)
+        ax.arrow(
+            xtail,
+            ytail,
+            dx,
+            dy,
+            width=0.1 * detradius,
+            head_width=0.3 * detradius,
+            head_length=0.3 * detradius,
+            fc=detcolor,
+            ec=detcolor,
+            length_includes_head=True,
+        )
 
         if labels is not None:
             xsgn = 1.0
             if dx < 0.0:
                 xsgn = -1.0
             labeloff = 0.05 * xsgn * fontpix * len(labels[d]) / figdpi
-            ax.text((xtail+1.1*dx+labeloff), (ytail+1.1*dy), labels[d],
-                color='k', fontsize=fontpt, horizontalalignment='center',
-                verticalalignment='center',
-                bbox=dict(fc='w', ec='none', pad=1, alpha=1.0))
+            ax.text(
+                (xtail + 1.1 * dx + labeloff),
+                (ytail + 1.1 * dy),
+                labels[d],
+                color="k",
+                fontsize=fontpt,
+                horizontalalignment="center",
+                verticalalignment="center",
+                bbox=dict(fc="w", ec="none", pad=1, alpha=1.0),
+            )
 
     if outfile is None:
         plt.show()

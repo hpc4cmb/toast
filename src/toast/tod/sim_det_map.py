@@ -1,20 +1,22 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import healpy as hp
 import numpy as np
 
+import healpy as hp
+
+from ..timing import function_timer
+
 from .. import qarray as qa
-from .. import timing as timing
-from ..ctoast import sim_map_scan_map
-from ..mpi import MPI
+
+from .._libtoast import scan_map_float64
+
 from ..op import Operator
 
 
 class OpSimGradient(Operator):
-    """
-    Generate a fake sky signal as a gradient between the poles.
+    """Generate a fake sky signal as a gradient between the poles.
 
     This passes through each observation and creates a fake signal timestream
     based on the cartesian Z coordinate of the HEALPix pixel containing the
@@ -29,9 +31,18 @@ class OpSimGradient(Operator):
         nest (bool): whether to use NESTED ordering.
     """
 
-    def __init__(self, out='grad', nside=512, min=-100.0, max=100.0, nest=False,
-                 flag_mask=255, common_flag_mask=255, keep_quats=False):
-        # We call the parent class constructor, which currently does nothing
+    def __init__(
+        self,
+        out="grad",
+        nside=512,
+        min=-100.0,
+        max=100.0,
+        nest=False,
+        flag_mask=255,
+        common_flag_mask=255,
+        keep_quats=False,
+    ):
+        # Call the parent class constructor
         super().__init__()
         self._nside = nside
         self._out = out
@@ -42,9 +53,9 @@ class OpSimGradient(Operator):
         self._common_flag_mask = common_flag_mask
         self._keep_quats = keep_quats
 
+    @function_timer
     def exec(self, data):
-        """
-        Create the gradient timestreams.
+        """Create the gradient timestreams.
 
         This pixelizes each detector's pointing and then assigns a
         timestream value based on the cartesian Z coordinate of the pixel
@@ -52,17 +63,15 @@ class OpSimGradient(Operator):
 
         Args:
             data (toast.Data): The distributed data.
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
-        comm = data.comm
 
+        """
         zaxis = np.array([0, 0, 1], dtype=np.float64)
         nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
         range = self._max - self._min
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
 
             offset, nsamp = tod.local_samples
 
@@ -70,15 +79,16 @@ class OpSimGradient(Operator):
 
             for det in tod.local_dets:
                 flags = tod.local_flags(det) & self._flag_mask
-                totflags = (flags | common)
+                totflags = flags | common
                 del flags
 
                 pdata = tod.local_pointing(det).copy()
                 pdata[totflags != 0, :] = nullquat
 
                 dir = qa.rotate(pdata, zaxis)
-                pixels = hp.vec2pix(self._nside, dir[:, 0], dir[:, 1], dir[:, 2],
-                                    nest=self._nest)
+                pixels = hp.vec2pix(
+                    self._nside, dir[:, 0], dir[:, 1], dir[:, 2], nest=self._nest
+                )
                 x, y, z = hp.pix2vec(self._nside, pixels, nest=self._nest)
                 z += 1.0
                 z *= 0.5
@@ -94,17 +104,15 @@ class OpSimGradient(Operator):
                 del ref
 
                 if not self._keep_quats:
-                    cachename = 'quat_{}'.format(det)
+                    cachename = "quat_{}".format(det)
                     tod.cache.destroy(cachename)
 
             del common
         return
 
     def sigmap(self):
+        """(array): Return the underlying signal map (full map on all processes).
         """
-        (array): Return the underlying signal map (full map on all processes).
-        """
-        autotimer = timing.auto_timer(type(self).__name__)
         range = self._max - self._min
         pix = np.arange(0, 12 * self._nside * self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
@@ -116,8 +124,7 @@ class OpSimGradient(Operator):
 
 
 class OpSimScan(Operator):
-    """
-    Operator which generates sky signal by scanning from a map.
+    """Operator which generates sky signal by scanning from a map.
 
     The signal to use should already be in a distributed pixel structure,
     and local pointing should already exist.
@@ -130,11 +137,13 @@ class OpSimScan(Operator):
             containing the pointing weights to use.
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
+
     """
 
-    def __init__(self, distmap=None, pixels='pixels', weights='weights',
-                 out='scan', dets=None):
-        # We call the parent class constructor, which currently does nothing
+    def __init__(
+        self, distmap=None, pixels="pixels", weights="weights", out="scan", dets=None
+    ):
+        # Call the parent class constructor
         super().__init__()
         self._map = distmap
         self._pixels = pixels
@@ -143,27 +152,21 @@ class OpSimScan(Operator):
         self._dets = dets
 
     def exec(self, data):
-        """
-        Create the timestreams by scanning from the map.
+        """Create the timestreams by scanning from the map.
 
         This loops over all observations and detectors and uses the pointing
         matrix to project the distributed map into a timestream.
 
         Args:
             data (toast.Data): The distributed data.
+
+        Returns:
+            None
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
-        comm = data.comm
-        # the global communicator
-        cworld = comm.comm_world
-        # the communicator within the group
-        cgroup = comm.comm_group
-        # the communicator with all processes with
-        # the same rank within their group
-        crank = comm.comm_rank
 
         for obs in data.obs:
-            tod = obs['tod']
+            tod = obs["tod"]
 
             dets = tod.local_dets if self._dets is None else self._dets
 
@@ -185,7 +188,9 @@ class OpSimScan(Operator):
                 #     for x in range(tod.local_samples[1]))
                 # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
-                sim_map_scan_map(sm, weights, lpix, self._map.data, maptod)
+                scan_map_float64(
+                    self._map.submap, nnz, sm, lpix, self._map.data, weights, maptod
+                )
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):

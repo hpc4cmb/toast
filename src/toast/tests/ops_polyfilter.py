@@ -1,35 +1,16 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 from .mpi import MPITestCase
 
-import sys
 import os
 
 import numpy as np
-import numpy.testing as nt
 
-import scipy.interpolate as si
+from ..tod import TODHpixSpiral, OpPolyFilter, AnalyticNoise, OpSimNoise, Interval
 
-from ..tod import OpPolyFilter, Interval
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_tod import *
-
-from .. import rng as rng
-
-from ._helpers import (
-    create_outdir,
-    create_distdata,
-    boresight_focalplane,
-    uniform_chunks,
-)
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 
 class OpPolyFilterTest(MPITestCase):

@@ -25,31 +25,30 @@ from .sim_interval import regular_intervals
 
 from .sim_det_noise import OpSimNoise
 
-# from .sim_det_map import OpSimGradient, OpSimScan
+from .sim_det_map import OpSimGradient, OpSimScan
 
 from .sim_det_dipole import OpSimDipole
 
 # from .sim_det_atm import OpSimAtmosphere
-#
-# from .sim_focalplane import (
-#     hex_layout,
-#     rhombus_layout,
-#     hex_pol_angles_qu,
-#     hex_pol_angles_radial,
-#     rhomb_pol_angles_qu,
-#     plot_focalplane,
-# )
+
+from .sim_focalplane import (
+    hex_layout,
+    rhombus_layout,
+    hex_pol_angles_qu,
+    hex_pol_angles_radial,
+    rhomb_pol_angles_qu,
+    plot_focalplane,
+)
 
 from .noise import Noise
 
-# from ..ctoast import filter_polyfilter
-# from .polyfilter import OpPolyFilter
+from .polyfilter import OpPolyFilter
 from .groundfilter import OpGroundFilter
 
-# from .gainscrambler import OpGainScrambler
+from .gainscrambler import OpGainScrambler
 from .applygain import OpApplyGain, write_calibration_file
 
-# from .memorycounter import OpMemoryCounter
+from .memorycounter import OpMemoryCounter
 
 from .pointing_math import aberrate
 

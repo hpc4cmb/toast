@@ -1,34 +1,24 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 
 import numpy as np
-import numpy.testing as nt
 
-import scipy.interpolate as si
+from ..tod import OpGainScrambler, TODHpixSpiral, AnalyticNoise, OpSimNoise
 
-from ..tod import OpGainScrambler
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_tod import *
-
-from .. import rng as rng
-
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class OpGainScramblerTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -40,9 +30,13 @@ class OpGainScramblerTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate, net=10.0,
-            fmin=1.0e-5, fknee=np.linspace(0.0, 0.1, num=self.ndet))
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet,
+            samplerate=self.rate,
+            net=10.0,
+            fmin=1.0e-5,
+            fknee=np.linspace(0.0, 0.1, num=self.ndet),
+        )
 
         # Total samples per observation
         self.totsamp = 200000
@@ -59,7 +53,8 @@ class OpGainScramblerTest(MPITestCase):
             firsttime=0.0,
             rate=self.rate,
             nside=512,
-            sampsizes=chunks)
+            sampsizes=chunks,
+        )
 
         # construct an analytic noise model
 
@@ -69,12 +64,11 @@ class OpGainScramblerTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
-
 
     def test_scrambler(self):
         # generate timestreams
@@ -95,7 +89,7 @@ class OpGainScramblerTest(MPITestCase):
 
         # Scramble the timestreams
 
-        op = OpGainScrambler(center=2, sigma=1e-6, name='noise')
+        op = OpGainScrambler(center=2, sigma=1e-6, name="noise")
         op.exec(self.data)
 
         # Ensure RMS changes for the implicated detectors
@@ -108,9 +102,9 @@ class OpGainScramblerTest(MPITestCase):
                 rms = np.std(y)
                 old = orms[det]
                 if np.abs(rms / old) - 2 > 1e-3:
-                    raise RuntimeError(\
-                        "det {} old rms = {}, new rms = {}"\
-                        .format(det, old, rms))
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
+                    )
                 del y
 
         return

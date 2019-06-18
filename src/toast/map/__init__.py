@@ -4,8 +4,6 @@
 
 # import functions in our public API
 
-# from .madam import OpMadam
-
 from .pixels import OpLocalPixels, DistPixels
 
 # from .rings import DistRings
@@ -21,5 +19,6 @@ from .cov import (
     covariance_apply,
 )
 
-#
 # from .mapsampler import MapSampler
+
+from .madam import OpMadam

@@ -2,15 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from .mpi import MPITestCase
+
 import os
 
 import numpy as np
 
-from .mpi import MPITestCase
+from ..tod import TODHpixSpiral, AnalyticNoise, OpSimNoise
 
-from ..tod import TODHpixSpiral
-
-from ..tod import AnalyticNoise, OpSimNoise
+from ..fod import autocov_psd
 
 from ._helpers import (
     create_outdir,
@@ -18,8 +18,6 @@ from ._helpers import (
     boresight_focalplane,
     uniform_chunks,
 )
-
-from ..fod import autocov_psd
 
 
 # FIXME:  This seems like a useful generic function- maybe move it into

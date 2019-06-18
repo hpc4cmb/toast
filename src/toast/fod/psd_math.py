@@ -6,8 +6,6 @@ import numpy as np
 
 from scipy.signal import fftconvolve
 
-from scipy.signal.windows import hamming
-
 from ..mpi import MPI
 
 from ..timing import function_timer
@@ -197,29 +195,26 @@ def crosscov_psd(
     covs = {}
 
     for ireal in range(realization[0], realization[-1] + 1):
-
         # Evaluate the covariance
-
         realflg = realization == ireal
-
         good = extended_flags[realflg] == 0
         ngood = np.sum(good)
         if ngood == 0:
             continue
-
         sig1 = extended_signal1[realflg].copy()
         sig1 = highpass_flagged_signal(sig1, good, naverage)
         # High pass filter does not work at the ends
         ind = slice(naverage // 2, -naverage // 2)
+        cov_hits = np.zeros(lagmax, dtype=np.int64)
+        cov = np.zeros(lagmax, dtype=np.float64)
         if signal2 is None:
-            (cov, cov_hits) = fod_autosums(sig1[ind], good[ind].astype(np.int8), lagmax)
+            fod_autosums(sig1[ind], good[ind].astype(np.uint8), lagmax, cov, cov_hits)
         else:
             sig2 = extended_signal2[realflg].copy()
             sig2 = highpass_flagged_signal(sig2, good, lagmax)
-            (cov, cov_hits) = fod_crosssums(
-                sig1[ind], sig2[ind], good[ind].astype(np.int8), lagmax
+            fod_crosssums(
+                sig1[ind], sig2[ind], good[ind].astype(np.uint8), lagmax, cov, cov_hits
             )
-
         covs[ireal] = (cov_hits, cov)
 
     # Collect the estimated covariance functions
@@ -237,9 +232,7 @@ def crosscov_psd(
             my_covs[ireal] = (cov_hits, cov)
     else:
         for ireal in range(nreal):
-
             owner = ireal // nreal_task
-
             if ireal in covs:
                 cov_hits, cov = covs[ireal]
             else:
@@ -261,14 +254,10 @@ def crosscov_psd(
     my_cov = []
 
     for ireal in my_covs.keys():
-
         cov_hits, cov = my_covs[ireal]
-
         good = cov_hits != 0
         cov[good] /= cov_hits[good]
-
         # Interpolate any empty bins
-
         if not np.all(good) and np.any(good):
             bad = cov_hits == 0
             # The last bins should be left empty

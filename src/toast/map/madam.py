@@ -1,23 +1,27 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ctypes.util import find_library
+from ..mpi import MPI, use_mpi
+
 import os
 
-import ctypes as ct
-import healpy as hp
 import numpy as np
-import numpy.ctypeslib as npc
-from toast.cache import Cache
-from toast.mpi import MPI
-from toast.op import Operator
-import toast.timing as timing
 
-try:
-    import libmadam_wrapper as madam
-except:
-    madam = None
+import healpy as hp
+
+from ..timing import function_timer
+
+from ..cache import Cache
+
+from ..op import Operator
+
+madam = None
+if use_mpi:
+    try:
+        import libmadam_wrapper as madam
+    except ImportError:
+        madam = None
 
 # DEBUG begin
 
@@ -105,7 +109,7 @@ try:
         return
 
 
-except:
+except ImportError:
 
     def memreport(comm=None, msg=""):
         return
@@ -115,8 +119,7 @@ except:
 
 
 class OpMadam(Operator):
-    """
-    Operator which passes data to libmadam for map-making.
+    """Operator which passes data to libmadam for map-making.
 
     Args:
         params (dictionary): parameters to pass to madam.
@@ -163,6 +166,7 @@ class OpMadam(Operator):
         conserve_memory(bool/int): Stagger the Madam buffer staging on node.
         translate_timestamps(bool): Translate timestamps to enforce
             monotonity.
+
     """
 
     def __init__(
@@ -191,9 +195,9 @@ class OpMadam(Operator):
         conserve_memory=True,
         translate_timestamps=True,
     ):
-
-        # We call the parent class constructor, which currently does nothing
+        # Call the parent class constructor
         super().__init__()
+
         # madam uses time-based distribution
         self._name = name
         self._name_out = name_out
@@ -256,17 +260,20 @@ class OpMadam(Operator):
 
     @property
     def available(self):
-        """
-        (bool): True if libmadam is found in the library search path.
+        """(bool): True if libmadam is found in the library search path.
         """
         return madam is not None and madam.available
 
+    @function_timer
     def exec(self, data, comm=None):
-        """
-        Copy data to Madam-compatible buffers and make a map.
+        """Copy data to Madam-compatible buffers and make a map.
 
         Args:
             data (toast.Data): The distributed data.
+
+        Returns:
+            None
+
         """
         if not self.available:
             raise RuntimeError("libmadam is not available")
@@ -277,12 +284,9 @@ class OpMadam(Operator):
                 "contain at least one observation"
             )
 
-        auto_timer = timing.auto_timer(type(self).__name__)
-
         if comm is None:
-            # Just use COMM_WORLD
+            # Use the world communicator from the distributed data.
             comm = data.comm.comm_world
-
         (
             pars,
             dets,
@@ -335,11 +339,11 @@ class OpMadam(Operator):
 
         return
 
+    @function_timer
     def _destripe(self, comm, pars, dets, periods, psdinfo):
         """ Destripe the buffered data
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
         if self._verbose:
             memreport(comm, "just before calling libmadam.destripe")
         if self._cached:
@@ -483,12 +487,11 @@ class OpMadam(Operator):
 
         return obs_period_ranges, psdfreqs, periods, nsamp
 
+    @function_timer
     def _prepare(self, data, comm):
         """ Examine the data object.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
-
         nsamp = self._count_samples(data)
 
         # Determine the detectors and the pointing matrix non-zeros
@@ -562,11 +565,11 @@ class OpMadam(Operator):
             nside,
         )
 
+    @function_timer
     def _stage_time(self, data, detectors, nsamp, obs_period_ranges):
         """ Stage the timestamps and use them to build PSD inputs.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = self._cache.create(
             "timestamps", madam.TIMESTAMP_TYPE, (nsamp,)
         )
@@ -610,11 +613,11 @@ class OpMadam(Operator):
 
         return psds
 
+    @function_timer
     def _stage_signal(self, data, detectors, nsamp, ndet, obs_period_ranges):
         """ Stage signal
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_signal = self._cache.create(
             "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
         )
@@ -649,11 +652,11 @@ class OpMadam(Operator):
 
         return signal_dtype
 
+    @function_timer
     def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges, nside):
         """ Stage pixels
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_pixels = self._cache.create(
             "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
@@ -726,14 +729,13 @@ class OpMadam(Operator):
 
         return pixels_dtype
 
+    @function_timer
     def _stage_pixweights(
         self, data, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
     ):
         """Now collect the pixel weights
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
-
         self._madam_pixweights = self._cache.create(
             "pixweights", madam.WEIGHT_TYPE, (nsamp * ndet * nnz,)
         )
@@ -775,9 +777,9 @@ class OpMadam(Operator):
                     tod.cache.clear(pattern=weightsname)
 
             global_offset = offset
-
         return weight_dtype
 
+    @function_timer
     def _stage_data(
         self,
         data,
@@ -803,8 +805,6 @@ class OpMadam(Operator):
         overhead only once per node.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
-
         if self._conserve_memory:
             # The user has elected to stagger staging the data on each
             # node to avoid exhausting memory
@@ -881,9 +881,9 @@ class OpMadam(Operator):
             npsdval = npsdbin * npsdtot
             psdvals = np.ones(npsdval)
         psdinfo = (detweights, npsd, psdstarts, psdfreqs, psdvals)
-
         return psdinfo, signal_dtype, pixels_dtype, weight_dtype
 
+    @function_timer
     def _unstage_data(
         self,
         comm,
@@ -902,7 +902,6 @@ class OpMadam(Operator):
         and cache the destriped signal.
 
         """
-        auto_timer = timing.auto_timer(type(self).__name__)
         self._madam_timestamps = None
         self._cache.destroy("timestamps")
 

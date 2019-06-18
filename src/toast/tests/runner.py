@@ -22,7 +22,7 @@ from . import dist as testdist
 from . import qarray as testqarray
 from . import tod as testtod
 
-# from . import psd_math as testpsdmath
+from . import psd_math as testpsdmath
 from . import intervals as testintervals
 
 from . import cov as testcov
@@ -32,18 +32,21 @@ from . import ops_pmat as testopspmat
 from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
 
-# from . import ops_polyfilter as testopspolyfilter
+from . import ops_polyfilter as testopspolyfilter
 from . import ops_groundfilter as testopsgroundfilter
 
-# from . import ops_gainscrambler as testopsgainscrambler
+from . import ops_gainscrambler as testopsgainscrambler
 from . import ops_applygain as testopsapplygain
 
-# from . import ops_memorycounter as testopsmemorycounter
-# from . import ops_madam as testopsmadam
+from . import ops_memorycounter as testopsmemorycounter
+
+from . import ops_madam as testopsmadam
+
 # from . import map_satellite as testmapsatellite
 # from . import map_ground as testmapground
 # from . import binned as testbinned
-# from . import sim_focalplane as testsimfocalplane
+
+from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
 # from ..tod import tidas_available
@@ -102,15 +105,15 @@ def test(name=None, verbosity=2):
         # suite.addTest(loader.loadTestsFromModule(testopspmat))
         # suite.addTest(loader.loadTestsFromModule(testcov))
         # suite.addTest(loader.loadTestsFromModule(testopsdipole))
-
-        suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
-
-        # suite.addTest(loader.loadTestsFromModule(testpsdmath))
-        # suite.addTest( loader.loadTestsFromModule(testsimfocalplane) )
+        # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
+        # suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
         # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
-        # suite.addTest( loader.loadTestsFromModule(testopsgainscrambler) )
-        # suite.addTest( loader.loadTestsFromModule(testopsmemorycounter) )
-        # suite.addTest( loader.loadTestsFromModule(testopsmadam) )
+        # suite.addTest(loader.loadTestsFromModule(testopsmemorycounter))
+        # suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
+        # suite.addTest(loader.loadTestsFromModule(testpsdmath))
+
+        suite.addTest(loader.loadTestsFromModule(testopsmadam))
+
         # suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
         # suite.addTest( loader.loadTestsFromModule(testmapground) )
         # suite.addTest( loader.loadTestsFromModule(testbinned) )

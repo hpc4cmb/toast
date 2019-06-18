@@ -1,34 +1,24 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 
 import numpy as np
-import numpy.testing as nt
 
-import scipy.interpolate as si
+from ..tod import TODHpixSpiral, OpMemoryCounter, AnalyticNoise, OpSimNoise
 
-from ..tod import OpMemoryCounter
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_tod import *
-
-from .. import rng as rng
-
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class OpMemoryCounterTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -44,8 +34,9 @@ class OpMemoryCounterTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with default properties.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET)
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet, samplerate=self.rate, net=self.NET
+        )
 
         # Total samples per observation
         self.totsamp = 100000
@@ -63,7 +54,8 @@ class OpMemoryCounterTest(MPITestCase):
             firsttime=0.0,
             rate=self.rate,
             nside=512,
-            sampsizes=chunks)
+            sampsizes=chunks,
+        )
 
         # construct an analytic noise model
 
@@ -73,16 +65,15 @@ class OpMemoryCounterTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
 
-
     def test_counter(self):
         ob = self.data.obs[0]
-        tod = ob['tod']
+        tod = ob["tod"]
         # Ensure timestamps are cached before simulating noise
         blah = tod.local_times()
         del blah
