@@ -451,6 +451,9 @@ class CovarianceTest(MPITestCase):
         return
 
     def test_fitsio(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # make a simple pointing matrix
         pointing = OpPointingHpix(
             nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
@@ -524,17 +527,17 @@ class CovarianceTest(MPITestCase):
         subsum = [np.sum(invnpp.data[x, :, :]) for x in range(len(invnpp.local))]
 
         outfile = os.path.join(self.outdir, "covtest.fits")
-        if self.data.comm.comm_world.rank == 0:
+        if rank == 0:
             if os.path.isfile(outfile):
                 os.remove(outfile)
 
         hitfile = os.path.join(self.outdir, "covtest_hits.fits")
-        if self.data.comm.comm_world.rank == 0:
+        if rank == 0:
             if os.path.isfile(hitfile):
                 os.remove(hitfile)
 
         rcondfile = os.path.join(self.outdir, "covtest_rcond.fits")
-        if self.data.comm.comm_world.rank == 0:
+        if rank == 0:
             if os.path.isfile(rcondfile):
                 os.remove(rcondfile)
 
@@ -551,7 +554,7 @@ class CovarianceTest(MPITestCase):
         difffile = os.path.join(self.outdir, "readwrite_diff.fits")
         diffdata.write_healpix_fits(difffile)
 
-        if self.comm.rank == 0:
+        if rank == 0:
             import matplotlib.pyplot as plt
 
             dat = hp.read_map(outfile)

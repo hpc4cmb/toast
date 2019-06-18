@@ -169,6 +169,10 @@ class OpSimNoiseTest(MPITestCase):
         # We have purposely distributed the TOD data so that every process has
         # a single stationary interval for all detectors.
 
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
         for ob in self.data.obs:
             tod = ob["tod"]
             nse = ob["noise"]
@@ -185,7 +189,7 @@ class OpSimNoiseTest(MPITestCase):
                 #      "".format(det, netsq, avg))
                 self.assertTrue((np.absolute(avg - netsq) / netsq) < 0.02)
 
-            if self.data.comm.world_rank == 0:
+            if rank == 0:
                 # One process dumps debugging info
                 import matplotlib.pyplot as plt
 
@@ -315,7 +319,7 @@ class OpSimNoiseTest(MPITestCase):
 
                 idet += 1
 
-            if self.data.comm.world_rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
                 for det in tod.local_dets:
@@ -365,7 +369,7 @@ class OpSimNoiseTest(MPITestCase):
                     bintruth[det] = tpsd
 
             hpy = None
-            if self.data.comm.world_rank == 0:
+            if rank == 0:
                 if "TOAST_TEST_BIGTOD" in os.environ.keys():
                     try:
                         import h5py as hpy
@@ -401,7 +405,7 @@ class OpSimNoiseTest(MPITestCase):
                 if realization == 0:
                     # write timestreams to disk for debugging
 
-                    if self.comm.rank == 0:
+                    if rank == 0:
                         import matplotlib.pyplot as plt
 
                         for det in tod.local_dets:
@@ -463,14 +467,14 @@ class OpSimNoiseTest(MPITestCase):
             if hfile is not None:
                 hfile.close()
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 np.savetxt(
                     os.path.join(self.outdir, "out_test_simnoise_tod_var.txt"),
                     np.transpose([todvar[x] for x in tod.local_dets]),
                     delimiter=" ",
                 )
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
                 for det in tod.local_dets:

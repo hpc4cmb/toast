@@ -189,7 +189,13 @@ class OpSimScan(Operator):
                 # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
                 scan_map_float64(
-                    self._map.submap, nnz, sm, lpix, self._map.data, weights, maptod
+                    self._map.submap,
+                    nnz,
+                    sm,
+                    lpix,
+                    self._map.flatdata,
+                    weights.reshape(-1),
+                    maptod,
                 )
 
                 cachename = "{}_{}".format(self._out, det)

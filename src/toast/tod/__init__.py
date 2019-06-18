@@ -6,8 +6,7 @@
 
 from .tod import TOD, TODCache
 
-
-from .interval import Interval
+from .interval import Interval, OpFlagGaps
 
 from .pointing import OpPointingHpix
 

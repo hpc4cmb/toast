@@ -39,7 +39,7 @@ class OpPointingHpixTest(MPITestCase):
             self.data.comm.comm_group,
             dquat,
             self.totsamp,
-            detranks=self.data.comm.comm_group.size,
+            detranks=self.data.comm.group_size,
         )
 
         self.data.obs[0]["tod"] = tod
@@ -48,6 +48,9 @@ class OpPointingHpixTest(MPITestCase):
         del self.data
 
     def test_hpix_simple(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         op = OpPointingHpix()
         op.exec(self.data)
 
@@ -55,21 +58,24 @@ class OpPointingHpixTest(MPITestCase):
         local = lc.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
+        if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_hpix_simple_info"), "w")
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
         return
 
     def test_hpix_hwpnull(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         op = OpPointingHpix(mode="IQU")
         op.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
+        if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_hpix_hwpnull_info"), "w")
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
         return

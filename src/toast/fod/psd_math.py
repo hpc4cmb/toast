@@ -122,6 +122,8 @@ def crosscov_psd(
     """
     rank = 0
     ntask = 1
+    time_start = times[0]
+    time_stop = times[-1]
     if comm is not None:
         rank = comm.rank
         ntask = comm.size

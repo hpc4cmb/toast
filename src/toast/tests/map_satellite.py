@@ -1,32 +1,41 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 import shutil
 
 import numpy as np
 import numpy.testing as nt
+
 import healpy as hp
 
-from ..tod.tod import *
-from ..tod.pointing import *
-from ..tod.sim_tod import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_det_map import *
-from ..tod.sim_noise import *
-from ..map import *
+from .. import qarray as qa
 
-from ._helpers import (create_outdir, create_distdata, boresight_focalplane,
-    uniform_chunks)
+from ..tod import (
+    TODSatellite,
+    OpPointingHpix,
+    AnalyticNoise,
+    OpSimGradient,
+    OpSimNoise,
+    slew_precession_axis,
+    satellite_scanning,
+    OpSimScan,
+)
+
+from ..map import OpLocalPixels, OpMadam, DistPixels
+
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    uniform_chunks,
+)
 
 
 class MapSatelliteTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -42,9 +51,9 @@ class MapSatelliteTest(MPITestCase):
         # Create detectors with white noise
         self.NET = 7.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = \
-            boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET,
-                fknee=0.0)
+        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+            self.ndet, samplerate=self.rate, net=self.NET, fknee=0.0
+        )
 
         # Samples per observation
         self.totsamp = 4000000
@@ -79,13 +88,14 @@ class MapSatelliteTest(MPITestCase):
             spinangle=self.spinangle,
             precperiod=self.precperiod,
             precangle=self.precangle,
-            sampsizes=chunks)
+            sampsizes=chunks,
+        )
 
-        precquat = np.empty(4 * tod.local_samples[1],
-            dtype=np.float64).reshape((-1, 4))
+        precquat = np.empty(4 * tod.local_samples[1], dtype=np.float64).reshape((-1, 4))
 
-        slew_precession_axis(precquat, firstsamp=tod.local_samples[0],
-            samplerate=self.rate, degday=1.0)
+        slew_precession_axis(
+            precquat, firstsamp=tod.local_samples[0], samplerate=self.rate, degday=1.0
+        )
 
         tod.set_prec_axis(qprec=precquat)
 
@@ -97,12 +107,11 @@ class MapSatelliteTest(MPITestCase):
             detectors=dnames,
             fknee=dfknee,
             alpha=dalpha,
-            NET=dnet
+            NET=dnet,
         )
 
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["noise"] = nse
-
 
     def test_boresight_null(self):
         # verify that if all angles are zero, we get fixed pointing
@@ -110,21 +119,31 @@ class MapSatelliteTest(MPITestCase):
 
         nsim = 1000
 
-        zaxis = np.array([0,0,1], dtype=np.float64)
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
 
-        borequat = np.empty(4*nsim, dtype=np.float64).reshape((-1, 4))
+        borequat = np.empty(4 * nsim, dtype=np.float64).reshape((-1, 4))
 
-        satellite_scanning(borequat, qprec=None, samplerate=100.0,
-                           spinperiod=1.0, spinangle=0.0, precperiod=20.0,
-                           precangle=0.0)
+        satellite_scanning(
+            borequat,
+            qprec=None,
+            samplerate=100.0,
+            spinperiod=1.0,
+            spinangle=0.0,
+            precperiod=20.0,
+            precangle=0.0,
+        )
 
-        data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1,3))
+        data = qa.rotate(borequat, np.tile(zaxis, nsim).reshape(-1, 3))
 
-        np.testing.assert_almost_equal(data, np.tile(np.array([1.0, 0.0, 0.0]), nsim).reshape(-1,3))
+        np.testing.assert_almost_equal(
+            data, np.tile(np.array([1.0, 0.0, 0.0]), nsim).reshape(-1, 3)
+        )
         return
 
-
     def test_grad(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # add simple sky gradient signal
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         grad.exec(self.data)
@@ -134,43 +153,45 @@ class MapSatelliteTest(MPITestCase):
         pointing.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_satellite_grad_info"), "w")
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_satellite_grad_info"), "w"
+            )
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.outdir, "madam_grad")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = 8
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = madam_out
-        pars[ 'info' ] = 0
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = 8
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "F"
+        pars["write_wcov"] = "F"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
-        madam = OpMadam(params=pars, name='grad', purge=True)
+        madam = OpMadam(params=pars, name="grad", purge=True)
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -178,7 +199,7 @@ class MapSatelliteTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
@@ -192,14 +213,16 @@ class MapSatelliteTest(MPITestCase):
                 nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
 
                 sig = grad.sigmap()
-                mask = (bins > -1.0e20)
+                mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:
             print("libmadam not available, skipping tests")
         return
 
-
     def test_noise(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # generate noise timestreams from the noise model
         nsig = OpSimNoise()
         nsig.exec(self.data)
@@ -209,53 +232,55 @@ class MapSatelliteTest(MPITestCase):
         pointing.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,"out_test_satellite_noise_info"), "w")
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_satellite_noise_info"), "w"
+            )
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # For noise weighting in madam, we know we are using an analytic noise
         # and so we can use noise weights based on the NET.  This is instrument
         # specific.
 
-        tod = self.data.obs[0]['tod']
-        nse = self.data.obs[0]['noise']
+        tod = self.data.obs[0]["tod"]
+        nse = self.data.obs[0]["noise"]
         detweights = {}
         for d in tod.local_dets:
-            detweights[d] = 1.0 / (self.rate * nse.NET(d)**2)
+            detweights[d] = 1.0 / (self.rate * nse.NET(d) ** 2)
 
         # make a binned map with madam
         madam_out = os.path.join(self.outdir, "madam_noise")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = 8
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = madam_out
-        pars[ 'info' ] = 0
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = 8
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "F"
+        pars["write_wcov"] = "F"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
-        madam = OpMadam(params=pars, detweights=detweights, name='noise')
+        madam = OpMadam(params=pars, detweights=detweights, name="noise")
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -263,7 +288,7 @@ class MapSatelliteTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
@@ -276,27 +301,29 @@ class MapSatelliteTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
-                #print("tothits = ", tothits)
+                # print("tothits = ", tothits)
 
-                mask = (bins > -1.0e20)
-                #print("num good pix = ", len(mask))
+                mask = bins > -1.0e20
+                # print("num good pix = ", len(mask))
                 rthits = np.sqrt(hits[mask].astype(np.float64))
-                #print("rthits = ", rthits)
-                #print("bmap = ", bins[mask])
+                # print("rthits = ", rthits)
+                # print("bmap = ", bins[mask])
                 weighted = bins[mask] * rthits
                 pixrms = np.std(weighted)
                 todrms = self.NET * np.sqrt(self.rate)
                 relerr = np.absolute(pixrms - todrms) / todrms
-                #print("pixrms = ", pixrms)
-                #print("todrms = ", todrms)
-                #print("relerr = ", relerr)
+                # print("pixrms = ", pixrms)
+                # print("todrms = ", todrms)
+                # print("relerr = ", relerr)
                 self.assertTrue(relerr < 0.05)
         else:
             print("libmadam not available, skipping tests")
         return
 
-
     def test_scanmap(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # make a simple pointing matrix
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
@@ -316,57 +343,65 @@ class MapSatelliteTest(MPITestCase):
 
         # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
-        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1,
-            dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(
+            comm=self.data.comm.comm_group,
+            size=npix,
+            nnz=1,
+            dtype=np.float64,
+            submap=submapsize,
+            local=localsm,
+        )
 
         lsub, lpix = distsig.global_to_local(localpix)
 
-        distsig.data[lsub,lpix,:] = \
-            np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
+        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
+            -1, 1
+        )
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,
-                "out_test_satellite_scanmap_info"), "w")
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_satellite_scanmap_info"), "w"
+            )
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.outdir, "madam_scansim")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = 8
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = madam_out
-        pars[ 'info' ] = 0
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = 8
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "F"
+        pars["write_wcov"] = "F"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
-        madam = OpMadam(params=pars, name='scan')
+        madam = OpMadam(params=pars, name="scan")
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -374,7 +409,7 @@ class MapSatelliteTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
@@ -386,18 +421,19 @@ class MapSatelliteTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
-                mask = (bins > -1.0e20)
+                mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:
             print("libmadam not available, skipping tests")
         return
 
-
     def test_hwpfast(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # make a pointing matrix with a HWP that rotates 2*PI every sample
         hwprate = self.rate * 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True,
-            hwprpm=hwprate)
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, hwprpm=hwprate)
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -416,57 +452,65 @@ class MapSatelliteTest(MPITestCase):
         # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
 
-        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1,
-            dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(
+            comm=self.data.comm.comm_group,
+            size=npix,
+            nnz=1,
+            dtype=np.float64,
+            submap=submapsize,
+            local=localsm,
+        )
 
         lsub, lpix = distsig.global_to_local(localpix)
 
-        distsig.data[lsub,lpix,:] = \
-            np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
+        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
+            -1, 1
+        )
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,
-                "out_test_satellite_hwpfast_info"), "w")
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_satellite_hwpfast_info"), "w"
+            )
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.outdir, "madam_hwpfast")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = 8
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = madam_out
-        pars[ 'info' ] = 0
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = 8
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "F"
+        pars["write_wcov"] = "F"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
-        madam = OpMadam(params=pars, name='scan')
+        madam = OpMadam(params=pars, name="scan")
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -474,7 +518,7 @@ class MapSatelliteTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
@@ -486,19 +530,22 @@ class MapSatelliteTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
-                mask = (bins > -1.0e20)
+                mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:
             print("libmadam not available, skipping tests")
         return
 
-
     def test_hwpconst(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # make a pointing matrix with a HWP that is constant
         hwpstep = 2.0 * np.pi
         hwpsteptime = (self.totsamp / self.rate) / 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True,
-            hwpstep=hwpstep, hwpsteptime=hwpsteptime)
+        pointing = OpPointingHpix(
+            nside=self.map_nside, nest=True, hwpstep=hwpstep, hwpsteptime=hwpsteptime
+        )
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -517,57 +564,65 @@ class MapSatelliteTest(MPITestCase):
         # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
 
-        distsig = DistPixels(comm=self.data.comm.comm_group, size=npix, nnz=1,
-            dtype=np.float64, submap=submapsize, local=localsm)
+        distsig = DistPixels(
+            comm=self.data.comm.comm_group,
+            size=npix,
+            nnz=1,
+            dtype=np.float64,
+            submap=submapsize,
+            local=localsm,
+        )
 
         lsub, lpix = distsig.global_to_local(localpix)
 
-        distsig.data[lsub,lpix,:] = \
-            np.array([ sig[x] for x in localpix ]).reshape(-1, 1)
+        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
+            -1, 1
+        )
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
         scansim.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
-            handle = open(os.path.join(self.outdir,
-                "out_test_satellite_hwpconst_info"), "w")
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_satellite_hwpconst_info"), "w"
+            )
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # make a binned map with madam
         madam_out = os.path.join(self.outdir, "madam_hwpconst")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
 
         pars = {}
-        pars[ 'kfirst' ] = 'F'
-        pars[ 'base_first' ] = 1.0
-        pars[ 'fsample' ] = self.rate
-        pars[ 'nside_map' ] = self.map_nside
-        pars[ 'nside_cross' ] = self.map_nside
-        pars[ 'nside_submap' ] = 8
-        pars[ 'write_map' ] = 'F'
-        pars[ 'write_binmap' ] = 'T'
-        pars[ 'write_matrix' ] = 'F'
-        pars[ 'write_wcov' ] = 'F'
-        pars[ 'write_hits' ] = 'T'
-        pars[ 'kfilter' ] = 'F'
-        pars[ 'path_output' ] = madam_out
-        pars[ 'info' ] = 0
+        pars["kfirst"] = "F"
+        pars["base_first"] = 1.0
+        pars["fsample"] = self.rate
+        pars["nside_map"] = self.map_nside
+        pars["nside_cross"] = self.map_nside
+        pars["nside_submap"] = 8
+        pars["write_map"] = "F"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "F"
+        pars["write_wcov"] = "F"
+        pars["write_hits"] = "T"
+        pars["kfilter"] = "F"
+        pars["path_output"] = madam_out
+        pars["info"] = 0
 
-        madam = OpMadam(params=pars, name='scan')
+        madam = OpMadam(params=pars, name="scan")
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
-                hitsfile = os.path.join(madam_out, 'madam_hmap.fits')
+                hitsfile = os.path.join(madam_out, "madam_hmap.fits")
                 hits = hp.read_map(hitsfile, nest=True)
 
                 outfile = "{}.png".format(hitsfile)
@@ -575,7 +630,7 @@ class MapSatelliteTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                binfile = os.path.join(madam_out, 'madam_bmap.fits')
+                binfile = os.path.join(madam_out, "madam_bmap.fits")
                 bins = hp.read_map(binfile, nest=True)
 
                 outfile = "{}.png".format(binfile)
@@ -587,7 +642,7 @@ class MapSatelliteTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
-                mask = (bins > -1.0e20)
+                mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:
             print("libmadam not available, skipping tests")

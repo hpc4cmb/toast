@@ -47,7 +47,7 @@ class OpPolyFilterTest(MPITestCase):
             self.data.comm.comm_group,
             dquat,
             self.totsamp,
-            detranks=self.data.comm.comm_group.size,
+            detranks=self.data.comm.group_size,
             firsttime=0.0,
             rate=self.rate,
             nside=512,

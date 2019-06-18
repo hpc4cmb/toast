@@ -29,27 +29,26 @@ def generate_hex(npix, width, poltype, fwhm):
 
     # Pol color different for A/B detectors
     detpolcolor = dict()
-    detpolcolor.update({ x : "red" for x in dets_a.keys() })
-    detpolcolor.update({ x : "blue" for x in dets_b.keys() })
+    detpolcolor.update({x: "red" for x in dets_a.keys()})
+    detpolcolor.update({x: "blue" for x in dets_b.keys()})
 
     # set the label to just the detector name
-    detlabels = { x : x for x in dets.keys() }
+    detlabels = {x: x for x in dets.keys()}
 
     # fwhm and face color the same
-    detfwhm = { x : fwhm for x in dets.keys() }
+    detfwhm = {x: fwhm for x in dets.keys()}
 
     # cycle through some colors just for fun
     pclr = [
         (1.0, 0.0, 0.0, 0.1),
         (1.0, 0.5, 0.0, 0.1),
         (0.25, 0.5, 1.0, 0.1),
-        (0.0, 0.75, 0.0, 0.1)
+        (0.0, 0.75, 0.0, 0.1),
     ]
-    detcolor = { y : pclr[(x // 2) % 4] for x, y in \
-        enumerate(sorted(dets.keys())) }
+    detcolor = {y: pclr[(x // 2) % 4] for x, y in enumerate(sorted(dets.keys()))}
 
     # split out quaternions for plotting
-    detquats = { x : dets[x]["quat"] for x in dets.keys() }
+    detquats = {x: dets[x]["quat"] for x in dets.keys()}
 
     return dets, detquats, detfwhm, detcolor, detpolcolor, detlabels
 
@@ -66,39 +65,39 @@ def generate_rhombus(npix, width, fwhm, prefix, center):
 
     # Pol color different for A/B detectors
     detpolcolor = dict()
-    detpolcolor.update({ x : "red" for x in dets_a.keys() })
-    detpolcolor.update({ x : "blue" for x in dets_b.keys() })
+    detpolcolor.update({x: "red" for x in dets_a.keys()})
+    detpolcolor.update({x: "blue" for x in dets_b.keys()})
 
     # set the label to just the detector name
-    detlabels = { x : x for x in dets.keys() }
+    detlabels = {x: x for x in dets.keys()}
 
     # fwhm and face color the same
-    detfwhm = { x : fwhm for x in dets.keys() }
+    detfwhm = {x: fwhm for x in dets.keys()}
 
     # cycle through some colors just for fun
     pclr = [
         (1.0, 0.0, 0.0, 0.1),
         (1.0, 0.5, 0.0, 0.1),
         (0.25, 0.5, 1.0, 0.1),
-        (0.0, 0.75, 0.0, 0.1)
+        (0.0, 0.75, 0.0, 0.1),
     ]
-    detcolor = { y : pclr[(x // 2) % 4] for x, y in \
-        enumerate(sorted(dets.keys())) }
+    detcolor = {y: pclr[(x // 2) % 4] for x, y in enumerate(sorted(dets.keys()))}
 
     # split out quaternions for plotting
-    detquats = { x : dets[x]["quat"] for x in dets.keys() }
+    detquats = {x: dets[x]["quat"] for x in dets.keys()}
 
     return dets, detquats, detfwhm, detcolor, detpolcolor, detlabels
 
 
 class SimFocalplaneTest(MPITestCase):
-
     def setUp(self):
         self.outdir = "toast_test_output"
-        if self.comm.rank == 0:
+        self.rank = 0
+        if self.comm is not None:
+            self.rank = self.comm.rank
+        if self.rank == 0:
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
-
 
     def test_cart_quat(self):
         xincr = np.linspace(-5.0, 5.0, num=10, endpoint=True)
@@ -109,81 +108,112 @@ class SimFocalplaneTest(MPITestCase):
                 ang = 3.6 * (x - xincr[0]) * (y - yincr[0])
                 offsets.append([x, y, ang])
         quats = sfp.cartesian_to_quat(offsets)
-        detquats = { "{}".format(x) : y for x, y in enumerate(quats) }
-        fwhm = { x : 30.0 for x in detquats.keys() }
+        detquats = {"{}".format(x): y for x, y in enumerate(quats)}
+        fwhm = {x: 30.0 for x in detquats.keys()}
         outfile = os.path.join(self.outdir, "out_test_cart2quat.png")
-        sfp.plot_focalplane(detquats, 12.0, 12.0, outfile, fwhm=fwhm)
+        if self.rank == 0:
+            sfp.plot_focalplane(detquats, 12.0, 12.0, outfile, fwhm=fwhm)
         return
-
 
     def test_hex_nring(self):
         result = {
-            1 : 1,
-            7 : 2,
-            19 : 3,
-            37 : 4,
-            61 : 5,
-            91 : 6,
-            127 : 7,
-            169 : 8,
-            217 : 9,
-            271 : 10,
-            331 : 11,
-            397 : 12
+            1: 1,
+            7: 2,
+            19: 3,
+            37: 4,
+            61: 5,
+            91: 6,
+            127: 7,
+            169: 8,
+            217: 9,
+            271: 10,
+            331: 11,
+            397: 12,
         }
         for npix, check in result.items():
             test = sfp.hex_nring(npix)
             nt.assert_equal(test, check)
         return
 
-
     def test_vis_hex_small(self):
-        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = \
-            generate_hex(7, 5.0, "qu", 15.0)
+        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = generate_hex(
+            7, 5.0, "qu", 15.0
+        )
         outfile = os.path.join(self.outdir, "out_test_vis_hex_small.png")
-        sfp.plot_focalplane(detquats, 6.0, 6.0, outfile,
-        	fwhm=detfwhm, facecolor=detcolor, polcolor=detpolcolor,
-            labels=detlabels)
+        if self.rank == 0:
+            sfp.plot_focalplane(
+                detquats,
+                6.0,
+                6.0,
+                outfile,
+                fwhm=detfwhm,
+                facecolor=detcolor,
+                polcolor=detpolcolor,
+                labels=detlabels,
+            )
         return
-
 
     def test_vis_hex_small_rad(self):
-        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = \
-            generate_hex(7, 5.0, "radial", 15.0)
+        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = generate_hex(
+            7, 5.0, "radial", 15.0
+        )
         outfile = os.path.join(self.outdir, "out_test_vis_hex_small_rad.png")
-        sfp.plot_focalplane(detquats, 6.0, 6.0, outfile,
-        	fwhm=detfwhm, facecolor=detcolor, polcolor=detpolcolor,
-            labels=detlabels)
+        if self.rank == 0:
+            sfp.plot_focalplane(
+                detquats,
+                6.0,
+                6.0,
+                outfile,
+                fwhm=detfwhm,
+                facecolor=detcolor,
+                polcolor=detpolcolor,
+                labels=detlabels,
+            )
         return
-
 
     def test_vis_hex_medium(self):
-        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = \
-            generate_hex(91, 5.0, "qu", 10.0)
+        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = generate_hex(
+            91, 5.0, "qu", 10.0
+        )
         outfile = os.path.join(self.outdir, "out_test_vis_hex_medium.png")
-        sfp.plot_focalplane(detquats, 6.0, 6.0, outfile,
-        	fwhm=detfwhm, facecolor=detcolor, polcolor=detpolcolor,
-            labels=detlabels)
+        if self.rank == 0:
+            sfp.plot_focalplane(
+                detquats,
+                6.0,
+                6.0,
+                outfile,
+                fwhm=detfwhm,
+                facecolor=detcolor,
+                polcolor=detpolcolor,
+                labels=detlabels,
+            )
         return
-
 
     def test_vis_hex_large(self):
-        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = \
-            generate_hex(217, 5.0, "qu", 5.0)
+        dets, detquats, detfwhm, detcolor, detpolcolor, detlabels = generate_hex(
+            217, 5.0, "qu", 5.0
+        )
         outfile = os.path.join(self.outdir, "out_test_vis_hex_large.png")
-        sfp.plot_focalplane(detquats, 6.0, 6.0, outfile,
-        	fwhm=detfwhm, facecolor=detcolor, polcolor=detpolcolor,
-            labels=detlabels)
+        if self.rank == 0:
+            sfp.plot_focalplane(
+                detquats,
+                6.0,
+                6.0,
+                outfile,
+                fwhm=detfwhm,
+                facecolor=detcolor,
+                polcolor=detpolcolor,
+                labels=detlabels,
+            )
         return
 
-
     def test_vis_rhombus(self):
-        sixty = np.pi/3.0
-        thirty = np.pi/6.0
+        sixty = np.pi / 3.0
+        thirty = np.pi / 6.0
         rtthree = np.sqrt(3.0)
 
         rdim = 8
-        rpix = rdim**2
+        rpix = rdim ** 2
 
         hexwidth = 5.0
         rwidth = hexwidth / rtthree
@@ -192,11 +222,13 @@ class SimFocalplaneTest(MPITestCase):
         margin = 0.60 * hexwidth
 
         centers = [
-            np.array([0.5*margin, 0.0, 0.0]),
-            np.array([-0.5*np.cos(sixty)*margin, 0.5*np.sin(sixty)*margin,
-                120.0]),
-            np.array([-0.5*np.cos(sixty)*margin, -0.5*np.sin(sixty)*margin,
-                240.0])
+            np.array([0.5 * margin, 0.0, 0.0]),
+            np.array(
+                [-0.5 * np.cos(sixty) * margin, 0.5 * np.sin(sixty) * margin, 120.0]
+            ),
+            np.array(
+                [-0.5 * np.cos(sixty) * margin, -0.5 * np.sin(sixty) * margin, 240.0]
+            ),
         ]
 
         cquats = sfp.cartesian_to_quat(centers)
@@ -208,8 +240,9 @@ class SimFocalplaneTest(MPITestCase):
         detpolcolor = dict()
         detlabels = dict()
         for w, c in enumerate(cquats):
-            wdets, wdetquats, wdetfwhm, wdetcolor, wdetpolcolor, wdetlabels = \
-                generate_rhombus(rpix, rwidth, 7.0, "{}".format(w), c)
+            wdets, wdetquats, wdetfwhm, wdetcolor, wdetpolcolor, wdetlabels = generate_rhombus(
+                rpix, rwidth, 7.0, "{}".format(w), c
+            )
             dets.update(wdets)
             detquats.update(wdetquats)
             detfwhm.update(wdetfwhm)
@@ -218,7 +251,15 @@ class SimFocalplaneTest(MPITestCase):
             detlabels.update(wdetlabels)
 
         outfile = os.path.join(self.outdir, "out_test_vis_rhombus.png")
-        sfp.plot_focalplane(detquats, 1.2*hexwidth, 1.2*hexwidth, outfile,
-        	fwhm=detfwhm, facecolor=detcolor, polcolor=detpolcolor,
-            labels=detlabels)
+        if self.rank == 0:
+            sfp.plot_focalplane(
+                detquats,
+                1.2 * hexwidth,
+                1.2 * hexwidth,
+                outfile,
+                fwhm=detfwhm,
+                facecolor=detcolor,
+                polcolor=detpolcolor,
+                labels=detlabels,
+            )
         return

@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
+from ..mpi import MPI, use_mpi
 
 import os
 import sys
@@ -42,9 +42,11 @@ from . import ops_memorycounter as testopsmemorycounter
 
 from . import ops_madam as testopsmadam
 
-# from . import map_satellite as testmapsatellite
-# from . import map_ground as testmapground
-# from . import binned as testbinned
+from . import map_satellite as testmapsatellite
+
+from . import map_ground as testmapground
+
+from . import binned as testbinned
 
 from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
@@ -66,19 +68,22 @@ from . import tod_satellite as testtodsat
 def test(name=None, verbosity=2):
     # We run tests with COMM_WORLD if available
     comm = None
-    if MPI is not None:
+    rank = 0
+    if use_mpi:
         comm = MPI.COMM_WORLD
+        rank = comm.rank
 
     set_backend()
 
     outdir = "toast_test_output"
 
-    if comm.rank == 0:
+    if rank == 0:
         outdir = os.path.abspath(outdir)
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
-    outdir = comm.bcast(outdir, root=0)
+    if comm is not None:
+        outdir = comm.bcast(outdir, root=0)
 
     if (name is None) or (name == "libtoast"):
         # Run tests from the serial compiled library.
@@ -91,32 +96,30 @@ def test(name=None, verbosity=2):
     suite = unittest.TestSuite()
 
     if name is None:
-        # suite.addTest(loader.loadTestsFromModule(testcache))
-        # suite.addTest(loader.loadTestsFromModule(testtiming))
-        # suite.addTest(loader.loadTestsFromModule(testrng))
-        # suite.addTest(loader.loadTestsFromModule(testfft))
-        # suite.addTest(loader.loadTestsFromModule(testdist))
-        # suite.addTest(loader.loadTestsFromModule(testqarray))
-        # suite.addTest(loader.loadTestsFromModule(testtod))
-        # suite.addTest(loader.loadTestsFromModule(testtodsat))
-        # suite.addTest(loader.loadTestsFromModule(testintervals))
-        # suite.addTest(loader.loadTestsFromModule(testopssimnoise))
-        # suite.addTest(loader.loadTestsFromModule(testopsapplygain))
-        # suite.addTest(loader.loadTestsFromModule(testopspmat))
-        # suite.addTest(loader.loadTestsFromModule(testcov))
-        # suite.addTest(loader.loadTestsFromModule(testopsdipole))
-        # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
-        # suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
-        # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
-        # suite.addTest(loader.loadTestsFromModule(testopsmemorycounter))
-        # suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
-        # suite.addTest(loader.loadTestsFromModule(testpsdmath))
-
+        suite.addTest(loader.loadTestsFromModule(testcache))
+        suite.addTest(loader.loadTestsFromModule(testtiming))
+        suite.addTest(loader.loadTestsFromModule(testrng))
+        suite.addTest(loader.loadTestsFromModule(testfft))
+        suite.addTest(loader.loadTestsFromModule(testdist))
+        suite.addTest(loader.loadTestsFromModule(testqarray))
+        suite.addTest(loader.loadTestsFromModule(testtod))
+        suite.addTest(loader.loadTestsFromModule(testtodsat))
+        suite.addTest(loader.loadTestsFromModule(testintervals))
+        suite.addTest(loader.loadTestsFromModule(testopssimnoise))
+        suite.addTest(loader.loadTestsFromModule(testopsapplygain))
+        suite.addTest(loader.loadTestsFromModule(testopspmat))
+        suite.addTest(loader.loadTestsFromModule(testcov))
+        suite.addTest(loader.loadTestsFromModule(testopsdipole))
+        suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
+        suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
+        suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
+        suite.addTest(loader.loadTestsFromModule(testopsmemorycounter))
+        suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
+        suite.addTest(loader.loadTestsFromModule(testpsdmath))
         suite.addTest(loader.loadTestsFromModule(testopsmadam))
-
-        # suite.addTest( loader.loadTestsFromModule(testmapsatellite) )
-        # suite.addTest( loader.loadTestsFromModule(testmapground) )
-        # suite.addTest( loader.loadTestsFromModule(testbinned) )
+        suite.addTest(loader.loadTestsFromModule(testmapsatellite))
+        suite.addTest(loader.loadTestsFromModule(testmapground))
+        suite.addTest(loader.loadTestsFromModule(testbinned))
         # if tidas_available:
         #     suite.addTest( loader.loadTestsFromModule(testtidas) )
         # if spt3g_available:

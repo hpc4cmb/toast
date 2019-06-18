@@ -70,7 +70,7 @@ class OpMadamTest(MPITestCase):
 
         # Write outputs to a test-specific directory
         mapdir = os.path.join(self.outdir, "grad")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(mapdir):
                 shutil.rmtree(mapdir)
             os.makedirs(mapdir)

@@ -1,27 +1,34 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
 import shutil
 
 import numpy as np
 import numpy.testing as nt
+
 import healpy as hp
 
-from ..tod.tod import *
-from ..tod.interval import *
-from ..tod.pointing import *
-from ..tod.sim_tod import *
-from ..tod.sim_det_noise import *
-from ..tod.sim_noise import *
-from ..tod.sim_interval import *
-from ..map import *
+from ..tod import (
+    TODSatellite,
+    OpPointingHpix,
+    AnalyticNoise,
+    OpSimNoise,
+    regular_intervals,
+    OpFlagGaps,
+)
+
+from ..map import (
+    OpLocalPixels,
+    OpMadam,
+    DistPixels,
+    OpAccumDiag,
+    covariance_invert,
+    covariance_apply,
+)
 
 from ._helpers import (
     create_outdir,
@@ -126,6 +133,9 @@ class BinnedTest(MPITestCase):
         self.data.obs[0]["intervals"] = intrvls
 
     def test_binned(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # flag data outside valid intervals
         gapflagger = OpFlagGaps()
         gapflagger.exec(self.data)
@@ -141,10 +151,10 @@ class BinnedTest(MPITestCase):
         pointing.exec(self.data)
 
         handle = None
-        if self.comm.rank == 0:
+        if rank == 0:
             handle = open(os.path.join(self.outdir, "info.txt"), "w")
         self.data.info(handle)
-        if self.comm.rank == 0:
+        if rank == 0:
             handle.close()
 
         # get locally hit pixels
@@ -222,7 +232,7 @@ class BinnedTest(MPITestCase):
         # compare with MADAM
 
         madam_out = os.path.join(self.outdir, "madam")
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(madam_out):
                 shutil.rmtree(madam_out)
             os.mkdir(madam_out)
@@ -252,7 +262,7 @@ class BinnedTest(MPITestCase):
         if madam.available:
             madam.exec(self.data)
 
-            if self.comm.rank == 0:
+            if rank == 0:
                 import matplotlib.pyplot as plt
 
                 hitsfile = os.path.join(madam_out, "madam_hmap.fits")
@@ -490,7 +500,7 @@ class BinnedTest(MPITestCase):
                 nt.assert_almost_equal(bins[2][mask], binserial[2][mask], decimal=3)
 
         else:
-            if self.comm.rank == 0:
+            if rank == 0:
                 print("libmadam not available, skipping tests", flush=True)
 
         return

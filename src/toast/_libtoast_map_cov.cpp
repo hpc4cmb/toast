@@ -350,7 +350,8 @@ void init_map_cov(py::module & m) {
               py::buffer_info info_vec = vec.request();
               int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
               size_t nb = (size_t)(info_mat.size / block);
-              if (info_vec.size != nb) {
+              size_t nv = (size_t)(info_vec.size / nnz);
+              if (nv != nb) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
                   o << "Buffer sizes are not consistent.";
