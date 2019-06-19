@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -11,9 +11,9 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..timing import (Timer, GlobalTimers, function_timer, gather_timers, dump)
+from ..timing import Timer, GlobalTimers, function_timer, gather_timers, dump
 
-from ._helpers import (create_outdir)
+from ._helpers import create_outdir
 
 
 @function_timer
@@ -24,7 +24,6 @@ def fibonacci(n):
 
 
 class TimingTest(MPITestCase):
-
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)

@@ -4,20 +4,19 @@
 
 import numpy as np
 
+import healpy as hp
+
+from ..mpi import MPI
+
 from ..timing import function_timer
 
-from ..fft import FFTPlanReal1DStore
-
-from .tod_math import sim_noise_timestream
+from ..utils import Logger, Timer
 
 from ..op import Operator
 
-import healpy as hp
-
 from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
 
-from ..tod import OpSimScan
-from ..mpi import MPI
+from .sim_det_map import OpSimScan
 
 
 def extract_local_dets(data):
@@ -146,6 +145,11 @@ class OpSimPySM(Operator):
 
     @function_timer
     def exec(self, data):
+        log = Logger.get()
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
         local_dets = extract_local_dets(data)
         bandpasses = {}
         fwhm_deg = {}
@@ -165,15 +169,21 @@ class OpSimPySM(Operator):
 
         lmax = 3 * self.nside - 1
 
-        if self.comm.rank == 0 and self._debug:
-            print("Collecting, Broadcasting map", flush=True)
-        start = MPI.Wtime()
-        local_maps = dict()  # FIXME use Cache instead
+        if rank == 0:
+            log.debug("Collecting, Broadcasting map")
+        tm = Timer()
+        tm.start()
+
         for det in local_dets:
-            self.comm.Barrier()
-            if self.comm.rank == 0 and self._debug:
-                print("Running PySM on {}".format(det), flush=True)
-            self.pysm_sky.exec(local_maps, out="sky", bandpasses={"": bandpasses[det]})
+            # FIXME: this used to be outside this loop, but there is no need for that.
+            # Actually I don't think we even need a dictionary, just the map that is
+            # output from PySMSky which we can then feed to libsharp smoothing.
+            local_maps = dict()
+            if self.comm is not None:
+                self.comm.Barrier()
+            if rank == 0:
+                log.debug("Running PySM on {}".format(det))
+            self.pysm_sky.exec(local_maps, out="sky", bandpasses={det: bandpasses[det]})
 
             if self.apply_beam:
                 if fwhm_deg[det] == -1:
@@ -183,47 +193,52 @@ class OpSimPySM(Operator):
                     )
                 # LibSharp also supports transforming multiple channels
                 # together each with own beam
-                self.comm.Barrier()
-                if self.comm.rank == 0 and self._debug:
-                    print("Initializing LibSharpSmooth on {}".format(det), flush=True)
+                if self.comm is not None:
+                    self.comm.Barrier()
+                if rank == 0:
+                    log.debug("Initializing LibSharpSmooth on {}".format(det))
                 smooth = LibSharpSmooth(
                     self.comm,
-                    signal_map="sky",
-                    out="sky",
                     lmax=lmax,
                     grid=self.dist_rings.libsharp_grid,
                     fwhm_deg=fwhm_deg[det],
                     beam=None,
                 )
-                self.comm.Barrier()
-                if self.comm.rank == 0 and self._debug:
-                    print("Executing LibSharpSmooth on {}".format(det), flush=True)
-                smooth.exec(local_maps)
-                self.comm.Barrier()
-                if self.comm.rank == 0 and self._debug:
-                    print("LibSharpSmooth completed on {}".format(det), flush=True)
+                if self.comm is not None:
+                    self.comm.Barrier()
+                if rank == 0:
+                    log.debug("Executing LibSharpSmooth on {}".format(det))
+                local_maps["sky_{}".format(det)] = smooth.exec(
+                    local_maps["sky_{}".format(det)]
+                )
+                if self.comm is not None:
+                    self.comm.Barrier()
+                if rank == 0:
+                    log.debug("LibSharpSmooth completed on {}".format(det))
 
             n_components = 3
 
-            self.comm.Barrier()
-            if self.comm.rank == 0 and self._debug:
-                print(
-                    "Assemble PySM map on rank0, shape of local map is {}"
-                    "".format(local_maps["sky"].shape),
-                    flush=True,
+            if self.comm is not None:
+                self.comm.Barrier()
+            if rank == 0:
+                log.debug(
+                    "Assemble PySM map on rank0, shape of local map is {}".format(
+                        local_maps["sky_{}".format(det)].shape
+                    )
                 )
             full_map_rank0 = assemble_map_on_rank0(
                 self.comm,
-                local_maps["sky"],
+                local_maps["sky_{}".format(det)],
                 self.dist_rings.local_pixels,
                 n_components,
                 self.npix,
             )
 
-            self.comm.Barrier()
-            if self.comm.rank == 0 and self._debug:
-                print("Communication completed", flush=True)
-            if self.comm.rank == 0 and self.coord != "G":
+            if self.comm is not None:
+                self.comm.Barrier()
+            if rank == 0:
+                log.debug("Communication completed")
+            if rank == 0 and self.coord != "G":
                 # PySM is always in Galactic, make rotation to Ecliptic or Equatorial
                 rot = hp.Rotator(coord=["G", self.coord])
                 # this requires healpy 1.12.8
@@ -237,39 +252,36 @@ class OpSimPySM(Operator):
                         "healpy.Rotator.rotate_map_alms available since healpy 1.12.8"
                     )
                     raise
-            if self.comm.rank == 0 and self._nest:
-                # PySM is RING, toast is NEST
+            if rank == 0 and self._nest:
+                # PySM is RING, convert to NEST if desired.
                 full_map_rank0 = hp.reorder(full_map_rank0, r2n=True)
             # full_map_rank0 dict contains on rank 0 the smoothed PySM map
 
-            self.comm.Barrier()
-            if self.comm.rank == 0 and self._debug:
-                print(
-                    "PySM map min and max pixel value",
-                    hp.ma(full_map_rank0).min(),
-                    hp.ma(full_map_rank0).max(),
-                    flush=True,
+            if self.comm is not None:
+                self.comm.Barrier()
+            if rank == 0:
+                log.debug(
+                    "PySM map min / max pixel value = {} / {}".format(
+                        hp.ma(full_map_rank0).min(), hp.ma(full_map_rank0).max()
+                    )
                 )
-                print("Broadcasting the map to other processes", flush=True)
+                log.debug("Broadcasting the map to other processes")
             self.distmap.broadcast_healpix_map(full_map_rank0)
-            self.comm.Barrier()
-            if self.comm.rank == 0 and self._debug:
-                print("Running OpSimScan", flush=True)
+            if rank == 0:
+                log.debug("Running OpSimScan")
             scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
-            if self.comm.rank == 0 and self._debug:
+            if rank == 0:
                 tod = data.obs[0]["tod"]
                 sig = tod.cache.reference(self._out + "_" + det)
-                print(
-                    "Rank 0 timeline min max after smoothing",
-                    sig.min(),
-                    sig.max(),
-                    flush=True,
+                log.debug(
+                    "Rank 0 timeline min / max after smoothing = {} / {}".format(
+                        sig.min(), sig.max()
+                    )
                 )
 
-        stop = MPI.Wtime()
-        if self.comm.rank == 0:
-            print(
-                "PySM Operator completed:  {:.2f} seconds" "".format(stop - start),
-                flush=True,
-            )
+        tm.stop()
+        if rank == 0:
+            tm.report("PySM Operator")
+
+        return

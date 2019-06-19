@@ -51,6 +51,12 @@ from . import binned as testbinned
 from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
+from ..map import libsharp_available
+
+if libsharp_available:
+    from . import ops_sim_pysm as testopspysm
+    from . import smooth as testsmooth
+
 # from ..tod import tidas_available
 # if tidas_available:
 #     from . import tidas as testtidas
@@ -59,10 +65,6 @@ from . import tod_satellite as testtodsat
 # if spt3g_available:
 #     from . import spt3g as testspt3g
 #
-# from ..map import libsharp_available
-# if libsharp_available:
-#     from . import ops_sim_pysm as testopspysm
-#     from . import smooth as testsmooth
 
 
 def test(name=None, verbosity=2):
@@ -120,30 +122,28 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
+        if libsharp_available:
+            suite.addTest(loader.loadTestsFromModule(testopspysm))
+            suite.addTest(loader.loadTestsFromModule(testsmooth))
         # if tidas_available:
         #     suite.addTest( loader.loadTestsFromModule(testtidas) )
         # if spt3g_available:
         #     suite.addTest( loader.loadTestsFromModule(testspt3g) )
-        # if libsharp_available:
-        #     suite.addTest( loader.loadTestsFromModule(testopspysm) )
-        #     suite.addTest( loader.loadTestsFromModule(testsmooth) )
-    # elif name != "libtoast":
-    #     if (name == "tidas") and (not tidas_available):
-    #         print("Cannot run TIDAS tests- package not available")
-    #         return
-    #     elif (name == "spt3g") and (not spt3g_available):
-    #         print("Cannot run SPT3G tests- package not available")
-    #         return
-    #     else:
-    #         modname = "toast.tests.{}".format(name)
-    #         suite.addTest( loader.loadTestsFromModule(sys.modules[modname]) )
+    elif name != "libtoast":
+        if (name == "tidas") and (not tidas_available):
+            print("Cannot run TIDAS tests- package not available")
+            return
+        elif (name == "spt3g") and (not spt3g_available):
+            print("Cannot run SPT3G tests- package not available")
+            return
+        else:
+            modname = "toast.tests.{}".format(name)
+            suite.addTest(loader.loadTestsFromModule(sys.modules[modname]))
 
     ret = 0
     _ret = mpirunner.run(suite)
     if not _ret.wasSuccessful():
         ret += 1
-
-    # finalize()
 
     if ret > 0:
         sys.exit(ret)

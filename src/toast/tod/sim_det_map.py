@@ -10,7 +10,7 @@ from ..timing import function_timer
 
 from .. import qarray as qa
 
-from .._libtoast import scan_map_float64
+from .._libtoast import scan_map_float64, scan_map_float32
 
 from ..op import Operator
 
@@ -188,15 +188,31 @@ class OpSimScan(Operator):
                 #     for x in range(tod.local_samples[1]))
                 # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
-                scan_map_float64(
-                    self._map.submap,
-                    nnz,
-                    sm,
-                    lpix,
-                    self._map.flatdata,
-                    weights.reshape(-1),
-                    maptod,
-                )
+                maptype = np.dtype(self._map.dtype)
+                if maptype.char == "d":
+                    scan_map_float64(
+                        self._map.submap,
+                        nnz,
+                        sm,
+                        lpix,
+                        self._map.flatdata,
+                        weights.reshape(-1),
+                        maptod,
+                    )
+                elif maptype.char == "f":
+                    scan_map_float32(
+                        self._map.submap,
+                        nnz,
+                        sm,
+                        lpix,
+                        self._map.flatdata,
+                        weights.reshape(-1),
+                        maptod,
+                    )
+                else:
+                    raise RuntimeError(
+                        "Scanning from a map only supports float32 and float64 maps"
+                    )
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):

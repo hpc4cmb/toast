@@ -17,6 +17,7 @@ install(FILES
     sim_det_dipole.py
     sim_det_map.py
     sim_det_noise.py
+    sim_det_pysm.py
     sim_focalplane.py
     sim_interval.py
     sim_noise.py

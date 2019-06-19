@@ -1,34 +1,40 @@
-# Copyright (c) 2017-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import healpy as hp
 import numpy as np
 
-try:
-    import libsharp
-    available = True
-except ModuleNotFoundError:
-    libsharp = None
-    available = False
+import healpy as hp
 
-from .. import timing as timing
+from ..mpi import MPI, use_mpi
+
+from ..timing import function_timer
+
 from ..cache import Cache
-from ..mpi import MPI
+
+libsharp = None
+available = False
+if use_mpi:
+    try:
+        import libsharp
+
+        available = True
+    except ImportError:
+        libsharp = None
+        available = False
 
 
+@function_timer
 def expand_pix(startpix, ringpix, local_npix, local_pix):
-    """Turn first pixel index and number of pixel in full array of pixels
-
-    to be optimized with cython
+    """Turn first pixel index and number of pixel in full array of pixels.
     """
-    autotimer = timing.auto_timer()
     i = 0
     for start, num in zip(startpix, ringpix):
-        local_pix[i:i + num] = np.arange(start, start + num)
+        local_pix[i : i + num] = np.arange(start, start + num)
         i += num
 
 
+@function_timer
 def distribute_rings(nside, rank, n_mpi_processes):
     """Create a libsharp map distribution based on rings
 
@@ -37,26 +43,21 @@ def distribute_rings(nside, rank, n_mpi_processes):
     the best performance on Harmonic Transforms
     Returns the grid object and the pixel indices array in RING ordering
 
-    Parameters
-    ---------
+    Args:
+        nside (int):  HEALPix NSIDE parameter of the distributed map
+        rank (int):  rank of the current MPI process
+        n_mpi_processes (int):  total number of processes
 
-    nside : int
-        HEALPix NSIDE parameter of the distributed map
-    rank, n_mpi_processes, ints
-        rank of the current MPI process and total number of processes
+    Returns:
+        (tuple):  tuple containing:
+            grid (libsharp.healpix_grid):  libsharp object that includes metadata
+                about HEALPix distributed rings
+            local_pix (np.ndarray):  integer array of local pixel indices in the
+                current MPI process in RING ordering
 
-    Returns
-    -------
-
-    grid : libsharp.healpix_grid
-        libsharp object that includes metadata about HEALPix distributed rings
-    local_pix : np.ndarray
-        integer array of local pixel indices in the current MPI process in RING
-        ordering
     """
     if libsharp is None:
-        raise RuntimeError('libsharp not available')
-    autotimer = timing.auto_timer()
+        raise RuntimeError("libsharp not available")
     nrings = 4 * nside - 1  # four missing pixels
 
     # ring indices are 1-based
@@ -70,14 +71,12 @@ def distribute_rings(nside, rank, n_mpi_processes):
     if local_ring_indices[-1] == 2 * nside:
         # has equator ring
         local_ring_indices = np.concatenate(
-            [local_ring_indices[:-1],
-             nrings - local_ring_indices[::-1] + 1]
+            [local_ring_indices[:-1], nrings - local_ring_indices[::-1] + 1]
         )
     else:
         # does not have equator ring
         local_ring_indices = np.concatenate(
-            [local_ring_indices,
-             nrings - local_ring_indices[::-1] + 1]
+            [local_ring_indices, nrings - local_ring_indices[::-1] + 1]
         )
 
     grid = libsharp.healpix_grid(nside, rings=local_ring_indices)
@@ -85,8 +84,7 @@ def distribute_rings(nside, rank, n_mpi_processes):
 
 
 class DistRings(object):
-    """
-    A map with unique pixels distributed as disjoint isolatitude rings.
+    """A map with unique pixels distributed as disjoint isolatitude rings.
 
     Designed for Harmonic Transforms with libsharp
 
@@ -103,12 +101,12 @@ class DistRings(object):
         local (array): the list of local submaps (integers).
         localpix (array): the list of local pixels (integers).
         nest (bool): nested pixel order flag
+
     """
 
-    def __init__(self, comm=MPI.COMM_WORLD, nnz=1, dtype=np.float64,
-                 nside=16):
+    def __init__(self, comm=MPI.COMM_WORLD, nnz=1, dtype=np.float64, nside=16):
         if libsharp is None:
-            raise RuntimeError('libsharp not available')
+            raise RuntimeError("libsharp not available")
         self.data = None
         self._comm = comm
         self._nnz = nnz
@@ -119,18 +117,22 @@ class DistRings(object):
         self._cache = Cache()
 
         self._libsharp_grid, self._local_ring_indices = distribute_rings(
-            self._nside, self._comm.rank, self._comm.size)
+            self._nside, self._comm.rank, self._comm.size
+        )
         # returns start index of the ring and number of pixels
         startpix, ringpix, _, _, _ = hp.ringinfo(
-            self._nside, self._local_ring_indices.astype(np.int64))
+            self._nside, self._local_ring_indices.astype(np.int64)
+        )
 
         local_npix = self._libsharp_grid.local_size()
         self._local_pixels = self._cache.create(
-            "local_pixels", shape=(local_npix,), type=np.int64)
+            "local_pixels", shape=(local_npix,), type=np.int64
+        )
         expand_pix(startpix, ringpix, local_npix, self._local_pixels)
 
         self.data = self._cache.create(
-            "data", shape=(local_npix, self._nnz), type=self._dtype)
+            "data", shape=(local_npix, self._nnz), type=self._dtype
+        )
 
     def __del__(self):
         if self.data is not None:

@@ -28,6 +28,8 @@ from .sim_det_map import OpSimGradient, OpSimScan
 
 from .sim_det_dipole import OpSimDipole
 
+from .sim_det_pysm import OpSimPySM
+
 # from .sim_det_atm import OpSimAtmosphere
 
 from .sim_focalplane import (
