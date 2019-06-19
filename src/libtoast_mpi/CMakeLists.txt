@@ -13,11 +13,6 @@ set(toastcore_mpi_SOURCES
 
 add_library(toastcore_mpi ${toastcore_mpi_SOURCES})
 
-set_property(TARGET toastcore_mpi PROPERTY
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
-)
-
 target_include_directories(toastcore_mpi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
@@ -43,11 +38,6 @@ set(toasttest_mpi_SOURCES
 
 add_library(toasttest_mpi ${toasttest_mpi_SOURCES})
 
-set_property(TARGET toasttest_mpi PROPERTY
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
-)
-
 target_include_directories(toasttest_mpi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
@@ -72,11 +62,6 @@ set(toast_mpi_SOURCES
 )
 
 add_library(toast_mpi ${toast_mpi_SOURCES})
-
-set_property(TARGET toast_mpi PROPERTY
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
-)
 
 target_include_directories(toast_mpi PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -112,11 +97,6 @@ install(TARGETS toast_mpi DESTINATION lib)
 
 add_executable(toast_mpi_test
     toast_mpi_test.cpp
-)
-
-set_property(TARGET toast_mpi_test PROPERTY
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
 )
 
 target_include_directories(toast_mpi_test PRIVATE

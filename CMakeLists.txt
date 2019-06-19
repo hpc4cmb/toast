@@ -17,6 +17,10 @@ endforeach()
 
 project(toast VERSION 2.3.0 LANGUAGES C CXX)
 
+# Force C++11
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
