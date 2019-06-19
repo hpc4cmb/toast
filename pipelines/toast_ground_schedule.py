@@ -61,6 +61,10 @@ class Patch(object):
         alternate=False,
         site_lat=0,
         area=None,
+        ra_period=10,
+        ra_amplitude=None,
+        dec_period=10,
+        dec_amplitude=None,
     ):
         self.name = name
         self.weight = weight
@@ -81,6 +85,35 @@ class Patch(object):
         self.el_max = self.el_max0
         self.el_lim = self.el_min0
         self.step_azel()
+        self.ra_period = ra_period
+        self.ra_amplitude = np.radians(ra_amplitude)
+        self.dec_period = dec_period
+        self.dec_amplitude = np.radians(dec_amplitude)
+
+    def oscillate(self):
+        autotimer = timing.auto_timer()
+        if self.ra_amplitude:
+            # Oscillate RA
+            halfperiod = self.ra_period // 2
+            old_phase = np.fmod(self.hits - 1 + halfperiod, self.ra_period) - halfperiod
+            new_phase = np.fmod(self.hits + halfperiod, self.ra_period) - halfperiod
+            old_offset = old_phase / halfperiod * self.ra_amplitude
+            new_offset = new_phase / halfperiod * self.ra_amplitude
+            offset = new_offset - old_offset
+            for corner in self.corners:
+                corner._ra += offset
+        if self.dec_amplitude:
+            # Oscillate DEC
+            halfperiod = self.dec_period // 2
+            old_phase = np.fmod(self.hits - 1 + halfperiod, self.dec_period) - halfperiod
+            new_phase = np.fmod(self.hits + halfperiod, self.dec_period) - halfperiod
+            old_offset = old_phase / halfperiod * self.dec_amplitude
+            new_offset = new_phase / halfperiod * self.dec_amplitude
+            offset = new_offset - old_offset
+            for corner in self.corners:
+                corner._dec += offset
+        del autotimer
+        return
 
     def get_area(self, observer, nside=32, equalize=False):
         if self._area is None:
@@ -1125,7 +1158,7 @@ def add_scan(
             azmin = (azmin - sub_az) % (2 * np.pi)
             azmax = (azmax + add_az) % (2 * np.pi)
             if t2 == tstop:
-                delta_t = tstop - tstart
+                delta_t = t2 - t1  # tstop - tstart
                 add_t = delta_t * np.abs(np.random.randn()) * args.scan_margin
                 t2 += add_t
         # Add the focal plane radius to the scan width
@@ -1215,6 +1248,9 @@ def add_scan(
     if not rising or args.pole_mode:
         patch.setting_hits += 1
         patch.setting_time += ces_time
+    # The oscillate method will slightly shift the patch to
+    # blur the boundaries
+    patch.oscillate()
 
     # Advance the time
     tstop += args.gap
@@ -1507,6 +1543,34 @@ def parse_args():
         type=np.float,
         help="Random fractional margin [0..1] added to the "
         "scans to smooth out edge effects",
+    )
+    parser.add_argument(
+        "--ra_period",
+        required=False,
+        default=10,
+        type=np.int,
+        help="Period of patch position oscillations in RA [visits]",
+    )
+    parser.add_argument(
+        "--ra_amplitude",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Amplitude of patch position oscillations in RA [deg]",
+    )
+    parser.add_argument(
+        "--dec_period",
+        required=False,
+        default=10,
+        type=np.int,
+        help="Period of patch position oscillations in DEC [visits]",
+    )
+    parser.add_argument(
+        "--dec_amplitude",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Amplitude of patch position oscillations in DEC [deg]",
     )
     parser.add_argument(
         "--elevation_penalty_limit",
@@ -1984,6 +2048,10 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 alternate=args.alternate,
                 site_lat=observer.lat,
                 area=area,
+                ra_period=args.ra_period,
+                ra_amplitude=args.ra_amplitude,
+                dec_period=args.dec_period,
+                dec_amplitude=args.dec_amplitude,
             )
         if args.equalize_area or args.debug:
             area = patch.get_area(observer, nside=32, equalize=args.equalize_area)
