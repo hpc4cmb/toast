@@ -1,4 +1,4 @@
-# Copyright (c) 2015 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -16,6 +16,7 @@ class MPITestCase(TestCase):
     """A simple wrapper around the standard TestCase which provides
     one extra method to set the communicator.
     """
+
     def __init__(self, *args, **kwargs):
         super(MPITestCase, self).__init__(*args, **kwargs)
 
@@ -30,14 +31,14 @@ class MPITestResult(TestResult):
 
     Used by MPITestRunner.
     """
+
     separator1 = "=" * 70
     separator2 = "-" * 70
 
-    def __init__(self, comm, stream=None, descriptions=None,
-                 verbosity=None, **kwargs):
+    def __init__(self, comm, stream=None, descriptions=None, verbosity=None, **kwargs):
         super(MPITestResult, self).__init__(
-            stream=stream, descriptions=descriptions, verbosity=verbosity,
-            **kwargs)
+            stream=stream, descriptions=descriptions, verbosity=verbosity, **kwargs
+        )
         self.comm = comm
         self.stream = stream
         self.descriptions = descriptions
@@ -99,8 +100,7 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.write("skipped({}) ".format(reason))
         else:
-            self.stream.write(
-                "[{}]skipped({}) ".format(self.comm.rank, reason))
+            self.stream.write("[{}]skipped({}) ".format(self.comm.rank, reason))
         self.stream.flush()
         return
 
@@ -118,26 +118,24 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.writeln("unexpected-success ")
         else:
-            self.stream.writeln(
-                "[{}]unexpected-success ".format(self.comm.rank))
+            self.stream.writeln("[{}]unexpected-success ".format(self.comm.rank))
         return
 
     def printErrorList(self, flavour, errors):
         for test, err in errors:
             if self.comm is None:
                 self.stream.writeln("{}".format(self.separator1))
-                self.stream.writeln(
-                    "{}: {}".format(flavour, self.getDescription(test)))
+                self.stream.writeln("{}: {}".format(flavour, self.getDescription(test)))
                 self.stream.writeln("{}".format(self.separator2))
                 self.stream.writeln("{}".format(err))
             else:
+                self.stream.writeln("[{}] {}".format(self.comm.rank, self.separator1))
                 self.stream.writeln(
-                    "[{}] {}".format(self.comm.rank, self.separator1))
-                self.stream.writeln(
-                    "[{}] {}: {}".format(self.comm.rank, flavour,
-                                         self.getDescription(test)))
-                self.stream.writeln(
-                    "[{}] {}".format(self.comm.rank, self.separator2))
+                    "[{}] {}: {}".format(
+                        self.comm.rank, flavour, self.getDescription(test)
+                    )
+                )
+                self.stream.writeln("[{}] {}".format(self.comm.rank, self.separator2))
                 self.stream.writeln("[{}] {}".format(self.comm.rank, err))
         return
 
@@ -179,6 +177,7 @@ class MPITestResult(TestResult):
 
 class _WritelnDecorator(object):
     """Used to decorate file-like objects with a handy "writeln" method"""
+
     def __init__(self, stream):
         self.stream = stream
 
@@ -201,10 +200,12 @@ class MPITestRunner(object):
 
     This information is only printed by the root process.
     """
+
     resultclass = MPITestResult
 
-    def __init__(self, comm, stream=None, descriptions=True, verbosity=2,
-                 warnings=None):
+    def __init__(
+        self, comm, stream=None, descriptions=True, verbosity=2, warnings=None
+    ):
         """Construct a MPITestRunner.
 
         Subclasses should accept **kwargs to ensure compatibility as the
@@ -220,8 +221,9 @@ class MPITestRunner(object):
 
     def run(self, test):
         "Run the given test case or test suite."
-        result = MPITestResult(self.comm, self.stream, self.descriptions,
-                               self.verbosity)
+        result = MPITestResult(
+            self.comm, self.stream, self.descriptions, self.verbosity
+        )
         registerResult(result)
         with warnings.catch_warnings():
             if self.warnings:
@@ -234,8 +236,10 @@ class MPITestRunner(object):
                 # only when self.warnings is None.
                 if self.warnings in ["default", "always"]:
                     warnings.filterwarnings(
-                        "module", category=DeprecationWarning,
-                        message=r"Please use assert\w+ instead.")
+                        "module",
+                        category=DeprecationWarning,
+                        message=r"Please use assert\w+ instead.",
+                    )
             startTime = time.time()
             startTestRun = getattr(result, "startTestRun", None)
             if startTestRun is not None:
@@ -266,15 +270,17 @@ class MPITestRunner(object):
 
         run = result.testsRun
         if (self.comm is None) or (self.comm.rank == 0):
-            self.stream.writeln("Ran %d test%s in %.3fs" %
-                                (run, run != 1 and "s" or "", timeTaken))
+            self.stream.writeln(
+                "Ran %d test%s in %.3fs" % (run, run != 1 and "s" or "", timeTaken)
+            )
             self.stream.writeln()
 
         expectedFails = unexpectedSuccesses = skipped = 0
         try:
-            results = map(len, (result.expectedFailures,
-                                result.unexpectedSuccesses,
-                                result.skipped))
+            results = map(
+                len,
+                (result.expectedFailures, result.unexpectedSuccesses, result.skipped),
+            )
         except AttributeError:
             pass
         else:
@@ -309,8 +315,7 @@ class MPITestRunner(object):
                 if expectedFails:
                     infos.append("expected failures=%d" % expectedFails)
                 if unexpectedSuccesses:
-                    infos.append(
-                        "unexpected successes=%d" % unexpectedSuccesses)
+                    infos.append("unexpected successes=%d" % unexpectedSuccesses)
                 if infos:
                     self.stream.writeln(" ({})".format(", ".join(infos)))
                 else:

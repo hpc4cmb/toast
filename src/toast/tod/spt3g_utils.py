@@ -17,7 +17,8 @@ from .. import qarray as qa
 available = True
 try:
     from spt3g import core as c3g
-    #from spt3g import coordinateutils as c3c
+
+    # from spt3g import coordinateutils as c3c
 except:
     available = False
 
@@ -121,10 +122,12 @@ def compute_file_frames(bytes_per_sample, frame_sizes, file_size=500000000):
     for fr in frame_sizes:
         frbytes = fr * bytes_per_sample
         if frbytes > file_size:
-            msg = "A single frame ({}) is larger than the target" \
-                " frame file size ({}). samples = {}, bytes/sample {}.  " \
-                "Increase the target" \
+            msg = (
+                "A single frame ({}) is larger than the target"
+                " frame file size ({}). samples = {}, bytes/sample {}.  "
+                "Increase the target"
                 "size.".format(frbytes, file_size, fr, bytes_per_sample)
+            )
             raise RuntimeError(msg)
         if filebytes + frbytes > file_size:
             # Start a new file
@@ -146,9 +149,11 @@ def compute_file_frames(bytes_per_sample, frame_sizes, file_size=500000000):
     sample_offs.append(fileoff)
     frame_offs.append(fileframeoff)
 
-    return (np.array(sample_offs, dtype=np.int64),
-            np.array(frame_offs, dtype=np.int64),
-            np.array(frame_sample_offs, dtype=np.int64))
+    return (
+        np.array(sample_offs, dtype=np.int64),
+        np.array(frame_offs, dtype=np.int64),
+        np.array(frame_sample_offs, dtype=np.int64),
+    )
 
 
 def local_frame_indices(local_first, nlocal, frame_offset, frame_size):
@@ -176,8 +181,9 @@ def local_frame_indices(local_first, nlocal, frame_offset, frame_size):
     nsamp = None
 
     # Does this frame overlap with any of our data?
-    if (frame_offset < local_first + nlocal) and \
-        (frame_offset + frame_size > local_first):
+    if (frame_offset < local_first + nlocal) and (
+        frame_offset + frame_size > local_first
+    ):
         # compute offsets into our local data and the frame
         if frame_offset >= local_first:
             # The frame starts in the middle of our local sample range.
@@ -195,9 +201,18 @@ def local_frame_indices(local_first, nlocal, frame_offset, frame_size):
     return (local_off, froff, nsamp)
 
 
-def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
-                   detector_map="detectors", flag_map="flags",
-                   common_prefix=None, det_prefix=None, flag_prefix=None):
+def frame_to_cache(
+    tod,
+    frame,
+    frame_offset,
+    frame_size,
+    frame_data=None,
+    detector_map="detectors",
+    flag_map="flags",
+    common_prefix=None,
+    det_prefix=None,
+    flag_prefix=None,
+):
     """Distribute a frame from the rank zero process.
 
     All vectors in the frame dictionary are copied into cache on all processes.
@@ -223,17 +238,18 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
 
     """
     # First broadcast the frame data.
-    #print("proc {}: start frame data bcast for {}".format(tod.mpicomm.rank, frame), flush=True)
+    # print("proc {}: start frame data bcast for {}".format(tod.mpicomm.rank, frame), flush=True)
     frame_data = tod.mpicomm.bcast(frame_data, root=0)
-    #print("proc {}: finished frame data bcast for {}".format(tod.mpicomm.rank, frame), flush=True)
+    # print("proc {}: finished frame data bcast for {}".format(tod.mpicomm.rank, frame), flush=True)
 
     # Local sample range
     local_first = tod.local_samples[0]
     nlocal = tod.local_samples[1]
 
     # Compute overlap of the frame with the local samples.
-    cacheoff, froff, nfr = local_frame_indices(local_first, nlocal,
-                                               frame_offset, frame_size)
+    cacheoff, froff, nfr = local_frame_indices(
+        local_first, nlocal, frame_offset, frame_size
+    )
 
     # Helper function to actually copy a slice of data into cache.
     def copy_slice(data, fld, cache_prefix):
@@ -245,20 +261,20 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
         flen = len(data[fld])
         nnz = flen // frame_size
         if nnz * frame_size != flen:
-            msg = "frame {}, field {} has length {} which is not "\
+            msg = (
+                "frame {}, field {} has length {} which is not "
                 "divisible by size {}".format(frame, fld, flen, frame_size)
+            )
             raise RuntimeError(msg)
         if not tod.cache.exists(cache_fld):
             # The field does not yet exist in cache, so create it.
-            #print("proc {}:  create cache field {}, {}, ({}, {})".format(tod.mpicomm.rank, fld, ftype, tod.local_samples[1], nnz), flush=True)
+            # print("proc {}:  create cache field {}, {}, ({}, {})".format(tod.mpicomm.rank, fld, ftype, tod.local_samples[1], nnz), flush=True)
             if nnz == 1:
-                rf = tod.cache.create(cache_fld, ftype,
-                                      (tod.local_samples[1],))
+                rf = tod.cache.create(cache_fld, ftype, (tod.local_samples[1],))
             else:
-                rf = tod.cache.create(cache_fld, ftype,
-                                      (tod.local_samples[1], nnz))
+                rf = tod.cache.create(cache_fld, ftype, (tod.local_samples[1], nnz))
             del rf
-        #print("proc {}: get cache ref for {}".format(tod.mpicomm.rank, cache_fld), flush=True)
+        # print("proc {}: get cache ref for {}".format(tod.mpicomm.rank, cache_fld), flush=True)
         rf = tod.cache.reference(cache_fld)
         # Verify that the dimensions of the cache object are what we expect,
         # then copy the data.
@@ -274,31 +290,33 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
 
         if cache_samples != tod.local_samples[1]:
             msg = "frame {}, field {}: cache has {} samples, which is"
-            " different from local TOD size {}"\
-            .format(frame, fld, cache_samples, tod.local_samples[1])
+            " different from local TOD size {}".format(
+                frame, fld, cache_samples, tod.local_samples[1]
+            )
             raise RuntimeError(msg)
 
         if cache_nnz != nnz:
-            msg = "frame {}, field {}: cache has nnz = {}, which is"\
-                " different from frame nnz {}"\
-                .format(frame, fld, cache_nnz, nnz)
+            msg = (
+                "frame {}, field {}: cache has nnz = {}, which is"
+                " different from frame nnz {}".format(frame, fld, cache_nnz, nnz)
+            )
             raise RuntimeError(msg)
 
         if cache_nnz > 1:
-            slc = \
-                np.array(data[fld][nnz*froff:nnz*(froff+nfr)],
-                copy=False).reshape((-1, nnz))
-            #print("proc {}:  copy_slice field {}[{}:{},:] = frame[{}:{},:]".format(tod.mpicomm.rank, fld, cacheoff, cacheoff+nfr, froff, froff+nfr), flush=True)
-            rf[cacheoff:cacheoff+nfr,:] = slc
+            slc = np.array(
+                data[fld][nnz * froff : nnz * (froff + nfr)], copy=False
+            ).reshape((-1, nnz))
+            # print("proc {}:  copy_slice field {}[{}:{},:] = frame[{}:{},:]".format(tod.mpicomm.rank, fld, cacheoff, cacheoff+nfr, froff, froff+nfr), flush=True)
+            rf[cacheoff : cacheoff + nfr, :] = slc
         else:
-            slc = np.array(data[fld][froff:froff+nfr], copy=False)
-            #print("proc {}:  copy_slice field {}[{}:{}] = frame[{}:{}]".format(tod.mpicomm.rank, fld, cacheoff, cacheoff+nfr, froff, froff+nfr), flush=True)
-            rf[cacheoff:cacheoff+nfr] = slc
+            slc = np.array(data[fld][froff : froff + nfr], copy=False)
+            # print("proc {}:  copy_slice field {}[{}:{}] = frame[{}:{}]".format(tod.mpicomm.rank, fld, cacheoff, cacheoff+nfr, froff, froff+nfr), flush=True)
+            rf[cacheoff : cacheoff + nfr] = slc
         del rf
         return
 
     if cacheoff is not None:
-        #print("proc {} has overlap with frame {}:  {} {} {}".format(tod.mpicomm.rank, frame, cacheoff, froff, nfr), flush=True)
+        # print("proc {} has overlap with frame {}:  {} {} {}".format(tod.mpicomm.rank, frame, cacheoff, froff, nfr), flush=True)
 
         # This process has some overlap with the frame.
         for field in frame_data.keys():
@@ -307,13 +325,13 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
                 continue
             if (flag_map is not None) and (field == flag_map):
                 continue
-            #print("proc {} copy frame {}, field {}".format(tod.mpicomm.rank, frame, field), flush=True)
+            # print("proc {} copy frame {}, field {}".format(tod.mpicomm.rank, frame, field), flush=True)
             copy_slice(frame_data, field, common_prefix)
 
         dpats = None
         if (detector_map is not None) or (flag_map is not None):
             # Build our list of regex matches
-            dpats = [ re.compile(".*{}.*".format(d)) for d in tod.local_dets ]
+            dpats = [re.compile(".*{}.*".format(d)) for d in tod.local_dets]
 
         if detector_map is not None:
             # If the field name contains any of our local detectors,
@@ -321,7 +339,7 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
             for field in frame_data[detector_map].keys():
                 for dp in dpats:
                     if dp.match(field) is not None:
-                        #print("proc {} copy frame {}, field {}".format(tod.mpicomm.rank, frame, field), flush=True)
+                        # print("proc {} copy frame {}, field {}".format(tod.mpicomm.rank, frame, field), flush=True)
                         copy_slice(frame_data[detector_map], field, det_prefix)
                         break
         if flag_map is not None:
@@ -335,9 +353,19 @@ def frame_to_cache(tod, frame, frame_offset, frame_size, frame_data=None,
     return
 
 
-def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
-                   common=None, detector_fields=None, flag_fields=None,
-                   detector_map="detectors", flag_map="flags", units=None):
+def cache_to_frames(
+    tod,
+    start_frame,
+    n_frames,
+    frame_offsets,
+    frame_sizes,
+    common=None,
+    detector_fields=None,
+    flag_fields=None,
+    detector_map="detectors",
+    flag_map="flags",
+    units=None,
+):
     """Gather all data from the distributed cache for a single frame.
 
     Args:
@@ -377,7 +405,7 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
         allnnz = 0
 
         if rankdet == prow:
-            #print("  proc {} doing gather of {}".format(tod.mpicomm.rank, fld), flush=True)
+            # print("  proc {} doing gather of {}".format(tod.mpicomm.rank, fld), flush=True)
             # This process is in the process row that has this field,
             # participate in the gather operation.
             pdata = None
@@ -396,13 +424,12 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
             elif ref.dtype == np.dtype(np.uint8):
                 mtype = MPI.UINT8_T
             else:
-                msg = "Cannot gather cache field {} of type {}"\
-                    .format(fld, ref.dtype)
+                msg = "Cannot gather cache field {} of type {}".format(fld, ref.dtype)
                 raise RuntimeError(msg)
-            #print("field {}:  proc {} has nnz = {}".format(fld, tod.mpicomm.rank, nnz), flush=True)
+            # print("field {}:  proc {} has nnz = {}".format(fld, tod.mpicomm.rank, nnz), flush=True)
             pz = 0
             if cacheoff is not None:
-                pdata = ref.flatten()[nnz*cacheoff:nnz*(cacheoff+ncache)]
+                pdata = ref.flatten()[nnz * cacheoff : nnz * (cacheoff + ncache)]
                 pz = nnz * ncache
             else:
                 pdata = np.zeros(0, dtype=ref.dtype)
@@ -411,7 +438,7 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
             disp = None
             totsize = None
             if ranksamp == 0:
-                #print("Gathering field {} with type {}".format(fld, mtype), flush=True)
+                # print("Gathering field {} with type {}".format(fld, mtype), flush=True)
                 # We are the process collecting the gathered data.
                 gproc = tod.mpicomm.rank
                 allnnz = nnz
@@ -423,12 +450,11 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                 totsize = np.sum(psizes)
                 # allocate receive buffer
                 gdata = np.zeros(totsize, dtype=ref.dtype)
-                #print("Gatherv psizes = {}, disp = {}".format(psizes, disp), flush=True)
+                # print("Gatherv psizes = {}, disp = {}".format(psizes, disp), flush=True)
 
-            #print("field {}:  proc {} start Gatherv".format(fld, tod.mpicomm.rank), flush=True)
-            tod.grid_comm_row.Gatherv(pdata, [gdata, psizes, disp, mtype],
-                                      root=0)
-            #print("field {}:  proc {} finish Gatherv".format(fld, tod.mpicomm.rank), flush=True)
+            # print("field {}:  proc {} start Gatherv".format(fld, tod.mpicomm.rank), flush=True)
+            tod.grid_comm_row.Gatherv(pdata, [gdata, psizes, disp, mtype], root=0)
+            # print("field {}:  proc {} finish Gatherv".format(fld, tod.mpicomm.rank), flush=True)
 
             del disp
             del psizes
@@ -442,14 +468,14 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
         # Create a unique message tag
         mtag = 10 * indx
 
-        #print("  proc {} hit allreduce of gproc".format(tod.mpicomm.rank), flush=True)
+        # print("  proc {} hit allreduce of gproc".format(tod.mpicomm.rank), flush=True)
         # All processes find out which one did the gather
         gproc = tod.mpicomm.allreduce(gproc, MPI.SUM)
         # All processes find out the field dimensions
         allnnz = tod.mpicomm.allreduce(allnnz, MPI.SUM)
-        #print("  proc {} for field {}, gproc = {}".format(tod.mpicomm.rank, fld, gproc), flush=True)
+        # print("  proc {} for field {}, gproc = {}".format(tod.mpicomm.rank, fld, gproc), flush=True)
 
-        #print("field {}:  proc {}, gatherproc = {}, allnnz = {}".format(fld, tod.mpicomm.rank, gproc, allnnz), flush=True)
+        # print("field {}:  proc {}, gatherproc = {}, allnnz = {}".format(fld, tod.mpicomm.rank, gproc, allnnz), flush=True)
 
         rdata = None
         if gproc == 0:
@@ -462,13 +488,13 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
             # Data not yet on rank 0
             if tod.mpicomm.rank == 0:
                 # Receive data from the first process in this row
-                #print("  proc {} for field {}, recv type".format(tod.mpicomm.rank, fld), flush=True)
-                rtype = tod.mpicomm.recv(source=gproc, tag=(mtag+1))
+                # print("  proc {} for field {}, recv type".format(tod.mpicomm.rank, fld), flush=True)
+                rtype = tod.mpicomm.recv(source=gproc, tag=(mtag + 1))
 
-                #print("  proc {} for field {}, recv size".format(tod.mpicomm.rank, fld), flush=True)
-                rsize = tod.mpicomm.recv(source=gproc, tag=(mtag+2))
+                # print("  proc {} for field {}, recv size".format(tod.mpicomm.rank, fld), flush=True)
+                rsize = tod.mpicomm.recv(source=gproc, tag=(mtag + 2))
 
-                #print("  proc {} for field {}, recv data".format(tod.mpicomm.rank, fld), flush=True)
+                # print("  proc {} for field {}, recv data".format(tod.mpicomm.rank, fld), flush=True)
                 rdata = np.zeros(rsize, dtype=np.dtype(rtype))
                 tod.mpicomm.Recv(rdata, source=gproc, tag=mtag)
 
@@ -476,17 +502,17 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                 if allnnz > 1:
                     rdata = rdata.reshape((-1, allnnz))
 
-            elif (tod.mpicomm.rank == gproc):
+            elif tod.mpicomm.rank == gproc:
                 # Send our data
-                #print("  proc {} for field {}, send {} samples of {}".format(tod.mpicomm.rank, fld, len(gdata), gdata.dtype.char), flush=True)
+                # print("  proc {} for field {}, send {} samples of {}".format(tod.mpicomm.rank, fld, len(gdata), gdata.dtype.char), flush=True)
 
-                #print("  proc {} for field {}, send type with tag = {}".format(tod.mpicomm.rank, fld, mtag+1), flush=True)
-                tod.mpicomm.send(gdata.dtype.char, dest=0, tag=(mtag+1))
+                # print("  proc {} for field {}, send type with tag = {}".format(tod.mpicomm.rank, fld, mtag+1), flush=True)
+                tod.mpicomm.send(gdata.dtype.char, dest=0, tag=(mtag + 1))
 
-                #print("  proc {} for field {}, send size with tag = {}".format(tod.mpicomm.rank, fld, mtag+2), flush=True)
-                tod.mpicomm.send(len(gdata), dest=0, tag=(mtag+2))
+                # print("  proc {} for field {}, send size with tag = {}".format(tod.mpicomm.rank, fld, mtag+2), flush=True)
+                tod.mpicomm.send(len(gdata), dest=0, tag=(mtag + 2))
 
-                #print("  proc {} for field {}, send data with tag {}".format(tod.mpicomm.rank, fld, mtag), flush=True)
+                # print("  proc {} for field {}, send data with tag {}".format(tod.mpicomm.rank, fld, mtag), flush=True)
                 tod.mpicomm.Send(gdata, 0, tag=mtag)
         return rdata
 
@@ -497,14 +523,14 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
     fdataoff = [0]
     for f in frame_sizes[:-1]:
         last = fdataoff[-1]
-        fdataoff.append(last+f)
+        fdataoff.append(last + f)
 
     # The list of frames- only on the root process.
     fdata = None
     if tod.mpicomm.rank == 0:
-        fdata = [ c3g.G3Frame(c3g.G3FrameType.Scan) for f in range(n_frames) ]
+        fdata = [c3g.G3Frame(c3g.G3FrameType.Scan) for f in range(n_frames)]
     else:
-        fdata = [ None for f in range(n_frames) ]
+        fdata = [None for f in range(n_frames)]
 
     # Compute the overlap of all frames with the local process.  We want to
     # to find the full sample range that this process overlaps the total set
@@ -515,17 +541,17 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
 
     for f in range(n_frames):
         # Compute overlap of the frame with the local samples.
-        fcacheoff, froff, nfr = local_frame_indices(local_first, nlocal,
-                                                    frame_offsets[f],
-                                                    frame_sizes[f])
-        #print("proc {}:  frame {} has cache off {}, fr off {}, nfr {}".format(tod.mpicomm.rank, f, fcacheoff, froff, nfr), flush=True)
+        fcacheoff, froff, nfr = local_frame_indices(
+            local_first, nlocal, frame_offsets[f], frame_sizes[f]
+        )
+        # print("proc {}:  frame {} has cache off {}, fr off {}, nfr {}".format(tod.mpicomm.rank, f, fcacheoff, froff, nfr), flush=True)
         if fcacheoff is not None:
             if cacheoff is None:
                 cacheoff = fcacheoff
                 ncache = nfr
             else:
                 ncache += nfr
-            #print("proc {}:    cache off now {}, ncache now {}".format(tod.mpicomm.rank, cacheoff, ncache), flush=True)
+            # print("proc {}:    cache off now {}, ncache now {}".format(tod.mpicomm.rank, cacheoff, ncache), flush=True)
 
     # Now gather the full sample data one field at a time.  The root process
     # splits up the results into frames.
@@ -533,10 +559,10 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
     # First gather common fields from the first row of the process grid.
 
     for findx, (cachefield, g3t, framefield) in enumerate(common):
-        #print("proc {} entering gather_field(0, {}, {}, {}, {})".format(tod.mpicomm.rank, cachefield, findx, cacheoff, ncache), flush=True)
+        # print("proc {} entering gather_field(0, {}, {}, {}, {})".format(tod.mpicomm.rank, cachefield, findx, cacheoff, ncache), flush=True)
         data = gather_field(0, cachefield, findx, cacheoff, ncache)
         if tod.mpicomm.rank == 0:
-            #print("Casting field {} to type {}".format(field, g3t), flush=True)
+            # print("Casting field {} to type {}".format(field, g3t), flush=True)
             if g3t == c3g.G3VectorTime:
                 # Special case for time values stored as int64_t, but
                 # wrapped in a class.
@@ -555,12 +581,14 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                     dataoff = fdataoff[f]
                     ndata = frame_sizes[f]
                     if len(data.shape) == 1:
-                        fdata[f][framefield] = \
-                            g3t(data[dataoff:dataoff+ndata].tolist())
+                        fdata[f][framefield] = g3t(
+                            data[dataoff : dataoff + ndata].tolist()
+                        )
                     else:
                         # We have a 2D quantity
-                        fdata[f][framefield] = \
-                            g3t(data[dataoff:dataoff+ndata,:].flatten().tolist())
+                        fdata[f][framefield] = g3t(
+                            data[dataoff : dataoff + ndata, :].flatten().tolist()
+                        )
         del data
 
     # Wait for everyone to catch up...
@@ -571,18 +599,18 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
     # We do the gather over just this process row.
 
     if (detector_fields is not None) or (flag_fields is not None):
-        dpats = { d : re.compile(".*{}.*".format(d)) for d in tod.local_dets }
+        dpats = {d: re.compile(".*{}.*".format(d)) for d in tod.local_dets}
 
         detmaps = None
         if detector_fields is not None:
             if tod.mpicomm.rank == 0:
-                detmaps = [ c3g.G3TimestreamMap() for f in range(n_frames) ]
+                detmaps = [c3g.G3TimestreamMap() for f in range(n_frames)]
 
             for dindx, (cachefield, framefield) in enumerate(detector_fields):
                 pc = -1
                 for det, pat in dpats.items():
                     if pat.match(cachefield) is not None:
-                        #print("proc {} has field {}".format(tod.mpicomm.rank, field), flush=True)
+                        # print("proc {} has field {}".format(tod.mpicomm.rank, field), flush=True)
                         pc = rankdet
                         break
                 # As a sanity check, verify that every process which
@@ -590,19 +618,20 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                 rowcheck = tod.mpicomm.gather(pc, root=0)
                 prow = 0
                 if tod.mpicomm.rank == 0:
-                    rc = np.array([ x for x in rowcheck if (x >= 0) ],
-                                  dtype=np.int32)
-                    #print(field, rc, flush=True)
+                    rc = np.array([x for x in rowcheck if (x >= 0)], dtype=np.int32)
+                    # print(field, rc, flush=True)
                     prow = np.max(rc)
                     if np.min(rc) != prow:
-                        msg = "Processes with field {} are not in the "\
+                        msg = (
+                            "Processes with field {} are not in the "
                             "same row\n".format(cachefield)
+                        )
                         sys.stderr.write(msg)
                         tod.mpicomm.abort()
 
                 # Every process finds out which process row is participating.
                 prow = tod.mpicomm.bcast(prow, root=0)
-                #print("proc {} got prow = {}".format(tod.mpicomm.rank, prow), flush=True)
+                # print("proc {} got prow = {}".format(tod.mpicomm.rank, prow), flush=True)
 
                 # Get the data on rank 0
                 data = gather_field(prow, cachefield, dindx, cacheoff, ncache)
@@ -615,15 +644,16 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                         for f in range(n_frames):
                             dataoff = fdataoff[f]
                             ndata = frame_sizes[f]
-                            detmaps[f][framefield] = \
-                                c3g.G3Timestream(data[dataoff:dataoff+ndata])
+                            detmaps[f][framefield] = c3g.G3Timestream(
+                                data[dataoff : dataoff + ndata]
+                            )
                     else:
                         for f in range(n_frames):
                             dataoff = fdataoff[f]
                             ndata = frame_sizes[f]
-                            detmaps[f][framefield] = \
-                                c3g.G3Timestream(data[dataoff:dataoff+ndata],
-                                                 units)
+                            detmaps[f][framefield] = c3g.G3Timestream(
+                                data[dataoff : dataoff + ndata], units
+                            )
 
             if tod.mpicomm.rank == 0:
                 for f in range(n_frames):
@@ -632,7 +662,7 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
         flagmaps = None
         if flag_fields is not None:
             if tod.mpicomm.rank == 0:
-                flagmaps = [ c3g.G3MapVectorInt() for f in range(n_frames) ]
+                flagmaps = [c3g.G3MapVectorInt() for f in range(n_frames)]
             for dindx, (cachefield, framefield) in enumerate(flag_fields):
                 pc = -1
                 for det, pat in dpats.items():
@@ -644,12 +674,13 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                 rowcheck = tod.mpicomm.gather(pc, root=0)
                 prow = 0
                 if tod.mpicomm.rank == 0:
-                    rc = np.array([ x for x in rowcheck if (x >= 0) ],
-                                  dtype=np.int32)
+                    rc = np.array([x for x in rowcheck if (x >= 0)], dtype=np.int32)
                     prow = np.max(rc)
                     if np.min(rc) != prow:
-                        msg = "Processes with field {} are not in the "\
+                        msg = (
+                            "Processes with field {} are not in the "
                             "same row\n".format(cachefield)
+                        )
                         sys.stderr.write(msg)
                         tod.mpicomm.abort()
 
@@ -666,10 +697,9 @@ def cache_to_frames(tod, start_frame, n_frames, frame_offsets, frame_sizes,
                     for f in range(n_frames):
                         dataoff = fdataoff[f]
                         ndata = frame_sizes[f]
-                        flagmaps[f][framefield] = \
-                            c3g.G3VectorInt(\
-                                data[dataoff:dataoff+ndata].astype(np.int32)\
-                                .tolist())
+                        flagmaps[f][framefield] = c3g.G3VectorInt(
+                            data[dataoff : dataoff + ndata].astype(np.int32).tolist()
+                        )
 
             if tod.mpicomm.rank == 0:
                 for f in range(n_frames):

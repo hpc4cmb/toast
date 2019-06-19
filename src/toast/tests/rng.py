@@ -6,13 +6,12 @@ from .mpi import MPITestCase
 
 from ..utils import AlignedU64
 
-from ..rng import (random, random_multi)
+from ..rng import random, random_multi
 
 import numpy as np
 
 
 class RNGTest(MPITestCase):
-
     def setUp(self):
         # data
         self.size = 11
@@ -29,16 +28,53 @@ class RNGTest(MPITestCase):
         # -1.024292, -0.170119], np.float64)
 
         self.array_m11 = np.array(
-            [-0.951008, 0.112014, -0.391117, 0.858437, -0.232332, -0.929797,
-             0.513278, -0.722889, -0.439833, 0.814677, 0.466897], np.float64)
+            [
+                -0.951008,
+                0.112014,
+                -0.391117,
+                0.858437,
+                -0.232332,
+                -0.929797,
+                0.513278,
+                -0.722889,
+                -0.439833,
+                0.814677,
+                0.466897,
+            ],
+            np.float64,
+        )
         self.array_01 = np.array(
-            [0.524496, 0.056007, 0.804442, 0.429218, 0.883834, 0.535102,
-             0.256639, 0.638556, 0.780084, 0.407338, 0.233448], np.float64)
+            [
+                0.524496,
+                0.056007,
+                0.804442,
+                0.429218,
+                0.883834,
+                0.535102,
+                0.256639,
+                0.638556,
+                0.780084,
+                0.407338,
+                0.233448,
+            ],
+            np.float64,
+        )
         self.array_uint64 = np.array(
-            [9675248043493244317, 1033143684219887964, 14839328367301273822,
-             7917682351778602270, 16303863741333868668, 9870884412429777903,
-             4734154306332135586, 11779270208507399991, 14390002533568630569,
-             7514066637753215609, 4306362335420736255], np.uint64)
+            [
+                9675248043493244317,
+                1033143684219887964,
+                14839328367301273822,
+                7917682351778602270,
+                16303863741333868668,
+                9870884412429777903,
+                4734154306332135586,
+                11779270208507399991,
+                14390002533568630569,
+                7514066637753215609,
+                4306362335420736255,
+            ],
+            np.uint64,
+        )
 
         # C test output with counter=[0,0] and key=[0,0]
         # self.array00_gaussian = np.array([-0.680004, -0.633214, -1.523790,
@@ -46,16 +82,53 @@ class RNGTest(MPITestCase):
         # 0.110980, -1.220734], np.float64)
 
         self.array00_m11 = np.array(
-            [-0.478794, -0.704256, 0.533997, 0.004571, 0.392376, -0.785938, -
-             0.373569, 0.866371, 0.325575, -0.266422, 0.937621], np.float64)
+            [
+                -0.478794,
+                -0.704256,
+                0.533997,
+                0.004571,
+                0.392376,
+                -0.785938,
+                -0.373569,
+                0.866371,
+                0.325575,
+                -0.266422,
+                0.937621,
+            ],
+            np.float64,
+        )
         self.array00_01 = np.array(
-            [0.760603, 0.647872, 0.266998, 0.002285, 0.196188, 0.607031,
-             0.813215, 0.433185, 0.162788, 0.866789, 0.468810], np.float64)
+            [
+                0.760603,
+                0.647872,
+                0.266998,
+                0.002285,
+                0.196188,
+                0.607031,
+                0.813215,
+                0.433185,
+                0.162788,
+                0.866789,
+                0.468810,
+            ],
+            np.float64,
+        )
         self.array00_uint64 = np.array(
-            [14030652003081164901, 11951131804325250240, 4925249918008276254,
-             42156276261651215, 3619028682724454876, 11197741606642300638,
-             15001177968947004470, 7990859118804543502, 3002902877118036975,
-             15989435820833075781, 8648023362736035120], np.uint64)
+            [
+                14030652003081164901,
+                11951131804325250240,
+                4925249918008276254,
+                42156276261651215,
+                3619028682724454876,
+                11197741606642300638,
+                15001177968947004470,
+                7990859118804543502,
+                3002902877118036975,
+                15989435820833075781,
+                8648023362736035120,
+            ],
+            np.uint64,
+        )
 
     def test_rng_gaussian(self):
         # # Testing with any counter and any key
@@ -74,34 +147,48 @@ class RNGTest(MPITestCase):
         np.testing.assert_array_almost_equal(result1[5:], result2[:-5])
 
         # ...And with threads
-        result1 = random(20, key=[0, 0], counter=[0, 0], sampler="gaussian",
-                         threads=True)
-        result2 = random(20, key=[0, 0], counter=[0, 5], sampler="gaussian",
-                         threads=True)
+        result1 = random(
+            20, key=[0, 0], counter=[0, 0], sampler="gaussian", threads=True
+        )
+        result2 = random(
+            20, key=[0, 0], counter=[0, 5], sampler="gaussian", threads=True
+        )
         np.testing.assert_array_almost_equal(result1[5:], result2[:-5])
         return
 
     def test_rng_m11(self):
         # Testing with any counter and any key
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_m11")
+        result = random(
+            self.size, key=self.key, counter=self.counter, sampler="uniform_m11"
+        )
         self.assertTrue((result > -1.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array_m11)
 
         # Testing with counter=[0,0] and key=[0,0]
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_m11")
+        result = random(
+            self.size, key=self.key00, counter=self.counter00, sampler="uniform_m11"
+        )
         self.assertTrue((result > -1.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array00_m11)
 
         # ...And with threads
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_m11", threads=True)
+        result = random(
+            self.size,
+            key=self.key,
+            counter=self.counter,
+            sampler="uniform_m11",
+            threads=True,
+        )
         self.assertTrue((result > -1.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array_m11)
 
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_m11", threads=True)
+        result = random(
+            self.size,
+            key=self.key00,
+            counter=self.counter00,
+            sampler="uniform_m11",
+            threads=True,
+        )
         self.assertTrue((result > -1.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array00_m11)
 
@@ -109,25 +196,37 @@ class RNGTest(MPITestCase):
 
     def test_rng_01(self):
         # Testing with any counter and any key
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_01")
+        result = random(
+            self.size, key=self.key, counter=self.counter, sampler="uniform_01"
+        )
         self.assertTrue((result > 0.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(np.array(result), self.array_01)
 
         # Testing with counter=[0,0] and key=[0,0]
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_01")
+        result = random(
+            self.size, key=self.key00, counter=self.counter00, sampler="uniform_01"
+        )
         self.assertTrue((result > 0.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array00_01)
 
         # ...And with threads
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_01", threads=True)
+        result = random(
+            self.size,
+            key=self.key,
+            counter=self.counter,
+            sampler="uniform_01",
+            threads=True,
+        )
         self.assertTrue((result > 0.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array_01)
 
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_01", threads=True)
+        result = random(
+            self.size,
+            key=self.key00,
+            counter=self.counter00,
+            sampler="uniform_01",
+            threads=True,
+        )
         self.assertTrue((result > 0.0).all() and (result < 1.0).all())
         np.testing.assert_array_almost_equal(result, self.array00_01)
 
@@ -135,25 +234,37 @@ class RNGTest(MPITestCase):
 
     def test_rng_uint64(self):
         # Testing with any counter and any key
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_uint64")
+        result = random(
+            self.size, key=self.key, counter=self.counter, sampler="uniform_uint64"
+        )
         self.assertTrue(type(result) == AlignedU64)
         np.testing.assert_array_equal(result, self.array_uint64)
 
         # Testing with counter=[0,0] and key=[0,0]
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_uint64")
+        result = random(
+            self.size, key=self.key00, counter=self.counter00, sampler="uniform_uint64"
+        )
         self.assertTrue(type(result) == AlignedU64)
         np.testing.assert_array_equal(result, self.array00_uint64)
 
         # ...And with threads
-        result = random(self.size, key=self.key, counter=self.counter,
-                        sampler="uniform_uint64", threads=True)
+        result = random(
+            self.size,
+            key=self.key,
+            counter=self.counter,
+            sampler="uniform_uint64",
+            threads=True,
+        )
         self.assertTrue(type(result) == AlignedU64)
         np.testing.assert_array_equal(result, self.array_uint64)
 
-        result = random(self.size, key=self.key00, counter=self.counter00,
-                        sampler="uniform_uint64", threads=True)
+        result = random(
+            self.size,
+            key=self.key00,
+            counter=self.counter00,
+            sampler="uniform_uint64",
+            threads=True,
+        )
         self.assertTrue(type(result) == AlignedU64)
         np.testing.assert_array_equal(result, self.array00_uint64)
 
@@ -173,8 +284,7 @@ class RNGTest(MPITestCase):
         result2 = random_multi(samples, keys, counters, sampler="gaussian")
 
         for i in range(self.nstream):
-            np.testing.assert_array_almost_equal(result1[i][5:],
-                                                 result2[i][:-5])
+            np.testing.assert_array_almost_equal(result1[i][5:], result2[i][:-5])
         return
 
     def test_rng_m11_multi(self):
@@ -184,8 +294,7 @@ class RNGTest(MPITestCase):
         counters = [self.counter for x in range(self.nstream)]
         result = random_multi(samples, keys, counters, sampler="uniform_m11")
         for i in range(self.nstream):
-            self.assertTrue((result[i] > -1.0).all()
-                            and (result[i] < 1.0).all())
+            self.assertTrue((result[i] > -1.0).all() and (result[i] < 1.0).all())
             np.testing.assert_array_almost_equal(result[i], self.array_m11)
 
         # Testing with counter=[0,0] and key=[0,0]
@@ -194,8 +303,7 @@ class RNGTest(MPITestCase):
         counters = [self.counter00 for x in range(self.nstream)]
         result = random_multi(samples, keys, counters, sampler="uniform_m11")
         for i in range(self.nstream):
-            self.assertTrue((result[i] > -1.0).all()
-                            and (result[i] < 1.0).all())
+            self.assertTrue((result[i] > -1.0).all() and (result[i] < 1.0).all())
             np.testing.assert_array_almost_equal(result[i], self.array00_m11)
         return
 
@@ -206,8 +314,7 @@ class RNGTest(MPITestCase):
         counters = [self.counter for x in range(self.nstream)]
         result = random_multi(samples, keys, counters, sampler="uniform_01")
         for i in range(self.nstream):
-            self.assertTrue((result[i] > 0.0).all()
-                            and (result[i] < 1.0).all())
+            self.assertTrue((result[i] > 0.0).all() and (result[i] < 1.0).all())
             np.testing.assert_array_almost_equal(result[i], self.array_01)
 
         # Testing with counter=[0,0] and key=[0,0]
@@ -216,8 +323,7 @@ class RNGTest(MPITestCase):
         counters = [self.counter00 for x in range(self.nstream)]
         result = random_multi(samples, keys, counters, sampler="uniform_01")
         for i in range(self.nstream):
-            self.assertTrue((result[i] > 0.0).all()
-                            and (result[i] < 1.0).all())
+            self.assertTrue((result[i] > 0.0).all() and (result[i] < 1.0).all())
             np.testing.assert_array_almost_equal(result[i], self.array00_01)
         return
 
@@ -226,8 +332,7 @@ class RNGTest(MPITestCase):
         samples = [self.size for x in range(self.nstream)]
         keys = [self.key for x in range(self.nstream)]
         counters = [self.counter for x in range(self.nstream)]
-        result = random_multi(samples, keys, counters,
-                              sampler="uniform_uint64")
+        result = random_multi(samples, keys, counters, sampler="uniform_uint64")
         for i in range(self.nstream):
             self.assertTrue(type(result[i]) == AlignedU64)
             np.testing.assert_array_equal(result[i], self.array_uint64)
@@ -236,8 +341,7 @@ class RNGTest(MPITestCase):
         samples = [self.size for x in range(self.nstream)]
         keys = [self.key00 for x in range(self.nstream)]
         counters = [self.counter00 for x in range(self.nstream)]
-        result = random_multi(samples, keys, counters,
-                              sampler="uniform_uint64")
+        result = random_multi(samples, keys, counters, sampler="uniform_uint64")
         for i in range(self.nstream):
             self.assertTrue(type(result[i]) == AlignedU64)
             np.testing.assert_array_equal(result[i], self.array00_uint64)

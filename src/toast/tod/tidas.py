@@ -80,13 +80,23 @@ class TODTidas(TOD):
             axis.  If a list is given use that explicit set of sample chunks.
 
     """
+
     # FIXME: currently the data flags are stored in the same group as
     # the data.  Once TIDAS supports per-group backend options like
     # compression, we should move the flags to a separate group:
     #   https://github.com/hpc4cmb/tidas/issues/13
 
-    def __init__(self, mpicomm, detranks, vol, path, group_dets=STR_DETGROUP,
-                 group_fp=STR_FPGROUP, detbreaks=None, distintervals=None):
+    def __init__(
+        self,
+        mpicomm,
+        detranks,
+        vol,
+        path,
+        group_dets=STR_DETGROUP,
+        group_fp=STR_FPGROUP,
+        detbreaks=None,
+        distintervals=None,
+    ):
 
         if not available:
             raise RuntimeError("tidas is not available")
@@ -110,24 +120,27 @@ class TODTidas(TOD):
         # Get the existing group and interval names
         grpnames = tmpblock.group_names()
 
-        tm = self._elapsed(mpicomm, tm, "TODTidas open block {}".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas open block {}".format(self._blockname)
+        )
 
         # Read detectors and focalplane offsets
 
         self._fpgrpname = group_fp
         if self._fpgrpname not in grpnames:
             raise RuntimeError(
-                "focalplane group {} does not exist".format(self._fpgrpname))
+                "focalplane group {} does not exist".format(self._fpgrpname)
+            )
 
         fpgrp = tmpblock.group_get(self._fpgrpname)
         if fpgrp.size() != 4:
             raise RuntimeError(
-                "focalplane group {} does not have quaternions"\
-                .format(self._fpgrpname))
+                "focalplane group {} does not have quaternions".format(self._fpgrpname)
+            )
 
         self._detquats = dict()
         schm = fpgrp.schema()
-        dets = [ x.name for x in schm.fields() if (x.name != "TIDAS_TIME") ]
+        dets = [x.name for x in schm.fields() if (x.name != "TIDAS_TIME")]
         for d in dets:
             q = fpgrp.read(d, 0, 4)
             self._detquats[d] = np.array(q)
@@ -135,14 +148,17 @@ class TODTidas(TOD):
         del fpgrp
 
         self._detlist = sorted(list(self._detquats.keys()))
-        tm = self._elapsed(mpicomm, tm, "TODTidas read fp group {}".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas read fp group {}".format(self._blockname)
+        )
 
         # Read detector data group properties and size.
 
         self._dgrpname = group_dets
         if self._dgrpname not in grpnames:
             raise RuntimeError(
-                "detector group {} does not exist".format(self._dgrpname))
+                "detector group {} does not exist".format(self._dgrpname)
+            )
         self._dgrp = None
 
         # Temporary handle to the group
@@ -150,18 +166,22 @@ class TODTidas(TOD):
 
         self._samples = tmpdgrp.size()
         meta = tdsutils.to_dict(tmpdgrp.dictionary())
-        tm = self._elapsed(mpicomm, tm, "TODTidas read det data group {} meta".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas read det data group {} meta".format(self._blockname)
+        )
 
         # See whether we have ground based data
 
         self._have_azel = False
         schm = tmpdgrp.schema()
-        fields = [ x.name for x in schm.fields() ]
+        fields = [x.name for x in schm.fields()]
         if "{}_{}X".format(STR_BOREAZEL, STR_QUAT) in fields:
             self._have_azel = True
         del fields
         del schm
-        tm = self._elapsed(mpicomm, tm, "TODTidas check {} azel".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas check {} azel".format(self._blockname)
+        )
 
         # We need to assign a unique integer index to each detector.  This
         # is used when seeding the streamed RNG in order to simulate
@@ -177,18 +197,22 @@ class TODTidas(TOD):
                 ind = int.from_bytes(bdet, byteorder="little")
                 uid = int(ind & 0xFFFFFFFF)
             except:
-                raise RuntimeError("Cannot convert detector name {} to a "
-                    "unique integer- maybe it is too long?".format(det))
+                raise RuntimeError(
+                    "Cannot convert detector name {} to a "
+                    "unique integer- maybe it is too long?".format(det)
+                )
             self._detindx[det] = uid
 
-        tm = self._elapsed(mpicomm, tm, "TODTidas make {} detindx".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas make {} detindx".format(self._blockname)
+        )
 
         # Create an MPI lock to use for writing to the TIDAS volume.  We must
         # have only one writing process at a time.  Note that this lock is over
         # the communicator for this single observation (TIDAS block).
         # Processes writing to separate blocks have no restrictions.
 
-        #self._writelock = MPILock(mpicomm)
+        # self._writelock = MPILock(mpicomm)
 
         # Read intervals and set up distribution chunks.
 
@@ -201,7 +225,8 @@ class TODTidas(TOD):
                 inames = tmpblock.intervals_names()
                 if distintervals not in inames:
                     raise RuntimeError(
-                        "distintervals {} does not exist".format(distintervals))
+                        "distintervals {} does not exist".format(distintervals)
+                    )
                 distint = tmpblock.intervals_get(distintervals)
                 # Rank zero process reads and broadcasts intervals
                 intervals = None
@@ -217,19 +242,27 @@ class TODTidas(TOD):
                 # This must be an explicit list
                 sampsizes = list(distintervals)
 
-        tm = self._elapsed(mpicomm, tm, "TODTidas read {} chunks".format(self._blockname))
+        tm = self._elapsed(
+            mpicomm, tm, "TODTidas read {} chunks".format(self._blockname)
+        )
 
         # Delete our temp handles
         del tmpdgrp
         del tmpblock
 
         # call base class constructor to distribute data
-        super().__init__(mpicomm, self._detlist, self._samples,
-            detindx=self._detindx, detranks=detranks, detbreaks=detbreaks,
-            sampsizes=sampsizes, meta=meta)
+        super().__init__(
+            mpicomm,
+            self._detlist,
+            self._samples,
+            detindx=self._detindx,
+            detranks=detranks,
+            detbreaks=detbreaks,
+            sampsizes=sampsizes,
+            meta=meta,
+        )
 
         return
-
 
     def __del__(self):
         self._close()
@@ -239,7 +272,6 @@ class TODTidas(TOD):
             pass
         return
 
-
     def _open(self):
         """Open block and group handles.
         """
@@ -247,11 +279,9 @@ class TODTidas(TOD):
             raise RuntimeError("block is already open!")
         if self._dgrp is not None:
             raise RuntimeError("data group is already open!")
-        self._block = tdsutils.find_obs(self._vol, self._blockparent,
-                                        self._blockname)
+        self._block = tdsutils.find_obs(self._vol, self._blockparent, self._blockname)
         self._dgrp = self._block.group_get(self._dgrpname)
         return
-
 
     def _close(self):
         """Close block and group handles.
@@ -268,11 +298,19 @@ class TODTidas(TOD):
             pass
         return
 
-
     @classmethod
-    def create(cls, vol, path, detectors, samples, meta, azel,
-               group_dets=STR_DETGROUP, group_fp=STR_FPGROUP,
-               units="none"):
+    def create(
+        cls,
+        vol,
+        path,
+        detectors,
+        samples,
+        meta,
+        azel,
+        group_dets=STR_DETGROUP,
+        group_fp=STR_FPGROUP,
+        units="none",
+    ):
         """Class method to create the underlying TIDAS objects.
 
         This method should ONLY be called by a single process.  It creates the
@@ -303,8 +341,10 @@ class TODTidas(TOD):
         grpnames = block.group_names()
         if group_dets in grpnames:
             raise RuntimeError(
-                "Creating new TODTidas, but detector group {} already exists"\
-                .format(group_dets))
+                "Creating new TODTidas, but detector group {} already exists".format(
+                    group_dets
+                )
+            )
 
         if (detectors is None) or (samples is None):
             raise RuntimeError("detectors and samples must be specified")
@@ -320,8 +360,9 @@ class TODTidas(TOD):
             for d in sorted(detectors.keys()):
                 check = fpgrp.read(d, 0, 4)
                 if not np.allclose(detectors[d], check):
-                    raise RuntimeError("existing focalplane offset for {} "\
-                                       "does not match".format(d))
+                    raise RuntimeError(
+                        "existing focalplane offset for {} " "does not match".format(d)
+                    )
             tm = cls._elapsed(None, tm, "create {} fp group read".format(blockname))
             del fpgrp
         else:
@@ -337,7 +378,9 @@ class TODTidas(TOD):
             for d in sorted(detectors.keys()):
                 g.write(d, 0, np.ascontiguousarray(detectors[d]))
 
-            tm = cls._elapsed(None, tm, "create {} fp group write offsets".format(blockname))
+            tm = cls._elapsed(
+                None, tm, "create {} fp group write offsets".format(blockname)
+            )
 
             del schm
             del g
@@ -349,13 +392,13 @@ class TODTidas(TOD):
         tm = cls._elapsed(None, tm, "create {} det gprops".format(blockname))
 
         # Create the detector data schema
-        schm = cls._create_det_schema(list(sorted(detectors.keys())),
-            tds.DataType.float64, units, azel)
+        schm = cls._create_det_schema(
+            list(sorted(detectors.keys())), tds.DataType.float64, units, azel
+        )
         tm = cls._elapsed(None, tm, "create {} det schema".format(blockname))
 
         # Create the detector data group
-        g = block.group_add(group_dets, tds.Group(schm, gprops,
-            samples))
+        g = block.group_add(group_dets, tds.Group(schm, gprops, samples))
         tm = cls._elapsed(None, tm, "create {} det group add".format(blockname))
 
         del schm
@@ -364,7 +407,6 @@ class TODTidas(TOD):
         del block
 
         return
-
 
     @staticmethod
     def _create_det_schema(detlist, datatype, units, azel=False):
@@ -388,29 +430,30 @@ class TODTidas(TOD):
         fields = list()
         for c in ["X", "Y", "Z", "W"]:
             f = "{}_{}{}".format(STR_BORE, STR_QUAT, c)
-            fields.append( tds.Field(f, tds.DataType.float64, "NA") )
+            fields.append(tds.Field(f, tds.DataType.float64, "NA"))
             if azel:
                 f = "{}_{}{}".format(STR_BOREAZEL, STR_QUAT, c)
-                fields.append( tds.Field(f, tds.DataType.float64, "NA") )
+                fields.append(tds.Field(f, tds.DataType.float64, "NA"))
 
         for c in ["X", "Y", "Z"]:
             f = "{}{}".format(STR_POS, c)
-            fields.append( tds.Field(f, tds.DataType.float64, "NA") )
+            fields.append(tds.Field(f, tds.DataType.float64, "NA"))
 
         for c in ["X", "Y", "Z"]:
             f = "{}{}".format(STR_VEL, c)
-            fields.append( tds.Field(f, tds.DataType.float64, "NA") )
+            fields.append(tds.Field(f, tds.DataType.float64, "NA"))
 
-        fields.append( tds.Field("{}_{}".format(STR_FLAG, STR_COMMON),
-            tds.DataType.uint8, "NA") )
+        fields.append(
+            tds.Field("{}_{}".format(STR_FLAG, STR_COMMON), tds.DataType.uint8, "NA")
+        )
 
         for d in detlist:
-            fields.append( tds.Field(d, datatype, units) )
-            fields.append( tds.Field("{}_{}".format(STR_FLAG, d),
-                tds.DataType.uint8, "NA") )
+            fields.append(tds.Field(d, datatype, units))
+            fields.append(
+                tds.Field("{}_{}".format(STR_FLAG, d), tds.DataType.uint8, "NA")
+            )
 
         return tds.Schema(fields)
-
 
     @staticmethod
     def _create_fp_schema(detlist):
@@ -429,9 +472,8 @@ class TODTidas(TOD):
         """
         fields = list()
         for d in detlist:
-            fields.append( tds.Field(d, tds.DataType.float64, "NA") )
+            fields.append(tds.Field(d, tds.DataType.float64, "NA"))
         return tds.Schema(fields)
-
 
     @staticmethod
     def _elapsed(mpicomm, start, msg):
@@ -441,9 +483,8 @@ class TODTidas(TOD):
         dur = stop - start
         if (mpicomm is None) or (mpicomm.rank == 0):
             pass
-            #print("{}: {:.3f} s".format(msg, dur), flush=True)
+            # print("{}: {:.3f} s".format(msg, dur), flush=True)
         return stop
-
 
     @property
     def volume(self):
@@ -451,13 +492,11 @@ class TODTidas(TOD):
         """
         return self._vol
 
-
     @property
     def block_path(self):
         """The metadata path to this TOD's observation.
         """
         return self._blockpath
-
 
     @property
     def group_det_name(self):
@@ -465,13 +504,11 @@ class TODTidas(TOD):
         """
         return self._dgrpname
 
-
     @property
     def group_fp_name(self):
         """The TIDAS group name for the focalplane data in this TOD.
         """
         return self._fpgrpname
-
 
     def detoffset(self):
         """
@@ -489,7 +526,6 @@ class TODTidas(TOD):
         """
         return dict(self._detquats)
 
-
     def _read_cache_helper(self, prefix, comps, start, n, usecache):
         """
         Helper function to read multi-component data, pack into an
@@ -503,28 +539,28 @@ class TODTidas(TOD):
         offset = self.local_samples[0] + start
 
         if self.cache.exists(prefix):
-            return self.cache.reference(prefix)[start:start+n,:]
+            return self.cache.reference(prefix)[start : start + n, :]
         else:
             if usecache:
                 # We cache the whole observation, regardless of what sample
                 # range we will return.
-                data = self.cache.create(prefix, np.float64,
-                    (self.local_samples[1], ncomp))
+                data = self.cache.create(
+                    prefix, np.float64, (self.local_samples[1], ncomp)
+                )
                 for c in range(ncomp):
                     field = "{}{}".format(prefix, comps[c])
                     d = self._dgrp.read(field, offset, self.local_samples[1])
-                    data[:,c] = d
+                    data[:, c] = d
                 # Return just the desired slice
-                return data[start:start+n,:]
+                return data[start : start + n, :]
             else:
                 # Read and return just the slice we want
                 data = np.zeros((n, ncomp), dtype=np.float64)
                 for c in range(ncomp):
                     field = "{}{}".format(prefix, comps[c])
                     d = self._dgrp.read(field, offset, n)
-                    data[:,c] = d
+                    data[:, c] = d
                 return data
-
 
     def _write_helper(self, data, prefix, comps, start):
         """
@@ -539,35 +575,32 @@ class TODTidas(TOD):
         tmpdata = np.empty(data.shape[0], dtype=data.dtype, order="C")
         for c in range(ncomp):
             field = "{}{}".format(prefix, comps[c])
-            tmpdata[:] = data[:,c]
+            tmpdata[:] = data[:, c]
             self._dgrp.write(field, offset, tmpdata)
 
         return
-
 
     def _get_boresight(self, start, n, usecache=True):
         # Cache name
         cachebore = "{}_{}".format(STR_BORE, STR_QUAT)
         # Read and optionally cache the boresight pointing.
         self._open()
-        ret = self._read_cache_helper(cachebore, ["X", "Y", "Z", "W"],
-                                      start, n, usecache)
+        ret = self._read_cache_helper(
+            cachebore, ["X", "Y", "Z", "W"], start, n, usecache
+        )
         self._close()
         return ret
-
 
     def _put_boresight(self, start, data):
         # Data name
         borename = "{}_{}".format(STR_BORE, STR_QUAT)
         # Write data
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
-        self._write_helper(data, borename, ["X", "Y", "Z", "W"],
-                           start)
+        self._write_helper(data, borename, ["X", "Y", "Z", "W"], start)
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_boresight_azel(self, start, n, usecache=True):
         if not self._have_azel:
@@ -576,11 +609,11 @@ class TODTidas(TOD):
         cachebore = "{}_{}".format(STR_BOREAZEL, STR_QUAT)
         # Read and optionally cache the boresight pointing.
         self._open()
-        ret = self._read_cache_helper(cachebore, ["X", "Y", "Z", "W"],
-                                      start, n, usecache)
+        ret = self._read_cache_helper(
+            cachebore, ["X", "Y", "Z", "W"], start, n, usecache
+        )
         self._close()
         return ret
-
 
     def _put_boresight_azel(self, start, data):
         if not self._have_azel:
@@ -588,14 +621,12 @@ class TODTidas(TOD):
         # Data name
         borename = "{}_{}".format(STR_BOREAZEL, STR_QUAT)
         # Write data
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
-        self._write_helper(data, borename, ["X", "Y", "Z", "W"],
-            start)
+        self._write_helper(data, borename, ["X", "Y", "Z", "W"], start)
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get(self, detector, start, n):
         # Compute the sample offset of our local data
@@ -606,18 +637,16 @@ class TODTidas(TOD):
         self._close()
         return ret
 
-
     def _put(self, detector, start, data):
         # Compute the sample offset of our local data
         offset = self.local_samples[0] + start
         # Write to the data group
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._dgrp.write(detector, offset, np.ascontiguousarray(data))
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_flags(self, detector, start, n):
         # Field name
@@ -629,20 +658,18 @@ class TODTidas(TOD):
         self._close()
         return ret
 
-
     def _put_flags(self, detector, start, flags):
         # Field name
         field = "{}_{}".format(STR_FLAG, detector)
         # Compute the sample offset of our local data
         offset = self.local_samples[0] + start
         # Write to the data group
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._dgrp.write(field, offset, np.ascontiguousarray(flags))
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_common_flags(self, start, n):
         # Field name
@@ -655,20 +682,18 @@ class TODTidas(TOD):
         self._close()
         return ret
 
-
     def _put_common_flags(self, start, flags):
         # Field name
         field = "{}_{}".format(STR_FLAG, STR_COMMON)
         # Compute the sample offset of our local data
         offset = self.local_samples[0] + start
         # Write to the data group
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._dgrp.write(field, offset, np.ascontiguousarray(flags))
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_times(self, start, n):
         # Compute the sample offset of our local data
@@ -678,18 +703,16 @@ class TODTidas(TOD):
         self._close()
         return ret
 
-
     def _put_times(self, start, stamps):
         # Compute the sample offset of our local data
         offset = self.local_samples[0] + start
         # Write to the data group
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._dgrp.write_times(offset, np.ascontiguousarray(stamps))
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_pntg(self, detector, start, n):
         # Get boresight pointing (from disk or cache)
@@ -700,46 +723,41 @@ class TODTidas(TOD):
         self._close()
         return ret
 
-
     def _put_pntg(self, detector, start, data):
-        raise RuntimeError("TODTidas computes detector pointing on the fly."
-            " Use the write_boresight() method instead.")
+        raise RuntimeError(
+            "TODTidas computes detector pointing on the fly."
+            " Use the write_boresight() method instead."
+        )
         return
-
 
     def _get_position(self, start, n, usecache=False):
         # Read and optionally cache the telescope position.
         self._open()
-        ret = self._read_cache_helper(STR_POS, ["X", "Y", "Z"], start, n,
-                                      usecache)
+        ret = self._read_cache_helper(STR_POS, ["X", "Y", "Z"], start, n, usecache)
         self._close()
         return ret
 
-
     def _put_position(self, start, pos):
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._write_helper(pos, STR_POS, ["X", "Y", "Z"], start)
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
-
 
     def _get_velocity(self, start, n, usecache=False):
         # Read and optionally cache the telescope velocity.
         self._open()
-        ret = self._read_cache_helper(STR_VEL, ["X", "Y", "Z"], start, n,
-                                      usecache)
+        ret = self._read_cache_helper(STR_VEL, ["X", "Y", "Z"], start, n, usecache)
         self._close()
         return ret
 
-
     def _put_velocity(self, start, vel):
-        #self._writelock.lock()
+        # self._writelock.lock()
         self._open()
         self._write_helper(vel, STR_VEL, ["X", "Y", "Z"], start)
         self._close()
-        #self._writelock.unlock()
+        # self._writelock.unlock()
         return
 
 
@@ -826,7 +844,9 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
             obspath[nm] = pthnm
             grpnames = current.group_names()
             if groupname not in grpnames:
-                raise RuntimeError("observation {} does not have a group '{}'".format(nm, groupname))
+                raise RuntimeError(
+                    "observation {} does not have a group '{}'".format(nm, groupname)
+                )
             grp = current.group_get(groupname)
             sch = grp.schema()
             nfield = len(sch.fields())
@@ -852,7 +872,7 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
 
     # Distribute observations based on number of samples
 
-    dweight = [ obsweight[x] for x in obslist ]
+    dweight = [obsweight[x] for x in obslist]
     distobs = distribute_discrete(dweight, comm.ngroups)
 
     # Distributed data
@@ -863,10 +883,9 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
 
     firstobs = distobs[comm.group][0]
     nobs = distobs[comm.group][1]
-    for ob in range(firstobs, firstobs+nobs):
+    for ob in range(firstobs, firstobs + nobs):
         obs = dict()
-        obs["tod"] = todclass(cgroup, detranks, vol, obspath[obslist[ob]],
-                              **kwargs)
+        obs["tod"] = todclass(cgroup, detranks, vol, obspath[obslist[ob]], **kwargs)
 
         # Get the observation properties group
         pfields = obspath[obslist[ob]].split("/")
@@ -891,8 +910,11 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
         # Verify that the name on disk is what we expect
         if "name" in obs:
             if obs["name"] != obslist[ob]:
-                raise RuntimeError("loading obs {}: name in file set to {}"\
-                                   .format(obslist[ob], obs["name"]))
+                raise RuntimeError(
+                    "loading obs {}: name in file set to {}".format(
+                        obslist[ob], obs["name"]
+                    )
+                )
         else:
             obs["name"] = obslist[ob]
 
@@ -955,10 +977,23 @@ class OpTidasExport(Operator):
             timestream.  If None, use the read* methods from the existing TOD.
 
     """
-    def __init__(self, path, todclass, backend=None, comp="none",
-        backopts=dict(), obspath=None, use_todchunks=False,
-        use_intervals=False, create_opts=dict(), ctor_opts=dict(),
-        cache_common=None, cache_name=None, cache_flag_name=None):
+
+    def __init__(
+        self,
+        path,
+        todclass,
+        backend=None,
+        comp="none",
+        backopts=dict(),
+        obspath=None,
+        use_todchunks=False,
+        use_intervals=False,
+        create_opts=dict(),
+        ctor_opts=dict(),
+        cache_common=None,
+        cache_name=None,
+        cache_flag_name=None,
+    ):
 
         if not available:
             raise RuntimeError("tidas is not available")
@@ -989,7 +1024,6 @@ class OpTidasExport(Operator):
         self._cache_flag_name = cache_flag_name
         # We call the parent class constructor
         super().__init__()
-
 
     def exec(self, data):
         """
@@ -1024,7 +1058,7 @@ class OpTidasExport(Operator):
             dur = stop - start
             if mcomm.rank == 0:
                 pass
-                #print("{}: {:.3f} s".format(msg, dur), flush=True)
+                # print("{}: {:.3f} s".format(msg, dur), flush=True)
             return stop
 
         tm = MPI.Wtime()
@@ -1037,20 +1071,25 @@ class OpTidasExport(Operator):
             if os.path.isdir(self._path):
                 # We are appending
                 if self._backend is not None:
-                    print("TIDAS volume {} already exists, but a backend "
-                          "format was specified, which indicates a new volume"
-                          " should be created.".format(self._path), flush=True)
+                    print(
+                        "TIDAS volume {} already exists, but a backend "
+                        "format was specified, which indicates a new volume"
+                        " should be created.".format(self._path),
+                        flush=True,
+                    )
                     cworld.Abort()
                 create = False
             else:
                 # We are creating a new volume.
                 if self._backend is None:
-                    print("TIDAS volume {} does not exist, and a backend "
-                          "format was not specified.".format(self._path), flush=True)
+                    print(
+                        "TIDAS volume {} does not exist, and a backend "
+                        "format was not specified.".format(self._path),
+                        flush=True,
+                    )
                     cworld.Abort()
                 create = True
-                vol = tds.Volume(self._path, self._backend, self._comp,
-                    self._backopts)
+                vol = tds.Volume(self._path, self._backend, self._comp, self._backopts)
                 del vol
         create = cworld.bcast(create, root=0)
 
@@ -1075,14 +1114,16 @@ class OpTidasExport(Operator):
                 # Sanity check- the group communicator should be the same
                 comp = MPI.Comm.Compare(oldtod.mpicomm, cgroup)
                 if comp not in (MPI.IDENT, MPI.CONGRUENT):
-                    print("On export, original TOD comm is different from "
-                        "group comm ({})".format(comp), flush=True)
+                    print(
+                        "On export, original TOD comm is different from "
+                        "group comm ({})".format(comp),
+                        flush=True,
+                    )
                     cworld.Abort()
 
                 # Get the name
                 if "name" not in obs:
-                    print("observation does not have a name, cannot export",
-                          flush=True)
+                    print("observation does not have a name, cannot export", flush=True)
                     cworld.Abort()
                 obsname = obs["name"]
 
@@ -1103,7 +1144,7 @@ class OpTidasExport(Operator):
                     if isinstance(v, (bool, int, float, str)):
                         oprops["obs_{}".format(k)] = v
 
-                #print("export: ",oprops, flush=True)
+                # print("export: ",oprops, flush=True)
 
                 # Create or open the block in the volume that corresponds to
                 # this observation.
@@ -1117,8 +1158,9 @@ class OpTidasExport(Operator):
                     obsprops = tdsutils.from_dict(oprops)
 
                     # Create the observation group
-                    obsgroup = tob.group_add(STR_OBSGROUP,
-                        tds.Group(tds.Schema(), obsprops, 0))
+                    obsgroup = tob.group_add(
+                        STR_OBSGROUP, tds.Group(tds.Schema(), obsprops, 0)
+                    )
                 else:
                     # Get the observation properties group
                     obsgroup = tob.group_get(STR_OBSGROUP)
@@ -1133,7 +1175,11 @@ class OpTidasExport(Operator):
                         if obsmat is not None:
                             obskey = obsmat.group(1)
                             if (obskey not in obs) or (obs[obskey] != v):
-                                raise RuntimeError("Attempting to export to existing observation with missing / changed property '{}'".format(k))
+                                raise RuntimeError(
+                                    "Attempting to export to existing observation with missing / changed property '{}'".format(
+                                        k
+                                    )
+                                )
 
                 # Whatever intervals we are using for data distribution (TOD
                 # chunks or the input observation intervals), we want to write
@@ -1143,8 +1189,7 @@ class OpTidasExport(Operator):
                 if self._useintervals:
                     # List of current toast intervals
                     if "intervals" not in obs:
-                        raise RuntimeError("Observation does not contain "
-                                           "intervals")
+                        raise RuntimeError("Observation does not contain " "intervals")
                     ninterval = len(obs["intervals"])
                 else:
                     # We are using TOD chunks
@@ -1155,14 +1200,16 @@ class OpTidasExport(Operator):
                     # Intervals already exist- verify size
                     tintr = tob.intervals_get(STR_DISTINTR)
                     if tintr.size() != ninterval:
-                        raise RuntimeError("Existing intervals have different "
-                                           "length than ones being exported")
+                        raise RuntimeError(
+                            "Existing intervals have different "
+                            "length than ones being exported"
+                        )
                     del tintr
                 else:
                     # Create distribution intervals
                     tintr = tob.intervals_add(
-                        STR_DISTINTR,
-                        tds.Intervals(tds.Dictionary(), ninterval))
+                        STR_DISTINTR, tds.Intervals(tds.Dictionary(), ninterval)
+                    )
                     del tintr
 
                 del obsgroup
@@ -1178,12 +1225,18 @@ class OpTidasExport(Operator):
                 except:
                     azel = False
 
-                self._todclass.create(vol, "/".join([blockpath, obsname]),
-                                      oldtod.detoffset(), oldtod.total_samples,
-                                      oldtod.meta(), azel, **self._create_opts)
+                self._todclass.create(
+                    vol,
+                    "/".join([blockpath, obsname]),
+                    oldtod.detoffset(),
+                    oldtod.total_samples,
+                    oldtod.meta(),
+                    azel,
+                    **self._create_opts
+                )
 
         tm = elapsed(cworld, tm, "Create obs groups and intervals")
-        #print("group {} meta sync".format(comm.group), flush=True)
+        # print("group {} meta sync".format(comm.group), flush=True)
         vol.meta_sync()
         del vol
         # Now all metadata is written to disk and synced between processes.
@@ -1221,8 +1274,9 @@ class OpTidasExport(Operator):
                 if cgroup.rank == 0:
                     ilist = []
                     for intr in obs["intervals"]:
-                        ilist.append(tds.Intrvl(intr.start, intr.stop,
-                            intr.first, intr.last))
+                        ilist.append(
+                            tds.Intrvl(intr.start, intr.stop, intr.first, intr.last)
+                        )
                     tintr = tob.intervals_get(STR_DISTINTR)
                     tintr.write(ilist)
                     del tintr
@@ -1248,7 +1302,8 @@ class OpTidasExport(Operator):
                         stamps = np.zeros(np.sum(psizes), dtype=np.float64)
 
                     oldtod.grid_comm_row.Gatherv(
-                        pdata, [stamps, psizes, disp, MPI.DOUBLE], root=0)
+                        pdata, [stamps, psizes, disp, MPI.DOUBLE], root=0
+                    )
 
                     if ranksamp == 0:
                         ilist = []
@@ -1258,14 +1313,15 @@ class OpTidasExport(Operator):
                             ilast = ckoff + chk - 1
                             istart = stamps[ifirst]
                             istop = stamps[ilast]
-                            ilist.append(tds.Intrvl(istart, istop, ifirst,
-                                                    ilast))
+                            ilist.append(tds.Intrvl(istart, istop, ifirst, ilast))
                             ckoff += chk
                         tintr = tob.intervals_get(STR_DISTINTR)
                         tintr.write(ilist)
                         del tintr
                         del ilist
-                tm = elapsed(cgroup, tm, "Group write {} chunk intervals".format(obsname))
+                tm = elapsed(
+                    cgroup, tm, "Group write {} chunk intervals".format(obsname)
+                )
 
             del tob
 
@@ -1274,8 +1330,9 @@ class OpTidasExport(Operator):
             if self._usechunks:
                 sampsizes = oldtod.total_chunks
             elif self._useintervals:
-                sampsizes = intervals_to_chunklist(obs["intervals"],
-                                                   oldtod.total_samples)
+                sampsizes = intervals_to_chunklist(
+                    obs["intervals"], oldtod.total_samples
+                )
 
             tm = elapsed(cgroup, tm, "Group compute {} sampsizes".format(obsname))
 
@@ -1284,10 +1341,16 @@ class OpTidasExport(Operator):
 
             obsdir = "/".join([blockpath, obsname])
 
-            #print("export:  construct tod at {}".format(obsdir), flush=True)
-            tod = self._todclass(cgroup, detranks, vol, obsdir,
-                distintervals=sampsizes, **self._ctor_opts)
-            #print("export:  done construct tod at {}".format(obsdir), flush=True)
+            # print("export:  construct tod at {}".format(obsdir), flush=True)
+            tod = self._todclass(
+                cgroup,
+                detranks,
+                vol,
+                obsdir,
+                distintervals=sampsizes,
+                **self._ctor_opts
+            )
+            # print("export:  done construct tod at {}".format(obsdir), flush=True)
 
             tm = elapsed(cgroup, tm, "Group instantiate {} TOD".format(obsname))
 
@@ -1295,10 +1358,18 @@ class OpTidasExport(Operator):
             new_detranks, new_sampranks = tod.grid_size
             new_rankdet, new_ranksamp = tod.grid_ranks
 
-            if (new_detranks != detranks) or (new_sampranks != sampranks) or \
-                (new_rankdet != rankdet) or (new_ranksamp != ranksamp):
-                print("During export to obs ({}), process grid shape mismatch"\
-                      .format(obsname), flush=True)
+            if (
+                (new_detranks != detranks)
+                or (new_sampranks != sampranks)
+                or (new_rankdet != rankdet)
+                or (new_ranksamp != ranksamp)
+            ):
+                print(
+                    "During export to obs ({}), process grid shape mismatch".format(
+                        obsname
+                    ),
+                    flush=True,
+                )
                 cworld.Abort()
 
             tm = elapsed(cgroup, tm, "Group check TOD {} process grid".format(obsname))
@@ -1308,7 +1379,7 @@ class OpTidasExport(Operator):
             # Since we only need to write these once, we let the first
             # process row handle that.
 
-            #print("export:  start data copy for {}".format(obsdir), flush=True)
+            # print("export:  start data copy for {}".format(obsdir), flush=True)
 
             if rankdet == 0:
                 # Only the first row of the process grid does this.
@@ -1318,22 +1389,22 @@ class OpTidasExport(Operator):
                         tod.write_times(stamps=oldtod.read_times())
                         tod.write_boresight(data=oldtod.read_boresight())
                         if azel:
-                            tod.write_boresight_azel(
-                                data=oldtod.read_boresight_azel())
+                            tod.write_boresight_azel(data=oldtod.read_boresight_azel())
                         tod.write_position(pos=oldtod.read_position())
                         tod.write_velocity(vel=oldtod.read_velocity())
                         if self._cache_common is None:
-                            tod.write_common_flags(
-                                flags=oldtod.read_common_flags())
+                            tod.write_common_flags(flags=oldtod.read_common_flags())
                         else:
                             ref = oldtod.cache.reference(self._cache_common)
                             tod.write_common_flags(flags=ref)
                             del ref
                     tod.grid_comm_row.barrier()
 
-            tm = elapsed(cgroup, tm, "Group write {} timestamps and boresight".format(obsname))
+            tm = elapsed(
+                cgroup, tm, "Group write {} timestamps and boresight".format(obsname)
+            )
 
-            #print("export:  finish common copy for {}".format(obsdir), flush=True)
+            # print("export:  finish common copy for {}".format(obsdir), flush=True)
 
             # Now every process takes turns writing their unique data
             for p in range(cgroup.size):
@@ -1343,22 +1414,25 @@ class OpTidasExport(Operator):
                             tod.write(detector=d, data=oldtod.read(detector=d))
                         else:
                             ref = oldtod.cache.reference(
-                                "{}_{}".format(self._cache_name, d))
+                                "{}_{}".format(self._cache_name, d)
+                            )
                             tod.write(detector=d, data=ref)
                             del ref
                         if self._cache_flag_name is None:
-                            tod.write_flags(detector=d,
-                                            flags=oldtod.read_flags(detector=d))
+                            tod.write_flags(
+                                detector=d, flags=oldtod.read_flags(detector=d)
+                            )
                         else:
                             ref = oldtod.cache.reference(
-                                "{}_{}".format(self._cache_flag_name, d))
+                                "{}_{}".format(self._cache_flag_name, d)
+                            )
                             tod.write_flags(detector=d, flags=ref)
                             del ref
                 cgroup.barrier()
 
             tm = elapsed(cgroup, tm, "Group write {} data".format(obsname))
 
-            #print("export:  finish det copy for {}".format(obsdir), flush=True)
+            # print("export:  finish det copy for {}".format(obsdir), flush=True)
 
             del tod
 

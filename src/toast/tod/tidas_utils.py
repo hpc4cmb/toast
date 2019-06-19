@@ -31,25 +31,25 @@ def to_dict(td):
     meta = dict()
     for k in td.keys():
         tp = td.get_type(k)
-        if (tp == "d"):
+        if tp == "d":
             meta[k] = td.get_float64(k)
-        elif (tp == "f"):
+        elif tp == "f":
             meta[k] = td.get_float32(k)
-        elif (tp == "l"):
+        elif tp == "l":
             meta[k] = td.get_int64(k)
-        elif (tp == "L"):
+        elif tp == "L":
             meta[k] = td.get_uint64(k)
-        elif (tp == "i"):
+        elif tp == "i":
             meta[k] = td.get_int32(k)
-        elif (tp == "I"):
+        elif tp == "I":
             meta[k] = td.get_uint32(k)
-        elif (tp == "h"):
+        elif tp == "h":
             meta[k] = td.get_int16(k)
-        elif (tp == "H"):
+        elif tp == "H":
             meta[k] = td.get_uint16(k)
-        elif (tp == "b"):
+        elif tp == "b":
             meta[k] = td.get_int8(k)
-        elif (tp == "B"):
+        elif tp == "B":
             meta[k] = td.get_uint8(k)
         else:
             meta[k] = td.get_string(k)

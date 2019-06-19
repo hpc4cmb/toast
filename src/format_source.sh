@@ -39,15 +39,15 @@ blkrun="-l 88"
 blktest="--check"
 
 # Directories to process
-cppdirs="libtoast/src libtoast/include libtoast_mpi/src libtoast_mpi/include"
+cppdirs="libtoast libtoast_mpi toast"
 pydirs="toast"
 
 # Test
 for cppd in ${cppdirs}; do
-    find "${base}/${cppd}" -name "*.hpp" -not -path '*Random123*' -exec ${unexe} ${unrun} '{}' \;
-    find "${base}/${cppd}" -name "*.cpp" -not -path '*Random123*' -exec ${unexe} ${unrun} '{}' \;
+    find "${base}/${cppd}" -name "*.hpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec ${unexe} ${unrun} '{}' \;
+    find "${base}/${cppd}" -name "*.cpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec ${unexe} ${unrun} '{}' \;
 done
 
 for pyd in ${pydirs}; do
-    find "${base}/${pyd}" -name "*.py" -exec ${blkexe} ${blkrun} '{}' \;
+    find "${base}/${pyd}" -name "*.py" -not -path '*pybind11/*' -exec ${blkexe} ${blkrun} '{}' \;
 done
