@@ -25,12 +25,17 @@ error_handler() {
 # If an error occurs, run our error handler
 trap 'error_handler' ERR
 
-# Run our tests
+# Run MPI tests
 #===========================================================================
 
 export OMP_NUM_THREADS=2
 
 mpirun -np 2 python -c "import toast.tests; toast.tests.run()"
+
+# Run tests with MPI disabled
+#===========================================================================
+
+TOAST_MPI_DISABLE=1 python -c "import toast.tests; toast.tests.run()"
 
 # cd examples/
 # mpirun -np 2 bash run_tiny_tests.sh

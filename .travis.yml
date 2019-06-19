@@ -21,11 +21,6 @@ matrix:
           packages:
             - build-essential
             - git
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - cmake
             - pkg-config
             - locales
             - libgl1-mesa-glx
@@ -51,11 +46,6 @@ matrix:
           packages:
             - build-essential
             - git
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - cmake
             - pkg-config
             - locales
             - libgl1-mesa-glx
@@ -81,11 +71,6 @@ matrix:
           packages:
             - build-essential
             - git
-            - autoconf
-            - automake
-            - m4
-            - libtool
-            - cmake
             - pkg-config
             - locales
             - libgl1-mesa-glx
@@ -118,7 +103,7 @@ before_install:
     - echo "Python site version = ${PYSITE}"
     # Install python dependencies. NOTE:  if you change this list, also
     # change them in the dependency tarball script.
-    - pip install -q numpy scipy matplotlib cython astropy ephem healpy
+    - pip install -q numpy scipy matplotlib cmake cython astropy ephem healpy numba
     - pip install -q https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz
     # Install all compiled dependencies from a pre-cached location
     - export DEPSURL="http://portal.nersc.gov/project/cmb/toast_travis/travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2"
@@ -140,13 +125,19 @@ before_install:
 
 install:
     # Build and install
-    - ./autogen.sh
-    - export GCCSTD=""
-    - if [ "x${DEPGCC}" = "x-4.9" ]; then export GCCSTD="-std=gnu++11"; fi
-    - if [ "x${DEPGCC}" = "x-5" ]; then export GCCSTD="-std=gnu++11"; fi
-    - CC="${MPICC}" CXX="${MPICXX}" CFLAGS="-O2 -g -fPIC -pthread -std=c99" CXXFLAGS="-O2 -g -fPIC -pthread ${GCCSTD}" ./configure --prefix=${HOME}/toast
+    - mkdir -p build
+    - cd build
+    - cmake \
+        -DCMAKE_C_COMPILER="${CC}" \
+        -DCMAKE_CXX_COMPILER="${CXX}" \
+        -DMPI_C_COMPILER="${MPICC}" \
+        -DMPI_CXX_COMPILER="${MPICXX}" \
+        -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+        -DCMAKE_INSTALL_PREFIX=${HOME}/toast \
+        ..
     - make -j 2
     - make install
+    - cd ..
     # Load TOAST install prefix into our environment
     - export PATH="${HOME}/toast/bin:${PATH}"
     - export CPATH="${HOME}/toast/include:${CPATH}"

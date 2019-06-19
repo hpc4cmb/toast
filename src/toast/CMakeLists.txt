@@ -35,6 +35,12 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_todmap_scanning.cpp
     _libtoast_map_cov.cpp
 )
+
+set_property(TARGET _libtoast PROPERTY
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
+)
+
 target_link_libraries(_libtoast PRIVATE toast)
 
 # Include path to the toast headers
@@ -68,6 +74,11 @@ install(FILES
 
 if(MPI_FOUND AND MPI4PY_FOUND)
     pybind11_add_module(_libtoast_mpi MODULE _libtoast_mpi.cpp)
+
+    set_property(TARGET _libtoast_mpi PROPERTY
+        CXX_STANDARD 11
+        CXX_STANDARD_REQUIRED ON
+    )
 
     string(STRIP "${MPI_CXX_COMPILE_FLAGS}" mpi_comp_flags)
     target_compile_options(_libtoast_mpi PRIVATE "${mpi_comp_flags}")
