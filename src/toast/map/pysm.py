@@ -60,27 +60,28 @@ class PySMSky(object):
             raise RuntimeError("pysm not available")
         initialized_sky_config = {}
         if pysm_precomputed_cmb_K_CMB is not None:
-            cmb = {
-                "model": "pre_computed",
-                "nside": self._nside,
-                "pixel_indices": self._local_pixels,
-            }
-            # PySM expects uK_CMB
-            cmb["A_I"], cmb["A_Q"], cmb["A_U"] = (
-                np.array(
-                    pysm.read_map(
-                        pysm_precomputed_cmb_K_CMB,
-                        self._nside,
-                        field=(0, 1, 2),
-                        pixel_indices=self._local_pixels,
-                        mpi_comm=self._comm,
-                    )
-                )
-                * 1e6
-            )
-            initialized_sky_config["cmb"] = [cmb]
-            # remove cmb from the pysm string
-            pysm_sky_config.pop("cmb", None)
+            pass
+            # cmb = {
+            #     "model": "pre_computed",
+            #     "nside": self._nside,
+            #     "pixel_indices": self._local_pixels,
+            # }
+            # # PySM expects uK_CMB
+            # cmb["A_I"], cmb["A_Q"], cmb["A_U"] = (
+            #     np.array(
+            #         pysm.read_map(
+            #             pysm_precomputed_cmb_K_CMB,
+            #             self._nside,
+            #             field=(0, 1, 2),
+            #             pixel_indices=self._local_pixels,
+            #             mpi_comm=self._comm,
+            #         )
+            #     )
+            #     * 1e6
+            # )
+            # initialized_sky_config["cmb"] = [cmb]
+            # # remove cmb from the pysm string
+            # pysm_sky_config.pop("cmb", None)
         for name, model_id in pysm_sky_config.items():
             initialized_sky_config[name] = pysm.nominal.models(
                 model_id, self._nside, self._local_pixels, mpi_comm=self._comm
