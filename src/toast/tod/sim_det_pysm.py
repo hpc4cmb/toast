@@ -116,7 +116,7 @@ class OpSimPySM(Operator):
             pysm_sky_config[full_component_name] = component_model
         self.pysm_sky = PySMSky(
             comm=self.comm,
-            local_pixels=self.dist_rings.local_pixels,
+            pixel_indices=self.dist_rings.local_pixels,
             nside=nside,
             pysm_sky_config=pysm_sky_config,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,

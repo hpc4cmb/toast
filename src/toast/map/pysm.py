@@ -36,13 +36,13 @@ class PySMSky(object):
         pysm_sky_config=None,
         pysm_precomputed_cmb_K_CMB=None,
         init_sky=True,
-        local_pixels=None,
+        pixel_indices=None,
         units="K_CMB",
     ):
         self._nside = nside
         self._pixels = pixels
         self._out = out
-        self._local_pixels = local_pixels
+        self._pixel_indices = pixel_indices
         self._comm = comm
         self._units = u.Unit(units)
 
@@ -63,7 +63,7 @@ class PySMSky(object):
             # cmb = {
             #     "model": "pre_computed",
             #     "nside": self._nside,
-            #     "pixel_indices": self._local_pixels,
+            #     "pixel_indices": self._pixel_indices,
             # }
             # # PySM expects uK_CMB
             # cmb["A_I"], cmb["A_Q"], cmb["A_U"] = (
@@ -72,7 +72,7 @@ class PySMSky(object):
             #             pysm_precomputed_cmb_K_CMB,
             #             self._nside,
             #             field=(0, 1, 2),
-            #             pixel_indices=self._local_pixels,
+            #             pixel_indices=self._pixel_indices,
             #             mpi_comm=self._comm,
             #         )
             #     )
@@ -82,11 +82,11 @@ class PySMSky(object):
             # # remove cmb from the pysm string
             # pysm_sky_config.pop("cmb", None)
         map_dist = pysm.MapDistribution(
-            pixel_indices=None, nside=self._nside, mpi_comm=self._comm
+            pixel_indices=self._pixel_indices, nside=self._nside, mpi_comm=self._comm
         )
         return pysm.Sky(
             nside=self._nside,
-            preset_strings=pysm_sky_config.values(),
+            preset_strings=list(pysm_sky_config.values()),
             map_dist=map_dist,
             output_unit=self._units,
         )
