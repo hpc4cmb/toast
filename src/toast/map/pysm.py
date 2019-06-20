@@ -86,7 +86,12 @@ class PySMSky(object):
         map_dist = pysm.MapDistribution(
             pixel_indices=None, nside=self._nside, mpi_comm=self._comm
         )
-        return pysm.Sky(nside=self._nside, preset_strings=pysm_sky_config.values(), map_dist=map_dist, output_unit=self._units)
+        return pysm.Sky(
+            nside=self._nside,
+            preset_strings=pysm_sky_config.values(),
+            map_dist=map_dist,
+            output_unit=self._units,
+        )
 
     @function_timer
     def exec(self, local_map, out, bandpasses=None):
@@ -99,27 +104,10 @@ class PySMSky(object):
                 self.pysm_sky_config, self.pysm_precomputed_cmb_K_CMB
             )
 
-        pysm_instrument_config = {
-            "beams": None,
-            "nside": self._nside,
-            "use_bandpass": True,
-            "channels": None,
-            "channel_names": list(bandpasses.keys()),
-            "add_noise": False,
-            "output_units": self._units,
-            "use_smoothing": False,
-            "pixel_indices": self._local_pixels,
-        }
-
         for ch_name, bandpass in bandpasses.items():
-            pysm_instrument_config["channels"] = [bandpass]
-            instrument = pysm.Instrument(pysm_instrument_config)
             out_name = (out + "_" + ch_name) if ch_name else out
-            # output of observe is a tuple, first item is the map
-            # however the map has 1 extra dimension of size 1,
-            # so we need to index [0] twice to get a map of (3, npix)
-            local_map[out_name] = instrument.observe(self.sky, write_outputs=False)[0][
-                0
-            ]
+            local_map[out_name] = self.sky.get_emission(
+                bandpass[0] * u.GHz, bandpass[1]
+            ).value
             assert local_map[out_name].shape[0] == 3
             assert local_map[out_name].ndim == 2
