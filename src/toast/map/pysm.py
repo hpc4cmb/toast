@@ -46,7 +46,7 @@ class PySMSky(object):
         self._out = out
         self._local_pixels = local_pixels
         self._comm = comm
-        self._units = units
+        self._units = u.Unit(units)
 
         self.pysm_sky_config = pysm_sky_config
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
@@ -60,7 +60,6 @@ class PySMSky(object):
     def init_sky(self, pysm_sky_config, pysm_precomputed_cmb_K_CMB):
         if pysm is None:
             raise RuntimeError("pysm not available")
-        initialized_sky_config = {}
         if pysm_precomputed_cmb_K_CMB is not None:
             pass
             # cmb = {
@@ -84,11 +83,10 @@ class PySMSky(object):
             # initialized_sky_config["cmb"] = [cmb]
             # # remove cmb from the pysm string
             # pysm_sky_config.pop("cmb", None)
-        for name, model_id in pysm_sky_config.items():
-            initialized_sky_config[name] = pysm.nominal.models(
-                model_id, self._nside, self._local_pixels, mpi_comm=self._comm
-            )
-        return pysm.Sky(initialized_sky_config, mpi_comm=self._comm)
+        map_dist = pysm.MapDistribution(
+            pixel_indices=None, nside=self._nside, mpi_comm=self._comm
+        )
+        return pysm.Sky(nside=self._nside, preset_strings=pysm_sky_config.values(), map_dist=map_dist, output_unit=self._units)
 
     @function_timer
     def exec(self, local_map, out, bandpasses=None):
