@@ -7,14 +7,10 @@ import numpy as np
 from ..timing import function_timer
 
 pysm = None
-available = False
 try:
     import pysm
-
-    available = True
 except ImportError:
     pysm = None
-    available = False
 
 
 class PySMSky(object):
