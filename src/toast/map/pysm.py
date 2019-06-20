@@ -9,8 +9,10 @@ from ..timing import function_timer
 pysm = None
 try:
     import pysm
+    import pysm.units as u
 except ImportError:
     pysm = None
+    u = None
 
 
 class PySMSky(object):
