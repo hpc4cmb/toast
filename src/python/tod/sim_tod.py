@@ -1004,6 +1004,16 @@ class TODGround(TOD):
         my_quats = qa.mult(my_azel2radec_quats, my_azelquats)
         del my_azelquats
 
+        if self._coord != "C":
+            # Add the coordinate system rotation
+            if self._coord == "G":
+                my_quats= qa.mult(quat_equ2gal, my_quats)
+            elif self._coord == "E":
+                my_quats = qa.mult(quat_equ2ecl, my_quats)
+            else:
+                raise RuntimeError(
+                    "Unknown coordinate system: {}".format(self._coord))
+
         quats = np.vstack(self._mpicomm.allgather(my_quats))
         self._boresight = quats
         del my_quats
@@ -1135,26 +1145,6 @@ class TODGround(TOD):
         autotimer = timing.auto_timer(type(self).__name__)
         self._boresight = None
         self.cache.destroy("boresight_radec")
-
-    def radec2quat(self, ra, dec, pa):
-        autotimer = timing.auto_timer(type(self).__name__)
-
-        qR = qa.rotation(ZAXIS, ra+np.pi/2)
-        qD = qa.rotation(XAXIS, np.pi/2-dec)
-        qP = qa.rotation(ZAXIS, pa) # FIXME: double-check this
-        q = qa.mult(qR, qa.mult(qD, qP))
-
-        if self._coord != "C":
-            # Add the coordinate system rotation
-            if self._coord == "G":
-                q = qa.mult(quat_equ2gal, q)
-            elif self._coord == "E":
-                q = qa.mult(quat_equ2ecl, q)
-            else:
-                raise RuntimeError(
-                    "Unknown coordinate system: {}".format(self._coord))
-
-        return q
 
     def detoffset(self):
         return { d : np.asarray(self._fp[d]) for d in self._detlist }
