@@ -20,7 +20,6 @@ if "TOAST_STARTUP_DELAY" in os.environ:
     #      flush=True)
     time.sleep(wait)
 
-
 import sys
 import re
 import argparse
@@ -28,44 +27,38 @@ import traceback
 import copy
 import pickle
 
-from datetime import datetime
-
 import dateutil.parser
 
-from astropy.io import fits
+import numpy as np
 
 from toast.mpi import get_world, Comm
 
 from toast.dist import distribute_uniform, Data
 
-from toast.utils import Logger
+from toast.utils import Logger, Environment
 
-from toast.vis import set_backend
+import toast.qarray as qa
 
 from toast.weather import Weather
 
-from toast.timing import function_timer, GlobalTimers, Timer
+from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
+from toast.timing import dump as dump_timing
 
-from toast.map import (
-    OpMadam,
-    OpAccumDiag,
-    OpLocalPixels,
-    covariance_apply,
-    covariance_invert,
-)
+from toast.map import OpMadam, OpLocalPixels, DistPixels
 
 from toast.tod import (
-    regular_intervals,
     AnalyticNoise,
-    plot_focalplane,
-    OpApplyGain,
     OpSimNoise,
-    OpSimDipole,
     OpPointingHpix,
-    slew_precession_axis,
     OpSimPySM,
     OpMemoryCounter,
-    TODSatellite,
+    TODGround,
+    OpSimScan,
+    OpCacheCopy,
+    OpGainScrambler,
+    OpPolyFilter,
+    OpGroundFilter,
+    OpSimAtmosphere,
 )
 
 # FIXME: put these back into the import statement above after porting.
@@ -91,6 +84,8 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 def parse_arguments(comm):
+    log = Logger.get()
+
     parser = argparse.ArgumentParser(
         description="Simulate ground-based boresight pointing.  Simulate "
         "atmosphere and make maps for some number of noise Monte Carlos.",
@@ -548,12 +543,12 @@ def parse_arguments(comm):
         raise RuntimeError("Cannot simulate atmosphere without a TOAST weather file")
 
     if comm.world_rank == 0:
-        print("\nAll parameters:")
-        print(args, flush=args.flush)
-        print("")
+        log.info("All parameters:")
+        for ag in vars(args):
+            log.info("{} = {}".format(ag, getattr(args, ag)))
 
     if args.groupsize:
-        comm = toast.Comm(groupsize=args.groupsize)
+        comm = Comm(world=comm.comm_world, groupsize=args.groupsize)
 
     if comm.world_rank == 0:
         if not os.path.isdir(args.outdir):
@@ -582,21 +577,21 @@ def load_weather(args, comm, schedules):
     """
     if args.weather is None:
         return
-    tm = Timer()
-    tm.start()
+    tmr = Timer()
+    tmr.start()
 
     if comm.world_rank == 0:
         weathers = []
         weatherdict = {}
-        ftm = Timer()
+        ftmr = Timer()
         for fname in args.weather.split(","):
             if fname not in weatherdict:
                 if not os.path.isfile(fname):
                     raise RuntimeError("No such weather file: {}".format(fname))
-                ftm.start()
+                ftmr.start()
                 weatherdict[fname] = Weather(fname)
-                ftm.stop()
-                ftm.report_clear("Load {}".format(fname))
+                ftmr.stop()
+                ftmr.report_clear("Load {}".format(fname))
             weathers.append(weatherdict[fname])
     else:
         weathers = None
@@ -611,9 +606,9 @@ def load_weather(args, comm, schedules):
     for schedule, weather in zip(schedules, weathers):
         schedule.append(weather)
 
-    tm.stop()
+    tmr.stop()
     if comm.world_rank == 0:
-        tm.report("Loading weather")
+        tmr.report("Loading weather")
     return
 
 
@@ -623,15 +618,15 @@ def load_schedule(args, comm):
 
     """
     schedules = []
-    tm = Timer()
-    tm.start()
+    tmr = Timer()
+    tmr.start()
 
     if comm.world_rank == 0:
-        ftm = Timer()
+        ftmr = Timer()
         for fn in args.schedule.split(","):
             if not os.path.isfile(fn):
                 raise RuntimeError("No such schedule file: {}".format(fn))
-            ftm.start()
+            ftmr.start()
             with open(fn, "r") as f:
                 while True:
                     line = f.readline()
@@ -698,14 +693,14 @@ def load_schedule(args, comm):
                         ]
                     )
             schedules.append([site, all_ces])
-            ftm.stop()
-            ftm.report_clear("Load {}".format(fn))
+            ftmr.stop()
+            ftmr.report_clear("Load {}".format(fn))
 
     schedules = comm.comm_world.bcast(schedules)
 
-    tm.stop()
+    tmr.stop()
     if comm.world_rank == 0:
-        tm.report("Loading schedule")
+        tmr.report("Loading schedule")
     return schedules
 
 
@@ -732,24 +727,21 @@ def load_focalplanes(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
 
     """
-    tm = Timer()
-    tm.start()
+    tmr = Timer()
+    tmr.start()
 
     # Load focalplane information
 
     focalplanes = []
     if comm.comm_world.rank == 0:
+        ftmr = Timer()
         for fpfile in args.fp.split(","):
-            start1 = MPI.Wtime()
+            ftmr.start()
             with open(fpfile, "rb") as picklefile:
                 focalplane = pickle.load(picklefile)
-                stop1 = MPI.Wtime()
-                print(
-                    "Load {}:  {:.2f} seconds".format(fpfile, stop1 - start1),
-                    flush=args.flush,
-                )
                 focalplanes.append(focalplane)
-                start1 = stop1
+                ftmr.report_clear("Load {}".format(fpfile))
+        ftmr.stop()
     focalplanes = comm.comm_world.bcast(focalplanes)
 
     if len(focalplanes) == 1 and len(schedules) > 1:
@@ -769,22 +761,22 @@ def load_focalplanes(args, comm, schedules):
                 raise RuntimeError("Detector weight for {} changes".format(detname))
             detweights[detname] = detweight
 
-    tm.stop()
+    tmr.stop()
     if comm.world_rank == 0:
-        tm.report("Loading focalplanes")
+        tmr.report("Loading focalplanes")
     return detweights
 
 
 @function_timer
-def get_analytic_noise(args, focalplane):
+def get_analytic_noise(args, comm, focalplane):
     """Create a TOAST noise object.
 
     Create a noise object from the 1/f noise parameters contained in the
     focalplane database.
 
     """
-    tm = Timer()
-    tm.start()
+    tmr = Timer()
+    tmr.start()
     detectors = sorted(focalplane.keys())
     fmin = {}
     fknee = {}
@@ -797,20 +789,20 @@ def get_analytic_noise(args, focalplane):
         fknee[d] = focalplane[d]["fknee"]
         alpha[d] = focalplane[d]["alpha"]
         NET[d] = focalplane[d]["NET"]
-    nse = tt.AnalyticNoise(
+    nse = AnalyticNoise(
         rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET
     )
-    tm.stop()
+    tmr.stop()
     if comm.world_rank == 0:
-        tm.report("Creating noise model")
+        tmr.report("Creating noise model")
     return nse
 
 
+@function_timer
 def get_breaks(comm, all_ces, nces, args):
     """ List operational day limits in the list of CES:s.
 
     """
-    autotimer = timing.auto_timer()
     breaks = []
     if args.skip_daymaps:
         return breaks
@@ -857,17 +849,16 @@ def get_breaks(comm, all_ces, nces, args):
             "Number of observing days ({}) does not match number of process "
             "groups ({}).".format(nbreak + 1, comm.ngroups)
         )
-    del autotimer
     return breaks
 
 
+@function_timer
 def create_observation(args, comm, all_ces_tot, ices, noise):
     """ Create a TOAST observation.
 
     Create an observation for the CES scan defined by all_ces_tot[ices].
 
     """
-    autotimer = timing.auto_timer()
     ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
 
     (
@@ -891,7 +882,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     # create the TOD for this observation
 
     try:
-        tod = tt.TODGround(
+        tod = TODGround(
             comm.comm_group,
             detquats,
             totsamples,
@@ -946,18 +937,19 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
     obs["date"] = date
     obs["MJD"] = mjdstart
     obs["focalplane"] = fp
-    del autotimer
     return obs
 
 
+@function_timer
 def create_observations(args, comm, schedules, mem_counter):
     """ Create and distribute TOAST observations for every CES in schedules.
 
     """
-    start = MPI.Wtime()
-    autotimer = timing.auto_timer()
+    log = Logger.get()
+    tmr = Timer()
+    tmr.start()
 
-    data = toast.Data(comm)
+    data = Data(comm)
 
     # Loop over the schedules, distributing each schedule evenly across
     # the process groups.  For now, we'll assume that each schedule has
@@ -992,7 +984,7 @@ def create_observations(args, comm, schedules, mem_counter):
 
         breaks = get_breaks(comm, all_ces, nces, args)
 
-        groupdist = toast.distribute_uniform(nces, comm.ngroups, breaks=breaks)
+        groupdist = distribute_uniform(nces, comm.ngroups, breaks=breaks)
         group_firstobs = groupdist[comm.group][0]
         group_numobs = groupdist[comm.group][1]
 
@@ -1005,11 +997,8 @@ def create_observations(args, comm, schedules, mem_counter):
             tod = ob["tod"]
             tod.free_azel_quats()
 
-    if comm.comm_group.rank == 0:
-        print(
-            "Group # {:4} has {} observations.".format(comm.group, len(data.obs)),
-            flush=args.flush,
-        )
+    if comm.group_rank == 0:
+        log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
 
     if len(data.obs) == 0:
         raise RuntimeError(
@@ -1019,13 +1008,11 @@ def create_observations(args, comm, schedules, mem_counter):
 
     mem_counter.exec(data)
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print(
-            "Simulated scans in {:.2f} seconds" "".format(stop - start),
-            flush=args.flush,
-        )
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Simulated scans")
 
     # Split the data object for each telescope for separate mapmaking.
     # We could also split by site.
@@ -1038,16 +1025,17 @@ def create_observations(args, comm, schedules, mem_counter):
     else:
         telescope_data = []
     telescope_data.insert(0, ("all", data))
-    del autotimer
     return data, telescope_data
 
 
+@function_timer
 def expand_pointing(args, comm, data, mem_counter):
     """ Expand boresight pointing to every detector.
 
     """
-    start = MPI.Wtime()
-    autotimer = timing.auto_timer()
+    log = Logger.get()
+    tmr = Timer()
+    tmr.start()
 
     hwprpm = args.hwprpm
     hwpstep = None
@@ -1055,10 +1043,10 @@ def expand_pointing(args, comm, data, mem_counter):
         hwpstep = float(args.hwpstep)
     hwpsteptime = args.hwpsteptime
 
-    if comm.comm_world.rank == 0:
-        print("Expanding pointing", flush=args.flush)
+    if comm.world_rank == 0:
+        log.info("Expanding pointing")
 
-    pointing = tt.OpPointingHpix(
+    pointing = OpPointingHpix(
         nside=args.nside,
         nest=True,
         mode="IQU",
@@ -1076,27 +1064,28 @@ def expand_pointing(args, comm, data, mem_counter):
             tod = ob["tod"]
             tod.free_radec_quats()
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print(
-            "Pointing generation took {:.3f} s".format(stop - start), flush=args.flush
-        )
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Pointing generation")
 
     mem_counter.exec(data)
-    del autotimer
     return
 
 
+@function_timer
 def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
+    log = Logger.get()
+
     if not args.skip_bin or args.input_map:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Scanning local pixels", flush=args.flush)
-        start = MPI.Wtime()
+        if comm.world_rank == 0:
+            log.info("Scanning local pixels")
+        tmr = Timer()
+        tmr.start()
 
         # Prepare for using distpixels objects
         nside = args.nside
@@ -1106,36 +1095,33 @@ def get_submaps(args, comm, data):
         subnpix = 12 * subnside * subnside
 
         # get locally hit pixels
-        lc = tm.OpLocalPixels()
+        lc = OpLocalPixels()
         localpix = lc.exec(data)
         if localpix is None:
             raise RuntimeError(
                 "Process {} has no hit pixels. Perhaps there are fewer "
-                "detectors than processes in the group?".format(comm.comm_world.rank)
+                "detectors than processes in the group?".format(comm.world_rank)
             )
 
         # find the locally hit submaps.
         localsm = np.unique(np.floor_divide(localpix, subnpix))
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print(
-                "Local submaps identified in {:.3f} s".format(elapsed), flush=args.flush
-            )
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Identify local submaps")
     else:
         localpix, localsm = None, None
-    del autotimer
     return localpix, localsm, subnpix
 
 
+@function_timer
 def add_sky_signal(data, totalname_freq, signalname):
     """ Add previously simulated sky signal to the atmospheric noise.
 
     """
     if signalname is not None:
-        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -1148,19 +1134,19 @@ def add_sky_signal(data, totalname_freq, signalname):
                 else:
                     ref_out = tod.cache.put(cachename_out, ref_in)
                 del ref_in, ref_out
-        del autotimer
     return
 
 
+@function_timer
 def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, localsm):
     """ Use PySM to simulate smoothed sky signal.
 
     """
-    autotimer = timing.auto_timer()
+    tmr = Timer()
+    tmr.start()
     # Convolve a signal TOD from PySM
-    start = MPI.Wtime()
     signalname = "signal"
-    op_sim_pysm = ttm.OpSimPySM(
+    op_sim_pysm = OpSimPySM(
         comm=comm.comm_rank,
         out=signalname,
         pysm_model=args.input_pysm_model,
@@ -1172,33 +1158,37 @@ def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, local
         coord=args.coord,
     )
     op_sim_pysm.exec(data)
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print("PySM took {:.2f} seconds".format(stop - start), flush=args.flush)
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("PySM")
 
     mem_counter.exec(data)
-    del autotimer
     return signalname
 
 
+@function_timer
 def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
     """ Scan sky signal from a map.
 
     """
+    log = Logger.get()
+    tmr = Timer()
+    tmr.start()
+
     signalname = None
 
     if args.input_map:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Scanning input map", flush=args.flush)
-        start = MPI.Wtime()
+        if comm.world_rank == 0:
+            log.info("Scanning input map")
 
         npix = 12 * args.nside ** 2
 
         # Scan the sky signal
         if comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
             raise RuntimeError("Input map does not exist: {}".format(args.input_map))
-        distmap = tm.DistPixels(
+        distmap = DistPixels(
             comm=comm.comm_world,
             size=npix,
             nnz=3,
@@ -1208,20 +1198,16 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
         )
         mem_counter._objects.append(distmap)
         distmap.read_healpix_fits(args.input_map)
-        scansim = tt.OpSimScan(distmap=distmap, out="signal")
+        scansim = OpSimScan(distmap=distmap, out="signal")
         scansim.exec(data)
-
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Read and sampled input map:  {:.2f} seconds" "".format(stop - start),
-                flush=args.flush,
-            )
         signalname = "signal"
-
         mem_counter.exec(data)
-        del autotimer
 
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Read and sample map")
     return signalname
 
 
@@ -1242,13 +1228,13 @@ def setup_sigcopy(args):
     return totalname, totalname_freq
 
 
+@function_timer
 def setup_madam(args):
     """ Create a Madam parameter dictionary.
 
     Initialize the Madam parameters from the command line arguments.
 
     """
-    autotimer = timing.auto_timer()
     pars = {}
 
     cross = args.nside // 2
@@ -1307,12 +1293,12 @@ def setup_madam(args):
     pars["fsample"] = args.samplerate
     pars["iter_max"] = args.madam_iter_max
     pars["file_root"] = args.madam_prefix
-    del autotimer
     return pars
 
 
+@function_timer
 def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
-    """ Scale atmospheric fluctuations by frequency.
+    """Scale atmospheric fluctuations by frequency.
 
     Assume that cached signal under totalname_freq is pure atmosphere
     and scale the absorption coefficient according to the frequency.
@@ -1325,8 +1311,8 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
     if args.skip_atmosphere:
         return
 
-    autotimer = timing.auto_timer()
-    start = MPI.Wtime()
+    tmr = Timer()
+    tmr.start()
     for obs in data.obs:
         tod = obs["tod"]
         todcomm = tod.mpicomm
@@ -1355,7 +1341,7 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         if my_nfreq > 0:
             my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max) * freqstep
             my_absorption = np.zeros(my_nfreq)
-            err = toast.ctoast.atm_get_absorption_coefficient_vec(
+            err = atm_get_absorption_coefficient_vec(
                 altitude,
                 air_temperature,
                 surface_pressure,
@@ -1393,16 +1379,17 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
             ref *= absorption_det
             del ref
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print("Atmosphere scaling took {:.3f} s".format(stop - start), flush=args.flush)
-    del autotimer
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Atmosphere scaling")
     return
 
 
+@function_timer
 def update_atmospheric_noise_weights(args, comm, data, freq, mc):
-    """ Update atmospheric noise weights.
+    """Update atmospheric noise weights.
 
     Estimate the atmospheric noise level from weather parameters and
     encode it as a noise_scale in the observation.  Madam will apply
@@ -1412,16 +1399,16 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     we do not have their relative calibration.
 
     """
+    tmr = Timer()
+    tmr.start()
     if args.weather and not args.skip_atmosphere:
-        autotimer = timing.auto_timer()
-        start = MPI.Wtime()
         for obs in data.obs:
             site_id = obs["site_id"]
             weather = obs["weather"]
             start_time = obs["start_time"]
             weather.set(site_id, mc, start_time)
             altitude = obs["altitude"]
-            absorption = toast.ctoast.atm_get_absorption_coefficient(
+            absorption = atm_get_absorption_coefficient(
                 altitude,
                 weather.air_temperature,
                 weather.surface_pressure,
@@ -1429,35 +1416,34 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
                 freq,
             )
             obs["noise_scale"] = absorption * weather.air_temperature
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Atmosphere weighting took {:.3f} s".format(stop - start),
-                flush=args.flush,
-            )
-        del autotimer
     else:
         for obs in data.obs:
             obs["noise_scale"] = 1.0
 
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Atmosphere weighting")
     return
 
 
+@function_timer
 def simulate_atmosphere(args, comm, data, mc, mem_counter, totalname):
+    log = Logger.get()
+    tmr = Timer()
+    tmr.start()
     if not args.skip_atmosphere:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Simulating atmosphere", flush=args.flush)
+        if comm.world_rank == 0:
+            log.info("Simulating atmosphere")
             if args.atm_cache and not os.path.isdir(args.atm_cache):
                 try:
                     os.makedirs(args.atm_cache)
                 except FileExistsError:
                     pass
-        start = MPI.Wtime()
 
         # Simulate the atmosphere signal
-        atm = tt.OpSimAtmosphere(
+        atm = OpSimAtmosphere(
             out=totalname,
             realization=mc,
             lmin_center=args.atm_lmin_center,
@@ -1481,92 +1467,85 @@ def simulate_atmosphere(args, comm, data, mc, mem_counter, totalname):
             flush=args.flush,
             wind_time=args.atm_wind_time,
         )
-
         atm.exec(data)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Atmosphere simulation took {:.3f} s".format(stop - start),
-                flush=args.flush,
-            )
-
         mem_counter.exec(data)
-        del autotimer
+
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Atmosphere simulation")
     return
 
 
+@function_timer
 def copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq):
-    """ Copy the atmospheric signal.
+    """Copy the atmospheric signal.
 
     Make a copy of the atmosphere so we can scramble the gains and apply
     frequency-dependent scaling.
 
     """
+    log = Logger.get()
     if totalname != totalname_freq:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print(
-                "Copying atmosphere from {} to {}".format(totalname, totalname_freq),
-                flush=args.flush,
+        if comm.world_rank == 0:
+            log.info(
+                "Copying atmosphere from {} to {}".format(totalname, totalname_freq)
             )
-        cachecopy = tt.OpCacheCopy(totalname, totalname_freq, force=True)
+        cachecopy = OpCacheCopy(totalname, totalname_freq, force=True)
         cachecopy.exec(data)
         mem_counter.exec(data)
-        del autotimer
     return
 
 
+@function_timer
 def simulate_noise(args, comm, data, mc, mem_counter, totalname_freq):
-    if not args.skip_noise:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Simulating noise", flush=args.flush)
-        start = MPI.Wtime()
+    log = Logger.get()
+    tmr = Timer()
 
-        nse = tt.OpSimNoise(out=totalname_freq, realization=mc)
+    if not args.skip_noise:
+        tmr.start()
+        if comm.world_rank == 0:
+            log.info("Simulating noise")
+        nse = OpSimNoise(out=totalname_freq, realization=mc)
         nse.exec(data)
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Noise simulation took {:.3f} s".format(stop - start), flush=args.flush
-            )
-
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Simulate noise")
         mem_counter.exec(data)
-        del autotimer
     return
 
 
+@function_timer
 def scramble_gains(args, comm, data, mc, mem_counter, totalname_freq):
-    if args.gain_sigma:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Scrambling gains", flush=args.flush)
-        start = MPI.Wtime()
+    log = Logger.get()
+    tmr = Timer()
 
-        scrambler = tt.OpGainScrambler(
+    if args.gain_sigma:
+        tmr.start()
+        if comm.world_rank == 0:
+            log.info("Scrambling gains")
+        scrambler = OpGainScrambler(
             sigma=args.gain_sigma, name=totalname_freq, realization=mc
         )
         scrambler.exec(data)
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Gain scrambling took {:.3f} s".format(stop - start), flush=args.flush
-            )
-
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Scramble gains")
         mem_counter.exec(data)
-        del autotimer
     return
 
 
+@function_timer
 def setup_output(args, comm, mc, freq):
     outpath = "{}/{:08}/{:03}".format(args.outdir, mc, int(freq))
-    if comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         if not os.path.isdir(outpath):
             try:
                 os.makedirs(outpath)
@@ -1575,72 +1554,67 @@ def setup_output(args, comm, mc, freq):
     return outpath
 
 
+@function_timer
 def apply_polyfilter(args, comm, data, mem_counter, totalname_freq):
+    log = Logger.get()
+    tmr = Timer()
     if args.polyorder:
-        autotimer = timing.auto_timer()
-        if comm.comm_world.rank == 0:
-            print("Polyfiltering signal", flush=args.flush)
-        start = MPI.Wtime()
-        polyfilter = tt.OpPolyFilter(
+        tmr.start()
+        if comm.world_rank == 0:
+            log.info("Polyfiltering signal")
+        polyfilter = OpPolyFilter(
             order=args.polyorder,
             name=totalname_freq,
             common_flag_mask=args.common_flag_mask,
         )
         polyfilter.exec(data)
-
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Polynomial filtering took {:.3f} s".format(stop - start),
-                flush=args.flush,
-            )
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Polynomial filtering")
 
         mem_counter.exec(data)
-        del autotimer
     return
 
 
+@function_timer
 def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
+    log = Logger.get()
+    tmr = Timer()
     if args.wbin_ground:
-        autotimer = timing.auto_timer()
+        tmr.start()
         if comm.comm_world.rank == 0:
-            print("Ground filtering signal", flush=args.flush)
-        start = MPI.Wtime()
-        groundfilter = tt.OpGroundFilter(
+            log.info("Ground filtering signal")
+        groundfilter = OpGroundFilter(
             wbin=args.wbin_ground,
             name=totalname_freq,
             common_flag_mask=args.common_flag_mask,
         )
         groundfilter.exec(data)
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        if comm.comm_world.rank == 0:
-            print(
-                "Ground filtering took {:.3f} s".format(stop - start), flush=args.flush
-            )
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Ground filtering")
 
         mem_counter.exec(data)
-        del autotimer
     return
 
 
+@function_timer
 def output_tidas(args, comm, data, totalname):
     if args.tidas is None:
         return
-    autotimer = timing.auto_timer()
-
+    log = Logger.get()
+    tmr = Timer()
     tidas_path = os.path.abspath(args.tidas)
 
-    comm.comm_world.Barrier()
-    if comm.comm_world.rank == 0:
-        print(
-            "Exporting data to a TIDAS volume at {}".format(tidas_path),
-            flush=args.flush,
-        )
-    start = MPI.Wtime()
+    if comm.world_rank == 0:
+        log.info("Exporting data to a TIDAS volume at {}".format(tidas_path))
 
+    tmr.start()
     export = OpTidasExport(
         tidas_path,
         TODTidas,
@@ -1652,33 +1626,27 @@ def output_tidas(args, comm, data, totalname):
     )
     export.exec(data)
 
-    comm.comm_world.Barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print(
-            "Wrote simulated data to {}:{} in {:.2f} s"
-            "".format(tidas_path, "total", stop - start),
-            flush=args.flush,
-        )
-    del autotimer
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("TIDAS export")
     return
 
 
+@function_timer
 def output_spt3g(args, comm, data, totalname):
     if args.spt3g is None:
         return
-    autotimer = timing.auto_timer()
+    log = Logger.get()
+    tmr = Timer()
 
     spt3g_path = os.path.abspath(args.spt3g)
 
-    comm.comm_world.Barrier()
-    if comm.comm_world.rank == 0:
-        print(
-            "Exporting data to SPT3G directory tree at {}".format(spt3g_path),
-            flush=args.flush,
-        )
-    start = MPI.Wtime()
+    if comm.world_rank == 0:
+        log.info("Exporting data to a SPT3G directory tree at {}".format(spt3g_path))
 
+    tmr.start()
     export = Op3GExport(
         spt3g_path,
         TOD3G,
@@ -1688,23 +1656,19 @@ def output_spt3g(args, comm, data, totalname):
     )
     export.exec(data)
 
-    comm.comm_world.Barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print(
-            "Wrote simulated data to {}:{} in {:.2f} s"
-            "".format(spt3g_path, "total", stop - start),
-            flush=args.flush,
-        )
-    del autotimer
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("spt3g export")
     return
 
 
+@function_timer
 def get_time_communicators(comm, data):
     """ Split the world communicator by time.
 
     """
-    autotimer = timing.auto_timer()
     time_comms = [("all", comm.comm_world)]
 
     # A process will only have data for one season and one day.  If more
@@ -1729,10 +1693,10 @@ def get_time_communicators(comm, data):
         day_comm = comm.comm_world.Split(my_day, comm.comm_world.rank)
         time_comms.append((my_date, day_comm))
 
-    del autotimer
     return time_comms
 
 
+@function_timer
 def apply_madam(
     args,
     comm,
@@ -1755,10 +1719,11 @@ def apply_madam(
     Bin and optionally destripe all conceivable subsets of the data.
 
     """
-    if comm.comm_world.rank == 0:
-        print("Making maps", flush=args.flush)
-    start = MPI.Wtime()
-    autotimer = timing.auto_timer()
+    log = Logger.get()
+    tmr = Timer()
+    tmr.start()
+    if comm.world_rank == 0:
+        log.info("Making maps")
 
     pars = copy.deepcopy(madampars)
     pars["path_output"] = outpath
@@ -1790,15 +1755,16 @@ def apply_madam(
         pars["write_matrix"],
     ]
     if not np.any(outputs):
-        if comm.comm_world.rank == 0:
-            print("No Madam outputs requested.  Skipping.", flush=args.flush)
+        if comm.world_rank == 0:
+            log.info("No Madam outputs requested.  Skipping.")
         return
 
     if args.madam_noisefilter or not pars["kfirst"]:
         madam_intervals = None
     else:
         madam_intervals = "intervals"
-    madam = tm.OpMadam(
+
+    madam = OpMadam(
         params=pars,
         detweights=detweights,
         name=totalname_madam,
@@ -1813,6 +1779,7 @@ def apply_madam(
     else:
         info = 3
 
+    ttmr = Timer()
     for time_name, time_comm in time_comms:
         for tele_name, tele_data in telescope_data:
             if len(time_name.split("-")) == 3:
@@ -1831,7 +1798,7 @@ def apply_madam(
                     pars["write_map"] = False
                     pars["write_binmap"] = True
 
-            start1 = MPI.Wtime()
+            ttmr.start()
             madam.params["file_root"] = "{}_telescope_{}_time_{}".format(
                 file_root, tele_name, time_name
             )
@@ -1841,53 +1808,51 @@ def apply_madam(
                 # Cannot have verbose output from concurrent mapmaking
                 madam.params["info"] = 0
             if time_comm.rank == 0:
-                print("Mapping {}".format(madam.params["file_root"]), flush=args.flush)
+                log.info("Mapping {}".format(madam.params["file_root"]))
             madam.exec(tele_data, time_comm)
+
             time_comm.barrier()
-            stop1 = MPI.Wtime()
-            if time_comm.rank == 0:
-                print(
-                    "Mapping {} took {:.3f} s".format(
-                        madam.params["file_root"], stop1 - start1
-                    ),
-                    flush=args.flush,
-                )
+            if comm.world_rank == 0:
+                ttmr.report_clear("Mapping {}".format(madam.params["file_root"]))
+
             if len(time_name.split("-")) == 3 and first_call:
                 # Restore destriping parameters
                 pars["kfirst"] = kfirst_save
                 pars["write_map"] = write_map_save
                 pars["write_binmap"] = write_binmap_save
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    if comm.comm_world.rank == 0:
-        print("Madam took {:.3f} s".format(stop - start), flush=args.flush)
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    tmr.stop()
+    if comm.world_rank == 0:
+        tmr.report("Madam total")
 
     mem_counter.exec(data)
-    del autotimer
     return
 
 
 def main():
+    env = Environment.get()
+    log = Logger.get()
+    gt = GlobalTimers.get()
+    gt.start("toast_ground_sim (total)")
+
+    mpiworld, procs, rank = get_world()
+    if rank == 0:
+        env.print()
+    if mpiworld is None:
+        log.info("Running serially with one process at {}".format(str(datetime.now())))
+    else:
+        if rank == 0:
+            log.info(
+                "Running with {} processes at {}".format(procs, str(datetime.now()))
+            )
 
     # This is the 2-level toast communicator.  By default,
     # there is just one group which spans MPI_COMM_WORLD.
-    comm = toast.Comm()
-
-    if comm.comm_world.rank == 0:
-        print(
-            "Running with {} processes at {}".format(
-                comm.comm_world.size, str(datetime.now())
-            ),
-            flush=True,
-        )
-
-    global_timer = timing.simple_timer("Total time")
-    global_timer.start()
+    comm = Comm(world=mpiworld)
 
     args, comm = parse_arguments(comm)
-
-    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
     # Initialize madam parameters
 
@@ -1908,7 +1873,7 @@ def main():
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
-    mem_counter = tt.OpMemoryCounter()
+    mem_counter = OpMemoryCounter()
 
     data, telescope_data = create_observations(args, comm, schedules, mem_counter)
 
@@ -1953,11 +1918,11 @@ def main():
 
         for ifreq, freq in enumerate(freqs):
 
-            if comm.comm_world.rank == 0:
-                print(
-                    "Processing frequency {}GHz {} / {}, MC = {}"
-                    "".format(freq, ifreq + 1, nfreq, mc),
-                    flush=args.flush,
+            if rank == 0:
+                log.info(
+                    "Processing frequency {}GHz {} / {}, MC = {}".format(
+                        freq, ifreq + 1, nfreq, mc
+                    )
                 )
 
             copy_atmosphere(args, comm, data, mem_counter, totalname, totalname_freq)
@@ -2031,47 +1996,30 @@ def main():
 
     mem_counter.exec(data)
 
-    comm.comm_world.barrier()
-    global_timer.stop()
-    if comm.comm_world.rank == 0:
-        global_timer.report()
-
-    del autotimer
+    gt.stop_all()
+    if mpiworld is not None:
+        mpiworld.barrier()
+    tmr = Timer()
+    tmr.start()
+    alltimers = gather_timers(comm=mpiworld)
+    if rank == 0:
+        out = os.path.join(args.outdir, "timing")
+        dump_timing(alltimers, out)
+        tmr.stop()
+        tmr.report("Gather and dump timing info")
     return
 
 
 if __name__ == "__main__":
-
     try:
-
         main()
-
-        tman = timing.timing_manager()
-        tman.report()
-    except Exception as e:
-        print('Exception occurred: "{}"'.format(e), flush=True)
-        if MPI.COMM_WORLD.size == 1:
-            raise
+    except Exception:
+        # We have an unhandled exception on at least one process.  Print a stack
+        # trace for this process and then abort so that all processes terminate.
+        mpiworld, procs, rank = get_world()
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        print("*** print_tb:")
-        traceback.print_tb(exc_traceback, limit=1, file=sys.stdout)
-        print("*** print_exception:")
-        traceback.print_exception(
-            exc_type, exc_value, exc_traceback, limit=5, file=sys.stdout
-        )
-        print("*** print_exc:")
-        traceback.print_exc()
-        print("*** format_exc, first and last line:")
-        formatted_lines = traceback.format_exc().splitlines()
-        print(formatted_lines[0])
-        print(formatted_lines[-1])
-        print("*** format_exception:")
-        print(repr(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-        print("*** extract_tb:")
-        print(repr(traceback.extract_tb(exc_traceback)))
-        print("*** format_tb:")
-        print(repr(traceback.format_tb(exc_traceback)))
-        print("*** tb_lineno:", exc_traceback.tb_lineno, flush=True)
-        toast.raise_error(6)  # typical error code for SIGABRT
-        MPI.COMM_WORLD.Abort(6)
-    finalize()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = ["Proc {}: {}".format(rank, x) for x in lines]
+        print("".join(lines), flush=True)
+        if mpiworld is not None:
+            mpiworld.Abort(6)

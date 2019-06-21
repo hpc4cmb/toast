@@ -8,5 +8,6 @@ install(PROGRAMS
     toast_fake_focalplane.py
     toast_ground_schedule.py
     toast_satellite_sim.py
+    toast_ground_sim.py
     DESTINATION bin
 )

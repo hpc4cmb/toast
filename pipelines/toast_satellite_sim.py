@@ -1054,7 +1054,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
+    except Exception:
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
         mpiworld, procs, rank = get_world()
