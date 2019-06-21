@@ -59,6 +59,8 @@ class OpPointingHpix(Operator):
             matrix using the common flags.
         apply_flags (bool): whether to read the TOD common flags, bitwise OR
             with the common_flag_mask, and then flag the pointing matrix.
+        single_precision (bool):  Return the pixel numbers and pointing
+             weights in single precision.  Default=False.
     """
 
     def __init__(
@@ -77,6 +79,7 @@ class OpPointingHpix(Operator):
         common_flag_mask=255,
         apply_flags=False,
         keep_quats=False,
+        single_precision=False,
     ):
         self._pixels = pixels
         self._weights = weights
@@ -89,6 +92,7 @@ class OpPointingHpix(Operator):
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
         self._keep_quats = keep_quats
+        self._single_precision = single_precision
 
         if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped " "HWP")
@@ -275,6 +279,16 @@ class OpPointingHpix(Operator):
                         weightsref[bslice, :].reshape(-1),
                     )
                     buf_off += buf_n
+
+                if self._single_precision:
+                    pixels = pixelsref.astype(np.int32)
+                    del pixelsref
+                    pixelsref = tod.cache.put(pixelsname, pixels, replace=True)
+                    del pixels
+                    weights = weightsref.astype(np.float32)
+                    del weightsref
+                    weightsref = tod.cache.put(weightsname, weights, replace=True)
+                    del weights
 
                 del pixelsref
                 del weightsref
