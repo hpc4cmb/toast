@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# FIXME:  Port this pipeline to 2.3.
+
+
 # Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
@@ -47,88 +50,146 @@ def elapsed(mcomm, start, msg):
 def main():
 
     if MPI.COMM_WORLD.rank == 0:
-        print("Running with {} processes".format(MPI.COMM_WORLD.size),
-            flush=True)
+        print("Running with {} processes".format(MPI.COMM_WORLD.size), flush=True)
 
     global_start = MPI.Wtime()
 
     parser = argparse.ArgumentParser(
         description="Read existing data and make a simple map.",
-        fromfile_prefix_chars="@")
+        fromfile_prefix_chars="@",
+    )
 
-    parser.add_argument("--groupsize", required=False, type=int, default=0,
-                        help="size of processor groups used to distribute "\
-                        "observations")
+    parser.add_argument(
+        "--groupsize",
+        required=False,
+        type=int,
+        default=0,
+        help="size of processor groups used to distribute " "observations",
+    )
 
-    parser.add_argument("--hwprpm", required=False, type=float,
-                        default=0.0,
-                        help="The rate (in RPM) of the HWP rotation")
+    parser.add_argument(
+        "--hwprpm",
+        required=False,
+        type=float,
+        default=0.0,
+        help="The rate (in RPM) of the HWP rotation",
+    )
 
-    parser.add_argument('--samplerate',
-                        required=False, default=100.0, type=np.float,
-                        help='Detector sample rate (Hz)')
+    parser.add_argument(
+        "--samplerate",
+        required=False,
+        default=100.0,
+        type=np.float,
+        help="Detector sample rate (Hz)",
+    )
 
-    parser.add_argument("--outdir", required=False, default="out",
-                        help="Output directory")
+    parser.add_argument(
+        "--outdir", required=False, default="out", help="Output directory"
+    )
 
-    parser.add_argument("--nside", required=False, type=int, default=64,
-                        help="Healpix NSIDE")
+    parser.add_argument(
+        "--nside", required=False, type=int, default=64, help="Healpix NSIDE"
+    )
 
-    parser.add_argument("--subnside", required=False, type=int, default=8,
-                        help="Distributed pixel sub-map NSIDE")
+    parser.add_argument(
+        "--subnside",
+        required=False,
+        type=int,
+        default=8,
+        help="Distributed pixel sub-map NSIDE",
+    )
 
-    parser.add_argument("--coord", required=False, default="E",
-                        help="Sky coordinate system [C,E,G]")
+    parser.add_argument(
+        "--coord", required=False, default="E", help="Sky coordinate system [C,E,G]"
+    )
 
-    parser.add_argument("--baseline", required=False, type=float,
-                        default=60.0,
-                        help="Destriping baseline length (seconds)")
+    parser.add_argument(
+        "--baseline",
+        required=False,
+        type=float,
+        default=60.0,
+        help="Destriping baseline length (seconds)",
+    )
 
-    parser.add_argument("--noisefilter", required=False, default=False,
-                        action="store_true",
-                        help="Destripe with the noise filter enabled")
+    parser.add_argument(
+        "--noisefilter",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Destripe with the noise filter enabled",
+    )
 
-    parser.add_argument("--madam", required=False, default=False,
-                        action="store_true",
-                        help="If specified, use libmadam for map-making")
+    parser.add_argument(
+        "--madam",
+        required=False,
+        default=False,
+        action="store_true",
+        help="If specified, use libmadam for map-making",
+    )
 
-    parser.add_argument("--madampar", required=False, default=None,
-                        help="Madam parameter file")
+    parser.add_argument(
+        "--madampar", required=False, default=None, help="Madam parameter file"
+    )
 
-    parser.add_argument("--polyorder",
-                        required=False, type=int,
-                        help="Polynomial order for the polyfilter")
+    parser.add_argument(
+        "--polyorder",
+        required=False,
+        type=int,
+        help="Polynomial order for the polyfilter",
+    )
 
-    parser.add_argument("--wbin_ground",
-                        required=False, type=float,
-                        help="Ground template bin width [degrees]")
+    parser.add_argument(
+        "--wbin_ground",
+        required=False,
+        type=float,
+        help="Ground template bin width [degrees]",
+    )
 
-    parser.add_argument("--flush", required=False, default=False,
-                        action="store_true",
-                        help="Flush every print statement.")
+    parser.add_argument(
+        "--flush",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Flush every print statement.",
+    )
 
-    parser.add_argument("--tidas", required=False, default=None,
-                        help="Input TIDAS volume")
+    parser.add_argument(
+        "--tidas", required=False, default=None, help="Input TIDAS volume"
+    )
 
-    parser.add_argument("--tidas_detgroup", required=False, default=None,
-                        help="TIDAS detector group")
+    parser.add_argument(
+        "--tidas_detgroup", required=False, default=None, help="TIDAS detector group"
+    )
 
-    parser.add_argument("--spt3g", required=False, default=None,
-                        help="Input SPT3G data directory")
+    parser.add_argument(
+        "--spt3g", required=False, default=None, help="Input SPT3G data directory"
+    )
 
-    parser.add_argument("--spt3g_prefix", required=False, default=None,
-                        help="SPT3G data frame file prefix")
+    parser.add_argument(
+        "--spt3g_prefix",
+        required=False,
+        default=None,
+        help="SPT3G data frame file prefix",
+    )
 
-    parser.add_argument("--common_flag_mask",
-                        required=False, default=0, type=np.uint8,
-                        help="Common flag mask")
+    parser.add_argument(
+        "--common_flag_mask",
+        required=False,
+        default=0,
+        type=np.uint8,
+        help="Common flag mask",
+    )
 
-    parser.add_argument("--debug", required=False, default=False,
-                        action="store_true",
-                        help="Write data distribution info and focalplane plot")
+    parser.add_argument(
+        "--debug",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Write data distribution info and focalplane plot",
+    )
 
     args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
-    #args = parser.parse_args(sys.argv)
+    # args = parser.parse_args(sys.argv)
 
     autotimer = timing.auto_timer("@{}".format(timing.FILE()))
 
@@ -163,8 +224,11 @@ def main():
 
     if MPI.COMM_WORLD.size % groupsize != 0:
         if MPI.COMM_WORLD.rank == 0:
-            print("WARNING:  process groupsize does not evenly divide into "
-                "total number of processes", flush=True)
+            print(
+                "WARNING:  process groupsize does not evenly divide into "
+                "total number of processes",
+                flush=True,
+            )
     comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=groupsize)
 
     # Create output directory
@@ -184,17 +248,28 @@ def main():
     if args.tidas is not None:
         if args.tidas_detgroup is None:
             raise RuntimeError("you must specify the detector group")
-        data = tds.load_tidas(comm, comm.group_size, args.tidas,
-                              "r", args.tidas_detgroup, tds.TODTidas,
-                              group_dets=args.tidas_detgroup,
-                              distintervals="chunks")
+        data = tds.load_tidas(
+            comm,
+            comm.group_size,
+            args.tidas,
+            "r",
+            args.tidas_detgroup,
+            tds.TODTidas,
+            group_dets=args.tidas_detgroup,
+            distintervals="chunks",
+        )
 
     if args.spt3g is not None:
         if args.spt3g_prefix is None:
             raise RuntimeError("you must specify the frame file prefix")
-        data = s3g.load_spt3g(comm, comm.group_size, args.spt3g,
-                              args.spt3g_prefix, s3g.obsweight_spt3g,
-                              s3g.TOD3G)
+        data = s3g.load_spt3g(
+            comm,
+            comm.group_size,
+            args.spt3g,
+            args.spt3g_prefix,
+            s3g.obsweight_spt3g,
+            s3g.TOD3G,
+        )
 
     mtime = elapsed(comm.comm_world, mtime, "Distribute data")
 
@@ -207,25 +282,23 @@ def main():
         data.info(handle)
         if comm.comm_world.rank == 0:
             handle.close()
-        mtime = elapsed(comm.comm_world, mtime,
-            "Dumping debug data distribution")
+        mtime = elapsed(comm.comm_world, mtime, "Dumping debug data distribution")
         if comm.comm_world.rank == 0:
             outfile = "{}_focalplane.png".format(args.outdir)
             set_backend()
             # Just plot the dets from the first TOD
             temptod = data.obs[0]["tod"]
             # FIXME: change this once we store det info in the metadata.
-            dfwhm = { x : 10.0 for x in temptod.detectors }
+            dfwhm = {x: 10.0 for x in temptod.detectors}
             tt.plot_focalplane(temptod.detoffset(), 10.0, 10.0, outfile, fwhm=dfwhm)
         comm.comm_world.barrier()
-        mtime = elapsed(comm.comm_world, mtime,
-            "Plotting debug focalplane")
+        mtime = elapsed(comm.comm_world, mtime, "Plotting debug focalplane")
 
     # Compute pointing matrix
 
     pointing = tt.OpPointingHpix(
-        nside=args.nside, nest=True, mode="IQU",
-        hwprpm=args.hwprpm)
+        nside=args.nside, nest=True, mode="IQU", hwprpm=args.hwprpm
+    )
     pointing.exec(data)
 
     mtime = elapsed(comm.comm_world, mtime, "Expand pointing")
@@ -236,7 +309,7 @@ def main():
     # observation.  We need to have both spt3g and tidas format Noise
     # classes which read the information from disk.  Then the mapmaking
     # operators need to get these noise weights from each observation.
-    detweights = { d : 1.0 for d in data.obs[0]["tod"].detectors }
+    detweights = {d: 1.0 for d in data.obs[0]["tod"].detectors}
 
     if not args.madam:
         if comm.comm_world.rank == 0:
@@ -246,15 +319,15 @@ def main():
 
         if args.polyorder:
             polyfilter = tt.OpPolyFilter(
-                order=args.polyorder,
-                common_flag_mask=args.common_flag_mask)
+                order=args.polyorder, common_flag_mask=args.common_flag_mask
+            )
             polyfilter.exec(data)
             mtime = elapsed(comm.comm_world, mtime, "Polynomial filtering")
 
         if args.wbin_ground:
             groundfilter = tt.OpGroundFilter(
-                wbin=args.wbin_ground,
-                common_flag_mask=args.common_flag_mask)
+                wbin=args.wbin_ground, common_flag_mask=args.common_flag_mask
+            )
             groundfilter.exec(data)
             mtime = elapsed(comm.comm_world, mtime, "Ground template filtering")
 
@@ -265,8 +338,8 @@ def main():
         if localpix is None:
             raise RuntimeError(
                 "Process {} has no hit pixels. Perhaps there are fewer "
-                "detectors than processes in the group?".format(
-                    comm.comm_world.rank))
+                "detectors than processes in the group?".format(comm.comm_world.rank)
+            )
         localsm = np.unique(np.floor_divide(localpix, subnpix))
         mtime = elapsed(comm.comm_world, mtime, "Compute local submaps")
 
@@ -274,20 +347,42 @@ def main():
         # noise weighted map, and hits
 
         mtime = MPI.Wtime()
-        invnpp = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=6,
-            dtype=np.float64, submap=subnpix, local=localsm)
-        hits = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=1,
-            dtype=np.int64, submap=subnpix, local=localsm)
-        zmap = tm.DistPixels(comm=comm.comm_world, size=npix, nnz=3,
-            dtype=np.float64, submap=subnpix, local=localsm)
+        invnpp = tm.DistPixels(
+            comm=comm.comm_world,
+            size=npix,
+            nnz=6,
+            dtype=np.float64,
+            submap=subnpix,
+            local=localsm,
+        )
+        hits = tm.DistPixels(
+            comm=comm.comm_world,
+            size=npix,
+            nnz=1,
+            dtype=np.int64,
+            submap=subnpix,
+            local=localsm,
+        )
+        zmap = tm.DistPixels(
+            comm=comm.comm_world,
+            size=npix,
+            nnz=3,
+            dtype=np.float64,
+            submap=subnpix,
+            local=localsm,
+        )
 
         # compute the hits and covariance.
 
         invnpp.data.fill(0.0)
         hits.data.fill(0)
 
-        build_invnpp = tm.OpAccumDiag(detweights=detweights, invnpp=invnpp,
-                                      hits=hits, common_flag_mask=args.common_flag_mask)
+        build_invnpp = tm.OpAccumDiag(
+            detweights=detweights,
+            invnpp=invnpp,
+            hits=hits,
+            common_flag_mask=args.common_flag_mask,
+        )
         build_invnpp.exec(data)
 
         invnpp.allreduce()
@@ -306,8 +401,9 @@ def main():
         mtime = elapsed(comm.comm_world, mtime, "Writing N_pp")
 
         zmap.data.fill(0.0)
-        build_zmap = tm.OpAccumDiag(zmap=zmap, detweights=detweights,
-                                    common_flag_mask=args.common_flag_mask)
+        build_zmap = tm.OpAccumDiag(
+            zmap=zmap, detweights=detweights, common_flag_mask=args.common_flag_mask
+        )
         build_zmap.exec(data)
         zmap.allreduce()
         mtime = elapsed(comm.comm_world, mtime, "Building noise weighted map")
@@ -322,17 +418,17 @@ def main():
         # Set up MADAM map making.
 
         pars = {}
-        pars[ "temperature_only" ] = "F"
-        pars[ "force_pol" ] = "T"
-        pars[ "kfirst" ] = "T"
-        pars[ "concatenate_messages" ] = "T"
-        pars[ "write_map" ] = "T"
-        pars[ "write_binmap" ] = "T"
-        pars[ "write_matrix" ] = "T"
-        pars[ "write_wcov" ] = "T"
-        pars[ "write_hits" ] = "T"
-        pars[ "nside_cross" ] = nside // 2
-        pars[ "nside_submap" ] = subnside
+        pars["temperature_only"] = "F"
+        pars["force_pol"] = "T"
+        pars["kfirst"] = "T"
+        pars["concatenate_messages"] = "T"
+        pars["write_map"] = "T"
+        pars["write_binmap"] = "T"
+        pars["write_matrix"] = "T"
+        pars["write_wcov"] = "T"
+        pars["write_hits"] = "T"
+        pars["nside_cross"] = nside // 2
+        pars["nside_submap"] = subnside
 
         if args.madampar is not None:
             pat = re.compile(r"\s*(\S+)\s*=\s*(\S+(\s+\S+)*)\s*")
@@ -345,16 +441,17 @@ def main():
                             key, value = result.group(1), result.group(2)
                             pars[key] = value
 
-        pars[ "base_first" ] = args.baseline
-        pars[ "nside_map" ] = nside
+        pars["base_first"] = args.baseline
+        pars["nside_map"] = nside
         if args.noisefilter:
-            pars[ "kfilter" ] = "T"
+            pars["kfilter"] = "T"
         else:
-            pars[ "kfilter" ] = "F"
-        pars[ "fsample" ] = args.samplerate
+            pars["kfilter"] = "F"
+        pars["fsample"] = args.samplerate
 
-        madam = tm.OpMadam(params=pars, detweights=detweights,
-                           common_flag_mask=args.common_flag_mask)
+        madam = tm.OpMadam(
+            params=pars, detweights=detweights, common_flag_mask=args.common_flag_mask
+        )
         madam.exec(data)
         mtime = elapsed(comm.comm_world, mtime, "Madam mapmaking")
 
@@ -374,8 +471,8 @@ if __name__ == "__main__":
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = [ "Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines ]
+        lines = ["Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines]
         print("".join(lines), flush=True)
-        toast.raise_error(6) # typical error code for SIGABRT
+        toast.raise_error(6)  # typical error code for SIGABRT
         MPI.COMM_WORLD.Abort(6)
     finalize()

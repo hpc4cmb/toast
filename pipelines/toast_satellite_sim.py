@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI, finalize
+"""
+This script runs a satellite simulation and makes a map.
+"""
 
 import os
 import sys
-import time
-
 import re
 import argparse
 import traceback
@@ -17,31 +17,60 @@ import traceback
 import pickle
 
 import numpy as np
+
 from astropy.io import fits
 
-import toast
-import toast.tod as tt
-import toast.map as tm
-import toast.todmap as ttm
+from toast.mpi import get_world, Comm
 
-import toast.qarray as qa
-import toast.timing as timing
+from toast.dist import distribute_uniform, Data
+
+from toast.utils import Logger, Environment
 
 from toast.vis import set_backend
 
-if tt.tidas_available:
+from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
+from toast.timing import dump as dump_timing
+
+from toast.map import (
+    OpMadam,
+    OpAccumDiag,
+    OpLocalPixels,
+    covariance_apply,
+    covariance_invert,
+    DistPixels,
+)
+
+from toast.tod import (
+    regular_intervals,
+    AnalyticNoise,
+    plot_focalplane,
+    OpApplyGain,
+    OpSimNoise,
+    OpSimDipole,
+    OpPointingHpix,
+    slew_precession_axis,
+    OpSimPySM,
+    OpMemoryCounter,
+    TODSatellite,
+)
+
+# FIXME: put these back into the import statement above after porting.
+tidas_available = False
+spt3g_available = False
+
+if tidas_available:
     from toast.tod.tidas import OpTidasExport, TODTidas
 
-if tt.spt3g_available:
+if spt3g_available:
     from toast.tod.spt3g import Op3GExport, TOD3G
 
 
+@function_timer
 def add_sky_signal(args, comm, data, totalname, signalname):
     """ Add signalname to totalname in the obs tod
 
     """
     if signalname is not None:
-        autotimer = timing.auto_timer()
         for obs in data.obs:
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -63,19 +92,14 @@ def add_sky_signal(args, comm, data, totalname, signalname):
                 if comm.comm_world.rank == 0 and args.debug:
                     print("final", "min max", ref_out.min(), ref_out.max())
                 del ref_in, ref_out
-
     return
 
 
+@function_timer
 def get_submaps(args, comm, data):
     """ Get a list of locally hit pixels and submaps on every process.
 
     """
-    autotimer = timing.auto_timer()
-    if comm.comm_world.rank == 0:
-        print("Scanning local pixels", flush=args.flush)
-    start = MPI.Wtime()
-
     # Prepare for using distpixels objects
     nside = args.nside
     subnside = 16
@@ -84,7 +108,7 @@ def get_submaps(args, comm, data):
     subnpix = 12 * subnside * subnside
 
     # get locally hit pixels
-    lc = tm.OpLocalPixels()
+    lc = OpLocalPixels()
     localpix = lc.exec(data)
     if localpix is None:
         raise RuntimeError(
@@ -95,14 +119,10 @@ def get_submaps(args, comm, data):
     # find the locally hit submaps.
     localsm = np.unique(np.floor_divide(localpix, subnpix))
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print("Local submaps identified in {:.3f} s".format(elapsed), flush=args.flush)
     return localpix, localsm, subnpix
 
 
+@function_timer
 def simulate_sky_signal(
     args, comm, data, mem_counter, focalplanes, subnpix, localsm, signalname
 ):
@@ -110,8 +130,7 @@ def simulate_sky_signal(
 
     """
     # Convolve a signal TOD from PySM
-    start = MPI.Wtime()
-    op_sim_pysm = ttm.OpSimPySM(
+    op_sim_pysm = OpSimPySM(
         comm=comm.comm_rank,
         out=signalname,
         pysm_model=args.input_pysm_model,
@@ -125,29 +144,34 @@ def simulate_sky_signal(
         coord=args.coord,
     )
     op_sim_pysm.exec(data)
-    stop = MPI.Wtime()
     if comm.comm_world.rank == 0:
-        print("PySM took {:.2f} seconds".format(stop - start), flush=args.flush)
         tod = data.obs[0]["tod"]
         for det in tod.local_dets:
             ref = tod.cache.reference(signalname + "_" + det)
             print("PySM signal first observation min max", det, ref.min(), ref.max())
             del ref
-
     del op_sim_pysm
-
     mem_counter.exec(data)
+    return
 
 
 def main():
+    env = Environment.get()
+    log = Logger.get()
+    gt = GlobalTimers.get()
+    gt.start("toast_satellite_sim (total)")
 
-    if MPI.COMM_WORLD.rank == 0:
-        print("Running with {} processes".format(MPI.COMM_WORLD.size), flush=True)
-
-    global_start = MPI.Wtime()
+    mpiworld, procs, rank = get_world()
+    if rank == 0:
+        env.print()
+    if mpiworld is None:
+        log.info("Running serially with one process")
+    else:
+        if rank == 0:
+            log.info("Running with {} processes".format(procs))
 
     parser = argparse.ArgumentParser(
-        description="Simulate satellite " "boresight pointing and make a noise map.",
+        description="Simulate satellite boresight pointing and make a map.",
         fromfile_prefix_chars="@",
     )
 
@@ -403,35 +427,27 @@ def main():
         default=263.99,
     )
 
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
-
-    autotimer = timing.auto_timer("@{}".format(timing.FILE()))
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        return
 
     if args.tidas is not None:
-        if not tt.tidas_available:
+        if not tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
 
     if args.spt3g is not None:
-        if not tt.spt3g_available:
+        if not spt3g_available:
             raise RuntimeError("SPT3G not found- cannot export")
 
     groupsize = args.groupsize
-    if groupsize == 0:
-        groupsize = MPI.COMM_WORLD.size
+    if groupsize <= 0:
+        groupsize = procs
 
     # This is the 2-level toast communicator.
+    comm = Comm(world=mpiworld, groupsize=groupsize)
 
-    if MPI.COMM_WORLD.size % groupsize != 0:
-        if MPI.COMM_WORLD.rank == 0:
-            print(
-                "WARNING:  process groupsize does not evenly divide into "
-                "total number of processes",
-                flush=True,
-            )
-    comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=groupsize)
-
-    # get options
-
+    # Parse options
     hwpstep = None
     if args.hwpstep is not None:
         hwpstep = float(args.hwpstep)
@@ -443,14 +459,19 @@ def main():
         subnside = args.nside
     subnpix = 12 * subnside * subnside
 
-    start = MPI.Wtime()
+    tmr = Timer()
+    tmr.start()
+
+    if rank == 0:
+        if not os.path.isdir(args.outdir):
+            os.makedirs(args.outdir)
 
     fp = None
     gain = None
 
     # Load focalplane information
 
-    if comm.comm_world.rank == 0:
+    if rank == 0:
         if args.fp is None:
             # in this case, create a fake detector at the boresight
             # with a pure white noise spectrum.
@@ -458,6 +479,7 @@ def main():
             fake["quat"] = np.array([0.0, 0.0, 1.0, 0.0])
             fake["fwhm"] = 30.0
             fake["fknee"] = 0.0
+            fake["fmin"] = 1.0e-5
             fake["alpha"] = 1.0
             fake["NET"] = 1.0
             fake["color"] = "r"
@@ -474,29 +496,21 @@ def main():
                 for i_det, det_name in f["DETECTORS"].data["DETECTORS"]:
                     gain[det_name] = np.array(f["GAINS"].data[i_det, :])
 
-    if args.gain is not None:
-        gain = comm.comm_world.bcast(gain, root=0)
+    if mpiworld is not None:
+        if args.gain is not None:
+            gain = mpiworld.bcast(gain, root=0)
+        fp = mpiworld.bcast(fp, root=0)
 
-    fp = comm.comm_world.bcast(fp, root=0)
-
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print(
-            "Create focalplane ({} dets):  {:.2f} seconds".format(
-                len(fp.keys()), stop - start
-            ),
-            flush=True,
-        )
-    start = stop
+    if rank == 0:
+        tmr.report_clear("Create focalplane ({} dets)".format(len(fp.keys())))
 
     if args.debug:
-        if comm.comm_world.rank == 0:
-            outfile = "{}_focalplane.png".format(args.outdir)
+        if rank == 0:
+            outfile = os.path.join(args.outdir, "focalplane.png")
             set_backend()
             dquats = {x: fp[x]["quat"] for x in fp.keys()}
             dfwhm = {x: fp[x]["fwhm"] for x in fp.keys()}
-            tt.plot_focalplane(dquats, 10.0, 10.0, outfile, fwhm=dfwhm)
+            plot_focalplane(dquats, 10.0, 10.0, outfile, fwhm=dfwhm)
 
     # Since we are simulating noise timestreams, we want
     # them to be contiguous and reproducible over the whole
@@ -505,9 +519,9 @@ def main():
     # than the number of detectors we have.
 
     if groupsize > len(fp.keys()):
-        if comm.comm_world.rank == 0:
-            print("process group is too large for the number of detectors", flush=True)
-            comm.comm_world.Abort()
+        if rank == 0:
+            log.error("process group is too large for the number of detectors")
+            mpiworld.Abort()
 
     # Detector information from the focalplane
 
@@ -524,11 +538,11 @@ def main():
 
     # Distribute the observations uniformly
 
-    groupdist = toast.distribute_uniform(args.numobs, comm.ngroups)
+    groupdist = distribute_uniform(args.numobs, comm.ngroups)
 
     # Compute global time and sample ranges of all observations
 
-    obsrange = tt.regular_intervals(
+    obsrange = regular_intervals(
         args.numobs,
         args.starttime,
         0,
@@ -551,15 +565,15 @@ def main():
         alpha[d] = fp[d]["alpha"]
         NET[d] = fp[d]["NET"]
 
-    noise = tt.AnalyticNoise(
+    noise = AnalyticNoise(
         rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET
     )
 
-    mem_counter = tt.OpMemoryCounter()
+    mem_counter = OpMemoryCounter()
 
     # The distributed timestream data
 
-    data = toast.Data(comm)
+    data = Data(comm)
 
     # Every process group creates its observations
 
@@ -567,7 +581,7 @@ def main():
     group_numobs = groupdist[comm.group][1]
 
     for ob in range(group_firstobs, group_firstobs + group_numobs):
-        tod = tt.TODSatellite(
+        tod = TODSatellite(
             comm.comm_group,
             detquats,
             obsrange[ob].samples,
@@ -593,15 +607,8 @@ def main():
 
         data.obs.append(obs)
 
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print(
-            "Read parameters, compute data distribution:  "
-            "{:.2f} seconds".format(stop - start),
-            flush=True,
-        )
-    start = stop
+    if rank == 0:
+        tmr.report_clear("Read parameters, compute data distribution")
 
     # we set the precession axis now, which will trigger calculation
     # of the boresight pointing.
@@ -617,7 +624,7 @@ def main():
         # Constantly slewing precession axis
         degday = 360.0 / 365.25
         precquat = np.empty(4 * tod.local_samples[1], dtype=np.float64).reshape((-1, 4))
-        tt.slew_precession_axis(
+        slew_precession_axis(
             precquat,
             firstsamp=(obsoffset + tod.local_samples[0]),
             samplerate=args.samplerate,
@@ -627,18 +634,12 @@ def main():
         tod.set_prec_axis(qprec=precquat)
         del precquat
 
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print(
-            "Construct boresight pointing:  " "{:.2f} seconds".format(stop - start),
-            flush=True,
-        )
-    start = stop
+    if rank == 0:
+        tmr.report_clear("Construct boresight pointing")
 
     # make a Healpix pointing matrix.
 
-    pointing = tt.OpPointingHpix(
+    pointing = OpPointingHpix(
         nside=args.nside,
         nest=True,
         mode="IQU",
@@ -648,14 +649,16 @@ def main():
     )
     pointing.exec(data)
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - start
-    if comm.comm_world.rank == 0:
-        print("Pointing generation took {:.3f} s".format(elapsed), flush=True)
-    start = stop
+    if mpiworld is not None:
+        mpiworld.barrier()
+
+    if rank == 0:
+        tmr.report_clear("Pointing generation")
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
+
+    if rank == 0:
+        tmr.report_clear("Compute locally hit pixels")
 
     signalname = "signal"
     has_signal = False
@@ -664,11 +667,13 @@ def main():
         simulate_sky_signal(
             args, comm, data, mem_counter, [fp], subnpix, localsm, signalname=signalname
         )
+        if rank == 0:
+            tmr.report_clear("Simulate sky signal")
 
     if args.input_dipole:
         print("Simulating dipole")
         has_signal = True
-        op_sim_dipole = tt.OpSimDipole(
+        op_sim_dipole = OpSimDipole(
             mode=args.input_dipole,
             solar_speed=args.input_dipole_solar_speed_kms,
             solar_gal_lat=args.input_dipole_solar_gal_lat_deg,
@@ -684,6 +689,8 @@ def main():
         )
         op_sim_dipole.exec(data)
         del op_sim_dipole
+        if rank == 0:
+            tmr.report_clear("Simulate dipole")
 
     # Mapmaking.  For purposes of this simulation, we use detector noise
     # weights based on the NET (white noise level).  If the destriping
@@ -695,20 +702,18 @@ def main():
         detweights[d] = 1.0 / (args.samplerate * net * net)
 
     if not args.madam:
-        if comm.comm_world.rank == 0:
-            print("Not using Madam, will only make a binned map!", flush=True)
-
-        # get locally hit pixels
-        lc = tm.OpLocalPixels()
-        localpix = lc.exec(data)
+        if rank == 0:
+            log.info("Not using Madam, will only make a binned map")
 
         # find the locally hit submaps.
         localsm = np.unique(np.floor_divide(localpix, subnpix))
+        if rank == 0:
+            tmr.report_clear("Compute local submaps")
 
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = tm.DistPixels(
+        invnpp = DistPixels(
             comm=comm.comm_world,
             size=npix,
             nnz=6,
@@ -716,7 +721,7 @@ def main():
             submap=subnpix,
             local=localsm,
         )
-        hits = tm.DistPixels(
+        hits = DistPixels(
             comm=comm.comm_world,
             size=npix,
             nnz=1,
@@ -724,7 +729,7 @@ def main():
             submap=subnpix,
             local=localsm,
         )
-        zmap = tm.DistPixels(
+        zmap = DistPixels(
             comm=comm.comm_world,
             size=npix,
             nnz=3,
@@ -736,71 +741,61 @@ def main():
         # compute the hits and covariance once, since the pointing and noise
         # weights are fixed.
 
-        invnpp.data.fill(0.0)
-        hits.data.fill(0)
+        if invnpp.data is not None:
+            invnpp.data.fill(0.0)
 
-        build_invnpp = tm.OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
+        if hits.data is not None:
+            hits.data.fill(0)
+
+        build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
         build_invnpp.exec(data)
+
+        if rank == 0:
+            tmr.report_clear("Accumulate N_pp'^1")
 
         invnpp.allreduce()
         hits.allreduce()
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print("Building hits and N_pp^-1 took {:.3f} s".format(elapsed), flush=True)
-        start = stop
+        if rank == 0:
+            tmr.report_clear("All reduce N_pp'^1")
 
-        hits.write_healpix_fits("{}_hits.fits".format(args.outdir))
-        invnpp.write_healpix_fits("{}_invnpp.fits".format(args.outdir))
+        hits.write_healpix_fits(os.path.join(args.outdir, "hits.fits"))
+        invnpp.write_healpix_fits(os.path.join(args.outdir, "invnpp.fits"))
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print("Writing hits and N_pp^-1 took {:.3f} s".format(elapsed), flush=True)
-        start = stop
+        if mpiworld is not None:
+            mpiworld.barrier()
+
+        if rank == 0:
+            tmr.report_clear("Writing hits and N_pp'^1")
 
         # invert it
-        tm.covariance_invert(invnpp, 1.0e-3)
+        covariance_invert(invnpp, 1.0e-3)
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print("Inverting N_pp^-1 took {:.3f} s".format(elapsed), flush=True)
-        start = stop
+        if mpiworld is not None:
+            mpiworld.barrier()
+        if rank == 0:
+            tmr.report_clear("Invert N_pp'^1")
 
-        invnpp.write_healpix_fits("{}_npp.fits".format(args.outdir))
+        invnpp.write_healpix_fits(os.path.join(args.outdir, "npp.fits"))
 
-        comm.comm_world.barrier()
-        stop = MPI.Wtime()
-        elapsed = stop - start
-        if comm.comm_world.rank == 0:
-            print("Writing N_pp took {:.3f} s".format(elapsed), flush=True)
-        start = stop
+        if mpiworld is not None:
+            mpiworld.barrier()
+        if rank == 0:
+            tmr.report_clear("Write N_pp'")
 
         # in debug mode, print out data distribution information
         if args.debug:
             handle = None
-            if comm.comm_world.rank == 0:
-                handle = open("{}_distdata.txt".format(args.outdir), "w")
+            if rank == 0:
+                handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
             data.info(handle)
-            if comm.comm_world.rank == 0:
+            if rank == 0:
                 handle.close()
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "Dumping debug data distribution took " "{:.3f} s".format(elapsed),
-                    flush=True,
-                )
-            start = stop
-
-        mcstart = start
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("Dumping data distribution")
 
         # Loop over Monte Carlos
 
@@ -808,40 +803,35 @@ def main():
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc + nmc):
+            mctmr = Timer()
+            mctmr.start()
+
             # create output directory for this realization
-            outpath = "{}_{:03d}".format(args.outdir, mc)
-            if comm.comm_world.rank == 0:
+            outpath = os.path.join(args.outdir, "mc_{:03d}".format(mc))
+            if rank == 0:
                 if not os.path.isdir(outpath):
                     os.makedirs(outpath)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "Creating output dir {:04d} took {:.3f} s".format(mc, elapsed),
-                    flush=True,
-                )
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("Creating output dir {:04d}".format(mc))
 
             # clear all signal data from the cache, so that we can generate
             # new noise timestreams.
-            tod.cache.clear("tot_signal_.*")
+            for obs in data.obs:
+                tod = obs["tod"]
+                tod.cache.clear("tot_signal_.*")
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
+            nse = OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Noise simulation {:04d} took {:.3f} s".format(mc, elapsed),
-                    flush=True,
-                )
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Noise simulation {:04d}".format(mc))
 
             # add sky signal
             if has_signal:
@@ -849,19 +839,19 @@ def main():
                     args, comm, data, totalname="tot_signal", signalname=signalname
                 )
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Add sky signal {:04d} took {:.3f} s".format(mc, elapsed),
-                    flush=True,
-                )
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Add sky signal {:04d}".format(mc))
 
             if gain is not None:
-                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+                op_apply_gain = OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
+
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Apply gains {:04d}".format(mc))
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -882,14 +872,10 @@ def main():
                     )
                     export.exec(data)
 
-                    comm.comm_world.barrier()
-                    stop = MPI.Wtime()
-                    elapsed = stop - start
-                    if comm.comm_world.rank == 0:
-                        print(
-                            "  Tidas export took {:.3f} s".format(elapsed), flush=True
-                        )
-                    start = stop
+                    if mpiworld is not None:
+                        mpiworld.barrier()
+                    if rank == 0:
+                        tmr.report_clear("  TIDAS export")
 
                 if args.spt3g is not None:
                     spt3g_path = os.path.abspath(args.spt3g)
@@ -902,63 +888,38 @@ def main():
                     )
                     export.exec(data)
 
-                    comm.comm_world.barrier()
-                    stop = MPI.Wtime()
-                    elapsed = stop - start
-                    if comm.comm_world.rank == 0:
-                        print(
-                            "  SPT3G export took {:.3f} s".format(elapsed), flush=True
-                        )
-                    start = stop
+                    if mpiworld is not None:
+                        mpiworld.barrier()
+                    if rank == 0:
+                        tmr.report_clear("  SPT3G export")
 
-            zmap.data.fill(0.0)
-            build_zmap = tm.OpAccumDiag(
+            if zmap.data is not None:
+                zmap.data.fill(0.0)
+            build_zmap = OpAccumDiag(
                 zmap=zmap, name="tot_signal", detweights=detweights
             )
             build_zmap.exec(data)
             zmap.allreduce()
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Building noise weighted map {:04d} took {:.3f} s".format(
-                        mc, elapsed
-                    ),
-                    flush=True,
-                )
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Building noise weighted map {:04d}".format(mc))
 
-            tm.covariance_apply(invnpp, zmap)
+            covariance_apply(invnpp, zmap)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Computing binned map {:04d} took {:.3f} s".format(mc, elapsed),
-                    flush=True,
-                )
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Computing binned map {:04d}".format(mc))
 
             zmap.write_healpix_fits(os.path.join(outpath, "binned.fits"))
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Writing binned map {:04d} took {:.3f} s".format(mc, elapsed),
-                    flush=True,
-                )
-            elapsed = stop - mcstart
-            if comm.comm_world.rank == 0:
-                print(
-                    "  Mapmaking {:04d} took {:.3f} s".format(mc, elapsed), flush=True
-                )
-            start = stop
-
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Writing binned map {:04d}".format(mc))
+                mctmr.report_clear("  Map-making {:04d}".format(mc))
     else:
 
         # Set up MADAM map making.
@@ -998,12 +959,39 @@ def main():
             pars["kfilter"] = "F"
         pars["fsample"] = args.samplerate
 
+        # in debug mode, print out data distribution information
+        if args.debug:
+            handle = None
+            if rank == 0:
+                handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
+            data.info(handle)
+            if rank == 0:
+                handle.close()
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("Dumping data distribution")
+
         # Loop over Monte Carlos
 
         firstmc = int(args.MC_start)
         nmc = int(args.MC_count)
 
         for mc in range(firstmc, firstmc + nmc):
+            mctmr = Timer()
+            mctmr.start()
+
+            # create output directory for this realization
+            pars["path_output"] = os.path.join(args.outdir, "mc_{:03d}".format(mc))
+            if rank == 0:
+                if not os.path.isdir(pars["path_output"]):
+                    os.makedirs(pars["path_output"])
+
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("Creating output dir {:04d}".format(mc))
+
             # clear all total signal data from the cache, so that we can generate
             # new noise timestreams.
             for obs in data.obs:
@@ -1012,8 +1000,13 @@ def main():
 
             # simulate noise
 
-            nse = tt.OpSimNoise(out="tot_signal", realization=mc)
+            nse = OpSimNoise(out="tot_signal", realization=mc)
             nse.exec(data)
+
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Noise simulation {:04d}".format(mc))
 
             # add sky signal
             if has_signal:
@@ -1021,60 +1014,53 @@ def main():
                     args, comm, data, totalname="tot_signal", signalname=signalname
                 )
 
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Add sky signal {:04d}".format(mc))
+
             if gain is not None:
-                op_apply_gain = tt.OpApplyGain(gain, name="tot_signal")
+                op_apply_gain = OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print("Noise simulation took {:.3f} s".format(elapsed), flush=True)
-            start = stop
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                tmr.report_clear("  Apply gains {:04d}".format(mc))
 
-            # create output directory for this realization
-            pars["path_output"] = "{}_{:03d}".format(args.outdir, mc)
-            if comm.comm_world.rank == 0:
-                if not os.path.isdir(pars["path_output"]):
-                    os.makedirs(pars["path_output"])
-
-            # in debug mode, print out data distribution information
-            if args.debug:
-                handle = None
-                if comm.comm_world.rank == 0:
-                    handle = open(
-                        os.path.join(pars["path_output"], "distdata.txt"), "w"
-                    )
-                data.info(handle)
-                if comm.comm_world.rank == 0:
-                    handle.close()
-
-            madam = tm.OpMadam(params=pars, detweights=detweights, name="tot_signal")
+            madam = OpMadam(params=pars, detweights=detweights, name="tot_signal")
             madam.exec(data)
 
-            comm.comm_world.barrier()
-            stop = MPI.Wtime()
-            elapsed = stop - start
-            if comm.comm_world.rank == 0:
-                print("Mapmaking took {:.3f} s".format(elapsed), flush=True)
+            if mpiworld is not None:
+                mpiworld.barrier()
+            if rank == 0:
+                mctmr.report_clear("  Map-making {:04d}".format(mc))
 
-    comm.comm_world.barrier()
-    stop = MPI.Wtime()
-    elapsed = stop - global_start
-    if comm.comm_world.rank == 0:
-        print("Total Time:  {:.2f} seconds".format(elapsed), flush=True)
+    gt.stop_all()
+    if mpiworld is not None:
+        mpiworld.barrier()
+    tmr.stop()
+    tmr.clear()
+    tmr.start()
+    alltimers = gather_timers(comm=mpiworld)
+    if rank == 0:
+        out = os.path.join(args.outdir, "timing")
+        dump_timing(alltimers, out)
+        tmr.stop()
+        tmr.report("Gather and dump timing info")
+    return
 
 
 if __name__ == "__main__":
     try:
         main()
-        tman = timing.timing_manager()
-        tman.report()
     except:
+        # We have an unhandled exception on at least one process.  Print a stack
+        # trace for this process and then abort so that all processes terminate.
+        mpiworld, procs, rank = get_world()
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(MPI.COMM_WORLD.rank, x) for x in lines]
+        lines = ["Proc {}: {}".format(rank, x) for x in lines]
         print("".join(lines), flush=True)
-        toast.raise_error(6)  # typical error code for SIGABRT
-        MPI.COMM_WORLD.Abort(6)
-    finalize()
+        if mpiworld is not None:
+            mpiworld.Abort(6)

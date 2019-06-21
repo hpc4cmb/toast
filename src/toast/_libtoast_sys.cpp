@@ -173,6 +173,22 @@ void init_sys(py::module & m) {
                 None
 
         )")
+    .def("report_clear", &toast::Timer::report_clear, py::arg(
+             "message"),
+         R"(
+            Report results of the timer to STDOUT and clear the timer.
+
+            If the timer was running, it is stopped before reporting and clearing and
+            then restarted.  If the timer was stopped, then it is left in the stopped
+            state after reporting and clearing.
+
+            Args:
+                message (str): A message to prepend to the timing results.
+
+            Returns:
+                None
+
+        )")
     .def("__repr__",
          [](toast::Timer const & self) {
              std::ostringstream o;

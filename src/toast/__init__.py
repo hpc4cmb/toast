@@ -22,11 +22,11 @@ try:
     env = Environment.get()
     __version__ = env.version()
 except ImportError:
-    import traceback
-
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-    print("".join(lines), flush=True)
+    # import traceback
+    # exc_type, exc_value, exc_traceback = sys.exc_info()
+    # lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+    # print("".join(lines), flush=True)
+    #
     # Just manually read the release file.
     thisdir = os.path.abspath(os.path.dirname(__file__))
     relfile = os.path.join(thisdir, "..", "..", "RELEASE")

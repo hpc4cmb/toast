@@ -121,6 +121,14 @@ TEST_F(TOASTutilsTest, singletimer) {
     size_t calls = tm.calls();
     toast::Timer newtm(seconds, calls);
     newtm.report("Copied");
+    tm.clear();
+    tm.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(incr));
+    tm.report_clear("Original was running");
+    EXPECT_EQ(true, tm.is_running());
+    tm.stop();
+    tm.report_clear("Original was stopped");
+    EXPECT_EQ(false, tm.is_running());
 }
 
 

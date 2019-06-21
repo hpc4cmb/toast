@@ -88,6 +88,7 @@ class Timer {
         double seconds() const;
         size_t calls() const;
         void report(char const * message);
+        void report_clear(char const * message);
         bool is_running() const;
 
     private:

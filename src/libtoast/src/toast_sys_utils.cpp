@@ -120,6 +120,19 @@ void toast::Timer::report(char const * message) {
     return;
 }
 
+void toast::Timer::report_clear(char const * message) {
+    bool was_running = running_;
+    if (was_running) {
+        stop();
+    }
+    report(message);
+    clear();
+    if (was_running) {
+        start();
+    }
+    return;
+}
+
 toast::GlobalTimers::GlobalTimers() {
     data.clear();
 }

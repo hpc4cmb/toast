@@ -68,3 +68,4 @@ find_package(MPI4PY)
 
 enable_testing()
 add_subdirectory(src)
+add_subdirectory(pipelines)

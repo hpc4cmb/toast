@@ -261,6 +261,15 @@ class OpAccumDiag(Operator):
                 # on which input pixel objects were given.
 
                 if self._do_invn and self._do_z:
+                    invnpp = self._invnpp.flatdata
+                    if invnpp is None:
+                        invnpp = np.empty(shape=(0), dtype=np.float64)
+                    zmap = self._zmap.flatdata
+                    if zmap is None:
+                        zmap = np.empty(shape=(0), dtype=np.float64)
+                    hits = self._hits.flatdata
+                    if hits is None:
+                        hits = np.empty(shape=(0), dtype=np.int64)
                     cov_accum_diag(
                         self._nsub,
                         self._subsize,
@@ -270,13 +279,18 @@ class OpAccumDiag(Operator):
                         weights.reshape(-1),
                         detweight,
                         signal,
-                        self._invnpp.flatdata,
-                        self._hits.flatdata,
-                        self._zmap.flatdata,
+                        invnpp,
+                        hits,
+                        zmap,
                     )
 
                 elif self._do_invn:
-
+                    invnpp = self._invnpp.flatdata
+                    if invnpp is None:
+                        invnpp = np.empty(shape=(0), dtype=np.float64)
+                    hits = self._hits.flatdata
+                    if hits is None:
+                        hits = np.empty(shape=(0), dtype=np.int64)
                     cov_accum_diag_invnpp(
                         self._nsub,
                         self._subsize,
@@ -285,11 +299,14 @@ class OpAccumDiag(Operator):
                         lpix,
                         weights.reshape(-1),
                         detweight,
-                        self._invnpp.flatdata,
-                        self._hits.flatdata,
+                        invnpp,
+                        hits,
                     )
 
                 elif self._do_z:
+                    zmap = self._zmap.flatdata
+                    if zmap is None:
+                        zmap = np.empty(shape=(0), dtype=np.float64)
                     cov_accum_zmap(
                         self._nsub,
                         self._subsize,
@@ -299,17 +316,15 @@ class OpAccumDiag(Operator):
                         weights.reshape(-1),
                         detweight,
                         signal,
-                        self._zmap.flatdata,
+                        zmap,
                     )
 
                 elif self._do_hits:
+                    hits = self._hits.flatdata
+                    if hits is None:
+                        hits = np.empty(shape=(0), dtype=np.int64)
                     cov_accum_diag_hits(
-                        self._nsub,
-                        self._subsize,
-                        self._nnz,
-                        sm,
-                        lpix,
-                        self._hits.flatdata,
+                        self._nsub, self._subsize, self._nnz, sm, lpix, hits
                     )
 
                 # print("det {}:".format(det))
@@ -342,7 +357,9 @@ def covariance_invert(npp, threshold, rcond=None):
 
     """
     mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
-
+    nppdata = npp.flatdata
+    if nppdata is None:
+        nppdata = np.empty(shape=(0), dtype=np.float64)
     if rcond is not None:
         if rcond.size != npp.size:
             raise RuntimeError(
@@ -356,20 +373,17 @@ def covariance_invert(npp, threshold, rcond=None):
         if rcond.nnz != 1:
             raise RuntimeError("condition number map should have NNZ = 1")
 
+        rdata = rcond.flatdata
+        if rdata is None:
+            rdata = np.empty(shape=(0), dtype=np.float64)
         cov_eigendecompose_diag(
-            npp.nsubmap,
-            npp.submap,
-            mapnnz,
-            npp.flatdata,
-            rcond.flatdata,
-            threshold,
-            True,
+            npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, True
         )
 
     else:
-        temp = np.zeros(npp.nsubmap * npp.submap, dtype=np.float64)
+        temp = np.zeros(shape=(npp.nsubmap * npp.submap), dtype=np.float64)
         cov_eigendecompose_diag(
-            npp.nsubmap, npp.submap, mapnnz, npp.flatdata, temp, threshold, True
+            npp.nsubmap, npp.submap, mapnnz, nppdata, temp, threshold, True
         )
     return
 
@@ -399,7 +413,13 @@ def covariance_multiply(npp1, npp2):
     if npp1.nnz != npp2.nnz:
         raise RuntimeError("covariance matrices must have same NNZ values")
 
-    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1.flatdata, npp2.flatdata)
+    npp1data = npp1.flatdata
+    if npp1data is None:
+        npp1data = np.empty(shape=(0), dtype=np.float64)
+    npp2data = npp2.flatdata
+    if npp2data is None:
+        npp2data = np.empty(shape=(0), dtype=np.float64)
+    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1data, npp2data)
     return
 
 
@@ -427,7 +447,13 @@ def covariance_apply(npp, m):
     if m.nnz != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
 
-    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, npp.flatdata, m.flatdata)
+    nppdata = npp.flatdata
+    if nppdata is None:
+        nppdata = np.empty(shape=(0), dtype=np.float64)
+    mdata = m.flatdata
+    if mdata is None:
+        mdata = np.empty(shape=(0), dtype=np.float64)
+    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, nppdata, mdata)
     return
 
 
@@ -458,8 +484,16 @@ def covariance_rcond(npp):
 
     threshold = np.finfo(np.float64).eps
 
+    nppdata = npp.flatdata
+    if nppdata is None:
+        nppdata = np.empty(shape=(0), dtype=np.float64)
+
+    rdata = rcond.flatdata
+    if rdata is None:
+        rdata = np.empty(shape=(0), dtype=np.float64)
+
     cov_eigendecompose_diag(
-        npp.nsubmap, npp.submap, mapnnz, npp.flatdata, rcond.flatdata, threshold, False
+        npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, False
     )
 
     return rcond

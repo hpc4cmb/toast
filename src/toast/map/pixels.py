@@ -166,21 +166,27 @@ class DistPixels(object):
         # we allocate this as a contiguous block
 
         self.data = None
+        self.flatdata = None
         if self._local is None:
             self._nsub = 0
         else:
-            self._nsub = len(self._local)
-            self._glob2loc = self._cache.create("glob2loc", np.int64, (self._nglob,))
-            self._glob2loc[:] = -1
-            for g in enumerate(self._local):
-                self._glob2loc[g[1]] = g[0]
-            if (self._submap * self._local.max()) > self._size:
-                raise RuntimeError("local submap indices out of range")
-            self.data = self._cache.create(
-                "data", dtype, (self._nsub, self._submap, self._nnz)
-            )
-            self.flatdata = self.data.view()
-            self.flatdata.shape = tuple([self._nsub * self._submap * self._nnz])
+            if len(self._local) == 0:
+                self._nsub = 0
+            else:
+                self._nsub = len(self._local)
+                self._glob2loc = self._cache.create(
+                    "glob2loc", np.int64, (self._nglob,)
+                )
+                self._glob2loc[:] = -1
+                for g in enumerate(self._local):
+                    self._glob2loc[g[1]] = g[0]
+                if (self._submap * self._local.max()) > self._size:
+                    raise RuntimeError("local submap indices out of range")
+                self.data = self._cache.create(
+                    "data", dtype, (self._nsub, self._submap, self._nnz)
+                )
+                self.flatdata = self.data.view()
+                self.flatdata.shape = tuple([self._nsub * self._submap * self._nnz])
 
     def __del__(self):
         if self._glob2loc is not None:

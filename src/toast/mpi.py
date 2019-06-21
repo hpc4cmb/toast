@@ -34,6 +34,27 @@ if use_mpi:
         )
 
 
+def get_world():
+    """Retrieve the default world communicator and its properties.
+
+    If MPI is enabled, this returns MPI.COMM_WORLD and the process rank and number of
+    processes.  If MPI is disabled, this returns None for the communicator, zero
+    for the rank, and one for the number of processes.
+
+    Returns:
+        (tuple):  The communicator, number of processes, and rank.
+
+    """
+    rank = 0
+    procs = 1
+    world = None
+    if use_mpi:
+        world = MPI.COMM_WORLD
+        rank = world.rank
+        procs = world.size
+    return world, procs, rank
+
+
 class Comm(object):
     """Class which represents a two-level hierarchy of MPI communicators.
 

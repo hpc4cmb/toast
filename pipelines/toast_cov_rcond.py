@@ -1,42 +1,52 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI, finalize
-
+"""Invert a block diagonal covariance matrix.
+"""
 import os
-
-import sys
 import re
+import sys
 import argparse
+import traceback
 
 import numpy as np
 
 import healpy as hp
 
-import toast
-import toast.map as tm
-import toast.timing as timing
+from toast.mpi import get_world
+
+from toast.utils import Logger
+
+from toast.dist import distribute_uniform
+
+from toast.map import DistPixels, covariance_rcond
 
 
 def main():
+    log = Logger.get()
 
-    comm = MPI.COMM_WORLD
+    parser = argparse.ArgumentParser(
+        description="Read a toast covariance matrix and write the inverse condition number map"
+    )
 
-    if comm.rank == 0:
-        print("Running with {} processes".format(comm.size))
+    parser.add_argument(
+        "--input", required=True, default=None, help="The input covariance FITS file"
+    )
 
-    global_start = MPI.Wtime()
+    parser.add_argument(
+        "--output",
+        required=False,
+        default=None,
+        help="The output inverse condition map FITS file.",
+    )
 
-    parser = argparse.ArgumentParser( description='Read a toast covariance matrix and write the inverse condition number map' )
-    parser.add_argument( '--input', required=True, default=None, help='The input covariance FITS file' )
-    parser.add_argument( '--output', required=False, default=None, help='The output inverse condition map FITS file.' )
-
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
-
-    autotimer = timing.auto_timer(timing.FILE())
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        return
 
     # get options
 
@@ -45,12 +55,15 @@ def main():
     if args.output is not None:
         outfile = args.output
     else:
-        inmat = re.match(r'(.*)\.fits', infile)
+        inmat = re.match(r"(.*)\.fits", infile)
         if inmat is None:
-            print("input file should have .fits extension")
-            sys.exit(0)
+            log.error("input file should have .fits extension")
+            return
         inroot = inmat.group(1)
         outfile = "{}_rcond.fits".format(inroot)
+
+    # Get the default communicator
+    mpiworld, procs, rank = get_world()
 
     # We need to read the header to get the size of the matrix.
     # This would be a trivial function call in astropy.fits or
@@ -60,53 +73,66 @@ def main():
 
     nside = 0
     nnz = 0
-    if comm.rank == 0:
+    if rank == 0:
         fake, head = hp.read_map(infile, h=True, memmap=True)
         for key, val in head:
-            if key == 'NSIDE':
+            if key == "NSIDE":
                 nside = int(val)
-            if key == 'TFIELDS':
+            if key == "TFIELDS":
                 nnz = int(val)
-    nside = comm.bcast(nside, root=0)
-    nnz = comm.bcast(nnz, root=0)
+    if mpiworld is not None:
+        nside = mpiworld.bcast(nside, root=0)
+        nnz = mpiworld.bcast(nnz, root=0)
 
-    npix = 12 * nside**2
+    npix = 12 * nside ** 2
     subnside = int(nside / 16)
     if subnside == 0:
         subnside = 1
-    subnpix = 12 * subnside**2
-    nsubmap = int( npix / subnpix )
+    subnpix = 12 * subnside ** 2
+    nsubmap = int(npix / subnpix)
 
     # divide the submaps as evenly as possible among processes
 
-    dist = toast.distribute_uniform(nsubmap, comm.size)
-    local = np.arange(dist[comm.rank][0], dist[comm.rank][0] + dist[comm.rank][1])
+    dist = distribute_uniform(nsubmap, procs)
+    local = np.arange(dist[rank][0], dist[rank][0] + dist[rank][1])
 
-    if comm.rank == 0:
+    if rank == 0:
         if os.path.isfile(outfile):
             os.remove(outfile)
-    comm.barrier()
+
+    if mpiworld is not None:
+        mpiworld.barrier()
 
     # create the covariance and inverse condition number map
 
-    cov = tm.DistPixels(comm=comm, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local)
+    cov = DistPixels(
+        comm=mpiworld, dtype=np.float64, size=npix, nnz=nnz, submap=subnpix, local=local
+    )
 
     # read the covariance
-
+    log.info("Reading covariance {}".format(infile))
     cov.read_healpix_fits(infile)
 
     # every process computes its local piece
-
-    rcond = tm.covariance_rcond(cov)
+    log.info("Computing condition number map")
+    rcond = covariance_rcond(cov)
 
     # write the map
-
+    log.info("Writing condition number map")
     rcond.write_healpix_fits(outfile)
-
+    return
 
 
 if __name__ == "__main__":
-    main()
-    tman = timing.timing_manager()
-    tman.report()
-    finalize()
+    try:
+        main()
+    except:
+        # We have an unhandled exception on at least one process.  Print a stack
+        # trace for this process and then abort so that all processes terminate.
+        mpiworld, procs, rank = get_world()
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = ["Proc {}: {}".format(rank, x) for x in lines]
+        print("".join(lines), flush=True)
+        if mpiworld is not None:
+            mpiworld.Abort(6)

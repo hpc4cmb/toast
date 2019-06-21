@@ -290,22 +290,22 @@ void toast::Environment::print() const {
     fprintf(stdout, "%s: Logging level = %s\n", prefix.c_str(),
             loglvl_.c_str());
 
-    fprintf(stdout, "%s: Signal handling status:\n", prefix.c_str());
-
+    std::vector <std::string> signals;
     for (auto const & sig : signals_avail_) {
-        if (signals_enabled_.count(sig) == 0) {
-            fprintf(stdout, "%s:   %9s unavailable\n", prefix.c_str(),
-                    sig.c_str());
-        } else {
+        if (signals_enabled_.count(sig) > 0) {
             if (signals_enabled_.at(sig)) {
-                fprintf(stdout, "%s:   %9s enabled\n", prefix.c_str(),
-                        sig.c_str());
-            } else {
-                fprintf(stdout, "%s:   %9s disabled\n", prefix.c_str(),
-                        sig.c_str());
+                signals.push_back(sig);
             }
         }
     }
+
+    fprintf(stdout, "%s: Handling enabled for %lu signals:\n", prefix.c_str(),
+            signals.size());
+
+    for (auto const & sig : signals) {
+        fprintf(stdout, "%s:   %9s\n", prefix.c_str(), sig.c_str());
+    }
+
     fprintf(stdout, "%s: Max threads = %d\n", prefix.c_str(),
             max_threads_);
     if (have_mpi_) {
