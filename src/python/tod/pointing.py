@@ -108,7 +108,7 @@ class OpPointingHpix(Operator):
     def __init__(self, pixels='pixels', weights='weights', nside=64, nest=False,
                  mode='I', cal=None, epsilon=None, hwprpm=None, hwpstep=None,
                  hwpsteptime=None, common_flag_name=None, common_flag_mask=255,
-                 apply_flags=False, keep_quats=False):
+                 apply_flags=False, keep_quats=False, single_precision=False):
         self._pixels = pixels
         self._weights = weights
         self._nside = nside
@@ -120,6 +120,7 @@ class OpPointingHpix(Operator):
         self._apply_flags = apply_flags
         self._common_flag_name = common_flag_name
         self._keep_quats = keep_quats
+        self._single_precision = single_precision
 
         if (hwprpm is not None) and (hwpstep is not None):
             raise RuntimeError("choose either continuously rotating or stepped "
@@ -279,7 +280,7 @@ class OpPointingHpix(Operator):
                     weightsref = tod.cache.reference(weightsname)
                 else:
                     weightsref = tod.cache.create(weightsname, np.float64,
-                        (nsamp, self._nnz))
+                                                  (nsamp, self._nnz))
 
                 pdata = None
                 if self._keep_quats:
@@ -316,6 +317,16 @@ class OpPointingHpix(Operator):
                         weightsref[bslice,:], hwpang=hslice,
                         flags=fslice, eps=eps, cal=cal)
                     buf_off += buf_n
+
+                if self._single_precision:
+                    pixels = pixelsref.astype(np.int32)
+                    del pixelsref
+                    pixelsref = tod.cache.put(pixelsname, pixels, replace=True)
+                    del pixels
+                    weights = weightsref.astype(np.float32)
+                    del weightsref
+                    weightsref = tod.cache.put(weightsname, weights, replace=True)
+                    del weights
 
                 del pixelsref
                 del weightsref
