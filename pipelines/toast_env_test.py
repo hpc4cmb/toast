@@ -13,10 +13,11 @@ import traceback
 
 from toast.mpi import get_world, Comm
 
-from toast.utils import Logger
+from toast.utils import Logger, Environment
 
 
 def main():
+    env = Environment.get()
     log = Logger.get()
 
     parser = argparse.ArgumentParser(
@@ -37,8 +38,10 @@ def main():
         return
 
     mpiworld, procs, rank = get_world()
+    if rank == 0:
+        env.print()
     if mpiworld is None:
-        log.info("MPI disabled")
+        log.info("Running serially with one process")
     else:
         if rank == 0:
             log.info("Running with {} processes".format(procs))
