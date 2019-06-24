@@ -87,6 +87,8 @@ class OpSimPySMTest(MPITestCase):
         )
         local_map = {}  # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
+        # Script to generate the expected output
+        # https://gist.github.com/zonca/56ff738c3d163ee17e3378c34e17a0c3
 
         if self.comm.rank == 0:
             np.testing.assert_almost_equal(
