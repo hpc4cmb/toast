@@ -59,7 +59,7 @@ class PySMSky(object):
         if pysm is None:
             raise RuntimeError("pysm not available")
         if pysm_precomputed_cmb_K_CMB is not None:
-            pass
+            raise NotImplementedError("pysm_precomputed_cmb_K_CMB is not currently supported")
             # cmb = {
             #     "model": "pre_computed",
             #     "nside": self._nside,
