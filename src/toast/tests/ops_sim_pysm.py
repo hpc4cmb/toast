@@ -12,7 +12,7 @@ from ..tod import OpPointingHpix, TODHpixSpiral, OpSimPySM
 
 from ._helpers import create_outdir, create_distdata, uniform_chunks
 
-from ..map import PySMSky, DistRings, OpLocalPixels
+from ..map import PySMSky, OpLocalPixels
 
 from ..dist import distribute_uniform
 
@@ -107,7 +107,7 @@ class OpSimPySMTest(MPITestCase):
 
         return
 
-    def test_pysm_distrings(self):
+    def test_pysm_ring_distribution(self):
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank

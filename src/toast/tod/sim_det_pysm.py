@@ -17,7 +17,7 @@ from ..utils import Logger, Timer
 
 from ..op import Operator
 
-from ..map import DistRings, PySMSky, DistPixels
+from ..map import PySMSky, DistPixels
 
 from .sim_det_map import OpSimScan
 
@@ -105,7 +105,6 @@ class OpSimPySM(Operator):
         self.comm = comm
         self._debug = debug
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
-        self.dist_rings = DistRings(comm, nside=nside, nnz=3)
         self.coord = coord
 
         pysm_sky_components = ["synchrotron", "dust", "freefree", "cmb", "ame"]
