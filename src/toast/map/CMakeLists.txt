@@ -8,7 +8,5 @@ install(FILES
     cov.py
     pixels.py
     pysm.py
-    rings.py
-    smooth.py
     DESTINATION ${PYTHON_SITE}/toast/map
 )
