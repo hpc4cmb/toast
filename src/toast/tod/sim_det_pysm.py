@@ -116,7 +116,7 @@ class OpSimPySM(Operator):
             pysm_sky_config[full_component_name] = component_model
         self.pysm_sky = PySMSky(
             comm=self.comm,
-            pixel_indices=self.dist_rings.local_pixels,
+            pixel_indices=None,
             nside=nside,
             pysm_sky_config=pysm_sky_config,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
@@ -229,7 +229,7 @@ class OpSimPySM(Operator):
             full_map_rank0 = assemble_map_on_rank0(
                 self.comm,
                 local_maps["sky_{}".format(det)],
-                self.dist_rings.local_pixels,
+                np.arange(len(local_maps["sky_{}".format(det)])) if self.comm is None else self.pysm_sky.sky.map_dist.pixel_indices,
                 n_components,
                 self.npix,
             )
