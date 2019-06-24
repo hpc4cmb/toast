@@ -99,7 +99,7 @@ class OpSimPySM(Operator):
         self,
         comm=None,
         out="signal",
-        pysm_model="",
+        pysm_model=None,
         pysm_precomputed_cmb_K_CMB=None,
         pysm_component_objects=None,
         focalplanes=None,
@@ -121,7 +121,7 @@ class OpSimPySM(Operator):
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.coord = coord
 
-        pysm_sky_config = pysm_model.split(",")
+        pysm_sky_config = None if pysm_model is None else pysm_model.split(",")
 
         self.pysm_sky = PySMSky(
             comm=self.comm,
@@ -147,10 +147,7 @@ class OpSimPySM(Operator):
         self.apply_beam = apply_beam
 
     def __del__(self):
-        # Ensure that the PySMSky member is destroyed first because
-        # it contains a reference to self.dist_rings.local_pixels
         del self.pysm_sky
-        del self.dist_rings
         del self.distmap
 
     @function_timer
