@@ -51,11 +51,7 @@ from . import binned as testbinned
 from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
-from ..map import libsharp_available
-
-if libsharp_available:
-    from . import ops_sim_pysm as testopspysm
-    from . import smooth as testsmooth
+from . import ops_sim_pysm as testopspysm
 
 # from ..tod import tidas_available
 # if tidas_available:
@@ -122,9 +118,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
-        if libsharp_available:
-            suite.addTest(loader.loadTestsFromModule(testopspysm))
-            suite.addTest(loader.loadTestsFromModule(testsmooth))
+        suite.addTest(loader.loadTestsFromModule(testopspysm))
         # if tidas_available:
         #     suite.addTest( loader.loadTestsFromModule(testtidas) )
         # if spt3g_available:
