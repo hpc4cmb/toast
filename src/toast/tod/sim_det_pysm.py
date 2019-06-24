@@ -146,10 +146,6 @@ class OpSimPySM(Operator):
         )
         self.apply_beam = apply_beam
 
-    def __del__(self):
-        del self.pysm_sky
-        del self.distmap
-
     @function_timer
     def exec(self, data):
         log = Logger.get()
