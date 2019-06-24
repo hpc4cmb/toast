@@ -156,66 +156,66 @@ class OpSimPySMTest(MPITestCase):
 
         return
 
-    #def test_op_pysm_nosmooth(self):
-    #    rank = 0
-    #    if self.comm is not None:
-    #        rank = self.comm.rank
-    #    # expand the pointing into a low-res pointing matrix
-    #    pointing = OpPointingHpix(nside=self.nside, nest=False, mode="IQU")
-    #    pointing.exec(self.data)
+    def test_op_pysm_nosmooth(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+        # expand the pointing into a low-res pointing matrix
+        pointing = OpPointingHpix(nside=self.nside, nest=False, mode="IQU")
+        pointing.exec(self.data)
 
-    #    # Get locally hit pixels.  Only do this if the PySM operator
-    #    # needs local pixels...
-    #    lc = OpLocalPixels()
-    #    localpix = lc.exec(self.data)
-    #    # subnpix = np.floor_divide(self.nside, 4)
-    #    # localsm = np.unique(np.floor_divide(localpix, subnpix))
+        # Get locally hit pixels.  Only do this if the PySM operator
+        # needs local pixels...
+        lc = OpLocalPixels()
+        localpix = lc.exec(self.data)
+        # subnpix = np.floor_divide(self.nside, 4)
+        # localsm = np.unique(np.floor_divide(localpix, subnpix))
 
-    #    subnpix, localsm = 64, np.arange(12)
-    #    focalplane = {
-    #        "fake_0A": {
-    #            "bandcenter_ghz": 22.5,
-    #            "bandwidth_ghz": 5,
-    #            "fmin": 1e-05,
-    #            "fwhm": 0.16666666666666666,
-    #        }
-    #    }
-    #    op_sim_pysm = OpSimPySM(
-    #        comm=self.data.comm.comm_world,
-    #        out="signal",
-    #        pysm_model="a2,d7,f1,s3,c1",
-    #        focalplanes=[focalplane],
-    #        nside=self.nside,
-    #        subnpix=subnpix,
-    #        localsm=localsm,
-    #        apply_beam=False,
-    #        nest=False,
-    #        units="uK_RJ",
-    #    )
+        subnpix, localsm = 64, np.arange(12)
+        focalplane = {
+            "fake_0A": {
+                "bandcenter_ghz": 22.5,
+                "bandwidth_ghz": 5,
+                "fmin": 1e-05,
+                "fwhm": 0.16666666666666666,
+            }
+        }
+        op_sim_pysm = OpSimPySM(
+            comm=self.data.comm.comm_world,
+            out="signal",
+            pysm_model="a1,f1,s1",
+            focalplanes=[focalplane],
+            nside=self.nside,
+            subnpix=subnpix,
+            localsm=localsm,
+            apply_beam=False,
+            nest=False,
+            units="uK_RJ",
+        )
 
-    #    op_sim_pysm.exec(self.data)
+        op_sim_pysm.exec(self.data)
 
-    #    tod = self.data.obs[0]["tod"]
-    #    rescanned_tod = tod.cache.reference("signal_fake_0A")
-    #    pix = tod.cache.reference("pixels_fake_0A")
-    #    weights = tod.cache.reference("weights_fake_0A")
+        tod = self.data.obs[0]["tod"]
+        rescanned_tod = tod.cache.reference("signal_fake_0A")
+        pix = tod.cache.reference("pixels_fake_0A")
+        weights = tod.cache.reference("weights_fake_0A")
 
-    #    # compare with maps computes with PySM standalone running
-    #    # the test_mpi.py script from the PySM repository
+        # compare with maps computes with PySM standalone running
+        # the test_mpi.py script from the PySM repository
 
-    #    I = np.array([121.76090504, 80.14861367, 77.58032105])
-    #    Q = np.array([-7.91582211, 1.03253469, -5.49429043])
-    #    U = np.array([-6.20504973, 7.71503699, -6.17427374])
-    #    expected = []
-    #    for i, (qw, uw) in enumerate([(-1, 1), (1, 1), (1, -1)]):
-    #        expected.append(
-    #            1.0 * I[i] + qw * 0.70710678 * Q[i] + uw * 0.70710678 * U[i]
-    #        )
+        I = np.array([95.15288056,  76.09502754,  87.41419261])
+        Q = np.array([-7.59180159,  1.30317198, -5.93620791])
+        U = np.array([-6.31112965,  7.90560375, -6.61861061])
+        expected = []
+        for i in range(3):
+            expected.append(
+                1.0 * I[i] + weights[i][1] * Q[i] + weights[i][2] * U[i]
+            )
 
-    #    if rank == 0:
-    #        np.testing.assert_array_almost_equal(rescanned_tod[:3], expected, decimal=4)
+        if rank == 0:
+            np.testing.assert_array_almost_equal(rescanned_tod[:3], expected, decimal=1)
 
-    #    return
+        return
 
 
 #class OpSimPySMTestSmooth(MPITestCase):
