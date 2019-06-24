@@ -6,6 +6,9 @@ import numpy as np
 
 import healpy as hp
 
+import pysm
+import pysm.units as u
+
 from ..mpi import MPI
 
 from ..timing import function_timer
@@ -14,7 +17,7 @@ from ..utils import Logger, Timer
 
 from ..op import Operator
 
-from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
+from ..map import DistRings, PySMSky, DistPixels
 
 from .sim_det_map import OpSimScan
 
@@ -196,25 +199,14 @@ class OpSimPySM(Operator):
                 if self.comm is not None:
                     self.comm.Barrier()
                 if rank == 0:
-                    log.debug("Initializing LibSharpSmooth on {}".format(det))
-                smooth = LibSharpSmooth(
-                    self.comm,
-                    lmax=lmax,
-                    grid=self.dist_rings.libsharp_grid,
-                    fwhm_deg=fwhm_deg[det],
-                    beam=None,
+                    log.debug("Executing Smoothing with libsharp on {}".format(det))
+                local_maps["sky_{}".format(det)] = pysm.apply_smoothing_and_coord_transform(
+                    local_maps["sky_{}".format(det)], fwhm=fwhm_deg[det]*u.deg, map_dist=self.pysm_sky.sky.map_dist
                 )
                 if self.comm is not None:
                     self.comm.Barrier()
                 if rank == 0:
-                    log.debug("Executing LibSharpSmooth on {}".format(det))
-                local_maps["sky_{}".format(det)] = smooth.exec(
-                    local_maps["sky_{}".format(det)]
-                )
-                if self.comm is not None:
-                    self.comm.Barrier()
-                if rank == 0:
-                    log.debug("LibSharpSmooth completed on {}".format(det))
+                    log.debug("Smoothing completed on {}".format(det))
 
             n_components = 3
 
