@@ -101,7 +101,7 @@ class PySMSky(object):
             # initialized_sky_config["cmb"] = [cmb]
             # # remove cmb from the pysm string
             # pysm_sky_config.pop("cmb", None)
-        map_dist = pysm.MapDistribution(
+        map_dist = None if self._comm is None else pysm.MapDistribution(
             pixel_indices=self._pixel_indices, nside=self._nside, mpi_comm=self._comm
         )
         return pysm.Sky(

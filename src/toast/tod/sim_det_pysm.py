@@ -38,13 +38,16 @@ def extract_local_dets(data):
 
 @function_timer
 def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
-    full_maps_rank0 = (
-        np.zeros((n_components, npix), dtype=np.float64) if comm.rank == 0 else None
-    )
-    local_map_buffer = np.zeros((n_components, npix), dtype=np.float64)
-    local_map_buffer[:, pixel_indices] = local_map
-    comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
-    return full_maps_rank0
+    if comm is None:
+        return local_map
+    else:
+        full_maps_rank0 = (
+            np.zeros((n_components, npix), dtype=np.float64) if comm.rank == 0 else None
+        )
+        local_map_buffer = np.zeros((n_components, npix), dtype=np.float64)
+        local_map_buffer[:, pixel_indices] = local_map
+        comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
+        return full_maps_rank0
 
 
 @function_timer
@@ -220,7 +223,7 @@ class OpSimPySM(Operator):
             full_map_rank0 = assemble_map_on_rank0(
                 self.comm,
                 local_maps["sky_{}".format(det)],
-                np.arange(len(local_maps["sky_{}".format(det)]))
+                np.arange(len(local_maps["sky_{}".format(det)][0]))
                 if self.comm is None
                 else self.pysm_sky.sky.map_dist.pixel_indices,
                 n_components,

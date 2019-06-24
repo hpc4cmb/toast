@@ -66,7 +66,9 @@ class OpSimPySMTest(MPITestCase):
     def test_pysm_local_pix(self):
         npix = 12 * self.nside * self.nside
 
-        local_start, nlocal = distribute_uniform(npix, self.comm.size)[self.comm.rank]
+        comm_size = 1 if self.comm is None else self.comm.size
+        comm_rank = 0 if self.comm is None else self.comm.rank
+        local_start, nlocal = distribute_uniform(npix, comm_size)[comm_rank]
         local_pixels = np.arange(nlocal, dtype=np.int64)
         local_pixels += local_start
 
@@ -91,14 +93,14 @@ class OpSimPySMTest(MPITestCase):
         # Script to generate the expected output
         # https://gist.github.com/zonca/56ff738c3d163ee17e3378c34e17a0c3
 
-        if self.comm.rank == 0:
+        if comm_rank == 0:
             np.testing.assert_almost_equal(
                 local_map["sky_1a"][0, :3],
                 np.array([95.15288056, 76.09502754, 87.41419261]),
                 decimal=1,
             )
 
-        if self.comm.rank == self.comm.size - 1:
+        if comm_rank == comm_size - 1:
             np.testing.assert_almost_equal(
                 local_map["sky_1b"][2, -3:],
                 np.array([1.3479588, -0.05170135, -3.72562926]),
@@ -254,6 +256,10 @@ class OpSimPySMTestSmooth(MPITestCase):
         for i in range(3):
             expected.append(1.0 * I[i] + weights[i][1] * Q[i] + weights[i][2] * U[i])
 
+        # With no MPI the smoothing performed by healpy is a bit different, so we reduce
+        # the tolerance
         if rank == 0:
-            np.testing.assert_array_almost_equal(rescanned_tod[:3], expected, decimal=1)
+            np.testing.assert_array_almost_equal(
+                rescanned_tod[:3], expected, decimal=0 if self.comm is None else 1
+            )
         return
