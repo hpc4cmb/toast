@@ -63,22 +63,35 @@ def extract_detector_parameters(det, focalplanes):
 
 
 class OpSimPySM(Operator):
-    """Operator which generates sky signal by scanning from a map.
+    """Operator which generates a bandpass integrated and smoothed sky signal with PySM 3
 
-    The signal to use should already be in a distributed pixel structure,
-    and local pointing should already exist.
+    This operator:
+    * Extracts band centers,  bandwidths and fwhm from the defined focalplane
+    * Creates a `PySMSky` object
+    * Runs `PySMSky` and gets distributed maps
+    * Performs distributed smoothing with libsharp facilities provided by PySM 3
+    * Communicates the distributed map to the first process
+    * Communicates to each of the processes their local pixels
+    * Rescans the pixels to a timeline
+
+    For PySM related arguments, see the PySMSky docstring
 
     Args:
-        distmap (DistPixels): the distributed map domain data.
-        pixels (str): the name of the cache object (<pixels>_<detector>)
-            containing the pixel indices to use.
-        weights (str): the name of the cache object (<weights>_<detector>)
-            containing the pointing weights to use.
+        comm (mpi4py.MPI.Comm): MPI communicator
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        units(str): Output units.
-        debug(bool):  Verbose progress reports.
-
+        focalplanes (list(dict)): List of focalplanes dictionaries with channel
+            name as key, another dictionary with keys "bandcenter_ghz", "bandwidth_ghz",
+            "fmin", "fwhm" (in arcmin)
+        nside (int): :math:`N_{side}` for PySM
+        subnpix (int): FIXME
+        localsm : FIXME
+        apply_beam (bool): Whether to perform gaussian smoothing with libsharp using the
+            fwhm defined in the focalplane
+        nest (bool): HEALPix nest or ring pixels
+        units (str): Output units.
+        debug (bool):  Verbose progress reports.
+        coord (str): Output reference frame
     """
 
     @function_timer

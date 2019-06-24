@@ -16,14 +16,30 @@ except ImportError:
 class PySMSky(object):
     """Create a bandpass-integrated sky map with PySM
 
+    Requires PySM 3. It initializes the `pysm.Sky` object either
+    in the constructor (`init_sky=True`) or when the `exec` method
+    is executed (`init_sky=False`).
+    Inizialization of the sky will load templates from the first process
+    of the MPI communicator, copy to all processes and then select the local
+    rings, distributed as required by `libsharp` for eventual smoothing later.
+    If another pixel distribution is required, it can be specified with `pixel_indices`,
+    however a different pixel distribution can only be used if performing no smoothing.
+
     Args:
-        PySM input paths / parameters:  FIXME.
+        comm (mpi4py.MPI.Comm): MPI communicator
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
-        weights (str): the name of the cache object (<weights>_<detector>)
-            containing the pointing weights to use.
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
+        nside (int): :math:`N_{side}` for PySM
+        pysm_sky_config (list(str)): list of PySM components, e.g. ["s1", "d1"],
+            this will be passed as `preset_strings` to `pysm.Sky`
+        pysm_precomputed_cmb_K_CMB (str): obsolete, will be removed shortly
+        pysm_component_objects (list(pysm.Model)): extra sky components that
+            inherits from `pysm.Model` to be passed to `pysm.Sky` as `components_objects`
+        init_sky (bool): Initializes the sky in the constructor if True, in `exec` if False
+        pixel_indices (np.array(int)): List of pixel indices, use None to use the standard
+            ring-based libsharp distribution
         units (str): Output units.
     """
 
@@ -98,6 +114,20 @@ class PySMSky(object):
 
     @function_timer
     def exec(self, local_map, out, bandpasses=None):
+        """Execute PySM
+
+        Executes PySM on the given bandpasses and return the
+        bandpass-integrated output maps
+
+        Args:
+        local_map (dict): Dictionary that will contain output maps
+        out (str): Output maps in `local_map` will be named `out_{chname}`
+            where `chname` is the key in the bandpasses dictionary
+        bandpasses (dict): Dictionary with channel names as keys and
+            a tuple of (frequency, weight) as values, PySM will normalize
+            the bandpasses and integrate the signal in Jy/sr
+
+        """
 
         if pysm is None:
             raise RuntimeError("pysm not available")
