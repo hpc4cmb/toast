@@ -35,6 +35,7 @@ class PySMSky(object):
         nside=None,
         pysm_sky_config=None,
         pysm_precomputed_cmb_K_CMB=None,
+        pysm_component_objects=None,
         init_sky=True,
         pixel_indices=None,
         units="K_CMB",
@@ -48,6 +49,7 @@ class PySMSky(object):
 
         self.pysm_sky_config = pysm_sky_config
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
+        self.pysm_component_objects = pysm_component_objects
         self.sky = (
             self.init_sky(self.pysm_sky_config, self.pysm_precomputed_cmb_K_CMB)
             if init_sky
@@ -88,7 +90,8 @@ class PySMSky(object):
         )
         return pysm.Sky(
             nside=self._nside,
-            preset_strings=list(pysm_sky_config.values()),
+            preset_strings=pysm_sky_config,
+            component_objects=self.pysm_component_objects,
             map_dist=map_dist,
             output_unit=self._units,
         )

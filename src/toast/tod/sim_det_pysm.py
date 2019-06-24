@@ -88,6 +88,7 @@ class OpSimPySM(Operator):
         out="signal",
         pysm_model="",
         pysm_precomputed_cmb_K_CMB=None,
+        pysm_component_objects=None,
         focalplanes=None,
         nside=None,
         subnpix=None,
@@ -107,20 +108,14 @@ class OpSimPySM(Operator):
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.coord = coord
 
-        pysm_sky_components = ["synchrotron", "dust", "freefree", "cmb", "ame"]
-        pysm_sky_config = dict()
-        for component_model in pysm_model.split(","):
-            full_component_name = [
-                each
-                for each in pysm_sky_components
-                if each.startswith(component_model[0])
-            ][0]
-            pysm_sky_config[full_component_name] = component_model
+        pysm_sky_config = pysm_model.split(",")
+
         self.pysm_sky = PySMSky(
             comm=self.comm,
             pixel_indices=None,
             nside=nside,
             pysm_sky_config=pysm_sky_config,
+            pysm_component_objects=pysm_component_objects,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
             units=units,
         )
