@@ -6,10 +6,7 @@
 
 from .pixels import OpLocalPixels, DistPixels
 
-from .rings import DistRings
 from .pysm import PySMSky
-from .smooth import LibSharpSmooth
-from .smooth import available as libsharp_available
 
 from .cov import (
     OpAccumDiag,
