@@ -169,17 +169,12 @@ class OpSimPySM(Operator):
                 np.ones(N_POINTS_BANDPASS),
             )
 
-        lmax = 3 * self.nside - 1
-
         if rank == 0:
             log.debug("Collecting, Broadcasting map")
         tm = Timer()
         tm.start()
 
         for det in local_dets:
-            # FIXME: this used to be outside this loop, but there is no need for that.
-            # Actually I don't think we even need a dictionary, just the map that is
-            # output from PySMSky which we can then feed to libsharp smoothing.
             local_maps = dict()
             if self.comm is not None:
                 self.comm.Barrier()
@@ -199,8 +194,12 @@ class OpSimPySM(Operator):
                     self.comm.Barrier()
                 if rank == 0:
                     log.debug("Executing Smoothing with libsharp on {}".format(det))
-                local_maps["sky_{}".format(det)] = pysm.apply_smoothing_and_coord_transform(
-                    local_maps["sky_{}".format(det)], fwhm=fwhm_deg[det]*u.deg, map_dist=self.pysm_sky.sky.map_dist
+                local_maps[
+                    "sky_{}".format(det)
+                ] = pysm.apply_smoothing_and_coord_transform(
+                    local_maps["sky_{}".format(det)],
+                    fwhm=fwhm_deg[det] * u.deg,
+                    map_dist=self.pysm_sky.sky.map_dist,
                 )
                 if self.comm is not None:
                     self.comm.Barrier()
@@ -220,7 +219,9 @@ class OpSimPySM(Operator):
             full_map_rank0 = assemble_map_on_rank0(
                 self.comm,
                 local_maps["sky_{}".format(det)],
-                np.arange(len(local_maps["sky_{}".format(det)])) if self.comm is None else self.pysm_sky.sky.map_dist.pixel_indices,
+                np.arange(len(local_maps["sky_{}".format(det)]))
+                if self.comm is None
+                else self.pysm_sky.sky.map_dist.pixel_indices,
                 n_components,
                 self.npix,
             )

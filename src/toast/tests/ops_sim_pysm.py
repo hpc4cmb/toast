@@ -84,7 +84,7 @@ class OpSimPySMTest(MPITestCase):
             nside=self.nside,
             pysm_sky_config=pysm_sky_config,
             units="uK_RJ",
-            comm=self.comm
+            comm=self.comm,
         )
         local_map = {}  # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
@@ -121,8 +121,12 @@ class OpSimPySMTest(MPITestCase):
             "2a": (np.linspace(18, 23, 10), np.ones(10)),
             "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
-        op = PySMSky(nside=self.nside, pysm_sky_config=pysm_sky_config, units="uK_RJ",
-                comm=self.comm)
+        op = PySMSky(
+            nside=self.nside,
+            pysm_sky_config=pysm_sky_config,
+            units="uK_RJ",
+            comm=self.comm,
+        )
         local_map = {}  # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
 
@@ -244,8 +248,8 @@ class OpSimPySMTestSmooth(MPITestCase):
         weights = tod.cache.reference("weights_fake_0A")
 
         I = np.array([90.15807463, 88.68902424, 89.27413783])
-        Q = np.array([-5.08794779,  4.77494585, -4.68392748])
-        U = np.array([-8.96212276,  8.80648313, -8.76468294])
+        Q = np.array([-5.08794779, 4.77494585, -4.68392748])
+        U = np.array([-8.96212276, 8.80648313, -8.76468294])
         expected = []
         for i in range(3):
             expected.append(1.0 * I[i] + weights[i][1] * Q[i] + weights[i][2] * U[i])
