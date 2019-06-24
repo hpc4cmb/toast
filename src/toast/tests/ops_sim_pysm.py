@@ -72,7 +72,7 @@ class OpSimPySMTest(MPITestCase):
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
-        pysm_sky_config = {"synchrotron": "s1", "freefree": "f1", "ame": "a1"}
+        pysm_sky_config = ["s1", "f1", "a1"]
         bandpasses = {
             "1a": (np.linspace(20, 25, 10), np.ones(10)),
             "1b": (np.linspace(21, 26, 10), np.ones(10)),
@@ -114,7 +114,7 @@ class OpSimPySMTest(MPITestCase):
 
         # construct the PySM operator.  Pass in information needed by PySM...
 
-        pysm_sky_config = {"synchrotron": "s1", "freefree": "f1", "ame": "a1"}
+        pysm_sky_config = ["s1", "f1", "a1"]
         bandpasses = {
             "1a": (np.linspace(20, 25, 10), np.ones(10)),
             "1b": (np.linspace(21, 26, 10), np.ones(10)),
