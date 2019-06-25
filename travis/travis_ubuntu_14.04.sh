@@ -52,7 +52,7 @@ export FC=$(which gfortran${toolchain})
 source ${HOME}/virtualenv/python3.6/bin/activate
 
 # Pip install the runtime packages we need.  These are not saved in the tarball.
-pip install numpy scipy matplotlib cython astropy ephem healpy cmake
+pip install numpy scipy matplotlib cython astropy ephem healpy cmake numba toml
 
 # Set up TOAST dependencies for travis.  We use the following approach:
 #
