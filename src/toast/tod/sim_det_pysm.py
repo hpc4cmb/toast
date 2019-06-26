@@ -114,6 +114,7 @@ class OpSimPySM(Operator):
         units="K_CMB",
         debug=False,
         coord="G",
+        map_dist=None,
     ):
         # Call the parent class constructor.
         super().__init__()
@@ -134,6 +135,7 @@ class OpSimPySM(Operator):
             pysm_component_objects=pysm_component_objects,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
             units=units,
+            map_dist=map_dist,
         )
 
         self.nside = nside
@@ -203,7 +205,7 @@ class OpSimPySM(Operator):
                 ] = pysm.apply_smoothing_and_coord_transform(
                     local_maps["sky_{}".format(det)],
                     fwhm=fwhm_deg[det] * u.deg,
-                    map_dist=self.pysm_sky.sky.map_dist,
+                    map_dist=self.pysm_sky.map_dist,
                 )
                 if self.comm is not None:
                     self.comm.Barrier()
@@ -225,7 +227,7 @@ class OpSimPySM(Operator):
                 local_maps["sky_{}".format(det)],
                 np.arange(len(local_maps["sky_{}".format(det)][0]))
                 if self.comm is None
-                else self.pysm_sky.sky.map_dist.pixel_indices,
+                else self.pysm_sky.map_dist.pixel_indices,
                 n_components,
                 self.npix,
             )
