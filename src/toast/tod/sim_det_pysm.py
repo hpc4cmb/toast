@@ -125,13 +125,11 @@ class OpSimPySM(Operator):
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.coord = coord
 
-        pysm_sky_config = None if pysm_model is None else pysm_model.split(",")
-
         self.pysm_sky = PySMSky(
             comm=self.comm,
             pixel_indices=None,
             nside=nside,
-            pysm_sky_config=pysm_sky_config,
+            pysm_sky_config=pysm_model,
             pysm_component_objects=pysm_component_objects,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
             units=units,

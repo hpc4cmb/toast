@@ -1149,7 +1149,7 @@ def simulate_sky_signal(args, comm, data, mem_counter, schedules, subnpix, local
     op_sim_pysm = OpSimPySM(
         comm=comm.comm_rank,
         out=signalname,
-        pysm_model=args.input_pysm_model,
+        pysm_model=args.input_pysm_model.split(","),
         focalplanes=[s[3] for s in schedules],
         nside=args.nside,
         subnpix=subnpix,

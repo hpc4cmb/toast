@@ -133,7 +133,7 @@ def simulate_sky_signal(
     op_sim_pysm = OpSimPySM(
         comm=comm.comm_rank,
         out=signalname,
-        pysm_model=args.input_pysm_model,
+        pysm_model=args.input_pysm_model.split(","),
         pysm_precomputed_cmb_K_CMB=args.input_pysm_precomputed_cmb_K_CMB,
         focalplanes=focalplanes,
         nside=args.nside,

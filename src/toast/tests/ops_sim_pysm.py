@@ -181,7 +181,7 @@ class OpSimPySMTest(MPITestCase):
         op_sim_pysm = OpSimPySM(
             comm=self.comm,
             out="signal",
-            pysm_model="a1,f1,s1",
+            pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],
             nside=self.nside,
             subnpix=subnpix,
@@ -233,7 +233,7 @@ class OpSimPySMTestSmooth(MPITestCase):
         op_sim_pysm = OpSimPySM(
             comm=self.comm,
             out="signal",
-            pysm_model="a1,s1,f1",
+            pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],
             nside=self.nside,
             subnpix=subnpix,
