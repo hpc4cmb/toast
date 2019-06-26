@@ -31,6 +31,5 @@ install(FILES
     map_ground.py
     binned.py
     ops_sim_pysm.py
-    smooth.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

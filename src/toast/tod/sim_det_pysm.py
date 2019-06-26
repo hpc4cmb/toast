@@ -6,6 +6,9 @@ import numpy as np
 
 import healpy as hp
 
+import pysm
+import pysm.units as u
+
 from ..mpi import MPI
 
 from ..timing import function_timer
@@ -14,7 +17,7 @@ from ..utils import Logger, Timer
 
 from ..op import Operator
 
-from ..map import DistRings, PySMSky, LibSharpSmooth, DistPixels
+from ..map import PySMSky, DistPixels
 
 from .sim_det_map import OpSimScan
 
@@ -35,13 +38,16 @@ def extract_local_dets(data):
 
 @function_timer
 def assemble_map_on_rank0(comm, local_map, pixel_indices, n_components, npix):
-    full_maps_rank0 = (
-        np.zeros((n_components, npix), dtype=np.float64) if comm.rank == 0 else None
-    )
-    local_map_buffer = np.zeros((n_components, npix), dtype=np.float64)
-    local_map_buffer[:, pixel_indices] = local_map
-    comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
-    return full_maps_rank0
+    if comm is None:
+        return local_map
+    else:
+        full_maps_rank0 = (
+            np.zeros((n_components, npix), dtype=np.float64) if comm.rank == 0 else None
+        )
+        local_map_buffer = np.zeros((n_components, npix), dtype=np.float64)
+        local_map_buffer[:, pixel_indices] = local_map
+        comm.Reduce(local_map_buffer, full_maps_rank0, root=0, op=MPI.SUM)
+        return full_maps_rank0
 
 
 @function_timer
@@ -60,22 +66,35 @@ def extract_detector_parameters(det, focalplanes):
 
 
 class OpSimPySM(Operator):
-    """Operator which generates sky signal by scanning from a map.
+    """Operator which generates a bandpass integrated and smoothed sky signal with PySM 3
 
-    The signal to use should already be in a distributed pixel structure,
-    and local pointing should already exist.
+    This operator:
+    * Extracts band centers,  bandwidths and fwhm from the defined focalplane
+    * Creates a `PySMSky` object
+    * Runs `PySMSky` and gets distributed maps
+    * Performs distributed smoothing with libsharp facilities provided by PySM 3
+    * Communicates the distributed map to the first process
+    * Communicates to each of the processes their local pixels
+    * Rescans the pixels to a timeline
+
+    For PySM related arguments, see the PySMSky docstring
 
     Args:
-        distmap (DistPixels): the distributed map domain data.
-        pixels (str): the name of the cache object (<pixels>_<detector>)
-            containing the pixel indices to use.
-        weights (str): the name of the cache object (<weights>_<detector>)
-            containing the pointing weights to use.
+        comm (mpi4py.MPI.Comm): MPI communicator
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
-        units(str): Output units.
-        debug(bool):  Verbose progress reports.
-
+        focalplanes (list(dict)): List of focalplanes dictionaries with channel
+            name as key, another dictionary with keys "bandcenter_ghz", "bandwidth_ghz",
+            "fmin", "fwhm" (in arcmin)
+        nside (int): :math:`N_{side}` for PySM
+        subnpix (int): FIXME
+        localsm : FIXME
+        apply_beam (bool): Whether to perform gaussian smoothing with libsharp using the
+            fwhm defined in the focalplane
+        nest (bool): HEALPix nest or ring pixels
+        units (str): Output units.
+        debug (bool):  Verbose progress reports.
+        coord (str): Output reference frame
     """
 
     @function_timer
@@ -83,8 +102,9 @@ class OpSimPySM(Operator):
         self,
         comm=None,
         out="signal",
-        pysm_model="",
+        pysm_model=None,
         pysm_precomputed_cmb_K_CMB=None,
+        pysm_component_objects=None,
         focalplanes=None,
         nside=None,
         subnpix=None,
@@ -94,6 +114,7 @@ class OpSimPySM(Operator):
         units="K_CMB",
         debug=False,
         coord="G",
+        map_dist=None,
     ):
         # Call the parent class constructor.
         super().__init__()
@@ -102,25 +123,17 @@ class OpSimPySM(Operator):
         self.comm = comm
         self._debug = debug
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
-        self.dist_rings = DistRings(comm, nside=nside, nnz=3)
         self.coord = coord
 
-        pysm_sky_components = ["synchrotron", "dust", "freefree", "cmb", "ame"]
-        pysm_sky_config = dict()
-        for component_model in pysm_model.split(","):
-            full_component_name = [
-                each
-                for each in pysm_sky_components
-                if each.startswith(component_model[0])
-            ][0]
-            pysm_sky_config[full_component_name] = component_model
         self.pysm_sky = PySMSky(
             comm=self.comm,
-            local_pixels=self.dist_rings.local_pixels,
+            pixel_indices=None,
             nside=nside,
-            pysm_sky_config=pysm_sky_config,
+            pysm_sky_config=pysm_model,
+            pysm_component_objects=pysm_component_objects,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
             units=units,
+            map_dist=map_dist,
         )
 
         self.nside = nside
@@ -135,13 +148,6 @@ class OpSimPySM(Operator):
             local=localsm,
         )
         self.apply_beam = apply_beam
-
-    def __del__(self):
-        # Ensure that the PySMSky member is destroyed first because
-        # it contains a reference to self.dist_rings.local_pixels
-        del self.pysm_sky
-        del self.dist_rings
-        del self.distmap
 
     @function_timer
     def exec(self, data):
@@ -167,17 +173,12 @@ class OpSimPySM(Operator):
                 np.ones(N_POINTS_BANDPASS),
             )
 
-        lmax = 3 * self.nside - 1
-
         if rank == 0:
             log.debug("Collecting, Broadcasting map")
         tm = Timer()
         tm.start()
 
         for det in local_dets:
-            # FIXME: this used to be outside this loop, but there is no need for that.
-            # Actually I don't think we even need a dictionary, just the map that is
-            # output from PySMSky which we can then feed to libsharp smoothing.
             local_maps = dict()
             if self.comm is not None:
                 self.comm.Barrier()
@@ -196,25 +197,18 @@ class OpSimPySM(Operator):
                 if self.comm is not None:
                     self.comm.Barrier()
                 if rank == 0:
-                    log.debug("Initializing LibSharpSmooth on {}".format(det))
-                smooth = LibSharpSmooth(
-                    self.comm,
-                    lmax=lmax,
-                    grid=self.dist_rings.libsharp_grid,
-                    fwhm_deg=fwhm_deg[det],
-                    beam=None,
+                    log.debug("Executing Smoothing with libsharp on {}".format(det))
+                local_maps[
+                    "sky_{}".format(det)
+                ] = pysm.apply_smoothing_and_coord_transform(
+                    local_maps["sky_{}".format(det)],
+                    fwhm=fwhm_deg[det] * u.deg,
+                    map_dist=self.pysm_sky.map_dist,
                 )
                 if self.comm is not None:
                     self.comm.Barrier()
                 if rank == 0:
-                    log.debug("Executing LibSharpSmooth on {}".format(det))
-                local_maps["sky_{}".format(det)] = smooth.exec(
-                    local_maps["sky_{}".format(det)]
-                )
-                if self.comm is not None:
-                    self.comm.Barrier()
-                if rank == 0:
-                    log.debug("LibSharpSmooth completed on {}".format(det))
+                    log.debug("Smoothing completed on {}".format(det))
 
             n_components = 3
 
@@ -229,7 +223,9 @@ class OpSimPySM(Operator):
             full_map_rank0 = assemble_map_on_rank0(
                 self.comm,
                 local_maps["sky_{}".format(det)],
-                self.dist_rings.local_pixels,
+                np.arange(len(local_maps["sky_{}".format(det)][0]))
+                if self.comm is None
+                else self.pysm_sky.map_dist.pixel_indices,
                 n_components,
                 self.npix,
             )

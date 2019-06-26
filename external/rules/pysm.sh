@@ -1,1 +1,1 @@
-pip install https://github.com/bthorne93/PySM_public/archive/2.1.0.tar.gz --prefix=@AUX_PREFIX@
+pip install https://github.com/healpy/pysm/archive/master.tar.gz --prefix=@AUX_PREFIX@
