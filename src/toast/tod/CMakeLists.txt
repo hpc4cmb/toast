@@ -28,5 +28,8 @@ install(FILES
     tidas.py
     tod_math.py
     tod.py
+    spt3g_utils.py
+    tidas_utils.py
+    tidas.py
     DESTINATION ${PYTHON_SITE}/toast/tod
 )

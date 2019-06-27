@@ -1,32 +1,20 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
 from .mpi import MPITestCase
 
-import sys
 import os
-import re
 import shutil
-
-import unittest
 
 import numpy as np
 import numpy.testing as nt
 
-from ..dist import *
-
 from .. import qarray as qa
 
-from ..tod import Interval, regular_intervals, TODGround
+from ..tod import regular_intervals, TODGround
 
-from ._helpers import (
-    create_outdir,
-    create_distdata,
-    boresight_focalplane,
-    uniform_chunks,
-)
+from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
 # This file will only be imported if TIDAS is already available
 import tidas as tds
@@ -47,7 +35,7 @@ class TidasTest(MPITestCase):
         # Create observations, divided evenly between groups
         self.nobs = 4
         opg = self.nobs
-        if self.comm.size >= 2:
+        if (self.comm is not None) and (self.comm.size >= 2):
             opg = self.nobs // 2
         self.data = create_distdata(self.comm, obs_per_group=opg)
 
@@ -203,8 +191,11 @@ class TidasTest(MPITestCase):
         return
 
     def obs_init(self, obscomm, vol, name, start, first):
+        detranks = 1
+        if obscomm is not None:
+            detranks = obscomm.size
         tod = tt.TODTidas(
-            obscomm, obscomm.size, vol, "/{}".format(name), distintervals="chunks"
+            obscomm, detranks, vol, "/{}".format(name), distintervals="chunks"
         )
 
         # print("rank {}: done create TOD {}".format(self.comm.rank, name), flush=True)
@@ -239,7 +230,8 @@ class TidasTest(MPITestCase):
                     # print("rank {}: write timestamp slice".format(self.comm.rank), flush=True)
                     tod.write_times(stamps=stamps)
                 # print("rank {}: grid row barrier".format(self.comm.rank), flush=True)
-                tod.grid_comm_row.barrier()
+                if tod.grid_comm_row is not None:
+                    tod.grid_comm_row.barrier()
 
             # print("rank {}: done timestamps".format(self.comm.rank), flush=True)
 
@@ -251,7 +243,8 @@ class TidasTest(MPITestCase):
                     # print("rank {}: write boresight".format(self.comm.rank), flush=True)
                     tod.write_boresight(data=boresight)
                 # print("rank {}: bore grid row barrier".format(self.comm.rank), flush=True)
-                tod.grid_comm_row.barrier()
+                if tod.grid_comm_row is not None:
+                    tod.grid_comm_row.barrier()
 
             # Now the common flags
             for p in range(sampranks):
@@ -259,15 +252,23 @@ class TidasTest(MPITestCase):
                     # print("rank {}: write common".format(self.comm.rank), flush=True)
                     tod.write_common_flags(flags=flags)
                 # print("rank {}: com grid row barrier".format(self.comm.rank), flush=True)
-                tod.grid_comm_row.barrier()
+                if tod.grid_comm_row is not None:
+                    tod.grid_comm_row.barrier()
 
         # print("rank {}: hit tod comm barrier".format(self.comm.rank), flush=True)
-        tod.mpicomm.barrier()
+        if tod.mpicomm is not None:
+            tod.mpicomm.barrier()
         # print("rank {}: done tod comm barrier".format(self.comm.rank), flush=True)
 
         # Detector data- serialize for now
-        for p in range(tod.mpicomm.size):
-            if p == tod.mpicomm.rank:
+        groupsize = 1
+        grouprank = 0
+        if tod.mpicomm is not None:
+            groupsize = tod.mpicomm.size
+            grouprank = tod.mpicomm.rank
+
+        for p in range(groupsize):
+            if p == grouprank:
                 fakedata = np.empty(n, dtype=np.float64)
                 for d in tod.local_dets:
                     # get unique detector index and convert to float
@@ -281,7 +282,8 @@ class TidasTest(MPITestCase):
                     # write detector flags
                     tod.write_flags(detector=d, flags=flags)
             # print("rank {}: write det barrier".format(self.comm.rank), flush=True)
-            tod.mpicomm.barrier()
+            if tod.mpicomm is not None:
+                tod.mpicomm.barrier()
 
         del tod
 
@@ -359,20 +361,32 @@ class TidasTest(MPITestCase):
         return
 
     def volume_init(self, path):
-        if self.comm.rank == 0:
+        rank = 0
+        grouprank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+            grouprank = self.data.comm.group_rank
+        if rank == 0:
             if os.path.isdir(path):
                 shutil.rmtree(path)
-        self.comm.barrier()
+        if self.comm is not None:
+            self.comm.barrier()
 
         # print("rank {}: creating volume".format(self.comm.rank), flush=True)
         # Create the volume on the world communicator
-        vol = MPIVolume(
-            self.data.comm.comm_world,
-            path,
-            tds.BackendType.hdf5,
-            tds.CompressionType.none,
-            dict(),
-        )
+        vol = None
+        if self.comm is None:
+            vol = tds.Volume(
+                path, tds.BackendType.hdf5, tds.CompressionType.none, dict()
+            )
+        else:
+            vol = MPIVolume(
+                self.data.comm.comm_world,
+                path,
+                tds.BackendType.hdf5,
+                tds.CompressionType.none,
+                dict(),
+            )
         del vol
         # print("rank {}: creating volume done".format(self.comm.rank), flush=True)
         # Usually for real data we will have a hierarchy of blocks
@@ -384,17 +398,24 @@ class TidasTest(MPITestCase):
 
         for pgrp in range(self.data.comm.ngroups):
             if pgrp == self.data.comm.group:
-                vol = MPIVolume(self.data.comm.comm_group, path, tds.AccessMode.write)
+                vol = None
+                if self.comm is None:
+                    vol = tds.Volume(path, tds.AccessMode.write)
+                else:
+                    vol = MPIVolume(
+                        self.data.comm.comm_group, path, tds.AccessMode.write
+                    )
 
                 # One process from each group creates the observations
                 for ob in range(len(self.data.obs)):
                     obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
                     start = ob * self.obstotal
                     first = ob * self.obstotalsamp
-                    if self.data.comm.comm_group.rank == 0:
+                    if grouprank == 0:
                         self.obs_create(vol, obsname, ob, start, first)
 
-                vol.meta_sync()
+                if self.comm is not None:
+                    vol.meta_sync()
 
                 for ob in range(len(self.data.obs)):
                     obsname = "obs_{}_{:02d}".format(self.data.comm.group, ob)
@@ -403,10 +424,12 @@ class TidasTest(MPITestCase):
                     # print("rank {}: init obs {}".format(self.comm.rank, obsname), flush=True)
                     self.obs_init(self.data.comm.comm_group, vol, obsname, start, first)
 
-                vol.meta_sync()
+                if self.comm is not None:
+                    vol.meta_sync()
                 del vol
 
-            self.comm.barrier()
+            if self.comm is not None:
+                self.comm.barrier()
 
         return
 
@@ -438,7 +461,11 @@ class TidasTest(MPITestCase):
         return
 
     def volume_verify(self, path, detgroup="detectors", ignore_last=False):
-        vol = MPIVolume(self.data.comm.comm_world, path, tds.AccessMode.read)
+        vol = None
+        if self.comm is None:
+            vol = tds.Volume(path, tds.AccessMode.read)
+        else:
+            vol = MPIVolume(self.data.comm.comm_world, path, tds.AccessMode.read)
         root = vol.root()
 
         for ob in range(len(self.data.obs)):
@@ -468,6 +495,9 @@ class TidasTest(MPITestCase):
         return
 
     def test_export(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         self.volume_init(self.outvol)
 
         distdata = tt.load_tidas(
@@ -480,10 +510,11 @@ class TidasTest(MPITestCase):
             distintervals="chunks",
         )
 
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(self.export):
                 shutil.rmtree(self.export)
-        self.comm.barrier()
+        if self.comm is not None:
+            self.comm.barrier()
 
         # NOTE:  the use_todchunks option will take the distribution chunks
         # of the TOD and create a set of intervals in the volume.  These
@@ -527,14 +558,18 @@ class TidasTest(MPITestCase):
         return
 
     def test_ground(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
         # Create simulated tods in memory
         self.init_ground()
 
         # Export this
-        if self.comm.rank == 0:
+        if rank == 0:
             if os.path.isdir(self.groundexport):
                 shutil.rmtree(self.groundexport)
-        self.comm.barrier()
+        if self.comm is not None:
+            self.comm.barrier()
 
         dumper = tt.OpTidasExport(
             self.groundexport, tt.TODTidas, backend="hdf5", use_todchunks=True

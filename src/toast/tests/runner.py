@@ -53,14 +53,16 @@ from . import tod_satellite as testtodsat
 
 from . import ops_sim_pysm as testopspysm
 
-# from ..tod import tidas_available
-# if tidas_available:
-#     from . import tidas as testtidas
-#
+from ..tod import tidas_available
+
+if tidas_available:
+    from . import tidas as testtidas
+
 # from ..tod import spt3g_available
 # if spt3g_available:
 #     from . import spt3g as testspt3g
-#
+testspt3g = None
+spt3g_available = False
 
 
 def test(name=None, verbosity=2):
@@ -119,10 +121,10 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         suite.addTest(loader.loadTestsFromModule(testopspysm))
-        # if tidas_available:
-        #     suite.addTest( loader.loadTestsFromModule(testtidas) )
-        # if spt3g_available:
-        #     suite.addTest( loader.loadTestsFromModule(testspt3g) )
+        if tidas_available:
+            suite.addTest(loader.loadTestsFromModule(testtidas))
+        if spt3g_available:
+            suite.addTest(loader.loadTestsFromModule(testspt3g))
     elif name != "libtoast":
         if (name == "tidas") and (not tidas_available):
             print("Cannot run TIDAS tests- package not available")

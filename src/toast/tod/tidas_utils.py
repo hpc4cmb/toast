@@ -1,29 +1,13 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, MPILock
-
-import sys
-import os
-import re
-
-import numpy as np
-
-from .. import qarray as qa
-from .. import timing as timing
-
-from ..dist import Data, distribute_discrete
-from ..op import Operator
-
-from .tod import TOD
-from .interval import Interval, intervals_to_chunklist
 
 available = True
 try:
     import tidas as tds
     from tidas.mpi import MPIVolume
-except:
+except ImportError:
     available = False
 
 

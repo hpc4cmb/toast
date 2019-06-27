@@ -29,3 +29,64 @@ Example
 -----------
 
 .. literalinclude:: ../examples/toast_example_dist.py
+
+
+
+
+NOTES:
+
+- Consider separately the "data" organization and the "process" organization.
+
+- Data consists of some number of observations, each of which has many frames,
+  where each frame has many detectors.
+
+- Different ways of mapping the data onto the processes, and the resulting
+  data that ends up on one of the processes (rank 0):
+
+    - one group, groupsize 1.  A single group has all observations.
+
+      --> rank 0 has all data in all observations.  This serial case only works
+          for a small number of short observations...
+
+    - one group, groupsize n_world.  A single group has all observations.
+
+        grid size within an observation:
+
+        - detranks = 1
+
+          --> rank 0 has some number of complete frames at the start of EVERY
+              observation.
+
+        - detranks = n_world
+
+          --> rank 0 has a subset of detectors from all frames across ALL
+              observations.
+
+        - detranks = something else
+
+          --> rank 0 has a subset of detectors from some number of frames at the
+              start of EVERY observation.
+
+    - N groups, groupsize 1 (N groups must be >= number of observations)
+
+      --> rank 0 has all data from some number of complete observations.
+          This only works if the "observations" are small...
+
+    - N groups, groupsize m (N groups must be >= number of observations)
+
+        grid size within an observation:
+
+        - detranks = 1
+
+        --> rank 0 has some number of complete frames at the start of SOME
+            observations.
+
+        - detranks = m
+
+        --> rank 0 has a subset of detectors from all frames across SOME
+            observations.
+
+        - detranks = something else
+
+        --> rank 0 has a subset of detectors from some number of frames at the
+            start of SOME observations.

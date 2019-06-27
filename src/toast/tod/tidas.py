@@ -1,17 +1,18 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, MPILock
+from ..mpi import MPI
 
-import sys
 import os
 import re
 
 import numpy as np
 
 from .. import qarray as qa
-from .. import timing as timing
+
+from ..utils import Logger
+from ..timing import function_timer, Timer
 
 from ..dist import Data, distribute_discrete
 from ..op import Operator
@@ -24,7 +25,7 @@ try:
     import tidas as tds
     from tidas.mpi import MPIVolume
     from . import tidas_utils as tdsutils
-except:
+except ImportError:
     available = False
 
 
@@ -86,6 +87,7 @@ class TODTidas(TOD):
     # compression, we should move the flags to a separate group:
     #   https://github.com/hpc4cmb/tidas/issues/13
 
+    @function_timer
     def __init__(
         self,
         mpicomm,
@@ -97,11 +99,14 @@ class TODTidas(TOD):
         detbreaks=None,
         distintervals=None,
     ):
-
         if not available:
             raise RuntimeError("tidas is not available")
+        rank = 0
+        if mpicomm is not None:
+            rank = mpicomm.rank
 
-        tm = MPI.Wtime()
+        tmr = Timer()
+        tmr.start()
 
         # We keep a handle to the volume
         self._vol = vol
@@ -120,9 +125,10 @@ class TODTidas(TOD):
         # Get the existing group and interval names
         grpnames = tmpblock.group_names()
 
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas open block {}".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear("TODTidas open block {}".format(self._blockname))
 
         # Read detectors and focalplane offsets
 
@@ -148,9 +154,10 @@ class TODTidas(TOD):
         del fpgrp
 
         self._detlist = sorted(list(self._detquats.keys()))
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas read fp group {}".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear("TODTidas read fp group {}".format(self._blockname))
 
         # Read detector data group properties and size.
 
@@ -166,9 +173,12 @@ class TODTidas(TOD):
 
         self._samples = tmpdgrp.size()
         meta = tdsutils.to_dict(tmpdgrp.dictionary())
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas read det data group {} meta".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear(
+                "TODTidas read det data group {} meta".format(self._blockname)
+            )
 
         # See whether we have ground based data
 
@@ -179,9 +189,10 @@ class TODTidas(TOD):
             self._have_azel = True
         del fields
         del schm
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas check {} azel".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear("TODTidas check {} azel".format(self._blockname))
 
         # We need to assign a unique integer index to each detector.  This
         # is used when seeding the streamed RNG in order to simulate
@@ -203,9 +214,10 @@ class TODTidas(TOD):
                 )
             self._detindx[det] = uid
 
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas make {} detindx".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear("TODTidas make {} detindx".format(self._blockname))
 
         # Create an MPI lock to use for writing to the TIDAS volume.  We must
         # have only one writing process at a time.  Note that this lock is over
@@ -230,9 +242,10 @@ class TODTidas(TOD):
                 distint = tmpblock.intervals_get(distintervals)
                 # Rank zero process reads and broadcasts intervals
                 intervals = None
-                if mpicomm.rank == 0:
+                if rank == 0:
                     intervals = distint.read()
-                intervals = mpicomm.bcast(intervals, root=0)
+                if mpicomm is not None:
+                    intervals = mpicomm.bcast(intervals, root=0)
                 # Compute the contiguous spans of time for data distribution
                 # based on the starting points of all intervals.
                 sampsizes = intervals_to_chunklist(intervals, self._samples)
@@ -242,9 +255,10 @@ class TODTidas(TOD):
                 # This must be an explicit list
                 sampsizes = list(distintervals)
 
-        tm = self._elapsed(
-            mpicomm, tm, "TODTidas read {} chunks".format(self._blockname)
-        )
+        if mpicomm is not None:
+            mpicomm.barrier()
+        if rank == 0:
+            tmr.report_clear("TODTidas read {} chunks".format(self._blockname))
 
         # Delete our temp handles
         del tmpdgrp
@@ -331,6 +345,9 @@ class TODTidas(TOD):
             units (str):  The units of the detector timestreams.
 
         """
+        tmr = Timer()
+        tmr.start()
+
         # Get a handle to the observation node
         pfields = path.split("/")
         parent = "/".join(pfields[0:-1])
@@ -349,38 +366,34 @@ class TODTidas(TOD):
         if (detectors is None) or (samples is None):
             raise RuntimeError("detectors and samples must be specified")
 
-        tm = MPI.Wtime()
-
         # Focalplane group.  If this group already exists, verify that its
         # data agrees with what we are passing in.
 
         if group_fp in grpnames:
             fpgrp = block.group_get(group_fp)
-            tm = cls._elapsed(None, tm, "create {} fp group get".format(blockname))
+            tmr.report_clear("create {} fp group get".format(blockname))
             for d in sorted(detectors.keys()):
                 check = fpgrp.read(d, 0, 4)
                 if not np.allclose(detectors[d], check):
                     raise RuntimeError(
                         "existing focalplane offset for {} " "does not match".format(d)
                     )
-            tm = cls._elapsed(None, tm, "create {} fp group read".format(blockname))
+            tmr.report_clear("create {} fp group read".format(blockname))
             del fpgrp
         else:
             # Create the FP schema
             schm = cls._create_fp_schema(list(sorted(detectors.keys())))
-            tm = cls._elapsed(None, tm, "create {} fp schema".format(blockname))
+            tmr.report_clear("create {} fp schema".format(blockname))
 
             # Create the FP group
             g = block.group_add(group_fp, tds.Group(schm, tds.Dictionary(), 4))
-            tm = cls._elapsed(None, tm, "create {} fp group add".format(blockname))
+            tmr.report_clear("create {} fp group add".format(blockname))
 
             # Write the FP offsets
             for d in sorted(detectors.keys()):
                 g.write(d, 0, np.ascontiguousarray(detectors[d]))
 
-            tm = cls._elapsed(
-                None, tm, "create {} fp group write offsets".format(blockname)
-            )
+            tmr.report_clear("create {} fp group write offsets".format(blockname))
 
             del schm
             del g
@@ -389,17 +402,17 @@ class TODTidas(TOD):
 
         # Detector data group properties
         gprops = tdsutils.from_dict(meta)
-        tm = cls._elapsed(None, tm, "create {} det gprops".format(blockname))
+        tmr.report_clear("create {} det gprops".format(blockname))
 
         # Create the detector data schema
         schm = cls._create_det_schema(
             list(sorted(detectors.keys())), tds.DataType.float64, units, azel
         )
-        tm = cls._elapsed(None, tm, "create {} det schema".format(blockname))
+        tmr.report_clear("create {} det schema".format(blockname))
 
         # Create the detector data group
         g = block.group_add(group_dets, tds.Group(schm, gprops, samples))
-        tm = cls._elapsed(None, tm, "create {} det group add".format(blockname))
+        tmr.report_clear("create {} det group add".format(blockname))
 
         del schm
         del gprops
@@ -475,17 +488,6 @@ class TODTidas(TOD):
             fields.append(tds.Field(d, tds.DataType.float64, "NA"))
         return tds.Schema(fields)
 
-    @staticmethod
-    def _elapsed(mpicomm, start, msg):
-        if mpicomm is not None:
-            mpicomm.barrier()
-        stop = MPI.Wtime()
-        dur = stop - start
-        if (mpicomm is None) or (mpicomm.rank == 0):
-            pass
-            # print("{}: {:.3f} s".format(msg, dur), flush=True)
-        return stop
-
     @property
     def volume(self):
         """The open TIDAS volume in use by this TOD.
@@ -526,12 +528,12 @@ class TODTidas(TOD):
         """
         return dict(self._detquats)
 
+    @function_timer
     def _read_cache_helper(self, prefix, comps, start, n, usecache):
         """
         Helper function to read multi-component data, pack into an
         array, optionally cache it, and return.
         """
-        autotimer = timing.auto_timer(type(self).__name__)
         # Number of components we have
         ncomp = len(comps)
 
@@ -761,9 +763,9 @@ class TODTidas(TOD):
         return
 
 
+@function_timer
 def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
-    """
-    Loads an existing TOAST dataset in TIDAS format.
+    """Loads an existing TOAST dataset in TIDAS format.
 
     This takes a 2-level TOAST communicator and opens an existing TIDAS
     volume using the global communicator.  The opened volume handle is stored
@@ -802,7 +804,6 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
     if not available:
         raise RuntimeError("tidas is not available")
         return None
-    autotimer = timing.auto_timer()
     # the global communicator
     cworld = comm.comm_world
     # the communicator within the group
@@ -810,6 +811,10 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
     # the communicator with all processes with
     # the same rank within their group
     crank = comm.comm_rank
+
+    rank = 0
+    if cworld is not None:
+        rank = cworld.rank
 
     # Collectively open the volume.  We cannot use a context manager here,
     # since we are keeping a handle to the volume around for future use.
@@ -822,7 +827,11 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
         tm = tds.AccessMode.write
     else:
         tm = tds.AccessMode.read
-    vol = MPIVolume(cworld, path, tm)
+    vol = None
+    if cworld is None:
+        vol = tds.Volume(path, tm)
+    else:
+        vol = MPIVolume(cworld, path, tm)
 
     # Traverse the blocks of the volume and get the properties of the
     # observations so we can distribute them.
@@ -856,7 +865,7 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
         del chld
         return
 
-    if cworld.rank == 0:
+    if rank == 0:
         root = vol.root()
         toplist = root.block_names()
         bk = None
@@ -866,9 +875,10 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
         del bk
         del root
 
-    obslist = cworld.bcast(obslist, root=0)
-    obspath = cworld.bcast(obspath, root=0)
-    obsweight = cworld.bcast(obsweight, root=0)
+    if cworld is not None:
+        obslist = cworld.bcast(obslist, root=0)
+        obspath = cworld.bcast(obspath, root=0)
+        obsweight = cworld.bcast(obsweight, root=0)
 
     # Distribute observations based on number of samples
 
@@ -924,8 +934,7 @@ def load_tidas(comm, detranks, path, mode, groupname, todclass, **kwargs):
 
 
 class OpTidasExport(Operator):
-    """
-    Operator which writes data to a TIDAS volume.
+    """Operator which writes data to a TIDAS volume.
 
     The volume is created at construction time, and the full metadata
     path inside the volume can be given for each observation.  If not given,
@@ -1025,9 +1034,9 @@ class OpTidasExport(Operator):
         # We call the parent class constructor
         super().__init__()
 
+    @function_timer
     def exec(self, data):
-        """
-        Export data to a TIDAS volume.
+        """Export data to a TIDAS volume.
 
         Each group will write its list of observations as TIDAS blocks.
 
@@ -1040,6 +1049,7 @@ class OpTidasExport(Operator):
             data (toast.Data): The distributed data.
 
         """
+        log = Logger.get()
         # the two-level toast communicator
         comm = data.comm
         # the global communicator
@@ -1050,81 +1060,97 @@ class OpTidasExport(Operator):
         # the same rank within their group
         crank = comm.comm_rank
 
+        worldrank = 0
+        if cworld is not None:
+            worldrank = cworld.rank
+        grouprank = 0
+        if cgroup is not None:
+            grouprank = cgroup.rank
+
         create = None
 
-        def elapsed(mcomm, start, msg):
-            mcomm.barrier()
-            stop = MPI.Wtime()
-            dur = stop - start
-            if mcomm.rank == 0:
-                pass
-                # print("{}: {:.3f} s".format(msg, dur), flush=True)
-            return stop
-
-        tm = MPI.Wtime()
+        tmr = Timer()
+        tmr.start()
 
         # Handle for the volume.
         vol = None
 
         # One process checks the path and creates the volume if needed.
-        if cworld.rank == 0:
+        if worldrank == 0:
             if os.path.isdir(self._path):
                 # We are appending
                 if self._backend is not None:
-                    print(
-                        "TIDAS volume {} already exists, but a backend "
-                        "format was specified, which indicates a new volume"
-                        " should be created.".format(self._path),
-                        flush=True,
+                    msg = "TIDAS volume {} already exists, but a backend format was specified, which indicates a new volume should be created.".format(
+                        self._path
                     )
-                    cworld.Abort()
+                    log.error(msg)
+                    if cworld is None:
+                        raise RuntimeError(msg)
+                    else:
+                        cworld.Abort()
                 create = False
             else:
                 # We are creating a new volume.
                 if self._backend is None:
-                    print(
-                        "TIDAS volume {} does not exist, and a backend "
-                        "format was not specified.".format(self._path),
-                        flush=True,
+                    msg = "TIDAS volume {} does not exist, and a backend format was not specified.".format(
+                        self._path
                     )
-                    cworld.Abort()
+                    log.error(msg)
+                    if cworld is None:
+                        raise RuntimeError(msg)
+                    else:
+                        cworld.Abort()
                 create = True
                 vol = tds.Volume(self._path, self._backend, self._comp, self._backopts)
                 del vol
-        create = cworld.bcast(create, root=0)
+        if cworld is not None:
+            create = cworld.bcast(create, root=0)
 
-        tm = elapsed(cworld, tm, "Check path / create volume")
+        if cworld is not None:
+            cworld.barrier()
+        if worldrank == 0:
+            tmr.report_clear("TIDAS:  Check path / create volume")
 
         # All processes open the volume.  Note:  we *might* be exporting a new
         # detector group from a toast.Data instance that is already using this
         # volume.  In this case, we need to not modify existing metadata in
         # the volume and only add our new group.
 
-        vol = MPIVolume(cworld, self._path, tds.AccessMode.write)
-        tm = elapsed(cworld, tm, "World open vol")
+        if cworld is None:
+            vol = tds.Volume(self._path, tds.AccessMode.write)
+        else:
+            vol = MPIVolume(cworld, self._path, tds.AccessMode.write)
+
+        if cworld is not None:
+            cworld.barrier()
+        if worldrank == 0:
+            tmr.report_clear("TIDAS:  world open volume")
 
         # The rank zero process in each group creates or checks the observation
         # blocks and creates the TOD groups.
 
-        if cgroup.rank == 0:
+        if grouprank == 0:
             for obs in data.obs:
                 # The existing TOD
                 oldtod = obs["tod"]
 
                 # Sanity check- the group communicator should be the same
-                comp = MPI.Comm.Compare(oldtod.mpicomm, cgroup)
-                if comp not in (MPI.IDENT, MPI.CONGRUENT):
-                    print(
-                        "On export, original TOD comm is different from "
-                        "group comm ({})".format(comp),
-                        flush=True,
-                    )
-                    cworld.Abort()
+                if cgroup is not None:
+                    comp = MPI.Comm.Compare(oldtod.mpicomm, cgroup)
+                    if comp not in (MPI.IDENT, MPI.CONGRUENT):
+                        msg = "On export, original TOD comm is different from group comm ({})".format(
+                            comp
+                        )
+                        log.error(msg)
+                        cworld.Abort()
 
                 # Get the name
                 if "name" not in obs:
-                    print("observation does not have a name, cannot export", flush=True)
-                    cworld.Abort()
+                    log.error("observation does not have a name, cannot export")
+                    if cgroup is None:
+                        raise RuntimeError()
+                    else:
+                        cworld.Abort()
                 obsname = obs["name"]
 
                 # Get the metadata path
@@ -1235,18 +1261,28 @@ class OpTidasExport(Operator):
                     **self._create_opts
                 )
 
-        tm = elapsed(cworld, tm, "Create obs groups and intervals")
+        if cworld is not None:
+            cworld.barrier()
+        if worldrank == 0:
+            tmr.report_clear("TIDAS:  Create obs groups and intervals")
+
         # print("group {} meta sync".format(comm.group), flush=True)
-        vol.meta_sync()
+        if cworld is not None:
+            vol.meta_sync()
         del vol
+
         # Now all metadata is written to disk and synced between processes.
-        tm = elapsed(cworld, tm, "World volume sync")
+        if cworld is not None:
+            cworld.barrier()
+        if worldrank == 0:
+            tmr.report_clear("TIDAS:  World volume sync")
 
         # Every process group copies their TOD data for each observation.
 
-        wtm = MPI.Wtime()
-
-        vol = MPIVolume(cgroup, self._path, tds.AccessMode.write)
+        if cworld is None:
+            vol = tds.Volume(self._path, tds.AccessMode.write)
+        else:
+            vol = MPIVolume(cgroup, self._path, tds.AccessMode.write)
 
         for obs in data.obs:
             # Get the name
@@ -1281,7 +1317,12 @@ class OpTidasExport(Operator):
                     tintr.write(ilist)
                     del tintr
                     del ilist
-                tm = elapsed(cgroup, tm, "Group write obs {} intervals".format(obsname))
+                if cgroup is not None:
+                    cgroup.barrier()
+                if grouprank == 0:
+                    tmr.report_clear(
+                        "TIDAS:  Group write obs {} intervals".format(obsname)
+                    )
             else:
                 # We are using the TOD chunks and the timestamps to build
                 # the intervals.  Gather the timestamps to the root process
@@ -1289,7 +1330,11 @@ class OpTidasExport(Operator):
                 if rankdet == 0:
                     psize = oldtod.local_samples[1]
                     pdata = oldtod.read_times()
-                    psizes = oldtod.grid_comm_row.gather(psize, root=0)
+                    psizes = None
+                    if oldtod.grid_comm_row is None:
+                        psizes = [psize]
+                    else:
+                        psizes = oldtod.grid_comm_row.gather(psize, root=0)
                     disp = None
                     stamps = None
                     if ranksamp == 0:
@@ -1301,9 +1346,12 @@ class OpTidasExport(Operator):
                         # allocate receive buffer
                         stamps = np.zeros(np.sum(psizes), dtype=np.float64)
 
-                    oldtod.grid_comm_row.Gatherv(
-                        pdata, [stamps, psizes, disp, MPI.DOUBLE], root=0
-                    )
+                    if oldtod.grid_comm_row is None:
+                        stamps[:] = pdata
+                    else:
+                        oldtod.grid_comm_row.Gatherv(
+                            pdata, [stamps, psizes, disp, MPI.DOUBLE], root=0
+                        )
 
                     if ranksamp == 0:
                         ilist = []
@@ -1319,9 +1367,12 @@ class OpTidasExport(Operator):
                         tintr.write(ilist)
                         del tintr
                         del ilist
-                tm = elapsed(
-                    cgroup, tm, "Group write {} chunk intervals".format(obsname)
-                )
+                if cgroup is not None:
+                    cgroup.barrier()
+                if grouprank == 0:
+                    tmr.report_clear(
+                        "TIDAS:  Group write {} chunk intervals".format(obsname)
+                    )
 
             del tob
 
@@ -1334,7 +1385,10 @@ class OpTidasExport(Operator):
                     obs["intervals"], oldtod.total_samples
                 )
 
-            tm = elapsed(cgroup, tm, "Group compute {} sampsizes".format(obsname))
+            if cgroup is not None:
+                cgroup.barrier()
+            if grouprank == 0:
+                tmr.report_clear("TIDAS:  Group compute {} sampsizes".format(obsname))
 
             # The new TIDAS TOD.  Note:  the TOD instance will maintain
             # a handle on the volume for its lifetime.
@@ -1352,7 +1406,10 @@ class OpTidasExport(Operator):
             )
             # print("export:  done construct tod at {}".format(obsdir), flush=True)
 
-            tm = elapsed(cgroup, tm, "Group instantiate {} TOD".format(obsname))
+            if cgroup is not None:
+                cgroup.barrier()
+            if grouprank == 0:
+                tmr.report_clear("TIDAS:  Group instantiate {} TOD".format(obsname))
 
             # Sanity check that the process grids are the same
             new_detranks, new_sampranks = tod.grid_size
@@ -1364,15 +1421,21 @@ class OpTidasExport(Operator):
                 or (new_rankdet != rankdet)
                 or (new_ranksamp != ranksamp)
             ):
-                print(
-                    "During export to obs ({}), process grid shape mismatch".format(
-                        obsname
-                    ),
-                    flush=True,
+                msg = "TIDAS: During export to obs ({}), process grid shape mismatch".format(
+                    obsname
                 )
-                cworld.Abort()
+                log.error(msg)
+                if cgroup is None:
+                    raise RuntimeError(msg)
+                else:
+                    cgroup.Abort()
 
-            tm = elapsed(cgroup, tm, "Group check TOD {} process grid".format(obsname))
+            if cgroup is not None:
+                cgroup.barrier()
+            if grouprank == 0:
+                tmr.report_clear(
+                    "TIDAS:  Group check TOD {} process grid".format(obsname)
+                )
 
             # Some data is common across all processes that share the same
             # time span (timestamps, boresight pointing, common flags).
@@ -1398,17 +1461,24 @@ class OpTidasExport(Operator):
                             ref = oldtod.cache.reference(self._cache_common)
                             tod.write_common_flags(flags=ref)
                             del ref
-                    tod.grid_comm_row.barrier()
+                    if tod.grid_comm_row is not None:
+                        tod.grid_comm_row.barrier()
 
-            tm = elapsed(
-                cgroup, tm, "Group write {} timestamps and boresight".format(obsname)
-            )
+            if cgroup is not None:
+                cgroup.barrier()
+            if grouprank == 0:
+                tmr.report_clear(
+                    "TIDAS:  Group write {} timestamps and boresight".format(obsname)
+                )
 
             # print("export:  finish common copy for {}".format(obsdir), flush=True)
 
             # Now every process takes turns writing their unique data
-            for p in range(cgroup.size):
-                if p == cgroup.rank:
+            groupsize = 1
+            if cgroup is not None:
+                groupsize = cgroup.size
+            for p in range(groupsize):
+                if p == grouprank:
                     for d in oldtod.local_dets:
                         if self._cache_name is None:
                             tod.write(detector=d, data=oldtod.read(detector=d))
@@ -1428,11 +1498,13 @@ class OpTidasExport(Operator):
                             )
                             tod.write_flags(detector=d, flags=ref)
                             del ref
+                if cgroup is not None:
+                    cgroup.barrier()
+
+            if cgroup is not None:
                 cgroup.barrier()
-
-            tm = elapsed(cgroup, tm, "Group write {} data".format(obsname))
-
-            # print("export:  finish det copy for {}".format(obsdir), flush=True)
+            if grouprank == 0:
+                tmr.report_clear("TIDAS:  Group write {} data".format(obsname))
 
             del tod
 

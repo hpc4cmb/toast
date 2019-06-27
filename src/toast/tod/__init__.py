@@ -63,7 +63,7 @@ from .tod_math import (
 )
 
 # from .conviqt import OpSimConviqt
-#
-# from .tidas import available as tidas_available
-#
-# from .spt3g_utils import available as spt3g_available
+
+from .tidas import available as tidas_available
+
+from .spt3g_utils import available as spt3g_available
