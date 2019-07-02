@@ -733,7 +733,7 @@ def load_focalplanes(args, comm, schedules):
     # Load focalplane information
 
     focalplanes = []
-    if comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         ftmr = Timer()
         for fpfile in args.fp.split(","):
             ftmr.start()
@@ -830,7 +830,7 @@ def get_breaks(comm, all_ces, nces, args):
 
     nbreak = len(breaks)
     if nbreak < comm.ngroups - 1:
-        if comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             print(
                 "WARNING: there are more process groups than observing days. "
                 "Will try distributing by observation.",
@@ -1186,7 +1186,7 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
         npix = 12 * args.nside ** 2
 
         # Scan the sky signal
-        if comm.comm_world.rank == 0 and not os.path.isfile(args.input_map):
+        if comm.world_rank == 0 and not os.path.isfile(args.input_map):
             raise RuntimeError("Input map does not exist: {}".format(args.input_map))
         distmap = DistPixels(
             comm=comm.comm_world,
@@ -1203,11 +1203,12 @@ def scan_sky_signal(args, comm, data, mem_counter, localsm, subnpix):
         signalname = "signal"
         mem_counter.exec(data)
 
-    if comm.comm_world is not None:
-        comm.comm_world.barrier()
-    tmr.stop()
-    if comm.world_rank == 0:
-        tmr.report("Read and sample map")
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        tmr.stop()
+        if comm.world_rank == 0:
+            tmr.report("Read and sample map")
+
     return signalname
 
 
@@ -1584,7 +1585,7 @@ def apply_groundfilter(args, comm, data, mem_counter, totalname_freq):
     tmr = Timer()
     if args.wbin_ground:
         tmr.start()
-        if comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             log.info("Ground filtering signal")
         groundfilter = OpGroundFilter(
             wbin=args.wbin_ground,
@@ -1679,7 +1680,7 @@ def get_time_communicators(comm, data):
     seasons = np.array(comm.comm_world.allgather(my_season))
     do_seasons = np.any(seasons != my_season)
     if do_seasons:
-        season_comm = comm.comm_world.Split(my_season, comm.comm_world.rank)
+        season_comm = comm.comm_world.Split(my_season, comm.world_rank)
         time_comms.append((str(my_season), season_comm))
 
     # Split the communicator to make daily maps.  We could easily split
@@ -1690,7 +1691,7 @@ def get_time_communicators(comm, data):
     days = np.array(comm.comm_world.allgather(my_day))
     do_days = np.any(days != my_day)
     if do_days:
-        day_comm = comm.comm_world.Split(my_day, comm.comm_world.rank)
+        day_comm = comm.comm_world.Split(my_day, comm.world_rank)
         time_comms.append((my_date, day_comm))
 
     return time_comms
