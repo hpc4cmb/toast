@@ -42,22 +42,23 @@ double mean(std::vector <double> vec) {
     return sum / vec.size();
 }
 
-toast::tatm::sim::sim(double azmin, double azmax, double elmin, double elmax,
-                      double tmin, double tmax,
-                      double lmin_center, double lmin_sigma,
-                      double lmax_center, double lmax_sigma,
-                      double w_center, double w_sigma,
-                      double wdir_center, double wdir_sigma,
-                      double z0_center, double z0_sigma,
-                      double T0_center, double T0_sigma,
-                      double zatm, double zmax,
-                      double xstep, double ystep, double zstep,
-                      long nelem_sim_max,
-                      int verbosity, MPI_Comm comm,
-                      uint64_t key1, uint64_t key2,
-                      uint64_t counterval1, uint64_t counterval2, char * cachedir,
-                      double rmin, double rmax
-                      )
+toast::mpi_atm_sim::mpi_atm_sim(double azmin, double azmax, double elmin, double elmax,
+                                double tmin, double tmax,
+                                double lmin_center, double lmin_sigma,
+                                double lmax_center, double lmax_sigma,
+                                double w_center, double w_sigma,
+                                double wdir_center, double wdir_sigma,
+                                double z0_center, double z0_sigma,
+                                double T0_center, double T0_sigma,
+                                double zatm, double zmax,
+                                double xstep, double ystep, double zstep,
+                                long nelem_sim_max,
+                                int verbosity, MPI_Comm comm,
+                                uint64_t key1, uint64_t key2,
+                                uint64_t counterval1, uint64_t counterval2,
+                                std::string cachedir,
+                                double rmin, double rmax
+                                )
     : comm(comm), cachedir(cachedir),
     verbosity(verbosity),
     key1(key1), key2(key2),
@@ -174,54 +175,54 @@ toast::tatm::sim::sim(double azmin, double azmax, double elmin, double elmax,
                                              // LDL'
 }
 
-toast::tatm::sim::~sim() {
+toast::mpi_atm_sim::~sim() {
     if (compressed_index) delete compressed_index;
     if (full_index) delete full_index;
     if (realization) delete realization;
     cholmod_finish(chcommon);
 }
 
-void toast::tatm::sim::print() {
+void toast::mpi_atm_sim::print(std::ostream & out) const {
     for (int i = 0; i < ntask; ++i) {
         MPI_Barrier(comm);
         if (rank != i) continue;
-        std::cerr << rank << " : comm = " << comm << std::endl;
-        std::cerr << rank << " : cachedir " << cachedir << std::endl;
-        std::cerr << rank << " : ntask = " << ntask
-                  << ", nthread = " << nthread << std::endl;
-        std::cerr << rank << " : verbosity = " << verbosity
-                  << ", key1 = " << key1
-                  << ", key2 = " << key2
-                  << ", counter1 = " << counter1
-                  << ", counter2 = " << counter2
-                  << ", counter1start = " << counter1start
-                  << ", counter2start = " << counter2start << std::endl;
-        std::cerr << rank << " : azmin = " << azmin
-                  << ", axmax = " << azmax
-                  << ", elmin = " << elmin
-                  << ", elmax = " << elmax
-                  << ", tmin = " << tmin
-                  << ", tmax = " << tmax
-                  << ", sinel0 = " << sinel0
-                  << ", cosel0 = " << cosel0
-                  << ", tanmin = " << tanmin
-                  << ", tanmax = " << tanmax << std::endl;
-        std::cerr << rank << " : lmin_center = " << lmin_center
-                  << ", lmax_center = " << lmax_center
-                  << ", w_center = " << w_center
-                  << ", w_sigma = " << w_sigma
-                  << ", wdir_center = " << wdir_center
-                  << ", wdir_sigma = " << wdir_sigma
-                  << ", z0_center = " << z0_center
-                  << ", z0_sigma = " << z0_sigma
-                  << ", T0_center = " << T0_center
-                  << ", T0_sigma = " << T0_sigma
-                  << ", z0inv = " << z0inv << std::endl;
+        out << rank << " : comm = " << comm << std::endl;
+        out << rank << " : cachedir " << cachedir << std::endl;
+        out << rank << " : ntask = " << ntask
+            << ", nthread = " << nthread << std::endl;
+        out << rank << " : verbosity = " << verbosity
+            << ", key1 = " << key1
+            << ", key2 = " << key2
+            << ", counter1 = " << counter1
+            << ", counter2 = " << counter2
+            << ", counter1start = " << counter1start
+            << ", counter2start = " << counter2start << std::endl;
+        out << rank << " : azmin = " << azmin
+            << ", axmax = " << azmax
+            << ", elmin = " << elmin
+            << ", elmax = " << elmax
+            << ", tmin = " << tmin
+            << ", tmax = " << tmax
+            << ", sinel0 = " << sinel0
+            << ", cosel0 = " << cosel0
+            << ", tanmin = " << tanmin
+            << ", tanmax = " << tanmax << std::endl;
+        out << rank << " : lmin_center = " << lmin_center
+            << ", lmax_center = " << lmax_center
+            << ", w_center = " << w_center
+            << ", w_sigma = " << w_sigma
+            << ", wdir_center = " << wdir_center
+            << ", wdir_sigma = " << wdir_sigma
+            << ", z0_center = " << z0_center
+            << ", z0_sigma = " << z0_sigma
+            << ", T0_center = " << T0_center
+            << ", T0_sigma = " << T0_sigma
+            << ", z0inv = " << z0inv << std::endl;
     }
     MPI_Barrier(comm);
 }
 
-void toast::tatm::sim::load_realization() {
+void toast::mpi_atm_sim::load_realization() {
     cached = false;
 
     std::ostringstream name;
@@ -404,7 +405,7 @@ void toast::tatm::sim::load_realization() {
     return;
 }
 
-void toast::tatm::sim::save_realization() {
+void toast::mpi_atm_sim::save_realization() {
     if (rank == 0) {
         std::ostringstream name;
         name << key1 << "_" << key2 << "_"
@@ -466,7 +467,7 @@ void toast::tatm::sim::save_realization() {
     return;
 }
 
-int toast::tatm::sim::simulate(bool use_cache) {
+int toast::mpi_atm_sim::simulate(bool use_cache) {
     if (use_cache) load_realization();
 
     if (cached) return 0;
@@ -566,7 +567,7 @@ int toast::tatm::sim::simulate(bool use_cache) {
     return 0;
 }
 
-void toast::tatm::sim::get_slice(long & ind_start, long & ind_stop) {
+void toast::mpi_atm_sim::get_slice(long & ind_start, long & ind_stop) {
     // Identify a manageable slice of compressed indices to simulate next
 
     // Move element counter to the end of the most recent simulated slice
@@ -609,7 +610,7 @@ void toast::tatm::sim::get_slice(long & ind_start, long & ind_stop) {
     return;
 }
 
-void toast::tatm::sim::smooth() {
+void toast::mpi_atm_sim::smooth() {
     // Replace each vertex with a mean of its immediate vicinity
 
     double t1 = MPI_Wtime();
@@ -679,8 +680,8 @@ void toast::tatm::sim::smooth() {
     return;
 }
 
-int toast::tatm::sim::observe(double * t, double * az, double * el, double * tod,
-                              long nsamp, double fixed_r) {
+int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * tod,
+                                long nsamp, double fixed_r) {
     if (!cached) {
         throw std::runtime_error("There is no cached observation to observe");
     }
@@ -847,7 +848,7 @@ int toast::tatm::sim::observe(double * t, double * az, double * el, double * tod
     return 0;
 }
 
-void toast::tatm::sim::draw() {
+void toast::mpi_atm_sim::draw() {
     // Draw 10000 gaussian variates to use in drawing the simulation
     // parameters
 
@@ -945,7 +946,7 @@ void toast::tatm::sim::draw() {
     return;
 }
 
-void toast::tatm::sim::get_volume() {
+void toast::mpi_atm_sim::get_volume() {
     // Trim zmax if rmax sets a more stringent limit
 
     double zmax_test = rmax * sin(elmax);
@@ -1069,7 +1070,7 @@ void toast::tatm::sim::get_volume() {
     initialize_kolmogorov();
 }
 
-void toast::tatm::sim::initialize_kolmogorov() {
+void toast::mpi_atm_sim::initialize_kolmogorov() {
     MPI_Barrier(comm);
     double t1 = MPI_Wtime();
 
@@ -1224,7 +1225,7 @@ void toast::tatm::sim::initialize_kolmogorov() {
     return;
 }
 
-double toast::tatm::sim::kolmogorov(double r) {
+double toast::mpi_atm_sim::kolmogorov(double r) {
     // Return autocovariance of a Kolmogorov process at separation r
 
     if (r == 0) return kolmo_y[0];
@@ -1263,7 +1264,7 @@ double toast::tatm::sim::kolmogorov(double r) {
     return val;
 }
 
-void toast::tatm::sim::compress_volume() {
+void toast::mpi_atm_sim::compress_volume() {
     // Establish a mapping between full volume indices and observed
     // volume indices
 
@@ -1404,7 +1405,7 @@ void toast::tatm::sim::compress_volume() {
     if (nelem == 0) throw std::runtime_error("No elements in the observation cone.");
 }
 
-bool toast::tatm::sim::in_cone(double x, double y, double z, double t_in) {
+bool toast::mpi_atm_sim::in_cone(double x, double y, double z, double t_in) {
     // Input coordinates are in the scan frame, rotate to horizontal frame
 
     double tstep = 1;
@@ -1478,7 +1479,7 @@ bool toast::tatm::sim::in_cone(double x, double y, double z, double t_in) {
     return false;
 }
 
-void toast::tatm::sim::ind2coord(long i, double * coord) {
+void toast::mpi_atm_sim::ind2coord(long i, double * coord) {
     // Translate a compressed index into xyz-coordinates
     // in the horizontal frame
 
@@ -1501,7 +1502,7 @@ void toast::tatm::sim::ind2coord(long i, double * coord) {
     coord[2] = x * sinel0 + z * cosel0;
 }
 
-long toast::tatm::sim::coord2ind(double x, double y, double z) {
+long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
     // Translate scan frame xyz-coordinates into a compressed index
 
     long ix = (x - xstart) * xstepinv;
@@ -1526,9 +1527,9 @@ long toast::tatm::sim::coord2ind(double x, double y, double z) {
     return (*compressed_index)[ifull];
 }
 
-double toast::tatm::sim::interp(double x, double y, double z,
-                                std::vector <long> & last_ind,
-                                std::vector <double> & last_nodes) {
+double toast::mpi_atm_sim::interp(double x, double y, double z,
+                                  std::vector <long> & last_ind,
+                                  std::vector <double> & last_nodes) {
     // Trilinear interpolation
 
     long ix = (x - xstart) * xstepinv;
@@ -1695,8 +1696,8 @@ double toast::tatm::sim::interp(double x, double y, double z,
     return c;
 }
 
-cholmod_sparse * toast::tatm::sim::build_sparse_covariance(long ind_start,
-                                                           long ind_stop) {
+cholmod_sparse * toast::mpi_atm_sim::build_sparse_covariance(long ind_start,
+                                                             long ind_stop) {
     /*
        Build a sparse covariance matrix.
      */
@@ -1815,7 +1816,7 @@ cholmod_sparse * toast::tatm::sim::build_sparse_covariance(long ind_start,
     return cov_sparse;
 }
 
-double toast::tatm::sim::cov_eval(double * coord1, double * coord2) {
+double toast::mpi_atm_sim::cov_eval(double * coord1, double * coord2) {
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
     // Coordinates are in the horizontal frame
@@ -1874,9 +1875,9 @@ double toast::tatm::sim::cov_eval(double * coord1, double * coord2) {
     return val * ninv;
 }
 
-cholmod_sparse * toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse * cov,
-                                                          long ind_start,
-                                                          long ind_stop) {
+cholmod_sparse * toast::mpi_atm_sim::sqrt_sparse_covariance(cholmod_sparse * cov,
+                                                            long ind_start,
+                                                            long ind_stop) {
     /*
        Cholesky-factorize the provided sparse matrix and return the
        sparse matrix representation of the factorization
@@ -1979,9 +1980,9 @@ cholmod_sparse * toast::tatm::sim::sqrt_sparse_covariance(cholmod_sparse * cov,
     return sqrt_cov;
 }
 
-void toast::tatm::sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
-                                               long ind_start,
-                                               long ind_stop) {
+void toast::mpi_atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
+                                                 long ind_start,
+                                                 long ind_stop) {
     /*
        Apply the Cholesky-decomposed (square-root) sparse covariance
        matrix to a vector of Gaussian random numbers to impose the

@@ -20,6 +20,16 @@ target_include_directories(toastcore_mpi PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+if(AATM_FOUND)
+    target_compile_definitions(toastcore_mpi PRIVATE HAVE_AATM=1)
+    target_include_directories(toastcore_mpi PUBLIC "${AATM_INCLUDE_DIRS}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(toastcore_mpi PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(toastcore_mpi PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+endif(CHOLMOD_FOUND)
+
 target_include_directories(toastcore_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 
 target_compile_options(toastcore_mpi PRIVATE "${mpi_comp_flags}")

@@ -34,7 +34,18 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_tod_simnoise.cpp
     _libtoast_todmap_scanning.cpp
     _libtoast_map_cov.cpp
+    _libtoast_atm.cpp
 )
+
+if(AATM_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_AATM=1)
+    target_include_directories(_libtoast PUBLIC "${AATM_INCLUDE_DIRS}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(_libtoast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+endif(CHOLMOD_FOUND)
 
 target_link_libraries(_libtoast PRIVATE toast)
 
@@ -79,11 +90,22 @@ if(MPI_FOUND AND MPI4PY_FOUND)
     )
 
     target_include_directories(_libtoast_mpi PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast_mpi/include"
         ${MPI_CXX_INCLUDE_PATH}
         ${MPI4PY_INCLUDE_DIR}
     )
+
+    if(AATM_FOUND)
+        target_compile_definitions(_libtoast_mpi PRIVATE HAVE_AATM=1)
+        target_include_directories(_libtoast_mpi PUBLIC "${AATM_INCLUDE_DIRS}")
+    endif(AATM_FOUND)
+
+    if(CHOLMOD_FOUND)
+        target_compile_definitions(_libtoast_mpi PRIVATE HAVE_CHOLMOD=1)
+        target_include_directories(_libtoast_mpi PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+    endif(CHOLMOD_FOUND)
 
     target_link_libraries(_libtoast_mpi
         PRIVATE toast_mpi "${MPI_CXX_LIBRARIES}"

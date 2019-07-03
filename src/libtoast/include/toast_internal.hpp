@@ -9,7 +9,7 @@
 #include <toast.hpp>
 
 // This header declares code whose member variables and/or function signatures
-// contain types that are conditin
+// contain types that are conditionally compiled.
 
 #include <toast/atm.hpp>
 #include <toast/math_fft_fftw.hpp>

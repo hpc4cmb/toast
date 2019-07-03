@@ -1,6 +1,19 @@
-# Copyright (c) 2015-2018 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+
+import numpy as np
+
+import healpy as hp
+
+from ..timing import function_timer
+
+from .tod_math import dipole
+
+from ..op import Operator
+
+from ..utils import Environment
+
 
 import os
 
@@ -21,8 +34,7 @@ import toast.timing as timing
 
 
 class OpSimAtmosphere(Operator):
-    """
-    Operator which generates atmosphere timestreams.
+    """Operator which generates atmosphere timestreams.
 
     All processes collectively generate the atmospheric realization.
     Then each process passes through its local data and observes the

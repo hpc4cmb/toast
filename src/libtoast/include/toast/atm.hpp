@@ -13,8 +13,14 @@ using mem_double = std::unique_ptr <AlignedVector <double> >;
 
 #ifdef HAVE_CHOLMOD
 
+# include <cholmod.h>
+
+
 class atm_sim {
     public:
+
+        typedef std::shared_ptr <atm_sim> pshr;
+        typedef std::unique_ptr <atm_sim> puniq;
 
         // The sim object is constructed for one CES (constant elevation scan)
 
@@ -56,7 +62,7 @@ class atm_sim {
 
             // RNG counters
             uint64_t counterval1 = 0, uint64_t counterval2 = 0,
-            char * cachedir = NULL,
+            std::string cachedir = std::string(),
 
             // Line-of-sight observing limits
             double rmin = 0, double rmax = 10000
@@ -73,7 +79,7 @@ class atm_sim {
         int observe(double * t, double * az, double * el, double * tod,
                     long nsamp, double fixed_r = -1);
 
-        void print();
+        void print(std::ostream & out = std::cout) const;
 
     private:
 
