@@ -23,7 +23,14 @@ from ..tod import (
     atm_available_mpi,
 )
 
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ..weather import Weather
+
+from ._helpers import (
+    create_outdir,
+    create_distdata,
+    boresight_focalplane,
+    create_weather,
+)
 
 
 class OpsSimAtmosphereTest(MPITestCase):
@@ -132,7 +139,12 @@ class OpsSimAtmosphereTest(MPITestCase):
             self.nflagged = self.data.comm.comm_world.allreduce(nflagged)
 
         self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["site_id"] = 123
+        self.data.obs[0]["weather"] = Weather(wfile, site=123)
+
         self.data_serial.obs[0]["tod"] = tod_serial
+        self.data_serial.obs[0]["site_id"] = 123
+        self.data_serial.obs[0]["weather"] = None
         return
 
     def test_atm(self):

@@ -3,12 +3,10 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <_libtoast.hpp>
-
-#include <toast_mpi_internal.hpp>
+#include <_libtoast_mpi.hpp>
 
 
-using size_container = py::detail::any_container <ssize_t>;
+#include <_libtoast_common.cpp>
 
 
 // Currently the only compiled code that uses MPI and needs to be bound to python is

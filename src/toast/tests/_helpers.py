@@ -161,6 +161,12 @@ def boresight_focalplane(
     return names, quat, det_eps, det_rate, det_net, det_fmin, det_fknee, det_alpha
 
 
+def create_weather(outfile):
+    from astropy.table import Table
+
+    return
+
+
 #
 # @contextmanager
 # def mpi_guard(comm=MPI.COMM_WORLD):

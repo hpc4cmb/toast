@@ -5,62 +5,7 @@
 
 #include <_libtoast.hpp>
 
-using size_container = py::detail::any_container <ssize_t>;
-
-// FIXME: we could use configure checks to detect whether we are on a 64bit
-// system and whether "l" and "L" are equivalent to "q" and "Q".
-
-template <>
-std::vector <char> align_format <int8_t> () {
-    return std::vector <char> ({'b'});
-}
-
-template <>
-std::vector <char> align_format <int16_t> () {
-    return std::vector <char> ({'h'});
-}
-
-template <>
-std::vector <char> align_format <int32_t> () {
-    return std::vector <char> ({'i'});
-}
-
-template <>
-std::vector <char> align_format <int64_t> () {
-    return std::vector <char> ({'q', 'l'});
-}
-
-template <>
-std::vector <char> align_format <uint8_t> () {
-    return std::vector <char> ({'B'});
-}
-
-template <>
-std::vector <char> align_format <uint16_t> () {
-    return std::vector <char> ({'H'});
-}
-
-template <>
-std::vector <char> align_format <uint32_t> () {
-    return std::vector <char> ({'I'});
-}
-
-template <>
-std::vector <char> align_format <uint64_t> () {
-    return std::vector <char> ({'Q', 'L'});
-}
-
-template <>
-std::vector <char> align_format <float> () {
-    return std::vector <char> ({'f'});
-}
-
-template <>
-std::vector <char> align_format <double> () {
-    return std::vector <char> ({'d'});
-}
-
-// Helper functions to check numpy array data types and dimensions.
+#include <_libtoast_common.cpp>
 
 
 PYBIND11_MODULE(_libtoast, m) {
