@@ -2,35 +2,35 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 import numpy as np
 
-import healpy as hp
+from ..utils import Logger
 
-from ..timing import function_timer
-
-from .tod_math import dipole
+from ..timing import function_timer, Timer
 
 from ..op import Operator
 
-from ..utils import Environment
+from .atm import available, available_utils, available_mpi
 
+if available_utils:
+    from .atm import (
+        atm_absorption_coefficient,
+        atm_absorption_coefficient_vec,
+        atm_atmospheric_loading,
+        atm_atmospheric_loading_vec,
+    )
 
-import os
+if available:
+    from .atm import AtmSim
 
-from toast.ctoast import (
-    atm_sim_alloc,
-    atm_sim_free,
-    atm_sim_simulate,
-    atm_sim_observe,
-    atm_get_absorption_coefficient,
-    atm_get_atmospheric_loading,
-)
+if available_mpi:
+    from .atm import AtmSimMPI
+
 from toast.mpi import MPI
-from toast.op import Operator
 
-import numpy as np
 import toast.qarray as qa
-import toast.timing as timing
 
 
 class OpSimAtmosphere(Operator):
@@ -122,8 +122,13 @@ class OpSimAtmosphere(Operator):
         flush=False,
         freq=None,
     ):
-
-        # We call the parent class constructor, which currently does nothing
+        if not available:
+            msg = (
+                "TOAST not compiled with atmosphere simulation support (requires "
+                "SuiteSparse)"
+            )
+            raise RuntimeError(msg)
+        # Call the parent class constructor
         super().__init__()
 
         self._out = out
@@ -157,17 +162,29 @@ class OpSimAtmosphere(Operator):
         self._wind_dist = wind_dist
         self._wind_time = None
 
+    @function_timer
     def exec(self, data):
-        """
-        Generate atmosphere timestreams.
+        """Generate atmosphere timestreams.
 
         This iterates over all observations and detectors and generates
         the atmosphere timestreams.
 
         Args:
             data (toast.Data): The distributed data.
+
+        Returns:
+            None
+
         """
-        autotimer = timing.auto_timer(type(self).__name__)
+        if data.comm.comm_world is not None:
+            if not available_mpi:
+                msg = (
+                    "MPI is used by the data distribution, but TOAST was not built "
+                    "with MPI-enabled atmosphere simulation support."
+                )
+                raise RuntimeError(msg)
+
+        log = Logger.get()
         group = data.comm.group
         for obs in data.obs:
             try:
@@ -177,6 +194,9 @@ class OpSimAtmosphere(Operator):
             prefix = "{} : {} : ".format(group, obsname)
             tod = self._get_from_obs("tod", obs)
             comm = tod.mpicomm
+            rank = 0
+            if comm is not None:
+                rank = comm.rank
             site = self._get_from_obs("site_id", obs)
             weather = self._get_from_obs("weather", obs)
 
@@ -185,8 +205,11 @@ class OpSimAtmosphere(Operator):
             times = tod.local_times()
             tmin = times[0]
             tmax = times[-1]
-            tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
-            tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
+            tmin_tot = tmin
+            tmax_tot = tmax
+            if comm is not None:
+                tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
+                tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
             weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
@@ -195,10 +218,10 @@ class OpSimAtmosphere(Operator):
 
             cachedir = self._get_cache_dir(obs, comm)
 
-            comm.Barrier()
-            if comm.rank == 0:
-                print(prefix + "Setting up atmosphere simulation", flush=self._flush)
-            comm.Barrier()
+            if comm is not None:
+                comm.Barrier()
+            if rank == 0:
+                log.info("{}Setting up atmosphere simulation".format(prefix))
 
             # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
@@ -209,33 +232,31 @@ class OpSimAtmosphere(Operator):
             # wind_time is intended to reflect the correlation length
             # in the atmospheric noise.
 
+            tmr = Timer()
             if self._report_timing:
-                comm.Barrier()
-                tstart = MPI.Wtime()
+                if comm is not None:
+                    comm.Barrier()
+                tmr.start()
 
             tmin = tmin_tot
             istart = 0
             counter1start = counter1
             while tmin < tmax_tot:
-                if self._report_timing:
+                if comm is not None:
                     comm.Barrier()
-                    tstart = MPI.Wtime()
-
-                comm.Barrier()
-                if comm.rank == 0:
-                    print(
-                        prefix + "Instantiating the atmosphere for t = {}"
-                        "".format(tmin - tmin_tot),
-                        flush=self._flush,
+                if rank == 0:
+                    log.info(
+                        "{}Instantiating atmosphere for t = {}".format(
+                            prefix, tmin - tmin_tot
+                        )
                     )
+
                 istart, istop, tmax = self._get_time_range(
                     tmin, istart, times, tmax_tot, common_ref, tod, weather
                 )
 
                 ind = slice(istart, istop)
                 nind = istop - istart
-
-                comm.Barrier()
 
                 rmin = 0
                 rmax = 100
@@ -289,6 +310,8 @@ class OpSimAtmosphere(Operator):
                         absorption,
                     )
 
+                    del sim
+
                     rmin = rmax
                     rmax *= scale
                     self._xstep *= np.sqrt(scale)
@@ -305,26 +328,25 @@ class OpSimAtmosphere(Operator):
                 tmin = tmax
 
         if self._report_timing:
-            comm.Barrier()
-            tstop = MPI.Wtime()
-            if comm.rank == 0:
-                print(
-                    prefix
-                    + "Simulated and observed atmosphere in {:.2f} s".format(
-                        tstop - tstart
-                    ),
-                    flush=self._flush,
-                )
-
+            if comm is not None:
+                comm.Barrier()
+            if rank == 0:
+                tmr.stop()
+                tmr.report("{}Simulated and observed atmosphere".format(prefix))
         return
 
+    @function_timer
     def _save_tod(self, obsname, tod, times, istart, nind, ind, comm, common_ref):
         import pickle
+
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
 
         t = times[ind]
         tmin, tmax = t[0], t[-1]
         outdir = "snapshots"
-        if comm.rank == 0:
+        if rank == 0:
             try:
                 os.makedirs(outdir)
             except FileExistsError:
@@ -363,6 +385,7 @@ class OpSimAtmosphere(Operator):
 
         return
 
+    @function_timer
     def _plot_snapshots(
         self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
     ):
@@ -389,8 +412,12 @@ class OpSimAtmosphere(Operator):
         atmdata = np.zeros(nn, dtype=np.float64)
         atmtimes = np.zeros(nn, dtype=np.float64)
 
-        rank = comm.rank
-        ntask = comm.size
+        rank = 0
+        ntask = 1
+        if comm is not None:
+            rank = comm.rank
+            ntask = comm.size
+
         r = 0
         t = 0
         my_snapshots = []
@@ -400,7 +427,7 @@ class OpSimAtmosphere(Operator):
         for i, t in enumerate(np.arange(tmin, tmax, tstep)):
             if i % ntask != rank:
                 continue
-            err = atm_sim_observe(sim, atmtimes + t, az, el, atmdata, nn, r)
+            err = sim.observe(atmtimes + t, az, el, atmdata, r)
             if err != 0:
                 raise RuntimeError(prefix + "Observation failed")
             if self._gain:
@@ -428,7 +455,6 @@ class OpSimAtmosphere(Operator):
         print("Snapshots saved in {}".format(fn), flush=True)
 
         """
-
         vmin = comm.allreduce(vmin, op=MPI.MIN)
         vmax = comm.allreduce(vmax, op=MPI.MAX)
 
@@ -453,9 +479,9 @@ class OpSimAtmosphere(Operator):
             ax.set_yticks(np.degrees([elmin, elmax]))
             plt.savefig("atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r)))
             plt.close()
-        del my_snapshots
-
         """
+
+        del my_snapshots
 
         return
 
@@ -492,19 +518,26 @@ class OpSimAtmosphere(Operator):
         counter2 = 0
         return key1, key2, counter1, counter2
 
+    @function_timer
     def _get_absorption_and_loading(self, obs):
         altitude = self._get_from_obs("altitude", obs)
         weather = self._get_from_obs("weather", obs)
         tod = self._get_from_obs("tod", obs)
         if self._freq is not None:
-            absorption = atm_get_absorption_coefficient(
+            if not available_utils:
+                msg = (
+                    "TOAST not compiled with libaatm support- absorption and "
+                    "loading unavailable"
+                )
+                raise RuntimeError(msg)
+            absorption = atm_absorption_coefficient(
                 altitude,
                 weather.air_temperature,
                 weather.surface_pressure,
                 weather.pwv,
                 self._freq,
             )
-            loading = atm_get_atmospheric_loading(
+            loading = atm_atmospheric_loading(
                 altitude,
                 weather.air_temperature,
                 weather.surface_pressure,
@@ -528,14 +561,14 @@ class OpSimAtmosphere(Operator):
             subsubdir = str(int((obsindx % 100) // 10))
             subsubsubdir = str(obsindx % 10)
             cachedir = os.path.join(self._cachedir, subdir, subsubdir, subsubsubdir)
-            if comm.rank == 0:
+            if (comm is None) or (comm.rank == 0):
                 try:
                     os.makedirs(cachedir)
                 except FileExistsError:
                     pass
-
         return cachedir
 
+    @function_timer
     def _get_scan_range(self, obs, comm):
         tod = self._get_from_obs("tod", obs)
         fp_radius = np.radians(self._get_from_obs("fpradius", obs))
@@ -561,10 +594,11 @@ class OpSimAtmosphere(Operator):
         elmin = min_el_bore - fp_radius
         elmax = max_el_bore + fp_radius
 
-        azmin = comm.allreduce(azmin, op=MPI.MIN)
-        azmax = comm.allreduce(azmax, op=MPI.MAX)
-        elmin = comm.allreduce(elmin, op=MPI.MIN)
-        elmax = comm.allreduce(elmax, op=MPI.MAX)
+        if comm is not None:
+            azmin = comm.allreduce(azmin, op=MPI.MIN)
+            azmax = comm.allreduce(azmax, op=MPI.MAX)
+            elmin = comm.allreduce(elmin, op=MPI.MIN)
+            elmax = comm.allreduce(elmax, op=MPI.MAX)
 
         if elmin < 0 or elmax > np.pi / 2:
             raise RuntimeError(
@@ -574,6 +608,7 @@ class OpSimAtmosphere(Operator):
 
         return azmin, azmax, elmin, elmax
 
+    @function_timer
     def _get_time_range(self, tmin, istart, times, tmax_tot, common_ref, tod, weather):
         while times[istart] < tmin:
             istart += 1
@@ -602,6 +637,7 @@ class OpSimAtmosphere(Operator):
 
         return istart, istop, tmax
 
+    @function_timer
     def _simulate_atmosphere(
         self,
         weather,
@@ -620,10 +656,15 @@ class OpSimAtmosphere(Operator):
         rmin,
         rmax,
     ):
-
+        log = Logger.get()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        tmr = Timer()
         if self._report_timing:
-            comm.Barrier()
-            tstart = MPI.Wtime()
+            if comm is not None:
+                comm.Barrier()
+            tmr.start()
 
         T0_center = weather.air_temperature
         wx = weather.west_wind
@@ -633,79 +674,109 @@ class OpSimAtmosphere(Operator):
 
         azmin, azmax, elmin, elmax = scan_range
 
-        sim = atm_sim_alloc(
-            azmin,
-            azmax,
-            elmin,
-            elmax,
-            tmin,
-            tmax,
-            self._lmin_center,
-            self._lmin_sigma,
-            self._lmax_center,
-            self._lmax_sigma,
-            w_center,
-            0,
-            wdir_center,
-            0,
-            self._z0_center,
-            self._z0_sigma,
-            T0_center,
-            0,
-            self._zatm,
-            self._zmax,
-            self._xstep,
-            self._ystep,
-            self._zstep,
-            self._nelem_sim_max,
-            self._verbosity,
-            comm,
-            key1,
-            key2,
-            counter1,
-            counter2,
-            cachedir,
-            rmin,
-            rmax,
-        )
-        if sim == 0:
-            raise RuntimeError(prefix + "Failed to allocate simulation")
+        sim = None
+        if comm is None:
+            sim = AtmSim(
+                azmin,
+                azmax,
+                elmin,
+                elmax,
+                tmin,
+                tmax,
+                self._lmin_center,
+                self._lmin_sigma,
+                self._lmax_center,
+                self._lmax_sigma,
+                w_center,
+                0,
+                wdir_center,
+                0,
+                self._z0_center,
+                self._z0_sigma,
+                T0_center,
+                0,
+                self._zatm,
+                self._zmax,
+                self._xstep,
+                self._ystep,
+                self._zstep,
+                self._nelem_sim_max,
+                self._verbosity,
+                key1,
+                key2,
+                counter1,
+                counter2,
+                cachedir,
+                rmin,
+                rmax,
+            )
+        else:
+            sim = AtmSimMPI(
+                azmin,
+                azmax,
+                elmin,
+                elmax,
+                tmin,
+                tmax,
+                self._lmin_center,
+                self._lmin_sigma,
+                self._lmax_center,
+                self._lmax_sigma,
+                w_center,
+                0,
+                wdir_center,
+                0,
+                self._z0_center,
+                self._z0_sigma,
+                T0_center,
+                0,
+                self._zatm,
+                self._zmax,
+                self._xstep,
+                self._ystep,
+                self._zstep,
+                self._nelem_sim_max,
+                self._verbosity,
+                comm,
+                key1,
+                key2,
+                counter1,
+                counter2,
+                cachedir,
+                rmin,
+                rmax,
+            )
 
         if self._report_timing:
-            comm.Barrier()
-            tstop = MPI.Wtime()
-            if comm.rank == 0 and tstop - tstart > 1:
-                print(
-                    prefix + "OpSimAtmosphere: Initialized "
-                    "atmosphere in {:.2f} s".format(tstop - tstart),
-                    flush=self._flush,
+            if comm is not None:
+                comm.Barrier()
+            if rank == 0:
+                tmr.report_clear(
+                    "{}OpSimAtmosphere: Initialize atmosphere".format(prefix)
                 )
-            tstart = tstop
-
-        comm.Barrier()
 
         use_cache = cachedir is not None
-        if comm.rank == 0:
+        if rank == 0:
             fname = os.path.join(
                 cachedir,
                 "{}_{}_{}_{}_metadata.txt".format(key1, key2, counter1, counter2),
             )
             if use_cache and os.path.isfile(fname):
-                print(
-                    prefix + "Loading the atmosphere for t = {} "
-                    "from {}".format(tmin - tmin_tot, fname),
-                    flush=self._flush,
+                log.info(
+                    "{}Loading the atmosphere for t = {} from {}".format(
+                        prefix, tmin - tmin_tot, fname
+                    )
                 )
                 cached = True
             else:
-                print(
-                    prefix + "Simulating the atmosphere for t = {}"
-                    "".format(tmin - tmin_tot),
-                    flush=self._flush,
+                log.info(
+                    "{}Simulating the atmosphere for t = {}".format(
+                        prefix, tmin - tmin_tot, fname
+                    )
                 )
                 cached = False
 
-        err = atm_sim_simulate(sim, use_cache)
+        err = sim.simulate(use_cache)
         if err != 0:
             raise RuntimeError(prefix + "Simulation failed.")
 
@@ -715,22 +786,19 @@ class OpSimAtmosphere(Operator):
         counter2 += 100000000
 
         if self._report_timing:
-            comm.Barrier()
-            tstop = MPI.Wtime()
-            if comm.rank == 0 and tstop - tstart > 1:
+            if comm is not None:
+                comm.Barrier()
+            if rank == 0:
+                op = None
                 if cached:
                     op = "Loaded"
                 else:
                     op = "Simulated"
-                print(
-                    prefix + "OpSimAtmosphere: {} atmosphere in "
-                    "{:.2f} s".format(op, tstop - tstart),
-                    flush=self._flush,
-                )
-            tstart = tstop
+                tmr.report_clear("{}OpSimAtmosphere: {} atmosphere".format(prefix, op))
 
         return sim, counter2
 
+    @function_timer
     def _observe_atmosphere(
         self,
         sim,
@@ -745,20 +813,24 @@ class OpSimAtmosphere(Operator):
         times,
         absorption,
     ):
+        log = Logger.get()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        tmr = Timer()
+        if self._report_timing:
+            if comm is not None:
+                comm.Barrier()
+            tmr.start()
 
         azmin, azmax, elmin, elmax = scan_range
 
         nsamp = tod.local_samples[1]
 
-        if self._report_timing:
-            comm.Barrier()
-            tstart = MPI.Wtime()
-
-        if comm.rank == 0:
-            print(prefix + "Observing the atmosphere", flush=self._flush)
+        if rank == 0:
+            log.info("{}Observing the atmosphere".format(prefix))
 
         for det in tod.local_dets:
-
             # Cache the output signal
             cachename = "{}_{}".format(self._out, det)
             if tod.cache.exists(cachename):
@@ -837,13 +909,12 @@ class OpSimAtmosphere(Operator):
 
             # Integrate detector signal
 
-            err = atm_sim_observe(sim, times[ind], az, el, atmdata, ngood, 0)
+            err = sim.observe(times[ind], az, el, atmdata, -1.0)
             if err != 0:
                 # Observing failed
-                print(
-                    prefix + "OpSimAtmosphere: Observing FAILED. "
-                    "det = {}, rank = {}".format(det, comm.rank),
-                    flush=self._flush,
+                log.error(
+                    "{}OpSimAtmosphere: Observing FAILED. "
+                    "det = {}, rank = {}".format(prefix, det, rank)
                 )
                 atmdata[:] = 0
                 flag_ref[ind] = 255
@@ -859,17 +930,10 @@ class OpSimAtmosphere(Operator):
 
             del ref
 
-        err = atm_sim_free(sim)
-        if err != 0:
-            raise RuntimeError(prefix + "Failed to free simulation.")
-
         if self._report_timing:
-            comm.Barrier()
-            tstop = MPI.Wtime()
-            if comm.rank == 0 and tstop - tstart > 1:
-                print(
-                    prefix + "OpSimAtmosphere: Observed atmosphere "
-                    "in {:.2f} s".format(tstop - tstart),
-                    flush=self._flush,
-                )
+            if comm is not None:
+                comm.Barrier()
+            if rank == 0:
+                tmr.stop()
+                tmr.report("{}OpSimAtmosphere: Observe atmosphere".format(prefix))
         return

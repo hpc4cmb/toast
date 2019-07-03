@@ -6,14 +6,16 @@
 #ifndef TOAST_MPI_ATM_HPP
 #define TOAST_MPI_ATM_HPP
 
+#ifdef HAVE_CHOLMOD
+
+extern "C" {
+# include <cholmod.h>
+}
+
 namespace toast {
 
 using mpi_shmem_double = mpi_shmem <double>;
 using mpi_shmem_long = mpi_shmem <long>;
-
-#ifdef HAVE_CHOLMOD
-
-# include <cholmod.h>
 
 
 class mpi_atm_sim {
@@ -165,8 +167,8 @@ class mpi_atm_sim {
         void save_realization();
 };
 
-#endif // ifdef HAVE_CHOLMOD
-
 }
+
+#endif // ifdef HAVE_CHOLMOD
 
 #endif // ifndef TOAST_MPI_ATM_HPP

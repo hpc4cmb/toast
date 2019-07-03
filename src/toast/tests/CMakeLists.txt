@@ -32,5 +32,6 @@ install(FILES
     binned.py
     ops_sim_pysm.py
     tidas.py
+    ops_sim_atm.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

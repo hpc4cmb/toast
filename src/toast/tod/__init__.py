@@ -30,7 +30,7 @@ from .sim_det_dipole import OpSimDipole
 
 from .sim_det_pysm import OpSimPySM
 
-# from .sim_det_atm import OpSimAtmosphere
+from .sim_det_atm import OpSimAtmosphere
 
 from .sim_focalplane import (
     hex_layout,
@@ -62,8 +62,12 @@ from .tod_math import (
     flagged_running_average,
 )
 
-# from .conviqt import OpSimConviqt
+from .conviqt import OpSimConviqt
 
 from .tidas import available as tidas_available
 
 from .spt3g_utils import available as spt3g_available
+
+from .atm import available as atm_available
+from .atm import available_utils as atm_available_utils
+from .atm import available_mpi as atm_available_mpi

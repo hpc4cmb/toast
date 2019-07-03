@@ -6,15 +6,16 @@
 #ifndef TOAST_ATM_HPP
 #define TOAST_ATM_HPP
 
+#ifdef HAVE_CHOLMOD
+
+extern "C" {
+# include <cholmod.h>
+}
+
 namespace toast {
 
 using mem_long = std::unique_ptr <AlignedVector <long> >;
 using mem_double = std::unique_ptr <AlignedVector <double> >;
-
-#ifdef HAVE_CHOLMOD
-
-# include <cholmod.h>
-
 
 class atm_sim {
     public:
@@ -167,8 +168,8 @@ class atm_sim {
         void save_realization();
 };
 
-#endif // ifdef HAVE_CHOLMOD
-
 }
+
+#endif // ifdef HAVE_CHOLMOD
 
 #endif // ifndef TOAST_ATM_HPP

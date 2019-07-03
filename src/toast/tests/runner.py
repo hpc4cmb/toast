@@ -53,6 +53,11 @@ from . import tod_satellite as testtodsat
 
 from . import ops_sim_pysm as testopspysm
 
+from ..tod import atm_available
+
+if atm_available:
+    from . import ops_sim_atm as testopsatm
+
 from ..tod import tidas_available
 
 if tidas_available:
@@ -121,6 +126,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         suite.addTest(loader.loadTestsFromModule(testopspysm))
+        suite.addTest(loader.loadTestsFromModule(testopsatm))
         if tidas_available:
             suite.addTest(loader.loadTestsFromModule(testtidas))
         if spt3g_available:

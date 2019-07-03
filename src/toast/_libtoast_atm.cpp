@@ -179,7 +179,7 @@ void init_atm(py::module & m) {
             use_cache (bool):  If True, use the disk cache for save / load.
 
         Returns:
-            None
+            (int):  A status value (zero == good).
 
     )")
     .def("observe", [](toast::atm_sim & self, py::buffer times,
@@ -206,8 +206,8 @@ void init_atm(py::module & m) {
              double * rawaz = reinterpret_cast <double *> (info_az.ptr);
              double * rawel = reinterpret_cast <double *> (info_el.ptr);
              double * rawtod = reinterpret_cast <double *> (info_tod.ptr);
-             auto blah = self.observe(rawtimes, rawaz, rawel, rawtod, nsamp, fixed_r);
-             return;
+             auto status = self.observe(rawtimes, rawaz, rawel, rawtod, nsamp, fixed_r);
+             return status;
          }, py::arg("times"), py::arg("az"), py::arg("el"), py::arg("tod"), py::arg(
              "fixed_r") = -1.0, R"(
             Observe the atmosphere with a detector.
@@ -227,7 +227,7 @@ void init_atm(py::module & m) {
                 fixed_r (float):  If greater than zero, use this single radial value.
 
             Returns:
-                None.
+                (int):  A status value (zero == good).
 
         )")
     .def("__repr__",

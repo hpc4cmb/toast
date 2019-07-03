@@ -19,9 +19,7 @@
 #include <algorithm>
 
 
-#ifdef HAVE_SUITESPARSE
-
-# include "cholmod.h"
+#ifdef HAVE_CHOLMOD
 
 double median(std::vector <double> vec) {
     if (vec.size() == 0) return 0;
@@ -175,7 +173,7 @@ toast::mpi_atm_sim::mpi_atm_sim(double azmin, double azmax, double elmin, double
                                              // LDL'
 }
 
-toast::mpi_atm_sim::~sim() {
+toast::mpi_atm_sim::~mpi_atm_sim() {
     if (compressed_index) delete compressed_index;
     if (full_index) delete full_index;
     if (realization) delete realization;
@@ -854,7 +852,7 @@ void toast::mpi_atm_sim::draw() {
 
     const size_t nrand = 10000;
     double randn[nrand];
-    rng::dist_normal(nrand, key1, key2, counter1, counter2, randn);
+    toast::rng_dist_normal(nrand, key1, key2, counter1, counter2, randn);
     counter2 += nrand;
     double * prand = randn;
     long irand = 0;
@@ -1997,7 +1995,8 @@ void toast::mpi_atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
 
     cholmod_dense * noise_in = cholmod_allocate_dense(nelem, 1, nelem,
                                                       CHOLMOD_REAL, chcommon);
-    rng::dist_normal(nelem, key1, key2, counter1, counter2, (double *)noise_in->x);
+    toast::rng_dist_normal(nelem, key1, key2, counter1, counter2,
+                           (double *)noise_in->x);
     counter2 += nelem;
 
     cholmod_dense * noise_out = cholmod_allocate_dense(nelem, 1, nelem,

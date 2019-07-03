@@ -9,6 +9,7 @@
 
 #include <toast/sys_utils.hpp>
 #include <toast/sys_environment.hpp>
+#include <toast/math_rng.hpp>
 #include <toast/atm.hpp>
 
 #include <sstream>
@@ -21,7 +22,7 @@
 #include <algorithm> // std::sort
 
 
-#ifdef HAVE_SUITESPARSE
+#ifdef HAVE_CHOLMOD
 
 double median(std::vector <double> vec) {
     if (vec.size() == 0) return 0;
@@ -185,7 +186,6 @@ toast::atm_sim::~atm_sim() {
 void toast::atm_sim::print(std::ostream & out) const {
     for (int i = 0; i < ntask; ++i) {
         if (rank != i) continue;
-        out << rank << " : comm = " << comm << std::endl;
         out << rank << " : cachedir " << cachedir << std::endl;
         out << rank << " : ntask = " << ntask
             << ", nthread = " << nthread << std::endl;
@@ -785,7 +785,7 @@ int toast::atm_sim::observe(double * t, double * az, double * el, double * tod,
 
     if ((rank == 0) && (verbosity > 0)) {
         if (fixed_r > 0) {
-            ostringstream o;
+            std::ostringstream o;
             o << " samples observed at r =  " << fixed_r << " in";
             tm.report(o.str().c_str());
         } else {
@@ -808,7 +808,7 @@ void toast::atm_sim::draw() {
 
     const size_t nrand = 10000;
     double randn[nrand];
-    rng::dist_normal(nrand, key1, key2, counter1, counter2, randn);
+    toast::rng_dist_normal(nrand, key1, key2, counter1, counter2, randn);
     counter2 += nrand;
     double * prand = randn;
     long irand = 0;
@@ -1007,7 +1007,7 @@ void toast::atm_sim::get_volume() {
 }
 
 void toast::atm_sim::initialize_kolmogorov() {
-    log = toast::Logger::get();
+    auto & logger = toast::Logger::get();
     toast::Timer tm;
     tm.start();
 
@@ -1150,9 +1150,9 @@ void toast::atm_sim::initialize_kolmogorov() {
     tm.stop();
 
     if ((rank == 0) && (verbosity > 0)) {
-        ostringstream o;
+        std::ostringstream o;
         o << "rcorr = " << rcorr << " m (corrlim = " << corrlim << ")";
-        log.debug(o.str().c_str());
+        logger.debug(o.str().c_str());
         tm.report("Kolmogorov initialized in");
     }
 
@@ -1921,7 +1921,8 @@ void toast::atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
 
     cholmod_dense * noise_in = cholmod_allocate_dense(nelem, 1, nelem,
                                                       CHOLMOD_REAL, chcommon);
-    rng::dist_normal(nelem, key1, key2, counter1, counter2, (double *)noise_in->x);
+    toast::rng_dist_normal(nelem, key1, key2, counter1, counter2,
+                           (double *)noise_in->x);
     counter2 += nelem;
 
     cholmod_dense * noise_out = cholmod_allocate_dense(nelem, 1, nelem,
@@ -1952,7 +1953,7 @@ void toast::atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
 
     tm.stop();
     if (verbosity > 0) {
-        ostringstream o;
+        std::ostringstream o;
         o << "Realization slice (" << ind_start << " -- "
           << ind_stop << ") var = " << var << ", constructed in";
         tm.report(o.str().c_str());
@@ -1986,4 +1987,4 @@ void toast::atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
     return;
 }
 
-#endif // ifdef HAVE_SUITESPARSE
+#endif // ifdef HAVE_CHOLMOD

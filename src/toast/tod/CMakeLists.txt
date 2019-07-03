@@ -31,5 +31,6 @@ install(FILES
     spt3g_utils.py
     tidas_utils.py
     tidas.py
+    atm.py
     DESTINATION ${PYTHON_SITE}/toast/tod
 )

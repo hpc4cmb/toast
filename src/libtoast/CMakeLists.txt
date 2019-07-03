@@ -26,6 +26,8 @@ set(toastcore_SOURCES
     src/toast_tod_filter.cpp
     src/toast_tod_pointing.cpp
     src/toast_tod_simnoise.cpp
+    src/toast_atm_utils.cpp
+    src/toast_atm.cpp
 )
 
 add_library(toastcore ${toastcore_SOURCES})
@@ -90,7 +92,7 @@ endif(LAPACK_FOUND)
 # Add internal googletest framework.  Must be added before the unit test
 # internal library in order to define some variables.
 
-add_subdirectory(gtest)
+add_subdirectory(gtest EXCLUDE_FROM_ALL)
 set(gtest_force_shared_crt TRUE)
 include_directories("${gtest_SOURCE_DIR}/include")
 
@@ -124,7 +126,7 @@ target_link_libraries(toasttest gtest)
 
 # Define the full toast library
 
-add_library(toast toast.cpp)
+add_library(toast SHARED toast.cpp)
 
 target_include_directories(toast PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -133,11 +135,13 @@ target_include_directories(toast PUBLIC
 
 if(APPLE)
     SET(TOASTTESTLIB -Wl,-all_load toasttest -Wl,-noall_load)
+    SET(TOASTCORELIB -Wl,-all_load toastcore -Wl,-noall_load)
 else()
     SET(TOASTTESTLIB -Wl,--whole-archive toasttest -Wl,--no-whole-archive)
+    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
 endif(APPLE)
 
-target_link_libraries(toast ${TOASTTESTLIB} toastcore)
+target_link_libraries(toast ${TOASTTESTLIB} ${TOASTCORELIB})
 
 # Installation
 

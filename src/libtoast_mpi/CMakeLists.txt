@@ -36,7 +36,7 @@ target_compile_options(toastcore_mpi PRIVATE "${mpi_comp_flags}")
 
 set_target_properties(toastcore_mpi PROPERTIES LINK_FLAGS "${mpi_link_flags}")
 
-target_link_libraries(toastcore_mpi toast "${MPI_CXX_LIBRARIES}")
+# target_link_libraries(toastcore_mpi "${MPI_CXX_LIBRARIES}")
 
 
 # Define the unit test internal library
@@ -62,7 +62,7 @@ target_include_directories(toasttest_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 
 target_compile_options(toasttest_mpi PRIVATE "${mpi_comp_flags}")
 
-target_link_libraries(toasttest_mpi)
+# target_link_libraries(toasttest_mpi)
 
 
 # Define the full toast MPI library
@@ -71,7 +71,7 @@ set(toast_mpi_SOURCES
     toast_mpi.cpp
 )
 
-add_library(toast_mpi ${toast_mpi_SOURCES})
+add_library(toast_mpi SHARED ${toast_mpi_SOURCES})
 
 target_include_directories(toast_mpi PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -88,11 +88,13 @@ target_compile_options(toast_mpi PRIVATE "${mpi_comp_flags}")
 
 if(APPLE)
     SET(TOASTMPITESTLIB -Wl,-all_load toasttest_mpi -Wl,-noall_load)
+    SET(TOASTMPICORELIB -Wl,-all_load toastcore_mpi -Wl,-noall_load)
 else()
     SET(TOASTMPITESTLIB -Wl,--whole-archive toasttest_mpi -Wl,--no-whole-archive)
+    SET(TOASTMPICORELIB -Wl,--whole-archive toastcore_mpi -Wl,--no-whole-archive)
 endif(APPLE)
 
-target_link_libraries(toast_mpi ${TOASTMPITESTLIB} toastcore_mpi)
+target_link_libraries(toast_mpi ${TOASTMPITESTLIB} ${TOASTMPICORELIB} toast "${MPI_CXX_LIBRARIES}")
 
 # Public headers
 install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")

@@ -6,6 +6,9 @@
 #ifndef TOAST_ATM_UTILS_HPP
 #define TOAST_ATM_UTILS_HPP
 
+#include <cmath>
+#include <cstddef>
+
 namespace toast {
 
 double atm_get_absorption_coefficient(double altitude, double temperature,
