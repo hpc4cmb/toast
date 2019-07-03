@@ -138,13 +138,29 @@ class OpsSimAtmosphereTest(MPITestCase):
         else:
             self.nflagged = self.data.comm.comm_world.allreduce(nflagged)
 
+        wfile = os.path.join(self.outdir, "weather.fits")
+        if self.comm is None or self.comm.rank == 0:
+            create_weather(wfile)
+        if self.comm is not None:
+            self.comm.barrier()
+
         self.data.obs[0]["tod"] = tod
+        self.data.obs[0]["id"] = self.data.comm.group
+        self.data.obs[0]["telescope_id"] = 1
+        self.data.obs[0]["site"] = "blah"
         self.data.obs[0]["site_id"] = 123
         self.data.obs[0]["weather"] = Weather(wfile, site=123)
+        self.data.obs[0]["altitude"] = 2000
+        self.data.obs[0]["fpradius"] = 1.0
 
         self.data_serial.obs[0]["tod"] = tod_serial
+        self.data_serial.obs[0]["id"] = self.data.comm.group
+        self.data_serial.obs[0]["telescope_id"] = 1
+        self.data_serial.obs[0]["site"] = "blah"
         self.data_serial.obs[0]["site_id"] = 123
-        self.data_serial.obs[0]["weather"] = None
+        self.data_serial.obs[0]["weather"] = Weather(wfile, site=123)
+        self.data_serial.obs[0]["altitude"] = 2000
+        self.data_serial.obs[0]["fpradius"] = 1.0
         return
 
     def test_atm(self):

@@ -163,6 +163,35 @@ def boresight_focalplane(
 
 def create_weather(outfile):
     from astropy.table import Table
+    import astropy.io.fits as af
+
+    TQI = [0.0 for x in range(24)]
+    TQL = [0.0 for x in range(24)]
+    TQV = [0.5 for x in range(24)]
+    QV10M = [0.001 for x in range(24)]
+    PS = [58550.0 for x in range(24)]
+    TS = [270.0 for x in range(24)]
+    T10M = [270.0 for x in range(24)]
+    U10M = [-5.0 for x in range(24)]
+    V10M = [-3.0 for x in range(24)]
+
+    hdus = af.HDUList([af.PrimaryHDU()])
+
+    for mon in range(12):
+        tab = Table(
+            [TQI, TQL, TQV, QV10M, PS, TS, T10M, U10M, V10M],
+            names=("TQI", "TQL", "TQV", "QV10M", "PS", "TS", "T10M", "U10M", "V10M"),
+            meta={
+                "PROBSTRT": 0.0,
+                "PROBSTOP": 1.0,
+                "PROBSTEP": 0.01,
+                "NSTEP": 101,
+                "MONTH": mon,
+            },
+        )
+        hdus.append(af.table_to_hdu(tab))
+
+    hdus.writeto(outfile, overwrite=True)
 
     return
 
