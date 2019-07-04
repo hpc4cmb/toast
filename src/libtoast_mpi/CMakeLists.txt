@@ -71,7 +71,7 @@ set(toast_mpi_SOURCES
     toast_mpi.cpp
 )
 
-add_library(toast_mpi SHARED ${toast_mpi_SOURCES})
+add_library(toast_mpi ${toast_mpi_SOURCES})
 
 target_include_directories(toast_mpi PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -87,11 +87,13 @@ target_include_directories(toast_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 target_compile_options(toast_mpi PRIVATE "${mpi_comp_flags}")
 
 if(APPLE)
-    SET(TOASTMPITESTLIB -Wl,-all_load toasttest_mpi -Wl,-noall_load)
-    SET(TOASTMPICORELIB -Wl,-all_load toastcore_mpi -Wl,-noall_load)
+    SET(TOASTMPITESTLIB -Wl,-force_load toasttest_mpi -Wl,-noall_load)
+    SET(TOASTMPICORELIB toastcore_mpi)
+#    SET(TOASTMPICORELIB -Wl,-all_load toastcore_mpi -Wl,-noall_load)
 else()
     SET(TOASTMPITESTLIB -Wl,--whole-archive toasttest_mpi -Wl,--no-whole-archive)
-    SET(TOASTMPICORELIB -Wl,--whole-archive toastcore_mpi -Wl,--no-whole-archive)
+    SET(TOASTMPICORELIB toastcore_mpi)
+#    SET(TOASTMPICORELIB -Wl,--whole-archive toastcore_mpi -Wl,--no-whole-archive)
 endif(APPLE)
 
 target_link_libraries(toast_mpi ${TOASTMPITESTLIB} ${TOASTMPICORELIB} toast "${MPI_CXX_LIBRARIES}")

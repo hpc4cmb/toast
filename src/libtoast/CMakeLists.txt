@@ -126,7 +126,7 @@ target_link_libraries(toasttest gtest)
 
 # Define the full toast library
 
-add_library(toast SHARED toast.cpp)
+add_library(toast toast.cpp)
 
 target_include_directories(toast PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -135,10 +135,12 @@ target_include_directories(toast PUBLIC
 
 if(APPLE)
     SET(TOASTTESTLIB -Wl,-all_load toasttest -Wl,-noall_load)
-    SET(TOASTCORELIB -Wl,-all_load toastcore -Wl,-noall_load)
+    SET(TOASTCORELIB toastcore)
+#    SET(TOASTCORELIB -Wl,-all_load toastcore -Wl,-noall_load)
 else()
     SET(TOASTTESTLIB -Wl,--whole-archive toasttest -Wl,--no-whole-archive)
-    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
+    SET(TOASTCORELIB toastcore)
+#    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
 endif(APPLE)
 
 target_link_libraries(toast ${TOASTTESTLIB} ${TOASTCORELIB})
