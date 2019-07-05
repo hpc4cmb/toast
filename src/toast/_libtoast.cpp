@@ -5,7 +5,7 @@
 
 #include <_libtoast.hpp>
 
-#include <_libtoast_common.cpp>
+using size_container = py::detail::any_container <ssize_t>;
 
 
 PYBIND11_MODULE(_libtoast, m) {

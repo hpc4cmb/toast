@@ -3,7 +3,7 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-using size_container = py::detail::any_container <ssize_t>;
+#include <_libtoast.hpp>
 
 // FIXME: we could use configure checks to detect whether we are on a 64bit
 // system and whether "l" and "L" are equivalent to "q" and "Q".

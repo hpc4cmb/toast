@@ -21,6 +21,7 @@ set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages")
 # Create a module for the serial toast library
 
 pybind11_add_module(_libtoast MODULE
+    _libtoast_common.cpp
     _libtoast.cpp
     _libtoast_sys.cpp
     _libtoast_math_sf.cpp
@@ -79,7 +80,10 @@ install(FILES
 # Optionally create a module for the MPI library
 
 if(MPI_FOUND AND MPI4PY_FOUND)
-    pybind11_add_module(_libtoast_mpi MODULE _libtoast_mpi.cpp)
+    pybind11_add_module(_libtoast_mpi MODULE
+        _libtoast_common.cpp
+        _libtoast_mpi.cpp
+    )
 
     string(STRIP "${MPI_CXX_COMPILE_FLAGS}" mpi_comp_flags)
     target_compile_options(_libtoast_mpi PRIVATE "${mpi_comp_flags}")

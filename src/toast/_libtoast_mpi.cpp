@@ -6,9 +6,6 @@
 #include <_libtoast_mpi.hpp>
 
 
-#include <_libtoast_common.cpp>
-
-
 // Currently the only compiled code that uses MPI and needs to be bound to python is
 // the atmosphere simulation code.  If the number of things increases, we should split
 // this file into multiple files.
