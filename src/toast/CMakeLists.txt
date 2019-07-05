@@ -51,7 +51,7 @@ endif(CHOLMOD_FOUND)
 target_link_libraries(_libtoast PRIVATE toast)
 
 # Include path to the toast headers
-target_include_directories(_libtoast PRIVATE
+target_include_directories(_libtoast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
 )
@@ -93,7 +93,7 @@ if(MPI_FOUND AND MPI4PY_FOUND)
         PROPERTIES LINK_FLAGS "${mpi_link_flags}"
     )
 
-    target_include_directories(_libtoast_mpi PRIVATE
+    target_include_directories(_libtoast_mpi BEFORE PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast_mpi/include"

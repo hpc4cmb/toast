@@ -32,7 +32,7 @@ set(toastcore_SOURCES
 
 add_library(toastcore ${toastcore_SOURCES})
 
-target_include_directories(toastcore PRIVATE
+target_include_directories(toastcore BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
@@ -115,7 +115,7 @@ set(toasttest_SOURCES
 
 add_library(toasttest ${toasttest_SOURCES})
 
-target_include_directories(toasttest PRIVATE
+target_include_directories(toasttest BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
@@ -128,7 +128,7 @@ target_link_libraries(toasttest gtest)
 
 add_library(toast toast.cpp)
 
-target_include_directories(toast PUBLIC
+target_include_directories(toast BEFORE PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -161,7 +161,7 @@ add_executable(toast_test
     toast_test.cpp
 )
 
-target_include_directories(toast_test PRIVATE
+target_include_directories(toast_test BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"

@@ -3,7 +3,7 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <_libtoast.hpp>
+#include <_libtoast_common.hpp>
 
 // FIXME: we could use configure checks to detect whether we are on a 64bit
 // system and whether "l" and "L" are equivalent to "q" and "Q".
