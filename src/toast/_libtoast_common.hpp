@@ -24,18 +24,6 @@
 
 namespace py = pybind11;
 
-// Aligned memory vector types
-
-using AlignedI8 = toast::AlignedVector <int8_t>;
-using AlignedU8 = toast::AlignedVector <uint8_t>;
-using AlignedI16 = toast::AlignedVector <int16_t>;
-using AlignedU16 = toast::AlignedVector <uint16_t>;
-using AlignedI32 = toast::AlignedVector <int32_t>;
-using AlignedU32 = toast::AlignedVector <uint32_t>;
-using AlignedI64 = toast::AlignedVector <int64_t>;
-using AlignedU64 = toast::AlignedVector <uint64_t>;
-using AlignedF32 = toast::AlignedVector <float>;
-using AlignedF64 = toast::AlignedVector <double>;
 
 template <typename T>
 std::vector <char> align_format() {

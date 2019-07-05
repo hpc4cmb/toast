@@ -279,12 +279,26 @@ bool operator!=(AlignedAllocator <T1> const &,
     return false;
 }
 
-// Helper alias for std::vector of a type with a AlignedAllocator for that
+// Helper aliases for std::vector of a type with a AlignedAllocator for that
 // type.
+
 template <typename T>
 using AlignedVector = std::vector <T, toast::AlignedAllocator <T> >;
 
-}
+// Define these explicitly, since specialization of using directive is not always
+// possible without wrapping in a struct.
 
+using AlignedI8 = std::vector <int8_t, toast::AlignedAllocator <int8_t> >;
+using AlignedU8 = std::vector <uint8_t, toast::AlignedAllocator <uint8_t> >;
+using AlignedI16 = std::vector <int16_t, toast::AlignedAllocator <int16_t> >;
+using AlignedU16 = std::vector <uint16_t, toast::AlignedAllocator <uint16_t> >;
+using AlignedI32 = std::vector <int32_t, toast::AlignedAllocator <int32_t> >;
+using AlignedU32 = std::vector <uint32_t, toast::AlignedAllocator <uint32_t> >;
+using AlignedI64 = std::vector <int64_t, toast::AlignedAllocator <int64_t> >;
+using AlignedU64 = std::vector <uint64_t, toast::AlignedAllocator <uint64_t> >;
+using AlignedF32 = std::vector <float, toast::AlignedAllocator <float> >;
+using AlignedF64 = std::vector <double, toast::AlignedAllocator <double> >;
+
+}
 
 #endif // ifndef TOAST_UTILS_HPP

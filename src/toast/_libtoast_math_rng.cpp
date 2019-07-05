@@ -174,11 +174,11 @@ void init_math_rng(py::module & m) {
             }
             py::list out;
             for (size_t i = 0; i < nstream; ++i) {
-                out.append(py::cast(AlignedU64(lengths[i])));
+                out.append(py::cast(toast::AlignedU64(lengths[i])));
             }
             std::vector <uint64_t *> bufs(nstream);
             for (size_t i = 0; i < nstream; ++i) {
-                auto ap = out[i].cast <AlignedU64 *> ();
+                auto ap = out[i].cast <toast::AlignedU64 *> ();
                 bufs[i] = ap->data();
             }
             toast::rng_multi_dist_uint64(nstream, lengths.data(), raw_k1,
@@ -239,11 +239,11 @@ void init_math_rng(py::module & m) {
             }
             py::list out;
             for (size_t i = 0; i < nstream; ++i) {
-                out.append(py::cast(AlignedF64(lengths[i])));
+                out.append(py::cast(toast::AlignedF64(lengths[i])));
             }
             std::vector <double *> bufs(nstream);
             for (size_t i = 0; i < nstream; ++i) {
-                auto ap = out[i].cast <AlignedF64 *> ();
+                auto ap = out[i].cast <toast::AlignedF64 *> ();
                 bufs[i] = ap->data();
             }
             toast::rng_multi_dist_uniform_01(nstream, lengths.data(), raw_k1,
@@ -305,11 +305,11 @@ void init_math_rng(py::module & m) {
             }
             py::list out;
             for (size_t i = 0; i < nstream; ++i) {
-                out.append(py::cast(AlignedF64(lengths[i])));
+                out.append(py::cast(toast::AlignedF64(lengths[i])));
             }
             std::vector <double *> bufs(nstream);
             for (size_t i = 0; i < nstream; ++i) {
-                auto ap = out[i].cast <AlignedF64 *> ();
+                auto ap = out[i].cast <toast::AlignedF64 *> ();
                 bufs[i] = ap->data();
             }
             toast::rng_multi_dist_uniform_11(nstream, lengths.data(), raw_k1,
@@ -371,11 +371,11 @@ void init_math_rng(py::module & m) {
             }
             py::list out;
             for (size_t i = 0; i < nstream; ++i) {
-                out.append(py::cast(AlignedF64(lengths[i])));
+                out.append(py::cast(toast::AlignedF64(lengths[i])));
             }
             std::vector <double *> bufs(nstream);
             for (size_t i = 0; i < nstream; ++i) {
-                auto ap = out[i].cast <AlignedF64 *> ();
+                auto ap = out[i].cast <toast::AlignedF64 *> ();
                 bufs[i] = ap->data();
             }
             toast::rng_multi_dist_normal(nstream, lengths.data(), raw_k1,

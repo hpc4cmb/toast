@@ -15,16 +15,16 @@ PYBIND11_MODULE(_libtoast, m) {
     )";
 
     // Register aligned array types
-    register_aligned <AlignedI8> (m, "AlignedI8");
-    register_aligned <AlignedU8> (m, "AlignedU8");
-    register_aligned <AlignedI16> (m, "AlignedI16");
-    register_aligned <AlignedU16> (m, "AlignedU16");
-    register_aligned <AlignedI32> (m, "AlignedI32");
-    register_aligned <AlignedU32> (m, "AlignedU32");
-    register_aligned <AlignedI64> (m, "AlignedI64");
-    register_aligned <AlignedU64> (m, "AlignedU64");
-    register_aligned <AlignedF32> (m, "AlignedF32");
-    register_aligned <AlignedF64> (m, "AlignedF64");
+    register_aligned <toast::AlignedI8> (m, "AlignedI8");
+    register_aligned <toast::AlignedU8> (m, "AlignedU8");
+    register_aligned <toast::AlignedI16> (m, "AlignedI16");
+    register_aligned <toast::AlignedU16> (m, "AlignedU16");
+    register_aligned <toast::AlignedI32> (m, "AlignedI32");
+    register_aligned <toast::AlignedU32> (m, "AlignedU32");
+    register_aligned <toast::AlignedI64> (m, "AlignedI64");
+    register_aligned <toast::AlignedU64> (m, "AlignedU64");
+    register_aligned <toast::AlignedF32> (m, "AlignedF32");
+    register_aligned <toast::AlignedF64> (m, "AlignedF64");
 
     init_sys(m);
     init_math_sf(m);
