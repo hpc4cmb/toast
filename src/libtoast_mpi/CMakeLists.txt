@@ -87,7 +87,7 @@ target_include_directories(toast_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 target_compile_options(toast_mpi PRIVATE "${mpi_comp_flags}")
 
 if(APPLE)
-    SET(TOASTMPITESTLIB -Wl,-force_load toasttest_mpi -Wl,-noall_load)
+    SET(TOASTMPITESTLIB -Wl,-force_load toasttest_mpi)
     SET(TOASTMPICORELIB toastcore_mpi)
 #    SET(TOASTMPICORELIB -Wl,-all_load toastcore_mpi -Wl,-noall_load)
 else()

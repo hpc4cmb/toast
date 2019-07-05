@@ -86,3 +86,31 @@ they should include the specific headers they need.  For example::
 If attempting to vectorize code with OpenMP simd constructs, be sure to check that any data array used in the simd region are aligned (see toast::is_aligned).  Otherwise this can result in silent data corruption.
 
 Documentation:  sphinx is used.  All python code should have docstrings.  All C++ code exposed through pybind11 should also have docstrings defined in the bindings.  C++ code that is not exposed to python is considered is internal, expert-level code does not require formal documentation.  However, such code should have sufficient comments to describe the algorithm and design choices.
+
+
+
+NOTES for OS X
+=========================
+
+homebrew:
+
+brew install fftw cfitsio suite-sparse zlib cmake boost-python3
+-->  this brings in openmpi as well
+
+Need to install hdf5 and h5py manually, since homebrew package built with gcc, not clang.
+
+
+macports:
+
+sudo port install mpich-devel-gcc9
+sudo port select --set mpi mpich-devel-gcc9-fortran
+
+https://trac.macports.org/ticket/58333#comment:8
+
+sudo port install cfitsio fftw suitesparse py37-h5py py37-virtualenv m4 libtool autoconf automake cmake zlib
+
+sudo port select --set cython cython37
+sudo port select --set python3 python37
+sudo port select --set virtualenv virtualenv37
+
+sudo port install boost +python37

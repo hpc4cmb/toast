@@ -134,7 +134,7 @@ target_include_directories(toast PUBLIC
 )
 
 if(APPLE)
-    SET(TOASTTESTLIB -Wl,-all_load toasttest -Wl,-noall_load)
+    SET(TOASTTESTLIB -Wl,-force_load toasttest)
     SET(TOASTCORELIB toastcore)
 #    SET(TOASTCORELIB -Wl,-all_load toastcore -Wl,-noall_load)
 else()
