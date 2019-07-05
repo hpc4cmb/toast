@@ -1,24 +1,18 @@
 #!/bin/bash
 
-# This script assumes that the "toast-deps" module has been loaded.
-# To install to my scratch directory, I might run this script with:
-#
-# $> ./platforms/cori-knl_intel_mkl.sh \
-#    --prefix=$SCRATCH/software/toast-knl
-#
+opts="$@"
 
-OPTS="$@"
+cmake \
+    -DCMAKE_C_COMPILER="${CRAYPE_DIR}/bin/cc" \
+    -DCMAKE_CXX_COMPILER="${CRAYPE_DIR}/bin/CC" \
+    -DMPI_C_COMPILER="${CRAYPE_DIR}/bin/cc" \
+    -DMPI_CXX_COMPILER="${CRAYPE_DIR}/bin/CC" \
+    -DCMAKE_C_FLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread -std=c++11" \
+    -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DSUITESPARSE_INCLUDE_DIR_HINTS="${CMBENV_AUX_ROOT}/include" \
+    -DSUITESPARSE_LIBRARY_DIR_HINTS="${CMBENV_AUX_ROOT}/lib" \
+    ${opts} \
+    ..
 
-export PYTHON=python3
-export CC=cc
-export CXX=CC
-export MPICC=cc
-export MPICXX=CC
-export CFLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread"
-export CXXFLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread"
-export OPENMP_CFLAGS="-qopenmp"
-export OPENMP_CXXFLAGS="-qopenmp"
-
-./configure ${OPTS} \
-    --with-math="-limf -lsvml" \
-    --with-mkl="${INTEL_PATH}/linux/mkl/lib/intel64"
