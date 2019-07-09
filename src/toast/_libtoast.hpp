@@ -41,6 +41,9 @@ void register_aligned(py::module & m, char const * name) {
     .def("resize", (void (C::*)(typename C::size_type count)) & C::resize)
     .def("size", &C::size)
     .def("clear", &C::clear)
+    .def("address", [](C & self) {
+            return (int64_t)((void*)self.data());
+        })
     .def("array", [](C & self) -> py::array_t <typename C::value_type> {
              py::array_t <typename C::value_type> ret({self.size()},
                                                       {sizeof(typename C::value_type)},

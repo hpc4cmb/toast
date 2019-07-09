@@ -123,6 +123,10 @@ class Cache(object):
                 raise ValueError(msg)
         self._dtypes[name] = ttype
         self._shapes[name] = shape
+        if self._pymem:
+            return self._buffers[name].reshape(self._shapes[name])
+        else:
+            return self._buffers[name].array().reshape(self._shapes[name])
         return self._buffers[name]
 
     def put(self, name, data, replace=False):
@@ -151,26 +155,25 @@ class Cache(object):
             realname = name
             if name in self._aliases:
                 realname = self._aliases[name]
+            addr = None
             if self._pymem:
-                if data is self._buffers[realname]:
-                    # These are the same object.
-                    return self.reference(realname)
+                p_ref = \
+                self._buffers[realname].ctypes.data_as(ctypes.c_void_p).value
             else:
-                # Just to be sure, compare the actual memory addresses, types,
-                # and sizes.
-                ref = self.reference(realname)
-                p_ref = ref.rawdata()
-                p_data = data.ctypes.data_as(ctypes.c_void_p)
-                if (
-                    (p_ref == p_data)
-                    and (ref.shape == data.shape)
-                    and (ref.dtype == data.dtype)
-                ):
-                    return ref
+                p_ref = self._buffers[realname].address()
+
+            p_data = data.ctypes.data_as(ctypes.c_void_p).value
+            # print("p_ref = {}, p_data = {}".format(p_ref, p_data), flush=True)
+            if (
+                (p_ref == p_data)
+                and (self._shapes[realname] == data.shape)
+                and (self._dtypes[realname] == data.dtype)
+            ):
+                return self.reference(realname)
             if not replace:
                 raise RuntimeError(
                     "Cache buffer named {} already exists "
-                    "and replace is False.".foramt(name)
+                    "and replace is False.".format(name)
                 )
             # At this point we have an existing memory buffer or alias with
             # the same name, and which is not identical to the input.  If this
@@ -181,12 +184,12 @@ class Cache(object):
                 # This existing data is not an alias.  However, the input
                 # might be a view into this existing memory.  Before deleting
                 # the existing data, we copy the input just in case.
-                indata[:] = data
+                indata = np.array(data)
                 self.destroy(name)
 
         # Now create the new buffer and copy in the data.
         ref = self.create(name, indata.dtype, indata.shape)
-        ref[:] = indata
+        np.copyto(ref, indata)
         return ref
 
     def add_alias(self, alias, name):

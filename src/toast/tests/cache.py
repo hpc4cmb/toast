@@ -6,6 +6,8 @@ import sys
 
 import numpy as np
 
+import ctypes
+
 from .mpi import MPITestCase
 
 from ..cache import Cache
@@ -80,34 +82,125 @@ class CacheTest(MPITestCase):
         for k, v in self.types.items():
             self.pycache.destroy("test-{}".format(k))
 
+        self.pycache.clear()
+        return
+
+    def test_put(self):
+        # Populate some buffers
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 4), v)
+            ref = self.cache.put(pname, pdata)
+            del ref
+
+        # Test putting the same buffer- it should just return a new array
+        # wrapping the same underlying memory.
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 4), v)
+            ref = self.cache.reference(pname)
+            copyref = self.cache.put(pname, ref)
+            ref_pnt = ref.ctypes.data_as(ctypes.c_void_p).value
+            copyref_pnt = copyref.ctypes.data_as(ctypes.c_void_p).value
+            self.assertTrue(ref_pnt == copyref_pnt)
+            del ref
+            del copyref
+
+        # Test replacement of buffers with the same name
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 8), v)
+            try:
+                # This should raise- same name as existing buffer, but
+                # replace == False
+                ref = self.cache.put(pname, pdata)
+                del ref
+                self.assertTrue(False)
+            except RuntimeError:
+                # Success!
+                pass
+            # This should work
+            ref = self.cache.put(pname, pdata, replace=True)
+            del ref
+
         self.cache.clear()
+
+        # Populate some buffers
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 4), v)
+            ref = self.pycache.put(pname, pdata)
+            del ref
+
+        # Test putting the same buffer- it should just return a new array
+        # wrapping the same underlying memory.
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 4), v)
+            ref = self.pycache.reference(pname)
+            copyref = self.pycache.put(pname, ref)
+            ref_pnt = ref.ctypes.data_as(ctypes.c_void_p).value
+            copyref_pnt = copyref.ctypes.data_as(ctypes.c_void_p).value
+            self.assertTrue(ref_pnt == copyref_pnt)
+            del ref
+            del copyref
+
+        # Test replacement of buffers with the same name
+        for k, v in self.types.items():
+            pname = "test-{}".format(k)
+            pdata = np.ones((self.nsamp, 8), v)
+            try:
+                # This should raise- same name as existing buffer, but
+                # replace == False
+                ref = self.pycache.put(pname, pdata)
+                del ref
+                self.assertTrue(False)
+            except RuntimeError:
+                # Success!
+                pass
+            # This should work
+            ref = self.pycache.put(pname, pdata, replace=True)
+            del ref
+
+        self.pycache.clear()
         return
 
     def test_create_none(self):
         try:
             ref = self.cache.create(None, np.float, (1, 10))
+            del ref
+            ref = self.pycache.create(None, np.float, (1, 10))
+            del ref
             raise RuntimeError("Creating object with None key succeeded")
         except ValueError:
             pass
 
         self.cache.clear()
+        self.pycache.clear()
         return
 
     def test_put_none(self):
         try:
             ref = self.cache.put(None, np.float, np.arange(10))
+            del ref
+            ref = self.pycache.put(None, np.float, np.arange(10))
+            del ref
             raise RuntimeError("Putting an object with None key succeeded")
         except ValueError:
             pass
 
         self.cache.clear()
+        self.pycache.clear()
         return
 
     def test_clear(self):
         for k, v in self.types.items():
             ref = self.cache.create("test-{}".format(k), v, (self.nsamp, 4))
             del ref
+            ref = self.pycache.create("test-{}".format(k), v, (self.nsamp, 4))
+            del ref
         self.cache.clear()
+        self.pycache.clear()
         return
 
     def test_alias(self):
@@ -129,4 +222,27 @@ class CacheTest(MPITestCase):
 
         ex = self.cache.exists("test-alias-2")
         self.assertFalse(ex)
+
+        self.cache.clear()
+
+        ref = self.pycache.put("test", np.arange(10))
+        del ref
+
+        self.pycache.add_alias("test-alias", "test")
+        self.pycache.add_alias("test-alias-2", "test")
+
+        data = self.pycache.reference("test-alias")
+        del data
+
+        self.pycache.destroy("test-alias")
+
+        data = self.pycache.reference("test-alias-2")
+        del data
+
+        self.pycache.destroy("test")
+
+        ex = self.pycache.exists("test-alias-2")
+        self.assertFalse(ex)
+
+        self.pycache.clear()
         return
