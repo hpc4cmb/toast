@@ -95,28 +95,28 @@ class Cache(object):
         for dim in shape:
             flatshape *= dim
         if self._pymem:
-            self._buffers[name] = np.zeros(flatshape, dtype=ttype).reshape(shape)
+            self._buffers[name] = np.zeros(flatshape, dtype=ttype)
         else:
             if ttype.char == "b":
-                self._buffers[name] = AlignedI8.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedI8.zeros(flatshape)
             elif ttype.char == "B":
-                self._buffers[name] = AlignedU8.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedU8.zeros(flatshape)
             elif ttype.char == "h":
-                self._buffers[name] = AlignedI16.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedI16.zeros(flatshape)
             elif ttype.char == "H":
-                self._buffers[name] = AlignedU16.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedU16.zeros(flatshape)
             elif ttype.char == "i":
-                self._buffers[name] = AlignedI32.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedI32.zeros(flatshape)
             elif ttype.char == "I":
-                self._buffers[name] = AlignedU32.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedU32.zeros(flatshape)
             elif (ttype.char == "q") or (ttype.char == "l"):
-                self._buffers[name] = AlignedI64.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedI64.zeros(flatshape)
             elif (ttype.char == "Q") or (ttype.char == "L"):
-                self._buffers[name] = AlignedU64.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedU64.zeros(flatshape)
             elif ttype.char == "f":
-                self._buffers[name] = AlignedF32.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedF32.zeros(flatshape)
             elif ttype.char == "d":
-                self._buffers[name] = AlignedF64.zeros(flatshape).array().reshape(shape)
+                self._buffers[name] = AlignedF64.zeros(flatshape)
             else:
                 msg = "Unsupported data typecode '{}'".format(ttype.char)
                 log.error(msg)
@@ -159,8 +159,8 @@ class Cache(object):
                 # Just to be sure, compare the actual memory addresses, types,
                 # and sizes.
                 ref = self.reference(realname)
-                p_ref = ref.ctypes.data_as(ctypes.POINTER(ctypes.c_void))
-                p_data = data.ctypes.data_as(ctypes.POINTER(ctypes.c_void))
+                p_ref = ref.rawdata()
+                p_data = data.ctypes.data_as(ctypes.c_void_p)
                 if (
                     (p_ref == p_data)
                     and (ref.shape == data.shape)
@@ -181,7 +181,7 @@ class Cache(object):
                 # This existing data is not an alias.  However, the input
                 # might be a view into this existing memory.  Before deleting
                 # the existing data, we copy the input just in case.
-                indata = data.copy()
+                indata[:] = data
                 self.destroy(name)
 
         # Now create the new buffer and copy in the data.
@@ -245,6 +245,10 @@ class Cache(object):
         for key in aliases_to_remove:
             del self._aliases[key]
 
+        # Forcibly resize this buffer to length zero
+        if not self._pymem:
+            self._buffers[name].clear()
+
         # Remove actual buffer
         del self._buffers[name]
         del self._dtypes[name]
@@ -291,7 +295,10 @@ class Cache(object):
         if name in self._aliases:
             # This is an alias
             realname = self._aliases[name]
-        return self._buffers[realname]
+        if self._pymem:
+            return self._buffers[realname].reshape(self._shapes[realname])
+        else:
+            return self._buffers[realname].array().reshape(self._shapes[realname])
 
     def keys(self):
         """Return a list of all the keys in the cache.

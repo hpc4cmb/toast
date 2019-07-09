@@ -126,7 +126,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         suite.addTest(loader.loadTestsFromModule(testopspysm))
-        suite.addTest(loader.loadTestsFromModule(testopsatm))
+        if atm_available:
+            suite.addTest(loader.loadTestsFromModule(testopsatm))
         if tidas_available:
             suite.addTest(loader.loadTestsFromModule(testtidas))
         if spt3g_available:

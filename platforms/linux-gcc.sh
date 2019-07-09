@@ -3,17 +3,16 @@
 # Pass extra configure options to this script, including
 # things like --prefix, --with-elemental, etc.
 
-OPTS="$@"
+opts="$@"
 
-export PYTHON=python3
-export CC=mpicc
-export CXX=mpicxx
-export MPICC=mpicc
-export MPICXX=mpicxx
-export CFLAGS="-O3 -g -fPIC -pthread -std=c99"
-export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -fext-numeric-literals"
-export OPENMP_CFLAGS="-fopenmp"
-export OPENMP_CXXFLAGS="-fopenmp"
-export LDFLAGS="-lpthread"
-
-./configure ${OPTS}
+cmake \
+    -DCMAKE_C_COMPILER="gcc" \
+    -DCMAKE_CXX_COMPILER="g++" \
+    -DMPI_C_COMPILER="mpicc" \
+    -DMPI_CXX_COMPILER="mpicxx" \
+    -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
+    -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    ${opts} \
+    ..

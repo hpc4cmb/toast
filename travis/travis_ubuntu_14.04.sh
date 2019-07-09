@@ -43,6 +43,10 @@ sudo -E apt-get -yq --no-install-suggests --no-install-recommends install build-
 export CC=$(which gcc${toolchain})
 export CXX=$(which g++${toolchain})
 export FC=$(which gfortran${toolchain})
+echo "Building dependencies with:"
+echo "  CC = ${CC} $(${CC} -dumpversion)"
+echo "  CXX = ${CXX} $(${CXX} -dumpversion)"
+echo "  FC = ${FC} $(${FC} -dumpversion)"
 
 # Install travis python
 # if [ ! -e "${HOME}/virtualenv/python3.6/bin/activate" ]; then
@@ -51,247 +55,18 @@ export FC=$(which gfortran${toolchain})
 # fi
 source ${HOME}/virtualenv/python3.6/bin/activate
 
-# Pip install the runtime packages we need.  These are not saved in the tarball.
-pip install numpy scipy matplotlib cython astropy ephem healpy cmake numba toml
 
-# Set up TOAST dependencies for travis.  We use the following approach:
-#
-# Python     : Use the travis-provided virtualenv.  Pip install common packages
-#              like numpy, scipy, astropy, etc.
-# MPI        : Install MPICH from source using the serial compilers specified
-#              in our build matrix.
-# mpi4py     : Install from source to use our MPICH.
-# ephem      : Install with pip using travis virtualenv.
-# healpy     : Install with pip using travis virtualenv.
-# elemental  : Install using our MPICH and build matrix compilers.
-# aatm       : Install with our build matrix compilers.
-# libmadam   : Install using our MPICH and build matrix compilers.
-# libconviqt : Install using our MPICH and build matrix compilers.
-# libsharp   : Install using our MPICH and build matrix compilers.
-# PySM       : Install with pip using travis virtualenv.
-#
+# Clone the cmbenv package
+git clone https://github.com/hpc4cmb/cmbenv.git
+cd cmbenv
+./cmbenv -c travis_14.04 -p ${HOME}/software
 
-PREFIX="${HOME}/software"
-mkdir -p "${PREFIX}"
+mkdir -p build
+cd build
+../install_travis_14.04.sh | tee log
 
-# Serial compilers - these should be set in the build matrix
 
-echo "Building dependencies with:"
-echo "  CC = ${CC} $(${CC} -dumpversion)"
-echo "  CXX = ${CXX} $(${CXX} -dumpversion)"
-echo "  FC = ${FC} $(${FC} -dumpversion)"
 
-# Set up our install prefix for all manually installed software
-
-mkdir -p ${PREFIX}/bin
-mkdir -p ${PREFIX}/lib
-mkdir -p ${PREFIX}/include
-export PYSITE=$(python --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
-mkdir -p ${PREFIX}/lib/python${PYSITE}/site-packages
-export PATH="${PREFIX}/bin:${PATH}"
-export CPATH="${PREFIX}/include:${CPATH}"
-export LIBRARY_PATH="${PREFIX}/lib:${LIBRARY_PATH}"
-export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH}"
-export PYTHONPATH="${PREFIX}/lib/python${PYSITE}/site-packages:${PYTHONPATH}"
-
-# Install MPICH
-
-wget http://www.mpich.org/static/downloads/3.2/mpich-3.2.tar.gz \
-    && tar -xzf mpich-3.2.tar.gz \
-    && cd mpich-3.2 \
-    && CFLAGS="-O2 -g -fPIC -pthread" \
-    CXXFLAGS="-O2 -g -fPIC -pthread" \
-    FCFLAGS="-O2 -g -fPIC -pthread" \
-    ./configure --prefix="${PREFIX}" \
-    && make \
-    && make install \
-    && cd ..
-
-# set the MPI compilers
-export MPICC=$(which mpicc)
-export MPICXX=$(which mpicxx)
-export MPIFC=$(which mpif90)
-
-# Install mpi4py using our MPICH.  This is put into the tarball.
-
-pip install --target="${PREFIX}/lib/python${PYSITE}/site-packages" mpi4py \
-
-# Install aatm
-
-wget https://launchpad.net/aatm/trunk/0.5/+download/aatm-0.5.tar.gz \
-    && tar xzf aatm-0.5.tar.gz \
-    && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_aatm \
-    && cd aatm-0.5 \
-    && chmod -R u+w . \
-    && patch -p1 < "../patch_aatm" \
-    && autoreconf --force --install \
-    && CFLAGS="-O2 -g -fPIC -pthread" \
-    CPPFLAGS="-I${PREFIX}/include" \
-    LDFLAGS="-L${PREFIX}/lib" \
-    ./configure  \
-    --prefix="${PREFIX}" \
-    && make \
-    && make install \
-    && cd ..
-
-# libbz2, needed for boost / spt3g
-# FIXME: change patch link below after branch is merged upstream.
-
-curl -SL https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/bzip2/1.0.6-8/bzip2_1.0.6.orig.tar.bz2 \
-        | tar xjf - \
-        && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_bzip2 \
-        && cd bzip2-1.0.6 \
-        && patch -p1 < ../patch_bzip2 \
-        && CC="${CC}" CFLAGS="-O2 -g -fPIC -pthread" \
-        make -f Makefile-toast \
-        && cp -a bzlib.h "${PREFIX}/include" \
-        && cp -a libbz2.so* "${PREFIX}/lib" \
-        && cd ..
-
-# Install boost (needed by spt3g)
-
-curl -SL https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.bz2 \
-    -o boost_1_65_1.tar.bz2 \
-    && tar xjf boost_1_65_1.tar.bz2 \
-    && cd boost_1_65_1 \
-    && echo "" > tools/build/src/user-config.jam \
-    && echo "using gcc : ${toolchainver} : ${CXX} ;" >> tools/build/src/user-config.jam \
-    && echo "using mpi : ${MPICXX} : <include>\"${PREFIX}/include\" <library-path>\"${PREFIX}/lib\" <find-shared-library>\"mpichcxx\" <find-shared-library>\"mpich\" ;" >> tools/build/src/user-config.jam \
-    && BOOST_BUILD_USER_CONFIG=tools/build/src/user-config.jam \
-    BZIP2_INCLUDE="${PREFIX}/include" \
-    BZIP2_LIBPATH="${PREFIX}/lib" \
-    ./bootstrap.sh \
-    --with-toolset=gcc \
-    --with-python=python${PYSITE} \
-    --prefix=${PREFIX} \
-    && ./b2 --toolset=gcc${toolchain} --layout=tagged \
-    --user-config=./tools/build/src/user-config.jam \
-    $(python3-config --includes | sed -e 's/-I//g' -e 's/\([^[:space:]]\+\)/ include=\1/g') \
-    variant=release threading=multi link=shared runtime-link=shared install \
-    && cd ..
-
-# Install Elemental
-
-wget https://github.com/elemental/Elemental/archive/v0.87.7.tar.gz \
-    && tar -xzf v0.87.7.tar.gz \
-    && cd Elemental-0.87.7 \
-    && mkdir build && cd build \
-    && cmake \
-    -D CMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -D INSTALL_PYTHON_PACKAGE=OFF \
-    -D CMAKE_CXX_COMPILER="${MPICXX}" \
-    -D CMAKE_C_COMPILER="${MPICC}" \
-    -D CMAKE_Fortran_COMPILER="${MPIFC}" \
-    -D MPI_CXX_COMPILER="${MPICXX}" \
-    -D MPI_C_COMPILER="${MPICC}" \
-    -D MPI_Fortran_COMPILER="${MPIFC}" \
-    -D METIS_GKREGEX=ON \
-    -D EL_DISABLE_PARMETIS=TRUE \
-    -D MATH_LIBS="-llapack -lopenblas" \
-    -D CMAKE_BUILD_TYPE=Release \
-    -D CMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_C_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_Fortran_FLAGS="-O2 -g -fPIC -pthread -fopenmp" \
-    -D CMAKE_SHARED_LINKER_FLAGS="-fopenmp" \
-    .. \
-    && make \
-    && make install \
-    && cd ../..
-
-# Install libmadam
-
-wget https://github.com/hpc4cmb/libmadam/releases/download/0.2.7/libmadam-0.2.7.tar.bz2 \
-    && tar -xjf libmadam-0.2.7.tar.bz2 \
-    && cd libmadam-0.2.7 \
-    && FC="${MPIFC}" FCFLAGS="-O2 -g -fPIC -pthread" \
-    CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread" \
-    ./configure --with-cfitsio="/usr" \
-    --with-blas="-lopenblas" --with-lapack="-llapack" \
-    --with-fftw="/usr" --prefix="${PREFIX}" \
-    && make \
-    && make install \
-    && cd ..
-
-# Install libconviqt
-
-wget -O libconviqt-1.0.2.tar.bz2 https://www.dropbox.com/s/4tzjn9bgq7enkf9/libconviqt-1.0.2.tar.bz2?dl=1 \
-    && tar -xjf libconviqt-1.0.2.tar.bz2 \
-    && cd libconviqt-1.0.2 \
-    && CC="${MPICC}" CXX="${MPICXX}" \
-    CFLAGS="-O2 -g -fPIC -pthread -std=gnu99" \
-    CXXFLAGS="-O2 -g -fPIC -pthread" \
-    ./configure --with-cfitsio="/usr" \
-    --prefix="${PREFIX}" \
-    && make \
-    && make install \
-    && cd ..
-
-# Install libsharp
-
-git clone https://github.com/Libsharp/libsharp --branch master --single-branch --depth 1 \
-    && wget https://raw.githubusercontent.com/hpc4cmb/toast/master/external/rules/patch_libsharp \
-    && cd libsharp \
-    && patch -p1 < "../patch_libsharp" \
-    && autoreconf --force --install \
-    && CC="${MPICC}" CFLAGS="-O2 -g -fPIC -pthread -std=c99" \
-    ./configure  --enable-mpi --enable-pic --prefix="${PREFIX}" \
-    && make \
-    && cp -a auto/* "${PREFIX}" \
-    && cd python \
-    && LIBSHARP="${PREFIX}" CC="${MPICC} -g" LDSHARED="${MPICC} -g -shared" \
-    python setup.py install --prefix="${PREFIX}" \
-    && cd ../..
-
-# Install spt3g software
-# FIXME: change patch link below after branch is merged upstream.
-
-git clone https://github.com/CMB-S4/spt3g_software.git --branch master --single-branch --depth 1 \
-    && wget https://raw.githubusercontent.com/tskisner/toast/issue_235/external/rules/patch_spt3g \
-    && export spt3g_start=$(pwd) \
-    && cd spt3g_software \
-    && patch -p1 < ../patch_spt3g \
-    && cd .. \
-    && cp -a spt3g_software "${PREFIX}/spt3g" \
-    && cd "${PREFIX}/spt3g" \
-    && mkdir build \
-    && cd build \
-    && LDFLAGS="-Wl,-z,muldefs" \
-    cmake \
-    -DCMAKE_C_COMPILER="${CC}" \
-    -DCMAKE_CXX_COMPILER="${CXX}" \
-    -DCMAKE_C_FLAGS="-O2 -g -fPIC -pthread" \
-    -DCMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DBOOST_ROOT="${PREFIX}" \
-    .. \
-    && make \
-    && ln -s ${PREFIX}/spt3g/build/bin/* ${PREFIX}/bin/ \
-    && ln -s ${PREFIX}/spt3g/build/spt3g ${PREFIX}/lib/python${PYSITE}/site-packages/ \
-    && cd ${spt3g_start}
-
-# Install TIDAS
-
-git clone https://github.com/hpc4cmb/tidas.git --branch master --single-branch --depth 1 \
-    && cd tidas \
-    && mkdir build \
-    && cd build \
-    && cmake \
-    -DCMAKE_C_COMPILER="${CC}" \
-    -DCMAKE_CXX_COMPILER="${CXX}" \
-    -DMPI_C_COMPILER="${MPICC}" \
-    -DMPI_CXX_COMPILER="${MPICXX}" \
-    -DCMAKE_C_FLAGS="-O2 -g -fPIC -pthread -DSQLITE_DISABLE_INTRINSIC" \
-    -DCMAKE_CXX_FLAGS="-O2 -g -fPIC -pthread -DSQLITE_DISABLE_INTRINSIC" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    .. \
-    && make && make install \
-    && cd ../..
-
-# Make sure that any python modules installed to our prefix are built into pyc
-# files- so that we can make those directories read-only
-
-python -m compileall -f "${PREFIX}/lib/python${PYSITE}/site-packages"
 
 # Package up tarball
 cd "${HOME}" \
