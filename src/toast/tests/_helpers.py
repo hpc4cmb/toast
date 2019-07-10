@@ -165,15 +165,16 @@ def create_weather(outfile):
     from astropy.table import Table
     import astropy.io.fits as af
 
-    TQI = [0.0 for x in range(24)]
-    TQL = [0.0 for x in range(24)]
-    TQV = [0.5 for x in range(24)]
-    QV10M = [0.001 for x in range(24)]
-    PS = [58550.0 for x in range(24)]
-    TS = [270.0 for x in range(24)]
-    T10M = [270.0 for x in range(24)]
-    U10M = [-5.0 for x in range(24)]
-    V10M = [-3.0 for x in range(24)]
+    nstep = 101
+    TQI = [np.linspace(0, 0.5, nstep) for x in range(24)]
+    TQL = [np.linspace(0, 0.1, nstep) for x in range(24)]
+    TQV = [np.linspace(1, 12, nstep) for x in range(24)]
+    QV10M = [np.linspace(0.001, 0.007, nstep) for x in range(24)]
+    PS = [np.linspace(58600, 59000, nstep) for x in range(24)]
+    TS = [np.linspace(270, 280, nstep) for x in range(24)]
+    T10M = [np.linspace(270, 280, nstep) for x in range(24)]
+    U10M = [np.linspace(-2, 8, nstep) for x in range(24)]
+    V10M = [np.linspace(-1, 3, nstep) for x in range(24)]
 
     hdus = af.HDUList([af.PrimaryHDU()])
 
@@ -185,7 +186,7 @@ def create_weather(outfile):
                 "PROBSTRT": 0.0,
                 "PROBSTOP": 1.0,
                 "PROBSTEP": 0.01,
-                "NSTEP": 101,
+                "NSTEP": nstep,
                 "MONTH": mon,
             },
         )
