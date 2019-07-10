@@ -33,5 +33,6 @@ install(FILES
     ops_sim_pysm.py
     tidas.py
     ops_sim_atm.py
+    ops_sim_sss.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

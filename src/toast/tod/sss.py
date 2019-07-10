@@ -17,6 +17,8 @@ from toast.mpi import MPI
 
 import toast.qarray as qa
 
+import healpy as hp
+
 
 class OpSimScanSynchronousSignal(Operator):
     """Operator which generates scan-synchronous signal timestreams.
@@ -40,23 +42,17 @@ class OpSimScanSynchronousSignal(Operator):
     """
 
     def __init__(
-            self,
-            out="sss",
-            realization=0,
-            component=663056,
-            nside=128,
-            fwhm=10,
-            lmax=256,
-            scale=1e-3,
-            power=-1,
-            report_timing=False,
+        self,
+        out="sss",
+        realization=0,
+        component=663056,
+        nside=128,
+        fwhm=10,
+        lmax=256,
+        scale=1e-3,
+        power=-1,
+        report_timing=False,
     ):
-        if not available:
-            msg = (
-                "TOAST not compiled with atmosphere simulation support (requires "
-                "SuiteSparse)"
-            )
-            raise RuntimeError(msg)
         # Call the parent class constructor
         super().__init__()
 
@@ -65,6 +61,7 @@ class OpSimScanSynchronousSignal(Operator):
         self._component = component
         self._nside = nside
         self._lmax = lmax
+        self._fwhm = fwhm
         self._scale = scale
         self._power = power
         self._report_timing = report_timing
@@ -99,7 +96,7 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 rank = comm.rank
             site = self._get_from_obs("site_id", obs)
-            #weather = self._get_from_obs("weather", obs)
+            # weather = self._get_from_obs("weather", obs)
 
             # Get the observation time span and initialize the weather
             # object if one is provided.
@@ -111,7 +108,7 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
                 tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
-            #weather.set(site, self._realization, tmin_tot)
+            # weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
 
@@ -137,8 +134,9 @@ class OpSimScanSynchronousSignal(Operator):
                 comm.Barrier()
             if rank == 0:
                 tmr.stop()
-                tmr.report("{}Simulated and observed scan-synchronous signal"
-                           "".format(prefix))
+                tmr.report(
+                    "{}Simulated and observed scan-synchronous signal" "".format(prefix)
+                )
         return
 
     def _get_from_obs(self, name, obs):
@@ -149,8 +147,7 @@ class OpSimScanSynchronousSignal(Operator):
         """
         if name not in obs:
             raise RuntimeError(
-                "Error simulating SSS: observation "
-                'does not define "{}"'.format(name)
+                "Error simulating SSS: observation " 'does not define "{}"'.format(name)
             )
         return obs[name]
 
@@ -173,45 +170,24 @@ class OpSimScanSynchronousSignal(Operator):
         counter2 = 0
         return key1, key2, counter1, counter2
 
-    def _get_cache_dir(self, obs, comm):
-        obsindx = self._get_from_obs("id", obs)
-        if self._cachedir is None:
-            cachedir = None
-        else:
-            # The number of atmospheric realizations can be large.  Use
-            # sub-directories under cachedir.
-            subdir = str(int((obsindx % 1000) // 100))
-            subsubdir = str(int((obsindx % 100) // 10))
-            subsubsubdir = str(obsindx % 10)
-            cachedir = os.path.join(self._cachedir, subdir, subsubdir, subsubsubdir)
-            if (comm is None) or (comm.rank == 0):
-                try:
-                    os.makedirs(cachedir)
-                except FileExistsError:
-                    pass
-        return cachedir
-
     def _simulate_sss(self, key1, key2, counter1, counter2):
         """
         Create a map of the ground signal to observe with all detectors
         """
         npix = 12 * self._nside ** 2
-        sssmap = random(npix, key=(key1, key2), counter=(counter1, counter2),
-                        sampler="gaussian")
+        sssmap = random(
+            npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
+        )
+        sssmap = np.array(sssmap, dtype=np.float)
         sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
+        sssmap /= np.std(sssmap)
         lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
-        scale = self._scale * (lat / 90 + .5) ** self._power
+        scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
         sssmap *= scale
         return sssmap
 
     @function_timer
-    def _observe_sss(
-        self,
-        sssmap,
-        tod,
-        comm,
-        prefix,
-    ):
+    def _observe_sss(self, sssmap, tod, comm, prefix):
         """
         Use healpy bilinear interpolation to observe the ground signal map
         """
@@ -224,8 +200,6 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 comm.Barrier()
             tmr.start()
-
-        azmin, azmax, elmin, elmax = scan_range
 
         nsamp = tod.local_samples[1]
 
@@ -242,13 +216,11 @@ class OpSimScanSynchronousSignal(Operator):
 
             try:
                 # Some TOD classes provide a shortcut to Az/El
-                az, el = tod.read_azel(detector=det, local_start=istart, n=nind)
+                az, el = tod.read_azel(detector=det)
                 phi = 2 * np.pi - az
                 theta = np.pi / 2 - el
             except Exception as e:
-                azelquat = tod.read_pntg(
-                    detector=det, local_start=istart, n=nind, azel=True
-                )[good]
+                azelquat = tod.read_pntg(detector=det, azel=True)
                 # Convert Az/El quaternion of the detector back into
                 # angles for the simulation.
                 theta, phi = qa.to_position(azelquat)
