@@ -60,8 +60,10 @@ if atm_available:
 
 from ..tod import tidas_available
 
-if tidas_available:
-    from . import tidas as testtidas
+# if tidas_available:
+#     from . import tidas as testtidas
+testtidas = None
+tidas_available = False
 
 # from ..tod import spt3g_available
 # if spt3g_available:

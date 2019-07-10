@@ -96,7 +96,7 @@ class OpMadamTest(MPITestCase):
         pars["write_hits"] = "T"
         pars["kfilter"] = "F"
         pars["path_output"] = mapdir
-        pars["info"] = 0
+        pars["info"] = 1
 
         madam = OpMadam(params=pars, name="grad")
         if madam.available:
