@@ -34,6 +34,14 @@ if use_mpi:
         )
 
 
+def comm_py2c(comm):
+    if MPI_Comm is None:
+        return None
+    else:
+        comm_ptr = MPI._addressof(comm)
+        return MPI_Comm.from_address(comm_ptr)
+
+
 def get_world():
     """Retrieve the default world communicator and its properties.
 
