@@ -114,9 +114,9 @@ class TOD(object):
 
         self._sizes = sampsizes
 
-        self._meta = meta
+        self.meta = meta
         if meta is None:
-            self._meta = {}
+            self.meta = {}
 
         if detindx is not None:
             for d in self._dets:
@@ -173,12 +173,6 @@ class TOD(object):
         (list): The total list of detectors.
         """
         return self._dets
-
-    def meta(self):
-        """
-        (dict): Dictionary of metadata properties.
-        """
-        return dict(self._meta)
 
     def detoffset(self):
         """

@@ -737,7 +737,7 @@ class OpSimAtmosphere(Operator):
                 self._zstep,
                 self._nelem_sim_max,
                 self._verbosity,
-                comm_py2c(comm),
+                comm_py2c(comm).value,
                 key1,
                 key2,
                 counter1,
@@ -909,7 +909,7 @@ class OpSimAtmosphere(Operator):
 
             # Integrate detector signal
 
-            err = sim.observe(times[ind], az, el, atmdata, -1.0)
+            err = sim.observe(times[ind][good], az, el, atmdata, -1.0)
             if err != 0:
                 # Observing failed
                 log.error(
