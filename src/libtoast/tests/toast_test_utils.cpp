@@ -98,7 +98,7 @@ TEST_F(TOASTutilsTest, singletimer) {
     double dincr = (double)incr / 1000.0;
     double prec = 1.0e-2;
     toast::Timer tm;
-    EXPECT_EQ(false, tm.is_running());
+    EXPECT_FALSE(tm.is_running());
     tm.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(incr));
     tm.stop();
@@ -114,7 +114,7 @@ TEST_F(TOASTutilsTest, singletimer) {
                   << std::endl;
         std::cout << e.what() << std::endl;
     }
-    EXPECT_EQ(true, tm.is_running());
+    EXPECT_TRUE(tm.is_running());
     tm.stop();
     tm.report("Original");
     double seconds = tm.seconds();
@@ -125,10 +125,10 @@ TEST_F(TOASTutilsTest, singletimer) {
     tm.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(incr));
     tm.report_clear("Original was running");
-    EXPECT_EQ(true, tm.is_running());
+    EXPECT_TRUE(tm.is_running());
     tm.stop();
     tm.report_clear("Original was stopped");
-    EXPECT_EQ(false, tm.is_running());
+    EXPECT_FALSE(tm.is_running());
 }
 
 
@@ -159,7 +159,7 @@ TEST_F(TOASTutilsTest, globaltimer) {
     }
 
     for (auto const & tname : tnames) {
-        EXPECT_EQ(true, gtm.is_running(tname));
+        EXPECT_TRUE(gtm.is_running(tname));
         try {
             gtm.stop(tname);
         } catch (std::runtime_error & e) {
