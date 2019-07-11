@@ -37,6 +37,8 @@ class OpSimScanSynchronousSignal(Operator):
         scale (float): RMS of the ground signal fluctuations at el=45deg
         power (float): exponential for suppressing ground pickup at
              higher observing elevation
+        path (string): path to a horizontal Healpix map to
+            sample for the SSS *instead* of synthesizing Gaussian maps
         report_timing (bool):  Print out time taken to initialize,
              simulate and observe
     """
@@ -51,6 +53,7 @@ class OpSimScanSynchronousSignal(Operator):
         lmax=256,
         scale=1e-3,
         power=-1,
+        path=None,
         report_timing=False,
     ):
         # Call the parent class constructor
@@ -64,6 +67,7 @@ class OpSimScanSynchronousSignal(Operator):
         self._fwhm = fwhm
         self._scale = scale
         self._power = power
+        self._path = path
         self._report_timing = report_timing
         return
 
@@ -72,7 +76,7 @@ class OpSimScanSynchronousSignal(Operator):
         """Generate timestreams.
 
         This iterates over all observations and detectors and generates
-        the atmosphere timestreams.
+        the scan-synchronous signal timestreams.
 
         Args:
             data (toast.Data): The distributed data.
@@ -96,7 +100,7 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 rank = comm.rank
             site = self._get_from_obs("site_id", obs)
-            # weather = self._get_from_obs("weather", obs)
+            weather = self._get_from_obs("weather", obs)
 
             # Get the observation time span and initialize the weather
             # object if one is provided.
@@ -108,7 +112,7 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
                 tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
-            # weather.set(site, self._realization, tmin_tot)
+            weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
 
@@ -123,7 +127,7 @@ class OpSimScanSynchronousSignal(Operator):
                     comm.Barrier()
                 tmr.start()
 
-            sssmap = self._simulate_sss(key1, key2, counter1, counter2)
+            sssmap = self._simulate_sss(key1, key2, counter1, counter2, weather)
 
             self._observe_sss(sssmap, tod, comm, prefix)
 
@@ -170,20 +174,28 @@ class OpSimScanSynchronousSignal(Operator):
         counter2 = 0
         return key1, key2, counter1, counter2
 
-    def _simulate_sss(self, key1, key2, counter1, counter2):
+    def _simulate_sss(self, key1, key2, counter1, counter2, weather):
         """
         Create a map of the ground signal to observe with all detectors
         """
-        npix = 12 * self._nside ** 2
-        sssmap = random(
-            npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
-        )
-        sssmap = np.array(sssmap, dtype=np.float)
-        sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
-        sssmap /= np.std(sssmap)
-        lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
-        scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
-        sssmap *= scale
+        # FIXME: we could store the map in node-shared memory
+        #
+        # Surface temperature is made available but not used yet
+        # to scale the SSS
+        temperature = weather.surface_temperature
+        if self.path:
+            sssmap = hp.read_map(self.path)
+        else:
+            npix = 12 * self._nside ** 2
+            sssmap = random(
+                npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
+            )
+            sssmap = np.array(sssmap, dtype=np.float)
+            sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
+            sssmap /= np.std(sssmap)
+            lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
+            scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
+            sssmap *= scale
         return sssmap
 
     @function_timer
