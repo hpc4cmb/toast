@@ -65,6 +65,16 @@ class Patch(object):
     _area = None
     current_el_min = 0
     current_el_max = 0
+    el_min0 = 0
+    el_max0 = np.pi / 2
+    el_min = el_min0
+    el_max = el_max0
+    el_step = 0
+    alternate = False
+    ra_amplitude = None
+    ra_period = 10
+    dec_amplitude = None
+    dec_period = 10
 
     def __init__(
         self,
@@ -133,6 +143,7 @@ class Patch(object):
 
     @function_timer
     def get_area(self, observer, nside=32, equalize=False):
+        self.update(observer)
         if self._area is None:
             npix = 12 * nside ** 2
             hitmap = np.zeros(npix)
@@ -277,6 +288,7 @@ class Patch(object):
         moon_avoidance_angle,
         check_sso,
     ):
+        self.update(observer)
         patch_el_max = -1000
         patch_el_min = 1000
         in_view = False
@@ -310,6 +322,48 @@ class Patch(object):
             self.current_el_max = patch_el_max
 
         return in_view, msg
+
+    def update(self):
+        """
+        A virtual method that is implemented by moving targets
+        """
+        pass
+
+
+class SSOPatch(Patch):
+    def __init__(self, name, weight, radius):
+        self.name = name
+        self.weight = weight
+        self.radius = radius
+        try:
+            self.body = getattr(ephem, name)()
+        except:
+            raise RuntimeError("Failed to initialize {} from pyEphem".format(name))
+        self.corners = None
+        return
+
+    def update(self, observer):
+        """
+        Calculate the relative position of the SSO at a given time
+        """
+        self.body.compute(observer)
+        ra, dec = self.body.ra, self.body.dec
+        # Synthesize 8 corners around the center
+        phi = ra
+        theta = dec
+        r = self.radius
+        ncorner = 8
+        angstep = 2 * np.pi / ncorner
+        self.corners = []
+        for icorner in range(ncorner):
+            ang = angstep * icorner
+            delta_theta = np.cos(ang) * r
+            delta_phi = np.sin(ang) * r / np.cos(theta + delta_theta)
+            patch_corner = ephem.FixedBody()
+            patch_corner._ra = phi + delta_phi
+            patch_corner._dec = theta + delta_theta
+            self.corners.append(patch_corner)
+        return
 
 
 class HorizontalPatch(Patch):
@@ -1779,7 +1833,10 @@ def parse_args():
         "--out", required=False, default="schedule.txt", help="Output filename"
     )
 
-    args = timing.add_arguments_and_parse(parser, timing.FILE(noquotes=True))
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        return
 
     if args.operational_days is None and args.stop is None:
         raise RuntimeError("You must provide --stop or --operational_days")
@@ -1817,7 +1874,13 @@ def parse_args():
 
 @function_timer
 def parse_patch_sso(args, parts):
-    pass
+    print(" SSO format ", end="", flush=True)
+    name = parts[0]
+    weight = float(parts[2])
+    radius = float(parts[3]) * degree
+    patch = SSOPatch(name, weight, radius)
+    return patch
+
 
 @function_timer
 def parse_patch_horizontal(args, parts):
@@ -2019,6 +2082,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         print('Adding patch "{}"'.format(name), end="", flush=True)
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
+        elif parts[1].upper() == "SSO":
+            patch = parse_patch_sso(args, parts)
         else:
             weight = float(parts[1])
             if np.isnan(weight):
