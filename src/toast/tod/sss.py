@@ -183,8 +183,8 @@ class OpSimScanSynchronousSignal(Operator):
         # Surface temperature is made available but not used yet
         # to scale the SSS
         temperature = weather.surface_temperature
-        if self.path:
-            sssmap = hp.read_map(self.path)
+        if self._path:
+            sssmap = hp.read_map(self._path)
         else:
             npix = 12 * self._nside ** 2
             sssmap = random(
