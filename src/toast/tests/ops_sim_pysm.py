@@ -8,11 +8,16 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..tod import OpPointingHpix, TODHpixSpiral, OpSimPySM
+from ..tod import OpPointingHpix, TODHpixSpiral
 
 from ._helpers import create_outdir, create_distdata, uniform_chunks
 
-from ..map import PySMSky, OpLocalPixels
+from ..map import pysm
+if pysm is not None:
+    from ..map import PySMSky
+    from ..tod import OpSimPySM
+
+from ..map import OpLocalPixels
 
 from ..dist import distribute_uniform
 

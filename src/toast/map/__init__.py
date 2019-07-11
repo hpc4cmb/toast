@@ -6,7 +6,9 @@
 
 from .pixels import OpLocalPixels, DistPixels
 
-from .pysm import PySMSky
+from .pysm import pysm
+if pysm is not None:
+    from .pysm import PySMSky
 
 from .cov import (
     OpAccumDiag,

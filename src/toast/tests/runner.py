@@ -51,7 +51,10 @@ from . import binned as testbinned
 from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
-from . import ops_sim_pysm as testopspysm
+from ..map import pysm
+
+if pysm is not None:
+    from . import ops_sim_pysm as testopspysm
 
 from ..tod import atm_available
 
@@ -127,7 +130,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
-        suite.addTest(loader.loadTestsFromModule(testopspysm))
+        if pysm is not None:
+            suite.addTest(loader.loadTestsFromModule(testopspysm))
         if atm_available:
             suite.addTest(loader.loadTestsFromModule(testopsatm))
         if tidas_available:

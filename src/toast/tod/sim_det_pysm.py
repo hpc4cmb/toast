@@ -6,9 +6,6 @@ import numpy as np
 
 import healpy as hp
 
-import pysm
-import pysm.units as u
-
 from ..mpi import MPI
 
 from ..timing import function_timer
@@ -17,7 +14,13 @@ from ..utils import Logger, Timer
 
 from ..op import Operator
 
-from ..map import PySMSky, DistPixels
+from ..map import pysm
+
+if pysm is not None:
+    import pysm.units as u
+    from ..map import PySMSky
+
+from ..map import DistPixels
 
 from .sim_det_map import OpSimScan
 
@@ -116,6 +119,8 @@ class OpSimPySM(Operator):
         coord="G",
         map_dist=None,
     ):
+        if pysm is None:
+            raise RuntimeError("PySM not available")
         # Call the parent class constructor.
         super().__init__()
         self._out = out
