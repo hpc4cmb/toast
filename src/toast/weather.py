@@ -112,7 +112,7 @@ class Weather(object):
         self._pwv = None
         self._humidity = None
         self._surface_pressure = None
-        self._surface_templerature = None
+        self._surface_temperature = None
         self._air_temperature = None
         self._west_wind = None
         self._south_wind = None

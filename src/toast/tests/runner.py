@@ -31,6 +31,7 @@ from . import ops_pmat as testopspmat
 
 from . import ops_dipole as testopsdipole
 from . import ops_simnoise as testopssimnoise
+from . import ops_sim_sss as testopssimsss
 
 from . import ops_polyfilter as testopspolyfilter
 from . import ops_groundfilter as testopsgroundfilter
@@ -116,6 +117,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testtodsat))
         suite.addTest(loader.loadTestsFromModule(testintervals))
         suite.addTest(loader.loadTestsFromModule(testopssimnoise))
+        suite.addTest(loader.loadTestsFromModule(testopssimsss))
         suite.addTest(loader.loadTestsFromModule(testopsapplygain))
         suite.addTest(loader.loadTestsFromModule(testopspmat))
         suite.addTest(loader.loadTestsFromModule(testcov))

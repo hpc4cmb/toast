@@ -32,6 +32,8 @@ from .sim_det_pysm import OpSimPySM
 
 from .sim_det_atm import OpSimAtmosphere
 
+from .sss import OpSimScanSynchronousSignal
+
 from .sim_focalplane import (
     hex_layout,
     rhombus_layout,

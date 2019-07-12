@@ -14,6 +14,7 @@ install(FILES
     pointing.py
     polyfilter.py
     sim_det_atm.py
+    sss.py
     sim_det_dipole.py
     sim_det_map.py
     sim_det_noise.py
