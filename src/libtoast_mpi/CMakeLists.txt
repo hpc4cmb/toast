@@ -20,6 +20,12 @@ target_include_directories(toastcore_mpi BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toastcore_mpi PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toastcore_mpi PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+    target_link_libraries(toastcore_mpi "${OpenMP_CXX_LIBRARIES}")
+endif(OpenMP_CXX_FOUND)
+
 if(AATM_FOUND)
     target_compile_definitions(toastcore_mpi PRIVATE HAVE_AATM=1)
     target_include_directories(toastcore_mpi PUBLIC "${AATM_INCLUDE_DIRS}")
