@@ -366,6 +366,81 @@ class SSOPatch(Patch):
         return
 
 
+class CoolerCyclePatch(Patch):
+    def __init__(
+        self,
+        hold_time_min,
+        hold_time_max,
+        cycle_time,
+        az,
+        el,
+        last_cycle_time,
+        weight=1,
+        power=2,
+    ):
+        # Standardized name for cooler cycles
+        self.name = "cooler_cycle"
+        self.hold_time_min = hold_time_min * 3600
+        self.hold_time_max = hold_time_max * 3600
+        self.cycle_time = cycle_time * 3600
+        self.az = az
+        self.el = el
+        self.last_cycle_time = last_cycle_time
+        self.weight0 = weight
+        self.power = power
+        return
+
+    def get_area(self):
+        return 0
+
+    def corner_coordinates(self):
+        return None
+
+    def in_patch(self):
+        return False
+
+    def step_azel(self):
+        return
+
+    def reset(self):
+        return
+
+    def get_hold_time(self, observer):
+        tlast = to_DJD(self.last_cycle_time)
+        tnow = float(observer.date)  # In Dublin Julian date
+        hold_time = (tnow - tlast) * 86400  # in seconds
+        return hold_time
+
+    def visible(
+        self,
+        el_min,
+        observer,
+        sun,
+        moon,
+        sun_avoidance_angle,
+        moon_avoidance_angle,
+        check_sso,
+    ):
+        self.update(observer)
+        hold_time = self.get_hold_time(obsever)
+        if hold_time > self.hold_time_min:
+            visible = True
+        else:
+            visible = False
+        return visible
+
+    def update(self, observer):
+        hold_time = self.get_hold_time(obsever)
+        if hold_time < self.hold_time_min:
+            self.weight = np.inf
+        else:
+            weight = (self.hold_time_max - hold_time) / (
+                self.hold_time_max - self.hold_time_min
+            )
+            self.weight = self.weight0 * weight ** self.power
+        return
+
+
 class HorizontalPatch(Patch):
     def __init__(self, name, weight, azmin, azmax, el, scantime):
         self.name = name
@@ -566,6 +641,20 @@ def attempt_scan(
     """
     success = False
     for patch in visible:
+        if isinstance(patch, CoolerCyclePatch):
+            # Cycle the cooler
+            t = add_cooler_cycle(
+                args,
+                t,
+                tstop,
+                observer,
+                fout,
+                fout_fmt,
+                patch,
+                ods,
+            )
+            success = True
+            break
         for rising in [True, False]:
             observer.date = to_DJD(t)
             el = get_constant_elevation(
@@ -1313,6 +1402,176 @@ def add_scan(
 
 
 @function_timer
+def add_cooler_cycle(
+    args,
+    tstart,
+    tstop,
+    observer,
+    fout,
+    fout_fmt,
+    patch,
+    ods,
+):
+    """ Make an entry for a cooler cycle in the schedule file.
+    """
+    ces_time = tstop - tstart
+    if ces_time > args.ces_max_time:  # and not args.pole_mode:
+        nsub = np.int(np.ceil(ces_time / args.ces_max_time))
+        ces_time /= nsub
+    aztimes = np.array(aztimes)
+    azmins = np.array(azmins)
+    azmaxs = np.array(azmaxs)
+    azmaxs[0] = unwind_angle(azmins[0], azmaxs[0])
+    for i in range(1, azmins.size):
+        azmins[i] = unwind_angle(azmins[0], azmins[i])
+        azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
+        azmaxs[i] = unwind_angle(azmins[i], azmaxs[i])
+    # for i in range(azmins.size-1):
+    #    if azmins[i+1] - azmins[i] > np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
+    #    if azmins[i+1] - azmins[i] < np.pi:
+    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
+    rising_string = "R" if rising else "S"
+    t1 = np.amin(aztimes)
+    entries = []
+    while t1 < tstop - 1:
+        subscan += 1
+        if args.operational_days:
+            # See if adding this scan would exceed the number of desired
+            # operational days
+            if subscan == 0:
+                tz = args.timezone / 24
+                od = int(to_MJD(tstart) + tz)
+                ods.add(od)
+            if len(ods) > args.operational_days:
+                # Prevent adding further entries to the schedule once
+                # the number of operational days is full
+                break
+        t2 = min(t1 + ces_time, tstop)
+        if tstop - t2 < ces_time / 10:
+            # Append leftover scan to the last full subscan
+            t2 = tstop
+        ind = np.logical_and(aztimes >= t1, aztimes <= t2)
+        if np.all(aztimes > t2):
+            ind[0] = True
+        if np.all(aztimes < t1):
+            ind[-1] = True
+        if azmins[ind][0] < azmaxs[ind][0]:
+            azmin = np.amin(azmins[ind])
+            azmax = np.amax(azmaxs[ind])
+        else:
+            # we are, scan from the maximum to the minimum
+            azmin = np.amax(azmins[ind])
+            azmax = np.amin(azmaxs[ind])
+        if args.scan_margin > 0:
+            # Add a random error to the scan parameters to smooth out
+            # caustics in the hit map
+            delta_az = azmax - unwind_angle(azmax, azmin)
+            sub_az = delta_az * np.abs(np.random.randn()) * args.scan_margin * 0.5
+            add_az = delta_az * np.abs(np.random.randn()) * args.scan_margin * 0.5
+            azmin = (azmin - sub_az) % (2 * np.pi)
+            azmax = (azmax + add_az) % (2 * np.pi)
+            if t2 == tstop:
+                delta_t = t2 - t1  # tstop - tstart
+                add_t = delta_t * np.abs(np.random.randn()) * args.scan_margin
+                t2 += add_t
+        # Add the focal plane radius to the scan width
+        fp_radius_eff = fp_radius / np.cos(el)
+        azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
+        azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
+        # Get the Sun and Moon locations at the beginning and end
+        observer.date = to_DJD(t1)
+        sun.compute(observer)
+        moon.compute(observer)
+        sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
+        moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
+        moon_phase1 = moon.phase
+        # It is possible that the Sun or the Moon gets too close to the
+        # scan, even if they are far enough from the actual patch.
+        sun_too_close, sun_time = check_sso(
+            observer, azmin, azmax, el / degree, sun, args.sun_avoidance_angle, t1, t2
+        )
+        moon_too_close, moon_time = check_sso(
+            observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
+        )
+        if (
+            isinstance(patch, HorizontalPatch)
+            and sun_time > tstart + 1
+            and moon_time > tstart + 1
+        ):
+            # Simply terminate the scan when the Sun or the Moon is too close
+            t2 = min(sun_time, moon_time)
+            if sun_too_close or moon_too_close:
+                tstop = t2
+                if t1 == t2:
+                    break
+        else:
+            # For regular patches, this is a failure condition
+            if sun_too_close:
+                if args.debug:
+                    print("Sun too close", flush=True)
+                raise SunTooClose
+            if moon_too_close:
+                if args.debug:
+                    print("Moon too close", flush=True)
+                raise MoonTooClose
+        observer.date = to_DJD(t2)
+        sun.compute(observer)
+        moon.compute(observer)
+        sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
+        moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+        moon_phase2 = moon.phase
+        # Create an entry in the schedule
+        entry = fout_fmt.format(
+            to_UTC(t1),
+            to_UTC(t2),
+            to_MJD(t1),
+            to_MJD(t2),
+            patch.name,
+            azmin,
+            azmax,
+            el / degree,
+            rising_string,
+            sun_el1,
+            sun_az1,
+            sun_el2,
+            sun_az2,
+            moon_el1,
+            moon_az1,
+            moon_el2,
+            moon_az2,
+            0.005 * (moon_phase1 + moon_phase2),
+            patch.hits,
+            subscan,
+        )
+        entries.append(entry)
+        t1 = t2 + args.gap_small
+
+    # Write the entries
+    for entry in entries:
+        if args.debug:
+            print(entry)
+        fout.write(entry)
+    fout.flush()
+
+    patch.hits += 1
+    patch.time += ces_time
+    if rising or args.pole_mode:
+        patch.rising_hits += 1
+        patch.rising_time += ces_time
+    if not rising or args.pole_mode:
+        patch.setting_hits += 1
+        patch.setting_time += ces_time
+    # The oscillate method will slightly shift the patch to
+    # blur the boundaries
+    patch.oscillate()
+
+    # Advance the time
+    tstop += args.gap
+    return tstop, subscan
+
+
+@function_timer
 def get_visible(args, observer, sun, moon, patches, el_min):
     """ Determine which patches are visible.
     """
@@ -1883,6 +2142,20 @@ def parse_patch_sso(args, parts):
 
 
 @function_timer
+def parse_patch_cooler(args, parts, last_cycle_time):
+    print(" Cooler cycle format ", end="", flush=True)
+    hold_time_min = float(parts[2])  # in hours
+    hold_time_max = float(parts[3])  # in hours
+    cycle_time = float(parts[4])  # in hours
+    az = float(parts[5])
+    el = float(parts[6])
+    patch = CoolerCyclePatch(
+        hold_time_min, hold_time_max, cycle_time, az, el, last_cycle_time
+    )
+    return patch
+
+
+@function_timer
 def parse_patch_horizontal(args, parts):
     """ Parse an explicit patch definition line
     """
@@ -2084,6 +2357,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             patch = parse_patch_horizontal(args, parts)
         elif parts[1].upper() == "SSO":
             patch = parse_patch_sso(args, parts)
+        elif parts[1].upper() == "COOLER":
+            patch = parse_patch_cooler(args, parts, start_timestamp)
         else:
             weight = float(parts[1])
             if np.isnan(weight):
