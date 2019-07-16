@@ -75,6 +75,7 @@ class Patch(object):
     ra_period = 10
     dec_amplitude = None
     dec_period = 10
+    corners = []
 
     def __init__(
         self,
@@ -369,14 +370,14 @@ class SSOPatch(Patch):
 class CoolerCyclePatch(Patch):
     def __init__(
         self,
+        weight,
+        power,
         hold_time_min,
         hold_time_max,
         cycle_time,
         az,
         el,
-        last_cycle_time,
-        weight=1,
-        power=2,
+        last_cycle_end,
     ):
         # Standardized name for cooler cycles
         self.name = "cooler_cycle"
@@ -385,28 +386,31 @@ class CoolerCyclePatch(Patch):
         self.cycle_time = cycle_time * 3600
         self.az = az
         self.el = el
-        self.last_cycle_time = last_cycle_time
+        self.last_cycle_end = last_cycle_end
         self.weight0 = weight
+        self.weight = weight
         self.power = power
         return
 
-    def get_area(self):
-        return 0
+    def get_area(self, *args, **kwargs):
+        if self._area is None:
+            self._area = 0
+        return self._area
 
-    def corner_coordinates(self):
+    def corner_coordinates(self, *args, **kwargs):
         return None
 
-    def in_patch(self):
+    def in_patch(self, *args, **kwargs):
         return False
 
-    def step_azel(self):
+    def step_azel(self, *args, **kwargs):
         return
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         return
 
-    def get_hold_time(self, observer):
-        tlast = to_DJD(self.last_cycle_time)
+    def get_current_hold_time(self, observer):
+        tlast = to_DJD(self.last_cycle_end)
         tnow = float(observer.date)  # In Dublin Julian date
         hold_time = (tnow - tlast) * 86400  # in seconds
         return hold_time
@@ -422,15 +426,17 @@ class CoolerCyclePatch(Patch):
         check_sso,
     ):
         self.update(observer)
-        hold_time = self.get_hold_time(obsever)
+        hold_time = self.get_current_hold_time(observer)
         if hold_time > self.hold_time_min:
             visible = True
+            msg = "minimum hold time exceeded"
         else:
             visible = False
-        return visible
+            msg = "minimum hold time not met"
+        return visible, msg
 
     def update(self, observer):
-        hold_time = self.get_hold_time(obsever)
+        hold_time = self.get_current_hold_time(observer)
         if hold_time < self.hold_time_min:
             self.weight = np.inf
         else:
@@ -575,41 +581,50 @@ def prioritize(args, visible):
     """
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
-            if patch_is_rising(visible[j]):
-                if args.equalize_time:
-                    hits1 = visible[j].rising_time
-                else:
-                    hits1 = visible[j].rising_hits
-                el1 = np.degrees(visible[j].current_el_max)
+            # If either of the patches is a cooler cycle, we don't modulate
+            # the priorities with hit counts, observing time or elevation
+            if isinstance(visible[j], CoolerCyclePatch) or isinstance(
+                visible[j + 1], CoolerCyclePatch
+            ):
+                weight1 = visible[j].weight
+                weight2 = visible[j + 1].weight
             else:
-                if args.equalize_time:
-                    hits1 = visible[j].setting_time
+                if patch_is_rising(visible[j]):
+                    if args.equalize_time:
+                        hits1 = visible[j].rising_time
+                    else:
+                        hits1 = visible[j].rising_hits
+                    el1 = np.degrees(visible[j].current_el_max)
                 else:
-                    hits1 = visible[j].setting_hits
-                el1 = np.degrees(visible[j].current_el_min)
-            if patch_is_rising(visible[j + 1]):
-                if args.equalize_time:
-                    hits2 = visible[j + 1].rising_time
+                    if args.equalize_time:
+                        hits1 = visible[j].setting_time
+                    else:
+                        hits1 = visible[j].setting_hits
+                    el1 = np.degrees(visible[j].current_el_min)
+                if patch_is_rising(visible[j + 1]):
+                    if args.equalize_time:
+                        hits2 = visible[j + 1].rising_time
+                    else:
+                        hits2 = visible[j + 1].rising_hits
+                    el2 = np.degrees(visible[j + 1].current_el_max)
                 else:
-                    hits2 = visible[j + 1].rising_hits
-                el2 = np.degrees(visible[j + 1].current_el_max)
-            else:
-                if args.equalize_time:
-                    hits2 = visible[j + 1].setting_time
-                else:
-                    hits2 = visible[j + 1].setting_hits
-                el2 = np.degrees(visible[j + 1].current_el_min)
-            # Patch with the lower weight goes first.  Having more
-            # earlier observing time and lower observing elevation
-            # will increase the weight.
-            weight1 = (hits1 + 1) * visible[j].weight
-            weight2 = (hits2 + 1) * visible[j + 1].weight
-            if args.elevation_penalty_limit > 0:
-                lim = args.elevation_penalty_limit
-                if el1 < lim:
-                    weight1 *= (lim / el1) ** args.elevation_penalty_power
-                if el2 < lim:
-                    weight2 *= (lim / el2) ** args.elevation_penalty_power
+                    if args.equalize_time:
+                        hits2 = visible[j + 1].setting_time
+                    else:
+                        hits2 = visible[j + 1].setting_hits
+                    el2 = np.degrees(visible[j + 1].current_el_min)
+                # Patch with the lower weight goes first.  Having more
+                # earlier observing time and lower observing elevation
+                # will increase the weight.
+                weight1 = (hits1 + 1) * visible[j].weight
+                weight2 = (hits2 + 1) * visible[j + 1].weight
+                # Optional elevation penalty
+                if args.elevation_penalty_limit > 0:
+                    lim = args.elevation_penalty_limit
+                    if el1 < lim:
+                        weight1 *= (lim / el1) ** args.elevation_penalty_power
+                    if el2 < lim:
+                        weight2 *= (lim / el2) ** args.elevation_penalty_power
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
     if args.debug:
@@ -630,6 +645,7 @@ def attempt_scan(
     fp_radius,
     tstep,
     stop_timestamp,
+    tstop_cooler,
     sun,
     moon,
     sun_el_max,
@@ -644,17 +660,11 @@ def attempt_scan(
         if isinstance(patch, CoolerCyclePatch):
             # Cycle the cooler
             t = add_cooler_cycle(
-                args,
-                t,
-                tstop,
-                observer,
-                fout,
-                fout_fmt,
-                patch,
-                ods,
+                args, t, stop_timestamp, observer, sun, moon, fout, fout_fmt, patch
             )
             success = True
             break
+        # All on-sky targets
         for rising in [True, False]:
             observer.date = to_DJD(t)
             el = get_constant_elevation(
@@ -671,7 +681,7 @@ def attempt_scan(
                 observer,
                 sun,
                 not_visible,
-                stop_timestamp,
+                tstop_cooler,
                 sun_el_max,
                 rising,
             )
@@ -771,6 +781,7 @@ def attempt_scan_pole(
     el_min,
     tstep,
     stop_timestamp,
+    tstop_cooler,
     sun,
     moon,
     sun_el_max,
@@ -780,9 +791,18 @@ def attempt_scan_pole(
 ):
     """ Attempt scanning the visible patches in order until success.
     """
+    if args.one_scan_per_day and stop_timestamp > tstop_cooler:
+        raise RuntimeError("one_scan_per_day is incompatible with cooler cycles")
     success = False
     for patch in visible:
         observer.date = to_DJD(tstart)
+        if isinstance(patch, CoolerCyclePatch):
+            # Cycle the cooler
+            t = add_cooler_cycle(
+                args, tstart, stop_timestamp, observer, sun, moon, fout, fout_fmt, patch
+            )
+            success = True
+            break
         # In pole scheduling, first elevation is just below the patch
         el = get_constant_elevation_pole(
             args, observer, patch, fp_radius, el_min, el_max, not_visible
@@ -802,7 +822,7 @@ def attempt_scan_pole(
                 observer,
                 sun,
                 not_visible,
-                stop_timestamp,
+                tstop_cooler,
                 sun_el_max,
             )
             if pole_success:
@@ -1402,173 +1422,67 @@ def add_scan(
 
 
 @function_timer
-def add_cooler_cycle(
-    args,
-    tstart,
-    tstop,
-    observer,
-    fout,
-    fout_fmt,
-    patch,
-    ods,
-):
+def add_cooler_cycle(args, tstart, tstop, observer, sun, moon, fout, fout_fmt, patch):
     """ Make an entry for a cooler cycle in the schedule file.
     """
-    ces_time = tstop - tstart
-    if ces_time > args.ces_max_time:  # and not args.pole_mode:
-        nsub = np.int(np.ceil(ces_time / args.ces_max_time))
-        ces_time /= nsub
-    aztimes = np.array(aztimes)
-    azmins = np.array(azmins)
-    azmaxs = np.array(azmaxs)
-    azmaxs[0] = unwind_angle(azmins[0], azmaxs[0])
-    for i in range(1, azmins.size):
-        azmins[i] = unwind_angle(azmins[0], azmins[i])
-        azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
-        azmaxs[i] = unwind_angle(azmins[i], azmaxs[i])
-    # for i in range(azmins.size-1):
-    #    if azmins[i+1] - azmins[i] > np.pi:
-    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
-    #    if azmins[i+1] - azmins[i] < np.pi:
-    #        azmins[i+1], azmaxs[i+1] = azmins[i+1]+2*np.pi, azmaxs[i+1]+2*np.pi
-    rising_string = "R" if rising else "S"
-    t1 = np.amin(aztimes)
-    entries = []
-    while t1 < tstop - 1:
-        subscan += 1
-        if args.operational_days:
-            # See if adding this scan would exceed the number of desired
-            # operational days
-            if subscan == 0:
-                tz = args.timezone / 24
-                od = int(to_MJD(tstart) + tz)
-                ods.add(od)
-            if len(ods) > args.operational_days:
-                # Prevent adding further entries to the schedule once
-                # the number of operational days is full
-                break
-        t2 = min(t1 + ces_time, tstop)
-        if tstop - t2 < ces_time / 10:
-            # Append leftover scan to the last full subscan
-            t2 = tstop
-        ind = np.logical_and(aztimes >= t1, aztimes <= t2)
-        if np.all(aztimes > t2):
-            ind[0] = True
-        if np.all(aztimes < t1):
-            ind[-1] = True
-        if azmins[ind][0] < azmaxs[ind][0]:
-            azmin = np.amin(azmins[ind])
-            azmax = np.amax(azmaxs[ind])
-        else:
-            # we are, scan from the maximum to the minimum
-            azmin = np.amax(azmins[ind])
-            azmax = np.amin(azmaxs[ind])
-        if args.scan_margin > 0:
-            # Add a random error to the scan parameters to smooth out
-            # caustics in the hit map
-            delta_az = azmax - unwind_angle(azmax, azmin)
-            sub_az = delta_az * np.abs(np.random.randn()) * args.scan_margin * 0.5
-            add_az = delta_az * np.abs(np.random.randn()) * args.scan_margin * 0.5
-            azmin = (azmin - sub_az) % (2 * np.pi)
-            azmax = (azmax + add_az) % (2 * np.pi)
-            if t2 == tstop:
-                delta_t = t2 - t1  # tstop - tstart
-                add_t = delta_t * np.abs(np.random.randn()) * args.scan_margin
-                t2 += add_t
-        # Add the focal plane radius to the scan width
-        fp_radius_eff = fp_radius / np.cos(el)
-        azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
-        azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
-        # Get the Sun and Moon locations at the beginning and end
-        observer.date = to_DJD(t1)
-        sun.compute(observer)
-        moon.compute(observer)
-        sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
-        moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
-        moon_phase1 = moon.phase
-        # It is possible that the Sun or the Moon gets too close to the
-        # scan, even if they are far enough from the actual patch.
-        sun_too_close, sun_time = check_sso(
-            observer, azmin, azmax, el / degree, sun, args.sun_avoidance_angle, t1, t2
-        )
-        moon_too_close, moon_time = check_sso(
-            observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
-        )
-        if (
-            isinstance(patch, HorizontalPatch)
-            and sun_time > tstart + 1
-            and moon_time > tstart + 1
-        ):
-            # Simply terminate the scan when the Sun or the Moon is too close
-            t2 = min(sun_time, moon_time)
-            if sun_too_close or moon_too_close:
-                tstop = t2
-                if t1 == t2:
-                    break
-        else:
-            # For regular patches, this is a failure condition
-            if sun_too_close:
-                if args.debug:
-                    print("Sun too close", flush=True)
-                raise SunTooClose
-            if moon_too_close:
-                if args.debug:
-                    print("Moon too close", flush=True)
-                raise MoonTooClose
-        observer.date = to_DJD(t2)
-        sun.compute(observer)
-        moon.compute(observer)
-        sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
-        moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
-        moon_phase2 = moon.phase
-        # Create an entry in the schedule
-        entry = fout_fmt.format(
-            to_UTC(t1),
-            to_UTC(t2),
-            to_MJD(t1),
-            to_MJD(t2),
-            patch.name,
-            azmin,
-            azmax,
-            el / degree,
-            rising_string,
-            sun_el1,
-            sun_az1,
-            sun_el2,
-            sun_az2,
-            moon_el1,
-            moon_az1,
-            moon_el2,
-            moon_az2,
-            0.005 * (moon_phase1 + moon_phase2),
-            patch.hits,
-            subscan,
-        )
-        entries.append(entry)
-        t1 = t2 + args.gap_small
+    az = patch.az
+    el = patch.el
+    t1 = tstart
+    t2 = t1 + patch.cycle_time
 
-    # Write the entries
-    for entry in entries:
-        if args.debug:
-            print(entry)
-        fout.write(entry)
+    observer.date = to_DJD(t1)
+    sun.compute(observer)
+    moon.compute(observer)
+    sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
+    moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
+    moon_phase1 = moon.phase
+
+    observer.date = to_DJD(t2)
+    sun.compute(observer)
+    moon.compute(observer)
+    sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
+    moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+    moon_phase2 = moon.phase
+
+    # Create an entry in the schedule
+    entry = fout_fmt.format(
+        to_UTC(t1),
+        to_UTC(t2),
+        to_MJD(t1),
+        to_MJD(t2),
+        patch.name,
+        az,
+        az,
+        el,
+        "R",
+        sun_el1,
+        sun_az1,
+        sun_el2,
+        sun_az2,
+        moon_el1,
+        moon_az1,
+        moon_el2,
+        moon_az2,
+        0.005 * (moon_phase1 + moon_phase2),
+        patch.hits,
+        0,
+    )
+
+    # Write the entry
+    if args.debug:
+        print(entry)
+    fout.write(entry)
     fout.flush()
 
+    patch.last_cycle_end = t2
     patch.hits += 1
-    patch.time += ces_time
-    if rising or args.pole_mode:
-        patch.rising_hits += 1
-        patch.rising_time += ces_time
-    if not rising or args.pole_mode:
-        patch.setting_hits += 1
-        patch.setting_time += ces_time
-    # The oscillate method will slightly shift the patch to
-    # blur the boundaries
-    patch.oscillate()
+    patch.time += t2 - t1
+    patch.rising_hits += 1
+    patch.rising_time += t2 - t1
+    patch.setting_hits += 1
+    patch.setting_time += t2 - t1
 
-    # Advance the time
-    tstop += args.gap
-    return tstop, subscan
+    return t2
 
 
 @function_timer
@@ -1748,6 +1662,14 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             t += tstep
             continue
 
+        # Determine if a cooler cycle sets a limit for observing
+        tstop_cooler = stop_timestamp
+        for patch in patches:
+            if isinstance(patch, CoolerCyclePatch):
+                ttest = patch.last_cycle_end + patch.hold_time_max
+                if ttest < tstop_cooler:
+                    tstop_cooler = ttest
+
         # Order the targets by priority and attempt to observe with both
         # a rising and setting scans until we find one that can be
         # succesfully scanned.
@@ -1768,6 +1690,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 el_min,
                 tstep,
                 stop_timestamp,
+                tstop_cooler,
                 sun,
                 moon,
                 sun_el_max,
@@ -1785,6 +1708,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fp_radius,
                 tstep,
                 stop_timestamp,
+                tstop_cooler,
                 sun,
                 moon,
                 sun_el_max,
@@ -2142,15 +2066,17 @@ def parse_patch_sso(args, parts):
 
 
 @function_timer
-def parse_patch_cooler(args, parts, last_cycle_time):
+def parse_patch_cooler(args, parts, last_cycle_end):
     print(" Cooler cycle format ", end="", flush=True)
-    hold_time_min = float(parts[2])  # in hours
-    hold_time_max = float(parts[3])  # in hours
-    cycle_time = float(parts[4])  # in hours
-    az = float(parts[5])
-    el = float(parts[6])
+    weight = float(parts[2])
+    power = float(parts[3])
+    hold_time_min = float(parts[4])  # in hours
+    hold_time_max = float(parts[5])  # in hours
+    cycle_time = float(parts[6])  # in hours
+    az = float(parts[7])
+    el = float(parts[8])
     patch = CoolerCyclePatch(
-        hold_time_min, hold_time_max, cycle_time, az, el, last_cycle_time
+        weight, power, hold_time_min, hold_time_max, cycle_time, az, el, last_cycle_end
     )
     return patch
 
@@ -2525,6 +2451,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             for patch in patches:
                 lon = [corner._ra / degree for corner in patch.corners]
                 lat = [corner._dec / degree for corner in patch.corners]
+                if len(lon) == 0:
+                    # Special patch without sky coordinates
+                    continue
                 lon.append(lon[0])
                 lat.append(lat[0])
                 print(
@@ -2641,7 +2570,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
+    except Exception as e:
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
         mpiworld, procs, rank = get_world()
@@ -2649,5 +2578,7 @@ if __name__ == "__main__":
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = ["Proc {}: {}".format(rank, x) for x in lines]
         print("".join(lines), flush=True)
-        if mpiworld is not None:
+        if mpiworld is not None and procs > 1:
             mpiworld.Abort(6)
+        else:
+            raise e
