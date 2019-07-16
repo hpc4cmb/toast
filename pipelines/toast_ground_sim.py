@@ -59,12 +59,15 @@ from toast.tod import (
     OpPolyFilter,
     OpGroundFilter,
     OpSimAtmosphere,
+    atm_available_utils,
 )
-from toast.tod.atm import (
-    atm_atmospheric_loading,
-    atm_absorption_coefficient,
-    atm_absorption_coefficient_vec,
-)
+
+if atm_available_utils:
+    from toast.tod.atm import (
+        atm_atmospheric_loading,
+        atm_absorption_coefficient,
+        atm_absorption_coefficient_vec,
+    )
 
 # FIXME: put these back into the import statement above after porting.
 tidas_available = False
@@ -1345,20 +1348,21 @@ def scale_atmosphere_by_frequency(args, comm, data, freq, totalname_freq, mc):
         my_ifreq_max = min(nfreq, nfreq_task * (todcomm.rank + 1))
         my_nfreq = my_ifreq_max - my_ifreq_min
         if my_nfreq > 0:
-            my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max) * freqstep
-            my_absorption = np.zeros(my_nfreq)
-            err = atm_absorption_coefficient_vec(
-                altitude,
-                air_temperature,
-                surface_pressure,
-                pwv,
-                my_freqs[0],
-                my_freqs[-1],
-                my_nfreq,
-                my_absorption,
-            )
-            if err != 0:
-                raise RuntimeError("Failed to get absorption coefficient vector")
+            if atm_available_utils:
+                my_freqs = freqmin + np.arange(my_ifreq_min, my_ifreq_max) * freqstep
+                my_absorption = atm_absorption_coefficient_vec(
+                    altitude,
+                    air_temperature,
+                    surface_pressure,
+                    pwv,
+                    my_freqs[0],
+                    my_freqs[-1],
+                    my_nfreq,
+                )
+            else:
+                raise RuntimeError(
+                    "Atmosphere utilities from libaatm are not available"
+                )
         else:
             my_freqs = np.array([])
             my_absorption = np.array([])
@@ -1407,20 +1411,23 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc):
     tmr = Timer()
     tmr.start()
     if args.weather and not args.skip_atmosphere:
-        for obs in data.obs:
-            site_id = obs["site_id"]
-            weather = obs["weather"]
-            start_time = obs["start_time"]
-            weather.set(site_id, mc, start_time)
-            altitude = obs["altitude"]
-            absorption = atm_absorption_coefficient(
-                altitude,
-                weather.air_temperature,
-                weather.surface_pressure,
-                weather.pwv,
-                freq,
-            )
-            obs["noise_scale"] = absorption * weather.air_temperature
+        if atm_available_utils:
+            for obs in data.obs:
+                site_id = obs["site_id"]
+                weather = obs["weather"]
+                start_time = obs["start_time"]
+                weather.set(site_id, mc, start_time)
+                altitude = obs["altitude"]
+                absorption = atm_absorption_coefficient(
+                    altitude,
+                    weather.air_temperature,
+                    weather.surface_pressure,
+                    weather.pwv,
+                    freq,
+                )
+                obs["noise_scale"] = absorption * weather.air_temperature
+        else:
+            raise RuntimeError("Atmosphere utilities from libaatm are not available")
     else:
         for obs in data.obs:
             obs["noise_scale"] = 1.0
