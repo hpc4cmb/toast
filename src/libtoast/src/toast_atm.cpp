@@ -1635,6 +1635,7 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
     std::vector <int> rows, cols;
     std::vector <double> vals;
     size_t nelem = ind_stop - ind_start; // Number of elements in the slice
+    std::vector <double> diagonal(nelem);
 
     // Fill the elements of the covariance matrix.
 
@@ -1642,7 +1643,6 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
     {
         std::vector <int> myrows, mycols;
         std::vector <double> myvals;
-        std::vector <double> diagonal(nelem);
 
         # pragma omp for schedule(static, 10)
         for (int i = 0; i < nelem; ++i) {
@@ -1650,7 +1650,6 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
             ind2coord(i + ind_start, coord);
             diagonal[i] = cov_eval(coord, coord);
         }
-
 
         # pragma omp for schedule(static, 10)
         for (int icol = 0; icol < nelem; ++icol) {
@@ -1669,8 +1668,7 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
-                double corr = val * pow(diagonal[icol] * diagonal[irow], -.5);
-                if (corr > 1e-3) {
+                if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
                     myrows.push_back(irow);
                     mycols.push_back(icol);
                     myvals.push_back(val);
@@ -1690,9 +1688,6 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
         tm.report("Sparse covariance evaluated in");
     }
 
-    // FIXME:  Was the intention to clear() this timer before restarting?
-    // Leaving it this way to match the original MPI version of the code, which
-    // simply kept "t1" the same.
     tm.start();
 
     // stype > 0 means that only the lower diagonal
