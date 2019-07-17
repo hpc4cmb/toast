@@ -133,7 +133,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         if pysm is not None:
-            if (comm is not None) and ("TRAVIS" in os.environ):
+            if (comm is None) or ("TRAVIS" not in os.environ):
                 # Remove this check after pysm works on travis with MPI
                 suite.addTest(loader.loadTestsFromModule(testopspysm))
         if atm_available:
