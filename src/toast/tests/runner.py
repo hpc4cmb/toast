@@ -133,7 +133,9 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         if pysm is not None:
-            suite.addTest(loader.loadTestsFromModule(testopspysm))
+            if (comm is not None) and ("TRAVIS" in os.eviron):
+                # Remove this check after pysm works on travis with MPI
+                suite.addTest(loader.loadTestsFromModule(testopspysm))
         if atm_available:
             suite.addTest(loader.loadTestsFromModule(testopsatm))
         if tidas_available:
