@@ -196,7 +196,7 @@ class OpSimScan(Operator):
                         sm,
                         lpix,
                         self._map.flatdata,
-                        weights.reshape(-1),
+                        weights.astype(np.float64).reshape(-1),
                         maptod,
                     )
                 elif maptype.char == "f":
@@ -206,7 +206,7 @@ class OpSimScan(Operator):
                         sm,
                         lpix,
                         self._map.flatdata,
-                        weights.reshape(-1),
+                        weights.astype(np.float64).reshape(-1),
                         maptod,
                     )
                 else:
