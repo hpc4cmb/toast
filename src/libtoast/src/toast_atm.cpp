@@ -473,6 +473,8 @@ int toast::atm_sim::simulate(bool use_cache) {
                                         ind_stop);
                 cholmod_free_sparse(&sqrt_cov, chcommon);
             }
+            // Advance the RNG counter on all processes
+            counter2 += ind_stop - ind_start;
 
             if (ind_stop == nelem) break;
 
@@ -1918,7 +1920,6 @@ void toast::atm_sim::apply_sparse_covariance(cholmod_sparse * sqrt_cov,
                                                       CHOLMOD_REAL, chcommon);
     toast::rng_dist_normal(nelem, key1, key2, counter1, counter2,
                            (double *)noise_in->x);
-    counter2 += nelem;
 
     cholmod_dense * noise_out = cholmod_allocate_dense(nelem, 1, nelem,
                                                        CHOLMOD_REAL, chcommon);
