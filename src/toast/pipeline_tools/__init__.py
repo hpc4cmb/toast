@@ -53,7 +53,8 @@ from .pointing import (
 )
 
 from .sky_signal import (
-    add_sky_args,
+    add_sky_map_args,
+    add_pysm_args,
     scan_sky_signal,
     simulate_sky_signal,
 )
@@ -65,8 +66,17 @@ from .sss import (
 
 from .todground import (
     add_todground_args,
+    get_breaks,
     load_schedule,
     load_weather,
+    Site,
+    Telescope,
+    CES,
+)
+
+from .dist import (
+    add_dist_args,
+    get_comm,
 )
 
 
@@ -89,8 +99,9 @@ def add_mc_args(parser):
     )
     return
 
+
 @function_timer
-def add_signal(data, prefix_out, prefix_in):
+def add_signal(data, prefix_out, prefix_in, purge=False):
     """ Add signal from cache prefix `prefix_in` to cache prefix
     `prefix_out`.  If `prefix_out` does not exit, it is created.
 
@@ -109,7 +120,10 @@ def add_signal(data, prefix_out, prefix_in):
             else:
                 ref_out = tod.cache.put(cachename_out, ref_in)
             del ref_in, ref_out
+        if purge:
+            tod.cache.clear(prefix_in + ".*")
     return
+
 
 @function_timer
 def copy_signal(args, comm, data, cache_prefix_in, cache_prefix_out, verbose=True):

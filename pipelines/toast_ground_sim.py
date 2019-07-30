@@ -22,7 +22,6 @@ if "TOAST_STARTUP_DELAY" in os.environ:
 
 import sys
 import argparse
-from datetime import datetime
 import traceback
 import pickle
 
@@ -32,9 +31,7 @@ from toast.mpi import get_world, Comm
 
 from toast.dist import distribute_uniform, Data
 
-from toast.utils import Logger, Environment
-
-from toast.weather import Weather
+from toast.utils import Logger, Environment, memreport
 
 from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
@@ -44,6 +41,8 @@ from toast.tod import (
 )
 
 from toast.pipeline_tools import (
+    add_dist_args,
+    get_comm,
     add_polyfilter_args,
     apply_polyfilter,
     add_groundfilter_args,
@@ -64,7 +63,8 @@ from toast.pipeline_tools import (
     add_madam_args,
     setup_madam,
     apply_madam,
-    add_sky_args,
+    add_sky_map_args,
+    add_pysm_args,
     scan_sky_signal,
     simulate_sky_signal,
     add_sss_args,
@@ -76,6 +76,10 @@ from toast.pipeline_tools import (
     add_spt3g_args,
     output_spt3g,
     add_todground_args,
+    get_breaks,
+    Telescope,
+    Site,
+    CES,
     load_schedule,
     load_weather,
     add_mc_args,
@@ -98,13 +102,7 @@ def parse_arguments(comm):
         fromfile_prefix_chars="@",
     )
 
-    parser.add_argument(
-        "--groupsize",
-        required=False,
-        type=np.int,
-        help="Size of a process group assigned to a CES",
-    )
-
+    add_dist_args(parser)
     add_todground_args(parser)
     add_pointing_args(parser)
     add_polyfilter_args(parser)
@@ -113,32 +111,17 @@ def parse_arguments(comm):
     add_noise_args(parser)
     add_gainscrambler_args(parser)
     add_madam_args(parser)
-    add_sky_args(parser)
+    add_sky_map_args(parser)
+    add_pysm_args(parser)
     add_sss_args(parser)
     add_tidas_args(parser)
     add_spt3g_args(parser)
-
-    parser.add_argument(
-        "--day-maps",
-        required=False,
-        action="store_true",
-        help="Bin daily maps",
-        dest="do_daymaps",
-    )
-    parser.add_argument(
-        "--no-day-maps",
-        required=False,
-        action="store_false",
-        help="Bin daily maps",
-        dest="do_daymaps",
-    )
-    parser.set_defaults(do_daymaps=False)
+    add_mc_args(parser)
 
     parser.add_argument(
         "--outdir", required=False, default="out", help="Output directory"
     )
     
-    add_mc_args(parser)
     parser.add_argument(
         "--focalplane",
         required=False,
@@ -185,8 +168,8 @@ def parse_arguments(comm):
         for ag in vars(args):
             log.info("{} = {}".format(ag, getattr(args, ag)))
 
-    if args.groupsize:
-        comm = Comm(world=comm.comm_world, groupsize=args.groupsize)
+    if args.group_size:
+        comm = Comm(groupsize=args.group_size)
 
     if comm.world_rank == 0:
         if not os.path.isdir(args.outdir):
@@ -198,24 +181,25 @@ def parse_arguments(comm):
     return args, comm
 
 
-def name2id(name, maxval=2 ** 16):
-    """ Map a name into an index.
-
-    """
-    value = 0
-    for c in name:
-        value += ord(c)
-    return value % maxval
-
-
 @function_timer
 def load_focalplanes(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
 
+    Args:
+        schedules (list) :  List of tuples of the form
+            (`site`, `all_ces`) where `site` is a Site
+            instansce with the `telescope` field filled
+            and `all_ces` is a list of CES objects.
+    Returns:
+        detweights (dict) : Inverse variance noise weights for every
+            detector across all focal planes.
     """
     timer = Timer()
     timer.start()
 
+    telescopes = []
+    for schedule in schedules:
+        telescopes.append(schedule[0].telescope)
     # Load focalplane information
 
     focalplanes = []
@@ -229,19 +213,24 @@ def load_focalplanes(args, comm, schedules):
                 ftimer.report_clear("Load {}".format(fpfile))
         ftimer.stop()
     focalplanes = comm.comm_world.bcast(focalplanes)
+    telescopes = comm.comm_world.bcast(telescopes)
 
     if len(focalplanes) == 1 and len(schedules) > 1:
         focalplanes *= len(schedules)
+    if len(telescopes) == 1 and len(schedules) > 1:
+        telescopes *= len(schedules)
     if len(focalplanes) != len(schedules):
         raise RuntimeError(
             "Number of focalplanes must equal number of schedules or be 1."
         )
 
+    # Append a focal plane and telescope to each entry in the schedules list
     detweights = {}
-    for schedule, focalplane in zip(schedules, focalplanes):
+    for schedule, focalplane, telescope in zip(schedules, focalplanes, telescopes):
         schedule.append(focalplane)
-        for detname, det in focalplane.items():
-            net = det["NET"]
+        schedule.append(Telescope(telescope))
+        for detname, detdata in focalplane.items():
+            net = detdata["NET"]
             detweight = 1.0 / (args.sample_rate * net * net)
             if detname in detweights and detweights[detname] != detweight:
                 raise RuntimeError("Detector weight for {} changes".format(detname))
@@ -254,85 +243,14 @@ def load_focalplanes(args, comm, schedules):
 
 
 @function_timer
-def get_breaks(comm, all_ces, nces, args):
-    """ List operational day limits in the list of CES:s.
-
-    """
-    breaks = []
-    if not args.do_daymaps:
-        return breaks
-    do_break = False
-    for i in range(nces - 1):
-        # If current and next CES are on different days, insert a break
-        tz = args.timezone / 24
-        start1 = all_ces[i][3]  # MJD start
-        start2 = all_ces[i + 1][3]  # MJD start
-        scan1 = all_ces[i][4]
-        scan2 = all_ces[i + 1][4]
-        if scan1 != scan2 and do_break:
-            breaks.append(nces + i + 1)
-            do_break = False
-            continue
-        day1 = int(start1 + tz)
-        day2 = int(start2 + tz)
-        if day1 != day2:
-            if scan1 == scan2:
-                # We want an entire CES, even if it crosses the day bound.
-                # Wait until the scan number changes.
-                do_break = True
-            else:
-                breaks.append(nces + i + 1)
-
-    nbreak = len(breaks)
-    if nbreak < comm.ngroups - 1:
-        if comm.world_rank == 0:
-            print(
-                "WARNING: there are more process groups than observing days. "
-                "Will try distributing by observation.",
-                flush=True,
-            )
-        breaks = []
-        for i in range(nces - 1):
-            scan1 = all_ces[i][4]
-            scan2 = all_ces[i + 1][4]
-            if scan1 != scan2:
-                breaks.append(nces + i + 1)
-        nbreak = len(breaks)
-
-    if nbreak != comm.ngroups - 1:
-        raise RuntimeError(
-            "Number of observing days ({}) does not match number of process "
-            "groups ({}).".format(nbreak + 1, comm.ngroups)
-        )
-    return breaks
-
-
-@function_timer
-def create_observation(args, comm, all_ces_tot, ices, noise):
+def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
     """ Create a TOAST observation.
 
     Create an observation for the CES scan defined by all_ces_tot[ices].
 
     """
-    ces, site, fp, fpradius, detquats, weather = all_ces_tot[ices]
-
-    (
-        CES_start,
-        CES_stop,
-        CES_name,
-        mjdstart,
-        scan,
-        subscan,
-        azmin,
-        azmax,
-        el,
-        season,
-        date,
-    ) = ces
-
-    _, _, site_lat, site_lon, site_alt = site
-
-    totsamples = int((CES_stop - CES_start) * args.sample_rate)
+    ces, site, telescope, fp, fpradius, detquats, weather = all_ces_tot[ices]
+    totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
 
     # create the TOD for this observation
 
@@ -342,14 +260,14 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
             detquats,
             totsamples,
             detranks=comm.comm_group.size,
-            firsttime=CES_start,
+            firsttime=ces.start_time,
             rate=args.sample_rate,
-            site_lon=site_lon,
-            site_lat=site_lat,
-            site_alt=site_alt,
-            azmin=azmin,
-            azmax=azmax,
-            el=el,
+            site_lon=site.lon,
+            site_lat=site.lat,
+            site_alt=site.alt,
+            azmin=ces.azmin,
+            azmax=ces.azmax,
+            el=ces.el,
             scanrate=args.scan_rate,
             scan_accel=args.scan_accel,
             CES_start=None,
@@ -357,41 +275,41 @@ def create_observation(args, comm, all_ces_tot, ices, noise):
             sun_angle_min=args.sun_angle_min,
             coord=args.coord,
             sampsizes=None,
+            report_timing=verbose,
         )
     except RuntimeError as e:
         raise RuntimeError(
             'Failed to create TOD for {}-{}-{}: "{}"'
-            "".format(CES_name, scan, subscan, e)
+            "".format(ces.name, ces.scan, ces.subscan, e)
         )
 
     # Create the observation
 
-    site_name = site[0]
-    telescope_name = site[1]
-    site_id = name2id(site_name)
-    telescope_id = name2id(telescope_name)
-
     obs = {}
     obs["name"] = "CES-{}-{}-{}-{}-{}".format(
-        site_name, telescope_name, CES_name, scan, subscan
+        site.name, telescope.name, ces.name, ces.scan, ces.subscan
     )
     obs["tod"] = tod
     obs["baselines"] = None
     obs["noise"] = noise
-    obs["id"] = int(mjdstart * 10000)
+    obs["id"] = int(ces.mjdstart * 10000)
     obs["intervals"] = tod.subscans
-    obs["site"] = site_name
-    obs["telescope"] = telescope_name
-    obs["site_id"] = site_id
-    obs["telescope_id"] = telescope_id
+    obs["site"] = site.name
+    obs["site_id"] = site.id
+    obs["telescope"] = telescope.name
+    obs["telescope_id"] = telescope.id
     obs["fpradius"] = fpradius
     obs["weather"] = weather
-    obs["start_time"] = CES_start
-    obs["altitude"] = site_alt
-    obs["season"] = season
-    obs["date"] = date
-    obs["MJD"] = mjdstart
+    obs["start_time"] = ces.start_time
+    obs["altitude"] = site.alt
+    obs["season"] = ces.season
+    obs["date"] = ces.start_date
+    obs["MJD"] = ces.mjdstart
     obs["focalplane"] = fp
+    obs["rising"] = ces.rising
+    obs["mindist_sun"] = ces.mindist_sun
+    obs["mindist_moon"] = ces.mindist_moon
+    obs["el_sun"] = ces.el_sun
     return obs
 
 
@@ -416,10 +334,10 @@ def create_observations(args, comm, schedules):
     for schedule in schedules:
 
         if args.weather is None:
-            site, all_ces, focalplane = schedule
+            site, all_ces, focalplane, telescope = schedule
             weather = None
         else:
-            site, all_ces, weather, focalplane = schedule
+            site, all_ces, weather, focalplane, telescope = schedule
 
         fpradius = get_focalplane_radius(args, focalplane)
 
@@ -429,13 +347,10 @@ def create_observations(args, comm, schedules):
         for d in detectors:
             detquats[d] = focalplane[d]["quat"]
 
-        # Noise model for this schedule
-        noise = get_analytic_noise(args, comm, focalplane)
-
         all_ces_tot = []
         nces = len(all_ces)
         for ces in all_ces:
-            all_ces_tot.append((ces, site, focalplane, fpradius, detquats, weather))
+            all_ces_tot.append((ces, site, telescope, focalplane, fpradius, detquats, weather))
 
         breaks = get_breaks(comm, all_ces, nces, args)
 
@@ -444,15 +359,17 @@ def create_observations(args, comm, schedules):
         group_numobs = groupdist[comm.group][1]
 
         for ices in range(group_firstobs, group_firstobs + group_numobs):
+            # Noise model for this CES
+            noise = get_analytic_noise(args, comm, focalplane)
             obs = create_observation(args, comm, all_ces_tot, ices, noise)
             data.obs.append(obs)
 
-    if not args.simulate_atmosphere:
-        for ob in data.obs:
-            tod = ob["tod"]
-            tod.free_azel_quats()
+    #if args.skip_atmosphere and args.skip_noise:
+    #    for ob in data.obs:
+    #        tod = ob["tod"]
+    #        tod.free_azel_quats()
 
-    if comm.group_rank == 0:
+    if comm.comm_group.rank == 0:
         log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
 
     if len(data.obs) == 0:
@@ -543,25 +460,11 @@ def get_time_communicators(comm, data):
 
 
 def main():
-    env = Environment.get()
     log = Logger.get()
     gt = GlobalTimers.get()
     gt.start("toast_ground_sim (total)")
 
-    mpiworld, procs, rank = get_world()
-    if rank == 0:
-        env.print()
-    if mpiworld is None:
-        log.info("Running serially with one process at {}".format(str(datetime.now())))
-    else:
-        if rank == 0:
-            log.info(
-                "Running with {} processes at {}".format(procs, str(datetime.now()))
-            )
-
-    # This is the 2-level toast communicator.  By default,
-    # there is just one group which spans MPI_COMM_WORLD.
-    comm = Comm(world=mpiworld)
+    mpiworld, procs, rank, comm = get_comm()
 
     args, comm = parse_arguments(comm)
 
@@ -651,7 +554,7 @@ def main():
 
             # Add previously simulated sky signal to the atmospheric noise.
 
-            add_signal(data, totalname_freq, signalname)
+            add_signal(data, totalname_freq, signalname, purge=(nmc == 1))
 
             mcoffset = ifreq * 1000000
 

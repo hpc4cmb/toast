@@ -57,7 +57,7 @@ def add_atmosphere_args(parser):
     parser.add_argument(
         "--atm-verbosity",
         required=False,
-        default=1,
+        default=0,
         type=np.int,
         help="Atmospheric sim verbosity level",
     )

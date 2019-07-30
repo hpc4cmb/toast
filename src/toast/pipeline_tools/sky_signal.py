@@ -18,15 +18,38 @@ from ..tod import (
 )
 
 
-def add_sky_args(parser):
+def add_sky_map_args(parser):
     """ Add the sky arguments
     """
 
     parser.add_argument(
-        "--input_map",
+        "--input-map",
         required=False,
         help="Input map for signal"
     )
+
+    # The nside may already be added
+    try:
+        parser.add_argument(
+            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+        )
+    except argparse.ArgumentError:
+        pass
+    # The coordinate system may already be added
+    try:
+        parser.add_argument(
+            "--coord", required=False, default="C", help="Sky coordinate system [C,E,G]"
+        )
+    except argparse.ArgumentError:
+        pass
+
+    return
+
+
+def add_pysm_args(parser):
+    """ Add the sky arguments
+    """
+
     parser.add_argument(
         "--input-pysm-model",
         required=False,

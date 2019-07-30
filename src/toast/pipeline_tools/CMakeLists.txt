@@ -4,6 +4,7 @@
 install(FILES
   __init__.py
   atm.py
+  dist.py
   export.py
   filters.py
   gain.py
