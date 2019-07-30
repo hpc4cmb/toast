@@ -36,12 +36,11 @@ from toast.utils import Logger, Environment, memreport
 from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
 
-from toast.tod import (
-    TODGround,
-)
+from toast.tod import TODGround
 
 from toast.pipeline_tools import (
     add_dist_args,
+    get_time_communicators,
     get_comm,
     add_polyfilter_args,
     apply_polyfilter,
@@ -93,6 +92,7 @@ from toast.pipeline_tools import (
 # warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 # warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
+
 def parse_arguments(comm):
     log = Logger.get()
 
@@ -121,7 +121,7 @@ def parse_arguments(comm):
     parser.add_argument(
         "--outdir", required=False, default="out", help="Output directory"
     )
-    
+
     parser.add_argument(
         "--focalplane",
         required=False,
@@ -350,7 +350,9 @@ def create_observations(args, comm, schedules):
         all_ces_tot = []
         nces = len(all_ces)
         for ces in all_ces:
-            all_ces_tot.append((ces, site, telescope, focalplane, fpradius, detquats, weather))
+            all_ces_tot.append(
+                (ces, site, telescope, focalplane, fpradius, detquats, weather)
+            )
 
         breaks = get_breaks(comm, all_ces, nces, args)
 
@@ -364,7 +366,7 @@ def create_observations(args, comm, schedules):
             obs = create_observation(args, comm, all_ces_tot, ices, noise)
             data.obs.append(obs)
 
-    #if args.skip_atmosphere and args.skip_noise:
+    # if args.skip_atmosphere and args.skip_noise:
     #    for ob in data.obs:
     #        tod = ob["tod"]
     #        tod.free_azel_quats()
@@ -425,38 +427,6 @@ def setup_output(args, comm, mc, freq):
             except FileExistsError:
                 pass
     return outpath
-
-
-@function_timer
-def get_time_communicators(comm, data):
-    """ Split the world communicator by time.
-
-    """
-    time_comms = [("all", comm.comm_world)]
-
-    # A process will only have data for one season and one day.  If more
-    # than one season is observed, we split the communicator to make
-    # season maps.
-
-    my_season = data.obs[0]["season"]
-    seasons = np.array(comm.comm_world.allgather(my_season))
-    do_seasons = np.any(seasons != my_season)
-    if do_seasons:
-        season_comm = comm.comm_world.Split(my_season, comm.world_rank)
-        time_comms.append((str(my_season), season_comm))
-
-    # Split the communicator to make daily maps.  We could easily split
-    # by month as well
-
-    my_day = int(data.obs[0]["MJD"])
-    my_date = data.obs[0]["date"]
-    days = np.array(comm.comm_world.allgather(my_day))
-    do_days = np.any(days != my_day)
-    if do_days:
-        day_comm = comm.comm_world.Split(my_day, comm.world_rank)
-        time_comms.append((my_date, day_comm))
-
-    return time_comms
 
 
 def main():

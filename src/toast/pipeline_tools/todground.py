@@ -13,14 +13,12 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 from ..weather import Weather
 
-from ..tod import (
-    OpSimAtmosphere,
-    atm_available_utils,
-)
+from ..tod import OpSimAtmosphere, atm_available_utils
 
 
 # Telescope, Site and CES are small helper classes for building
 # ground observations
+
 
 def name2id(name, maxval=2 ** 16):
     """ Map a name into an index.
@@ -61,9 +59,24 @@ class Site(object):
 
 
 class CES(object):
-    def __init__(self, start_time, stop_time, name, mjdstart, scan, subscan,
-                 azmin, azmax, el, season, start_date,
-                 rising, mindist_sun, mindist_moon, el_sun):
+    def __init__(
+        self,
+        start_time,
+        stop_time,
+        name,
+        mjdstart,
+        scan,
+        subscan,
+        azmin,
+        azmax,
+        el,
+        season,
+        start_date,
+        rising,
+        mindist_sun,
+        mindist_moon,
+        el_sun,
+    ):
         self.start_time = start_time
         self.stop_time = stop_time
         self.name = name
@@ -163,9 +176,9 @@ def add_todground_args(parser):
     parser.add_argument(
         "--split-schedule",
         required=False,
-        help='Only use a subset of the schedule.  The argument is a string '
+        help="Only use a subset of the schedule.  The argument is a string "
         'of the form "[isplit],[nsplit]" and only observations that satisfy '
-        'scan % nsplit == isplit are included',
+        "scan % nsplit == isplit are included",
     )
     return
 
@@ -229,29 +242,30 @@ def _parse_line(line, all_ces):
     """
     if line.startswith("#"):
         return
-    
-    (start_date,
-     start_time,
-     stop_date,
-     stop_time,
-     mjdstart,
-     mjdstop,
-     name,
-     azmin,
-     azmax,
-     el,
-     rs,
-     sun_el1,
-     sun_az1,
-     sun_el2,
-     sun_az2,
-     moon_el1,
-     moon_az1,
-     moon_el2,
-     moon_az2,
-     moon_phase,
-     scan,
-     subscan,
+
+    (
+        start_date,
+        start_time,
+        stop_date,
+        stop_time,
+        mjdstart,
+        mjdstop,
+        name,
+        azmin,
+        azmax,
+        el,
+        rs,
+        sun_el1,
+        sun_az1,
+        sun_el2,
+        sun_az2,
+        moon_el1,
+        moon_az1,
+        moon_el2,
+        moon_az2,
+        moon_phase,
+        scan,
+        subscan,
     ) = line.split()
     start_time = start_date + " " + start_time
     stop_time = stop_date + " " + stop_time
@@ -266,19 +280,21 @@ def _parse_line(line, all_ces):
         stop_time = dateutil.parser.parse(stop_time)
     start_timestamp = start_time.timestamp()
     stop_timestamp = stop_time.timestamp()
-    all_ces.append([
-        start_timestamp,
-        stop_timestamp,
-        name,
-        float(mjdstart),
-        int(scan),
-        int(subscan),
-        float(azmin),
-        float(azmax),
-        float(el),
-        season,
-        start_date,
-    ])
+    all_ces.append(
+        [
+            start_timestamp,
+            stop_timestamp,
+            name,
+            float(mjdstart),
+            int(scan),
+            int(subscan),
+            float(azmin),
+            float(azmax),
+            float(el),
+            season,
+            start_date,
+        ]
+    )
     return
 
 
@@ -332,7 +348,9 @@ def load_schedule(args, comm):
                     if line.startswith("#"):
                         continue
                     (site_name, telescope, site_lat, site_lon, site_alt) = line.split()
-                    site = Site(site_name, site_lat, site_lon, float(site_alt), telescope)
+                    site = Site(
+                        site_name, site_lat, site_lon, float(site_alt), telescope
+                    )
                     break
                 all_ces = []
                 for line in f:
@@ -386,12 +404,14 @@ def load_schedule(args, comm):
                     # Gather other useful metadata
                     mindist_sun = min_sso_dist(
                         *np.array(
-                            [el, azmin, azmax, sun_el1, sun_az1,
-                             sun_el2, sun_az2]).astype(np.float))
+                            [el, azmin, azmax, sun_el1, sun_az1, sun_el2, sun_az2]
+                        ).astype(np.float)
+                    )
                     mindist_moon = min_sso_dist(
                         *np.array(
-                            [el, azmin, azmax, moon_el1, moon_az1,
-                             moon_el2, moon_az2]).astype(np.float))
+                            [el, azmin, azmax, moon_el1, moon_az1, moon_el2, moon_az2]
+                        ).astype(np.float)
+                    )
                     el_sun = max(float(sun_el1), float(sun_el2))
                     try:
                         start_time = dateutil.parser.parse(start_time + " +0000")
@@ -422,8 +442,7 @@ def load_schedule(args, comm):
                     )
             schedules.append([site, all_ces])
             timer1.stop()
-            timer1.report_clear(
-                "Load {} (sub)scans in {}".format(len(all_ces), fn))
+            timer1.report_clear("Load {} (sub)scans in {}".format(len(all_ces), fn))
 
     schedules = comm.comm_world.bcast(schedules)
 

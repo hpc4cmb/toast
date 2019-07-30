@@ -10,9 +10,7 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..tod import (
-    OpGainScrambler,
-)
+from ..tod import OpGainScrambler
 
 
 def add_gainscrambler_args(parser):
@@ -53,9 +51,7 @@ def scramble_gains(args, comm, data, mc, cache_name=None, verbose=False):
     timer.start()
     if comm.world_rank == 0 and verbose:
         log.info("Scrambling gains")
-    scrambler = OpGainScrambler(
-        sigma=args.gain_sigma, name=cache_name, realization=mc
-    )
+    scrambler = OpGainScrambler(sigma=args.gain_sigma, name=cache_name, realization=mc)
     scrambler.exec(data)
 
     if comm.comm_world is not None:

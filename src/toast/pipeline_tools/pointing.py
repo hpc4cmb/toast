@@ -12,9 +12,7 @@ from ..utils import Logger, Environment
 
 from ..map import OpMadam, OpLocalPixels, DistPixels
 
-from ..tod import (
-    OpPointingHpix
-)
+from ..tod import OpPointingHpix
 
 
 def add_pointing_args(parser):
@@ -154,5 +152,5 @@ def get_submaps(args, comm, data):
     timer.stop()
     if comm.world_rank == 0:
         timer.report("Identify local submaps")
-            
+
     return localpix, localsm, subnpix

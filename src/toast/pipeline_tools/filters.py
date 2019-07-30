@@ -9,14 +9,12 @@ import numpy as np
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 
-from ..tod import (
-    OpPolyFilter,
-    OpGroundFilter,
-)
+from ..tod import OpPolyFilter, OpGroundFilter
 
 #
 # Polynomial filter
 #
+
 
 def add_polyfilter_args(parser):
     """ Add the polynomial filter arguments to argparser
@@ -70,9 +68,7 @@ def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
     if comm.world_rank == 0 and verbose:
         log.info("Polyfiltering signal")
     polyfilter = OpPolyFilter(
-        order=args.poly_order,
-        name=cache_name,
-        common_flag_mask=args.common_flag_mask,
+        order=args.poly_order, name=cache_name, common_flag_mask=args.common_flag_mask
     )
     polyfilter.exec(data)
     if comm.comm_world is not None:
@@ -82,9 +78,11 @@ def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
         timer.report("Polynomial filtering")
     return
 
+
 #
 # Ground filter
 #
+
 
 def add_groundfilter_args(parser):
     """ Add the ground filter arguments to argparser
@@ -111,7 +109,7 @@ def add_groundfilter_args(parser):
         required=False,
         default=0,
         type=np.int,
-        help="Ground template order"
+        help="Ground template order",
     )
     # Common flag mask may already be added
     try:

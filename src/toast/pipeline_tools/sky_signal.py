@@ -12,21 +12,14 @@ from ..utils import Logger, Environment
 
 from ..map import OpMadam, OpLocalPixels, DistPixels
 
-from ..tod import (
-    OpSimPySM,
-    OpSimScan,
-)
+from ..tod import OpSimPySM, OpSimScan
 
 
 def add_sky_map_args(parser):
     """ Add the sky arguments
     """
 
-    parser.add_argument(
-        "--input-map",
-        required=False,
-        help="Input map for signal"
-    )
+    parser.add_argument("--input-map", required=False, help="Input map for signal")
 
     # The nside may already be added
     try:
@@ -83,14 +76,15 @@ def add_pysm_args(parser):
 
 
 @function_timer
-def scan_sky_signal(args, comm, data, localsm, subnpix,
-                    cache_prefix="signal", verbose=True):
+def scan_sky_signal(
+    args, comm, data, localsm, subnpix, cache_prefix="signal", verbose=True
+):
     """ Scan sky signal from a map.
 
     """
     if not args.input_map:
         return None
-    
+
     log = Logger.get()
     timer = Timer()
     timer.start()

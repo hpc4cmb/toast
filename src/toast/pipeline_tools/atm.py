@@ -12,10 +12,7 @@ from ..utils import Logger, Environment
 
 from .. import qarray as qa
 
-from ..tod import (
-    OpSimAtmosphere,
-    atm_available_utils,
-)
+from ..tod import OpSimAtmosphere, atm_available_utils
 
 if atm_available_utils:
     from ..tod.atm import (
@@ -53,7 +50,7 @@ def add_atmosphere_args(parser):
         type=np.float,
         help="Override focal plane radius [deg]",
     )
-    
+
     parser.add_argument(
         "--atm-verbosity",
         required=False,
@@ -256,7 +253,9 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
 
 
 @function_timer
-def scale_atmosphere_by_frequency(args, comm, data, freq, mc, cache_name=None, verbose=True):
+def scale_atmosphere_by_frequency(
+    args, comm, data, freq, mc, cache_name=None, verbose=True
+):
     """Scale atmospheric fluctuations by frequency.
 
     Assume that cached signal under totalname_freq is pure atmosphere
@@ -413,5 +412,3 @@ def get_focalplane_radius(args, focalplane, rmin=1.0):
     mincos = np.amin(cosangs)
     maxdist = max(np.degrees(np.arccos(mincos)), rmin)
     return maxdist * 1.001
-
-

@@ -10,9 +10,7 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..tod import (
-    OpSimScanSynchronousSignal,
-)
+from ..tod import OpSimScanSynchronousSignal
 
 
 def add_sss_args(parser):
@@ -20,54 +18,58 @@ def add_sss_args(parser):
     """
 
     parser.add_argument(
-        "--ground-map",
-        required=False,
-        help="Fixed ground template map")
+        "--ground-map", required=False, help="Fixed ground template map"
+    )
     parser.add_argument(
         "--ground-nside",
         required=False,
         default=128,
         type=np.int,
-        help="Ground template resolution")
+        help="Ground template resolution",
+    )
     parser.add_argument(
         "--ground-fwhm-deg",
         required=False,
         default=10,
         type=np.float,
-        help="Ground template smoothing in degrees")
+        help="Ground template smoothing in degrees",
+    )
     parser.add_argument(
         "--ground-lmax",
         required=False,
         default=256,
         type=np.int,
-        help="Ground template expansion order")
+        help="Ground template expansion order",
+    )
     parser.add_argument(
         "--ground-scale",
         required=False,
         default=1e-3,
         type=np.float,
-        help="Ground template RMS at el=45 deg")
+        help="Ground template RMS at el=45 deg",
+    )
     parser.add_argument(
         "--ground-power",
         required=False,
         default=-1,
         type=np.float,
         help="Exponential for suppressing ground pick-up at "
-        "higher observing elevation")
-    
+        "higher observing elevation",
+    )
+
     parser.add_argument(
         "--simulate-ground",
         required=False,
         action="store_true",
         help="Enable simulating ground pickup.",
-        dest="simulate_ground"
+        dest="simulate_ground",
     )
     parser.add_argument(
         "--no-simulate-ground",
         required=False,
         action="store_true",
         help="Enable simulating ground pickup.",
-        dest="simulate_ground"
+        dest="simulate_ground",
     )
     parser.set_defaults(simulate_ground=False)
 

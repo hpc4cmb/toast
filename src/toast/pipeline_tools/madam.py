@@ -73,7 +73,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_allreduce",
     )
     parser.set_defaults(madam_destripe=ground_data)
-    
+
     parser.add_argument(
         "--destripe",
         required=False,
@@ -89,7 +89,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_destripe",
     )
     parser.set_defaults(madam_destripe=True)
-    
+
     parser.add_argument(
         "--binmap",
         required=False,
@@ -105,7 +105,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_binmap",
     )
     parser.set_defaults(madam_binmap=True)
-    
+
     parser.add_argument(
         "--hits",
         required=False,
@@ -121,7 +121,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_hits",
     )
     parser.set_defaults(madam_hits=True)
-    
+
     parser.add_argument(
         "--wcov",
         required=False,
@@ -137,7 +137,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_wcov",
     )
     parser.set_defaults(madam_wcov=True)
-    
+
     parser.add_argument(
         "--wcov-inv",
         required=False,
@@ -153,7 +153,7 @@ def add_madam_args(parser, ground_data=True):
         dest="madam_wcov_inv",
     )
     parser.set_defaults(madam_wcov_inv=True)
-    
+
     parser.add_argument(
         "--conserve-memory",
         dest="conserve_memory",
@@ -269,21 +269,21 @@ def setup_madam(args):
 
 @function_timer
 def apply_madam(
-        args,
-        comm,
-        data,
-        madampars,
-        mc,
-        outpath,
-        detweights,
-        cache_name,
-        freq=None,
-        time_comms=None,
-        telescope_data=None,
-        first_call=True,
-        extra_prefix=None,
-        verbose=True,
-        bin_only=False,
+    args,
+    comm,
+    data,
+    madampars,
+    mc,
+    outpath,
+    detweights,
+    cache_name,
+    freq=None,
+    time_comms=None,
+    telescope_data=None,
+    first_call=True,
+    extra_prefix=None,
+    verbose=True,
+    bin_only=False,
 ):
     """ Use libmadam to bin and optionally destripe data.
 
@@ -334,7 +334,7 @@ def apply_madam(
         pars["write_binmap"] = True
 
     # Sanity check, is any of the Madam outputs required?
-        
+
     outputs = [
         pars["write_map"],
         pars["write_binmap"],

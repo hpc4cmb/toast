@@ -10,10 +10,7 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..tod import (
-    AnalyticNoise,
-    OpSimNoise,
-)
+from ..tod import AnalyticNoise, OpSimNoise
 
 
 def add_noise_args(parser):
@@ -88,5 +85,3 @@ def get_analytic_noise(args, comm, focalplane, verbose=True):
     if comm.world_rank == 0 and verbose:
         timer.report("Creating noise model")
     return noise
-
-
