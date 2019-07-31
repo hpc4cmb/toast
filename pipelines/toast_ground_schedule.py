@@ -1554,9 +1554,9 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
-    if not os.path.isdir(dir_out):
-        print("Creating output directory: {}".format(dir_out), flush=True)
-        os.makedirs(dir_out)
+    if dir_out:
+        print("Creating '{}'".format(dir_out), flush=True)
+        os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
     fout.write(
