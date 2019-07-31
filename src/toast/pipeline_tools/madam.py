@@ -331,15 +331,18 @@ def apply_madam(
         bin_only (bool) :  Disable destriping and only bin the signal,
             Useful when running Madam as a part of a filter+bin pipeline.
     """
+    if comm.comm_world is None:
+        raise RuntimeError("Madam requires MPI")
+
     log = Logger.get()
     timer = Timer()
     timer.start()
-    if comm.world_rank == 0 and verbose:
+    if (comm.comm_world is None or comm.world_rank == 0) and verbose:
         log.info("Making maps")
 
     pars = copy.deepcopy(madampars)
     pars["path_output"] = outpath
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         os.makedirs(outpath, exist_ok=True)
     file_root = pars["file_root"]
     if extra_prefix is not None:
@@ -373,7 +376,7 @@ def apply_madam(
         pars["write_matrix"],
     ]
     if not np.any(outputs):
-        if comm.world_rank == 0:
+        if comm.comm_world is None or comm.world_rank == 0:
             log.info("No Madam outputs requested.  Skipping.")
         return
 
@@ -434,12 +437,13 @@ def apply_madam(
             else:
                 # Cannot have verbose output from concurrent mapmaking
                 madam.params["info"] = 0
-            if time_comm.rank == 0 and verbose:
+            if (time_comm is None or time_comm.rank == 0) and verbose:
                 log.info("Mapping {}".format(madam.params["file_root"]))
             madam.exec(tele_data, time_comm)
 
-            time_comm.barrier()
-            if comm.world_rank == 0 and verbose:
+            if time_comm is not None:
+                time_comm.barrier()
+            if (comm.comm_world is None or comm.world_rank == 0) and verbose:
                 ttimer.report_clear("Mapping {}".format(madam.params["file_root"]))
 
             if len(time_name.split("-")) == 3 and first_call:
@@ -451,7 +455,7 @@ def apply_madam(
     if comm.comm_world is not None:
         comm.comm_world.barrier()
     timer.stop()
-    if comm.world_rank == 0 and verbose:
+    if (comm_world is not None or comm.world_rank == 0) and verbose:
         timer.report("Madam total")
 
     return

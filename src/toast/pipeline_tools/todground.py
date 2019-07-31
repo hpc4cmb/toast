@@ -216,7 +216,7 @@ def get_breaks(comm, all_ces, args, verbose=True):
 
     nbreak = len(breaks)
     if nbreak < comm.ngroups - 1:
-        if comm.world_rank == 0:
+        if comm.comm_world is None or comm.world_rank == 0:
             print(
                 "WARNING: there are more process groups than observing days. "
                 "Will try distributing by observation.",
@@ -331,7 +331,7 @@ def load_schedule(args, comm):
     timer0 = Timer()
     timer0.start()
 
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         timer1 = Timer()
         isplit, nsplit = None, None
         if args.split_schedule is not None:
@@ -445,10 +445,11 @@ def load_schedule(args, comm):
             timer1.stop()
             timer1.report_clear("Load {} (sub)scans in {}".format(len(all_ces), fn))
 
-    schedules = comm.comm_world.bcast(schedules)
+    if comm.comm_world is not None:
+        schedules = comm.comm_world.bcast(schedules)
 
     timer0.stop()
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         timer0.report("Loading schedule")
     return schedules
 
@@ -463,7 +464,7 @@ def load_weather(args, comm, schedules, verbose=False):
     timer = Timer()
     timer.start()
 
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         weathers = []
         weatherdict = {}
         ftimer = Timer()
@@ -490,6 +491,6 @@ def load_weather(args, comm, schedules, verbose=False):
         schedule.append(weather)
 
     timer.stop()
-    if comm.world_rank == 0 and verbose:
+    if (comm.comm_world is None or comm.world_rank == 0) and verbose:
         timer.report("Loading weather")
     return

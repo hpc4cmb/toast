@@ -27,7 +27,7 @@ from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
 
 import toast.qarray as qa
-from toast.tod import TODGround, OpCacheCopy
+from toast.tod import TODGround, OpCacheCopy, plot_focalplane, OpCacheClear
 
 from toast.pipeline_tools import (
     add_dist_args,
@@ -151,7 +151,7 @@ def parse_arguments(comm):
         if not tidas_available:
             raise RuntimeError("TIDAS not found- cannot export")
 
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         log.info("All parameters:")
         for ag in vars(args):
             log.info("{} = {}".format(ag, getattr(args, ag)))
@@ -159,11 +159,11 @@ def parse_arguments(comm):
     if args.group_size:
         comm = toast.Comm(groupsize=args.group_size)
 
-    if comm.comm_world.rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         os.makedirs(args.outdir, exist_ok=True)
 
     timer.stop()
-    if comm.world_rank == 0:
+    if comm.comm_world is None or comm.world_rank == 0:
         timer.report("Parsed parameters")
 
     return args, comm
@@ -180,7 +180,7 @@ def load_fp(args, comm):
 
     nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
 
-    if comm.comm_world.rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         if args.focalplane is None:
             XAXIS, YAXIS, ZAXIS = np.eye(3)
             # in this case, create a fake detector at the boresight
@@ -231,15 +231,16 @@ def load_fp(args, comm):
         else:
             with open(args.focalplane, "rb") as p:
                 fp = pickle.load(p)
-    fp = comm.comm_world.bcast(fp, root=0)
+    if comm.comm_world is not None:
+        fp = comm.comm_world.bcast(fp, root=0)
 
-    if comm.comm_world.rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         timer.report_clear("Create focalplane")
 
     if args.debug:
-        if comm.comm_world.rank == 0:
+        if comm.comm_world is None or comm.comm_world.rank == 0:
             outfile = "{}/focalplane.png".format(args.outdir)
-            tt.plot_focalplane(fp, 6, 6, outfile)
+            plot_focalplane(fp, 6, 6, outfile)
 
     detectors = sorted(fp.keys())
     detweights = {}
@@ -287,6 +288,11 @@ def create_observations(args, comm, fp, all_ces, site):
 
     noise = get_analytic_noise(args, comm, fp)
 
+    if comm.comm_group is not None:
+        ndetrank = comm.comm_group.size
+    else:
+        ndetrank = 1
+
     for ices in range(group_firstobs, group_firstobs + group_numobs):
         ces = all_ces[ices]
         totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
@@ -298,7 +304,7 @@ def create_observations(args, comm, fp, all_ces, site):
                 comm.comm_group,
                 detquats,
                 totsamples,
-                detranks=comm.comm_group.size,
+                detranks=ndetrank,
                 firsttime=ces.start_time,
                 rate=args.sample_rate,
                 site_lon=site.lon,
@@ -338,7 +344,7 @@ def create_observations(args, comm, fp, all_ces, site):
         tod = ob["tod"]
         tod.free_azel_quats()
 
-    if comm.comm_group.rank == 0:
+    if comm.comm_world is None or comm.comm_group.rank == 0:
         log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
 
     if len(data.obs) == 0:
@@ -347,7 +353,7 @@ def create_observations(args, comm, fp, all_ces, site):
             "be assigned to at least one observation."
         )
 
-    if comm.comm_world.rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         timer.report_clear("Simulate scans")
 
     return data
@@ -371,7 +377,7 @@ def setup_sigcopy(args, comm, signalname):
 
 def setup_output(args, comm):
     outpath = "{}".format(args.outdir)
-    if comm.comm_world.rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         if not os.path.isdir(outpath):
             try:
                 os.makedirs(outpath)
@@ -385,7 +391,7 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
 
     """
     if sigcopy_madam is not None:
-        if comm.comm_world.rank == 0:
+        if comm.comm_world is None or comm.comm_world.rank == 0:
             print("Making a copy of the TOD for Madam", flush=args.flush)
         sigcopy_madam.exec(data)
 
@@ -394,7 +400,7 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
 
 def clear_signal(args, comm, data, sigclear):
     if sigclear is not None:
-        if comm.comm_world.rank == 0:
+        if comm.comm_world is None or comm.comm_world.rank == 0:
             print("Clearing filtered signal")
         sigclear.exec(data)
     return
@@ -496,7 +502,8 @@ def main():
 
     # Now run Madam on the unprocessed copy of the signal
 
-    apply_madam(args, comm, data, madampars, outpath, detweights, signalname_madam)
+    if args.use_madam:
+        apply_madam(args, comm, data, madampars, outpath, detweights, signalname_madam)
 
     gt.stop_all()
     if mpiworld is not None:
@@ -504,7 +511,7 @@ def main():
     timer = Timer()
     timer.start()
     alltimers = gather_timers(comm=mpiworld)
-    if rank == 0:
+    if comm.comm_world is None or comm.comm_world.rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
         timer.stop()

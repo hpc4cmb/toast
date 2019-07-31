@@ -49,6 +49,8 @@ def get_time_communicators(comm, data):
 
     """
     time_comms = [("all", comm.comm_world)]
+    if comm.comm_world is None:
+        return time_comms
 
     # A process will only have data for one season and one day.  If more
     # than one season is observed, we split the communicator to make
