@@ -35,7 +35,9 @@ def add_noise_args(parser):
 
 
 @function_timer
-def simulate_noise(args, comm, data, mc, cache_prefix=None, verbose=True):
+def simulate_noise(
+    args, comm, data, mc, cache_prefix=None, verbose=True, overwrite=False
+):
     """ Simulate electronic noise
     """
     if not args.simulate_noise:
@@ -45,6 +47,15 @@ def simulate_noise(args, comm, data, mc, cache_prefix=None, verbose=True):
     timer.start()
     if comm.world_rank == 0 and verbose:
         log.info("Simulating noise")
+    if overwrite:
+        # Clear existing signal from the cache
+        for obs in data.obs:
+            tod = obs["tod"]
+            if cache_prefix is None:
+                prefix = tod.SIGNAL_NAME
+            else:
+                prefix = cache_prefix
+            tod.cache.clear(prefix + "_.*")
     nse = OpSimNoise(out=cache_prefix, realization=mc)
     nse.exec(data)
 

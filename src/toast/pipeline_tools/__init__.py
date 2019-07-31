@@ -14,6 +14,8 @@ from .atm import (
     update_atmospheric_noise_weights,
     get_focalplane_radius,
 )
+from .binning import add_binner_args, init_binner, apply_binner
+from .dipole import add_dipole_args, simulate_dipole
 from .dist import add_dist_args, get_comm, get_time_communicators
 from .export import add_tidas_args, output_tidas, add_spt3g_args, output_spt3g
 from .filters import (
@@ -42,6 +44,7 @@ from .todground import (
     Telescope,
     CES,
 )
+from .todsatellite import add_todsatellite_args
 
 
 def add_mc_args(parser):
@@ -65,13 +68,17 @@ def add_mc_args(parser):
 
 
 @function_timer
-def add_signal(data, prefix_out, prefix_in, purge=False):
+def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=True):
     """ Add signal from cache prefix `prefix_in` to cache prefix
     `prefix_out`.  If `prefix_out` does not exit, it is created.
 
     """
     if prefix_in == prefix_out or prefix_in is None or prefix_out is None:
         return
+    log = Logger.get()
+    if (comm is None or comm.world_rank == 0) and verbose:
+        log.info("Adding signal from {} to {}" "".format(prefix_in, prefix_out))
+    timer = Timer()
     for obs in data.obs:
         tod = obs["tod"]
         for det in tod.local_dets:
@@ -86,6 +93,9 @@ def add_signal(data, prefix_out, prefix_in, purge=False):
             del ref_in, ref_out
         if purge:
             tod.cache.clear(prefix_in + ".*")
+    timer.stop()
+    if (comm is None or comm.world_rank == 0) and verbose:
+        timer.report("Add signal")
     return
 
 
@@ -94,13 +104,17 @@ def copy_signal(args, comm, data, cache_prefix_in, cache_prefix_out, verbose=Tru
     """Copy the signal in `cache_prefix_in` to `cache_prefix_out`.
 
     """
+    if cache_prefix_in == cache_prefix_out:
+        return
     log = Logger.get()
-    if cache_prefix_in != cache_prefix_out:
-        if comm.world_rank == 0 and verbose:
-            log.info(
-                "Copying signal from {} to {}"
-                "".format(cache_prefix_in, cache_prefix_out)
-            )
-        cachecopy = OpCacheCopy(cache_prefix_in, cache_prefix_out, force=True)
-        cachecopy.exec(data)
+    timer = Timer()
+    if (comm is None or comm.world_rank == 0) and verbose:
+        log.info(
+            "Copying signal from {} to {}" "".format(cache_prefix_in, cache_prefix_out)
+        )
+    cachecopy = OpCacheCopy(cache_prefix_in, cache_prefix_out, force=True)
+    cachecopy.exec(data)
+    timer.stop()
+    if (comm is None or comm.world_rank == 0) and verbose:
+        timer.report("Copy signal")
     return

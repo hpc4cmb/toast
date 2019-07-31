@@ -44,7 +44,7 @@ def add_pysm_args(parser):
     """
 
     parser.add_argument(
-        "--input-pysm-model",
+        "--pysm-model",
         required=False,
         help="Comma separated models for on-the-fly PySM "
         'simulation, e.g. s3,d6,f1,a2"',
@@ -55,6 +55,12 @@ def add_pysm_args(parser):
         action="store_true",
         help="Apply beam convolution to input map with "
         "gaussian beam parameters defined in focalplane",
+    )
+    parser.add_argument(
+        "--pysm-precomputed-cmb-K_CMB",
+        required=False,
+        help="Precomputed CMB map for PySM in K_CMB"
+        'it overrides any model defined in pysm_model"',
     )
 
     # The nside may already be added
@@ -119,19 +125,23 @@ def scan_sky_signal(
 
 
 @function_timer
-def simulate_sky_signal(args, comm, data, schedules, subnpix, localsm, verbose=False):
+def simulate_sky_signal(
+    args, comm, data, focalplanes, subnpix, localsm, cache_prefix, verbose=False
+):
     """ Use PySM to simulate smoothed sky signal.
 
     """
+    if not args.pysm_model:
+        return
     timer = Timer()
     timer.start()
     # Convolve a signal TOD from PySM
-    signalname = "signal"
     op_sim_pysm = OpSimPySM(
         comm=comm.comm_rank,
-        out=signalname,
-        pysm_model=args.input_pysm_model.split(","),
-        focalplanes=[s[3] for s in schedules],
+        out=cache_prefix,
+        pysm_model=args.pysm_model.split(","),
+        pysm_precomputed_cmb_K_CMB=args.pysm_precomputed_cmb_K_CMB,
+        focalplanes=focalplanes,
         nside=args.nside,
         subnpix=subnpix,
         localsm=localsm,
@@ -145,7 +155,7 @@ def simulate_sky_signal(args, comm, data, schedules, subnpix, localsm, verbose=F
     if comm.world_rank == 0 and verbose:
         timer.report("PySM")
 
-    return signalname
+    return cache_prefix
 
 
 @function_timer

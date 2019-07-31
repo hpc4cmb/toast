@@ -4,6 +4,8 @@
 install(FILES
   __init__.py
   atm.py
+  binning.py
+  dipole.py
   dist.py
   export.py
   filters.py
@@ -14,5 +16,6 @@ install(FILES
   sky_signal.py
   sss.py
   todground.py
+  todsatellite.py
   DESTINATION ${PYTHON_SITE}/toast/pipeline_tools
 )

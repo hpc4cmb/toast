@@ -110,7 +110,7 @@ def parse_arguments(comm):
     add_atmosphere_args(parser)
     add_noise_args(parser)
     add_gainscrambler_args(parser)
-    add_madam_args(parser)
+    add_madam_args(parser, ground_data=True)
     add_sky_map_args(parser)
     add_pysm_args(parser)
     add_sss_args(parser)
@@ -480,8 +480,9 @@ def main():
     _, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.input_pysm_model:
+        focalplanes = [s[3] for s in schedules]
         signalname = simulate_sky_signal(
-            args, comm, data, schedules, subnpix, localsm, "signal"
+            args, comm, data, focalplanes, subnpix, localsm, "signal"
         )
     else:
         signalname = scan_sky_signal(args, comm, data, localsm, subnpix, "signal")
@@ -492,8 +493,8 @@ def main():
 
     # Loop over Monte Carlos
 
-    firstmc = int(args.MC_start)
-    nmc = int(args.MC_count)
+    firstmc = args.MC_start
+    nmc = args.MC_count
 
     freqs = [float(freq) for freq in args.freq.split(",")]
     nfreq = len(freqs)
@@ -524,7 +525,7 @@ def main():
 
             # Add previously simulated sky signal to the atmospheric noise.
 
-            add_signal(data, totalname_freq, signalname, purge=(nmc == 1))
+            add_signal(args, comm, data, totalname_freq, signalname, purge=(nmc == 1))
 
             mcoffset = ifreq * 1000000
 

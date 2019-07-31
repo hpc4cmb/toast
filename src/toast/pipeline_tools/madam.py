@@ -58,108 +58,132 @@ def add_madam_args(parser, ground_data=True):
     parser.add_argument(
         "--madam-parfile", required=False, default=None, help="Madam parameter file"
     )
+
+    if ground_data:
+        suffix = " [default]"
+    else:
+        suffix = ""
     parser.add_argument(
         "--madam-allreduce",
         required=False,
         action="store_true",
-        help="Use the allreduce commucation pattern in Madam",
+        help="Use the allreduce commucation pattern in Madam" + suffix,
         dest="madam_allreduce",
     )
+    if ground_data:
+        suffix = ""
+    else:
+        suffix = " [default]"
     parser.add_argument(
         "--no-madam-allreduce",
         required=False,
         action="store_false",
-        help="Do not use the allreduce commucation pattern in Madam",
+        help="Do not use the allreduce commucation pattern in Madam" + suffix,
         dest="madam_allreduce",
     )
-    parser.set_defaults(madam_destripe=ground_data)
+    parser.set_defaults(madam_allreduce=ground_data)
 
-    parser.add_argument(
-        "--destripe",
-        required=False,
-        action="store_true",
-        help="Write Madam destriped maps",
-        dest="madam_destripe",
-    )
-    parser.add_argument(
-        "--no-destripe",
-        required=False,
-        action="store_false",
-        help="Do not write Madam destriped maps",
-        dest="madam_destripe",
-    )
-    parser.set_defaults(madam_destripe=True)
+    try:
+        parser.add_argument(
+            "--destripe",
+            required=False,
+            action="store_true",
+            help="Write destriped maps [default]",
+            dest="destripe",
+        )
+        parser.add_argument(
+            "--no-destripe",
+            required=False,
+            action="store_false",
+            help="Do not write destriped maps",
+            dest="destripe",
+        )
+        parser.set_defaults(destripe=True)
+    except argparse.ArgumentError:
+        pass
 
-    parser.add_argument(
-        "--binmap",
-        required=False,
-        action="store_true",
-        help="Write Madam binned maps",
-        dest="madam_binmap",
-    )
-    parser.add_argument(
-        "--no-binmap",
-        required=False,
-        action="store_false",
-        help="Do not write Madam binned maps",
-        dest="madam_binmap",
-    )
-    parser.set_defaults(madam_binmap=True)
+    try:
+        parser.add_argument(
+            "--binmap",
+            required=False,
+            action="store_true",
+            help="Write binned maps [default]",
+            dest="write_binmap",
+        )
+        parser.add_argument(
+            "--no-binmap",
+            required=False,
+            action="store_false",
+            help="Do not write binned maps",
+            dest="write_binmap",
+        )
+        parser.set_defaults(write_binmap=True)
+    except argparse.ArgumentError:
+        pass
 
-    parser.add_argument(
-        "--hits",
-        required=False,
-        action="store_true",
-        help="Write Madam hit maps",
-        dest="madam_hits",
-    )
-    parser.add_argument(
-        "--no-hits",
-        required=False,
-        action="store_false",
-        help="Do not write Madam hit maps",
-        dest="madam_hits",
-    )
-    parser.set_defaults(madam_hits=True)
+    try:
+        parser.add_argument(
+            "--hits",
+            required=False,
+            action="store_true",
+            help="Write hit maps [default]",
+            dest="write_hits",
+        )
+        parser.add_argument(
+            "--no-hits",
+            required=False,
+            action="store_false",
+            help="Do not write hit maps",
+            dest="write_hits",
+        )
+        parser.set_defaults(write_hits=True)
+    except argparse.ArgumentError:
+        pass
 
-    parser.add_argument(
-        "--wcov",
-        required=False,
-        action="store_true",
-        help="Write Madam white noise covariance",
-        dest="madam_wcov",
-    )
-    parser.add_argument(
-        "--no-wcov",
-        required=False,
-        action="store_false",
-        help="Do not write Madam white noise covariance",
-        dest="madam_wcov",
-    )
-    parser.set_defaults(madam_wcov=True)
+    try:
+        parser.add_argument(
+            "--wcov",
+            required=False,
+            action="store_true",
+            help="Write white noise covariance [default]",
+            dest="write_wcov",
+        )
+        parser.add_argument(
+            "--no-wcov",
+            required=False,
+            action="store_false",
+            help="Do not write white noise covariance",
+            dest="write_wcov",
+        )
+        parser.set_defaults(write_wcov=True)
+    except argparse.ArgumentError:
+        pass
 
-    parser.add_argument(
-        "--wcov-inv",
-        required=False,
-        action="store_true",
-        help="Write Madam inverse white noise covariance",
-        dest="madam_wcov_inv",
-    )
-    parser.add_argument(
-        "--no-wcov-inv",
-        required=False,
-        action="store_false",
-        help="Do not write Madam inverse white noise covariance",
-        dest="madam_wcov_inv",
-    )
-    parser.set_defaults(madam_wcov_inv=True)
+    try:
+        parser.add_argument(
+            "--wcov-inv",
+            required=False,
+            action="store_true",
+            help="Write inverse white noise covariance [default]",
+            dest="write_wcov_inv",
+        )
+        parser.add_argument(
+            "--no-wcov-inv",
+            required=False,
+            action="store_false",
+            help="Do not write inverse white noise covariance",
+            dest="write_wcov_inv",
+        )
+        parser.set_defaults(write_wcov_inv=True)
+    except argparse.ArgumentError:
+        pass
 
     parser.add_argument(
         "--conserve-memory",
         dest="conserve_memory",
         required=False,
         action="store_true",
-        help="Conserve memory when staging libMadam buffers",
+        help="Conserve memory when staging libMadam buffers [default]",
     )
     parser.add_argument(
         "--no-conserve-memory",
@@ -217,12 +241,12 @@ def setup_madam(args):
 
     pars["temperature_only"] = False
     pars["force_pol"] = True
-    pars["kfirst"] = args.madam_destripe
-    pars["write_map"] = args.madam_destripe
-    pars["write_binmap"] = args.madam_binmap
-    pars["write_matrix"] = args.madam_wcov_inv
-    pars["write_wcov"] = args.madam_wcov
-    pars["write_hits"] = args.madam_hits
+    pars["kfirst"] = args.destripe
+    pars["write_map"] = args.destripe
+    pars["write_binmap"] = args.write_binmap
+    pars["write_matrix"] = args.write_wcov_inv
+    pars["write_wcov"] = args.write_wcov
+    pars["write_hits"] = args.write_hits
     pars["nside_cross"] = cross
     pars["nside_submap"] = submap
     pars["allreduce"] = args.madam_allreduce
@@ -307,6 +331,12 @@ def apply_madam(
 
     pars = copy.deepcopy(madampars)
     pars["path_output"] = outpath
+    if comm.world_rank == 0:
+        if not os.path.isdir(outpath):
+            try:
+                os.makedirs(outpath)
+            except FileExistsError:
+                pass
     file_root = pars["file_root"]
     if extra_prefix is not None:
         if len(file_root) > 0 and not file_root.endswith("_"):
@@ -374,7 +404,7 @@ def apply_madam(
         time_comms = [("all", comm.comm_world)]
 
     if telescope_data is None:
-        telescope_data = ["all", data]
+        telescope_data = [("all", data)]
 
     ttimer = Timer()
     for time_name, time_comm in time_comms:
