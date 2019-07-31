@@ -145,9 +145,11 @@ def parse_arguments(comm, procs):
         sys.exit()
 
     if comm.world_rank == 0:
+        log.info("\n")
         log.info("All parameters:")
         for ag in vars(args):
             log.info("{} = {}".format(ag, getattr(args, ag)))
+        log.info("\n")
 
     groupsize = args.group_size
     if groupsize is None or groupsize <= 0:
