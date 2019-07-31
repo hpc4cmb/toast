@@ -297,7 +297,6 @@ def apply_madam(
     comm,
     data,
     madampars,
-    mc,
     outpath,
     detweights,
     cache_name,
@@ -347,13 +346,9 @@ def apply_madam(
             file_root += "_"
         file_root += "{:03}".format(int(freq))
 
-    if first_call:
+    if not first_call:
         # Only the first MC iteration should produce the hits and
         # white noise matrices
-        pars["write_matrix"] = False
-        pars["write_wcov"] = False
-        pars["write_hits"] = False
-    else:
         pars["write_matrix"] = False
         pars["write_wcov"] = False
         pars["write_hits"] = False

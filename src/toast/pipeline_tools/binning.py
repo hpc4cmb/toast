@@ -78,6 +78,25 @@ def add_binner_args(parser):
     except argparse.ArgumentError:
         pass
 
+    try:
+        parser.add_argument(
+            "--zip",
+            required=False,
+            action="store_true",
+            help="Compress the map outputs",
+            dest="zip_maps",
+        )
+        parser.add_argument(
+            "--no-zip",
+            required=False,
+            action="store_false",
+            help="Do not compress the map outputs",
+            dest="zip_maps",
+        )
+        parser.set_defaults(zip_maps=True)
+    except argparse.ArgumentError:
+        pass
+
     # `nside` may already be added
     try:
         parser.add_argument(
@@ -148,11 +167,15 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
 
     if args.write_hits:
         fname = os.path.join(args.outdir, "hits.fits")
+        if args.zip_maps:
+            fname += ".gz"
         hits.write_healpix_fits(fname)
         if comm.world_rank == 0 and verbose:
             log.info("Wrote hits to {}".format(fname))
     if args.write_wcov_inv:
         fname = os.path.join(args.outdir, "invnpp.fits")
+        if args.zip_maps:
+            fname += ".gz"
         invnpp.write_healpix_fits(fname)
         if comm.world_rank == 0 and verbose:
             log.info("Wrote inverse white noise covariance to {}".format(fname))
@@ -189,7 +212,16 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
 
 
 def apply_binner(
-    args, comm, data, invnpp, zmap, detweights, outpath, cache_prefix=None, verbose=True
+    args,
+    comm,
+    data,
+    invnpp,
+    zmap,
+    detweights,
+    outpath,
+    cache_prefix=None,
+    prefix="binned",
+    verbose=True,
 ):
     """ Bin the signal in `cache_prefix` onto `zmap`
     using the noise weights in `invnpp`.
@@ -215,7 +247,9 @@ def apply_binner(
     if (comm is None or comm.world_rank == 0) and verbose:
         timer.report_clear("  Computing binned map")
 
-    fname = os.path.join(outpath, "binned.fits")
+    fname = os.path.join(outpath, prefix + ".fits")
+    if args.zip_maps:
+        fname += ".gz"
     zmap.write_healpix_fits(fname)
 
     if (comm is None or comm.world_rank == 0) and verbose:

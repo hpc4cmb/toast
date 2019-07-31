@@ -352,8 +352,7 @@ def main():
     tmr.start()
 
     if rank == 0:
-        if not os.path.isdir(args.outdir):
-            os.makedirs(args.outdir)
+        os.makedirs(args.outdir, exist_ok=True)
 
     focalplane, gain, detweights = load_focalplane(args, comm, rank, mpiworld)
 
@@ -465,7 +464,7 @@ def main():
                 tmr.report_clear("  Apply gains {:04d}".format(mc))
 
             apply_madam(
-                args, comm, data, madampars, mc, outpath, detweights, "tot_signal"
+                args, comm, data, madampars, outpath, detweights, "tot_signal"
             )
 
             if mpiworld is not None:

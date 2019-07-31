@@ -184,7 +184,7 @@ def add_todground_args(parser):
 
 
 @function_timer
-def get_breaks(comm, all_ces, nces, args, verbose=True):
+def get_breaks(comm, all_ces, args, verbose=True):
     """ List operational day limits in the list of CES:s.
 
     """
@@ -192,6 +192,7 @@ def get_breaks(comm, all_ces, nces, args, verbose=True):
     if not args.do_daymaps:
         return breaks
     do_break = False
+    nces = len(all_ces)
     for i in range(nces - 1):
         # If current and next CES are on different days, insert a break
         tz = args.timezone / 24

@@ -94,6 +94,8 @@ from toast.pipeline_tools import (
 
 
 def parse_arguments(comm):
+    timer = Timer()
+    timer.start()
     log = Logger.get()
 
     parser = argparse.ArgumentParser(
@@ -172,11 +174,11 @@ def parse_arguments(comm):
         comm = Comm(groupsize=args.group_size)
 
     if comm.world_rank == 0:
-        if not os.path.isdir(args.outdir):
-            try:
-                os.makedirs(args.outdir)
-            except FileExistsError:
-                pass
+        os.makedirs(args.outdir, exist_ok=True)
+
+    timer.stop()
+    if comm.world_rank == 0:
+        timer.report("Parsed parameters")
 
     return args, comm
 
@@ -354,7 +356,7 @@ def create_observations(args, comm, schedules):
                 (ces, site, telescope, focalplane, fpradius, detquats, weather)
             )
 
-        breaks = get_breaks(comm, all_ces, nces, args)
+        breaks = get_breaks(comm, all_ces, args)
 
         groupdist = distribute_uniform(nces, comm.ngroups, breaks=breaks)
         group_firstobs = groupdist[comm.group][0]
@@ -421,11 +423,7 @@ def setup_sigcopy(args):
 def setup_output(args, comm, mc, freq):
     outpath = "{}/{:08}/{:03}".format(args.outdir, mc, int(freq))
     if comm.world_rank == 0:
-        if not os.path.isdir(outpath):
-            try:
-                os.makedirs(outpath)
-            except FileExistsError:
-                pass
+        os.makedirs(outpath, exist_ok=True)
     return outpath
 
 
@@ -479,7 +477,7 @@ def main():
 
     _, localsm, subnpix = get_submaps(args, comm, data)
 
-    if args.input_pysm_model:
+    if args.pysm_model:
         focalplanes = [s[3] for s in schedules]
         signalname = simulate_sky_signal(
             args, comm, data, focalplanes, subnpix, localsm, "signal"
@@ -541,7 +539,7 @@ def main():
                 output_tidas(args, comm, data, totalname)
                 output_spt3g(args, comm, data, totalname)
 
-            outpath = setup_output(args, comm, mc, freq)
+            outpath = setup_output(args, comm, mc + mcoffset, freq)
 
             # Bin and destripe maps
 
@@ -550,7 +548,6 @@ def main():
                 comm,
                 data,
                 madampars,
-                mc + mcoffset,
                 outpath,
                 detweights,
                 totalname_freq,
@@ -575,7 +572,6 @@ def main():
                     comm,
                     data,
                     madampars,
-                    mc + mcoffset,
                     outpath,
                     detweights,
                     totalname_freq,
