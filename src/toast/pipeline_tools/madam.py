@@ -35,6 +35,13 @@ def add_madam_args(parser, ground_data=True):
         help="Maximum number of CG iterations in Madam",
     )
     parser.add_argument(
+        "--madam-precond-width",
+        required=False,
+        default=100,
+        type=np.int,
+        help="Maximum width of the Madam band preconditioner",
+    )
+    parser.add_argument(
         "--madam-baseline-length",
         required=False,
         default=10000.0,
@@ -275,6 +282,8 @@ def setup_madam(args):
 
     pars["base_first"] = args.madam_baseline_length
     pars["basis_order"] = args.madam_baseline_order
+    pars["precond_width_min"] = max(10, args.madam_precond_width // 10)
+    pars["precond_width_max"] = max(10, args.madam_precond_width)
     pars["nside_map"] = args.nside
     if args.madam_noisefilter:
         if args.madam_baseline_order != 0:
@@ -331,11 +340,7 @@ def apply_madam(
     pars = copy.deepcopy(madampars)
     pars["path_output"] = outpath
     if comm.world_rank == 0:
-        if not os.path.isdir(outpath):
-            try:
-                os.makedirs(outpath)
-            except FileExistsError:
-                pass
+        os.makedirs(outpath, exist_ok=True)
     file_root = pars["file_root"]
     if extra_prefix is not None:
         if len(file_root) > 0 and not file_root.endswith("_"):
