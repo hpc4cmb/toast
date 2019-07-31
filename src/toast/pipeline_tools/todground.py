@@ -449,7 +449,7 @@ def load_schedule(args, comm):
         schedules = comm.comm_world.bcast(schedules)
 
     timer0.stop()
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         timer0.report("Loading schedule")
     return schedules
 
@@ -464,7 +464,7 @@ def load_weather(args, comm, schedules, verbose=False):
     timer = Timer()
     timer.start()
 
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         weathers = []
         weatherdict = {}
         ftimer = Timer()
@@ -491,6 +491,6 @@ def load_weather(args, comm, schedules, verbose=False):
         schedule.append(weather)
 
     timer.stop()
-    if (comm.comm_world is None or comm.world_rank == 0) and verbose:
+    if comm.world_rank == 0 and verbose:
         timer.report("Loading weather")
     return

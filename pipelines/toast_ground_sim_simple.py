@@ -344,7 +344,7 @@ def create_observations(args, comm, fp, all_ces, site):
         tod = ob["tod"]
         tod.free_azel_quats()
 
-    if comm.comm_world is None or comm.comm_group.rank == 0:
+    if comm.comm_group.rank == 0:
         log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
 
     if len(data.obs) == 0:
@@ -353,7 +353,7 @@ def create_observations(args, comm, fp, all_ces, site):
             "be assigned to at least one observation."
         )
 
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         timer.report_clear("Simulate scans")
 
     return data
@@ -377,7 +377,7 @@ def setup_sigcopy(args, comm, signalname):
 
 def setup_output(args, comm):
     outpath = "{}".format(args.outdir)
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         if not os.path.isdir(outpath):
             try:
                 os.makedirs(outpath)
@@ -391,7 +391,7 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
 
     """
     if sigcopy_madam is not None:
-        if comm.comm_world is None or comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             print("Making a copy of the TOD for Madam", flush=args.flush)
         sigcopy_madam.exec(data)
 
@@ -400,7 +400,7 @@ def copy_signal_madam(args, comm, data, sigcopy_madam):
 
 def clear_signal(args, comm, data, sigclear):
     if sigclear is not None:
-        if comm.comm_world is None or comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             print("Clearing filtered signal")
         sigclear.exec(data)
     return
@@ -511,7 +511,7 @@ def main():
     timer = Timer()
     timer.start()
     alltimers = gather_timers(comm=mpiworld)
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
         timer.stop()

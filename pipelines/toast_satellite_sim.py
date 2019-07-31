@@ -144,7 +144,7 @@ def parse_arguments(comm, procs):
     except SystemExit:
         sys.exit()
 
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         log.info("\n")
         log.info("All parameters:")
         for ag in vars(args):
@@ -167,7 +167,7 @@ def load_focalplane(args, comm):
     timer = Timer()
     gain = None
     fp = None
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         if args.focalplane is None:
             # in this case, create a fake detector at the boresight
             # with a pure white noise spectrum.
@@ -198,11 +198,11 @@ def load_focalplane(args, comm):
         fp = comm.comm_world.bcast(fp, root=0)
 
     timer.stop()
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         timer.report("Create focalplane ({} dets)".format(len(fp.keys())))
 
     if args.debug:
-        if comm.comm_world is None or comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             outfile = os.path.join(args.outdir, "focalplane.png")
             set_backend()
             dquats = {x: fp[x]["quat"] for x in fp.keys()}
@@ -221,12 +221,12 @@ def load_focalplane(args, comm):
     return fp, gain, detweights
 
 
-def create_observations(args, comm, focalplane, groupsize, rank):
+def create_observations(args, comm, focalplane, groupsize):
     timer = Timer()
     timer.start()
 
     if groupsize > len(focalplane.keys()):
-        if comm.comm_world is None or comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             log.error("process group is too large for the number of detectors")
             comm.comm_world.Abort()
 
@@ -297,7 +297,7 @@ def create_observations(args, comm, focalplane, groupsize, rank):
         data.obs.append(obs)
 
     timer.stop()
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         timer.report_clear("Read parameters, compute data distribution")
 
     # Since we are simulating noise timestreams, we want
@@ -331,7 +331,7 @@ def create_observations(args, comm, focalplane, groupsize, rank):
         del precquat
 
     timer.stop()
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         timer.report("Construct boresight pointing")
 
     return data
@@ -351,12 +351,12 @@ def main():
     tmr = Timer()
     tmr.start()
 
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         os.makedirs(args.outdir, exist_ok=True)
 
     focalplane, gain, detweights = load_focalplane(args, comm)
 
-    data = create_observations(args, comm, focalplane, groupsize, rank)
+    data = create_observations(args, comm, focalplane, groupsize)
 
     expand_pointing(args, comm, data)
 
@@ -371,7 +371,7 @@ def main():
     # Mapmaking.
 
     if not args.use_madam:
-        if comm.comm_world is None or comm.comm_world.rank == 0:
+        if comm.world_rank == 0:
             log.info("Not using Madam, will only make a binned map")
 
         invnpp, zmap = init_binner(
@@ -400,7 +400,7 @@ def main():
 
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 tmr.report_clear("  Apply gains {:04d}".format(mc))
 
             if mc == firstmc:
@@ -416,7 +416,7 @@ def main():
                 args, comm, data, invnpp, zmap, detweights, outpath, "tot_signal"
             )
 
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 mctmr.report_clear("  Map-making {:04d}".format(mc))
     else:
 
@@ -427,14 +427,14 @@ def main():
         # in debug mode, print out data distribution information
         if args.debug:
             handle = None
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
             data.info(handle)
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 handle.close()
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
-            if comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 tmr.report_clear("Dumping data distribution")
 
         # Loop over Monte Carlos
@@ -460,7 +460,7 @@ def main():
 
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 tmr.report_clear("  Apply gains {:04d}".format(mc))
 
             apply_madam(
@@ -469,7 +469,7 @@ def main():
 
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 mctmr.report_clear("  Map-making {:04d}".format(mc))
 
     gt.stop_all()
@@ -479,7 +479,7 @@ def main():
     tmr.clear()
     tmr.start()
     alltimers = gather_timers(comm=comm.comm_world)
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
         tmr.stop()

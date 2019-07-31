@@ -295,9 +295,14 @@ def scale_atmosphere_by_frequency(
         freqmax = 2 * freq
         nfreq = 1001
         freqstep = (freqmax - freqmin) / (nfreq - 1)
-        nfreq_task = int(nfreq // todcomm.size) + 1
-        my_ifreq_min = nfreq_task * todcomm.rank
-        my_ifreq_max = min(nfreq, nfreq_task * (todcomm.rank + 1))
+        if todcomm is None:
+            nfreq_task = nfreq
+            my_ifreq_min = 0
+            my_ifreq_max = nfreq
+        else:
+            nfreq_task = int(nfreq // todcomm.size) + 1
+            my_ifreq_min = nfreq_task * todcomm.rank
+            my_ifreq_max = min(nfreq, nfreq_task * (todcomm.rank + 1))
         my_nfreq = my_ifreq_max - my_ifreq_min
         if my_nfreq > 0:
             if atm_available_utils:
@@ -318,8 +323,12 @@ def scale_atmosphere_by_frequency(
         else:
             my_freqs = np.array([])
             my_absorption = np.array([])
-        freqs = np.hstack(todcomm.allgather(my_freqs))
-        absorption = np.hstack(todcomm.allgather(my_absorption))
+        if todcomm is None:
+            freqs = my_freqs
+            absorption = my_absorption
+        else:
+            freqs = np.hstack(todcomm.allgather(my_freqs))
+            absorption = np.hstack(todcomm.allgather(my_absorption))
         # loading = atm_atmospheric_loading(altitude, pwv, freq)
         for det in tod.local_dets:
             try:

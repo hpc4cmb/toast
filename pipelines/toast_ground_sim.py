@@ -165,7 +165,7 @@ def parse_arguments(comm):
     if args.simulate_atmosphere and args.weather is None:
         raise RuntimeError("Cannot simulate atmosphere without a TOAST weather file")
 
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         log.info("All parameters:")
         for ag in vars(args):
             log.info("{} = {}".format(ag, getattr(args, ag)))
@@ -173,11 +173,11 @@ def parse_arguments(comm):
     if args.group_size:
         comm = Comm(groupsize=args.group_size)
 
-    if comm.comm_world is None or ccomm.world_rank == 0:
+    if comm.world_rank == 0:
         os.makedirs(args.outdir, exist_ok=True)
 
     timer.stop()
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         timer.report("Parsed parameters")
 
     return args, comm
@@ -205,7 +205,7 @@ def load_focalplanes(args, comm, schedules):
     # Load focalplane information
 
     focalplanes = []
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         ftimer = Timer()
         for fpfile in args.focalplane.split(","):
             ftimer.start()
@@ -240,7 +240,7 @@ def load_focalplanes(args, comm, schedules):
             detweights[detname] = detweight
 
     timer.stop()
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         timer.report("Loading focalplanes")
     return detweights
 
@@ -391,7 +391,7 @@ def create_observations(args, comm, schedules):
     if comm.comm_world is not None:
         comm.comm_world.barrier()
     timer.stop()
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         timer.report("Simulated scans")
 
     # Split the data object for each telescope for separate mapmaking.
@@ -428,7 +428,7 @@ def setup_sigcopy(args):
 @function_timer
 def setup_output(args, comm, mc, freq):
     outpath = "{}/{:08}/{:03}".format(args.outdir, mc, int(freq))
-    if comm.comm_world is None or comm.world_rank == 0:
+    if comm.world_rank == 0:
         os.makedirs(outpath, exist_ok=True)
     return outpath
 
@@ -512,7 +512,7 @@ def main():
 
         for ifreq, freq in enumerate(freqs):
 
-            if comm.comm_world is None or comm.comm_world.rank == 0:
+            if comm.world_rank == 0:
                 log.info(
                     "Processing frequency {}GHz {} / {}, MC = {}".format(
                         freq, ifreq + 1, nfreq, mc
@@ -595,7 +595,7 @@ def main():
     timer = Timer()
     timer.start()
     alltimers = gather_timers(comm=mpiworld)
-    if comm.comm_world is None or comm.comm_world.rank == 0:
+    if comm.world_rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
         timer.stop()
