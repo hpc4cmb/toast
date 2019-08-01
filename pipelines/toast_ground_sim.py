@@ -194,7 +194,7 @@ def load_focalplanes(args, comm, schedules):
             and `all_ces` is a list of CES objects.
     Returns:
         detweights (dict) : Inverse variance noise weights for every
-            detector across all focal planes.
+            detector across all focal planes. In [K_CMB^-2].
     """
     timer = Timer()
     timer.start()
