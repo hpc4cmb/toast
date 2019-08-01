@@ -6,6 +6,7 @@ import argparse
 import os
 
 import numpy as np
+from healpy import nside2npix
 
 from ..timing import function_timer, Timer
 from ..tod import OpSimDipole
@@ -134,7 +135,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     if subnpix is None or localsm is None:
         localpix, localsm, subnpix = get_submaps(args, comm, data, verbose=verbose)
 
-    npix = 12 * args.nside * args.nside
+    npix = nside2npix(args.nside)
 
     npp = DistPixels(
         comm=comm.comm_world,
