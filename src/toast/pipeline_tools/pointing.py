@@ -41,13 +41,13 @@ def add_pointing_args(parser):
         help="The rate (in RPM) of the HWP rotation",
     )
     parser.add_argument(
-        "--hwp-step",
+        "--hwp-step-deg",
         required=False,
         default=None,
         help="For stepped HWP, the angle in degrees of each step",
     )
     parser.add_argument(
-        "--hwp-step-time",
+        "--hwp-step-time-s",
         required=False,
         default=0,
         type=np.float,
