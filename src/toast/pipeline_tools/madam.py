@@ -21,7 +21,10 @@ def add_madam_args(parser, ground_data=True):
     Args:
         ground_data (bool) :  If true, assume that Madam will be used to
             process ground experiment data and every process will have
-            approximately equal sky coverage.
+            approximately equal sky coverage.  Madam will use the "allreduce"
+            communication pattern which involves allocating the entire
+            observed sky on every process, instead of just the submaps
+            each process has data for.
     """
 
     parser.add_argument(
@@ -335,8 +338,8 @@ def apply_madam(
         raise RuntimeError("Madam requires MPI")
 
     log = Logger.get()
-    timer = Timer()
-    timer.start()
+    total_timer = Timer()
+    total_timer.start()
     if comm.world_rank == 0 and verbose:
         log.info("Making maps")
 
@@ -409,7 +412,7 @@ def apply_madam(
     if telescope_data is None:
         telescope_data = [("all", data)]
 
-    ttimer = Timer()
+    timer = Timer()
     for time_name, time_comm in time_comms:
         for tele_name, tele_data in telescope_data:
             if len(time_name.split("-")) == 3:
@@ -428,7 +431,7 @@ def apply_madam(
                     pars["write_map"] = False
                     pars["write_binmap"] = True
 
-            ttimer.start()
+            timer.start()
             madam.params["file_root"] = "{}_telescope_{}_time_{}".format(
                 file_root, tele_name, time_name
             )
@@ -444,7 +447,7 @@ def apply_madam(
             if time_comm is not None:
                 time_comm.barrier()
             if comm.world_rank == 0 and verbose:
-                ttimer.report_clear("Mapping {}".format(madam.params["file_root"]))
+                timer.report_clear("Mapping {}".format(madam.params["file_root"]))
 
             if len(time_name.split("-")) == 3 and first_call:
                 # Restore destriping parameters
@@ -454,8 +457,8 @@ def apply_madam(
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
+    total_timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Madam total")
+        total_timer.report("Madam total")
 
     return
