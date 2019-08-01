@@ -13,32 +13,27 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 from ..weather import Weather
 
-from ..tod import OpSimAtmosphere, atm_available_utils
+from .classes import Telescope, Focalplane
+from .debug import add_debug_args
 
-
-# Telescope, Site and CES are small helper classes for building
+# Schedule, Site and CES are small helper classes for building
 # ground observations
 
 
-def name2id(name, maxval=2 ** 16):
-    """ Map a name into an index.
+class Schedule:
+    telescope = None
+    ceslist = None
 
-    """
-    value = 0
-    for c in name:
-        value += ord(c)
-    return value % maxval
-
-
-class Telescope(object):
-    def __init__(self, name):
-        self.name = name
-        self.id = name2id(name)
+    def __init__(self, telescope=None, ceslist=None):
+        self.telescope = telescope
+        self.ceslist = ceslist
         return
 
 
 class Site(object):
-    def __init__(self, name, lat, lon, alt, telescope=None):
+    weather = None
+
+    def __init__(self, name, lat, lon, alt, weather=None):
         """ Instantiate a Site object
         
         args:
@@ -55,7 +50,8 @@ class Site(object):
         self.lon = str(lon)
         self.alt = alt
         self.id = 0
-        self.telescope = telescope
+        self.weather = weather
+        return
 
 
 class CES(object):
@@ -154,6 +150,8 @@ def add_todground_args(parser):
         dest="do_daymaps",
     )
     parser.set_defaults(do_daymaps=False)
+
+    add_debug_args(parser)
 
     # `sample-rate` may be already added
     try:
@@ -348,10 +346,15 @@ def load_schedule(args, comm):
                     line = f.readline()
                     if line.startswith("#"):
                         continue
-                    (site_name, telescope, site_lat, site_lon, site_alt) = line.split()
-                    site = Site(
-                        site_name, site_lat, site_lon, float(site_alt), telescope
-                    )
+                    (
+                        site_name,
+                        telescope_name,
+                        site_lat,
+                        site_lon,
+                        site_alt,
+                    ) = line.split()
+                    site = Site(site_name, site_lat, site_lon, float(site_alt))
+                    telescope = Telescope(telescope_name, site=site)
                     break
                 all_ces = []
                 for line in f:
@@ -441,23 +444,24 @@ def load_schedule(args, comm):
                             el_sun=el_sun,
                         )
                     )
-            schedules.append([site, all_ces])
-            timer1.stop()
+            schedules.append(Schedule(telescope, all_ces))
             timer1.report_clear("Load {} (sub)scans in {}".format(len(all_ces), fn))
 
     if comm.comm_world is not None:
         schedules = comm.comm_world.bcast(schedules)
 
-    timer0.stop()
     if comm.world_rank == 0:
-        timer0.report("Loading schedule")
+        timer0.report_clear("Loading schedule(s)")
     return schedules
 
 
 @function_timer
 def load_weather(args, comm, schedules, verbose=False):
-    """ Load TOAST weather file(s) and attach them to the schedules.
+    """ Load TOAST weather file(s) and attach them to the sites in the
+     schedules.
 
+    Args:
+        schedules (iterable) :  list of observing schedules.
     """
     if args.weather is None:
         return
@@ -488,7 +492,7 @@ def load_weather(args, comm, schedules, verbose=False):
         raise RuntimeError("Number of weathers must equal number of schedules or be 1.")
 
     for schedule, weather in zip(schedules, weathers):
-        schedule.append(weather)
+        schedule.telescope.site.weather = weather
 
     timer.stop()
     if comm.world_rank == 0 and verbose:

@@ -12,9 +12,10 @@ from .atm import (
     simulate_atmosphere,
     scale_atmosphere_by_frequency,
     update_atmospheric_noise_weights,
-    get_focalplane_radius,
 )
 from .binning import add_binner_args, init_binner, apply_binner
+from .classes import Telescope, Focalplane
+from .debug import add_debug_args
 from .dipole import add_dipole_args, simulate_dipole
 from .dist import add_dist_args, get_comm, get_time_communicators
 from .export import add_tidas_args, output_tidas, add_spt3g_args, output_spt3g
@@ -41,8 +42,8 @@ from .todground import (
     load_schedule,
     load_weather,
     Site,
-    Telescope,
     CES,
+    Schedule,
 )
 from .todsatellite import add_todsatellite_args
 

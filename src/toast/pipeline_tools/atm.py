@@ -45,7 +45,7 @@ def add_atmosphere_args(parser):
     parser.set_defaults(simulate_atmosphere=False)
 
     parser.add_argument(
-        "--focalplane-radius",
+        "--focalplane-radius-deg",
         required=False,
         type=np.float,
         help="Override focal plane radius [deg]",
@@ -254,7 +254,7 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
 
 @function_timer
 def scale_atmosphere_by_frequency(
-    args, comm, data, freq, mc, cache_name=None, verbose=True
+    args, comm, data, freq=None, mc=0, cache_name=None, verbose=True
 ):
     """Scale atmospheric fluctuations by frequency.
 
@@ -263,7 +263,7 @@ def scale_atmosphere_by_frequency(
 
     If the focalplane is included in the observation and defines
     bandpasses for the detectors, the scaling is computed for each
-    detector separately.
+    detector separately and `freq` is ignored.
 
     """
     if not args.simulate_atmosphere:
@@ -402,22 +402,3 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc, verbose=False):
     if comm.world_rank == 0 and verbose:
         timer.report("Atmosphere weighting")
     return
-
-
-@function_timer
-def get_focalplane_radius(args, focalplane, rmin=1.0):
-    """ Find the furthest angular distance from the boresight
-
-    The number is needed for simulating the atmosphere.
-    """
-    if args.focalplane_radius:
-        return args.focalplane_radius
-
-    cosangs = []
-    for det in focalplane:
-        quat = focalplane[det]["quat"]
-        vec = qa.rotate(quat, ZAXIS)
-        cosangs.append(np.dot(ZAXIS, vec))
-    mincos = np.amin(cosangs)
-    maxdist = max(np.degrees(np.arccos(mincos)), rmin)
-    return maxdist * 1.001

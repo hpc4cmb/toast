@@ -171,7 +171,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     if hits.data is not None:
         hits.data.fill(0)
 
-    build_npp = OpAccumDiag(detweights=detweights, npp=npp, hits=hits)
+    build_npp = OpAccumDiag(detweights=detweights, invnpp=npp, hits=hits)
     build_npp.exec(data)
 
     if comm.world_rank == 0 and verbose:

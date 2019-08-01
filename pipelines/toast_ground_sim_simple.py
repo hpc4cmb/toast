@@ -31,6 +31,7 @@ from toast.tod import TODGround, OpCacheCopy, plot_focalplane, OpCacheClear
 
 from toast.pipeline_tools import (
     add_dist_args,
+    add_debug_args,
     get_time_communicators,
     get_comm,
     add_polyfilter_args,
@@ -38,10 +39,6 @@ from toast.pipeline_tools import (
     add_groundfilter_args,
     apply_groundfilter,
     add_atmosphere_args,
-    simulate_atmosphere,
-    scale_atmosphere_by_frequency,
-    update_atmospheric_noise_weights,
-    get_focalplane_radius,
     add_noise_args,
     simulate_noise,
     get_analytic_noise,
@@ -68,6 +65,7 @@ from toast.pipeline_tools import (
     add_todground_args,
     get_breaks,
     Telescope,
+    Focalplane,
     Site,
     CES,
     load_schedule,
@@ -90,6 +88,7 @@ def parse_arguments(comm):
     )
 
     add_dist_args(parser)
+    add_debug_args(parser)
     add_todground_args(parser)
     add_pointing_args(parser)
     add_polyfilter_args(parser)
@@ -122,13 +121,6 @@ def parse_arguments(comm):
     )
     parser.set_defaults(use_madam=False)
 
-    parser.add_argument(
-        "--debug",
-        required=False,
-        default=False,
-        action="store_true",
-        help="Write diagnostics",
-    )
     parser.add_argument(
         "--focalplane",
         required=False,
@@ -169,33 +161,27 @@ def parse_arguments(comm):
     return args, comm
 
 
-def load_fp(args, comm):
-    timer = Timer()
-    log = Logger.get()
-    timer.start()
-
-    fp = None
+def load_focalplane(args, comm, schedule):
+    focalplane = None
 
     # Load focalplane information
 
-    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
-
     if comm.comm_world is None or comm.comm_world.rank == 0:
         if args.focalplane is None:
-            XAXIS, YAXIS, ZAXIS = np.eye(3)
+            detector_data = {}
+            ZAXIS = np.array([0, 0, 1.0])
             # in this case, create a fake detector at the boresight
             # with a pure white noise spectrum.
             fake = {}
-            fake["quat"] = nullquat
+            fake["quat"] = np.array([0, 0, 0, 1.0])
             fake["fwhm"] = 30.0
             fake["fknee"] = 0.0
             fake["fmin"] = 1e-9
             fake["alpha"] = 1.0
             fake["NET"] = 1.0
             fake["color"] = "r"
-            fp = {}
+            detector_data["bore1"] = fake
             # Second detector at 22.5 degree polarization angle
-            fp["bore1"] = fake
             fake2 = {}
             zrot = qa.rotation(ZAXIS, np.radians(22.5))
             fake2["quat"] = qa.mult(fake["quat"], zrot)
@@ -205,7 +191,7 @@ def load_fp(args, comm):
             fake2["alpha"] = 1.0
             fake2["NET"] = 1.0
             fake2["color"] = "r"
-            fp["bore2"] = fake2
+            detector_data["bore2"] = fake2
             # Third detector at 45 degree polarization angle
             fake3 = {}
             zrot = qa.rotation(ZAXIS, np.radians(45))
@@ -216,7 +202,7 @@ def load_fp(args, comm):
             fake3["alpha"] = 1.0
             fake3["NET"] = 1.0
             fake3["color"] = "r"
-            fp["bore3"] = fake3
+            detector_data["bore3"] = fake3
             # Fourth detector at 67.5 degree polarization angle
             fake4 = {}
             zrot = qa.rotation(ZAXIS, np.radians(67.5))
@@ -227,31 +213,27 @@ def load_fp(args, comm):
             fake4["alpha"] = 1.0
             fake4["NET"] = 1.0
             fake4["color"] = "r"
-            fp["bore4"] = fake4
+            detector_data["bore4"] = fake4
+            focalplane = Focalplane(
+                detector_data=detector_data, sample_rate=args.sample_rate
+            )
         else:
-            with open(args.focalplane, "rb") as p:
-                fp = pickle.load(p)
+            focalplane = Focalplane(args.focalplane, sample_rate=args.sample_rate)
     if comm.comm_world is not None:
-        fp = comm.comm_world.bcast(fp, root=0)
-
-    if comm.comm_world is None or comm.comm_world.rank == 0:
-        timer.report_clear("Create focalplane")
+        focalplane = comm.comm_world.bcast(focalplane, root=0)
 
     if args.debug:
         if comm.comm_world is None or comm.comm_world.rank == 0:
             outfile = "{}/focalplane.png".format(args.outdir)
-            plot_focalplane(fp, 6, 6, outfile)
+            plot_focalplane(focalplane, 6, 6, outfile)
 
-    detectors = sorted(fp.keys())
-    detweights = {}
-    for d in detectors:
-        net = fp[d]["NET"]
-        detweights[d] = 1.0 / (args.sample_rate * net * net)
+    schedule.telescope.focalplane = focalplane
+    detweights = focalplane.detweights
 
-    return fp, detweights
+    return detweights
 
 
-def create_observations(args, comm, fp, all_ces, site):
+def create_observations(args, comm, schedule):
     """ Simulate constant elevation scans.
 
     Simulate constant elevation scans at "site" matching entries in
@@ -264,29 +246,19 @@ def create_observations(args, comm, fp, all_ces, site):
 
     data = Data(comm)
 
-    detectors = sorted(fp.keys())
-    detquats = {}
-    for d in detectors:
-        detquats[d] = fp[d]["quat"]
-
+    telescope = schedule.telescope
+    site = telescope.site
+    focalplane = telescope.focalplane
+    all_ces = schedule.ceslist
     nces = len(all_ces)
 
     breaks = get_breaks(comm, all_ces, args)
 
     nbreak = len(breaks)
-    if nbreak != comm.ngroups - 1:
-        raise RuntimeError(
-            "Number of observing days ({}) does not match number of process "
-            "groups ({}).".format(nbreak + 1, comm.ngroups)
-        )
 
     groupdist = distribute_uniform(nces, comm.ngroups, breaks=breaks)
     group_firstobs = groupdist[comm.group][0]
     group_numobs = groupdist[comm.group][1]
-
-    # Create the noise model used by all observations
-
-    noise = get_analytic_noise(args, comm, fp)
 
     if comm.comm_group is not None:
         ndetrank = comm.comm_group.size
@@ -302,7 +274,7 @@ def create_observations(args, comm, fp, all_ces, site):
         try:
             tod = TODGround(
                 comm.comm_group,
-                detquats,
+                focalplane.detquats,
                 totsamples,
                 detranks=ndetrank,
                 firsttime=ces.start_time,
@@ -335,7 +307,7 @@ def create_observations(args, comm, fp, all_ces, site):
         else:
             raise RuntimeError("{} has no valid intervals".format(ob["name"]))
         ob["baselines"] = None
-        ob["noise"] = noise
+        ob["noise"] = focalplane.noise
         ob["id"] = int(ces.mjdstart * 10000)
 
         data.obs.append(ob)
@@ -344,7 +316,7 @@ def create_observations(args, comm, fp, all_ces, site):
         tod = ob["tod"]
         tod.free_azel_quats()
 
-    if comm.comm_group.rank == 0:
+    if comm.comm_world is None or comm.comm_group.rank == 0:
         log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
 
     if len(data.obs) == 0:
@@ -421,16 +393,16 @@ def main():
 
     # Load and broadcast the schedule file
 
-    site, all_ces = load_schedule(args, comm)[0]
+    schedule = load_schedule(args, comm)[0]
 
     # load or simulate the focalplane
 
-    fp, detweights = load_fp(args, comm)
+    detweights = load_focalplane(args, comm, schedule)
 
     # Create the TOAST data object to match the schedule.  This will
     # include simulating the boresight pointing.
 
-    data = create_observations(args, comm, fp, all_ces, site)
+    data = create_observations(args, comm, schedule)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
@@ -456,7 +428,7 @@ def main():
 
     signalname_madam, sigcopy_madam, sigclear = setup_sigcopy(args, comm, signalname)
 
-    invnpp, zmap = init_binner(
+    npp, zmap = init_binner(
         args, comm, data, detweights, subnpix=subnpix, localsm=localsm
     )
 
@@ -470,7 +442,7 @@ def main():
 
     # Bin unprocessed signal for reference
 
-    apply_binner(args, comm, data, invnpp, zmap, detweights, outpath, signalname)
+    apply_binner(args, comm, data, npp, zmap, detweights, outpath, signalname)
 
     if args.apply_polyfilter or args.apply_groundfilter:
 
@@ -486,7 +458,7 @@ def main():
             args,
             comm,
             data,
-            invnpp,
+            npp,
             zmap,
             detweights,
             outpath,

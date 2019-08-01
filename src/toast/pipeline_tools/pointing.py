@@ -90,9 +90,9 @@ def expand_pointing(args, comm, data):
 
     hwprpm = args.hwp_rpm
     hwpstep = None
-    if args.hwp_step is not None:
-        hwpstep = float(args.hwp_step)
-    hwpsteptime = args.hwp_step_time
+    if args.hwp_step_deg is not None:
+        hwpstep = float(args.hwp_step_deg)
+    hwpsteptime = args.hwp_step_time_s
 
     if comm.world_rank == 0:
         log.info("Expanding pointing")

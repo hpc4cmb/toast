@@ -39,6 +39,7 @@ from toast.timing import dump as dump_timing
 from toast.tod import TODGround
 
 from toast.pipeline_tools import (
+    add_debug_args,
     add_dist_args,
     get_time_communicators,
     get_comm,
@@ -50,7 +51,6 @@ from toast.pipeline_tools import (
     simulate_atmosphere,
     scale_atmosphere_by_frequency,
     update_atmospheric_noise_weights,
-    get_focalplane_radius,
     add_noise_args,
     simulate_noise,
     get_analytic_noise,
@@ -77,7 +77,9 @@ from toast.pipeline_tools import (
     add_todground_args,
     get_breaks,
     Telescope,
+    Focalplane,
     Site,
+    Schedule,
     CES,
     load_schedule,
     load_weather,
@@ -105,6 +107,7 @@ def parse_arguments(comm):
     )
 
     add_dist_args(parser)
+    add_debug_args(parser)
     add_todground_args(parser)
     add_pointing_args(parser)
     add_polyfilter_args(parser)
@@ -138,7 +141,9 @@ def parse_arguments(comm):
     parser.add_argument(
         "--freq",
         required=True,
-        help="Comma-separated list of frequencies with identical focal planes",
+        help="Comma-separated list of frequencies with identical focal planes."
+        "  They override the bandpasses in the focalplane for the purpose of"
+        " scaling the atmospheric signal but not for simulating the sky signal.",
     )
 
     try:
@@ -188,56 +193,46 @@ def load_focalplanes(args, comm, schedules):
     """ Attach a focalplane to each of the schedules.
 
     Args:
-        schedules (list) :  List of tuples of the form
-            (`site`, `all_ces`) where `site` is a Site
-            instansce with the `telescope` field filled
-            and `all_ces` is a list of CES objects.
+        schedules (list) :  List of Schedule instances.
+            Each schedule has two members, telescope
+            and ceslist, a list of CES objects.
     Returns:
         detweights (dict) : Inverse variance noise weights for every
             detector across all focal planes. In [K_CMB^-2].
+            They can be used to bin the TOD.
     """
     timer = Timer()
     timer.start()
 
-    telescopes = []
-    for schedule in schedules:
-        telescopes.append(schedule[0].telescope)
     # Load focalplane information
 
     focalplanes = []
     if comm.world_rank == 0:
-        ftimer = Timer()
         for fpfile in args.focalplane.split(","):
-            ftimer.start()
-            with open(fpfile, "rb") as picklefile:
-                focalplane = pickle.load(picklefile)
-                focalplanes.append(focalplane)
-                ftimer.report_clear("Load {}".format(fpfile))
-        ftimer.stop()
+            focalplanes.append(
+                Focalplane(
+                    fpfile,
+                    sample_rate=args.sample_rate,
+                    radius_deg=args.focalplane_radius_deg,
+                )
+            )
     if comm.comm_world is not None:
         focalplanes = comm.comm_world.bcast(focalplanes)
-        telescopes = comm.comm_world.bcast(telescopes)
 
     if len(focalplanes) == 1 and len(schedules) > 1:
         focalplanes *= len(schedules)
-    if len(telescopes) == 1 and len(schedules) > 1:
-        telescopes *= len(schedules)
     if len(focalplanes) != len(schedules):
         raise RuntimeError(
             "Number of focalplanes must equal number of schedules or be 1."
         )
 
-    # Append a focal plane and telescope to each entry in the schedules list
+    # Append a focal plane and telescope to each entry in the schedules
+    # list and assemble a detector weight dictionary that represents all
+    # detectors in all focalplanes
     detweights = {}
-    for schedule, focalplane, telescope in zip(schedules, focalplanes, telescopes):
-        schedule.append(focalplane)
-        schedule.append(Telescope(telescope))
-        for detname, detdata in focalplane.items():
-            net = detdata["NET"]
-            detweight = 1.0 / (args.sample_rate * net * net)
-            if detname in detweights and detweights[detname] != detweight:
-                raise RuntimeError("Detector weight for {} changes".format(detname))
-            detweights[detname] = detweight
+    for schedule, focalplane in zip(schedules, focalplanes):
+        schedule.telescope.focalplane = focalplane
+        detweights.update(schedule.telescope.focalplane.detweights)
 
     timer.stop()
     if comm.world_rank == 0:
@@ -246,13 +241,22 @@ def load_focalplanes(args, comm, schedules):
 
 
 @function_timer
-def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
+def create_observation(args, comm, telescope, ces, verbose=True):
     """ Create a TOAST observation.
 
-    Create an observation for the CES scan defined by all_ces_tot[ices].
+    Create an observation for the CES scan
+
+    Args:
+        args :  argparse arguments
+        comm :  TOAST communicator
+        ces (CES) :  One constant elevation scan
 
     """
-    ces, site, telescope, fp, fpradius, detquats, weather = all_ces_tot[ices]
+    focalplane = telescope.focalplane
+    site = telescope.site
+    weather = site.weather
+    fpradius = focalplane.radius
+    noise = focalplane.noise
     totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
 
     # create the TOD for this observation
@@ -265,7 +269,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
     try:
         tod = TODGround(
             comm.comm_group,
-            detquats,
+            focalplane.detquats,
             totsamples,
             detranks=ndetrank,
             firsttime=ces.start_time,
@@ -283,7 +287,7 @@ def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
             sun_angle_min=args.sun_angle_min,
             coord=args.coord,
             sampsizes=None,
-            report_timing=verbose,
+            report_timing=args.debug,
         )
     except RuntimeError as e:
         raise RuntimeError(
@@ -302,18 +306,20 @@ def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
     obs["noise"] = noise
     obs["id"] = int(ces.mjdstart * 10000)
     obs["intervals"] = tod.subscans
-    obs["site"] = site.name
+    obs["site"] = site
+    obs["site_name"] = site.name
     obs["site_id"] = site.id
-    obs["telescope"] = telescope.name
-    obs["telescope_id"] = telescope.id
-    obs["fpradius"] = fpradius
-    obs["weather"] = weather
-    obs["start_time"] = ces.start_time
     obs["altitude"] = site.alt
+    obs["weather"] = site.weather
+    obs["telescope"] = telescope
+    obs["telescope_name"] = telescope.name
+    obs["telescope_id"] = telescope.id
+    obs["focalplane"] = telescope.focalplane.detector_data
+    obs["fpradius"] = telescope.focalplane.radius
+    obs["start_time"] = ces.start_time
     obs["season"] = ces.season
     obs["date"] = ces.start_date
     obs["MJD"] = ces.mjdstart
-    obs["focalplane"] = fp
     obs["rising"] = ces.rising
     obs["mindist_sun"] = ces.mindist_sun
     obs["mindist_moon"] = ces.mindist_moon
@@ -323,8 +329,11 @@ def create_observation(args, comm, all_ces_tot, ices, noise, verbose=True):
 
 @function_timer
 def create_observations(args, comm, schedules):
-    """ Create and distribute TOAST observations for every CES in schedules.
+    """ Create and distribute TOAST observations for every CES in
+    schedules.
 
+    Args:
+        schedules (iterable) :  a list of Schedule objects.
     """
     log = Logger.get()
     timer = Timer()
@@ -341,26 +350,9 @@ def create_observations(args, comm, schedules):
 
     for schedule in schedules:
 
-        if args.weather is None:
-            site, all_ces, focalplane, telescope = schedule
-            weather = None
-        else:
-            site, all_ces, weather, focalplane, telescope = schedule
-
-        fpradius = get_focalplane_radius(args, focalplane)
-
-        # Focalplane information for this schedule
-        detectors = sorted(focalplane.keys())
-        detquats = {}
-        for d in detectors:
-            detquats[d] = focalplane[d]["quat"]
-
-        all_ces_tot = []
+        telescope = schedule.telescope
+        all_ces = schedule.ceslist
         nces = len(all_ces)
-        for ces in all_ces:
-            all_ces_tot.append(
-                (ces, site, telescope, focalplane, fpradius, detquats, weather)
-            )
 
         breaks = get_breaks(comm, all_ces, args)
 
@@ -369,15 +361,8 @@ def create_observations(args, comm, schedules):
         group_numobs = groupdist[comm.group][1]
 
         for ices in range(group_firstobs, group_firstobs + group_numobs):
-            # Noise model for this CES
-            noise = get_analytic_noise(args, comm, focalplane)
-            obs = create_observation(args, comm, all_ces_tot, ices, noise)
+            obs = create_observation(args, comm, telescope, all_ces[ices])
             data.obs.append(obs)
-
-    # if args.skip_atmosphere and args.skip_noise:
-    #    for ob in data.obs:
-    #        tod = ob["tod"]
-    #        tod.free_azel_quats()
 
     if comm.comm_world is None or comm.comm_group.rank == 0:
         log.info("Group # {:4} has {} observations.".format(comm.group, len(data.obs)))
@@ -484,7 +469,7 @@ def main():
     _, localsm, subnpix = get_submaps(args, comm, data)
 
     if args.pysm_model:
-        focalplanes = [s[3] for s in schedules]
+        focalplanes = [s.telescope.focalplane.detector_data for s in schedules]
         signalname = simulate_sky_signal(
             args, comm, data, focalplanes, subnpix, localsm, "signal"
         )
@@ -498,12 +483,12 @@ def main():
     # Loop over Monte Carlos
 
     firstmc = args.MC_start
-    nmc = args.MC_count
+    nsimu = args.MC_count
 
     freqs = [float(freq) for freq in args.freq.split(",")]
     nfreq = len(freqs)
 
-    for mc in range(firstmc, firstmc + nmc):
+    for mc in range(firstmc, firstmc + nsimu):
 
         simulate_atmosphere(args, comm, data, mc, totalname)
 
@@ -523,13 +508,15 @@ def main():
             # frequency-dependent scaling.
             copy_signal(args, comm, data, totalname, totalname_freq)
 
-            scale_atmosphere_by_frequency(args, comm, data, freq, mc, totalname_freq)
+            scale_atmosphere_by_frequency(
+                args, comm, data, freq=freq, mc=mc, cache_name=totalname_freq
+            )
 
             update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
             # Add previously simulated sky signal to the atmospheric noise.
 
-            add_signal(args, comm, data, totalname_freq, signalname, purge=(nmc == 1))
+            add_signal(args, comm, data, totalname_freq, signalname, purge=(nsimu == 1))
 
             mcoffset = ifreq * 1000000
 
