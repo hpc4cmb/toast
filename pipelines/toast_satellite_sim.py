@@ -374,7 +374,7 @@ def main():
         if comm.world_rank == 0:
             log.info("Not using Madam, will only make a binned map")
 
-        invnpp, zmap = init_binner(
+        npp, zmap = init_binner(
             args, comm, data, detweights, subnpix=subnpix, localsm=localsm
         )
 
@@ -412,9 +412,7 @@ def main():
                 output_tidas(args, comm, data, "tot_signal")
                 output_spt3g(args, comm, data, "tot_signal")
 
-            apply_binner(
-                args, comm, data, invnpp, zmap, detweights, outpath, "tot_signal"
-            )
+            apply_binner(args, comm, data, npp, zmap, detweights, outpath, "tot_signal")
 
             if comm.world_rank == 0:
                 mctmr.report_clear("  Map-making {:04d}".format(mc))
@@ -463,9 +461,7 @@ def main():
             if comm.world_rank == 0:
                 tmr.report_clear("  Apply gains {:04d}".format(mc))
 
-            apply_madam(
-                args, comm, data, madampars, outpath, detweights, "tot_signal"
-            )
+            apply_madam(args, comm, data, madampars, outpath, detweights, "tot_signal")
 
             if comm.comm_world is not None:
                 comm.comm_world.barrier()

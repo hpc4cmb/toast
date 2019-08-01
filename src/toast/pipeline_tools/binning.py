@@ -110,6 +110,23 @@ def add_binner_args(parser):
 def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbose=True):
     """construct distributed maps to store the covariance,
     noise weighted map, and hits
+
+    Args:
+        detweights (dict) :  A dictionary of the dimensional, inverse variance
+             detector weights that form the diagonal of N^-1.
+    Returns:
+        npp (DistPixels) :  The white noise covariance matrices needed to
+            bin signal onto the distributed map `zmap`.
+        zmap (DistPixels) :  An empty distributed map compatible with `npp`
+            ready for binning TOD.  Can be used repeatedly in calls to
+            `apply_binner`.
+
+    Outputs:
+        '{args.outdir}/hits.fits' : the hit map, if `args.write_hits` is True.
+        '{args.outdir}/npp.fits' : the inverse white noise covariance,
+             if `args.write_wcov_inv` is True.
+        '{args.outdir}/npp.fits' : the white noise covariance,
+             if `args.write_wcov` is True.
     """
     log = Logger.get()
     timer = Timer()
@@ -119,7 +136,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
 
     npix = 12 * args.nside * args.nside
 
-    invnpp = DistPixels(
+    npp = DistPixels(
         comm=comm.comm_world,
         size=npix,
         nnz=6,
@@ -147,19 +164,19 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     # compute the hits and covariance once, since the pointing and noise
     # weights are fixed.
 
-    if invnpp.data is not None:
-        invnpp.data.fill(0.0)
+    if npp.data is not None:
+        npp.data.fill(0.0)
 
     if hits.data is not None:
         hits.data.fill(0)
 
-    build_invnpp = OpAccumDiag(detweights=detweights, invnpp=invnpp, hits=hits)
-    build_invnpp.exec(data)
+    build_npp = OpAccumDiag(detweights=detweights, npp=npp, hits=hits)
+    build_npp.exec(data)
 
     if comm.world_rank == 0 and verbose:
         timer.report_clear("Accumulate N_pp'^1")
 
-    invnpp.allreduce()
+    npp.allreduce()
     hits.allreduce()
 
     if comm.world_rank == 0 and verbose:
@@ -173,10 +190,10 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
         if comm.world_rank == 0 and verbose:
             log.info("Wrote hits to {}".format(fname))
     if args.write_wcov_inv:
-        fname = os.path.join(args.outdir, "invnpp.fits")
+        fname = os.path.join(args.outdir, "npp.fits")
         if args.zip_maps:
             fname += ".gz"
-        invnpp.write_healpix_fits(fname)
+        npp.write_healpix_fits(fname)
         if comm.world_rank == 0 and verbose:
             log.info("Wrote inverse white noise covariance to {}".format(fname))
 
@@ -184,14 +201,14 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
         timer.report_clear("Writing hits and N_pp'^1")
 
     # invert it
-    covariance_invert(invnpp, 1.0e-3)
+    covariance_invert(npp, 1.0e-3)
 
     if comm.world_rank == 0 and verbose:
         timer.report_clear("Invert N_pp'^1")
 
     if args.write_wcov:
         fname = os.path.join(args.outdir, "npp.fits")
-        invnpp.write_healpix_fits(fname)
+        npp.write_healpix_fits(fname)
         if comm.world_rank == 0 and verbose:
             log.info("Wrote white noise covariance to {}".format(fname))
 
@@ -208,14 +225,14 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
             handle.close()
         if comm.world_rank == 0 and verbose:
             timer.report_clear("Dumping data distribution")
-    return invnpp, zmap
+    return npp, zmap
 
 
 def apply_binner(
     args,
     comm,
     data,
-    invnpp,
+    npp,
     zmap,
     detweights,
     outpath,
@@ -224,14 +241,28 @@ def apply_binner(
     verbose=True,
 ):
     """ Bin the signal in `cache_prefix` onto `zmap`
-    using the noise weights in `invnpp`.
+    using the noise weights in `npp`.
+
+    Args :
+        npp (DistPixels) :  Pre-computed white noise covariance matrices
+        zmap (DistPixels) :  Pre-allocated distributed map compatible with
+            `npp`.  Will be cleared upon entry and will contain the
+            binned map upon exit.
+        detweights (dict) :  A dictionary of inverse variance weights that
+            form the diagonal of N^-1, the inverse sample-sample white noise
+            covariance matrix.
+        outpath (str) :  Output directory to contain the binned map.
+        cache_prefix (str) :  Select which signal to bin
+        prefix (str) :  Identifier to append to output map name
+
+    Outputs :
+        '`outpath`/`prefix` + .fits' : The binned map.
     """
     log = Logger.get()
     timer = Timer()
 
-    if comm is None or comm.world_rank == 0:
-        if not os.path.isdir(outpath):
-            os.makedirs(outpath, exist_ok=True)
+    if comm.world_rank == 0:
+        os.makedirs(outpath, exist_ok=True)
 
     if zmap.data is not None:
         zmap.data.fill(0.0)
@@ -239,10 +270,10 @@ def apply_binner(
     build_zmap.exec(data)
     zmap.allreduce()
 
-    if (comm is None or comm.world_rank == 0) and verbose:
-        timer.report_clear("  Building noise weighted map")
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("  Building noise-weighted map")
 
-    covariance_apply(invnpp, zmap)
+    covariance_apply(npp, zmap)
 
     if (comm is None or comm.world_rank == 0) and verbose:
         timer.report_clear("  Computing binned map")
@@ -252,7 +283,7 @@ def apply_binner(
         fname += ".gz"
     zmap.write_healpix_fits(fname)
 
-    if (comm is None or comm.world_rank == 0) and verbose:
+    if comm.world_rank == 0 and verbose:
         log.info("Wrote binned map to {}".format(fname))
         timer.report_clear("  Writing binned map")
     return
