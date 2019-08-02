@@ -24,7 +24,7 @@ def name2id(name, maxval=2 ** 16):
 
 
 class Focalplane:
-    detector_data = {}
+    detector_data = None
     _detweights = None
     sample_rate = None
     _radius = None
@@ -46,6 +46,7 @@ class Focalplane:
                 otherwise it will be calculated from the detector
                 offsets.
         """
+        self.detector_data = {}
         if detector_data is not None:
             self.detector_data.update(detector_data)
         if fname_pickle is not None:
@@ -133,6 +134,15 @@ class Focalplane:
             )
         return self._noise
 
+    def __repr__(self):
+        value = "(Focalplane : {} detectors, sample_rate = {} Hz, radius = {} deg, " \
+            "detectors = (" \
+            "".format(len(self.detector_data), self.sample_rate, self.radius)
+        for detector_name, detector_data in self.detector_data.items():
+            value += "{}, ".format(detector_name)
+        value += "))"
+        return value
+
 
 class Telescope(object):
     focalplane = None
@@ -144,3 +154,8 @@ class Telescope(object):
         self.focalplane = focalplane
         self.site = site
         return
+
+    def __repr__(self):
+        value = "(Telescope '{}' : ID = {}, Site = {}, Focalplane = {}" \
+            "".format(self.name, self.id, self.site, self.focalplane)
+        return value

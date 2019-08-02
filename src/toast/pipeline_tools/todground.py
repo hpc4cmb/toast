@@ -53,6 +53,12 @@ class Site(object):
         self.weather = weather
         return
 
+    def __repr__(self):
+        value = "(Site '{}' : ID = {}, lon = {}, lat = {}, alt = {} m, " \
+            "weather = {})" \
+            "".format(self.name, self.id, self.lon, self.lat, self.alt, self.weather)
+        return value
+
 
 class CES(object):
     def __init__(
