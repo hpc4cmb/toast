@@ -15,8 +15,8 @@ from ..tod import tidas_available, spt3g_available
 if tidas_available:
     from ..tod.tidas import OpTidasExport, TODTidas
 
-if spt3g_available:
-    from ..tod.spt3g import Op3GExport, TOD3G
+#if spt3g_available:
+#    from ..tod.spt3g import Op3GExport, TOD3G
 
 
 def add_tidas_args(parser):
@@ -25,16 +25,14 @@ def add_tidas_args(parser):
     parser.add_argument(
         "--tidas", required=False, default=None, help="Output TIDAS export path"
     )
-    return
 
 
 def add_spt3g_args(parser):
     """ Add the noise simulation arguments
     """
-    parser.add_argument(
-        "--spt3g", required=False, default=None, help="Output SPT3G export path"
-    )
-    return
+    #parser.add_argument(
+    #    "--spt3g", required=False, default=None, help="Output SPT3G export path"
+    #)
 
 
 @function_timer
@@ -69,11 +67,11 @@ def output_tidas(args, comm, data, cache_prefix=None, verbose=True):
     timer.stop()
     if comm.world_rank == 0 and verbose:
         timer.report("TIDAS export")
-    return
 
 
 @function_timer
 def output_spt3g(args, comm, data, cache_prefix=None, verbose=True):
+    """
     if args.spt3g is None:
         return
     if not spt3g_available:
@@ -103,4 +101,4 @@ def output_spt3g(args, comm, data, cache_prefix=None, verbose=True):
     timer.stop()
     if comm.world_rank == 0 and verbose:
         timer.report("spt3g export")
-    return
+    """
