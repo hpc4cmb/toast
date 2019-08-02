@@ -21,18 +21,12 @@ from .debug import add_debug_args
 
 
 class Schedule:
-    telescope = None
-    ceslist = None
-
     def __init__(self, telescope=None, ceslist=None):
         self.telescope = telescope
         self.ceslist = ceslist
-        return
 
 
-class Site(object):
-    weather = None
-
+class Site:
     def __init__(self, name, lat, lon, alt, weather=None):
         """ Instantiate a Site object
         
@@ -51,16 +45,17 @@ class Site(object):
         self.alt = alt
         self.id = 0
         self.weather = weather
-        return
 
     def __repr__(self):
-        value = "(Site '{}' : ID = {}, lon = {}, lat = {}, alt = {} m, " \
-            "weather = {})" \
+        value = (
+            "(Site '{}' : ID = {}, lon = {}, lat = {}, alt = {} m, "
+            "weather = {})"
             "".format(self.name, self.id, self.lon, self.lat, self.alt, self.weather)
+        )
         return value
 
 
-class CES(object):
+class CES:
     def __init__(
         self,
         start_time,
@@ -184,7 +179,6 @@ def add_todground_args(parser):
         'of the form "[isplit],[nsplit]" and only observations that satisfy '
         "scan % nsplit == isplit are included",
     )
-    return
 
 
 @function_timer
@@ -300,7 +294,6 @@ def _parse_line(line, all_ces):
             start_date,
         ]
     )
-    return
 
 
 @function_timer
@@ -500,7 +493,5 @@ def load_weather(args, comm, schedules, verbose=False):
     for schedule, weather in zip(schedules, weathers):
         schedule.telescope.site.weather = weather
 
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Loading weather")
-    return
+        timer.report_clear("Loading weather")

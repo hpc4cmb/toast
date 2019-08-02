@@ -24,10 +24,7 @@ def name2id(name, maxval=2 ** 16):
 
 
 class Focalplane:
-    detector_data = None
     _detweights = None
-    sample_rate = None
-    _radius = None
     _detquats = None
     _noise = None
 
@@ -37,8 +34,11 @@ class Focalplane:
         """ Instantiate a focalplane
 
         Args:
+            detector_data (dict) :  Dictionary of detector attributes, such
+                as detector quaternions and noise parameters.
             fname_pickle (str) :  Pickle file containing the focal
-                 plane dictionary
+                 plane dictionary.  If both `detector_data` and
+                 `fname_pickle` are set, the dictionaries are merged.
             sample_rate (float) :  Default sampling rate for all
                 detectors.  Will be overridden by 'fsample' fields
                 if they exist for the detectors in the dictionary.
@@ -54,16 +54,14 @@ class Focalplane:
                 self.detector_data.update(pickle.load(picklefile))
         self.sample_rate = sample_rate
         self._radius = radius_deg
-        return
 
-    def refresh(self):
+    def reset_properties(self):
         """ Clear automatic properties so they will be re-generated
         """
         self._detweights = None
         self._radius = None
         self._detquats = None
         self._noise = None
-        return
 
     @property
     def detweights(self):
@@ -135,9 +133,11 @@ class Focalplane:
         return self._noise
 
     def __repr__(self):
-        value = "(Focalplane : {} detectors, sample_rate = {} Hz, radius = {} deg, " \
-            "detectors = (" \
+        value = (
+            "(Focalplane : {} detectors, sample_rate = {} Hz, radius = {} deg, "
+            "detectors = ("
             "".format(len(self.detector_data), self.sample_rate, self.radius)
+        )
         for detector_name, detector_data in self.detector_data.items():
             value += "{}, ".format(detector_name)
         value += "))"
@@ -145,17 +145,14 @@ class Focalplane:
 
 
 class Telescope(object):
-    focalplane = None
-    site = None
-
     def __init__(self, name, focalplane=None, site=None):
         self.name = name
         self.id = name2id(name)
         self.focalplane = focalplane
         self.site = site
-        return
 
     def __repr__(self):
-        value = "(Telescope '{}' : ID = {}, Site = {}, Focalplane = {}" \
-            "".format(self.name, self.id, self.site, self.focalplane)
+        value = "(Telescope '{}' : ID = {}, Site = {}, Focalplane = {}" "".format(
+            self.name, self.id, self.site, self.focalplane
+        )
         return value
