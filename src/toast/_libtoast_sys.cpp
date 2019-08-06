@@ -200,6 +200,19 @@ void init_sys(py::module & m) {
                 None
 
         )")
+    .def("report_elapsed", &toast::Timer::report_elapsed, py::arg(
+             "message"),
+         R"(
+            Report results of a running timer to STDOUT without
+            modifying the timer state.
+
+            Args:
+                message (str): A message to prepend to the timing results.
+
+            Returns:
+                None
+
+        )")
     .def("__repr__",
          [](toast::Timer const & self) {
              std::ostringstream o;
