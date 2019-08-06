@@ -24,7 +24,7 @@ fi
 : ${QUEUE:=debug}
 : ${TYPES:="satellite ground ground_simple ground_multisite"}
 : ${SIZES:="tiny small medium large representative"}
-: ${MACHINES:="cori-knl cori-haswell edison"}
+: ${MACHINES:="cori-knl cori-haswell"}
 
 for TYPE in ${TYPES}; do
     for SIZE in ${SIZES}; do

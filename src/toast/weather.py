@@ -270,3 +270,10 @@ class Weather(object):
         if self._south_wind is None:
             self._south_wind = self._draw("V10M")
         return self._south_wind
+
+    def __repr__(self):
+        value = "(Weather : '{}', site = {}, time = {}, year = {}, month = {}, " \
+            "hour = {}, realization = {})" \
+            "".format(self._fname, self.site, self._time, self._year,
+                      self._month, self._hour, self.realization)
+        return value

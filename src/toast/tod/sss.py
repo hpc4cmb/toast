@@ -121,13 +121,14 @@ class OpSimScanSynchronousSignal(Operator):
             if rank == 0:
                 log.info("{}Setting up SSS simulation".format(prefix))
 
-            tmr = Timer()
+            timer = Timer()
             if self._report_timing:
                 if comm is not None:
                     comm.Barrier()
-                tmr.start()
+                timer.start()
 
-            sssmap = self._simulate_sss(key1, key2, counter1, counter2, weather)
+            sssmap = self._simulate_sss(
+                key1, key2, counter1, counter2, weather, comm)
 
             self._observe_sss(sssmap, tod, comm, prefix)
 
@@ -137,8 +138,8 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 comm.Barrier()
             if rank == 0:
-                tmr.stop()
-                tmr.report(
+                timer.stop()
+                timer.report(
                     "{}Simulated and observed scan-synchronous signal" "".format(prefix)
                 )
         return
@@ -174,7 +175,7 @@ class OpSimScanSynchronousSignal(Operator):
         counter2 = 0
         return key1, key2, counter1, counter2
 
-    def _simulate_sss(self, key1, key2, counter1, counter2, weather):
+    def _simulate_sss(self, key1, key2, counter1, counter2, weather, comm):
         """
         Create a map of the ground signal to observe with all detectors
         """
@@ -182,20 +183,26 @@ class OpSimScanSynchronousSignal(Operator):
         #
         # Surface temperature is made available but not used yet
         # to scale the SSS
-        temperature = weather.surface_temperature
-        if self._path:
-            sssmap = hp.read_map(self._path, verbose=False)
+        if comm is None or comm.rank == 0:
+            # Only the root process loads or simulates the map
+            temperature = weather.surface_temperature
+            if self._path:
+                sssmap = hp.read_map(self._path, verbose=False)
+            else:
+                npix = 12 * self._nside ** 2
+                sssmap = random(
+                    npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
+                )
+                sssmap = np.array(sssmap, dtype=np.float)
+                sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
+                sssmap /= np.std(sssmap)
+                lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
+                scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
+                sssmap *= scale
         else:
-            npix = 12 * self._nside ** 2
-            sssmap = random(
-                npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
-            )
-            sssmap = np.array(sssmap, dtype=np.float)
-            sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
-            sssmap /= np.std(sssmap)
-            lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
-            scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
-            sssmap *= scale
+            sssmap = None
+        if comm is not None:
+            sssmap = comm.bcast(sssmap)
         return sssmap
 
     @function_timer
@@ -207,11 +214,11 @@ class OpSimScanSynchronousSignal(Operator):
         rank = 0
         if comm is not None:
             rank = comm.rank
-        tmr = Timer()
+        timer = Timer()
         if self._report_timing:
             if comm is not None:
                 comm.Barrier()
-            tmr.start()
+            timer.start()
 
         nsamp = tod.local_samples[1]
 
@@ -249,6 +256,6 @@ class OpSimScanSynchronousSignal(Operator):
             if comm is not None:
                 comm.Barrier()
             if rank == 0:
-                tmr.stop()
-                tmr.report("{}OpSimSSS: Observe signal".format(prefix))
+                timer.stop()
+                timer.report("{}OpSimSSS: Observe signal".format(prefix))
         return

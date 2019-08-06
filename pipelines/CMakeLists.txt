@@ -9,5 +9,6 @@ install(PROGRAMS
     toast_ground_schedule.py
     toast_satellite_sim.py
     toast_ground_sim.py
+    toast_ground_sim_simple.py
     DESTINATION bin
 )
