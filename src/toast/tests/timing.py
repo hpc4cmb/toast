@@ -31,17 +31,22 @@ class TimingTest(MPITestCase):
     def test_single(self):
         incr = 200
         dincr = float(incr) / 1000.0
-        prec = 2
+        prec = 1
         tm = Timer()
         self.assertFalse(tm.is_running())
         tm.start()
         time.sleep(dincr)
         elapsed = tm.elapsed_seconds()
+        tm.report_elapsed("Test timer elapsed")
         tm.stop()
         try:
-            tm.elapsed_seconds()
+            elapsed = tm.elapsed_seconds("This should raise since timer is stopped...")
         except:
             print("Successful exception:  elapsed_seconds() from a stopped timer")
+        try:
+            tm.report_elapsed("This should raise since timer is stopped...")
+        except:
+            print("Successful exception:  report_elapsed() for a stopped timer")
         np.testing.assert_almost_equal(tm.seconds(), elapsed, decimal=prec)
         np.testing.assert_almost_equal(tm.seconds(), dincr, decimal=prec)
         tm.report("Test timer stopped")

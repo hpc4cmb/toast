@@ -151,6 +151,20 @@ void toast::Timer::report_clear(char const * message) {
     return;
 }
 
+void toast::Timer::report_elapsed(char const * message) {
+    /* Report elapsed time from a running timer without changing its state
+     */
+    double t = elapsed_seconds();
+    toast::Logger & logger = toast::Logger::get();
+    std::ostringstream msg;
+
+    msg.precision(2);
+    msg << std::fixed << message << ":  " << t << " seconds ("
+        << calls_ << " calls)";
+    logger.info(msg.str().c_str());
+    return;
+}
+
 toast::GlobalTimers::GlobalTimers() {
     data.clear();
 }
