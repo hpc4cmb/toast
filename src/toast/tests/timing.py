@@ -36,7 +36,13 @@ class TimingTest(MPITestCase):
         self.assertFalse(tm.is_running())
         tm.start()
         time.sleep(dincr)
+        elapsed = tm.elapsed_seconds()
         tm.stop()
+        try:
+            tm.elapsed_seconds()
+        except:
+            print("Successful exception:  elapsed_seconds() from a stopped timer")
+        np.testing.assert_almost_equal(tm.seconds(), elapsed, decimal=prec)
         np.testing.assert_almost_equal(tm.seconds(), dincr, decimal=prec)
         tm.report("Test timer stopped")
         tm.clear()

@@ -86,6 +86,7 @@ class Timer {
         void stop();
         void clear();
         double seconds() const;
+        double elapsed_seconds() const;
         size_t calls() const;
         void report(char const * message);
         void report_clear(char const * message);

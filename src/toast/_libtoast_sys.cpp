@@ -147,6 +147,17 @@ void init_sys(py::module & m) {
                 (float): The elapsed seconds (if timer is stopped) else -1.
 
         )")
+    .def("elapsed_seconds",
+         [](toast::Timer const & self) {
+             return self.elapsed_seconds();
+         }, R"(
+            Return the elapsed seconds from a running timer without
+            modifying the timer state.
+
+            Returns:
+                (float): The elapsed seconds (if timer is running).
+
+        )")
     .def("calls",
          [](toast::Timer const & self) {
              if (self.is_running()) {
