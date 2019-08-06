@@ -121,6 +121,33 @@ target_include_directories(toasttest BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
 )
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toasttest PRIVATE "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
+if(AATM_FOUND)
+    target_compile_definitions(toasttest PRIVATE HAVE_AATM=1)
+    target_include_directories(toasttest PRIVATE "${AATM_INCLUDE_DIRS}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(toasttest PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(toasttest PRIVATE "${CHOLMOD_INCLUDE_DIR}")
+endif(CHOLMOD_FOUND)
+
+if(FFTW_FOUND)
+    target_compile_definitions(toasttest PRIVATE HAVE_FFTW=1)
+    target_include_directories(toasttest PRIVATE "${FFTW_INCLUDE_DIRS}")
+    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
+        target_compile_definitions(toasttest PRIVATE HAVE_FFTW_THREADS=1)
+    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
+endif(FFTW_FOUND)
+
+if(LAPACK_FOUND)
+    target_compile_definitions(toasttest PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(toasttest PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+endif(LAPACK_FOUND)
+
 target_link_libraries(toasttest gtest)
 
 

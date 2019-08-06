@@ -64,6 +64,20 @@ target_include_directories(toasttest_mpi BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
 )
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toasttest_mpi PRIVATE "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
+if(AATM_FOUND)
+    target_compile_definitions(toasttest_mpi PRIVATE HAVE_AATM=1)
+    target_include_directories(toasttest_mpi PRIVATE "${AATM_INCLUDE_DIRS}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(toasttest_mpi PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(toasttest_mpi PRIVATE "${CHOLMOD_INCLUDE_DIR}")
+endif(CHOLMOD_FOUND)
+
 target_include_directories(toasttest_mpi PRIVATE "${MPI_CXX_INCLUDE_PATH}")
 
 target_compile_options(toasttest_mpi PRIVATE "${mpi_comp_flags}")
