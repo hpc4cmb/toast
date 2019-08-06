@@ -93,6 +93,24 @@ double toast::Timer::seconds() const {
     return total_;
 }
 
+double toast::Timer::elapsed_seconds() const {
+    /* Return the current reading on the timer without incrementing
+       the calls_ counter or stopping the timer
+     */
+    if (not running_) {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("Timer is not running!");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    auto now = std::chrono::high_resolution_clock::now();
+    std::chrono::duration <double> elapsed =
+        std::chrono::duration_cast <std::chrono::duration <double> >
+        (now - start_);
+    return total_ + elapsed.count();
+}
+
 size_t toast::Timer::calls() const {
     if (running_) {
         auto here = TOAST_HERE();
