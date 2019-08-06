@@ -221,8 +221,8 @@ def sim_noise_timestream(
             rate,
             firstsamp,
             oversample,
-            freq,
-            psd,
+            freq.astype(np.float64),
+            psd.astype(np.float64),
             tdata,
         )
         return tdata.array()
