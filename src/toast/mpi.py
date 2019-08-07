@@ -6,6 +6,8 @@ import sys
 import itertools
 import ctypes as ct
 
+import numpy as np
+
 from .utils import Environment, Logger
 
 env = Environment.get()
