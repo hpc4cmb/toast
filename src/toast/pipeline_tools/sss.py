@@ -67,8 +67,8 @@ def add_sss_args(parser):
     parser.add_argument(
         "--no-simulate-ground",
         required=False,
-        action="store_true",
-        help="Enable simulating ground pickup.",
+        action="store_false",
+        help="Disable simulating ground pickup.",
         dest="simulate_ground",
     )
     parser.set_defaults(simulate_ground=False)
