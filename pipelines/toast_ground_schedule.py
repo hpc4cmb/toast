@@ -9,31 +9,23 @@ This script creates a CES schedule file that can be used as input
 to toast_ground_sim.py
 """
 
+import argparse
+from datetime import datetime, timezone, timedelta
+import dateutil.parser
 import os
 import sys
-import argparse
 import traceback
 
-from datetime import datetime
-
-import dateutil.parser
-
 import numpy as np
-
 from scipy.constants import degree
-
 from matplotlib import cm
 
+import ephem
 import healpy as hp
 
-import ephem
-
 from toast.mpi import get_world
-
 from toast.utils import Logger
-
 import toast.qarray as qa
-
 from toast.timing import function_timer, GlobalTimers
 
 
@@ -324,7 +316,7 @@ class Patch(object):
 
         return in_view, msg
 
-    def update(self):
+    def update(self, *args, **kwargs):
         """
         A virtual method that is implemented by moving targets
         """
@@ -534,7 +526,7 @@ class HorizontalPatch(Patch):
 
 def to_UTC(t):
     # Convert UNIX time stamp to a date string
-    return datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M:%S %Z")
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
 def to_JD(t):
@@ -579,6 +571,7 @@ def patch_is_rising(patch):
 def prioritize(args, visible):
     """ Order visible targets by priority and number of scans.
     """
+    log = Logger.get()
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
             # If either of the patches is a cooler cycle, we don't modulate
@@ -627,11 +620,10 @@ def prioritize(args, visible):
                         weight2 *= (lim / el2) ** args.elevation_penalty_power
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
-    if args.debug:
-        print("Prioritized list of viewable patches: ", end="")
-        for patch in visible:
-            print("{}, ".format(patch.name), end="")
-        print(flush=True)
+    names = []
+    for patch in visible:
+        names.append(patch.name)
+    log.debug("Prioritized list of viewable patches: {}".format(names))
     return
 
 
@@ -868,6 +860,7 @@ def attempt_scan_pole(
 def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible):
     """ Determine the elevation at which to scan.
     """
+    log = Logger.get()
     azs, els = patch.corner_coordinates(observer)
     el = None
     if rising:
@@ -904,8 +897,8 @@ def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible
                 )
             )
             el = None
-    if el is None and args.debug:
-        print("NOT VISIBLE: {}".format(not_visible[-1]))
+    if el is None:
+        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
     return el
 
 
@@ -915,6 +908,7 @@ def get_constant_elevation_pole(
 ):
     """ Determine the elevation at which to scan.
     """
+    log = Logger.get()
     _, els = patch.corner_coordinates(observer)
     el = np.amin(els) - fp_radius
 
@@ -934,12 +928,13 @@ def get_constant_elevation_pole(
             )
         )
         el = None
-    if el is None and args.debug:
-        print("NOT VISIBLE: {}".format(not_visible[-1]))
+    if el is None:
+        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
     return el
 
 
 def check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
+    log = Logger.get()
     observer.date = to_DJD(t)
     if sun_el_max < np.pi / 2:
         sun.compute(observer)
@@ -951,8 +946,7 @@ def check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
                     "".format(np.degrees(sun.alt), rising),
                 )
             )
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             return True
     return False
 
@@ -973,6 +967,7 @@ def scan_patch(
 ):
     """ Attempt scanning the patch specified by corners at elevation el.
     """
+    log = Logger.get()
     azmins, azmaxs, aztimes = [], [], []
     if isinstance(patch, HorizontalPatch):
         # No corners.  Simply scan for the requested time
@@ -996,8 +991,7 @@ def scan_patch(
             not_visible.append(
                 (patch.name, "Ran out of time rising = {}".format(rising))
             )
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             break
         if check_sun_el(tstop, observer, sun, sun_el_max, args, not_visible):
             break
@@ -1079,6 +1073,7 @@ def scan_patch_pole(
     The pole scheduling mode will not wait for the patch to drift across.
     It simply attempts to scan for the required time: args.pole_ces_time.
     """
+    log = Logger.get()
     success = False
     tstop = t
     tstep = 60
@@ -1090,32 +1085,26 @@ def scan_patch_pole(
                 success = True
             else:
                 not_visible.append(
-                    (patch.name, "No overlap at {:.2f}" "".format(el / degree))
+                    (patch.name, "No overlap at {:.2f}".format(el / degree))
                 )
-                if args.debug:
-                    print("NOT VISIBLE: {}".format(not_visible[-1]))
+                log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             break
         if tstop > stop_timestamp or tstop - t > 86400:
             not_visible.append((patch.name, "Ran out of time"))
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             break
         observer.date = to_DJD(tstop)
         sun.compute(observer)
         if sun.alt > sun_el_max:
             not_visible.append(
-                (patch.name, "Sun too high {:.2f}" "".format(sun.alt / degree))
+                (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
             )
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             break
         azs, els = patch.corner_coordinates(observer)
         if np.amax(els) + fp_radius < el:
-            not_visible.append(
-                (patch.name, "Patch below {:.2f}" "".format(el / degree))
-            )
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
             break
         radius = max(np.radians(1), fp_radius)
         current_extent_pole(
@@ -1264,6 +1253,7 @@ def add_scan(
 ):
     """ Make an entry for a CES in the schedule file.
     """
+    log = Logger.get()
     ces_time = tstop - tstart
     if ces_time > args.ces_max_time:  # and not args.pole_mode:
         nsub = np.int(np.ceil(ces_time / args.ces_max_time))
@@ -1358,12 +1348,10 @@ def add_scan(
         else:
             # For regular patches, this is a failure condition
             if sun_too_close:
-                if args.debug:
-                    print("Sun too close", flush=True)
+                log.debug("Sun too close", flush=True)
                 raise SunTooClose
             if moon_too_close:
-                if args.debug:
-                    print("Moon too close", flush=True)
+                log.debug("Moon too close", flush=True)
                 raise MoonTooClose
         observer.date = to_DJD(t2)
         sun.compute(observer)
@@ -1399,8 +1387,7 @@ def add_scan(
 
     # Write the entries
     for entry in entries:
-        if args.debug:
-            print(entry)
+        log.debug(entry)
         fout.write(entry)
     fout.flush()
 
@@ -1425,6 +1412,7 @@ def add_scan(
 def add_cooler_cycle(args, tstart, tstop, observer, sun, moon, fout, fout_fmt, patch):
     """ Make an entry for a cooler cycle in the schedule file.
     """
+    log = Logger.get()
     az = patch.az
     el = patch.el
     t1 = tstart
@@ -1469,8 +1457,7 @@ def add_cooler_cycle(args, tstart, tstop, observer, sun, moon, fout, fout_fmt, p
     )
 
     # Write the entry
-    if args.debug:
-        print(entry)
+    log.debug(entry)
     fout.write(entry)
     fout.flush()
 
@@ -1489,6 +1476,7 @@ def add_cooler_cycle(args, tstart, tstop, observer, sun, moon, fout, fout_fmt, p
 def get_visible(args, observer, sun, moon, patches, el_min):
     """ Determine which patches are visible.
     """
+    log = Logger.get()
     visible = []
     not_visible = []
     # DEBUG begin
@@ -1532,21 +1520,89 @@ def get_visible(args, observer, sun, moon, patches, el_min):
                     in_view = False
         if in_view:
             visible.append(patch)
-            if args.debug:
-                print(
-                    "In view: {}. el = {:.2f}..{:.2f}".format(
-                        patch.name, np.degrees(patch.el_min), np.degrees(patch.el_max)
-                    ),
-                    flush=True,
+            log.debug(
+                "In view: {}. el = {:.2f}..{:.2f}".format(
+                    patch.name, np.degrees(patch.el_min), np.degrees(patch.el_max)
                 )
+            )
         else:
-            if args.debug:
-                print("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
     return visible, not_visible
 
 
 @function_timer
+def apply_blockouts(args, t_in):
+    """ Check if `t` is inside a blockout period.
+    If so, advance it to the next unblocked time.
+
+    Returns:  The (new) time and a boolean flag indicating if
+        the time was blocked and subsequently advanced.
+    """
+    if not args.block_out:
+        return t_in, False
+    log = Logger.get()
+    t = t_in
+    blocked = False
+    for block_out in args.block_out:
+        current = datetime.fromtimestamp(t, timezone.utc)
+        start, stop = block_out.split("-")
+        try:
+            # If the block out specifies the year then no extra logic is needed
+            start_year, start_month, start_day = start.split("/")
+            start = datetime(
+                int(start_year),
+                int(start_month),
+                int(start_day),
+                0,
+                0,
+                0,
+                0,
+                timezone.utc,
+            )
+        except ValueError:
+            # No year given so must figure out which year is the right one
+            start_month, start_day = start.split("/")
+            start = datetime(
+                current.year, int(start_month), int(start_day), 0, 0, 0, 0, timezone.utc
+            )
+            if start > current:
+                # This year's block out is still in the future but the past
+                # year's blockout may still be active
+                start = start.replace(year=start.year - 1)
+        try:
+            # If the block out specifies the year then no extra logic is needed
+            stop_year, stop_month, stop_day = stop.split("/")
+            stop = datetime(
+                int(stop_year), int(stop_month), int(stop_day), 0, 0, 0, 0, timezone.utc
+            )
+        except ValueError:
+            # No year given so must figure out which year is the right one
+            stop_month, stop_day = stop.split("/")
+            stop = datetime(
+                start.year, int(stop_month), int(stop_day), 0, 0, 0, 0, timezone.utc
+            )
+            if stop < start:
+                # The block out ends on a different year than it starts
+                stop = stop.replace(year=start.year + 1)
+        # advance the stop time by one day to make the definition inclusive
+        stop += timedelta(days=1)
+        if start < current and current < stop:
+            # `t` is inside the block out.
+            # Advance to the end of the block out.
+            log.info(
+                "{} is inside block out {}, advancing to {}".format(
+                    current, block_out, stop
+                )
+            )
+            t = stop.timestamp()
+            blocked = True
+    return t, blocked
+
+
+@function_timer
 def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun, moon):
+    log = Logger.get()
+
     sun_el_max = args.sun_el_max * degree
     el_min = args.el_min * degree
     el_max = args.el_max * degree
@@ -1555,7 +1611,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
     if dir_out:
-        print("Creating '{}'".format(dir_out), flush=True)
+        log.info("Creating '{}'".format(dir_out), flush=True)
         os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
@@ -1615,37 +1671,47 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         )
     )
 
-    t = start_timestamp
     tstep = 600
 
     # Operational days
     ods = set()
 
+    t = start_timestamp
     last_successful = t
-    while t < stop_timestamp:
-        if t - last_successful > 86400:
+    while True:
+        t, blocked = apply_blockouts(args, t)
+        if t > stop_timestamp:
+            break
+        if t - last_successful > 86400 or blocked:
+            # A long time has passed since the last successfully
+            # scheduled scan.
             # Reset the individual patch az and el limits
             for patch in patches:
                 patch.reset()
-            # Only try this once for every day
-            t, last_successful = last_successful, t
+            if blocked:
+                last_successful = t
+            else:
+                # Only try this once for every day.  Swapping
+                # `t` <-> `last_successful` means that we will not trigger
+                # this branch again without scheduling a succesful scan
+                log.debug(
+                    "Resetting patches and returning to the last successful "
+                    "scan: {}".format(to_UTC(last_succesful))
+                )
+                t, last_successful = last_successful, t
 
         # Determine which patches are observable at time t.
 
-        if args.debug:
-            tstring = datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M:%S %Z")
-            print("t =  {}".format(tstring), flush=True)
+        log.debug("t = {}".format(to_UTC(t)))
         # Determine which patches are visible
         observer.date = to_DJD(t)
         sun.compute(observer)
         if sun.alt > sun_el_max:
-            if args.debug:
-                print(
-                    "Sun elevation is {:.2f} > {:.2f}. Moving on.".format(
-                        sun.alt / degree, sun_el_max / degree
-                    ),
-                    flush=True,
+            log.debug(
+                "Sun elevation is {:.2f} > {:.2f}. Moving on.".format(
+                    sun.alt / degree, sun_el_max / degree
                 )
+            )
             t += tstep
             continue
         moon.compute(observer)
@@ -1653,12 +1719,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         visible, not_visible = get_visible(args, observer, sun, moon, patches, el_min)
 
         if len(visible) == 0:
-            if args.debug:
-                tstring = datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M:%S %Z")
-                print(
-                    "No patches visible at {}: {}".format(tstring, not_visible),
-                    flush=True,
-                )
+            log.debug("No patches visible at {}: {}".format(to_UTC(t), not_visible))
             t += tstep
             continue
 
@@ -1721,14 +1782,9 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             break
 
         if not success:
-            if args.debug:
-                tstring = datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M:%S %Z")
-                print(
-                    "No patches could be scanned at {}: {}".format(
-                        tstring, not_visible
-                    ),
-                    flush=True,
-                )
+            log.debug(
+                "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
+            )
             t += tstep
         else:
             last_successful = t
@@ -1743,7 +1799,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--site_name", required=False, default="LBL", help="Observing site name"
+        "--site-name", required=False, default="LBL", help="Observing site name"
     )
     parser.add_argument(
         "--telescope",
@@ -1752,26 +1808,26 @@ def parse_args():
         help="Observing telescope name",
     )
     parser.add_argument(
-        "--site_lon",
+        "--site-lon",
         required=False,
         default="-122.247",
         help="Observing site longitude [PyEphem string]",
     )
     parser.add_argument(
-        "--site_lat",
+        "--site-lat",
         required=False,
         default="37.876",
         help="Observing site latitude [PyEphem string]",
     )
     parser.add_argument(
-        "--site_alt",
+        "--site-alt",
         required=False,
         default=100,
         type=np.float,
         help="Observing site altitude [meters]",
     )
     parser.add_argument(
-        "--scan_margin",
+        "--scan-margin",
         required=False,
         default=0,
         type=np.float,
@@ -1779,63 +1835,63 @@ def parse_args():
         "scans to smooth out edge effects",
     )
     parser.add_argument(
-        "--ra_period",
+        "--ra-period",
         required=False,
         default=10,
         type=np.int,
         help="Period of patch position oscillations in RA [visits]",
     )
     parser.add_argument(
-        "--ra_amplitude",
+        "--ra-amplitude",
         required=False,
         default=0,
         type=np.float,
         help="Amplitude of patch position oscillations in RA [deg]",
     )
     parser.add_argument(
-        "--dec_period",
+        "--dec-period",
         required=False,
         default=10,
         type=np.int,
         help="Period of patch position oscillations in DEC [visits]",
     )
     parser.add_argument(
-        "--dec_amplitude",
+        "--dec-amplitude",
         required=False,
         default=0,
         type=np.float,
         help="Amplitude of patch position oscillations in DEC [deg]",
     )
     parser.add_argument(
-        "--elevation_penalty_limit",
+        "--elevation-penalty-limit",
         required=False,
         default=0,
         type=np.float,
-        help="Assign a penalty to observing elevations below " "this limit [degrees]",
+        help="Assign a penalty to observing elevations below this limit [degrees]",
     )
     parser.add_argument(
-        "--elevation_penalty_power",
+        "--elevation-penalty-power",
         required=False,
         default=2,
         type=np.float,
         help="Power in the elevation penalty function [> 0] ",
     )
     parser.add_argument(
-        "--equalize_area",
+        "--equalize-area",
         required=False,
         default=False,
         action="store_true",
         help="Adjust priorities to account for patch area",
     )
     parser.add_argument(
-        "--equalize_time",
+        "--equalize-time",
         required=False,
         action="store_true",
         dest="equalize_time",
         help="Modulate priority by integration time.",
     )
     parser.add_argument(
-        "--equalize_scans",
+        "--equalize-scans",
         required=False,
         action="store_false",
         dest="equalize_time",
@@ -1851,27 +1907,27 @@ def parse_args():
         "OR name,weight,lon,lat,width",
     )
     parser.add_argument(
-        "--patch_coord",
+        "--patch-coord",
         required=False,
         default="C",
         help="Sky patch coordinate system [C,E,G]",
     )
     parser.add_argument(
-        "--el_min",
+        "--el-min",
         required=False,
         default=30,
         type=np.float,
         help="Minimum elevation for a CES",
     )
     parser.add_argument(
-        "--el_max",
+        "--el-max",
         required=False,
         default=80,
         type=np.float,
         help="Maximum elevation for a CES",
     )
     parser.add_argument(
-        "--el_step",
+        "--el-step",
         required=False,
         default=0,
         type=np.float,
@@ -1885,28 +1941,28 @@ def parse_args():
         help="Alternate between rising and setting scans",
     )
     parser.add_argument(
-        "--fp_radius",
+        "--fp-radius",
         required=False,
         default=0,
         type=np.float,
         help="Focal plane radius [deg]",
     )
     parser.add_argument(
-        "--sun_avoidance_angle",
+        "--sun-avoidance-angle",
         required=False,
         default=30,
         type=np.float,
-        help="Minimum distance between the Sun and " "the bore sight [deg]",
+        help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
-        "--moon_avoidance_angle",
+        "--moon-avoidance-angle",
         required=False,
         default=20,
         type=np.float,
-        help="Minimum distance between the Moon and " "the bore sight [deg]",
+        help="Minimum distance between the Moon and the bore sight [deg]",
     )
     parser.add_argument(
-        "--sun_el_max",
+        "--sun-el-max",
         required=False,
         default=90,
         type=np.float,
@@ -1920,17 +1976,26 @@ def parse_args():
     )
     parser.add_argument("--stop", required=False, help="UTC stop time of the schedule")
     parser.add_argument(
-        "--operational_days",
+        "--block-out",
+        required=False,
+        action="append",
+        help="Range of UTC calendar days to omit from scheduling in format "
+        "START_MONTH/START_DAY-END_MONTH/END_DAY or "
+        "START_YEAR/START_MONTH/START_DAY-END_YEAR/END_MONTH/END_DAY "
+        "where YEAR, MONTH and DAY are integers. END days are inclusive",
+    )
+    parser.add_argument(
+        "--operational-days",
         required=False,
         type=np.int,
-        help="Number of operational days to schedule " "(empty days do not count)",
+        help="Number of operational days to schedule (empty days do not count)",
     )
     parser.add_argument(
         "--timezone",
         required=False,
         type=np.int,
         default=0,
-        help="Offset to apply to MJD to separate operational " "days [hours]",
+        help="Offset to apply to MJD to separate operational days [hours]",
     )
     parser.add_argument(
         "--gap",
@@ -1940,21 +2005,21 @@ def parse_args():
         help="Gap between CES:es [seconds]",
     )
     parser.add_argument(
-        "--gap_small",
+        "--gap-small",
         required=False,
         default=10,
         type=np.float,
         help="Gap between split CES:es [seconds]",
     )
     parser.add_argument(
-        "--one_scan_per_day",
+        "--one-scan-per-day",
         required=False,
         default=False,
         action="store_true",
         help="Pad each operational day to have only one CES",
     )
     parser.add_argument(
-        "--ces_max_time",
+        "--ces-max-time",
         required=False,
         default=900,
         type=np.float,
@@ -1970,43 +2035,43 @@ def parse_args():
     parser.add_argument(
         "--polmap",
         required=False,
-        help="Include polarization from map in the plotted " "patches when --debug",
+        help="Include polarization from map in the plotted patches when --debug",
     )
     parser.add_argument(
-        "--polmin",
+        "--pol-min",
         required=False,
         type=np.float,
         help="Lower plotting range for polarization map",
     )
     parser.add_argument(
-        "--polmax",
+        "--pol-max",
         required=False,
         type=np.float,
         help="Upper plotting range for polarization map",
     )
     parser.add_argument(
-        "--delay_sso_check",
+        "--delay-sso-check",
         required=False,
         default=False,
         action="store_true",
         help="Only apply SSO check during simulated scan.",
     )
     parser.add_argument(
-        "--pole_mode",
+        "--pole-mode",
         required=False,
         default=False,
         action="store_true",
         help="Pole scheduling mode (no drift scan)",
     )
     parser.add_argument(
-        "--pole_el_step",
+        "--pole-el-step",
         required=False,
         default=0.25,
         type=np.float,
         help="Elevation step in pole scheduling mode [deg]",
     )
     parser.add_argument(
-        "--pole_ces_time",
+        "--pole-ces-time",
         required=False,
         default=3000,
         type=np.float,
@@ -2019,19 +2084,17 @@ def parse_args():
     try:
         args = parser.parse_args()
     except SystemExit:
-        return
+        sys.exit(0)
 
     if args.operational_days is None and args.stop is None:
-        raise RuntimeError("You must provide --stop or --operational_days")
+        raise RuntimeError("You must provide --stop or --operational-days")
 
     stop_time = None
     if args.start.endswith("Z"):
         start_time = dateutil.parser.parse(args.start)
         if args.stop is not None:
             if not args.stop.endswith("Z"):
-                raise RuntimeError(
-                    "Either both or neither times must be " "given in UTC"
-                )
+                raise RuntimeError("Either both or neither times must be given in UTC")
             stop_time = dateutil.parser.parse(args.stop)
     else:
         if args.timezone < 0:
@@ -2041,9 +2104,7 @@ def parse_args():
         start_time = dateutil.parser.parse(args.start + tz)
         if args.stop is not None:
             if args.stop.endswith("Z"):
-                raise RuntimeError(
-                    "Either both or neither times must be " "given in UTC"
-                )
+                raise RuntimeError("Either both or neither times must be given in UTC")
             stop_time = dateutil.parser.parse(args.stop + tz)
 
     start_timestamp = start_time.timestamp()
@@ -2057,7 +2118,8 @@ def parse_args():
 
 @function_timer
 def parse_patch_sso(args, parts):
-    print(" SSO format ", end="", flush=True)
+    log = Logger.get()
+    log.info("SSO format")
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
@@ -2067,7 +2129,8 @@ def parse_patch_sso(args, parts):
 
 @function_timer
 def parse_patch_cooler(args, parts, last_cycle_end):
-    print(" Cooler cycle format ", end="", flush=True)
+    log = Logger.get()
+    log.info("Cooler cycle format")
     weight = float(parts[2])
     power = float(parts[3])
     hold_time_min = float(parts[4])  # in hours
@@ -2085,8 +2148,9 @@ def parse_patch_cooler(args, parts, last_cycle_end):
 def parse_patch_horizontal(args, parts):
     """ Parse an explicit patch definition line
     """
+    log = Logger.get()
     corners = []
-    print(" Horizontal format ", end="", flush=True)
+    log.info("Horizontal format")
     name = parts[0]
     weight = float(parts[2])
     azmin = float(parts[3]) * degree
@@ -2101,12 +2165,14 @@ def parse_patch_horizontal(args, parts):
 def parse_patch_explicit(args, parts):
     """ Parse an explicit patch definition line
     """
+    log = Logger.get()
     corners = []
-    print("Explicit-corners format ", end="", flush=True)
+    log.info("Explicit-corners format: ")
     name = parts[0]
     i = 2
+    definition = ""
     while i + 1 < len(parts):
-        print(" ({}, {})".format(parts[i], parts[i + 1]), end="", flush=True)
+        definition += " ({}, {})".format(parts[i], parts[i + 1])
         try:
             # Assume coordinates in degrees
             lon = float(parts[i]) * degree
@@ -2134,6 +2200,7 @@ def parse_patch_explicit(args, parts):
         patch_corner._ra = corner.ra
         patch_corner._dec = corner.dec
         corners.append(patch_corner)
+    log.info(definition)
     return corners
 
 
@@ -2141,8 +2208,9 @@ def parse_patch_explicit(args, parts):
 def parse_patch_rectangular(args, parts):
     """ Parse a rectangular patch definition line
     """
+    log = Logger.get()
     corners = []
-    print(" Rectangular format ", end="", flush=True)
+    log.info("Rectangular format")
     name = parts[0]
     try:
         # Assume coordinates in degrees
@@ -2233,8 +2301,9 @@ def add_side(corner1, corner2, corners_temp, coordconv):
 def parse_patch_center_and_width(args, parts):
     """ Parse center-and-width patch definition
     """
+    log = Logger.get()
     corners = []
-    print("Center-and-width format ", end="", flush=True)
+    log.info("Center-and-width format")
     try:
         # Assume coordinates in degrees
         lon = float(parts[2]) * degree
@@ -2273,12 +2342,13 @@ def parse_patch_center_and_width(args, parts):
 @function_timer
 def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
     # Parse the patch definitions
+    log = Logger.get()
     patches = []
     total_weight = 0
     for patch_def in args.patch:
         parts = patch_def.split(",")
         name = parts[0]
-        print('Adding patch "{}"'.format(name), end="", flush=True)
+        log.info('Adding patch "{}"'.format(name))
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
         elif parts[1].upper() == "SSO":
@@ -2299,7 +2369,6 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             else:
                 corners = parse_patch_explicit(args, parts)
                 area = None
-            print("")
             patch = Patch(
                 name,
                 weight,
@@ -2320,10 +2389,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         total_weight += patch.weight
         patches.append(patch)
 
-        print(
+        log.debug(
             "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area),
-            flush=True,
+            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
         )
 
     if args.debug:
@@ -2456,9 +2524,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     continue
                 lon.append(lon[0])
                 lat.append(lat[0])
-                print(
-                    "{} corners:\n lon = {}\n lat= {}".format(patch.name, lon, lat),
-                    flush=True,
+                log.info(
+                    "{} corners:\n lon = {}\n lat= {}".format(patch.name, lon, lat)
                 )
                 hp.projplot(
                     lon,
