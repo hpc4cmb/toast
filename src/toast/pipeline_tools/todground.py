@@ -362,8 +362,10 @@ def load_schedule(args, comm):
                     (
                         start_date,
                         start_time,
+                        start_timezone,
                         stop_date,
                         stop_time,
+                        stop_timezone,
                         mjdstart,
                         mjdstop,
                         name,
