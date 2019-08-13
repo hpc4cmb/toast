@@ -33,5 +33,6 @@ install(FILES
     tidas_utils.py
     tidas.py
     atm.py
+    mapsampler.py
     DESTINATION ${PYTHON_SITE}/toast/tod
 )

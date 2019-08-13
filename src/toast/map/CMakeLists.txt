@@ -4,7 +4,6 @@
 install(FILES
     __init__.py
     madam.py
-    mapsampler.py
     cov.py
     pixels.py
     pysm.py

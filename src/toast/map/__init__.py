@@ -7,6 +7,7 @@
 from .pixels import OpLocalPixels, DistPixels
 
 from .pysm import pysm
+
 if pysm is not None:
     from .pysm import PySMSky
 
@@ -17,7 +18,5 @@ from .cov import (
     covariance_multiply,
     covariance_apply,
 )
-
-# from .mapsampler import MapSampler
 
 from .madam import OpMadam

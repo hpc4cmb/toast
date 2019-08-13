@@ -3,11 +3,12 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_TODMAP_SCANNING_HPP
-#define TOAST_TODMAP_SCANNING_HPP
+#ifndef TOAST_TOD_MAPSCAN_HPP
+#define TOAST_TOD_MAPSCAN_HPP
+
+#include <cstring>
 
 namespace toast {
-
 template <typename T>
 void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weights,
                     int64_t nmap, int64_t * subpix, T const * map, double * tod,
@@ -30,6 +31,25 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
         }
     }
 
+    return;
+}
+
+template <typename T>
+void fast_scanning(double * toi, int64_t nsamp,
+                   int64_t const * pixels, double const * weights,
+                   int64_t nweight, T const * bmap) {
+    memset(toi, 0, nsamp * sizeof(double));
+    #pragma omp parallel for
+    for (int64_t row = 0; row < nsamp; ++row) {
+        int64_t offset = row * nweight;
+        for (int64_t col = 0; col < nweight; ++col) {
+            int64_t pix = pixels[offset];
+            if (pix < 0) continue;
+            double weight = weights[offset];
+            toi[row] += bmap[pix] * weight;
+            ++offset;
+        }
+    }
     return;
 }
 
@@ -101,28 +121,6 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 //     return;
 // }
 //
-// void toast::map_tools::fast_scanning32(double * toi, int64_t const nsamp,
-//                                        int64_t const * pixels,
-//                                        double const * weights,
-//                                        int64_t const nweight,
-//                                        float const * bmap) {
-//     memset(toi, 0, nsamp * sizeof(double));
-//     #pragma \
-//     omp parallel for schedule(static) default(none) shared(pixels, weights, nweight,
-// map, tod, nsamp
-//     for (int64_t row = 0; row < nsamp; ++row) {
-//         int64_t offset = row * nweight;
-//         for (int64_t col = 0; col < nweight; ++col) {
-//             int64_t pix = pixels[offset];
-//             if (pix < 0) continue;
-//             double weight = weights[offset];
-//             toi[row] += bmap[pix] * weight;
-//             ++offset;
-//         }
-//     }
-// }
-//
-
 }
 
-#endif // ifndef TOAST_TODMAP_SCANNING_HPP
+#endif // ifndef TOAST_TOD_MAPSCAN_HPP

@@ -73,3 +73,5 @@ from .spt3g_utils import available as spt3g_available
 from .atm import available as atm_available
 from .atm import available_utils as atm_available_utils
 from .atm import available_mpi as atm_available_mpi
+
+from .mapsampler import MapSampler
