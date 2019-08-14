@@ -526,7 +526,7 @@ class HorizontalPatch(Patch):
 
 def to_UTC(t):
     # Convert UNIX time stamp to a date string
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def to_JD(t):
