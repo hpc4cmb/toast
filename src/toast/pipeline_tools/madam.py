@@ -417,7 +417,7 @@ def apply_madam(
         for tele_name, tele_data in telescope_data:
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
-                if args.skip_daymaps:
+                if args.do_daymaps:
                     continue
                 if len(telescope_data) > 1 and tele_name == "all":
                     # Skip daily maps over multiple telescopes
