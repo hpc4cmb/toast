@@ -49,13 +49,23 @@ def add_pysm_args(parser):
         help="Comma separated models for on-the-fly PySM "
         'simulation, e.g. s3,d6,f1,a2"',
     )
+
     parser.add_argument(
-        "--apply-beam",
+        "--pysm-apply-beam",
         required=False,
         action="store_true",
-        help="Apply beam convolution to input map with "
-        "gaussian beam parameters defined in focalplane",
+        help="Convolve sky with detector beam",
+        dest="pysm_apply_beam",
     )
+    parser.add_argument(
+        "--no-pysm-apply-beam",
+        required=False,
+        action="store_false",
+        help="Do not convolve sky with detector beam.",
+        dest="pysm_apply_beam",
+    )
+    parser.set_defaults(pysm_apply_beam=True)
+
     parser.add_argument(
         "--pysm-precomputed-cmb-K_CMB",
         required=False,
@@ -145,7 +155,7 @@ def simulate_sky_signal(
         nside=args.nside,
         subnpix=subnpix,
         localsm=localsm,
-        apply_beam=args.apply_beam,
+        apply_beam=args.pysm_apply_beam,
         coord=args.coord,
     )
     op_sim_pysm.exec(data)

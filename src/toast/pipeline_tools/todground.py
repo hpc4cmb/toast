@@ -136,22 +136,6 @@ def add_todground_args(parser):
         help="Offset to apply to MJD to separate days [hours]",
     )
 
-    parser.add_argument(
-        "--day-maps",
-        required=False,
-        action="store_true",
-        help="Enable daily maps",
-        dest="do_daymaps",
-    )
-    parser.add_argument(
-        "--no-day-maps",
-        required=False,
-        action="store_false",
-        help="Disable daily maps",
-        dest="do_daymaps",
-    )
-    parser.set_defaults(do_daymaps=False)
-
     add_debug_args(parser)
 
     # `sample-rate` may be already added

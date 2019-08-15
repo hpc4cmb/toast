@@ -450,7 +450,7 @@ def main():
 
     # Split the communicator for day and season mapmaking
 
-    time_comms = get_time_communicators(comm, data)
+    time_comms = get_time_communicators(args, comm, data)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
