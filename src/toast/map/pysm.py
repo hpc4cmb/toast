@@ -2,12 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..utils import set_numba_openmp
+from ..utils import set_numba_threading
 
 from ..timing import function_timer
 
-# Force the numba threading layer to be OpenMP before importing PySM
-set_numba_openmp()
+# Force the numba threading layer to be OpenMP if possible before importing PySM
+set_numba_threading()
 
 pysm = None
 try:

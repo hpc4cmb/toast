@@ -36,7 +36,23 @@ from ._libtoast import (
 )
 
 
-def set_numba_openmp():
+def set_numba_threading():
+    """Set the numba threading layer.
+
+    For parallel numba jit blocks, the backend threading layer is selected at runtime
+    based on an order set inside the numba package.  We would like to change the
+    order of selection to prefer the OpenMP backend in order to be compatible with
+    other pieces of compiled code that use the OpenMP thread pool.  If OpenMP is not
+    supported, then we next try to use TBB for threading and finally fall back to the
+    default, which uses a multiprocessing workqueue.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    """
     have_numba_omp = False
     have_numba_tbb = False
     try:
