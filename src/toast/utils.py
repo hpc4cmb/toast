@@ -36,6 +36,29 @@ from ._libtoast import (
 )
 
 
+def set_numba_openmp():
+    try:
+        from numba import config, threading_layer
+
+        layer = None
+        try:
+            config.THREADING_LAYER = "omp"
+            layer = threading_layer()
+        except ValueError:
+            try:
+                config.THREADING_LAYER = "threadsafe"
+                layer = threading_layer()
+            except ValueError:
+                # Just give up at this point
+                config.THREADING_LAYER = "default"
+                layer = threading_layer()
+        log = Logger.get()
+        log.info("Numba threading layer set to:  {}".format(layer))
+    except ImportError:
+        pass
+    return
+
+
 try:
     import psutil
 
@@ -116,6 +139,7 @@ try:
         if comm is not None:
             comm.Barrier()
         return
+
 
 except ImportError:
 
