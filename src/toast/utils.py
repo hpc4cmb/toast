@@ -53,33 +53,25 @@ def set_numba_threading():
         None
 
     """
-    have_numba_omp = False
-    have_numba_tbb = False
-    try:
-        from numba.npyufunc import tbbpool
-
-        have_numba_tbb = True
-    except ImportError:
-        # no TBB
-        pass
-
+    log = Logger.get()
+    threading = "default"
     try:
         from numba.npyufunc import omppool
 
-        have_numba_omp = True
+        threading = "omp"
     except ImportError:
         # no OpenMP support
-        pass
+        try:
+            from numba.npyufunc import tbbpool
 
+            threading = "tbb"
+        except ImportError:
+            # no TBB
+            pass
     try:
         from numba import config, njit, threading_layer
 
-        if have_numba_omp:
-            config.THREADING_LAYER = "omp"
-        elif have_numba_tbb:
-            config.THREADING_LAYER = "tbb"
-        else:
-            config.THREADING_LAYER = "default"
+        config.THREADING_LAYER = threading
 
         # In order to get numba to actually select a threading layer, we must
         # trigger compilation of a parallel function.
@@ -89,17 +81,17 @@ def set_numba_threading():
 
         x = np.arange(10.0)
         y = x.copy()
-        foo(x, y)
-
-        # Log the layer that was selected
-        layer = threading_layer()
-        log = Logger.get()
-        log.info("Numba threading layer set to:  {}".format(layer))
+        out_py = x + y
+        out_numba = foo(x, y)
+        if not np.allclose(out_py, out_numba):
+            log.info("Numba results do not match python, not setting threading")
+        else:
+            # Log the layer that was selected
+            layer = threading_layer()
+            log.info("Numba threading layer set to:  {}".format(layer))
     except ImportError:
         # Numba not available at all
-        log = Logger.get()
         log.info("Numba not available, not setting threading layer")
-    return
 
 
 try:
