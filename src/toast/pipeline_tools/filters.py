@@ -34,6 +34,7 @@ def add_polyfilter_args(parser):
         help="Do not apply polynomial filter",
         dest="apply_polyfilter",
     )
+    parser.set_defaults(apply_polyfilter=False)
 
     parser.add_argument(
         "--poly-order",

@@ -51,8 +51,25 @@ def add_pointing_args(parser):
         required=False,
         default=0,
         type=np.float,
-        help="For stepped HWP, the the time in seconds between steps",
+        help="For stepped HWP, the time in seconds between steps",
     )
+
+    parser.add_argument(
+        "--single-precision-pointing",
+        required=False,
+        action="store_true",
+        help="Use single precision for pointing in memory.",
+        dest="single_precision_pointing",
+    )
+    parser.add_argument(
+        "--no-single-precision-pointing",
+        required=False,
+        action="store_false",
+        help="Use single precision for pointing in memory.",
+        dest="single_precision_pointing",
+    )
+    parser.set_defaults(single_precision_pointing=False)
+
 
     # Common flag mask may already be added
     try:
@@ -104,6 +121,7 @@ def expand_pointing(args, comm, data):
         hwprpm=hwprpm,
         hwpstep=hwpstep,
         hwpsteptime=hwpsteptime,
+        single_precision=args.single_precision_pointing,
     )
 
     pointing.exec(data)
