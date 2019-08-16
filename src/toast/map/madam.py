@@ -474,7 +474,7 @@ class OpMadam(Operator):
         )
 
     @function_timer
-    def _stage_time(self, data, detectors, nsamp, obs_period_ranges):
+    def _stage_time(self, data, comm, detectors, nsamp, obs_period_ranges):
         """ Stage the timestamps and use them to build PSD inputs.
 
         """
@@ -522,10 +522,11 @@ class OpMadam(Operator):
         return psds
 
     @function_timer
-    def _stage_signal(self, data, detectors, nsamp, ndet, obs_period_ranges):
+    def _stage_signal(self, data, comm, detectors, nsamp, ndet, obs_period_ranges):
         """ Stage signal
 
         """
+        memreport(comm, "before staging signal")  # DEBUG
         self._madam_signal = self._cache.create(
             "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
         )
@@ -554,17 +555,19 @@ class OpMadam(Operator):
                     self._purge_tod or self._name == self._name_out
                 ):
                     cachename = "{}_{}".format(self._name, det)
-                    tod.cache.clear(pattern=cachename)
+                    tod.cache.destroy(cachename)
 
             global_offset = offset
 
+        memreport(comm, "after staging signal")  # DEBUG
         return signal_dtype
 
     @function_timer
-    def _stage_pixels(self, data, detectors, nsamp, ndet, obs_period_ranges, nside):
+    def _stage_pixels(self, data, comm, detectors, nsamp, ndet, obs_period_ranges, nside):
         """ Stage pixels
 
         """
+        memreport(comm, "before staging pixels")  # DEBUG
         self._madam_pixels = self._cache.create(
             "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
@@ -620,26 +623,27 @@ class OpMadam(Operator):
             # buffers when purge_pixels=False
             for idet, det in enumerate(detectors):
                 pixelsname = "{}_{}".format(self._pixels, det)
-                tod.cache.clear(pattern=pixelsname)
+                tod.cache.destroy(pixelsname)
                 if self._name is not None and (
                     self._purge_tod or self._name == self._name_out
                 ):
                     cachename = "{}_{}".format(self._name, det)
-                    tod.cache.clear(pattern=cachename)
+                    tod.cache.destroy(cachename)
                 if self._purge_flags and self._flag_name is not None:
                     cacheflagname = "{}_{}".format(self._flag_name, det)
-                    tod.cache.clear(pattern=cacheflagname)
+                    tod.cache.cdestroy(cacheflagname)
 
             del commonflags
             if self._purge_flags and self._common_flag_name is not None:
-                tod.cache.clear(pattern=self._common_flag_name)
+                tod.cache.destroy(self._common_flag_name)
             global_offset = offset
 
+        memreport(comm, "after staging pixels")  # DEBUG
         return pixels_dtype
 
     @function_timer
     def _stage_pixweights(
-        self, data, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
+            self, data, comm, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
     ):
         """Now collect the pixel weights
 
@@ -675,16 +679,16 @@ class OpMadam(Operator):
             # buffers when purge_weights=False.
             # Handle special case when Madam only stores a subset of
             # the weights.
+            memreport(comm, "before purging pixel weights")  # DEBUG
             if not self._purge_weights and (nnz != nnz_full):
                 pass
             else:
                 for idet, det in enumerate(detectors):
-                    # get the pixels and weights for the valid intervals
-                    # from the cache
                     weightsname = "{}_{}".format(self._weights, det)
-                    tod.cache.clear(pattern=weightsname)
-
+                    tod.cache.destroy(weightsname)
+            memreport(comm, "after purging pixel weights")  # DEBUG
             global_offset = offset
+        memreport(comm, "after staging pixel weights")  # DEBUG
         return weight_dtype
 
     @function_timer
@@ -729,15 +733,16 @@ class OpMadam(Operator):
             nodecomm.Barrier()
             if nodecomm.rank % nread != iread:
                 continue
-            psds = self._stage_time(data, detectors, nsamp, obs_period_ranges)
+            psds = self._stage_time(data, comm, detectors, nsamp, obs_period_ranges)
             signal_dtype = self._stage_signal(
-                data, detectors, nsamp, ndet, obs_period_ranges
+                data, comm, detectors, nsamp, ndet, obs_period_ranges
             )
             pixels_dtype = self._stage_pixels(
-                data, detectors, nsamp, ndet, obs_period_ranges, nside
+                data, comm, detectors, nsamp, ndet, obs_period_ranges, nside
             )
             weight_dtype = self._stage_pixweights(
                 data,
+                comm,
                 detectors,
                 nsamp,
                 ndet,
