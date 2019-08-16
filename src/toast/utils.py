@@ -37,25 +37,52 @@ from ._libtoast import (
 
 
 def set_numba_openmp():
+    have_numba_omp = False
+    have_numba_tbb = False
     try:
-        from numba import config, threading_layer
+        from numba.npyufunc import tbbpool
 
-        layer = None
-        try:
+        have_numba_tbb = True
+    except ImportError:
+        # no TBB
+        pass
+
+    try:
+        from numba.npyufunc import omppool
+
+        have_numba_omp = True
+    except ImportError:
+        # no OpenMP support
+        pass
+
+    try:
+        from numba import config, njit, threading_layer
+
+        if have_numba_omp:
             config.THREADING_LAYER = "omp"
-            layer = threading_layer()
-        except ValueError:
-            try:
-                config.THREADING_LAYER = "threadsafe"
-                layer = threading_layer()
-            except ValueError:
-                # Just give up at this point
-                config.THREADING_LAYER = "default"
-                layer = threading_layer()
+        elif have_numba_tbb:
+            config.THREADING_LAYER = "tbb"
+        else:
+            config.THREADING_LAYER = "default"
+
+        # In order to get numba to actually select a threading layer, we must
+        # trigger compilation of a parallel function.
+        @njit(parallel=True)
+        def foo(a, b):
+            return a + b
+
+        x = np.arange(10.0)
+        y = x.copy()
+        foo(x, y)
+
+        # Log the layer that was selected
+        layer = threading_layer()
         log = Logger.get()
         log.info("Numba threading layer set to:  {}".format(layer))
     except ImportError:
-        pass
+        # Numba not available at all
+        log = Logger.get()
+        log.info("Numba not available, not setting threading layer")
     return
 
 
