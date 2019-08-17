@@ -691,16 +691,12 @@ class OpMadam(Operator):
             # buffers when purge_weights=False.
             # Handle special case when Madam only stores a subset of
             # the weights.
-            if self._rank == 0:
-                memreport("before purging pixel weights")  # DEBUG
             if not self._purge_weights and (nnz != nnz_full):
                 pass
             else:
                 for idet, det in enumerate(detectors):
                     weightsname = "{}_{}".format(self._weights, det)
                     tod.cache.clear(weightsname)
-            if self._rank == 0:
-                memreport("after purging pixel weights")  # DEBUG
             global_offset = offset
         if self._rank == 0:
             memreport("after staging pixel weights")  # DEBUG
