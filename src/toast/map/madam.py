@@ -249,7 +249,7 @@ class OpMadam(Operator):
 
         """
         if self._verbose:
-            memreport(self._comm, "just before calling libmadam.destripe")
+            memreport("just before calling libmadam.destripe", self._comm)
         if self._cached:
             # destripe
             outpath = ""
@@ -535,7 +535,8 @@ class OpMadam(Operator):
 
         """
         log = Logger.get()
-        memreport(self._comm, "before staging signal")  # DEBUG
+        if self._rank == 0:
+            memreport("before staging signal")  # DEBUG
         self._madam_signal = self._cache.create(
             "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
         )
@@ -567,8 +568,8 @@ class OpMadam(Operator):
                     tod.cache.destroy(cachename)
 
             global_offset = offset
-
-        memreport(self._comm, "after staging signal")  # DEBUG
+        if self._rank == 0:
+            memreport("after staging signal")  # DEBUG
         return signal_dtype
 
     @function_timer
@@ -576,7 +577,8 @@ class OpMadam(Operator):
         """ Stage pixels
 
         """
-        memreport(self._comm, "before staging pixels")  # DEBUG
+        if self._rank == 0:
+            memreport("before staging pixels")  # DEBUG
         self._madam_pixels = self._cache.create(
             "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
@@ -646,8 +648,8 @@ class OpMadam(Operator):
             if self._purge_flags and self._common_flag_name is not None:
                 tod.cache.destroy(self._common_flag_name)
             global_offset = offset
-
-        memreport(self._comm, "after staging pixels")  # DEBUG
+        if self._rank == 0:
+            memreport("after staging pixels")  # DEBUG
         return pixels_dtype
 
     @function_timer
@@ -688,16 +690,19 @@ class OpMadam(Operator):
             # buffers when purge_weights=False.
             # Handle special case when Madam only stores a subset of
             # the weights.
-            memreport(self._comm, "before purging pixel weights")  # DEBUG
+            if self._rank == 0:
+                memreport("before purging pixel weights")  # DEBUG
             if not self._purge_weights and (nnz != nnz_full):
                 pass
             else:
                 for idet, det in enumerate(detectors):
                     weightsname = "{}_{}".format(self._weights, det)
                     tod.cache.destroy(weightsname)
-            memreport(self._comm, "after purging pixel weights")  # DEBUG
+            if self._rank == 0:
+                memreport("after purging pixel weights")  # DEBUG
             global_offset = offset
-        memreport(self._comm, "after staging pixel weights")  # DEBUG
+        if self._rank == 0:
+            memreport("after staging pixel weights")  # DEBUG
         return weight_dtype
 
     @function_timer
