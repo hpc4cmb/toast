@@ -635,11 +635,6 @@ class OpMadam(Operator):
             for idet, det in enumerate(detectors):
                 pixelsname = "{}_{}".format(self._pixels, det)
                 tod.cache.destroy(pixelsname)
-                if self._name is not None and (
-                    self._purge_tod or self._name == self._name_out
-                ):
-                    cachename = "{}_{}".format(self._name, det)
-                    tod.cache.destroy(cachename)
                 if self._purge_flags and self._flag_name is not None:
                     cacheflagname = "{}_{}".format(self._flag_name, det)
                     tod.cache.cdestroy(cacheflagname)
