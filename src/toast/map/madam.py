@@ -565,7 +565,9 @@ class OpMadam(Operator):
                     self._purge_tod or self._name == self._name_out
                 ):
                     cachename = "{}_{}".format(self._name, det)
-                    tod.cache.destroy(cachename)
+                    # cache.clear() will not fail if the object was already
+                    # deleted as an alias
+                    tod.cache.clear(cachename)
 
             global_offset = offset
         if self._rank == 0:
@@ -632,16 +634,20 @@ class OpMadam(Operator):
 
             # Always purge the pixels but restore them from the Madam
             # buffers when purge_pixels=False
+            # Purging MUST happen after all detectors are staged because
+            # some the pixel numbers may be aliased between detectors
             for idet, det in enumerate(detectors):
                 pixelsname = "{}_{}".format(self._pixels, det)
-                tod.cache.destroy(pixelsname)
+                # cache.clear() will not fail if the object was already
+                # deleted as an alias
+                tod.cache.clear(pixelsname)
                 if self._purge_flags and self._flag_name is not None:
                     cacheflagname = "{}_{}".format(self._flag_name, det)
-                    tod.cache.cdestroy(cacheflagname)
+                    tod.cache.clear(cacheflagname)
 
             del commonflags
             if self._purge_flags and self._common_flag_name is not None:
-                tod.cache.destroy(self._common_flag_name)
+                tod.cache.clear(self._common_flag_name)
             global_offset = offset
         if self._rank == 0:
             memreport("after staging pixels")  # DEBUG
@@ -692,7 +698,7 @@ class OpMadam(Operator):
             else:
                 for idet, det in enumerate(detectors):
                     weightsname = "{}_{}".format(self._weights, det)
-                    tod.cache.destroy(weightsname)
+                    tod.cache.clear(weightsname)
             if self._rank == 0:
                 memreport("after purging pixel weights")  # DEBUG
             global_offset = offset
