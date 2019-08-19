@@ -188,6 +188,11 @@ add_executable(toast_test
     toast_test.cpp
 )
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast_test PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
 target_include_directories(toast_test BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
