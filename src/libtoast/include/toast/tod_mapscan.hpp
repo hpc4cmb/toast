@@ -18,8 +18,7 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
     // packed into "weights".
     //
     // The TOD is *NOT* set to zero, to allow accumulation.
-    #pragma \
-    omp parallel for schedule(static) default(none) shared(submap, subnpix, weights, nmap, subpix, map, tod, nsamp)
+    #pragma omp parallel for schedule(static) default(none) shared(submap, subnpix, weights, nmap, subpix, map, tod, nsamp)
     for (int64_t i = 0; i < nsamp; ++i) {
         if ((subpix[i] < 0) || (submap[i] < 0)) {
             continue;

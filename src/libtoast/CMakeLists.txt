@@ -170,6 +170,11 @@ else()
 #    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
 endif(APPLE)
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
 target_link_libraries(toast ${TOASTTESTLIB} ${TOASTCORELIB})
 
 # Installation
@@ -187,6 +192,11 @@ install(TARGETS toast DESTINATION lib)
 add_executable(toast_test
     toast_test.cpp
 )
+
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast_test PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
 
 target_include_directories(toast_test BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
