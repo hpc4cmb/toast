@@ -116,6 +116,11 @@ else()
 #    SET(TOASTMPICORELIB -Wl,--whole-archive toastcore_mpi -Wl,--no-whole-archive)
 endif(APPLE)
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast_mpi PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast_mpi PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
 target_link_libraries(toast_mpi ${TOASTMPITESTLIB} ${TOASTMPICORELIB} toast "${MPI_CXX_LIBRARIES}")
 
 # Public headers

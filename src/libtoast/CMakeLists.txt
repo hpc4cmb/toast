@@ -170,6 +170,11 @@ else()
 #    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
 endif(APPLE)
 
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+endif(OpenMP_CXX_FOUND)
+
 target_link_libraries(toast ${TOASTTESTLIB} ${TOASTCORELIB})
 
 # Installation
