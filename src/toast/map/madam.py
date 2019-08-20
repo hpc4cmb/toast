@@ -12,7 +12,7 @@ import numpy as np
 from ..cache import Cache
 from ..op import Operator
 from ..timing import function_timer, Timer
-from ..utils import Logger
+from ..utils import Logger, memreport
 
 madam = None
 if use_mpi:
@@ -20,8 +20,6 @@ if use_mpi:
         import libmadam_wrapper as madam
     except ImportError:
         madam = None
-
-from ..utils import memreport
 
 
 class OpMadam(Operator):

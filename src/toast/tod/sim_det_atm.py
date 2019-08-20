@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-from ..utils import Logger
+from ..utils import Logger, memreport
 
 from ..timing import function_timer, Timer
 
