@@ -93,9 +93,9 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
             else:
                 ref_out = tod.cache.put(cachename_out, ref_in)
             del ref_in, ref_out
-        if purge:
-            tod.cache.clear(prefix_in + ".*")
-    if (comm is None or comm.world_rank == 0) and verbose:
+            if purge:
+                tod.cache.clear(cachename_in)
+    if comm.world_rank == 0 and verbose:
         timer.report_clear("Add signal")
     return
 
@@ -109,13 +109,13 @@ def copy_signal(args, comm, data, cache_prefix_in, cache_prefix_out, verbose=Tru
         return
     log = Logger.get()
     timer = Timer()
-    if (comm is None or comm.world_rank == 0) and verbose:
+    timer.start()
+    if comm.world_rank == 0 and verbose:
         log.info(
             "Copying signal from {} to {}" "".format(cache_prefix_in, cache_prefix_out)
         )
     cachecopy = OpCacheCopy(cache_prefix_in, cache_prefix_out, force=True)
     cachecopy.exec(data)
-    timer.stop()
-    if (comm is None or comm.world_rank == 0) and verbose:
-        timer.report("Copy signal")
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("Copy signal")
     return
