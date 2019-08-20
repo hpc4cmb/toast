@@ -37,7 +37,11 @@ tod_buffer_length = 1048576
 def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
     """ Simulate and cache HWP angle in the TOD
     """
-    if hwprpm is not None and hwpstep is not None:
+    if hwprpm is None and hwpsteptime is None and hwpstep is None:
+        # No HWP
+        return
+
+    if hwprpm is not None and hwpsteptime is not None:
         raise RuntimeError("choose either continuously rotating or stepped HWP")
 
     if hwpstep is not None and hwpsteptime is None:
