@@ -33,26 +33,6 @@ def add_pointing_args(parser):
         )
     except argparse.ArgumentError:
         pass
-    parser.add_argument(
-        "--hwp-rpm",
-        required=False,
-        default=0,
-        type=np.float,
-        help="The rate (in RPM) of the HWP rotation",
-    )
-    parser.add_argument(
-        "--hwp-step-deg",
-        required=False,
-        default=None,
-        help="For stepped HWP, the angle in degrees of each step",
-    )
-    parser.add_argument(
-        "--hwp-step-time-s",
-        required=False,
-        default=0,
-        type=np.float,
-        help="For stepped HWP, the time in seconds between steps",
-    )
 
     parser.add_argument(
         "--single-precision-pointing",
@@ -69,7 +49,6 @@ def add_pointing_args(parser):
         dest="single_precision_pointing",
     )
     parser.set_defaults(single_precision_pointing=False)
-
 
     # Common flag mask may already be added
     try:
@@ -118,9 +97,6 @@ def expand_pointing(args, comm, data):
         nside=args.nside,
         nest=True,
         mode="IQU",
-        hwprpm=hwprpm,
-        hwpstep=hwpstep,
-        hwpsteptime=hwpsteptime,
         single_precision=args.single_precision_pointing,
     )
 

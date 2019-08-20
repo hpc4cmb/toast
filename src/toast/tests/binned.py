@@ -115,6 +115,7 @@ class BinnedTest(MPITestCase):
             precperiod=self.precperiod,
             precangle=self.precangle,
             sampsizes=chunks,
+            hwprpm=self.hwprpm,
         )
 
         tod.set_prec_axis()
@@ -146,7 +147,7 @@ class BinnedTest(MPITestCase):
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
+            nside=self.map_nside, nest=True, mode="IQU",
         )
         pointing.exec(self.data)
 

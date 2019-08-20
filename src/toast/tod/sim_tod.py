@@ -34,6 +34,68 @@ tod_buffer_length = 1048576
 
 
 @function_timer
+def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
+    """ Simulate and cache HWP angle in the TOD
+    """
+    if hwprpm is not None and hwpstep is not None:
+        raise RuntimeError("choose either continuously rotating or stepped HWP")
+
+    if hwpstep is not None and hwpsteptime is None:
+        raise RuntimeError("for a stepped HWP, you must specify the time between steps")
+
+    # compute effective sample rate
+
+    times = tod.local_times()
+    dt = np.mean(times[1:-1] - times[0:-2])
+    rate = 1.0 / dt
+    del times
+
+    if hwprpm is not None:
+        # convert to radians / second
+        tod._hwprate = hwprpm * 2.0 * np.pi / 60.0
+    else:
+        tod._hwprate = None
+
+    if hwpstep is not None:
+        # convert to radians and seconds
+        tod._hwpstep = hwpstep * np.pi / 180.0
+        tod._hwpsteptime = hwpsteptime * 60.0
+    else:
+        tod._hwpstep = None
+        tod._hwpsteptime = None
+
+    offset, nsamp = tod.local_samples
+    if tod._hwprate is not None:
+        # continuous HWP
+        # HWP increment per sample is:
+        # (hwprate / samplerate)
+        hwpincr = tod._hwprate / rate
+        startang = np.fmod(offset * hwpincr, 2 * np.pi)
+        hwp_angle = hwpincr * np.arange(nsamp, dtype=np.float64)
+        hwp_angle += startang
+        tod.cache.put(tod.HWP_ANGLE_NAME, hwp_angle)
+    elif tod._hwpstep is not None:
+        # stepped HWP
+        hwp_angle = np.ones(nsamp, dtype=np.float64)
+        stepsamples = int(tod._hwpsteptime * rate)
+        wholesteps = int(offset / stepsamples)
+        remsamples = offset - wholesteps * stepsamples
+        curang = np.fmod(wholesteps * tod._hwpstep, 2 * np.pi)
+        curoff = 0
+        fill = remsamples
+        while curoff < nsamp:
+            if curoff + fill > nsamp:
+                fill = nsamp - curoff
+            hwp_angle[curoff:fill] *= curang
+            curang += tod._hwpstep
+            curoff += fill
+            fill = stepsamples
+        tod.cache.put(tod.HWP_ANGLE_NAME, hwp_angle)
+
+    return
+
+
+@function_timer
 def slew_precession_axis(result, firstsamp=0, samplerate=100.0, degday=1.0):
     """Generate quaternions for constantly slewing precession axis.
 
@@ -413,6 +475,11 @@ class TODSatellite(TOD):
             of the spin axis from the precession axis.
         coord (str):  Sky coordinate system.  One of
             C (Equatorial), E (Ecliptic) or G (Galactic)
+        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
+            it is the rate (in RPM) of constant rotation.
+        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
+            is the step in degrees.
+        hwpsteptime: The time in minutes between HWP steps.
         All other keyword arguments are passed to the parent constructor.
 
     """
@@ -430,6 +497,9 @@ class TODSatellite(TOD):
         precperiod=0.0,
         precangle=0.0,
         coord="E",
+        hwprpm=None,
+        hwpstep=None,
+        hwpsteptime=None,
         **kwargs
     ):
 
@@ -461,6 +531,10 @@ class TODSatellite(TOD):
         self._radpersec = self._radperday / 86400.0
         self._radinc = self._radpersec / self._rate
         self._earthspeed = self._radpersec * self._AU
+
+        # If HWP parameters are specified, simulate and cache HWP angle
+
+        simulate_hwp(self, hwprpm, hwpstep, hwpsteptime)
 
     def set_prec_axis(self, qprec=None):
         """Set the fixed or time-varying precession axis.
@@ -544,6 +618,17 @@ class TODSatellite(TOD):
 
     def _put_common_flags(self, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
+        return
+
+    def _get_hwp_angle(self, start, n):
+        if self.cache.exists(self.HWP_ANGLE_NAME):
+            angle = self.cache.reference(self.HWP_ANGLE_NAME)[start : start + n]
+        else:
+            angle = None
+        return angle
+
+    def _put_hwp_angle(self, start, flags):
+        raise RuntimeError("cannot write HWP angle to simulated data streams")
         return
 
     def _get_times(self, start, n):
@@ -637,6 +722,11 @@ class TODGround(TOD):
             C (Equatorial), E (Ecliptic) or G (Galactic)
         report_timing (bool):  Report the time spent simulating the scan
             and translating the pointing.
+        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
+            it is the rate (in RPM) of constant rotation.
+        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
+            is the step in degrees.
+        hwpsteptime: The time in minutes between HWP steps.
         All other keyword arguments are passed to the parent constructor.
 
     """
@@ -673,6 +763,9 @@ class TODGround(TOD):
         sampbreaks=None,
         coord="C",
         report_timing=True,
+        hwprpm=None,
+        hwpstep=None,
+        hwpsteptime=None,
         **kwargs
     ):
         if samples < 1:
@@ -850,6 +943,12 @@ class TODGround(TOD):
             tm.stop()
             if (mpicomm is None) or (mpicomm.rank == 0):
                 tm.report("TODGround: translate scan pointing")
+
+        # If HWP parameters are specified, simulate and cache HWP angle
+
+        simulate_hwp(self, hwprpm, hwpstep, hwpsteptime)
+
+        return
 
     @function_timer
     def __del__(self):
@@ -1253,6 +1352,17 @@ class TODGround(TOD):
 
     def _put_common_flags(self, start, flags):
         raise RuntimeError("cannot write flags to simulated data streams")
+        return
+
+    def _get_hwp_angle(self, start, n):
+        if self.cache.exists(self.HWP_ANGLE_NAME):
+            angle = self.cache.reference(self.HWP_ANGLE_NAME)[start : start + n]
+        else:
+            angle = None
+        return angle
+
+    def _put_hwp_angle(self, start, flags):
+        raise RuntimeError("cannot write HWP angle to simulated data streams")
         return
 
     def _get_times(self, start, n):

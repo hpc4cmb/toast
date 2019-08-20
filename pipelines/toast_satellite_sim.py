@@ -284,6 +284,9 @@ def create_observations(args, comm, focalplane, groupsize):
             precangle=args.prec_angle_deg,
             detindx=detindx,
             detranks=comm.group_size,
+            hwprpm=hwprpm,
+            hwpstep=hwpstep,
+            hwpsteptime=hwpsteptime,
         )
 
         obs = {}

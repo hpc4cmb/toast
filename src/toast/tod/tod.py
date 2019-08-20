@@ -26,6 +26,7 @@ class TOD(object):
     SIGNAL_NAME = "signal"
     FLAG_NAME = "flags"
     POINTING_NAME = "quat"
+    HWP_ANGLE_NAME = "hwp_angle"
 
     """
     Base class for an object that provides detector pointing and
@@ -382,6 +383,29 @@ class TOD(object):
             cachename = name
         return self.cache.reference(cachename)
 
+    def local_hwp_angle(self, name=None, **kwargs):
+        """ Locally stored half-wave plate angle.
+
+        Args:
+            name (str):  Optional cache key to use.
+        Returns:
+            A cache reference to a hwp angle vector.  If 'name' is None
+            a default name 'hwp_angle' is used and the vector may be
+            constructed and cached using the 'read_hwp_angle' method.
+            If 'name' is given, then the angles must already be cached.
+
+        """
+        if name is None:
+            cachename = self.HWP_ANGLE_NAME
+            if not self.cache.exists(cachename):
+                hwp_angle = self.read_hwp_angle(**kwargs)
+                if hwp_angle is None:
+                    return None
+                self.cache.put(cachename, hwp_angle)
+        else:
+            cachename = name
+        return self.cache.reference(cachename)
+
     def local_intervals(self, intervals):
         """ Translate observation-wide intervals into local sample indices.
         """
@@ -541,7 +565,19 @@ class TOD(object):
         raise NotImplementedError(
             "Fell through to TOD._put_common_flags base class method"
         )
-        return
+        return None
+
+    def _get_hwp_angle(self, start, n):
+        raise NotImplementedError(
+            "Fell through to TOD._get_hwp_angle base class method"
+        )
+        return None
+
+    def _put_hwp_angle(self, start, flags):
+        raise NotImplementedError(
+            "Fell through to TOD._put_hwp_angle base class method"
+        )
+        return None
 
     def _get_times(self, start, n):
         raise NotImplementedError("Fell through to TOD._get_times base class method")
@@ -953,6 +989,68 @@ class TOD(object):
                 "".format(local_start, local_start + flags.shape[0] - 1)
             )
         self._put_common_flags(local_start, flags, **kwargs)
+        return
+
+    @function_timer
+    def read_hwp_angle(self, local_start=0, n=0, **kwargs):
+        """Read half-wave plate angle
+
+        This reads the common HWP angle that should be applied to all
+        detectors.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            (array): a numpy array containing the angles or None if the
+                angle is not defined.
+
+        """
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot read HWP angle- process has no assigned local samples"
+            )
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start + n - 1)
+            )
+        try:
+            hwpangle = self._get_hwp_angle(local_start, n, **kwargs)
+        except:
+            hwpangle = None
+        return hwpangle
+
+    @function_timer
+    def write_hwp_angle(self, local_start=0, hwpangle=None, **kwargs):
+        """Write half-wave plate angle
+
+        This writes the common HWP angle that should be applied to all
+        detectors.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            flags (array): array containing the flags to write.
+
+        """
+        if hwpangle is None:
+            raise ValueError("hwpangle must be specified")
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot write HWP angle- process has no assigned local samples"
+            )
+
+        if (local_start < 0) or (local_start + flags.shape[0] > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid"
+                "".format(local_start, local_start + flags.shape[0] - 1)
+            )
+        self._put_hwp_angle(local_start, flags, **kwargs)
         return
 
     @function_timer

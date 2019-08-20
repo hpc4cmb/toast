@@ -44,6 +44,8 @@ class MapSatelliteTest(MPITestCase):
         # one detector with multiple chunks distributed among the processes.
 
         self.data = create_distdata(self.comm, obs_per_group=1)
+        self.data_fast_hwp = create_distdata(self.comm, obs_per_group=1)
+        self.data_const_hwp = create_distdata(self.comm, obs_per_group=1)
 
         self.ndet = 1
         self.rate = 40.0
@@ -77,41 +79,74 @@ class MapSatelliteTest(MPITestCase):
 
         # Populate the single observation per group
 
-        tod = TODSatellite(
-            self.data.comm.comm_group,
-            dquat,
-            self.totsamp,
-            detranks=1,
-            firsttime=0.0,
-            rate=self.rate,
-            spinperiod=self.spinperiod,
-            spinangle=self.spinangle,
-            precperiod=self.precperiod,
-            precangle=self.precangle,
-            sampsizes=chunks,
+        common_args = [dquat, self.totsamp]
+        common_kwargs = {
+            "detranks": 1,
+            "firsttime": 0.0,
+            "rate": self.rate,
+            "spinperiod": self.spinperiod,
+            "spinangle": self.spinangle,
+            "precperiod": self.precperiod,
+            "precangle": self.precangle,
+            "sampsizes": chunks,
+        }
+
+        # No HWP
+        tod_no_hwp = TODSatellite(
+            self.data.comm.comm_group, *common_args, **common_kwargs
         )
 
-        precquat = np.empty(4 * tod.local_samples[1], dtype=np.float64).reshape((-1, 4))
-
-        slew_precession_axis(
-            precquat, firstsamp=tod.local_samples[0], samplerate=self.rate, degday=1.0
+        # CHWP
+        hwprate = self.rate * 60.0
+        tod_fast_hwp = TODSatellite(
+            self.data_fast_hwp.comm.comm_group,
+            *common_args,
+            **common_kwargs,
+            hwprpm=hwprate
         )
 
-        tod.set_prec_axis(qprec=precquat)
-
-        # add analytic noise model with white noise
-
-        nse = AnalyticNoise(
-            rate=drate,
-            fmin=dfmin,
-            detectors=dnames,
-            fknee=dfknee,
-            alpha=dalpha,
-            NET=dnet,
+        # Stepped HWP
+        hwpstep = 2.0 * np.pi
+        hwpsteptime = (self.totsamp / self.rate) / 60.0
+        tod_const_hwp = TODSatellite(
+            self.data_const_hwp.comm.comm_group,
+            *common_args,
+            **common_kwargs,
+            hwpstep=hwpstep,
+            hwpsteptime=hwpsteptime
         )
 
-        self.data.obs[0]["tod"] = tod
-        self.data.obs[0]["noise"] = nse
+        for data, tod in [
+            (self.data, tod_no_hwp),
+            (self.data_fast_hwp, tod_fast_hwp),
+            (self.data_const_hwp, tod_const_hwp),
+        ]:
+            precquat = np.empty(4 * tod.local_samples[1], dtype=np.float64).reshape(
+                (-1, 4)
+            )
+
+            slew_precession_axis(
+                precquat,
+                firstsamp=tod.local_samples[0],
+                samplerate=self.rate,
+                degday=1.0,
+            )
+
+            tod.set_prec_axis(qprec=precquat)
+
+            # add analytic noise model with white noise
+
+            nse = AnalyticNoise(
+                rate=drate,
+                fmin=dfmin,
+                detectors=dnames,
+                fknee=dfknee,
+                alpha=dalpha,
+                NET=dnet,
+            )
+
+            data.obs[0]["tod"] = tod
+            data.obs[0]["noise"] = nse
 
     def test_boresight_null(self):
         # verify that if all angles are zero, we get fixed pointing
@@ -432,13 +467,13 @@ class MapSatelliteTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
         # make a pointing matrix with a HWP that rotates 2*PI every sample
-        hwprate = self.rate * 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, hwprpm=hwprate)
-        pointing.exec(self.data)
+        data = self.data_fast_hwp
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing.exec(data)
 
         # get locally hit pixels
         lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
+        localpix = lc.exec(data)
 
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
@@ -453,7 +488,7 @@ class MapSatelliteTest(MPITestCase):
         npix = 12 * self.sim_nside * self.sim_nside
 
         distsig = DistPixels(
-            comm=self.data.comm.comm_group,
+            comm=data.comm.comm_group,
             size=npix,
             nnz=1,
             dtype=np.float64,
@@ -469,14 +504,14 @@ class MapSatelliteTest(MPITestCase):
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
-        scansim.exec(self.data)
+        scansim.exec(data)
 
         handle = None
         if rank == 0:
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_hwpfast_info"), "w"
             )
-        self.data.info(handle)
+        data.info(handle)
         if rank == 0:
             handle.close()
 
@@ -505,7 +540,7 @@ class MapSatelliteTest(MPITestCase):
 
         madam = OpMadam(params=pars, name="scan")
         if madam.available:
-            madam.exec(self.data)
+            madam.exec(data)
 
             if rank == 0:
                 import matplotlib.pyplot as plt
@@ -529,7 +564,7 @@ class MapSatelliteTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
+                nt.assert_equal(data.comm.ngroups * self.totsamp, tothits)
                 mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:
@@ -541,16 +576,13 @@ class MapSatelliteTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
         # make a pointing matrix with a HWP that is constant
-        hwpstep = 2.0 * np.pi
-        hwpsteptime = (self.totsamp / self.rate) / 60.0
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, hwpstep=hwpstep, hwpsteptime=hwpsteptime
-        )
-        pointing.exec(self.data)
+        data = self.data_const_hwp
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing.exec(data)
 
         # get locally hit pixels
         lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
+        localpix = lc.exec(data)
 
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
@@ -565,7 +597,7 @@ class MapSatelliteTest(MPITestCase):
         npix = 12 * self.sim_nside * self.sim_nside
 
         distsig = DistPixels(
-            comm=self.data.comm.comm_group,
+            comm=data.comm.comm_group,
             size=npix,
             nnz=1,
             dtype=np.float64,
@@ -581,14 +613,14 @@ class MapSatelliteTest(MPITestCase):
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
-        scansim.exec(self.data)
+        scansim.exec(data)
 
         handle = None
         if rank == 0:
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_hwpconst_info"), "w"
             )
-        self.data.info(handle)
+        data.info(handle)
         if rank == 0:
             handle.close()
 
@@ -617,7 +649,7 @@ class MapSatelliteTest(MPITestCase):
 
         madam = OpMadam(params=pars, name="scan")
         if madam.available:
-            madam.exec(self.data)
+            madam.exec(data)
 
             if rank == 0:
                 import matplotlib.pyplot as plt
@@ -641,7 +673,7 @@ class MapSatelliteTest(MPITestCase):
                 # compare binned map to input signal
 
                 tothits = np.sum(hits)
-                nt.assert_equal(self.data.comm.ngroups * self.totsamp, tothits)
+                nt.assert_equal(data.comm.ngroups * self.totsamp, tothits)
                 mask = bins > -1.0e20
                 nt.assert_almost_equal(bins[mask], sig[mask], decimal=4)
         else:

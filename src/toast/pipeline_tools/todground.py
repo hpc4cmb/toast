@@ -164,6 +164,38 @@ def add_todground_args(parser):
         "scan % nsplit == isplit are included",
     )
 
+    # The HWP arguments may also be added by other TOD classes
+    try:
+        parser.add_argument(
+            "--hwp-rpm",
+            required=False,
+            default=0,
+            type=np.float,
+            help="The rate (in RPM) of the HWP rotation",
+        )
+    except argparse.ArgumentError:
+        pass
+    try:
+        parser.add_argument(
+            "--hwp-step-deg",
+            required=False,
+            default=None,
+            help="For stepped HWP, the angle in degrees of each step",
+        )
+    except argparse.ArgumentError:
+        pass
+    try:
+        parser.add_argument(
+            "--hwp-step-time-s",
+            required=False,
+            default=0,
+            type=np.float,
+            help="For stepped HWP, the time in seconds between steps",
+        )
+    except argparse.ArgumentError:
+        pass
+    return
+
 
 @function_timer
 def get_breaks(comm, all_ces, args, verbose=True):

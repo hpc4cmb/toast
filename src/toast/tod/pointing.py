@@ -48,11 +48,6 @@ class OpPointingHpix(Operator):
             value means a value of 1.0 for all detectors.
         epsilon (dict): dictionary of cross-polar response per detector. A
             None value means epsilon is zero for all detectors.
-        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
-            it is the rate (in RPM) of constant rotation.
-        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
-            is the step in degrees.
-        hwpsteptime: The time in minutes between HWP steps.
         common_flag_name (str): the optional name of a cache object to use for
             the common flags.
         common_flag_mask (byte): the bitmask to use when flagging the pointing
@@ -72,9 +67,6 @@ class OpPointingHpix(Operator):
         mode="I",
         cal=None,
         epsilon=None,
-        hwprpm=None,
-        hwpstep=None,
-        hwpsteptime=None,
         common_flag_name=None,
         common_flag_mask=255,
         apply_flags=False,
@@ -93,28 +85,6 @@ class OpPointingHpix(Operator):
         self._common_flag_name = common_flag_name
         self._keep_quats = keep_quats
         self._single_precision = single_precision
-
-        if (hwprpm is not None) and (hwpstep is not None):
-            raise RuntimeError("choose either continuously rotating or stepped " "HWP")
-
-        if (hwpstep is not None) and (hwpsteptime is None):
-            raise RuntimeError(
-                "for a stepped HWP, you must specify the time " "between steps"
-            )
-
-        if hwprpm is not None:
-            # convert to radians / second
-            self._hwprate = hwprpm * 2.0 * np.pi / 60.0
-        else:
-            self._hwprate = None
-
-        if hwpstep is not None:
-            # convert to radians and seconds
-            self._hwpstep = hwpstep * np.pi / 180.0
-            self._hwpsteptime = hwpsteptime * 60.0
-        else:
-            self._hwpstep = None
-            self._hwpsteptime = None
 
         # initialize the healpix pixels object
         self.hpix = HealpixPixels(self._nside)
@@ -174,34 +144,12 @@ class OpPointingHpix(Operator):
 
             offset, nsamp = tod.local_samples
 
-            # generate HWP angles
-
             hwpang = None
-            if self._hwprate is not None:
-                # continuous HWP
-                # HWP increment per sample is:
-                # (hwprate / samplerate)
-                hwpincr = self._hwprate / rate
-                startang = np.fmod(offset * hwpincr, 2 * np.pi)
-                hwpang = hwpincr * np.arange(nsamp, dtype=np.float64)
-                hwpang += startang
-            elif self._hwpstep is not None:
-                # stepped HWP
-                hwpang = np.ones(nsamp, dtype=np.float64)
-                stepsamples = int(self._hwpsteptime * rate)
-                wholesteps = int(offset / stepsamples)
-                remsamples = offset - wholesteps * stepsamples
-                curang = np.fmod(wholesteps * self._hwpstep, 2 * np.pi)
-                curoff = 0
-                fill = remsamples
-                while curoff < nsamp:
-                    if curoff + fill > nsamp:
-                        fill = nsamp - curoff
-                    hwpang[curoff:fill] *= curang
-                    curang += self._hwpstep
-                    curoff += fill
-                    fill = stepsamples
-            else:
+            try:
+                hwpang = tod.local_hwp_angle()
+            except:
+                pass
+            if hwpang is None:
                 hwpang = np.zeros(nsamp, dtype=np.float64)
 
             # read the common flags and apply bitmask

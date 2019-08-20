@@ -258,6 +258,12 @@ def create_observation(args, comm, telescope, ces, verbose=True):
     noise = focalplane.noise
     totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
 
+    hwprpm = args.hwp_rpm
+    hwpstep = None
+    if args.hwp_step_deg is not None:
+        hwpstep = float(args.hwp_step_deg)
+    hwpsteptime = args.hwp_step_time_s
+
     # create the TOD for this observation
 
     if comm.comm_group is not None:
@@ -287,6 +293,9 @@ def create_observation(args, comm, telescope, ces, verbose=True):
             coord=args.coord,
             sampsizes=None,
             report_timing=args.debug,
+            hwprpm=hwprpm,
+            hwpstep=hwpstep,
+            hwpsteptime=hwpsteptime,
         )
     except RuntimeError as e:
         raise RuntimeError(

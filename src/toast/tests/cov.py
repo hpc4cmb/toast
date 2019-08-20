@@ -91,6 +91,7 @@ class CovarianceTest(MPITestCase):
             precperiod=self.precperiod,
             precangle=self.precangle,
             sampsizes=chunks,
+            hwprpm=self.hwprpm,
         )
 
         tod.set_prec_axis()
@@ -266,9 +267,7 @@ class CovarianceTest(MPITestCase):
         op.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
-        )
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -339,9 +338,7 @@ class CovarianceTest(MPITestCase):
 
     def test_distpix_init(self):
         # make a simple pointing matrix
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
-        )
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -377,9 +374,7 @@ class CovarianceTest(MPITestCase):
 
     def test_multiply(self):
         # make a simple pointing matrix
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
-        )
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
         # get locally hit pixels
@@ -455,9 +450,7 @@ class CovarianceTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
         # make a simple pointing matrix
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU", hwprpm=self.hwprpm
-        )
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
         # get locally hit pixels
