@@ -530,48 +530,57 @@ class OpMadam(Operator):
         return psds
 
     @function_timer
-    def _stage_signal(self, detectors, nsamp, ndet, obs_period_ranges):
+    def _stage_signal(self, detectors, nsamp, ndet, obs_period_ranges, nodecomm, nread):
         """ Stage signal
 
         """
         log = Logger.get()
-        if self._rank == 0:
-            memreport("before staging signal")  # DEBUG
-        self._madam_signal = self._cache.create(
-            "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
-        )
-        self._madam_signal[:] = np.nan
+        timer = Timer()
+        # Determine if we can purge the signal and avoid keeping two
+        # copies in memory
+        purge = self._name is not None and (
+            self._purge_tod or self._name == self._name_out)
+        if not purge:
+            nread = 1
+            nodecomm = MPI.COMM_SELF
 
-        global_offset = 0
-        for iobs, obs in enumerate(self._data.obs):
-            tod = obs["tod"]
-            period_ranges = obs_period_ranges[iobs]
-
-            for idet, det in enumerate(detectors):
-                # Get the signal.
-                signal = tod.local_signal(det, self._name)
-                signal_dtype = signal.dtype
-                offset = global_offset
-                for istart, istop in period_ranges:
-                    nn = istop - istart
-                    dslice = slice(idet * nsamp + offset, idet * nsamp + offset + nn)
-                    self._madam_signal[dslice] = signal[istart:istop]
-                    offset += nn
-
-                del signal
-
-            for idet, det in enumerate(detectors):
-                if self._name is not None and (
-                    self._purge_tod or self._name == self._name_out
-                ):
-                    cachename = "{}_{}".format(self._name, det)
+        for iread in range(nread):
+            nodecomm.Barrier()
+            timer.start()
+            if nodecomm.rank % nread == iread:
+                # Allocate Madam buffer
+                self._madam_signal = self._cache.create(
+                    "signal", madam.SIGNAL_TYPE, (nsamp * ndet,)
+                )
+                self._madam_signal[:] = np.nan
+                # Fill Madam buffer
+                global_offset = 0
+                for iobs, obs in enumerate(self._data.obs):
+                    tod = obs["tod"]
+                    period_ranges = obs_period_ranges[iobs]
+                    for idet, det in enumerate(detectors):
+                        # Get the signal.
+                        signal = tod.local_signal(det, self._name)
+                        signal_dtype = signal.dtype
+                        offset = global_offset
+                        for istart, istop in period_ranges:
+                            nn = istop - istart
+                            dslice = slice(idet * nsamp + offset, idet * nsamp + offset + nn)
+                            self._madam_signal[dslice] = signal[istart:istop]
+                            offset += nn
+                        del signal
+                    # Purge only after all detectors are staged in case some are aliased
                     # cache.clear() will not fail if the object was already
                     # deleted as an alias
-                    tod.cache.clear(cachename)
-
-            global_offset = offset
-        if self._rank == 0:
-            memreport("after staging signal")  # DEBUG
+                    if purge:
+                        for det in detectors:
+                            cachename = "{}_{}".format(self._name, det)
+                            tod.cache.clear(cachename)
+                    global_offset = offset
+            if self._verbose and nread > 1:
+                nodecomm.Barrier()
+                if self._rank == 0:
+                    timer.report_clear("Stage signal {} / {}".format(iread + 1, nread))
         return signal_dtype
 
     @function_timer
@@ -579,8 +588,6 @@ class OpMadam(Operator):
         """ Stage pixels
 
         """
-        if self._rank == 0:
-            memreport("before staging pixels")  # DEBUG
         self._madam_pixels = self._cache.create(
             "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
@@ -636,7 +643,7 @@ class OpMadam(Operator):
             # buffers when purge_pixels=False
             # Purging MUST happen after all detectors are staged because
             # some the pixel numbers may be aliased between detectors
-            for idet, det in enumerate(detectors):
+            for det in detectors:
                 pixelsname = "{}_{}".format(self._pixels, det)
                 # cache.clear() will not fail if the object was already
                 # deleted as an alias
@@ -649,8 +656,6 @@ class OpMadam(Operator):
             if self._purge_flags and self._common_flag_name is not None:
                 tod.cache.clear(self._common_flag_name)
             global_offset = offset
-        if self._rank == 0:
-            memreport("after staging pixels")  # DEBUG
         return pixels_dtype
 
     @function_timer
@@ -698,8 +703,6 @@ class OpMadam(Operator):
                     weightsname = "{}_{}".format(self._weights, det)
                     tod.cache.clear(weightsname)
             global_offset = offset
-        if self._rank == 0:
-            memreport("after staging pixel weights")  # DEBUG
         return weight_dtype
 
     @function_timer
@@ -742,44 +745,67 @@ class OpMadam(Operator):
         self._comm.Barrier()
         timer_tot = Timer()
         timer_tot.start()
+
+        # Stage time, it is never purged so the staging is never stepped
+        timer = Timer()
+        timer.start()
+        psds = self._stage_time(detectors, nsamp, obs_period_ranges)
+        if self._verbose:
+            nodecomm.Barrier()
+            if self._rank == 0:
+                timer.report_clear("Stage time")
+        memreport("after staging time", self._comm)  # DEBUG
+
+        # Stage signal.  If signal is not being purged, staging is not stepped
+        timer.start()
+        signal_dtype = self._stage_signal(
+            detectors, nsamp, ndet, obs_period_ranges, nodecomm, nread)
+        if self._verbose:
+            nodecomm.Barrier()
+            if self._rank == 0:
+                timer.report_clear("Stage signal")
+        memreport("after staging signal", self._comm)  # DEBUG
+
+        # Stage pixels
+        timer_step = Timer()
+        timer_step.start()
         for iread in range(nread):
-            timer_step = Timer()
-            timer_step.start()
-            timer = Timer()
+            nodecomm.Barrier()
             timer.start()
-            if nodecomm.rank % nread == iread:
-                psds = self._stage_time(detectors, nsamp, obs_period_ranges)
-            if self._verbose:
-                nodecomm.Barrier()
-                if self._rank == 0:
-                    timer.report_clear("Stage time {} / {}".format(iread + 1, nread))
-            if nodecomm.rank % nread == iread:
-                signal_dtype = self._stage_signal(
-                    detectors, nsamp, ndet, obs_period_ranges
-                )
-            if self._verbose:
-                nodecomm.Barrier()
-                if self._rank == 0:
-                    timer.report_clear("Stage signal {} / {}".format(iread + 1, nread))
             if nodecomm.rank % nread == iread:
                 pixels_dtype = self._stage_pixels(
                     detectors, nsamp, ndet, obs_period_ranges, nside
                 )
-            if self._verbose:
+            if self._verbose and nread > 1:
                 nodecomm.Barrier()
                 if self._rank == 0:
                     timer.report_clear("Stage pixels {} / {}".format(iread + 1, nread))
+        if self._verbose:
+            nodecomm.Barrier()
+            if self._rank == 0:
+                timer.report_clear("Stage pixels")
+        memreport("after staging pixels", self._comm)  # DEBUG
+
+        # Stage pixel weights
+        timer.start()
+        for iread in range(nread):
+            nodecomm.Barrier()
             if nodecomm.rank % nread == iread:
                 weight_dtype = self._stage_pixweights(
                     detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
                 )
+            if self._verbose and nread > 1:
+                nodecomm.Barrier()
+                if self._rank == 0:
+                    timer.report_clear(
+                        "Stage pixel weights {} / {}".format(iread + 1, nread)
+                    )
+        if self._verbose:
             nodecomm.Barrier()
-            if self._rank == 0 and self._verbose:
-                timer.report_clear(
-                    "Stage pixel weights {} / {}".format(iread + 1, nread)
-                )
-            if self._rank == 0 and self._verbose:
-                timer_step.report_clear("Stage data {} / {}".format(iread + 1, nread))
+            if self._rank == 0:
+                timer.report_clear("Stage pixel weights")
+        memreport("after staging pixel weights", self._comm)  # DEBUG
+
         del nodecomm
         if self._rank == 0 and self._verbose:
             timer_tot.report_clear("Stage all data")
