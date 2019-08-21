@@ -22,6 +22,29 @@ if use_mpi:
         madam = None
 
 
+def count_caches(data, comm, nodecomm, madamcache, msg=""):
+    """ Count the amount of memory in the TOD caches
+    """
+    my_todsize = 0
+    for obs in data.obs:
+        tod = obs["tod"]
+        my_todsize += tod.cache.report(silent=True)
+    my_cachesize = madamcache.report(silent=True)
+    node_todsize = nodecomm.allreduce(my_todsize, MPI.SUM)
+    node_cachesize = nodecomm.allreduce(my_cachesize, MPI.SUM)
+    if comm.rank == 0:
+        print(
+            "Node has {:.3f} GB allocated in TOAST TOD caches and "
+            "{:.3f} GB in Madam caches ({:.3f} GB total) {}".format(
+                node_todsize / 2 ** 30,
+                node_cachesize / 2 ** 30,
+                (node_todsize + node_cachesize) / 2 ** 30,
+                msg,
+            )
+        )
+    return
+
+
 class OpMadam(Operator):
     """Operator which passes data to libmadam for map-making.
 
@@ -537,7 +560,8 @@ class OpMadam(Operator):
         # Determine if we can purge the signal and avoid keeping two
         # copies in memory
         purge = self._name is not None and (
-            self._purge_tod or self._name == self._name_out)
+            self._purge_tod or self._name == self._name_out
+        )
         if not purge:
             nread = 1
             nodecomm = MPI.COMM_SELF
@@ -563,7 +587,9 @@ class OpMadam(Operator):
                         offset = global_offset
                         for istart, istop in period_ranges:
                             nn = istop - istart
-                            dslice = slice(idet * nsamp + offset, idet * nsamp + offset + nn)
+                            dslice = slice(
+                                idet * nsamp + offset, idet * nsamp + offset + nn
+                            )
                             self._madam_signal[dslice] = signal[istart:istop]
                             offset += nn
                         del signal
@@ -658,49 +684,74 @@ class OpMadam(Operator):
 
     @function_timer
     def _stage_pixweights(
-        self, detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
+        self,
+        detectors,
+        nsamp,
+        ndet,
+        nnz,
+        nnz_full,
+        nnz_stride,
+        obs_period_ranges,
+        nodecomm,
+        nread,
     ):
         """Now collect the pixel weights
 
         """
-        self._madam_pixweights = self._cache.create(
-            "pixweights", madam.WEIGHT_TYPE, (nsamp * ndet * nnz,)
-        )
-        self._madam_pixweights[:] = 0
+        log = Logger.get()
+        timer = Timer()
+        # Determine if we can purge the pixel weights and avoid keeping two
+        # copies of the weights in memory
+        purge = self._purge_weights or (nnz == nnz_full)
+        if not purge:
+            nread = 1
+            nodecomm = MPI.COMM_SELF
 
-        global_offset = 0
-        for iobs, obs in enumerate(self._data.obs):
-            tod = obs["tod"]
-            period_ranges = obs_period_ranges[iobs]
-            for idet, det in enumerate(detectors):
-                # get the pixels and weights for the valid intervals
-                # from the cache
-                weightsname = "{}_{}".format(self._weights, det)
-                weights = tod.cache.reference(weightsname)
-                weight_dtype = weights.dtype
-                offset = global_offset
-                for istart, istop in period_ranges:
-                    nn = istop - istart
-                    dwslice = slice(
-                        (idet * nsamp + offset) * nnz,
-                        (idet * nsamp + offset + nn) * nnz,
+        for iread in range(nread):
+            nodecomm.Barrier()
+            timer.start()
+            if nodecomm.rank % nread == iread:
+                # Allocate Madam buffer
+                self._madam_pixweights = self._cache.create(
+                    "pixweights", madam.WEIGHT_TYPE, (nsamp * ndet * nnz,)
+                )
+                self._madam_pixweights[:] = 0
+                # Fill Madam buffer
+                global_offset = 0
+                for iobs, obs in enumerate(self._data.obs):
+                    tod = obs["tod"]
+                    period_ranges = obs_period_ranges[iobs]
+                    for idet, det in enumerate(detectors):
+                        # get the pixels and weights for the valid intervals
+                        # from the cache
+                        weightsname = "{}_{}".format(self._weights, det)
+                        weights = tod.cache.reference(weightsname)
+                        weight_dtype = weights.dtype
+                        offset = global_offset
+                        for istart, istop in period_ranges:
+                            nn = istop - istart
+                            dwslice = slice(
+                                (idet * nsamp + offset) * nnz,
+                                (idet * nsamp + offset + nn) * nnz,
+                            )
+                            self._madam_pixweights[dwslice] = weights[
+                                istart:istop
+                            ].flatten()[::nnz_stride]
+                            offset += nn
+                        del weights
+                    # Purge the weights but restore them from the Madam
+                    # buffers when purge_weights=False.
+                    if purge:
+                        for idet, det in enumerate(detectors):
+                            weightsname = "{}_{}".format(self._weights, det)
+                            tod.cache.clear(weightsname)
+                    global_offset = offset
+            if self._verbose and nread > 1:
+                nodecomm.Barrier()
+                if self._rank == 0:
+                    timer.report_clear(
+                        "Stage pixel weights {} / {}".format(iread + 1, nread)
                     )
-                    self._madam_pixweights[dwslice] = weights[istart:istop].flatten()[
-                        ::nnz_stride
-                    ]
-                    offset += nn
-                del weights
-            # Purge the weights but restore them from the Madam
-            # buffers when purge_weights=False.
-            # Handle special case when Madam only stores a subset of
-            # the weights.
-            if not self._purge_weights and (nnz != nnz_full):
-                pass
-            else:
-                for idet, det in enumerate(detectors):
-                    weightsname = "{}_{}".format(self._weights, det)
-                    tod.cache.clear(weightsname)
-            global_offset = offset
         return weight_dtype
 
     @function_timer
@@ -728,16 +779,15 @@ class OpMadam(Operator):
 
         """
         log = Logger.get()
+        nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, self._rank)
+        # Check if the user has elected to stagger staging the data on each
+        # node to avoid exhausting memory
         if self._conserve_memory:
-            # The user has elected to stagger staging the data on each
-            # node to avoid exhausting memory
-            nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, self._rank)
             if self._conserve_memory == 1:
                 nread = nodecomm.size
             else:
                 nread = min(self._conserve_memory, nodecomm.size)
         else:
-            nodecomm = MPI.COMM_SELF
             nread = 1
 
         self._comm.Barrier()
@@ -753,16 +803,23 @@ class OpMadam(Operator):
             if self._rank == 0:
                 timer.report_clear("Stage time")
         memreport("after staging time", self._comm)  # DEBUG
+        count_caches(
+            self._data, self._comm, nodecomm, self._cache, "after staging time"
+        )  # DEBUG
 
         # Stage signal.  If signal is not being purged, staging is not stepped
         timer.start()
         signal_dtype = self._stage_signal(
-            detectors, nsamp, ndet, obs_period_ranges, nodecomm, nread)
+            detectors, nsamp, ndet, obs_period_ranges, nodecomm, nread
+        )
         if self._verbose:
             nodecomm.Barrier()
             if self._rank == 0:
                 timer.report_clear("Stage signal")
         memreport("after staging signal", self._comm)  # DEBUG
+        count_caches(
+            self._data, self._comm, nodecomm, self._cache, "after staging signal"
+        )  # DEBUG
 
         # Stage pixels
         timer_step = Timer()
@@ -781,28 +838,33 @@ class OpMadam(Operator):
         if self._verbose:
             nodecomm.Barrier()
             if self._rank == 0:
-                timer.report_clear("Stage pixels")
+                timer_step.report_clear("Stage pixels")
         memreport("after staging pixels", self._comm)  # DEBUG
+        count_caches(
+            self._data, self._comm, nodecomm, self._cache, "after staging pixels"
+        )  # DEBUG
 
         # Stage pixel weights
-        timer.start()
-        for iread in range(nread):
-            nodecomm.Barrier()
-            if nodecomm.rank % nread == iread:
-                weight_dtype = self._stage_pixweights(
-                    detectors, nsamp, ndet, nnz, nnz_full, nnz_stride, obs_period_ranges
-                )
-            if self._verbose and nread > 1:
-                nodecomm.Barrier()
-                if self._rank == 0:
-                    timer.report_clear(
-                        "Stage pixel weights {} / {}".format(iread + 1, nread)
-                    )
+        timer_step.start()
+        weight_dtype = self._stage_pixweights(
+            detectors,
+            nsamp,
+            ndet,
+            nnz,
+            nnz_full,
+            nnz_stride,
+            obs_period_ranges,
+            nodecomm,
+            nread,
+        )
         if self._verbose:
             nodecomm.Barrier()
             if self._rank == 0:
-                timer.report_clear("Stage pixel weights")
+                timer_step.report_clear("Stage pixel weights")
         memreport("after staging pixel weights", self._comm)  # DEBUG
+        count_caches(
+            self._data, self._comm, nodecomm, self._cache, "after staging pixel weights"
+        )  # DEBUG
 
         del nodecomm
         if self._rank == 0 and self._verbose:
