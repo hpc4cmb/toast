@@ -69,6 +69,7 @@ def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
         tod._hwpsteptime = None
 
     offset, nsamp = tod.local_samples
+    hwp_angle = None
     if tod._hwprate is not None:
         # continuous HWP
         # HWP increment per sample is:
@@ -77,7 +78,6 @@ def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
         startang = np.fmod(offset * hwpincr, 2 * np.pi)
         hwp_angle = hwpincr * np.arange(nsamp, dtype=np.float64)
         hwp_angle += startang
-        tod.cache.put(tod.HWP_ANGLE_NAME, hwp_angle)
     elif tod._hwpstep is not None:
         # stepped HWP
         hwp_angle = np.ones(nsamp, dtype=np.float64)
@@ -94,6 +94,10 @@ def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
             curang += tod._hwpstep
             curoff += fill
             fill = stepsamples
+
+    if hwp_angle is not None:
+        # Choose the HWP angle between [0, 2*pi)
+        hwp_angle %= 2 * np.pi
         tod.cache.put(tod.HWP_ANGLE_NAME, hwp_angle)
 
     return
