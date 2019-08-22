@@ -12,12 +12,14 @@ from .mpi import MPITestCase
 
 from ..cache import Cache
 
-from ..utils import AlignedF64
+from ..utils import AlignedF64, memreport
 
 
 class CacheTest(MPITestCase):
     def setUp(self):
         self.nsamp = 1000
+        self.membytes = 100000000
+        self.memnbuf = 100
         self.cache = Cache(pymem=False)
         self.pycache = Cache(pymem=True)
         self.types = {
@@ -246,3 +248,42 @@ class CacheTest(MPITestCase):
 
         self.pycache.clear()
         return
+
+    def test_memfree(self):
+        memreport(comm=self.comm, msg="Before large buffer creation")
+        memcache = Cache(pymem=False)
+        ref = memcache.create("test-big", np.uint8, (self.membytes,))
+        del ref
+
+        memreport(comm=self.comm, msg="After large buffer creation")
+
+        mem = memcache.report(silent=True)
+        self.assertEqual(mem, self.membytes)
+        print("Cache now has {} bytes".format(mem), flush=True)
+
+        memcache.clear()
+
+        memreport(comm=self.comm, msg="After cache clear")
+        mem = memcache.report(silent=True)
+        self.assertEqual(mem, 0)
+        print("Cache now has {} bytes".format(mem), flush=True)
+
+        smallbytes = self.membytes // self.memnbuf
+        for i in range(self.memnbuf):
+            name = "test-small_{}".format(i)
+            ref = memcache.create(name, np.uint8, (smallbytes,))
+            del ref
+
+        memreport(
+            comm=self.comm,
+            msg="After creation of {} small buffers".format(self.memnbuf)
+        )
+        mem = memcache.report(silent=True)
+        self.assertEqual(mem, self.memnbuf * smallbytes)
+        print("Cache now has {} bytes".format(mem), flush=True)
+
+        memcache.clear()
+        memreport(comm=self.comm, msg="After cache clear")
+        mem = memcache.report(silent=True)
+        self.assertEqual(mem, 0)
+        print("Cache now has {} bytes".format(mem), flush=True)
