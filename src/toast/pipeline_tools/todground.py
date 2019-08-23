@@ -370,6 +370,7 @@ def load_schedule(args, comm):
                     telescope = Telescope(telescope_name, site=site)
                     break
                 all_ces = []
+                last_name = None
                 for line in f:
                     if line.startswith("#"):
                         continue
@@ -401,7 +402,7 @@ def load_schedule(args, comm):
                         # Only accept 1 / `nsplit` of the rising and setting
                         # scans in patch `name`.  Selection is performed
                         # during the first subscan.
-                        if int(subscan) == 0:
+                        if name != last_name:
                             if name not in scan_counters:
                                 scan_counters[name] = {}
                             counter = scan_counters[name]
@@ -411,6 +412,7 @@ def load_schedule(args, comm):
                             else:
                                 counter[rs] += 1
                             iscan = counter[rs]
+                        last_name = name
                         if iscan % nsplit != isplit:
                             continue
                     start_time = start_date + " " + start_time
