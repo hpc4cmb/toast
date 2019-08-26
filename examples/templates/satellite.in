@@ -52,7 +52,6 @@ if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
         --disable-timer-serialization \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --minpix ${detpix} --out "${outdir}/fp"
 fi
 
@@ -85,8 +84,6 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
 --enable-timer-serialization \
 --groupsize ${groupsize} \
 --fp ${fpfile} \
