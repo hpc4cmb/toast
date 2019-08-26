@@ -46,7 +46,7 @@ schedulefile_atacama="${outdir}/schedule_atacama.txt"
 if [ ! -e "${schedulefile_atacama}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
         --out "${schedulefile_atacama}" --patch @PATCH@ \
-	--operational_days 1
+	--operational-days 1
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -56,7 +56,7 @@ schedulefile_pole="${outdir}/schedule_pole.txt"
 if [ ! -e "${schedulefile_pole}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-	 --operational_days 1
+	 --operational-days 1
 fi
 
 # The executable script
@@ -73,17 +73,16 @@ parfile="@TOPDIR@/params/ground/ground_sim_multisite.par"
 # The commandline
 
 com="${ex} @${parfile} \
---enable-timer-serialization \
---fp ${fpfile_atacama},${fpfile_pole} \
+--focalplane ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
---atm_cache ${outdir}/atm_cache \
---atm_xstep @CELLSIZE@ \
---atm_ystep @CELLSIZE@ \
---atm_zstep @CELLSIZE@ \
---groupsize 2 \
---samplerate @SAMPLERATE@ \
---scanrate @SCANRATE@ \
+--atm-cache ${outdir}/atm_cache \
+--atm-xstep @CELLSIZE@ \
+--atm-ystep @CELLSIZE@ \
+--atm-zstep @CELLSIZE@ \
+--group-size 2 \
+--sample-rate @SAMPLERATE@ \
+--scan-rate @SCANRATE@ \
 $@ \
 "
 

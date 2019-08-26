@@ -383,7 +383,7 @@ def create_observations(args, comm, schedules):
     # We could also split by site.
 
     if len(schedules) > 1:
-        telescope_data = data.split("telescope")
+        telescope_data = data.split("telescope_name")
         if len(telescope_data) == 1:
             # Only one telescope available
             telescope_data = []
