@@ -218,7 +218,8 @@ def load_focalplane(args, comm, schedule):
                 detector_data=detector_data, sample_rate=args.sample_rate
             )
         else:
-            focalplane = Focalplane(args.focalplane, sample_rate=args.sample_rate)
+            focalplane = Focalplane(
+                fname_pickle=args.focalplane, sample_rate=args.sample_rate)
     if comm.comm_world is not None:
         focalplane = comm.comm_world.bcast(focalplane, root=0)
 
@@ -498,6 +499,8 @@ if __name__ == "__main__":
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
         mpiworld, procs, rank = get_world()
+        if procs == 1:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = ["Proc {}: {}".format(rank, x) for x in lines]
