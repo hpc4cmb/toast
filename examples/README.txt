@@ -24,7 +24,7 @@ For customization, set the following environment variables:
   - default for SLURM: "large medium small tiny representative"
   - default for SHELL: no customization permitted
 - MACHINES
-  - default: "cori-intel-knl cori-intel-haswell and edison-intel"
+  - default: "cori-intel-knl and cori-intel-haswell"
 - account
   - default: "mp107"
 - queue:
