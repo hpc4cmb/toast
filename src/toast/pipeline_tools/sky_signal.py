@@ -46,8 +46,8 @@ def add_pysm_args(parser):
     parser.add_argument(
         "--pysm-model",
         required=False,
-        help="Comma separated models for on-the-fly PySM "
-        'simulation, e.g. s3,d6,f1,a2"',
+        help='Comma separated models for on-the-fly PySM '
+        'simulation, e.g. "s1,d6,f1,a2"',
     )
 
     parser.add_argument(

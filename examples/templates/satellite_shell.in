@@ -57,13 +57,12 @@ groupsize=1
 # The commandline
 
 com="${ex} @${parfile} \
---enable-timer-serialization \
---groupsize ${groupsize} \
---fp ${fpfile} \
+--group-size ${groupsize} \
+--focalplane ${fpfile} \
 --nside ${nside} \
---obs ${obs_len} \
+--obs-time-h ${obs_len} \
 --gap ${obs_gap} \
---numobs ${nobs} \
+--obs-num ${nobs} \
 --outdir ${outdir}/out \
 $@ \
 "
