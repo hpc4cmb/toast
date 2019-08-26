@@ -54,7 +54,6 @@ fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --disable-timer-serialization \
          --out "${outdir}/fp_atacama" --minpix $detpix --fov 1
 fi
 
@@ -62,7 +61,6 @@ fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
 if [ ! -e "${fpfile_pole}" ]; then
     echo "Running toast_fake_focalplane.py (pole)..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-         --disable-timer-serialization \
          --out "${outdir}/fp_pole" --minpix $detpix --fov 1
 fi
 
@@ -75,9 +73,8 @@ schedulefile_atacama="${outdir}/schedule_atacama.txt"
 if [ ! -e "${schedulefile_atacama}" ]; then
     echo "Running toast_ground_schedule.py (atacama)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --disable-timer-serialization \
          --out "${schedulefile_atacama}" --patch @PATCH@ \
-         --operational_days $operational_days
+         --operational-days $operational_days
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -85,9 +82,8 @@ schedulefile_pole="${outdir}/schedule_pole.txt"
 if [ ! -e "${schedulefile_pole}" ]; then
     echo "Running toast_ground_schedule.py (pole)..."
     srun -n 1 -N 1 toast_ground_schedule.py @$schparfile \
-         --disable-timer-serialization \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-         --operational_days $operational_days
+         --operational-days $operational_days
 fi
 
 # The executable script
@@ -106,18 +102,17 @@ groupsize=$(( @NODES_PER_GROUP@ * node_proc ))
 # The commandline
 
 com="${ex} @${parfile} \
---enable-timer-serialization \
---groupsize ${groupsize} \
---fp ${fpfile_atacama},${fpfile_pole} \
+--group-size ${groupsize} \
+--focalplane ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
---atm_cache ${outdir}/atm_cache \
---atm_xstep @CELLSIZE@ \
---atm_ystep @CELLSIZE@ \
---atm_zstep @CELLSIZE@ \
---madam_iter_max @ITERMAX@ \
---samplerate @SAMPLERATE@ \
---scanrate @SCANRATE@ \
+--atm-cache ${outdir}/atm_cache \
+--atm-xstep @CELLSIZE@ \
+--atm-ystep @CELLSIZE@ \
+--atm-zstep @CELLSIZE@ \
+--madam-iter-max @ITERMAX@ \
+--sample-rate @SAMPLERATE@ \
+--scan-rate @SCANRATE@ \
 $@ \
 "
 

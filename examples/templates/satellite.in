@@ -51,7 +51,6 @@ fpparfile="@TOPDIR@/params/satellite/focalplane.par"
 if [ ! -e "${fpfile}" ]; then
     echo "Running toast_fake_focalplane.py..."
     srun -n 1 -N 1 toast_fake_focalplane.py @$fpparfile \
-        --disable-timer-serialization \
         --minpix ${detpix} --out "${outdir}/fp"
 fi
 
@@ -84,10 +83,9 @@ fi
 # The commandline
 
 com="${ex} @${parfile} \
---enable-timer-serialization \
---groupsize ${groupsize} \
---fp ${fpfile} \
---numobs ${nobs} \
+--group-size ${groupsize} \
+--focalplane ${fpfile} \
+--obs-num ${nobs} \
 --outdir ${outdir}/out \
 $@ \
 "
