@@ -231,12 +231,12 @@ void toast::mpi_atm_sim::load_realization() {
     if (rank == 0) {
         // Load metadata
 
-        success = 1;
-
         std::ostringstream fname;
         fname << cachedir << "/" << name.str() << "_metadata.txt";
 
         std::ifstream f(fname.str());
+
+        success = 0;
         if (f.good()) {
             f >> nn;
             f >> nelem;
@@ -259,15 +259,14 @@ void toast::mpi_atm_sim::load_realization() {
             f >> wdir;
             f >> z0;
             f >> T0;
+            success = f.good();
             f.close();
+        }
 
-            if (rank == 0 and verbosity > 0) {
-                std::cerr << "Loaded metada from "
-                          << fname.str() << std::endl;
-            }
-        } else success = 0;
-
-        if ((verbosity > 0) && success) {
+        if (success) {
+          if (verbosity > 0) {
+            std::cerr << "Loaded metada from "
+                      << fname.str() << std::endl;
             std::cerr << std::endl;
             std::cerr << "Simulation volume:" << std::endl;
             std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
@@ -293,6 +292,10 @@ void toast::mpi_atm_sim::load_realization() {
             std::cerr << "   T0 = " << T0 << " K" << std::endl;
             std::cerr << "rcorr = " << rcorr << " m (corrlim = "
                       << corrlim << ")" << std::endl;
+          }
+        } else {
+          std::cerr << "FAILED to load metada from "
+                    << fname.str() << std::endl;
         }
     }
 
@@ -375,6 +378,7 @@ void toast::mpi_atm_sim::load_realization() {
                   << nelem << std::endl;
         throw;
     }
+
     if (full_index->rank() == 0) {
         std::ostringstream fname_real;
         fname_real << cachedir << "/" << name.str() << "_realization.dat";
@@ -391,13 +395,30 @@ void toast::mpi_atm_sim::load_realization() {
         freal.read((char *)&(*realization)[0],
                    realization->size() * sizeof(double));
 
+        success = freal.good();
         freal.close();
 
-        if (verbosity > 0) std::cerr << "Loaded realization from "
-                                     << fname_real.str() << std::endl;
+        if (success) {
+          if (verbosity > 0) std::cerr << "Loaded realization from "
+                                       << fname_real.str() << std::endl;
+        } else {
+          std::cerr << "FAILED to load realization from "
+                    << fname_real.str() << std::endl;
+        }
     }
 
-    cached = true;
+    //if (MPI_Bcast(&success, 1, MPI_CHAR, 0, comm)) throw std::runtime_error(
+    //              "Failed to bcast success");
+    if (MPI_Allreduce(&success, MPI_IN_PLACE, 1, MPI_CHAR, MPI_MIN, comm))
+      throw std::runtime_error("Failed to allreduce success");
+
+    if (!success) {
+      delete compressed_index;
+      delete full_index;
+      delete realization;
+    } else {
+      cached = true;
+    }
 
     return;
 }
