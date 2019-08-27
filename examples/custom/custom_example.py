@@ -10,13 +10,12 @@ import traceback
 
 import numpy as np
 
-from toast.mpi import MPI
+from toast.mpi import get_world, Comm
+from toast.pipeline_tools import get_comm
 import toast.qarray as qa
 
 import toast.tod as tt
 import toast.map as tm
-
-from toast.vis import set_backend
 
 
 def fake_focalplane():
@@ -28,8 +27,6 @@ def fake_focalplane():
     field of view.
     """
     npix = 19
-    # 5' beam
-    fwhm = 5.0 / 60.0
     # 5 degree FOV...
     fov = 5.0
     # ...converted to size of hexagon
@@ -40,8 +37,8 @@ def fake_focalplane():
     Bpol = tt.hex_pol_angles_qu(npix, offset=90.0)
     
     # Build a simple hexagon layout
-    Adets = tt.hex_layout(npix, 100.0, angwidth, fwhm, "fake_", "A", Apol)
-    Bdets = tt.hex_layout(npix, 100.0, angwidth, fwhm, "fake_", "B", Bpol)
+    Adets = tt.hex_layout(npix, angwidth, "fake_", "A", Apol)
+    Bdets = tt.hex_layout(npix, angwidth, "fake_", "B", Bpol)
     
     # Combine into a single dictionary
     dets = Adets.copy()
@@ -59,6 +56,8 @@ def fake_focalplane():
         dets[d]["NET"] = 20.0e-6
         # Unique index for reproducibility of simulations
         dets[d]["index"] = indx
+        # FWHM in degrees
+        dets[d]["fwhm_deg"] = 5 / 60
 
     return dets
 
@@ -252,15 +251,17 @@ def main():
     # them in a reasonable size that is smaller than the number of detectors
     # and which divides evenly into the total number of processes.
 
-    comm = toast.Comm(world=MPI.COMM_WORLD, groupsize=MPI.COMM_WORLD.size)
+    mpiworld, procs, rank, comm = get_comm()
 
     # Make a fake focalplane.  Plot it just for fun (don't waste time on this
     # for very large runs though).
     fp = fake_focalplane()
     if comm.comm_world.rank == 0:
         outfile = "custom_example_focalplane.png"
-        set_backend()
-        tt.plot_focalplane(fp, 6.0, 6.0, outfile)
+        qdets = {x: y["quat"] for x, y in fp.items()}
+        beams = {x: (60.0 * y["fwhm_deg"]) for x, y in fp.items()}
+        fov = 6.0
+        tt.plot_focalplane(qdets, fov, fov, outfile, fwhm=beams)
 
     # Read in 2 boresight files
     borefiles = [
@@ -347,7 +348,6 @@ def main():
     tm.covariance_apply(invnpp, zmap)
     zmap.write_healpix_fits("custom_example_binned.fits")
 
-    MPI.Finalize()
     return
 
 
@@ -356,8 +356,12 @@ if __name__ == "__main__":
     try:
         main()
     except:
+        mpiworld, procs, rank = get_world()
+        if procs == 1:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         for ln in lines:
             print(ln, flush=True)
-        MPI.COMM_WORLD.Abort()
+        if mpiworld is not None:
+            mpiworld.Abort(6)
