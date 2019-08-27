@@ -146,9 +146,7 @@ class BinnedTest(MPITestCase):
         nsig.exec(self.data)
 
         # make a simple pointing matrix
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, mode="IQU",
-        )
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
         handle = None

@@ -117,6 +117,7 @@ try:
             comm.Barrier()
         return
 
+
 except ImportError:
 
     def memreport(msg="", comm=None):

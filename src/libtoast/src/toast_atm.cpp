@@ -473,6 +473,7 @@ int toast::atm_sim::simulate(bool use_cache) {
                                         ind_stop);
                 cholmod_free_sparse(&sqrt_cov, chcommon);
             }
+
             // Advance the RNG counter on all processes
             counter2 += ind_stop - ind_start;
 

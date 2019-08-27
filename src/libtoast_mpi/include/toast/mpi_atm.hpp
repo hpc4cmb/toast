@@ -13,7 +13,6 @@ extern "C" {
 }
 
 namespace toast {
-
 using mpi_shmem_double = mpi_shmem <double>;
 using mpi_shmem_long = mpi_shmem <long>;
 
@@ -166,7 +165,6 @@ class mpi_atm_sim {
         void load_realization();
         void save_realization();
 };
-
 }
 
 #endif // ifdef HAVE_CHOLMOD

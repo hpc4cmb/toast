@@ -78,8 +78,7 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
         return
     log = Logger.get()
     if comm.world_rank == 0 and verbose:
-        log.info("Adding signal from {} to {}."
-                 "".format(prefix_in, prefix_out))
+        log.info("Adding signal from {} to {}." "".format(prefix_in, prefix_out))
         if purge:
             log.info("Purging {} after adding".format(prefix_in))
     timer = Timer()

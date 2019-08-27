@@ -8,7 +8,6 @@
 
 
 namespace toast {
-
 void lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
                  double * ALPHA, double * A, int * LDA, double * B, int * LDB,
                  double * BETA, double * C, int * LDC);
@@ -40,7 +39,6 @@ void lapack_pocon(char * UPLO, int * N, double * A, int * LDA, double * ANORM,
                   double * RCOND, double * WORK, int * IWORK, int * INFO);
 
 void lapack_potri(char * UPLO, int * N, double * A, int * LDA, int * INFO);
-
 }
 
 #endif // ifndef TOAST_LAPACK_HPP

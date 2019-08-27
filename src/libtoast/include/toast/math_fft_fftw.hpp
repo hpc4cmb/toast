@@ -13,7 +13,6 @@
 # include <fftw3.h>
 
 namespace toast {
-
 class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
     public:
 
@@ -36,7 +35,6 @@ class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
         std::vector <double *> tview_;
         std::vector <double *> fview_;
 };
-
 }
 
 #endif // ifdef HAVE_FFTW

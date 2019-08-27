@@ -10,7 +10,6 @@
 #include <cstddef>
 
 namespace toast {
-
 double atm_get_absorption_coefficient(double altitude, double temperature,
                                       double pressure, double pwv, double freq);
 
@@ -26,7 +25,6 @@ int atm_get_atmospheric_loading_vec(double altitude, double temperature,
                                     double pressure, double pwv,
                                     double freqmin, double freqmax, size_t nfreq,
                                     double * loading);
-
 }
 
 #endif // ifndef TOAST_ATM_UTILS_HPP

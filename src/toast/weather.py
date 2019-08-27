@@ -272,8 +272,17 @@ class Weather(object):
         return self._south_wind
 
     def __repr__(self):
-        value = "(Weather : '{}', site = {}, time = {}, year = {}, month = {}, " \
-            "hour = {}, realization = {})" \
-            "".format(self._fname, self.site, self._time, self._year,
-                      self._month, self._hour, self.realization)
+        value = (
+            "(Weather : '{}', site = {}, time = {}, year = {}, month = {}, "
+            "hour = {}, realization = {})"
+            "".format(
+                self._fname,
+                self.site,
+                self._time,
+                self._year,
+                self._month,
+                self._hour,
+                self.realization,
+            )
+        )
         return value

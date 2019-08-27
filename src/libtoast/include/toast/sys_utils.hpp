@@ -17,7 +17,6 @@
 
 
 namespace toast {
-
 // Constants
 
 // PI
@@ -300,7 +299,6 @@ using AlignedI64 = std::vector <int64_t, toast::AlignedAllocator <int64_t> >;
 using AlignedU64 = std::vector <uint64_t, toast::AlignedAllocator <uint64_t> >;
 using AlignedF32 = std::vector <float, toast::AlignedAllocator <float> >;
 using AlignedF64 = std::vector <double, toast::AlignedAllocator <double> >;
-
 }
 
 #endif // ifndef TOAST_UTILS_HPP

@@ -8,7 +8,6 @@
 
 
 namespace toast {
-
 void cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     int64_t nsamp,
                     int64_t const * indx_submap, int64_t const * indx_pix,
@@ -42,7 +41,6 @@ void cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
 void cov_apply_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     double const * mat, double * vec);
-
 }
 
 #endif // ifndef TOAST_MAP_COV_HPP

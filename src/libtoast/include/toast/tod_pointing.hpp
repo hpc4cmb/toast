@@ -10,14 +10,12 @@
 
 
 namespace toast {
-
 void pointing_matrix_healpix(toast::HealpixPixels const & hpix,
                              bool nest, double eps, double cal,
                              std::string const & mode, size_t n,
                              double const * pdata, double const * hwpang,
                              uint8_t const * flags,
                              int64_t * pixels, double * weights);
-
 }
 
 #endif // ifndef TOAST_TOD_POINTING_HPP

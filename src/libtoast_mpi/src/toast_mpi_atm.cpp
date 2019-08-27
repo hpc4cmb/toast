@@ -264,38 +264,39 @@ void toast::mpi_atm_sim::load_realization() {
         }
 
         if (success) {
-          if (verbosity > 0) {
-            std::cerr << "Loaded metada from "
-                      << fname.str() << std::endl;
-            std::cerr << std::endl;
-            std::cerr << "Simulation volume:" << std::endl;
-            std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
-            std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
-            std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
-            std::cerr << "    xstart = " << xstart << " m" << std::endl;
-            std::cerr << "    ystart = " << ystart << " m" << std::endl;
-            std::cerr << "    zstart = " << zstart << " m" << std::endl;
-            std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
-            std::cerr << "        nx = " << nx << std::endl;
-            std::cerr << "        ny = " << ny << std::endl;
-            std::cerr << "        nz = " << nz << std::endl;
-            std::cerr << "        nn = " << nn << std::endl;
-            std::cerr << "Atmospheric realization parameters:" << std::endl;
-            std::cerr << " lmin = " << lmin << " m" << std::endl;
-            std::cerr << " lmax = " << lmax << " m" << std::endl;
-            std::cerr << "    w = " << w << " m/s" << std::endl;
-            std::cerr << "   wx = " << wx << " m/s" << std::endl;
-            std::cerr << "   wy = " << wy << " m/s" << std::endl;
-            std::cerr << "   wz = " << wz << " m/s" << std::endl;
-            std::cerr << " wdir = " << wdir * 180. / M_PI << " degrees" << std::endl;
-            std::cerr << "   z0 = " << z0 << " m" << std::endl;
-            std::cerr << "   T0 = " << T0 << " K" << std::endl;
-            std::cerr << "rcorr = " << rcorr << " m (corrlim = "
-                      << corrlim << ")" << std::endl;
-          }
+            if (verbosity > 0) {
+                std::cerr << "Loaded metada from "
+                          << fname.str() << std::endl;
+                std::cerr << std::endl;
+                std::cerr << "Simulation volume:" << std::endl;
+                std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
+                std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
+                std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
+                std::cerr << "    xstart = " << xstart << " m" << std::endl;
+                std::cerr << "    ystart = " << ystart << " m" << std::endl;
+                std::cerr << "    zstart = " << zstart << " m" << std::endl;
+                std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
+                std::cerr << "        nx = " << nx << std::endl;
+                std::cerr << "        ny = " << ny << std::endl;
+                std::cerr << "        nz = " << nz << std::endl;
+                std::cerr << "        nn = " << nn << std::endl;
+                std::cerr << "Atmospheric realization parameters:" << std::endl;
+                std::cerr << " lmin = " << lmin << " m" << std::endl;
+                std::cerr << " lmax = " << lmax << " m" << std::endl;
+                std::cerr << "    w = " << w << " m/s" << std::endl;
+                std::cerr << "   wx = " << wx << " m/s" << std::endl;
+                std::cerr << "   wy = " << wy << " m/s" << std::endl;
+                std::cerr << "   wz = " << wz << " m/s" << std::endl;
+                std::cerr << " wdir = " << wdir * 180. / M_PI << " degrees" <<
+                    std::endl;
+                std::cerr << "   z0 = " << z0 << " m" << std::endl;
+                std::cerr << "   T0 = " << T0 << " K" << std::endl;
+                std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                          << corrlim << ")" << std::endl;
+            }
         } else {
-          std::cerr << "FAILED to load metada from "
-                    << fname.str() << std::endl;
+            std::cerr << "FAILED to load metada from "
+                      << fname.str() << std::endl;
         }
     }
 
@@ -378,7 +379,6 @@ void toast::mpi_atm_sim::load_realization() {
                   << nelem << std::endl;
         throw;
     }
-
     if (full_index->rank() == 0) {
         std::ostringstream fname_real;
         fname_real << cachedir << "/" << name.str() << "_realization.dat";
@@ -399,25 +399,23 @@ void toast::mpi_atm_sim::load_realization() {
         freal.close();
 
         if (success) {
-          if (verbosity > 0) std::cerr << "Loaded realization from "
-                                       << fname_real.str() << std::endl;
+            if (verbosity > 0) std::cerr << "Loaded realization from "
+                                         << fname_real.str() << std::endl;
         } else {
-          std::cerr << "FAILED to load realization from "
-                    << fname_real.str() << std::endl;
+            std::cerr << "FAILED to load realization from "
+                      << fname_real.str() << std::endl;
         }
     }
 
-    //if (MPI_Bcast(&success, 1, MPI_CHAR, 0, comm)) throw std::runtime_error(
-    //              "Failed to bcast success");
-    if (MPI_Allreduce(&success, MPI_IN_PLACE, 1, MPI_CHAR, MPI_MIN, comm))
-      throw std::runtime_error("Failed to allreduce success");
+    if (MPI_Allreduce(MPI_IN_PLACE, &success, 1, MPI_CHAR, MPI_MIN,
+                      comm)) throw std::runtime_error("Failed to allreduce success");
 
     if (!success) {
-      delete compressed_index;
-      delete full_index;
-      delete realization;
+        delete compressed_index;
+        delete full_index;
+        delete realization;
     } else {
-      cached = true;
+        cached = true;
     }
 
     return;
@@ -537,6 +535,7 @@ int toast::mpi_atm_sim::simulate(bool use_cache) {
                                         ind_stop);
                 cholmod_free_sparse(&sqrt_cov, chcommon);
             }
+
             // Advance the RNG counter on all processes
             counter2 += ind_stop - ind_start;
 

@@ -14,7 +14,6 @@
 
 
 namespace toast {
-
 template <typename T>
 class mpi_shmem {
     public:
@@ -225,7 +224,6 @@ class mpi_shmem {
         int rank_;
         int world_rank_;
 };
-
 }
 
 #endif // ifndef TOAST_MPI_SHMEM_HPP

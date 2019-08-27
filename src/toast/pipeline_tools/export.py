@@ -15,7 +15,7 @@ from ..tod import tidas_available, spt3g_available
 if tidas_available:
     from ..tod.tidas import OpTidasExport, TODTidas
 
-#if spt3g_available:
+# if spt3g_available:
 #    from ..tod.spt3g import Op3GExport, TOD3G
 
 

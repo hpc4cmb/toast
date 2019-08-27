@@ -8,7 +8,6 @@
 
 
 namespace toast {
-
 void qa_list_dot(size_t n, size_t m, size_t d, double const * a,
                  double const * b, double * dotprod);
 
@@ -106,7 +105,6 @@ void qa_from_position(size_t n, double const * theta, double const * phi,
 
 void qa_to_position(size_t n, double const * quat, double * theta,
                     double * phi);
-
 }
 
 #endif // ifndef TOAST_QARRAY_HPP

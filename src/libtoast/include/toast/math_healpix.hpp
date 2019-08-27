@@ -8,7 +8,6 @@
 
 
 namespace toast {
-
 void healpix_ang2vec(int64_t n, double const * theta, double const * phi,
                      double * vec);
 
@@ -130,7 +129,6 @@ class HealpixPixels {
         double tqnside_;
         int64_t factor_;
 };
-
 }
 
 #endif // ifndef TOAST_HEALPIX_HPP

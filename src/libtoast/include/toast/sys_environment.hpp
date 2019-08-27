@@ -15,7 +15,6 @@
 
 
 namespace toast {
-
 class Environment {
     // Singleton containing runtime settings.
 
@@ -57,7 +56,6 @@ class Environment {
         std::string version_;
         int64_t tod_buffer_length_;
 };
-
 }
 
 #endif // ifndef TOAST_ENVIRONMENT_HPP

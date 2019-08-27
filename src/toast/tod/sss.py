@@ -127,8 +127,7 @@ class OpSimScanSynchronousSignal(Operator):
                     comm.Barrier()
                 timer.start()
 
-            sssmap = self._simulate_sss(
-                key1, key2, counter1, counter2, weather, comm)
+            sssmap = self._simulate_sss(key1, key2, counter1, counter2, weather, comm)
 
             self._observe_sss(sssmap, tod, comm, prefix)
 
@@ -191,12 +190,19 @@ class OpSimScanSynchronousSignal(Operator):
             else:
                 npix = 12 * self._nside ** 2
                 sssmap = random(
-                    npix, key=(key1, key2), counter=(counter1, counter2), sampler="gaussian"
+                    npix,
+                    key=(key1, key2),
+                    counter=(counter1, counter2),
+                    sampler="gaussian",
                 )
                 sssmap = np.array(sssmap, dtype=np.float)
-                sssmap = hp.smoothing(sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax)
+                sssmap = hp.smoothing(
+                    sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax
+                )
                 sssmap /= np.std(sssmap)
-                lon, lat = hp.pix2ang(self._nside, np.arange(npix, dtype=np.int), lonlat=True)
+                lon, lat = hp.pix2ang(
+                    self._nside, np.arange(npix, dtype=np.int), lonlat=True
+                )
                 scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
                 sssmap *= scale
         else:

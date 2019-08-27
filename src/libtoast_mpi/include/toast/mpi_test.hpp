@@ -8,9 +8,7 @@
 
 
 namespace toast {
-
 int test_mpi_runner(int argc, char * argv[]);
-
 }
 
 #endif // ifndef TOAST_TEST_HPP

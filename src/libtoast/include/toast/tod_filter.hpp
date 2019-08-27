@@ -7,11 +7,9 @@
 #define TOAST_TOD_FILTER_HPP
 
 namespace toast {
-
 void filter_polynomial(int64_t order, size_t nsignal, uint8_t * flags,
                        std::vector <double *> const & signals, size_t nscan,
                        int64_t const * starts, int64_t const * stops);
-
 }
 
 #endif // ifndef TOAST_TOD_FILTER_HPP
