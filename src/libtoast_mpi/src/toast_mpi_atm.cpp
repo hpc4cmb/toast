@@ -295,7 +295,7 @@ void toast::mpi_atm_sim::load_realization() {
                           << corrlim << ")" << std::endl;
             }
         } else {
-            std::cerr << "FAILED to load metada from "
+            std::cerr << "FAILED to load metadata from "
                       << fname.str() << std::endl;
         }
     }
