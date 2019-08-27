@@ -17,7 +17,7 @@
 --nside
 512
 --pysm-model
-s1,d6,f1,a2
+s1,d1,f1,a1
 --pysm-apply-beam
 --flush
 --dipole-mode
