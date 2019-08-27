@@ -1,6 +1,6 @@
 #!/bin/bash
 
-RSYNC="rsync -a"
+RSYNC="rsync -avrP"
 WGET="wget -nv -r -c -N -np -nH --progress=bar --cut-dirs=4 --reject \"index.html*\""
 
 LOCAL_DATA="/project/projectdirs/cmb/www/toast_data/example_data"
