@@ -173,7 +173,6 @@ toast::mpi_atm_sim::mpi_atm_sim(double azmin, double azmax, double elmin, double
 }
 
 toast::mpi_atm_sim::~mpi_atm_sim() {
-    if (rank == 0) std::cerr << "Destroying atmosphere object." << std::endl;  // DEBUG
     if (compressed_index) delete compressed_index;
     if (full_index) delete full_index;
     if (realization) delete realization;
