@@ -21,9 +21,24 @@ from .debug import add_debug_args
 
 
 class Schedule:
-    def __init__(self, telescope=None, ceslist=None):
+    def __init__(self, telescope=None, ceslist=None, sort=False):
         self.telescope = telescope
         self.ceslist = ceslist
+        if sort:
+            self._sort_ceslist()
+        return
+
+    def sort_ceslist(self):
+        """ Sort the list of CES by name
+        """
+        nces = len(self._ceslist)
+        for i in range(nces - 1):
+            for j in range(i + 1, nces):
+                if self.ceslist[j].name < self.ceslist[j - 1].name:
+                    temp = self.ceslist[j]
+                    self.ceslist[j] = self.ceslist[j - 1]
+                    self.ceslist[j - 1] = temp
+        return
 
 
 class Site:
@@ -163,6 +178,24 @@ def add_todground_args(parser):
         'of the form "[isplit],[nsplit]" and only observations that satisfy '
         "scan % nsplit == isplit are included",
     )
+    parser.add_argument(
+        "--sort-schedule",
+        required=False,
+        action="store_true",
+        help="Reorder the observing schedule so that observations of the"
+        "same patch are consecutive.  This will reduce the sky area observed "
+        "by individual process groups.",
+        dest="sort_schedule",
+    )
+    parser.add_argument(
+        "--no-sort-schedule",
+        required=False,
+        action="store_false",
+        help="Do not reorder the observing schedule so that observations of the"
+        "same patch are consecutive.",
+        dest="sort_schedule",
+    )
+    parser.set_defaults(sort_schedule=True)
 
     # The HWP arguments may also be added by other TOD classes
     try:
@@ -459,7 +492,7 @@ def load_schedule(args, comm):
                             el_sun=el_sun,
                         )
                     )
-            schedules.append(Schedule(telescope, all_ces))
+            schedules.append(Schedule(telescope, all_ces, sort=args.sort_schedule))
             timer1.report_clear("Load {} (sub)scans in {}".format(len(all_ces), fn))
 
     if comm.comm_world is not None:
