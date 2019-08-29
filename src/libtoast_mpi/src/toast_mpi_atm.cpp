@@ -173,6 +173,7 @@ toast::mpi_atm_sim::mpi_atm_sim(double azmin, double azmax, double elmin, double
 }
 
 toast::mpi_atm_sim::~mpi_atm_sim() {
+    if (rank == 0) std::cerr << "Destroying atmosphere object." << std::endl;  // DEBUG
     if (compressed_index) delete compressed_index;
     if (full_index) delete full_index;
     if (realization) delete realization;
@@ -235,9 +236,10 @@ void toast::mpi_atm_sim::load_realization() {
         fname << cachedir << "/" << name.str() << "_metadata.txt";
 
         std::ifstream f(fname.str());
+        bool there = f.good();
 
         success = 0;
-        if (f.good()) {
+        if (there) {
             f >> nn;
             f >> nelem;
             f >> nx;
@@ -295,8 +297,10 @@ void toast::mpi_atm_sim::load_realization() {
                           << corrlim << ")" << std::endl;
             }
         } else {
-            std::cerr << "FAILED to load metadata from "
-                      << fname.str() << std::endl;
+            if (there) {
+                std::cerr << "FAILED to load metadata from "
+                          << fname.str() << std::endl;
+            }
         }
     }
 

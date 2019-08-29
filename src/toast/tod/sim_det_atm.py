@@ -891,6 +891,11 @@ class OpSimAtmosphere(Operator):
                     azmin <= azmin_det - 2 * np.pi and azmax_det - 2 * np.pi <= azmax
                 )
             ) or not (elmin <= elmin_det and elmin_det <= elmax):
+                # DEBUG begin
+                import pickle
+                with open("bad_quats_{}_{}.pck".format(rank, det), "wb") as fout:
+                    pickle.dump([scan_range, az, el, azelquat, tod._boresight_azel], fout)
+                # DEBUG end
                 raise RuntimeError(
                     prefix + "Detector Az/El: [{:.5f}, {:.5f}], "
                     "[{:.5f}, {:.5f}] is not contained in "
