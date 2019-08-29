@@ -25,13 +25,13 @@ class Schedule:
         self.telescope = telescope
         self.ceslist = ceslist
         if sort:
-            self._sort_ceslist()
+            self.sort_ceslist()
         return
 
     def sort_ceslist(self):
         """ Sort the list of CES by name
         """
-        nces = len(self._ceslist)
+        nces = len(self.ceslist)
         for i in range(nces - 1):
             for j in range(i + 1, nces):
                 if self.ceslist[j].name < self.ceslist[j - 1].name:
