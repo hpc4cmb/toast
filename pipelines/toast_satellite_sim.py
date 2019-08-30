@@ -97,7 +97,7 @@ def parse_arguments(comm, procs):
         help="Write diagnostics",
     )
 
-    add_madam_args(parser, ground_data=False)
+    add_madam_args(parser)
     add_binner_args(parser)
 
     parser.add_argument(
