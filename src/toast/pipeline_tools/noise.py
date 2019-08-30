@@ -24,7 +24,21 @@ def add_noise_args(parser):
         dest="simulate_noise",
     )
     parser.add_argument(
+        "--simulate-noise",
+        required=False,
+        action="store_true",
+        help="Add simulated noise",
+        dest="simulate_noise",
+    )
+    parser.add_argument(
         "--no-noise",
+        required=False,
+        action="store_false",
+        help="Do not add simulated noise",
+        dest="simulate_noise",
+    )
+    parser.add_argument(
+        "--no-simulate-noise",
         required=False,
         action="store_false",
         help="Do not add simulated noise",

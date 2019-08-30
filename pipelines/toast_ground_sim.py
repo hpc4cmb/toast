@@ -421,6 +421,8 @@ def main():
     log = Logger.get()
     gt = GlobalTimers.get()
     gt.start("toast_ground_sim (total)")
+    timer0 = Timer()
+    timer0.start()
 
     mpiworld, procs, rank, comm = get_comm()
 
@@ -586,6 +588,7 @@ def main():
         dump_timing(alltimers, out)
         timer.stop()
         timer.report("Gather and dump timing info")
+        timer0.report_clear("toast_ground_sim.py")
     return
 
 
