@@ -255,7 +255,6 @@ def create_observation(args, comm, telescope, ces, verbose=True):
     focalplane = telescope.focalplane
     site = telescope.site
     weather = site.weather
-    fpradius = focalplane.radius
     noise = focalplane.noise
     totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
 
