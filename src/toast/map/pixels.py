@@ -105,15 +105,12 @@ class OpLocalPixels(Operator):
             if self._verbose:
                 timer.report_clear("Build hit map")
 
-            local = []
-            for pixel, hit in enumerate(hitmap):
-                if hit:
-                    local.append(pixel + pixmin)
+            local = np.arange(pixmin, pixmax + 1, dtype=np.int)[hitmap]
 
             if self._verbose:
                 timer.report_clear("hit map to list")
 
-        return np.array(local)
+        return local
 
 
 class DistPixels(object):
