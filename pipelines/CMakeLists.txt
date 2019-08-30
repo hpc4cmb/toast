@@ -3,6 +3,7 @@
 
 install(PROGRAMS
     toast_env_test.py
+    toast_cache_test.py
     toast_cov_invert.py
     toast_cov_rcond.py
     toast_fake_focalplane.py
