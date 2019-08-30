@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 
 from ..mpi import MPI
 
@@ -26,7 +26,7 @@ class OpLocalPixels(Operator):
 
     """
 
-    def __init__(self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False):
+    def __init__(self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False, verbose=False):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -36,6 +36,7 @@ class OpLocalPixels(Operator):
         self._pixmin = pixmin
         self._pixmax = pixmax
         self._no_hitmap = no_hitmap
+        self._verbose = verbose
 
     @function_timer
     def exec(self, data):
@@ -50,6 +51,8 @@ class OpLocalPixels(Operator):
         """
         # initialize the local pixel set
         local = None
+        timer = Timer()
+        timer.start()
 
         if self._no_hitmap:
             # Avoid allocating extra memory at the cost of slower operation
@@ -63,6 +66,8 @@ class OpLocalPixels(Operator):
                     else:
                         local = np.unique(np.concatenate((local, np.unique(pixels))))
                     del pixels
+            if self._verbose:
+                timer.report_clear("Identify unique pixels")
         else:
             pixmin = self._pixmin
             pixmax = self._pixmax
@@ -79,6 +84,8 @@ class OpLocalPixels(Operator):
                         pixmin = min(pixmin, np.amin(pixels))
                         pixmax = max(pixmax, np.amax(pixels))
                         del pixels
+                if self._verbose:
+                    timer.report_clear("Identify pixel range")
 
                 if pixmin == 2 ** 60 and pixmax == -2 ** 60:
                     # No pixels
@@ -95,10 +102,16 @@ class OpLocalPixels(Operator):
                     hitmap[pixels - pixmin] = True
                     del pixels
 
+            if self._verbose:
+                timer.report_clear("Build hit map")
+
             local = []
             for pixel, hit in enumerate(hitmap):
                 if hit:
                     local.append(pixel + pixmin)
+
+            if self._verbose:
+                timer.report_clear("hit map to list")
 
         return np.array(local)
 

@@ -129,13 +129,17 @@ def get_submaps(args, comm, data):
     subnpix = 12 * subnside * subnside
 
     # get locally hit pixels
-    lc = OpLocalPixels()
+    lc = OpLocalPixels(verbose=(comm.group_rank == 0))
     localpix = lc.exec(data)
     if localpix is None:
         raise RuntimeError(
             "Process {} has no hit pixels. Perhaps there are fewer "
             "detectors than processes in the group?".format(comm.world_rank)
         )
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    if comm.world_rank == 0:
+        timer.report_clear("Identify local pixels")
 
     # find the locally hit submaps.
     localsm = np.unique(np.floor_divide(localpix, subnpix))
