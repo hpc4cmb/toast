@@ -22,3 +22,5 @@ data/weather_Atacama.fits
 95
 --input-map
 data/ffp10_lensed_scl_100_nside0512.fits
+--atm-wind-dist
+6000

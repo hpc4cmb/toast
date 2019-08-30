@@ -27,3 +27,5 @@ s1,d6,f1,a2
 2
 --focalplane-radius
 2
+--atm-wind-dist
+6000
