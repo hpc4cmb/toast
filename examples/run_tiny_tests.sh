@@ -19,19 +19,17 @@ TOASTDATACOMMIT=397d8422856192f32bb8a23fc240b94cf879da0e
 bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
 # nside
-sed -i.bak "s/512/64/g" tiny* params/satellite/sim_noise_hwp.par
-sed -i.bak "/zip/d" params/ground/ground_sim_simple.par
-# zip -> skip_atmo in ground
-sed -i.bak "s/zip/skip_atmosphere/" params/ground/ground_sim.par params/ground/ground_sim_multisite.par
+sed -i.bak "s/512/64/g" tiny*
+# Do not zip the binned maps
+sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_satellite_shell.sh
+sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_ground_simple_shell.sh
+# Skip the atmospheric simulation
+sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_shell.sh
+sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_multisite_shell.sh
 # just make 30 madam iterations in ground, we don't test destriped maps
 # make sure that file doesn't contain madam_iter_max already so we
 # avoid applying this twice
-for file in params/ground/*par
-do
-    if ! grep -q "madam_iter_max" $file; then
-        sed -i.bak "s/--madam/--madam_iter_max\n30\n--madam/" $file
-    fi
-done
+sed -i.bak "s/\$\@/--madam-iter-max 30 $\@/g" tiny_ground_*shell.sh
 # duration
 sed -i.bak "s/24/1/g" tiny*
 # fake focalplane disable mpi
