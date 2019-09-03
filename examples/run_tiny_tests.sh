@@ -14,7 +14,7 @@
 # * updated `TOASTDATACOMMIT` below to the latest commit
 # * run `run_tiny_tests.sh` again and check that the test passes
 
-TOASTDATACOMMIT=397d8422856192f32bb8a23fc240b94cf879da0e
+TOASTDATACOMMIT=b428734ca6c88fc2278ae0125d2fb362e9d3e507
 
 bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
@@ -41,16 +41,23 @@ sed -i.bak 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
 
 find . -name "*.bak" -delete
 
-: ${TYPES:="satellite ground ground_simple ground_multisite"}
+if [ "x${TYPES}" = "x" ]; then
+    TYPES="satellite ground ground_simple ground_multisite"
+fi
 exit_status=0
 
-for TYPE in $TYPES
-do
+for TYPE in ${TYPES}; do
     echo ">>>>>>>>>> Running test for $TYPE"
     # uncomment this to automatically pickup the latest version
     # wget --output-document=ref_out_tiny_${TYPE}.tgz https://github.com/hpc4cmb/toast-test-data/blob/master/examples/ref_out_tiny_${TYPE}.tgz?raw=true > /dev/null 2>&1
     wget --output-document=ref_out_tiny_${TYPE}.tgz https://github.com/hpc4cmb/toast-test-data/blob/${TOASTDATACOMMIT}/examples/ref_out_tiny_${TYPE}.tgz?raw=true > /dev/null 2>&1
     tar xzf ref_out_tiny_${TYPE}.tgz > /dev/null 2>&1
-    bash tiny_${TYPE}_shell.sh && python check_maps.py $TYPE; (( exit_status = exit_status || $? ))
+
+    bash tiny_${TYPE}_shell.sh \
+    && python check_maps.py $TYPE
+    if [ $? -ne 0 ]; then
+        echo "FAILED"
+        exit_status=$?
+    fi
 done
 exit $exit_status
