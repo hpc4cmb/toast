@@ -129,7 +129,7 @@ def get_submaps(args, comm, data):
     subnpix = 12 * subnside * subnside
 
     # get locally hit pixels
-    lc = OpLocalPixels(verbose=(comm.group_rank == 0))
+    lc = OpLocalPixels()
     localpix = lc.exec(data)
     if localpix is None:
         raise RuntimeError(
