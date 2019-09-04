@@ -14,7 +14,7 @@
 # * updated `TOASTDATACOMMIT` below to the latest commit
 # * run `run_tiny_tests.sh` again and check that the test passes
 
-TOASTDATACOMMIT=b428734ca6c88fc2278ae0125d2fb362e9d3e507
+TOASTDATACOMMIT=d50dfea8a1d939bfc4681171198f5c31eed5fee7
 
 bash fetch_data.sh > /dev/null 2>&1
 bash generate_shell.sh
