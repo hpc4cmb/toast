@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-// #if !defined(DEBUG)
-// #   define DEBUG
-// #endif
+//#if !defined(DEBUG)
+//#   define DEBUG
+//#endif
 
 #include <toast_mpi_internal.hpp>
 
@@ -390,15 +390,24 @@ void toast::mpi_atm_sim::load_realization() {
 
         freal.read((char *)&(*full_index)[0],
                    full_index->size() * sizeof(long));
-        for (int i = 0; i < nelem; ++i) {
-            long ifull = (*full_index)[i];
-            (*compressed_index)[ifull] = i;
-        }
-
-        freal.read((char *)&(*realization)[0],
-                   realization->size() * sizeof(double));
-
         success = freal.good();
+
+        if (success) {
+            for (int i = 0; i < nelem; ++i) {
+                long ifull = (*full_index)[i];
+                if (ifull < 0 || ifull > compressed_index->size() - 1) {
+                    // Cached file must be corrupt
+                    success = false;
+                    break;
+                }
+                (*compressed_index)[ifull] = i;
+            }
+            if (success) {
+                freal.read((char *)&(*realization)[0],
+                           realization->size() * sizeof(double));
+                success = freal.good();
+            }
+        }
         freal.close();
 
         if (success) {
@@ -798,7 +807,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
             if ((x < xstart) || (x > xstart + delta_x) ||
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
-                o << "atmsim::observe : (x,y,z) out of bounds: "
+                std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
                   << std::endl
                   << "x = " << x << std::endl
                   << "y = " << y << std::endl
@@ -1540,6 +1549,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
           << x << ", " << y << ", " << z << ") = ("
           << ix << " /  " << nx << ", " << iy << " / " << ny << ", "
           << iz << ", " << nz << ")";
+        std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
 # endif // ifdef DEBUG
@@ -1573,6 +1583,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
           << "dx = " << dx << std::endl
           << "dy = " << dy << std::endl
           << "dz = " << dz << std::endl;
+        std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
 # endif // ifdef DEBUG
@@ -1591,6 +1602,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << ix << "/" << nx << ", "
               << iy << "/" << ny << ", "
               << iz << "/" << nz << ")";
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1629,6 +1641,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << "ifull101 = " << ifull101 << std::endl
               << "ifull110 = " << ifull110 << std::endl
               << "ifull111 = " << ifull111 << std::endl;
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1669,6 +1682,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << std::endl
               << "in_cone(x, y, z) = " << in_cone(x, y, z)
               << std::endl;
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1941,7 +1955,6 @@ cholmod_sparse * toast::mpi_atm_sim::sqrt_sparse_covariance(cholmod_sparse * cov
                         fclose(covfile);
                         exit(-1);
                     }
-
                     // DEBUG end
                     std::cerr << rank
                               << " : Factorization failed, trying a band "
