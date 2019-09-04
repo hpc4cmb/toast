@@ -1348,10 +1348,10 @@ def add_scan(
         else:
             # For regular patches, this is a failure condition
             if sun_too_close:
-                log.debug("Sun too close", flush=True)
+                log.debug("Sun too close")
                 raise SunTooClose
             if moon_too_close:
-                log.debug("Moon too close", flush=True)
+                log.debug("Moon too close")
                 raise MoonTooClose
         observer.date = to_DJD(t2)
         sun.compute(observer)
@@ -1611,7 +1611,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
     if dir_out:
-        log.info("Creating '{}'".format(dir_out), flush=True)
+        log.info("Creating '{}'".format(dir_out))
         os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
