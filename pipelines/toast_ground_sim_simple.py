@@ -149,14 +149,13 @@ def parse_arguments(comm):
             log.info("{} = {}".format(ag, getattr(args, ag)))
 
     if args.group_size:
-        comm = toast.Comm(groupsize=args.group_size)
+        comm = Comm(groupsize=args.group_size)
 
     if comm.comm_world is None or comm.comm_world.rank == 0:
         os.makedirs(args.outdir, exist_ok=True)
 
-    timer.stop()
     if comm.comm_world is None or comm.world_rank == 0:
-        timer.report("Parsed parameters")
+        timer.report_clear("Parsed parameters")
 
     return args, comm
 
@@ -487,8 +486,7 @@ def main():
     if comm.world_rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
-        timer.stop()
-        timer.report("Gather and dump timing info")
+        timer.report_clear("Gather and dump timing info")
     return
 
 
