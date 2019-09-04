@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/bin/bash
+
+# Abort on Error
+set -e
 
 # How to update the test maps
 
@@ -44,7 +47,6 @@ find . -name "*.bak" -delete
 if [ "x${TYPES}" = "x" ]; then
     TYPES="satellite ground ground_simple ground_multisite"
 fi
-exit_status=0
 
 for TYPE in ${TYPES}; do
     echo ">>>>>>>>>> Running test for $TYPE"
@@ -55,9 +57,4 @@ for TYPE in ${TYPES}; do
 
     bash tiny_${TYPE}_shell.sh \
     && python check_maps.py $TYPE
-    if [ $? -ne 0 ]; then
-        echo "FAILED"
-        exit_status=$?
-    fi
 done
-exit $exit_status

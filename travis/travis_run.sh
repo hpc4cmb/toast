@@ -47,8 +47,8 @@ mpirun -np 2 python -c "import toast.tests; toast.tests.run()"
 cd examples/
 # Disable tests with PySM until https://github.com/astropy/astropy/pull/9190
 # is merged or otherwise resolved
-#bash run_tiny_tests.sh
-TYPES="ground ground_simple" bash run_tiny_tests.sh
+bash run_tiny_tests.sh
+#TYPES="ground ground_simple" bash run_tiny_tests.sh
 cd ..
 
 #===========================================================================

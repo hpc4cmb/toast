@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Abort on Error
+set -e
+
 RSYNC="rsync -avrP"
 WGET="wget -nv -r -c -N -np -nH --progress=bar --cut-dirs=4 --reject \"index.html*\""
 
