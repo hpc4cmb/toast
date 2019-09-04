@@ -41,9 +41,12 @@ TOAST_MPI_DISABLE=1 python -c "import toast.tests; toast.tests.run()"
 
 mpirun -np 2 python -c "import toast.tests; toast.tests.run()"
 
-# cd examples/
-# mpirun -np 2 bash run_tiny_tests.sh
-# cd ..
+# Run tiny MPI example pipelines
+#===========================================================================
+
+cd examples/
+bash run_tiny_tests.sh
+cd ..
 
 #===========================================================================
 # End tests
