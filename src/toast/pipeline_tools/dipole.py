@@ -74,9 +74,10 @@ def simulate_dipole(args, comm, data, cache_prefix, freq=0, verbose=True):
             relativistic quadrupole will include frequency corrections.
     """
     if not args.simulate_dipole:
-        return
+        return None
     log = Logger.get()
     timer = Timer()
+    timer.start()
     if comm.world_rank == 0 and verbose:
         log.info("Simulating dipole")
     has_signal = True
@@ -95,7 +96,6 @@ def simulate_dipole(args, comm, data, cache_prefix, freq=0, verbose=True):
         common_flag_mask=255,
     )
     op_sim_dipole.exec(data)
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Simulate dipole")
+        timer.report_clear("Simulate dipole")
     return cache_prefix

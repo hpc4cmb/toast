@@ -296,7 +296,6 @@ def create_observations(args, comm, focalplane, groupsize):
 
         data.obs.append(obs)
 
-    timer.stop()
     if comm.world_rank == 0:
         timer.report_clear("Read parameters, compute data distribution")
 
@@ -330,9 +329,8 @@ def create_observations(args, comm, focalplane, groupsize):
         tod.set_prec_axis(qprec=precquat)
         del precquat
 
-    timer.stop()
     if comm.world_rank == 0:
-        timer.report("Construct boresight pointing")
+        timer.report_clear("Construct boresight pointing")
 
     return data
 
@@ -364,11 +362,16 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
-    signalname = simulate_sky_signal(
+    signalname = None
+    skyname = simulate_sky_signal(
         args, comm, data, [focalplane], subnpix, localsm, "signal"
     )
+    if skyname is not None:
+        signalname = skyname
 
-    signalname = simulate_dipole(args, comm, data, "signal")
+    diponame = simulate_dipole(args, comm, data, "signal")
+    if diponame is not None:
+        signalname = diponame
 
     # Mapmaking.
 
@@ -397,13 +400,12 @@ def main():
             add_signal(args, comm, data, "tot_signal", signalname)
 
             if gain is not None:
+                timer = Timer()
+                timer.start()
                 op_apply_gain = OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
-
-            if comm.comm_world is not None:
-                comm.comm_world.barrier()
-            if comm.world_rank == 0:
-                tmr.report_clear("  Apply gains {:04d}".format(mc))
+                if comm.world_rank == 0:
+                    timer.report_clear("  Apply gains {:04d}".format(mc))
 
             if mc == firstmc:
                 # For the first realization, optionally export the

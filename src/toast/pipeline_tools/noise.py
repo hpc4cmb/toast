@@ -75,9 +75,8 @@ def simulate_noise(
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Simulate noise")
+        timer.report_clear("Simulate noise")
     return
 
 
@@ -106,7 +105,6 @@ def get_analytic_noise(args, comm, focalplane, verbose=True):
     noise = AnalyticNoise(
         rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET
     )
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Creating noise model")
+        timer.report_clear("Creating noise model")
     return noise

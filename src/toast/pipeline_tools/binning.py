@@ -132,6 +132,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     """
     log = Logger.get()
     timer = Timer()
+    timer.start()
 
     if subnpix is None or localsm is None:
         localpix, localsm, subnpix = get_submaps(args, comm, data, verbose=verbose)
