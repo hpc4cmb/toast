@@ -117,6 +117,9 @@ export TOAST_NUM_THREADS=${OMP_NUM_THREADS}
 echo "OpenMP # threads: ${OMP_NUM_THREADS}"
 echo "TOAST # threads: ${TOAST_NUM_THREADS}"
 
+export NUMBA_THREADING_LAYER=tbb
+export NUMBA_NUM_THREADS=${OMP_NUM_THREADS}
+
 # Set TMPDIR to be on the ramdisk
 export TMPDIR=/dev/shm
 
