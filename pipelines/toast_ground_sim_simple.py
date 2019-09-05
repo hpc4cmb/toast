@@ -149,14 +149,13 @@ def parse_arguments(comm):
             log.info("{} = {}".format(ag, getattr(args, ag)))
 
     if args.group_size:
-        comm = toast.Comm(groupsize=args.group_size)
+        comm = Comm(groupsize=args.group_size)
 
     if comm.comm_world is None or comm.comm_world.rank == 0:
         os.makedirs(args.outdir, exist_ok=True)
 
-    timer.stop()
     if comm.comm_world is None or comm.world_rank == 0:
-        timer.report("Parsed parameters")
+        timer.report_clear("Parsed parameters")
 
     return args, comm
 
@@ -218,7 +217,8 @@ def load_focalplane(args, comm, schedule):
                 detector_data=detector_data, sample_rate=args.sample_rate
             )
         else:
-            focalplane = Focalplane(args.focalplane, sample_rate=args.sample_rate)
+            focalplane = Focalplane(
+                fname_pickle=args.focalplane, sample_rate=args.sample_rate)
     if comm.comm_world is not None:
         focalplane = comm.comm_world.bcast(focalplane, root=0)
 
@@ -486,8 +486,7 @@ def main():
     if comm.world_rank == 0:
         out = os.path.join(args.outdir, "timing")
         dump_timing(alltimers, out)
-        timer.stop()
-        timer.report("Gather and dump timing info")
+        timer.report_clear("Gather and dump timing info")
     return
 
 
@@ -498,6 +497,8 @@ if __name__ == "__main__":
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
         mpiworld, procs, rank = get_world()
+        if procs == 1:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = ["Proc {}: {}".format(rank, x) for x in lines]

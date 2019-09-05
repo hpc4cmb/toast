@@ -255,7 +255,6 @@ def create_observation(args, comm, telescope, ces, verbose=True):
     focalplane = telescope.focalplane
     site = telescope.site
     weather = site.weather
-    fpradius = focalplane.radius
     noise = focalplane.noise
     totsamples = int((ces.stop_time - ces.start_time) * args.sample_rate)
 
@@ -383,7 +382,7 @@ def create_observations(args, comm, schedules):
     # We could also split by site.
 
     if len(schedules) > 1:
-        telescope_data = data.split("telescope")
+        telescope_data = data.split("telescope_name")
         if len(telescope_data) == 1:
             # Only one telescope available
             telescope_data = []
@@ -422,6 +421,8 @@ def main():
     log = Logger.get()
     gt = GlobalTimers.get()
     gt.start("toast_ground_sim (total)")
+    timer0 = Timer()
+    timer0.start()
 
     mpiworld, procs, rank, comm = get_comm()
 
@@ -587,6 +588,7 @@ def main():
         dump_timing(alltimers, out)
         timer.stop()
         timer.report("Gather and dump timing info")
+        timer0.report_clear("toast_ground_sim.py")
     return
 
 

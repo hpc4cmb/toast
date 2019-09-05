@@ -296,7 +296,6 @@ def create_observations(args, comm, focalplane, groupsize):
 
         data.obs.append(obs)
 
-    timer.stop()
     if comm.world_rank == 0:
         timer.report_clear("Read parameters, compute data distribution")
 
@@ -330,9 +329,8 @@ def create_observations(args, comm, focalplane, groupsize):
         tod.set_prec_axis(qprec=precquat)
         del precquat
 
-    timer.stop()
     if comm.world_rank == 0:
-        timer.report("Construct boresight pointing")
+        timer.report_clear("Construct boresight pointing")
 
     return data
 
@@ -342,6 +340,8 @@ def main():
     log = Logger.get()
     gt = GlobalTimers.get()
     gt.start("toast_satellite_sim (total)")
+    timer0 = Timer()
+    timer0.start()
 
     mpiworld, procs, rank, comm = get_comm()
     args, comm, groupsize = parse_arguments(comm, procs)
@@ -362,11 +362,16 @@ def main():
 
     localpix, localsm, subnpix = get_submaps(args, comm, data)
 
-    signalname = simulate_sky_signal(
+    signalname = None
+    skyname = simulate_sky_signal(
         args, comm, data, [focalplane], subnpix, localsm, "signal"
     )
+    if skyname is not None:
+        signalname = skyname
 
-    signalname = simulate_dipole(args, comm, data, "signal")
+    diponame = simulate_dipole(args, comm, data, "signal")
+    if diponame is not None:
+        signalname = diponame
 
     # Mapmaking.
 
@@ -395,13 +400,12 @@ def main():
             add_signal(args, comm, data, "tot_signal", signalname)
 
             if gain is not None:
+                timer = Timer()
+                timer.start()
                 op_apply_gain = OpApplyGain(gain, name="tot_signal")
                 op_apply_gain.exec(data)
-
-            if comm.comm_world is not None:
-                comm.comm_world.barrier()
-            if comm.world_rank == 0:
-                tmr.report_clear("  Apply gains {:04d}".format(mc))
+                if comm.world_rank == 0:
+                    timer.report_clear("  Apply gains {:04d}".format(mc))
 
             if mc == firstmc:
                 # For the first realization, optionally export the
@@ -480,6 +484,7 @@ def main():
         dump_timing(alltimers, out)
         tmr.stop()
         tmr.report("Gather and dump timing info")
+        timer0.report_clear("toast_satellite_sim.py")
     return
 
 
@@ -490,6 +495,8 @@ if __name__ == "__main__":
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
         mpiworld, procs, rank = get_world()
+        if procs == 1:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = ["Proc {}: {}".format(rank, x) for x in lines]

@@ -46,8 +46,8 @@ def add_pysm_args(parser):
     parser.add_argument(
         "--pysm-model",
         required=False,
-        help="Comma separated models for on-the-fly PySM "
-        'simulation, e.g. s3,d6,f1,a2"',
+        help='Comma separated models for on-the-fly PySM '
+        'simulation, e.g. "s1,d6,f1,a2"',
     )
 
     parser.add_argument(
@@ -127,9 +127,8 @@ def scan_sky_signal(
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Read and sample map")
+        timer.report_clear("Read and sample map")
 
     return cache_prefix
 
@@ -142,7 +141,7 @@ def simulate_sky_signal(
 
     """
     if not args.pysm_model:
-        return
+        return None
     timer = Timer()
     timer.start()
     # Convolve a signal TOD from PySM
@@ -161,53 +160,7 @@ def simulate_sky_signal(
     op_sim_pysm.exec(data)
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("PySM")
+        timer.report_clear("PySM")
 
     return cache_prefix
-
-
-@function_timer
-def expand_pointing(args, comm, data):
-    """ Expand boresight pointing to every detector.
-
-    """
-    log = Logger.get()
-    timer = Timer()
-    timer.start()
-
-    hwprpm = args.hwprpm
-    hwpstep = None
-    if args.hwpstep is not None:
-        hwpstep = float(args.hwpstep)
-    hwpsteptime = args.hwpsteptime
-
-    if comm.world_rank == 0:
-        log.info("Expanding pointing")
-
-    pointing = OpPointingHpix(
-        nside=args.nside,
-        nest=True,
-        mode="IQU",
-        hwprpm=hwprpm,
-        hwpstep=hwpstep,
-        hwpsteptime=hwpsteptime,
-    )
-
-    pointing.exec(data)
-
-    # Only purge the pointing if we are NOT going to export the
-    # data to a TIDAS volume
-    if (args.tidas is None) and (args.spt3g is None):
-        for ob in data.obs:
-            tod = ob["tod"]
-            tod.free_radec_quats()
-
-    if comm.comm_world is not None:
-        comm.comm_world.barrier()
-    timer.stop()
-    if comm.world_rank == 0:
-        timer.report("Pointing generation")
-
-    return

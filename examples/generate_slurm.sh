@@ -52,10 +52,3 @@ done
 if [ "${GENERATE_SHELL}" -gt 0 ]; then
     ${TOPDIR}/generate_shell.sh
 fi
-
-# set default to 0
-: ${GENERATE_VTUNE:=0}
-# generate VTune if set to greater than zero
-if [ "${GENERATE_VTUNE}" -gt 0 ]; then
-    ${TOPDIR}/generate_vtune.sh
-fi

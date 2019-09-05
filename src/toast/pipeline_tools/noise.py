@@ -24,7 +24,21 @@ def add_noise_args(parser):
         dest="simulate_noise",
     )
     parser.add_argument(
+        "--simulate-noise",
+        required=False,
+        action="store_true",
+        help="Add simulated noise",
+        dest="simulate_noise",
+    )
+    parser.add_argument(
         "--no-noise",
+        required=False,
+        action="store_false",
+        help="Do not add simulated noise",
+        dest="simulate_noise",
+    )
+    parser.add_argument(
+        "--no-simulate-noise",
         required=False,
         action="store_false",
         help="Do not add simulated noise",
@@ -61,9 +75,8 @@ def simulate_noise(
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Simulate noise")
+        timer.report_clear("Simulate noise")
     return
 
 
@@ -92,7 +105,6 @@ def get_analytic_noise(args, comm, focalplane, verbose=True):
     noise = AnalyticNoise(
         rate=rates, fmin=fmin, detectors=detectors, fknee=fknee, alpha=alpha, NET=NET
     )
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Creating noise model")
+        timer.report_clear("Creating noise model")
     return noise

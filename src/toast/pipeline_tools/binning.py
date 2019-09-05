@@ -132,6 +132,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     """
     log = Logger.get()
     timer = Timer()
+    timer.start()
 
     if subnpix is None or localsm is None:
         localpix, localsm, subnpix = get_submaps(args, comm, data, verbose=verbose)
@@ -194,7 +195,7 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
         if comm.world_rank == 0 and verbose:
             log.info("Wrote hits to {}".format(fname))
     if args.write_wcov_inv:
-        fname = os.path.join(args.outdir, "npp.fits")
+        fname = os.path.join(args.outdir, "invnpp.fits")
         if args.zip_maps:
             fname += ".gz"
         white_noise_cov_matrix.write_healpix_fits(fname)
@@ -212,6 +213,8 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
 
     if args.write_wcov:
         fname = os.path.join(args.outdir, "npp.fits")
+        if args.zip_maps:
+            fname += ".gz"
         white_noise_cov_matrix.write_healpix_fits(fname)
         if comm.world_rank == 0 and verbose:
             log.info("Wrote white noise covariance to {}".format(fname))

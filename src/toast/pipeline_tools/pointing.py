@@ -110,9 +110,8 @@ def expand_pointing(args, comm, data):
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0:
-        timer.report("Pointing generation")
+        timer.report_clear("Pointing generation")
 
     return
 
@@ -149,8 +148,7 @@ def get_submaps(args, comm, data):
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0:
-        timer.report("Identify local submaps")
+        timer.report_clear("Identify local submaps")
 
     return localpix, localsm, subnpix

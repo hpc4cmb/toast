@@ -28,14 +28,12 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 fpfile_atacama="${outdir}/fp_atacama_${detpix}.pkl"
 if [ ! -e "${fpfile_atacama}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_atacama" \
         --out "${outdir}/fp_atacama" --minpix $detpix --fov 1
 fi
 
 fpfile_pole="${outdir}/fp_pole_${detpix}.pkl"
 if [ ! -e "${fpfile_pole}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp_pole" \
         --out "${outdir}/fp_pole" --minpix $detpix --fov 1
 fi
 
@@ -47,9 +45,8 @@ schedulefile_atacama="${outdir}/schedule_atacama.txt"
 
 if [ ! -e "${schedulefile_atacama}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
         --out "${schedulefile_atacama}" --patch @PATCH@ \
-	--operational_days 1
+	--operational-days 1
 fi
 
 schparfile="@TOPDIR@/params/ground/schedule_pole.par"
@@ -58,9 +55,8 @@ schedulefile_pole="${outdir}/schedule_pole.txt"
 
 if [ ! -e "${schedulefile_pole}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
-         --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule_pole" \
          --out "${schedulefile_pole}" --patch @PATCH@ \
-	 --operational_days 1
+	 --operational-days 1
 fi
 
 # The executable script
@@ -77,19 +73,16 @@ parfile="@TOPDIR@/params/ground/ground_sim_multisite.par"
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
---fp ${fpfile_atacama},${fpfile_pole} \
+--focalplane ${fpfile_atacama},${fpfile_pole} \
 --schedule ${schedulefile_atacama},${schedulefile_pole} \
 --out ${outdir}/out \
---atm_cache ${outdir}/atm_cache \
---atm_xstep @CELLSIZE@ \
---atm_ystep @CELLSIZE@ \
---atm_zstep @CELLSIZE@ \
---groupsize 2 \
---samplerate @SAMPLERATE@ \
---scanrate @SCANRATE@ \
+--atm-cache ${outdir}/atm_cache \
+--atm-xstep @CELLSIZE@ \
+--atm-ystep @CELLSIZE@ \
+--atm-zstep @CELLSIZE@ \
+--group-size 2 \
+--sample-rate @SAMPLERATE@ \
+--scan-rate @SCANRATE@ \
 $@ \
 "
 
@@ -112,15 +105,3 @@ run="@MPI_RUN@ -n ${procs}"
 : ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
-
-# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
-shopt -s nullglob
-if [ -x ${PWD}/generate_notes.sh ]; then
-    ${PWD}/generate_notes.sh ${outdir}
-else
-    for i in ${outdir}/timing_report*.out
-    do
-        echo -e "\n--> ${i}\n" >> ${LOG_OUT}
-        head -n 1000 ${i} >> ${LOG_OUT}
-    done
-fi

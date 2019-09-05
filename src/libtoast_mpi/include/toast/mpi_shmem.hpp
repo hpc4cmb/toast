@@ -206,6 +206,10 @@ class mpi_shmem {
 
         ~mpi_shmem() {
             free();
+	    if (shmcomm_ != MPI_COMM_NULL) {
+	        MPI_Comm_free(&shmcomm_);
+                shmcomm_ = MPI_COMM_NULL;
+	    }
         }
 
     private:
@@ -214,8 +218,8 @@ class mpi_shmem {
         T * global_ = NULL;
         size_t n_ = 0;
         size_t nlocal_ = 0;
-        MPI_Comm comm_;
-        MPI_Comm shmcomm_;
+        MPI_Comm comm_ = MPI_COMM_NULL;
+        MPI_Comm shmcomm_ = MPI_COMM_NULL;
         MPI_Win win_ = MPI_WIN_NULL;
         int ntasks_;
         int rank_;

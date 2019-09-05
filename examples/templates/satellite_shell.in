@@ -28,7 +28,6 @@ fpparfile="@TOPDIR@/params/satellite/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --minpix ${detpix} --out "${outdir}/fp"
 fi
 
@@ -58,15 +57,12 @@ groupsize=1
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
---groupsize ${groupsize} \
---fp ${fpfile} \
+--group-size ${groupsize} \
+--focalplane ${fpfile} \
 --nside ${nside} \
---obs ${obs_len} \
+--obs-time-h ${obs_len} \
 --gap ${obs_gap} \
---numobs ${nobs} \
+--obs-num ${nobs} \
 --outdir ${outdir}/out \
 $@ \
 "
@@ -90,15 +86,3 @@ run="@MPI_RUN@ -n ${procs}"
 : ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
-
-# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
-shopt -s nullglob
-if [ -x ${PWD}/generate_notes.sh ]; then
-    ${PWD}/generate_notes.sh ${outdir}
-else
-    for i in ${outdir}/timing_report*.out
-    do
-        echo -e "\n--> ${i}\n" >> ${LOG_OUT}
-        head -n 1000 ${i} >> ${LOG_OUT}
-    done
-fi

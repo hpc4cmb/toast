@@ -1,10 +1,13 @@
 #!/bin/bash
 
-RSYNC="rsync -a"
-WGET="wget -nv -d -r -c -N -np -nH --cut-dirs=3 --reject \"index.html*\""
+# Abort on Error
+set -e
 
-LOCAL_DATA="/project/projectdirs/cmb/www/toast_data"
-REMOTE_DATA="http://portal.nersc.gov/project/cmb/toast_data"
+RSYNC="rsync -avrP"
+WGET="wget -nv -r -c -N -np -nH --progress=bar --cut-dirs=4 --reject \"index.html*\""
+
+LOCAL_DATA="/project/projectdirs/cmb/www/toast_data/example_data"
+REMOTE_DATA="http://portal.nersc.gov/project/cmb/toast_data/example_data/"
 
 # Get the absolute path to the directory with this script
 pushd $(dirname $0) > /dev/null
@@ -23,7 +26,7 @@ if [ -d "${LOCAL_DATA}" ]; then
 else
     # no
     eval ${WGET} "${REMOTE_DATA}" &> /dev/stdout
-    rm robots.txt toast_data
+    rm robots.txt
 fi
 
 popd > /dev/null

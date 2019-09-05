@@ -93,6 +93,9 @@ class Focalplane:
                 cosangs.append(np.dot(ZAXIS, vec))
             mincos = np.amin(cosangs)
             self._radius = np.degrees(np.arccos(mincos))
+            # Add a very small margin to avoid numeric issues
+            # in the atmospheric simulation
+            self._radius *= 1.001
         return self._radius
 
     @property

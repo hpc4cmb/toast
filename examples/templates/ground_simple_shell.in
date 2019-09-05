@@ -28,7 +28,6 @@ fpparfile="@TOPDIR@/params/ground/focalplane.par"
 
 if [ ! -e "${fpfile}" ]; then
     @MPI_RUN@ -n 1 toast_fake_focalplane.py @$fpparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_fp" \
         --out "${outdir}/fp" --minpix $detpix
 fi
 
@@ -40,9 +39,8 @@ schedulefile="${outdir}/schedule.txt"
 
 if [ ! -e "${schedulefile}" ]; then
     @MPI_RUN@ -n 1 toast_ground_schedule.py @$schparfile \
-        --toast-output-dir "${outdir}" --toast-timing-fname "timing_report_ground_schedule" \
         --out "${schedulefile}" --patch @PATCH@ \
-        --operational_days 1
+        --operational-days 1
 fi
 
 # The executable script
@@ -59,14 +57,11 @@ parfile="@TOPDIR@/params/ground/ground_sim_simple.par"
 # The commandline
 
 com="${ex} @${parfile} \
---toast-output-dir "${outdir}" \
---toast-timing-fname "timing_report_main" \
---enable-timer-serialization \
---fp ${fpfile} \
+--focalplane ${fpfile} \
 --schedule ${schedulefile} \
 --out ${outdir}/out \
---samplerate @SAMPLERATE@ \
---scanrate @SCANRATE@ \
+--sample-rate @SAMPLERATE@ \
+--scan-rate @SCANRATE@ \
 $@ \
 "
 
@@ -89,15 +84,3 @@ run="@MPI_RUN@ -n ${procs}"
 : ${LOG_OUT:="${outdir}/log"}
 echo "${run} ${com}"
 eval ${run} ${com} > ${LOG_OUT} 2>&1
-
-# if the glob is unsuccessful, don't pass ${outdir}/timing_report*.out
-shopt -s nullglob
-if [ -x ${PWD}/generate_notes.sh ]; then
-    ${PWD}/generate_notes.sh ${outdir}
-else
-    for i in ${outdir}/timing_report*.out
-    do
-        echo -e "\n--> ${i}\n" >> ${LOG_OUT}
-        head -n 1000 ${i} >> ${LOG_OUT}
-    done
-fi

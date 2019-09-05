@@ -80,6 +80,7 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
     if (comm is None or comm.world_rank == 0) and verbose:
         log.info("Adding signal from {} to {}" "".format(prefix_in, prefix_out))
     timer = Timer()
+    timer.start()
     for obs in data.obs:
         tod = obs["tod"]
         for det in tod.local_dets:
@@ -94,9 +95,8 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
             del ref_in, ref_out
         if purge:
             tod.cache.clear(prefix_in + ".*")
-    timer.stop()
     if (comm is None or comm.world_rank == 0) and verbose:
-        timer.report("Add signal")
+        timer.report_clear("Add signal")
     return
 
 

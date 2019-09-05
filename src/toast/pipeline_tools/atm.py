@@ -36,7 +36,21 @@ def add_atmosphere_args(parser):
         dest="simulate_atmosphere",
     )
     parser.add_argument(
+        "--simulate-atmosphere",
+        required=False,
+        action="store_true",
+        help="Add simulated atmoshere",
+        dest="simulate_atmosphere",
+    )
+    parser.add_argument(
         "--no-atmosphere",
+        required=False,
+        action="store_false",
+        help="Do not add simulated atmosphere",
+        dest="simulate_atmosphere",
+    )
+    parser.add_argument(
+        "--no-simulate-atmosphere",
         required=False,
         action="store_false",
         help="Do not add simulated atmosphere",
