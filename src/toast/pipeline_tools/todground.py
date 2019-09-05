@@ -176,7 +176,7 @@ def add_todground_args(parser):
         required=False,
         help="Only use a subset of the schedule.  The argument is a string "
         'of the form "[isplit],[nsplit]" and only observations that satisfy '
-        "scan % nsplit == isplit are included",
+        "scan modulo nsplit == isplit are included",
     )
     parser.add_argument(
         "--sort-schedule",
