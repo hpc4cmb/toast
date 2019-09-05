@@ -19,34 +19,47 @@ set -e
 
 TOASTDATACOMMIT=d50dfea8a1d939bfc4681171198f5c31eed5fee7
 
-bash fetch_data.sh > /dev/null 2>&1
-bash generate_shell.sh
-# nside
-sed -i.bak "s/512/64/g" tiny*
-# Do not zip the binned maps
-sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_satellite_shell.sh
-sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_ground_simple_shell.sh
-# Skip the atmospheric simulation
-sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_shell.sh
-sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_multisite_shell.sh
-# just make 30 madam iterations in ground, we don't test destriped maps
-# make sure that file doesn't contain madam_iter_max already so we
-# avoid applying this twice
-sed -i.bak "s/\$\@/--madam-iter-max 30 $\@/g" tiny_ground_*shell.sh
-# duration
-sed -i.bak "s/24/1/g" tiny*
-# fake focalplane disable mpi
-sed -i.bak "s/mpirun -n 1//g" tiny*
-# write log to stdout
-sed -i.bak 's/eval \${run} \${com}.*$/eval \${run} \${com}/' tiny*
-# 2 procs, 1 thread each
-sed -i.bak 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' tiny*
-
-find . -name "*.bak" -delete
-
 if [ "x${TYPES}" = "x" ]; then
     TYPES="satellite ground ground_simple ground_multisite"
 fi
+
+bash fetch_data.sh > /dev/null 2>&1
+bash generate_shell.sh
+
+# Adjust the shell scripts to run quicker
+for f in tiny*sh; do
+    # nside
+    sed -i.bak "s/512/64/g" $f
+    # duration
+    sed -i.bak "s/24/1/g" $f
+    # fake focalplane disable mpi
+    sed -i.bak "s/mpirun -n 1//g" $f
+    # write log to stdout
+    sed -i.bak 's/eval \${run} \${com}.*$/eval \${run} \${com}/' $f
+    # 2 procs, 1 thread each
+    sed -i.bak 's/OMP_NUM_THREADS=\${threads}/OMP_NUM_THREADS=1/' $f
+done
+# Do not zip the binned maps
+if [ -e tiny_satellite_shell.sh ]; then
+    sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_satellite_shell.sh
+fi
+if [ -e tiny_ground_simple_shell.sh ]; then
+    sed -i.bak "s/\$\@/--no-zip $\@/g" tiny_ground_simple_shell.sh
+fi
+# Skip the atmospheric simulation, limit madam to 30 iterations
+if [ -e tiny_ground_shell.sh ]; then
+    sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_shell.sh
+    sed -i.bak "s/\$\@/--madam-iter-max 30 $\@/g" $f
+fi
+if [ -e tiny_ground_simple_shell.sh ]; then
+    sed -i.bak "s/\$\@/--madam-iter-max 30 $\@/g" $f
+fi
+if [ -e tiny_ground_multisite_shell.sh ]; then
+    sed -i.bak "s/\$\@/--no-atmosphere $\@/g" tiny_ground_multisite_shell.sh
+    sed -i.bak "s/\$\@/--madam-iter-max 30 $\@/g" $f
+fi
+
+find . -name "*.bak" -delete
 
 for TYPE in ${TYPES}; do
     echo ">>>>>>>>>> Running test for $TYPE"
