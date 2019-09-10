@@ -13,7 +13,7 @@ import traceback
 
 from toast.mpi import get_world, Comm
 
-from toast.utils import Logger, Environment
+from toast.utils import Logger, Environment, set_numba_threading
 
 
 def main():
@@ -45,6 +45,8 @@ def main():
     else:
         if rank == 0:
             log.info("Running with {} processes".format(procs))
+
+    set_numba_threading()
 
     groupsize = args.groupsize
     if groupsize <= 0:

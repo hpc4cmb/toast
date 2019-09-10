@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import gc
 
 import numpy as np
@@ -41,10 +42,11 @@ def set_numba_threading():
 
     For parallel numba jit blocks, the backend threading layer is selected at runtime
     based on an order set inside the numba package.  We would like to change the
-    order of selection to prefer the OpenMP backend in order to be compatible with
-    other pieces of compiled code that use the OpenMP thread pool.  If OpenMP is not
-    supported, then we next try to use TBB for threading and finally fall back to the
-    default, which uses a multiprocessing workqueue.
+    order of selection to prefer one of the thread-based backends (omp or tbb).  We also
+    set the maximum number of threads used by numba to be the same as the number of
+    threads used by TOAST.  Since TOAST does not use numba, it means that there will
+    be a consistent maximum number of threads in use at all times and no
+    oversubscription.
 
     Args:
         None
@@ -53,6 +55,10 @@ def set_numba_threading():
         None
 
     """
+    # Get the number of threads used by TOAST at runtime.
+    env = Environment.get()
+    toastthreads = env.max_threads()
+
     log = Logger.get()
     threading = "default"
     try:
@@ -61,38 +67,40 @@ def set_numba_threading():
         threading = "omp"
     except ImportError:
         # no OpenMP support
+        log.debug("Numba: No OpenMP support")
         try:
             from numba.npyufunc import tbbpool
 
             threading = "tbb"
         except ImportError:
             # no TBB
+            log.debug("Numba: No TBB support")
             pass
     try:
-        from numba import config, njit, threading_layer
+        from numba import vectorize, threading_layer
 
-        config.THREADING_LAYER = threading
+        # Set threading layer and number of threads by way of
+        # the environment.
+        os.environ["NUMBA_THREADING_LAYER"] = threading
+        os.environ["NUMBA_NUM_THREADS"] = "{:d}".format(toastthreads)
+        log.debug("Attempting to set numba threading layer to '{}'".format(threading))
 
         # In order to get numba to actually select a threading layer, we must
         # trigger compilation of a parallel function.
-        @njit(parallel=True)
-        def foo(a, b):
-            return a + b
+        @vectorize("float64(float64)", target="parallel")
+        def force_thread_launch(x):
+            return x + 1
 
-        x = np.arange(10.0)
-        y = x.copy()
-        out_py = x + y
-        out_numba = foo(x, y)
-        if not np.allclose(out_py, out_numba):
-            log.info("Numba results do not match python, not setting threading")
-        else:
-            # Log the layer that was selected
-            layer = threading_layer()
-            log.info("Numba threading layer set to:  {}".format(layer))
+        force_thread_launch(np.zeros(1))
+
+        # Log the layer that was selected
+        layer = threading_layer()
+        log.info("Numba threading layer set to:  {}".format(layer))
+        log.info("Numba configured to use {} threads".format(toastthreads))
+
     except ImportError:
         # Numba not available at all
-        log.info("Numba not available, not setting threading layer")
-
+        log.info("Numba not available:  skipping threading layer selection")
 
 try:
     import psutil
