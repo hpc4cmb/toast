@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import gc
 
 import numpy as np
@@ -34,6 +35,69 @@ from ._libtoast import (
     vfast_log,
     vfast_erfinv,
 )
+
+numba_threading_layer = "NA"
+
+
+def set_numba_threading():
+    """Set the numba threading layer.
+
+    For parallel numba jit blocks, the backend threading layer is selected at runtime
+    based on an order set inside the numba package.  We would like to change the
+    order of selection to prefer one of the thread-based backends (omp or tbb).  We also
+    set the maximum number of threads used by numba to be the same as the number of
+    threads used by TOAST.  Since TOAST does not use numba, it means that there will
+    be a consistent maximum number of threads in use at all times and no
+    oversubscription.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    """
+    global numba_threading_layer
+    # Get the number of threads used by TOAST at runtime.
+    env = Environment.get()
+    toastthreads = env.max_threads()
+
+    threading = "default"
+    try:
+        from numba.npyufunc import omppool
+
+        threading = "omp"
+    except ImportError:
+        # no OpenMP support
+        try:
+            from numba.npyufunc import tbbpool
+
+            threading = "tbb"
+        except ImportError:
+            # no TBB
+            pass
+    try:
+        from numba import vectorize, threading_layer
+
+        # Set threading layer and number of threads by way of
+        # the environment.
+        os.environ["NUMBA_THREADING_LAYER"] = threading
+        os.environ["NUMBA_NUM_THREADS"] = "{:d}".format(toastthreads)
+
+        # In order to get numba to actually select a threading layer, we must
+        # trigger compilation of a parallel function.
+        @vectorize("float64(float64)", target="parallel")
+        def force_thread_launch(x):
+            return x + 1
+
+        force_thread_launch(np.zeros(1))
+
+        # Log the layer that was selected
+        numba_threading_layer = threading_layer()
+
+    except ImportError:
+        # Numba not available at all
+        pass
 
 
 try:
@@ -116,6 +180,7 @@ try:
         if comm is not None:
             comm.Barrier()
         return
+
 
 except ImportError:
 

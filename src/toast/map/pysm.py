@@ -2,7 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from ..utils import set_numba_threading
+
 from ..timing import function_timer
+
 
 pysm = None
 try:
