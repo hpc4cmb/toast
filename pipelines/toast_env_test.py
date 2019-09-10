@@ -13,7 +13,7 @@ import traceback
 
 from toast.mpi import get_world, Comm
 
-from toast.utils import Logger, Environment, set_numba_threading
+from toast.utils import Logger, Environment, numba_threading_layer
 
 
 def main():
@@ -40,13 +40,12 @@ def main():
     mpiworld, procs, rank = get_world()
     if rank == 0:
         env.print()
+        log.info("Numba threading layer set to '{}'".format(numba_threading_layer))
     if mpiworld is None:
         log.info("Running serially with one process")
     else:
         if rank == 0:
             log.info("Running with {} processes".format(procs))
-
-    set_numba_threading()
 
     groupsize = args.groupsize
     if groupsize <= 0:

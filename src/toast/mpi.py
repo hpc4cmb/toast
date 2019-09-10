@@ -8,7 +8,7 @@ import ctypes as ct
 
 import numpy as np
 
-from .utils import Environment, Logger
+from .utils import Environment, Logger, set_numba_threading
 
 env = Environment.get()
 
@@ -17,7 +17,7 @@ use_mpi = env.use_mpi()
 MPI = None
 MPI_Comm = None
 
-if use_mpi:
+if use_mpi and (MPI is None):
     try:
         import mpi4py.MPI as MPI
     except ImportError:
@@ -36,6 +36,21 @@ if use_mpi:
             "Failed to set the portable MPI communicator datatype. MPI4py is "
             "probably too old. You need to have at least version 2.0. ({})".format(e)
         )
+
+# We set the numba threading here, **after** importing MPI.  The reasons are:
+#
+#  1. The import of MPI is time critical.  MPI_Init must be called quickly
+#     before the scheduling system thinks that the job is hung and kills it.
+#
+#  2. This source file is loaded by the top level module import, so placing
+#     code here will ensure that it is run once and only once when toast itself
+#     is imported and before any other dependencies are imported which might
+#     use numba internally.
+
+_have_set_numba_threading = False
+if not _have_set_numba_threading:
+    set_numba_threading()
+    _have_set_numba_threading = True
 
 
 def comm_py2c(comm):
@@ -224,6 +239,7 @@ class Comm(object):
 # Revision = 0c89cb0ec2ebfd32d47cda6b5bc87cfb8981ee9c
 #
 
+
 class MPILock(object):
     """
     Implement a MUTEX lock with MPI one-sided operations.
@@ -238,6 +254,7 @@ class MPILock(object):
         root (int): the rank which stores the list of waiting processes.
         debug (bool): if True, print debugging info about the lock status.
     """
+
     # This creates a new integer for each time the class is instantiated.
     newid = next(itertools.count())
 
@@ -271,17 +288,19 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             # Root allocates the buffer
             status = 0
             try:
                 self._win = MPI.Win.Create(self._waiting, comm=self._comm)
             except:
                 if self._debug:
-                    print("rank {} win create raised exception".format(self._rank),
-                          flush=True)
+                    print(
+                        "rank {} win create raised exception".format(self._rank),
+                        flush=True,
+                    )
                 status = 1
-            self._checkabort(self._comm, status,
-                             "shared memory allocation")
+            self._checkabort(self._comm, status, "shared memory allocation")
 
             self._comm.barrier()
 
@@ -311,11 +330,11 @@ class MPILock(object):
 
     def _checkabort(self, comm, status, msg):
         from mpi4py import MPI
+
         failed = comm.allreduce(status, op=MPI.SUM)
         if failed > 0:
             if comm.rank == self._root:
-                print("MPIShared: one or more processes failed: {}".format(
-                    msg))
+                print("MPIShared: one or more processes failed: {}".format(msg))
             comm.Abort()
         return
 
@@ -332,39 +351,58 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             waiting = np.zeros((self._procs,), dtype=np.uint8)
             lock = np.zeros((1,), dtype=np.uint8)
             lock[0] = 1
 
             # lock the window
             if self._debug:
-                print("lock:  rank {}, instance {} locking shared window".format(
-                    self._rank, self._tag), flush=True)
+                print(
+                    "lock:  rank {}, instance {} locking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
 
             # add ourselves to the list of waiting ranks
             if self._debug:
-                print("lock:  rank {}, instance {} putting rank".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR],
-                          self._root, target=self._rank)
+                print(
+                    "lock:  rank {}, instance {} putting rank".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root, target=self._rank)
 
             # get the full list of current processes waiting or running
             if self._debug:
-                print("lock:  rank {}, instance {} getting waitlist".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Get(
-                [waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
+                print(
+                    "lock:  rank {}, instance {} getting waitlist".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
             if self._debug:
-                print("lock:  rank {}, instance {} list = {}".format(self._rank,
-                                                                     self._tag, waiting), flush=True)
+                print(
+                    "lock:  rank {}, instance {} list = {}".format(
+                        self._rank, self._tag, waiting
+                    ),
+                    flush=True,
+                )
 
             self._win.Flush(self._root)
 
             # unlock the window
             if self._debug:
-                print("lock:  rank {}, instance {} unlocking shared window".format(
-                    self._rank, self._tag), flush=True)
+                print(
+                    "lock:  rank {}, instance {} unlocking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Unlock(self._root)
 
             # Go through the list of waiting processes.  If any one is
@@ -374,12 +412,15 @@ class MPILock(object):
                 if (waiting[p] == 1) and (p != self._rank):
                     # we have to wait...
                     if self._debug:
-                        print("lock:  rank {} waiting for the lock".format(self._rank),
-                              flush=True)
+                        print(
+                            "lock:  rank {} waiting for the lock".format(self._rank),
+                            flush=True,
+                        )
                     self._comm.Recv(lock, source=MPI.ANY_SOURCE, tag=self._tag)
                     if self._debug:
-                        print("lock:  rank {} got the lock".format(self._rank),
-                              flush=True)
+                        print(
+                            "lock:  rank {} got the lock".format(self._rank), flush=True
+                        )
                     break
 
         # We have the lock now!
@@ -396,38 +437,57 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             waiting = np.zeros((self._procs,), dtype=np.uint8)
             lock = np.zeros((1,), dtype=np.uint8)
 
             # lock the window
             if self._debug:
-                print("unlock:  rank {}, instance {} locking shared window"
-                      .format(self._rank, self._tag), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} locking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
 
             # remove ourselves to the list of waiting ranks
             if self._debug:
-                print("unlock:  rank {}, instance {} putting rank".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root,
-                          target=self._rank)
+                print(
+                    "unlock:  rank {}, instance {} putting rank".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root, target=self._rank)
 
             # get the full list of current processes waiting or running
             if self._debug:
-                print("unlock:  rank {}, instance {} getting waitlist".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR],
-                          self._root)
+                print(
+                    "unlock:  rank {}, instance {} getting waitlist".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
             if self._debug:
-                print("unlock:  rank {}, instance {} list = {}"
-                      .format(self._rank, self._tag, waiting), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} list = {}".format(
+                        self._rank, self._tag, waiting
+                    ),
+                    flush=True,
+                )
 
             self._win.Flush(self._root)
 
             # unlock the window
             if self._debug:
-                print("unlock:  rank {}, instance {} unlocking shared window"
-                      .format(self._rank, self._tag), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} unlocking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Unlock(self._root)
 
             # Go through the list of waiting processes.  Pass the lock
@@ -437,8 +497,12 @@ class MPILock(object):
                 nextrank = next % self._procs
                 if waiting[nextrank] == 1:
                     if self._debug:
-                        print("unlock:  rank {} passing lock to {}"
-                              .format(self._rank, nextrank), flush=True)
+                        print(
+                            "unlock:  rank {} passing lock to {}".format(
+                                self._rank, nextrank
+                            ),
+                            flush=True,
+                        )
                     self._comm.Send(lock, nextrank, tag=self._tag)
                     self._have_lock = False
                     break
@@ -506,6 +570,7 @@ class MPIShared(object):
         self._mynode = 0
         if self._comm is not None:
             import mpi4py.MPI as MPI
+
             self._nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
             self._noderank = self._nodecomm.rank
             self._nodeprocs = self._nodecomm.size
@@ -565,6 +630,7 @@ class MPIShared(object):
             dsize = self._dtype.itemsize
         else:
             import mpi4py.MPI as MPI
+
             # We are actually using MPI, so we need to ensure that
             # our specified numpy dtype has a corresponding MPI datatype.
             status = 0
@@ -575,8 +641,7 @@ class MPIShared(object):
                 self._mpitype = MPI._typedict[self._dtype.char]
             except:
                 status = 1
-            self._checkabort(self._comm, status,
-                             "numpy to MPI type conversion")
+            self._checkabort(self._comm, status, "numpy to MPI type conversion")
 
             dsize = self._mpitype.Get_size()
 
@@ -585,20 +650,18 @@ class MPIShared(object):
 
         self._buffer = None
         if self._comm is None:
-            self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"),
-                                      order="C")
+            self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"), order="C")
         else:
             import mpi4py.MPI as MPI
+
             # Every process allocates a piece of the buffer.  The per-
             # process pieces are guaranteed to be contiguous.
             status = 0
             try:
-                self._win = MPI.Win.Allocate_shared(nbytes, dsize,
-                                                    comm=self._nodecomm)
+                self._win = MPI.Win.Allocate_shared(nbytes, dsize, comm=self._nodecomm)
             except:
                 status = 1
-            self._checkabort(self._nodecomm, status,
-                             "shared memory allocation")
+            self._checkabort(self._nodecomm, status, "shared memory allocation")
 
             # Every process looks up the memory address of rank zero's piece,
             # which is the start of the contiguous shared buffer.
@@ -685,11 +748,11 @@ class MPIShared(object):
 
     def _checkabort(self, comm, status, msg):
         import mpi4py.MPI as MPI
+
         failed = comm.allreduce(status, op=MPI.SUM)
         if failed > 0:
             if comm.rank == 0:
-                print("MPIShared: one or more processes failed: {}".format(
-                    msg))
+                print("MPIShared: one or more processes failed: {}".format(msg))
                 sys.stdout.flush()
             comm.Abort()
         return
@@ -728,8 +791,10 @@ class MPIShared(object):
         if self._rank == fromrank:
             if len(data.shape) != len(self._shape):
                 if len(data.shape) != len(self._shape):
-                    msg = "input data dimensions {} incompatible with "\
+                    msg = (
+                        "input data dimensions {} incompatible with "
                         "buffer ({})".format(len(data.shape), len(self._shape))
+                    )
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
@@ -737,8 +802,10 @@ class MPIShared(object):
                 else:
                     raise RuntimeError(msg)
             if len(offset) != len(self._shape):
-                msg = "input offset dimensions {} incompatible with "\
+                msg = (
+                    "input offset dimensions {} incompatible with "
                     "buffer ({})".format(len(offset), len(self._shape))
+                )
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
@@ -746,9 +813,12 @@ class MPIShared(object):
                 else:
                     raise RuntimeError(msg)
             if data.dtype != self._dtype:
-                msg = "input data type ({}, {}) incompatible with "\
-                    "buffer ({}, {})".format(data.dtype.str, data.dtype.num,
-                                             self._dtype.str, self._dtype.num)
+                msg = (
+                    "input data type ({}, {}) incompatible with "
+                    "buffer ({}, {})".format(
+                        data.dtype.str, data.dtype.num, self._dtype.str, self._dtype.num
+                    )
+                )
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
@@ -762,6 +832,7 @@ class MPIShared(object):
 
         if self._comm is not None:
             import mpi4py.MPI as MPI
+
             target_noderank = self._comm.bcast(self._noderank, root=fromrank)
             fromnode = self._comm.bcast(self._mynode, root=fromrank)
 
@@ -769,8 +840,10 @@ class MPIShared(object):
             # every node (see notes in the constructor).
             if target_noderank > self._maxsetrank:
                 if self._rank == 0:
-                    print("set() called with data from a node rank which does"
-                          " not exist on all nodes")
+                    print(
+                        "set() called with data from a node rank which does"
+                        " not exist on all nodes"
+                    )
                     self._comm.Abort()
 
             if self._noderank == target_noderank:
@@ -805,8 +878,9 @@ class MPIShared(object):
                 dslice = []
                 ndims = len(nodedata.shape)
                 for d in range(ndims):
-                    dslice.append(slice(copyoffset[d],
-                                        copyoffset[d] + nodedata.shape[d], 1))
+                    dslice.append(
+                        slice(copyoffset[d], copyoffset[d] + nodedata.shape[d], 1)
+                    )
                 slc = tuple(dslice)
 
                 # Get a write-lock on the shared memory
@@ -839,5 +913,7 @@ class MPIShared(object):
         return self._data[key]
 
     def __setitem__(self, key, value):
-        raise NotImplementedError("Setting individual array elements not"
-                                  " supported.  Use the set() method instead.")
+        raise NotImplementedError(
+            "Setting individual array elements not"
+            " supported.  Use the set() method instead."
+        )

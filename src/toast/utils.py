@@ -36,6 +36,8 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
+numba_threading_layer = "NA"
+
 
 def set_numba_threading():
     """Set the numba threading layer.
@@ -55,11 +57,11 @@ def set_numba_threading():
         None
 
     """
+    global numba_threading_layer
     # Get the number of threads used by TOAST at runtime.
     env = Environment.get()
     toastthreads = env.max_threads()
 
-    log = Logger.get()
     threading = "default"
     try:
         from numba.npyufunc import omppool
@@ -67,14 +69,12 @@ def set_numba_threading():
         threading = "omp"
     except ImportError:
         # no OpenMP support
-        log.debug("Numba: No OpenMP support")
         try:
             from numba.npyufunc import tbbpool
 
             threading = "tbb"
         except ImportError:
             # no TBB
-            log.debug("Numba: No TBB support")
             pass
     try:
         from numba import vectorize, threading_layer
@@ -83,7 +83,6 @@ def set_numba_threading():
         # the environment.
         os.environ["NUMBA_THREADING_LAYER"] = threading
         os.environ["NUMBA_NUM_THREADS"] = "{:d}".format(toastthreads)
-        log.debug("Attempting to set numba threading layer to '{}'".format(threading))
 
         # In order to get numba to actually select a threading layer, we must
         # trigger compilation of a parallel function.
@@ -94,13 +93,12 @@ def set_numba_threading():
         force_thread_launch(np.zeros(1))
 
         # Log the layer that was selected
-        layer = threading_layer()
-        log.info("Numba threading layer set to:  {}".format(layer))
-        log.info("Numba configured to use {} threads".format(toastthreads))
+        numba_threading_layer = threading_layer()
 
     except ImportError:
         # Numba not available at all
-        log.info("Numba not available:  skipping threading layer selection")
+        pass
+
 
 try:
     import psutil

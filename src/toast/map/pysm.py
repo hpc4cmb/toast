@@ -6,8 +6,6 @@ from ..utils import set_numba_threading
 
 from ..timing import function_timer
 
-# Force the numba threading layer to be OpenMP if possible before importing PySM
-set_numba_threading()
 
 pysm = None
 try:
