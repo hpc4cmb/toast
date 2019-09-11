@@ -277,6 +277,8 @@ def rotation(axis, angle):
         (array):  The result.
 
     """
+    if np.shape(axis)[-1] != 3:
+        raise RuntimeError("axis is not a 3D vector")
     axin = ensure_buffer_f64(axis)
     angin = ensure_buffer_f64(angle)
     out = AlignedF64(4 * len(angin))

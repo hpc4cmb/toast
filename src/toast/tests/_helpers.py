@@ -15,8 +15,10 @@ from ..dist import Data
 from .. import qarray as qa
 
 
-# These are helper routines for common operations used in the unit tests.
+ZAXIS = np.array([0, 0, 1.])
 
+
+# These are helper routines for common operations used in the unit tests.
 
 def create_outdir(mpicomm, subdir=None):
     """Create the top level output directory and per-test subdir.
@@ -123,7 +125,7 @@ def boresight_focalplane(
     """Create a set of detectors at the boresight.
 
     This creates multiple detectors at the boresight, oriented in evenly
-    spaced increments from zero to 2*PI.
+    spaced increments from zero to PI.
 
     Args:
         ndet (int): the number of detectors.
@@ -135,10 +137,10 @@ def boresight_focalplane(
 
     """
     names = ["d{:02d}".format(x) for x in range(ndet)]
-    pol = {"d{:02d}".format(x): (x * 2 * np.pi / ndet) for x in range(ndet)}
+    pol = {"d{:02d}".format(x): (x * np.pi / ndet) for x in range(ndet)}
 
     quat = {
-        "d{:02d}".format(x): qa.rotation([0.0, 0.0, 0.0, 1.0], pol["d{:02d}".format(x)])
+        "d{:02d}".format(x): qa.rotation(ZAXIS, pol["d{:02d}".format(x)])
         for x in range(ndet)
     }
 
