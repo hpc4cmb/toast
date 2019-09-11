@@ -1696,7 +1696,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 # this branch again without scheduling a succesful scan
                 log.debug(
                     "Resetting patches and returning to the last successful "
-                    "scan: {}".format(to_UTC(last_succesful))
+                    "scan: {}".format(to_UTC(last_successful))
                 )
                 t, last_successful = last_successful, t
 
