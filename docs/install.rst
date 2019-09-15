@@ -5,7 +5,57 @@ Installation
 
 TOAST is written in C++ and python3 and depends on several commonly available
 packages.  It also has some optional functionality that is only enabled if
-additional external libraries are available.
+additional external packages are available.  The best installation method will depend on your specific needs.  We try to clarify the different options below.
+
+User Installation
+--------------------------
+
+If you are using TOAST to build simulation and analysis workflows, including mixing built-in functionality with your own custom tools, then you can use of these methods to get started.  If you want to hack on the TOAST package itself, see the section on Developer Installation.
+
+Conda Packages
+~~~~~~~~~~~~~~~~~~~~~~
+
+The easiest way to install TOAST and all of its optional dependencies is to use the conda package manager.  The conda-forge ecosystem allows us to create packages that are built consistently with all their dependencies.  We recommend following the setup guidelines used by conda-forge:  https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge , specifically:
+
+    1.  Install a "miniconda" base system (not the full Anaconda distribution).
+
+    2.  Set the conda-forge channel to be the top priority package source, with strict ordering if available.
+
+    3.  Leave the base system (a.k.a. the "root" environment) with just the bare minimum of packages.
+
+    4.  Always create a new environment (i.e. not the base one) when setting up a python stack for a particular purpose.  This allows you to upgrade the conda base system in a reliable way, and to wipe and recreate whole conda environments whenever needed.
+
+conda config --add channels conda-forge
+conda config --set channel_priority strict
+
+
+Minimal Install with PIP
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you cannot or do not want to use the conda package manager, then it is possible to install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will be missing support for MPI and atmospheric simulation.  Additionally, you must first ensure that a BLAS/LAPACK library is installed and available in the default compiler search paths.  You should also install the FFTW package, either through your OS package manager or manually.  After doing those steps, you can do::
+
+    $> pip install ....
+
+Something Else
+~~~~~~~~~~~~~~~~~~~~~
+
+If you have a custom install situation that is not met by the above solutions, then you should follow the instructions below for a "Developer install".
+
+
+Developer Installation
+-----------------------------
+
+Before setting up a software stack for TOAST development, you should become familiar with the following:
+
+    1.  What serial C++11 compilers are you using?
+
+    2.  If using MPI, your MPI installation must be compatible with your serial compilers
+
+    mpicxx -show
+
+    3.  What python3 installation are you using?
+
+    4.  Your mpi4py installation must be compatible with #3 and #2
 
 
 Compiled Dependencies
