@@ -1060,7 +1060,7 @@ class OpMapMaker(Operator):
         # Initialize objects
         self.comm = data.comm.comm_world
         if self.comm is None:
-            self.rank == 0
+            self.rank = 0
         else:
             self.rank = self.comm.rank
         self.get_detweights(data)
