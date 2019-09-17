@@ -16,6 +16,8 @@ from .._libtoast import (
     cov_accum_zmap,
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
+    scan_map_float64,
+    scan_map_float32,
 )
 
 from ..map import DistPixels
