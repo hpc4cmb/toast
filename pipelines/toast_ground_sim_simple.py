@@ -27,7 +27,8 @@ from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
 
 import toast.qarray as qa
-from toast.tod import TODGround, OpCacheCopy, plot_focalplane, OpCacheClear
+from toast.tod import OpCacheCopy, plot_focalplane, OpCacheClear
+from toast.todmap import TODGround
 
 from toast.pipeline_tools import (
     add_dist_args,

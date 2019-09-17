@@ -35,9 +35,8 @@ from toast.tod import (
     regular_intervals,
     plot_focalplane,
     OpApplyGain,
-    slew_precession_axis,
-    TODSatellite,
 )
+from toast.todmap import TODSatellite, slew_precession_axis
 
 from toast.pipeline_tools import (
     add_dist_args,
