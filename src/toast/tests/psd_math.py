@@ -8,7 +8,8 @@ import os
 
 import numpy as np
 
-from ..tod import TODHpixSpiral, AnalyticNoise, OpSimNoise
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import TODHpixSpiral
 
 from ..fod import autocov_psd
 

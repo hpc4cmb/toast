@@ -14,11 +14,11 @@ from ..utils import Logger, Timer
 
 from ..op import Operator
 
-from ..map import pysm
+from .pysm import pysm
 
 if pysm is not None:
     import pysm.units as u
-    from ..map import PySMSky
+    from .pysm import PySMSky
 
 from ..map import DistPixels
 

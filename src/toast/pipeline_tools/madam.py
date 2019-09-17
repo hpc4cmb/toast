@@ -12,7 +12,7 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..map import OpMadam
+from ..todmap import OpMadam
 
 
 def add_madam_args(parser):

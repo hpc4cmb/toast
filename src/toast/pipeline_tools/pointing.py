@@ -10,9 +10,8 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..map import OpMadam, OpLocalPixels, DistPixels
-
-from ..tod import OpPointingHpix
+from ..map import DistPixels
+from ..todmap import OpMadam, OpLocalPixels, OpPointingHpix
 
 
 def add_pointing_args(parser):

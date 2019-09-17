@@ -9,7 +9,8 @@ import numpy as np
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 
-from ..tod import OpPolyFilter, OpGroundFilter
+from ..tod import OpPolyFilter
+from ..todmap import OpGroundFilter
 
 #
 # Polynomial filter

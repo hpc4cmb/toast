@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 from ..timing import function_timer, Timer
-from ..tod import OpSimDipole
+from ..todmap import OpSimDipole
 from ..utils import Logger, Environment
 
 

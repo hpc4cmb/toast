@@ -12,23 +12,10 @@ import numpy.testing as nt
 
 import healpy as hp
 
-from ..tod import (
-    TODSatellite,
-    OpPointingHpix,
-    AnalyticNoise,
-    OpSimNoise,
-    regular_intervals,
-    OpFlagGaps,
-)
+from ..tod import AnalyticNoise, OpSimNoise, regular_intervals, OpFlagGaps
+from ..todmap import TODSatellite, OpPointingHpix, OpLocalPixels, OpMadam, OpAccumDiag
 
-from ..map import (
-    OpLocalPixels,
-    OpMadam,
-    DistPixels,
-    OpAccumDiag,
-    covariance_invert,
-    covariance_apply,
-)
+from ..map import DistPixels, covariance_invert, covariance_apply
 
 from ._helpers import (
     create_outdir,

@@ -27,6 +27,7 @@ install(FILES
     ops_gainscrambler.py
     psd_math.py
     ops_madam.py
+    ops_mapmaker.py
     map_satellite.py
     map_ground.py
     binned.py

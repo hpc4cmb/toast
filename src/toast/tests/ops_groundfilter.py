@@ -8,7 +8,8 @@ import os
 
 import numpy as np
 
-from ..tod import OpGroundFilter, TODGround, AnalyticNoise, OpSimNoise
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import OpGroundFilter, TODGround
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 

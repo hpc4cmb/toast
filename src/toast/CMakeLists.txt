@@ -135,6 +135,7 @@ endif(MPI_FOUND AND MPI4PY_FOUND)
 # Process the sub directories
 add_subdirectory(tests)
 add_subdirectory(tod)
-add_subdirectory(fod)
 add_subdirectory(map)
+add_subdirectory(todmap)
+add_subdirectory(fod)
 add_subdirectory(pipeline_tools)

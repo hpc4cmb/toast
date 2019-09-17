@@ -6,9 +6,7 @@ from .mpi import MPITestCase
 
 import os
 
-from ..tod import TODHpixSpiral, OpPointingHpix
-
-from ..map import OpLocalPixels
+from ..todmap import TODHpixSpiral, OpPointingHpix, OpLocalPixels
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 

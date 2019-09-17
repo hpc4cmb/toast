@@ -12,16 +12,17 @@ import numpy.testing as nt
 
 import healpy as hp
 
-from ..tod import (
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import (
     TODGround,
     OpPointingHpix,
-    AnalyticNoise,
     OpSimGradient,
-    OpSimNoise,
     OpSimScan,
+    OpLocalPixels,
+    OpMadam,
 )
 
-from ..map import OpLocalPixels, OpMadam, DistPixels
+from ..map import DistPixels
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 

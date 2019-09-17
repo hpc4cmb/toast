@@ -42,6 +42,7 @@ from . import ops_applygain as testopsapplygain
 from . import ops_memorycounter as testopsmemorycounter
 
 from . import ops_madam as testopsmadam
+from . import ops_mapmaker as testopsmapmaker
 
 from . import map_satellite as testmapsatellite
 
@@ -52,12 +53,12 @@ from . import binned as testbinned
 from . import sim_focalplane as testsimfocalplane
 from . import tod_satellite as testtodsat
 
-from ..map import pysm
+from ..todmap import pysm
 
 if pysm is not None:
     from . import ops_sim_pysm as testopspysm
 
-from ..tod import atm_available
+from ..todmap import atm_available
 
 if atm_available:
     from . import ops_sim_atm as testopsatm
@@ -129,6 +130,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
         suite.addTest(loader.loadTestsFromModule(testpsdmath))
         suite.addTest(loader.loadTestsFromModule(testopsmadam))
+        suite.addTest(loader.loadTestsFromModule(testopsmapmaker))
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
@@ -151,6 +153,13 @@ def test(name=None, verbosity=2):
             return
         else:
             modname = "toast.tests.{}".format(name)
+            if modname not in sys.modules:
+                result = '"{}" is not a valid test.  Try'.format(name)
+                for name in sys.modules:
+                    if name.startswith("toast.tests."):
+                        result += '\n  - "{}"'.format(name.replace("toast.tests.", ""))
+                result += "\n"
+                raise RuntimeError(result)
             suite.addTest(loader.loadTestsFromModule(sys.modules[modname]))
 
     ret = 0

@@ -12,9 +12,7 @@ import numpy as np
 
 import healpy as hp
 
-from ..tod import TODHpixSpiral, OpSimGradient, OpPointingHpix
-
-from ..map import OpMadam
+from ..todmap import TODHpixSpiral, OpSimGradient, OpPointingHpix, OpMadam
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 

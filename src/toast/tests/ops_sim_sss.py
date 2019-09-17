@@ -10,12 +10,12 @@ import shutil
 import numpy as np
 import numpy.testing as nt
 
-from ..tod import (
+from ..tod import AnalyticNoise, OpSimNoise
+
+from ..todmap import (
     TODGround,
     OpPointingHpix,
-    AnalyticNoise,
     OpSimGradient,
-    OpSimNoise,
     OpSimScan,
     OpSimScanSynchronousSignal,
 )

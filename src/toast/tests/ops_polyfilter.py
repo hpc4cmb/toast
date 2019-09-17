@@ -8,7 +8,8 @@ import os
 
 import numpy as np
 
-from ..tod import TODHpixSpiral, OpPolyFilter, AnalyticNoise, OpSimNoise, Interval
+from ..tod import OpPolyFilter, AnalyticNoise, OpSimNoise, Interval
+from ..todmap import TODHpixSpiral
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 

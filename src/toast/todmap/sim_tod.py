@@ -17,11 +17,9 @@ from .. import qarray as qa
 
 from ..timing import function_timer, Timer
 
-from .interval import Interval
+from ..tod import Interval, TOD
 
 from ..healpix import ang2vec
-
-from .tod import TOD
 
 from .pointing_math import quat_equ2ecl, quat_equ2gal, quat_ecl2gal
 

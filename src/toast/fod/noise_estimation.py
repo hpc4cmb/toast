@@ -16,7 +16,7 @@ from .. import qarray as qa
 
 from ..timing import Timer, function_timer
 
-from ..map import MapSampler
+from ..todmap import MapSampler
 
 from ..tod import flagged_running_average, Interval
 

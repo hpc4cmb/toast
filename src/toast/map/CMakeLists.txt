@@ -3,9 +3,7 @@
 
 install(FILES
     __init__.py
-    madam.py
     cov.py
     pixels.py
-    pysm.py
     DESTINATION ${PYTHON_SITE}/toast/map
 )

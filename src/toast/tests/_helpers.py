@@ -15,10 +15,11 @@ from ..dist import Data
 from .. import qarray as qa
 
 
-ZAXIS = np.array([0, 0, 1.])
+ZAXIS = np.array([0, 0, 1.0])
 
 
 # These are helper routines for common operations used in the unit tests.
+
 
 def create_outdir(mpicomm, subdir=None):
     """Create the top level output directory and per-test subdir.

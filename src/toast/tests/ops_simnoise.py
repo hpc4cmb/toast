@@ -8,7 +8,8 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..tod import Noise, sim_noise_timestream, AnalyticNoise, OpSimNoise, TODHpixSpiral
+from ..tod import Noise, sim_noise_timestream, AnalyticNoise, OpSimNoise
+from ..todmap import TODHpixSpiral
 
 from .. import rng as rng
 

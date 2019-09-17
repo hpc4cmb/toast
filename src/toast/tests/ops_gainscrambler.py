@@ -8,7 +8,8 @@ import os
 
 import numpy as np
 
-from ..tod import OpGainScrambler, TODHpixSpiral, AnalyticNoise, OpSimNoise
+from ..tod import OpGainScrambler, AnalyticNoise, OpSimNoise
+from ..todmap import TODHpixSpiral
 
 from ._helpers import (
     create_outdir,

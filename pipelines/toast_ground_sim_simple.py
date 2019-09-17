@@ -218,7 +218,8 @@ def load_focalplane(args, comm, schedule):
             )
         else:
             focalplane = Focalplane(
-                fname_pickle=args.focalplane, sample_rate=args.sample_rate)
+                fname_pickle=args.focalplane, sample_rate=args.sample_rate
+            )
     if comm.comm_world is not None:
         focalplane = comm.comm_world.bcast(focalplane, root=0)
 

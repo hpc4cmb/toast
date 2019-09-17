@@ -14,18 +14,19 @@ import healpy as hp
 
 from .. import qarray as qa
 
-from ..tod import (
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import (
     TODSatellite,
     OpPointingHpix,
-    AnalyticNoise,
     OpSimGradient,
-    OpSimNoise,
     slew_precession_axis,
     satellite_scanning,
     OpSimScan,
+    OpLocalPixels,
+    OpMadam,
 )
 
-from ..map import OpLocalPixels, OpMadam, DistPixels
+from ..map import DistPixels
 
 from ._helpers import (
     create_outdir,

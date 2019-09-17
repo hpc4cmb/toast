@@ -9,15 +9,9 @@ import numpy as np
 from healpy import nside2npix
 
 from ..timing import function_timer, Timer
-from ..tod import OpSimDipole
 from ..utils import Logger, Environment
-from ..map import (
-    OpAccumDiag,
-    OpLocalPixels,
-    covariance_apply,
-    covariance_invert,
-    DistPixels,
-)
+from ..map import covariance_apply, covariance_invert, DistPixels
+from ..todmap import OpSimDipole, OpAccumDiag, OpLocalPixels
 from .pointing import get_submaps
 
 
