@@ -16,7 +16,7 @@ from .. import healpix as hpx
 
 from .. import qarray as qa
 
-from ..tod.sim_tod import slew_precession_axis, satellite_scanning, TODSatellite
+from ..todmap import slew_precession_axis, satellite_scanning, TODSatellite
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
