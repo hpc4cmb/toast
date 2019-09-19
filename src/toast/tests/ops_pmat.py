@@ -55,8 +55,8 @@ class OpPointingHpixTest(MPITestCase):
         nside = 64
         hpix = HealpixPixels(64)
         nest = True
-        # psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
-        psivec = np.radians([-180, 180])
+        psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
+        # psivec = np.radians([-180, 180])
         nsamp = psivec.size
         eps = 0.0
         cal = 1.0
@@ -65,7 +65,7 @@ class OpPointingHpixTest(MPITestCase):
         hwpang = np.zeros(nsamp)
         flags = np.zeros(nsamp, dtype=np.uint8)
         pixels = np.zeros(nsamp, dtype=np.int64)
-        weights = np.zeros([nsamp, nnz])
+        weights = np.zeros([nsamp, nnz], dtype=np.float64)
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
         xaxis, yaxis, zaxis = np.eye(3)
@@ -93,16 +93,18 @@ class OpPointingHpixTest(MPITestCase):
         for quat in quats:
             theta, phi, psi = qa.to_angles(quat)
             weights_ref.append(np.array([1, np.cos(2 * psi), np.sin(2 * psi)]))
+        weights_ref = np.vstack(weights_ref)
         failed = False
         for w1, w2, psi, quat in zip(weights_ref, weights, psivec, quats):
-            print("\npsi = {}, quat = {} : ".format(psi, quat), end="")
+            # print("\npsi = {}, quat = {} : ".format(psi, quat), end="")
             if not np.allclose(w1, w2):
                 print(
                     "Pointing weights do not agree: {} != {}".format(w1, w2), flush=True
                 )
                 failed = True
             else:
-                print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
+                # print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
+                pass
         self.assertFalse(failed)
         return
 
