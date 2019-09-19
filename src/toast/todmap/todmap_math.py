@@ -23,6 +23,31 @@ from .._libtoast import (
 from ..map import DistPixels
 
 
+@function_timer
+def get_submaps_nested(data, nside, subnside=16):
+    """ Get a list of locally hit pixels and submaps on every process.
+
+    Assumes nested pixel numbers
+    """
+    # Prepare for using distpixels objects
+    subnside = min(subnside, nside)
+    subnpix = 12 * subnside * subnside
+
+    # get locally hit pixels
+    lc = OpLocalPixels()
+    localpix = lc.exec(data)
+    if localpix is None:
+        raise RuntimeError(
+            "Process {} has no hit pixels. Perhaps there are fewer "
+            "detectors than processes in the group?".format(data.comm.world_rank)
+        )
+
+    # find the locally hit submaps.
+    localsm = np.unique(np.floor_divide(localpix, subnpix))
+
+    return localpix, localsm, subnpix
+
+
 class OpLocalPixels(Operator):
     """Operator which computes the set of locally hit pixels.
 

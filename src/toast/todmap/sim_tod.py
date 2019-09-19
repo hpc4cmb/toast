@@ -392,6 +392,7 @@ class TODHpixSpiral(TOD):
         # pixel offset
         start_pix = int(start_abs % self._npix)
         pixels = np.linspace(start_pix, start_pix + n, num=n, endpoint=False)
+        step = (start_abs + pixels) // self._npix
         pixels = np.mod(pixels, self._npix * np.ones(n, dtype=np.int64)).astype(
             np.int64
         )
@@ -420,10 +421,14 @@ class TODHpixSpiral(TOD):
         # axis
         v *= np.sin(ang)
 
-        # build the un-normalized quaternion
-        boresight = np.concatenate((v, s), axis=1)
+        # build the normalized quaternion
+        boresight = qa.norm(np.concatenate((v, s), axis=1))
 
-        return qa.norm(boresight)
+        # Add rotation around the boresight
+        zrot = qa.rotation(zaxis, np.radians(45) * step)
+        boresight = qa.norm(qa.mult(boresight, zrot))
+
+        return boresight
 
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")

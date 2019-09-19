@@ -12,9 +12,27 @@ from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 from .sim_det_map import OpSimScan
 from .todmap_math import OpAccumDiag, OpLocalPixels, OpScanScale, OpScanMask
-from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply
-from ..map import covariance_apply, covariance_invert, DistPixels
+from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGaps
+from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
 from toast.pipeline_tools.pointing import get_submaps
+
+
+temporary_names = set()
+
+
+def get_temporary_name():
+    i = 0
+    while True:
+        name = "temporary{:03}".format(i)
+        if name not in temporary_names:
+            break
+        i += 1
+    temporary_names.add(name)
+    return name
+
+
+def free_temporary_name(name):
+    temporary_names.remove(name)
 
 
 class TOASTMatrix:
@@ -90,8 +108,6 @@ class SubharmonicTemplate(TODTemplate):
     """
 
     name = "subharmonic"
-    _last_nsamp = None
-    _last_templates = None
 
     def __init__(
         self,
@@ -112,6 +128,8 @@ class SubharmonicTemplate(TODTemplate):
         self.common_flag_mask = common_flag_mask
         self.flags = flags
         self.flag_mask = flag_mask
+        self._last_nsamp = None
+        self._last_templates = None
         self.get_steps_and_preconditioner()
 
     def get_steps_and_preconditioner(self):
@@ -153,9 +171,8 @@ class SubharmonicTemplate(TODTemplate):
         """ Calculate the preconditioner for the given interval and detector
         """
         flags = tod.local_flags(det, self.flags)[todslice]
-        flags = (flags & self.flag_mask) != 0
-        flags[common_flags[todslice]] = True
-        good = np.logical_not(flags)
+        good = (flags & self.flag_mask) == 0
+        good[common_flags[todslice]] = False
         norder = self.order + 1
         preconditioner = np.zeros([norder, norder])
         templates = self._get_templates(todslice)
@@ -235,14 +252,33 @@ class OffsetTemplate(TODTemplate):
 
     name = "offset"
 
-    def __init__(self, data, step_length=1000000, intervals=None):
+    def __init__(
+        self,
+        data,
+        detweights,
+        step_length=1000000,
+        intervals=None,
+        use_noise_prior=True,
+        common_flags=None,
+        common_flag_mask=1,
+        flags=None,
+        flag_mask=1,
+    ):
         self.data = data
+        self.detweights = detweights
         self.step_length = step_length
         self.intervals = intervals
+        self.common_flags = common_flags
+        self.common_flag_mask = common_flag_mask
+        self.flags = flags
+        self.flag_mask = flag_mask
         self.get_steps()
-        self.get_filters()
+        self.use_noise_prior = use_noise_prior
+        if self.use_noise_prior:
+            self.get_filters_and_preconditioners()
+        return
 
-    def get_filters(self):
+    def get_filters_and_preconditioners(self):
         """ Compute and store the filter and associated preconditioner
         for every detector and every observation
         """
@@ -366,6 +402,8 @@ class OffsetTemplate(TODTemplate):
         self.offset_slices = []  # slices in all observations
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
+            common_flags = tod.local_common_flags(self.common_flags)
+            common_flags = (common_flags & self.common_flag_mask) != 0
             if self.intervals and self.intervals in obs:
                 intervals = obs[self.intervals]
             else:
@@ -387,8 +425,12 @@ class OffsetTemplate(TODTemplate):
                 for idet, det in enumerate(tod.local_dets):
                     istart = self.namplitude
                     for todslice in todslices:
+                        sigmasq = self._get_sigmasq(
+                            tod, det, todslice, common_flags, self.detweights[iobs][det]
+                        )
+                        # Register the baseline offset
                         self.offset_templates.append(
-                            [self.namplitude, iobs, det, todslice]
+                            [self.namplitude, iobs, det, todslice, sigmasq]
                         )
                         self.namplitude += 1
                     # Keep a record of ranges of offsets that correspond
@@ -400,19 +442,47 @@ class OffsetTemplate(TODTemplate):
             self.offset_slices.append(offset_slices)
         return
 
+    def _get_sigmasq(self, tod, det, todslice, common_flags, detweight):
+        """ calculate a rough estimate of the baseline variance
+        for diagonal preconditioner
+        """
+        flags = tod.local_flags(det, self.flags)[todslice]
+        good = (flags & self.flag_mask) == 0
+        good[common_flags[todslice]] = False
+        ngood = np.sum(good)
+        sigmasq = 1
+        if detweight != 0:
+            sigmasq /= detweight
+        if ngood != 0:
+            sigmasq /= ngood
+        return sigmasq
+
     def add_to_signal(self, signal, amplitudes):
         offset_amplitudes = amplitudes[self.name]
-        for ibase, (itemplate, iobs, det, todslice) in enumerate(self.offset_templates):
+        for itemplate, iobs, det, todslice, sigmasq in self.offset_templates:
             signal[iobs, det, todslice] += offset_amplitudes[itemplate]
         return
 
     def project_signal(self, signal, amplitudes):
         offset_amplitudes = amplitudes[self.name]
-        for ibase, (itemplate, iobs, det, todslice) in enumerate(self.offset_templates):
+        # print("PROJECTING SIGNAL {}: before:".format(signal.name), offset_amplitudes)  # DEBUG
+        # if not np.all(offset_amplitudes == 0):
+        #    import pdb
+        #    pdb.set_trace()
+        # n = 0  # DEBUG
+        for itemplate, iobs, det, todslice, sqsigma in self.offset_templates:
+            # print("n = {}, itemplate = {}, iobs = {}, det = {}, todslice = {}, sum = {}".format(
+            #    n, itemplate, iobs, det, todslice, np.sum(signal[iobs, det, todslice])))  # DEBUG
             offset_amplitudes[itemplate] += np.sum(signal[iobs, det, todslice])
+            # offset_amplitudes[itemplate] = np.sum(signal[iobs, det, todslice])  # DEBUG
+            # n += 1  # DEBUG
+        # print("PROJECTED {} templates".format(n))  # DEBUG
+        # print("PROJECTING SIGNAL {}: after:".format(signal.name), offset_amplitudes)  # DEBUG
         return
 
     def add_prior(self, amplitudes_in, amplitudes_out):
+        if not self.use_noise_prior:
+            return
         offset_amplitudes_in = amplitudes_in[self.name]
         offset_amplitudes_out = amplitudes_out[self.name]
         for iobs, obs in enumerate(self.data.obs):
@@ -431,31 +501,36 @@ class OffsetTemplate(TODTemplate):
     def apply_precond(self, amplitudes_in, amplitudes_out):
         offset_amplitudes_in = amplitudes_in[self.name]
         offset_amplitudes_out = amplitudes_out[self.name]
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            for det in tod.local_dets:
-                slices = self.offset_slices[iobs][det]
-                preconditioners = self.preconditioners[iobs][det]
-                for offsetslice, preconditioner in zip(slices, preconditioners):
-                    amps_in = offset_amplitudes_in[offsetslice]
-                    # scipy.signal.convolve will use either `convolve` or `fftconvolve`
-                    # depending on the size of the inputs
-                    amps_out = scipy.signal.convolve(
-                        amps_in, preconditioner, mode="same"
-                    )
-                    offset_amplitudes_out[offsetslice] = amps_out
+        if self.use_noise_prior:
+            # C_a preconditioner
+            for iobs, obs in enumerate(self.data.obs):
+                tod = obs["tod"]
+                for det in tod.local_dets:
+                    slices = self.offset_slices[iobs][det]
+                    preconditioners = self.preconditioners[iobs][det]
+                    for offsetslice, preconditioner in zip(slices, preconditioners):
+                        amps_in = offset_amplitudes_in[offsetslice]
+                        # scipy.signal.convolve will use either `convolve` or `fftconvolve`
+                        # depending on the size of the inputs
+                        amps_out = scipy.signal.convolve(
+                            amps_in, preconditioner, mode="same"
+                        )
+                        offset_amplitudes_out[offsetslice] = amps_out
+        else:
+            # Diagonal preconditioner
+            offset_amplitudes_out[:] = offset_amplitudes_in
+            for itemplate, iobs, det, todslice, sigmasq in self.offset_templates:
+                offset_amplitudes_out[itemplate] *= sigmasq
         return
 
 
 class TemplateMatrix(TOASTMatrix):
-
-    templates = []
-
     def __init__(self, data, comm, templates=None):
         """ Initialize the template matrix with a given baseline length
         """
         self.data = data
         self.comm = comm
+        self.templates = []
         for template in templates:
             self.register_template(template)
         return
@@ -464,13 +539,6 @@ class TemplateMatrix(TOASTMatrix):
         """ Add template to the list of templates to fit
         """
         self.templates.append(template)
-
-    def __del__(self):
-        # Destroy any temporary objects placed in the TOD caches
-        for obs in self.data.obs:
-            tod = obs["tod"]
-            tod.cache.clear("temporary.*")
-        return
 
     def apply(self, amplitudes):
         """ Compute and return y = F.a
@@ -514,7 +582,7 @@ class TemplateMatrix(TOASTMatrix):
 
         The zero signal object will use the same TOD objects but different cache prefix
         """
-        new_signal = Signal(self.data, name="temporary", init_val=0)
+        new_signal = Signal(self.data, temporary=True, init_val=0)
         return new_signal
 
     def clean_signal(self, signal, amplitudes, in_place=True):
@@ -544,9 +612,9 @@ class TemplateAmplitudes(TOASTVector):
         return
 
     def __str__(self):
-        result = "template amplitudes:\n"
+        result = "template amplitudes:"
         for name, values in self.amplitudes.items():
-            result += '"{}" : {}\n'.format(name, values)
+            result += '\n"{}" : \n{}'.format(name, values)
         return result
 
     def dot(self, other):
@@ -659,20 +727,13 @@ class ProjectionMatrix(TOASTMatrix):
         self.common_flag_mask = common_flag_mask
         self.flag_mask = flag_mask
 
-    def __del__(self):
-        for obs in self.data.obs:
-            tod = obs["tod"]
-            tod.cache.clear("temporary3.*")
-        return
-
     def apply(self, signal):
         """ Return Z.y
         """
         self.bin_map(signal.name)
         new_signal = signal.copy()
-        name = "temporary3"
-        scanned_signal = Signal(self.data, name=name, init_val=0)
-        self.scan_map(name)
+        scanned_signal = Signal(self.data, temporary=True, init_val=0)
+        self.scan_map(scanned_signal.name)
         new_signal -= scanned_signal
         return new_signal
 
@@ -738,12 +799,27 @@ class PointingMatrix(TOASTMatrix):
 
 
 class Signal(TOASTVector):
-    def __init__(self, data, name=None, init_val=None):
+    """ Signal class wraps the TOAST data object but represents only
+    one cached signal flavor.
+    """
+
+    def __init__(self, data, name=None, init_val=None, temporary=False):
         self.data = data
-        self.name = name
+        self.temporary = temporary
+        if self.temporary:
+            self.name = get_temporary_name()
+        else:
+            self.name = name
         if init_val is not None:
             cacheinit = OpCacheInit(name=self.name, init_val=init_val)
             cacheinit.exec(data)
+        return
+
+    def __del__(self):
+        if self.temporary:
+            cacheclear = OpCacheClear(self.name)
+            cacheclear.exec(self.data)
+            free_temporary_name(self.name)
         return
 
     def apply_flags(self, common_flag_mask, flag_mask):
@@ -768,10 +844,9 @@ class Signal(TOASTVector):
         """ Return a new Signal object with independent copies of the
         signal vectors.
         """
-        new_name = "temporary2"
-        copysignal = OpCacheCopy(self.name, new_name, force=True)
+        new_signal = Signal(self.data, temporary=True)
+        copysignal = OpCacheCopy(self.name, new_signal.name, force=True)
         copysignal.exec(self.data)
-        new_signal = Signal(self.data, name=new_name)
         return new_signal
 
     def __getitem__(self, key):
@@ -863,7 +938,7 @@ class PCGSolver:
         self.rhs = self.templates.applyTranspose(
             self.noise.apply(self.projection.apply(self.signal))
         )
-        # print("RHS: {}".format(self.rhs))  # DEBUG
+        # print("RHS {}: {}".format(self.signal.name, self.rhs))  # DEBUG
         return
 
     def apply_lhs(self, amplitudes):
@@ -922,7 +997,7 @@ class PCGSolver:
                         iiter, sqsum / init_sqsum
                     )
                 )
-            if sqsum < init_sqsum * self.convergence_limit:
+            if sqsum < init_sqsum * self.convergence_limit or sqsum < 1e-30:
                 if self.rank == 0:
                     timer0.report_clear(
                         "PCG converged after {} iterations".format(iiter)
@@ -947,10 +1022,10 @@ class PCGSolver:
 
 class OpMapMaker(Operator):
 
+    # Choose one bit in the common flags for storing gap information
+    gap_bit = 2 ** 7
     # Choose one bit in the quality flags for storing processing mask
-    maskbit = 2 ** 7
-    # In addition to the mask, we may down-weight the sky by pixel
-    weightmap = None
+    mask_bit = 2 ** 7
 
     def __init__(
         self,
@@ -965,6 +1040,8 @@ class OpMapMaker(Operator):
         write_wcov=True,
         write_binned=True,
         write_destriped=True,
+        write_rcond=True,
+        rcond_limit=1e-3,
         baseline_length=100000,
         maskfile=None,
         weightmapfile=None,
@@ -972,6 +1049,9 @@ class OpMapMaker(Operator):
         flag_mask=1,
         intervals="intervals",
         subharmonic_order=None,
+        iter_min=3,
+        iter_max=100,
+        use_noise_prior=True,
     ):
         self.nside = nside
         self.npix = 12 * self.nside ** 2
@@ -988,13 +1068,19 @@ class OpMapMaker(Operator):
         self.write_wcov = write_wcov
         self.write_binned = write_binned
         self.write_destriped = write_destriped
+        self.write_rcond = write_rcond
+        self.rcond_limit = rcond_limit
         self.baseline_length = baseline_length
         self.maskfile = maskfile
+        self.weightmap = None
         self.weightmapfile = weightmapfile
         self.common_flag_mask = common_flag_mask
         self.flag_mask = flag_mask
         self.intervals = intervals
         self.subharmonic_order = subharmonic_order
+        self.iter_min = iter_min
+        self.iter_max = iter_max
+        self.use_noise_prior = use_noise_prior
 
     def load_mask(self, data):
         """ Load processing mask and generate appropriate flag bits
@@ -1020,7 +1106,7 @@ class OpMapMaker(Operator):
         if self.rank == 0:
             timer.report_clear("Read processing mask from {}".format(self.maskfile))
 
-        scanmask = OpScanMask(distmap=distmap, flagmask=self.maskbit)
+        scanmask = OpScanMask(distmap=distmap, flagmask=self.mask_bit)
         scanmask.exec(data)
 
         if self.rank == 0:
@@ -1063,7 +1149,14 @@ class OpMapMaker(Operator):
             self.rank = 0
         else:
             self.rank = self.comm.rank
+        # Add flag bits between the intervals
+        flag_gaps = OpFlagGaps(common_flag_value=self.gap_bit, intervals=self.intervals)
+        flag_gaps.exec(data)
+        if self.rank == 0:
+            timer.report_clear("Flag gaps")
         self.get_detweights(data)
+        if self.rank == 0:
+            timer.report_clear("Get detector weights")
         self.initialize_binning(data)
         if self.write_binned:
             self.bin_map(data, "binned")
@@ -1074,23 +1167,38 @@ class OpMapMaker(Operator):
 
         # Solve template amplitudes
 
-        precond = UnitMatrix()
         templatelist = []
         if self.baseline_length is not None:
+            log.info(
+                "Initializing offset template, step_length = {}".format(
+                    self.baseline_length
+                )
+            )
             templatelist.append(
                 OffsetTemplate(
-                    data, step_length=self.baseline_length, intervals=self.intervals
+                    data,
+                    self.detweights,
+                    step_length=self.baseline_length,
+                    intervals=self.intervals,
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
+                    use_noise_prior=self.use_noise_prior,
                 )
             )
         if self.subharmonic_order is not None:
+            log.info(
+                "Initializing subharmonic template, order = {}".format(
+                    self.subharmonic_order
+                )
+            )
             templatelist.append(
                 SubharmonicTemplate(
                     data,
                     self.detweights,
                     order=self.subharmonic_order,
                     intervals=self.intervals,
-                    common_flag_mask=self.common_flag_mask,
-                    flag_mask=(self.flag_mask | self.maskbit),
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
                 )
             )
 
@@ -1104,8 +1212,8 @@ class OpMapMaker(Operator):
             self.comm,
             self.detweights,
             self.weightmap,
-            common_flag_mask=self.common_flag_mask,
-            flag_mask=(self.flag_mask | self.maskbit),
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
+            flag_mask=(self.flag_mask | self.mask_bit),
         )
         if self.rank == 0:
             timer.report_clear("Initialize templates")
@@ -1119,19 +1227,28 @@ class OpMapMaker(Operator):
             self.subnpix,
             self.localsm,
             self.white_noise_cov_matrix,
-            common_flag_mask=self.common_flag_mask,
-            # Do not add maskbit here since it is not included in the white noise matrices
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
+            # Do not add mask_bit here since it is not included in the white noise matrices
             flag_mask=self.flag_mask,
         )
         if self.rank == 0:
             timer.report_clear("Initialize projection matrix")
+        # noise = UnitMatrix()  # DEBUG
         # projection = UnitMatrix()  # DEBUG
         signal = Signal(data, name=self.name)
         # DEBUG begin
         # signal += 100
         # DEBUG end
 
-        solver = PCGSolver(self.comm, templates, noise, projection, signal)
+        solver = PCGSolver(
+            self.comm,
+            templates,
+            noise,
+            projection,
+            signal,
+            niter_min=self.iter_min,
+            niter_max=self.iter_max,
+        )
         if self.rank == 0:
             timer.report_clear("Initialize PCG solver")
         amplitudes = solver.solve()
@@ -1212,7 +1329,7 @@ class OpMapMaker(Operator):
                     psd = noise.psd(det)
                     rate = noise.rate(det)
                     ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                    noisevar = np.median(psd[ind]) * rate
+                    noisevar = np.median(psd[ind])
                 detweights[det] = 1 / noisevar
             self.detweights.append(detweights)
         return
@@ -1304,8 +1421,22 @@ class OpMapMaker(Operator):
             if self.rank == 0:
                 timer.report_clear("Write N_pp'^1")
 
-        # invert it
-        covariance_invert(self.white_noise_cov_matrix, 1.0e-3)
+        if self.write_rcond:
+            # Reciprocal condition numbers
+            rcond = covariance_rcond(self.white_noise_cov_matrix)
+            if self.rank == 0:
+                timer.report_clear("Compute reciprocal condition numbers")
+            fname = os.path.join(self.outdir, self.outprefix + "rcond.fits")
+            if self.zip_maps:
+                fname += ".gz"
+            rcond.write_healpix_fits(fname)
+            if self.rank == 0:
+                log.info("Wrote reciprocal condition numbers to {}".format(fname))
+            if self.rank == 0:
+                timer.report_clear("Write rcond")
+
+        # Invert the white noise covariance in each pixel
+        covariance_invert(self.white_noise_cov_matrix, self.rcond_limit)
         if self.rank == 0:
             timer.report_clear("Invert N_pp'^1")
 

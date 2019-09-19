@@ -12,8 +12,17 @@ import shutil
 import healpy as hp
 import numpy as np
 
-from ..tod import AnalyticNoise, OpSimNoise, Interval, OpCacheCopy
-from ..todmap import TODHpixSpiral, OpSimGradient, OpPointingHpix, OpMadam, OpMapMaker
+from ..tod import AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit
+from ..map import DistPixels
+from ..todmap import (
+    TODHpixSpiral,
+    OpSimGradient,
+    OpPointingHpix,
+    OpMadam,
+    OpMapMaker,
+    get_submaps_nested,
+    OpSimScan,
+)
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
@@ -98,11 +107,11 @@ class OpMapMakerTest(MPITestCase):
 
         # Write processing masks
 
-        npix = 12 * self.map_nside ** 2
-        pix = np.arange(npix)
+        self.npix = 12 * self.map_nside ** 2
+        pix = np.arange(self.npix)
         pix = hp.reorder(pix, r2n=True)
 
-        self.binary_mask = np.logical_or(pix < npix * 0.45, pix > npix * 0.55)
+        self.binary_mask = np.logical_or(pix < self.npix * 0.45, pix > self.npix * 0.55)
         self.maskfile_binary = os.path.join(self.outdir, "binary_mask.fits")
         hp.write_map(
             self.maskfile_binary,
@@ -112,7 +121,7 @@ class OpMapMakerTest(MPITestCase):
             nest=True,
         )
 
-        self.smooth_mask = (np.abs(pix - npix / 2) / (npix / 2)) ** 0.5
+        self.smooth_mask = (np.abs(pix - self.npix / 2) / (self.npix / 2)) ** 0.5
         self.maskfile_smooth = os.path.join(self.outdir, "apodized_mask.fits")
         hp.write_map(
             self.maskfile_smooth,
@@ -122,13 +131,30 @@ class OpMapMakerTest(MPITestCase):
             nest=True,
         )
 
+        # Synthesize an input map
+        self.lmax = 2 * self.sim_nside
+        self.cl = np.ones([4, self.lmax + 1])
+        self.cl[:, 0:2] = 0
+        fwhm = np.radians(10)
+        self.inmap = hp.synfast(
+            self.cl,
+            self.sim_nside,
+            lmax=self.lmax,
+            mmax=self.lmax,
+            pol=True,
+            pixwin=True,
+            fwhm=np.radians(30),
+        )
+        self.inmap = hp.reorder(self.inmap, r2n=True)
+        self.inmapfile = os.path.join(self.outdir, "input_map.fits")
+        hp.write_map(self.inmapfile, self.inmap, overwrite=True, nest=True)
+
         return
 
-    def test_mapmaker_gradient(self):
+    def test_subharmonic_template(self):
 
-        # add simple sky gradient signal
-        grad = OpSimGradient(nside=self.sim_nside, nest=True)
-        grad.exec(self.data)
+        name = "testtod1"
+        init = OpCacheInit(name=name, init_val=0)
 
         # make a simple pointing matrix
         pointing = OpPointingHpix(
@@ -136,13 +162,129 @@ class OpMapMakerTest(MPITestCase):
         )
         pointing.exec(self.data)
 
+        localpix, localsm, subnpix = get_submaps_nested(self.data, self.sim_nside)
+        # Scan the signal from a map
+        distmap = DistPixels(
+            comm=self.comm,
+            size=self.npix,
+            nnz=self.nnz,
+            dtype=np.float32,
+            submap=subnpix,
+            local=localsm,
+        )
+        distmap.read_healpix_fits(self.inmapfile)
+        scansim = OpSimScan(distmap=distmap, out=name)
+        scansim.exec(self.data)
+
+        # add a sharp gradient to one of the detectors
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            sig = tod.local_signal("d01", name)
+            sig[:] += np.arange(sig.size)
+
+        # Run TOAST mapmaker
+
+        mapmaker = OpMapMaker(
+            nside=self.map_nside,
+            nnz=self.nnz,
+            name=name,
+            outdir=self.outdir,
+            outprefix="toast_subharmonic_test_",
+            baseline_length=None,
+            # maskfile=self.maskfile_binary,
+            # weightmapfile=self.maskfile_smooth,
+            subharmonic_order=1,
+        )
+        mapmaker.exec(self.data)
+
+        # Run the mapmaker again
+
+        mapmaker = OpMapMaker(
+            nside=self.map_nside,
+            nnz=self.nnz,
+            name=name,
+            outdir=self.outdir,
+            outprefix="toast_subharmonic_test2_",
+            baseline_length=None,
+            # maskfile=self.maskfile_binary,
+            # weightmapfile=self.maskfile_smooth,
+            subharmonic_order=1,
+        )
+        mapmaker.exec(self.data)
+
+        # Compare
+
+        m1 = None
+        if self.rank == 0:
+            m1 = hp.read_map(
+                os.path.join(self.outdir, "toast_subharmonic_test2_destriped.fits"),
+                None,
+                nest=True,
+            )
+
+        failed = False
+        if self.rank == 0:
+            if not np.allclose(self.inmap[1], m1[1], atol=1e-6, rtol=1e-6):
+                print("Input and output maps do not agree.")
+                failed = True
+        if self.comm is not None:
+            failed = self.comm.bcast(failed, root=0)
+        self.assertFalse(failed)
+
+        return
+
+    def test_mapmaker_madam(self):
+
+        name = "testtod2"
+        init = OpCacheInit(name=name, init_val=0)
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(
+            nside=self.map_nside, nest=True, mode=self.pointingmode
+        )
+        pointing.exec(self.data)
+
+        """
+        pix0 = 49103
+        all_weights = {}
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                pix = tod.cache.reference("pixels_{}".format(det))
+                good = pix == pix0
+                weights = tod.cache.reference("weights_{}".format(det))
+                if det not in all_weights:
+                    all_weights[det] = []
+                all_weights[det].append(weights[good])
+        pnt = []
+        for det, weights in all_weights.items():
+            for w in weights[0]:
+                pnt.append(w)
+        pnt = np.vstack(pnt)
+        import pdb
+        pdb.set_trace()
+        """
+
+        localpix, localsm, subnpix = get_submaps_nested(self.data, self.sim_nside)
+        # Scan the signal from a map
+        distmap = DistPixels(
+            comm=self.comm,
+            size=self.npix,
+            nnz=self.nnz,
+            dtype=np.float32,
+            submap=subnpix,
+            local=localsm,
+        )
+        distmap.read_healpix_fits(self.inmapfile)
+        scansim = OpSimScan(distmap=distmap, out=name)
+        scansim.exec(self.data)
+
         # Add simulated noise
-        name = "grad"
         opnoise = OpSimNoise(realization=0, out=name)
         opnoise.exec(self.data)
 
         # Copy the signal to run with Madam
-        name_madam = "grad_copy"
+        name_madam = name + "_copy"
         cachecopy = OpCacheCopy(name, name_madam)
         cachecopy.exec(self.data)
 
@@ -153,10 +295,28 @@ class OpMapMakerTest(MPITestCase):
             nnz=self.nnz,
             name=name,
             outdir=self.outdir,
-            outprefix="toast_",
+            outprefix="toast_test_",
             baseline_length=1,
             maskfile=self.maskfile_binary,
-            #weightmapfile=self.maskfile_smooth,
+            # weightmapfile=self.maskfile_smooth,
+            subharmonic_order=None,
+            iter_max=100,
+            use_noise_prior=True,
+        )
+        mapmaker.exec(self.data)
+
+        mapmaker = OpMapMaker(
+            nside=self.map_nside,
+            nnz=self.nnz,
+            name=name,
+            outdir=self.outdir,
+            outprefix="toast_test2_",
+            baseline_length=1,
+            maskfile=self.maskfile_binary,
+            # weightmapfile=self.maskfile_smooth,
+            subharmonic_order=None,
+            iter_max=100,
+            use_noise_prior=True,
         )
         mapmaker.exec(self.data)
 
@@ -172,7 +332,7 @@ class OpMapMakerTest(MPITestCase):
         pars["write_map"] = "T"
         pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"
-        pars["write_wcov"] = "F"
+        pars["write_wcov"] = "T"
         pars["write_hits"] = "T"
         pars["file_inmask"] = self.maskfile_binary
         pars["kfilter"] = "T"
@@ -180,7 +340,9 @@ class OpMapMakerTest(MPITestCase):
         pars["file_root"] = "madam"
         pars["info"] = 3
 
-        madam = OpMadam(params=pars, name=name_madam, flag_mask=1)
+        madam = OpMadam(
+            params=pars, name=name_madam, flag_mask=1, detweights=mapmaker.detweights[0]
+        )
         if not madam.available:
             print("libmadam not available, skipping mapmaker comparison")
             return
@@ -191,7 +353,7 @@ class OpMapMakerTest(MPITestCase):
 
         m0 = None
         if self.rank == 0:
-            m0 = hp.read_map(os.path.join(self.outdir, "toast_binned.fits"))
+            m0 = hp.read_map(os.path.join(self.outdir, "toast_test_binned.fits"))
         m1 = None
         if self.rank == 0:
             m1 = hp.read_map(os.path.join(self.outdir, "madam_bmap.fits"))
@@ -206,16 +368,3 @@ class OpMapMakerTest(MPITestCase):
         self.assertFalse(failed)
 
         return
-
-
-if __name__ == "__main__":
-    from mpi4py import MPI
-
-    comm = MPI.COMM_WORLD
-    rank = comm.rank
-    if rank == 0:
-        print("Running test")
-    myTest = OpMapMakerTest()
-    myTest.comm = comm
-    myTest.setUp()
-    myTest.test_mapmaker_gradient()

@@ -6,7 +6,13 @@ from .mpi import MPITestCase
 
 import os
 
+import healpy as hp
+import numpy as np
+
+from .._libtoast import pointing_matrix_healpix
+from ..healpix import HealpixPixels
 from ..todmap import TODHpixSpiral, OpPointingHpix, OpLocalPixels
+from .. import qarray as qa
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
@@ -44,6 +50,61 @@ class OpPointingHpixTest(MPITestCase):
 
     def tearDown(self):
         del self.data
+
+    def test_pointing_matrix_healpix(self):
+        nside = 64
+        hpix = HealpixPixels(64)
+        nest = True
+        # psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
+        psivec = np.radians([-180, 180])
+        nsamp = psivec.size
+        eps = 0.0
+        cal = 1.0
+        mode = "IQU"
+        nnz = 3
+        hwpang = np.zeros(nsamp)
+        flags = np.zeros(nsamp, dtype=np.uint8)
+        pixels = np.zeros(nsamp, dtype=np.int64)
+        weights = np.zeros([nsamp, nnz])
+        pix = 49103
+        theta, phi = hp.pix2ang(nside, pix, nest=nest)
+        xaxis, yaxis, zaxis = np.eye(3)
+        thetarot = qa.rotation(yaxis, theta)
+        phirot = qa.rotation(zaxis, phi)
+        pixrot = qa.mult(phirot, thetarot)
+        quats = []
+        for psi in psivec:
+            psirot = qa.rotation(zaxis, psi)
+            quats.append(qa.mult(pixrot, psirot))
+        quats = np.vstack(quats)
+        pointing_matrix_healpix(
+            hpix,
+            nest,
+            eps,
+            cal,
+            mode,
+            quats.reshape(-1),
+            hwpang,
+            flags,
+            pixels,
+            weights.reshape(-1),
+        )
+        weights_ref = []
+        for quat in quats:
+            theta, phi, psi = qa.to_angles(quat)
+            weights_ref.append(np.array([1, np.cos(2 * psi), np.sin(2 * psi)]))
+        failed = False
+        for w1, w2, psi, quat in zip(weights_ref, weights, psivec, quats):
+            print("\npsi = {}, quat = {} : ".format(psi, quat), end="")
+            if not np.allclose(w1, w2):
+                print(
+                    "Pointing weights do not agree: {} != {}".format(w1, w2), flush=True
+                )
+                failed = True
+            else:
+                print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
+        self.assertFalse(failed)
+        return
 
     def test_hpix_simple(self):
         rank = 0
