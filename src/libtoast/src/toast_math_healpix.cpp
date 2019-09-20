@@ -289,7 +289,10 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
     }
 
     toast::vfast_sqrt(n, work1.data(), rtz);
-    toast::vfast_atan2(n, work3.data(), work2.data(), phi);
+
+    // FIXME:  revert to fast version after unit tests in place
+    // toast::vfast_atan2(n, work3.data(), work2.data(), phi);
+    toast::vatan2(n, work3.data(), work2.data(), phi);
 
     return;
 }
@@ -307,6 +310,8 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
 
     toast::AlignedVector <double> work1(n);
 
+    // FIXME:  revert to fast version once unit tests pass
+    // toast::vcos(static_cast <int> (n), theta, z);
     toast::vfast_cos(static_cast <int> (n), theta, z);
 
     if (toast::is_aligned(theta) && toast::is_aligned(region)

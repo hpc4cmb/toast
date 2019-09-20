@@ -89,7 +89,8 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
 
         toast::AlignedVector <double> detang(n);
 
-        toast::vfast_atan2(n, by, bx, detang.data());
+        // FIXME:  Switch back to fast version after unit tests improved.
+        toast::vatan2(n, by, bx, detang.data());
 
         if (hwpang != NULL) {
             for (size_t i = 0; i < n; ++i) {
@@ -101,7 +102,8 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
         double * sinout = buf1.data();
         double * cosout = buf2.data();
 
-        toast::vfast_sincos(n, detang.data(), sinout, cosout);
+        // FIXME:  Switch back to fast version after unit tests pass
+        toast::vsincos(n, detang.data(), sinout, cosout);
 
         for (size_t i = 0; i < n; ++i) {
             size_t off = 3 * i;
