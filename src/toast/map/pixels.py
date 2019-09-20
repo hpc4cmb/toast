@@ -189,11 +189,6 @@ class DistPixels(object):
                 )
                 self._glob2loc[:] = -1
                 for ilocal_submap, iglobal_submap in enumerate(self._local):
-                    # DEBUG begin
-                    if ilocal_submap > self._glob2loc.size - 1:
-                        import pdb
-                        pdb.set_trace()
-                    # DEBUG end
                     self._glob2loc[iglobal_submap] = ilocal_submap
                 if (self._submap * self._local.max()) > self._size:
                     raise RuntimeError("local submap indices out of range")
