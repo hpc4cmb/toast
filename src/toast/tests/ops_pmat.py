@@ -51,6 +51,50 @@ class OpPointingHpixTest(MPITestCase):
     def tearDown(self):
         del self.data
 
+    def test_pointing_matrix_healpix2(self):
+        nside = 64
+        npix = 12 * nside ** 2
+        hpix = HealpixPixels(64)
+        nest = True
+        phivec = np.radians([-360, -270, -180, -135, -90, -45, 0, 45, 90, 135, 180, 270, 360])
+        nsamp = phivec.size
+        eps = 0.0
+        cal = 1.0
+        mode = "IQU"
+        nnz = 3
+        hwpang = np.zeros(nsamp)
+        flags = np.zeros(nsamp, dtype=np.uint8)
+        pixels = np.zeros(nsamp, dtype=np.int64)
+        weights = np.zeros([nsamp, nnz], dtype=np.float64)
+        theta = np.radians(135)
+        psi = np.radians(135)
+        quats = []
+        xaxis, yaxis, zaxis = np.eye(3)
+        for phi in phivec:
+            phirot = qa.rotation(zaxis, phi)
+            quats.append(qa.from_angles(theta, phi, psi))
+        quats = np.vstack(quats)
+        pointing_matrix_healpix(
+            hpix,
+            nest,
+            eps,
+            cal,
+            mode,
+            quats.reshape(-1),
+            hwpang,
+            flags,
+            pixels,
+            weights.reshape(-1),
+        )
+        failed = False
+        bad = np.logical_or(pixels < 0, pixels > npix - 1)
+        nbad = np.sum(bad)
+        if nbad > 0:
+            print("{} pixels are outside of the map. phi = {} deg".format(nbad, np.degrees(phivec[bad])))
+            failed = True
+        self.assertFalse(failed)
+        return
+
     def test_pointing_matrix_healpix(self):
         nside = 64
         hpix = HealpixPixels(64)

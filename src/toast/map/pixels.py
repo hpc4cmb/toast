@@ -158,7 +158,7 @@ class DistPixels(object):
 
         if self._size % self._submap != 0:
             raise RuntimeError(
-                "submap size must evenly divide into total " "number of pixels"
+                "submap size must evenly divide into total number of pixels"
             )
 
         if localpix is not None:
@@ -188,8 +188,13 @@ class DistPixels(object):
                     "glob2loc", np.int64, (self._nglob,)
                 )
                 self._glob2loc[:] = -1
-                for g in enumerate(self._local):
-                    self._glob2loc[g[1]] = g[0]
+                for ilocal_submap, iglobal_submap in enumerate(self._local):
+                    # DEBUG begin
+                    if ilocal_submap > self._glob2loc.size - 1:
+                        import pdb
+                        pdb.set_trace()
+                    # DEBUG end
+                    self._glob2loc[iglobal_submap] = ilocal_submap
                 if (self._submap * self._local.max()) > self._size:
                     raise RuntimeError("local submap indices out of range")
                 self.data = self._cache.create(

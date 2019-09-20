@@ -320,6 +320,7 @@ class TODHpixSpiral(TOD):
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         nside (int): sky NSIDE to use.
+        rot (ndarray):  Extra quaternion to rotate the  quaternions with.
         Other keyword arguments are passed to the parent class constructor.
 
     """
@@ -332,6 +333,7 @@ class TODHpixSpiral(TOD):
         firsttime=0.0,
         rate=100.0,
         nside=512,
+        rot=None,
         **kwargs
     ):
 
@@ -345,6 +347,7 @@ class TODHpixSpiral(TOD):
         self._rate = rate
         self._nside = nside
         self._npix = 12 * self._nside * self._nside
+        self._rot = rot
 
     def detoffset(self):
         return {d: np.asarray(self._fp[d]) for d in self._detlist}
@@ -426,7 +429,10 @@ class TODHpixSpiral(TOD):
 
         # Add rotation around the boresight
         zrot = qa.rotation(zaxis, np.radians(45) * step)
-        boresight = qa.norm(qa.mult(boresight, zrot))
+        boresight = qa.mult(boresight, zrot)
+        if self._rot is not None:
+            boresight = qa.mult(self._rot, boresight)
+        boresight = qa.norm(boresight)
 
         return boresight
 

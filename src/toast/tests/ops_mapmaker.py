@@ -23,6 +23,7 @@ from ..todmap import (
     get_submaps_nested,
     OpSimScan,
 )
+from .. import qarray as qa
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
@@ -42,14 +43,16 @@ class OpMapMakerTest(MPITestCase):
                     pass
 
         # One observation per group
-        self.data = create_distdata(self.comm, obs_per_group=1)
+        self.nobs = 3
+        self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
         self.ndet = 4  # self.data.comm.group_size
         self.rate = 50.0
+        self.fknee = 1.0
 
         # Create detectors with defaults
         dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
+            self.ndet, samplerate=self.rate, fknee=self.fknee,
         )
 
         # Pixelization
@@ -79,17 +82,6 @@ class OpMapMakerTest(MPITestCase):
             )
             istart = istop
 
-        # Populate the observations
-
-        tod = TODHpixSpiral(
-            self.data.comm.comm_group,
-            dquat,
-            self.totsamp,
-            detranks=self.data.comm.group_size,
-            rate=self.rate,
-            nside=self.sim_nside,
-        )
-
         # Construct an uncorrelated analytic noise model for the detectors
 
         noise = AnalyticNoise(
@@ -101,9 +93,29 @@ class OpMapMakerTest(MPITestCase):
             NET=dnet,
         )
 
-        self.data.obs[0]["tod"] = tod
-        self.data.obs[0]["noise"] = noise
-        self.data.obs[0]["intervals"] = intervals
+        # Populate the observations
+
+        for iobs in range(self.nobs):
+            if iobs == 1:
+                rot = qa.from_angles(np.pi/2, 0, 0)
+            if iobs == 2:
+                rot = qa.from_angles(np.pi/2, np.pi/2, 0)
+            else:
+                rot = None
+
+            tod = TODHpixSpiral(
+                self.data.comm.comm_group,
+                dquat,
+                self.totsamp,
+                detranks=self.data.comm.group_size,
+                rate=self.rate,
+                nside=self.sim_nside,
+                rot=rot,
+            )
+
+            self.data.obs[iobs]["tod"] = tod
+            self.data.obs[iobs]["noise"] = noise
+            self.data.obs[iobs]["intervals"] = intervals
 
         # Write processing masks
 
@@ -151,6 +163,7 @@ class OpMapMakerTest(MPITestCase):
 
         return
 
+    """
     def test_subharmonic_template(self):
 
         name = "testtod1"
@@ -232,6 +245,7 @@ class OpMapMakerTest(MPITestCase):
         self.assertFalse(failed)
 
         return
+    """
 
     def test_mapmaker_madam(self):
 
