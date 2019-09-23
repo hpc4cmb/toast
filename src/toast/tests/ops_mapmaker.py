@@ -12,6 +12,8 @@ import shutil
 import healpy as hp
 import numpy as np
 
+from ..timing import gather_timers, GlobalTimers
+from ..timing import dump as dump_timing
 from ..tod import AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit
 from ..map import DistPixels
 from ..todmap import (
@@ -60,8 +62,8 @@ class OpMapMakerTest(MPITestCase):
         )
 
         # Pixelization
-        self.sim_nside = 32
-        self.map_nside = 32
+        self.sim_nside = 64
+        self.map_nside = 64
         self.pointingmode = "IQU"
         self.nnz = 3
 
@@ -336,6 +338,9 @@ class OpMapMakerTest(MPITestCase):
 
         # Run TOAST mapmaker
 
+        gt = GlobalTimers.get()
+        gt.start("OpMapMaker test")
+
         mapmaker = OpMapMaker(
             nside=self.map_nside,
             nnz=self.nnz,
@@ -348,8 +353,16 @@ class OpMapMakerTest(MPITestCase):
             subharmonic_order=None,
             iter_max=100,
             use_noise_prior=True,
+            precond_width=20,
         )
         mapmaker.exec(self.data)
+
+        gt.stop_all()
+        alltimers = gather_timers(comm=self.comm)
+        if self.rank == 0:
+            out = os.path.join(self.outdir, "timing")
+            dump_timing(alltimers, out)
+            print("Saved timers in {}".format(out))
 
         """
         # Run the destriper again
