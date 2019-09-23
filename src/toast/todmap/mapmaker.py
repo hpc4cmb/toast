@@ -422,7 +422,8 @@ class OffsetTemplate(TODTemplate):
                 stop_indices = np.hstack([start_indices[1:], [ival.last]])
                 todslices = []
                 for istart, istop in zip(start_indices, stop_indices):
-                    todslices.append(slice(istart, istop + 1))
+                    #todslices.append(slice(istart, istop + 1))
+                    todslices.append(slice(istart, istop))
                 for idet, det in enumerate(tod.local_dets):
                     istart = self.namplitude
                     for todslice in todslices:
@@ -588,7 +589,7 @@ class TemplateMatrix(TOASTMatrix):
             tod = sig.data.obs[0]["tod"]
             for idet, det in enumerate(tod.local_dets):
                 plt.subplot(2, 2, idet + 1)
-                plt.plot(tod.local_signal(det, sig.name), label=sig.name)
+                plt.plot(tod.local_signal(det, sig.name), label=sig.name, zorder=50)
         """
         # DEBUG end
         if in_place:
@@ -599,14 +600,15 @@ class TemplateMatrix(TOASTMatrix):
         outsignal -= template_tod
         # DEBUG begin
         """
-        for sig in [template_tod, outsignal]:
+        for sig, zorder in [(template_tod, 100), (outsignal, 0)]:
             tod = sig.data.obs[0]["tod"]
             for idet, det in enumerate(tod.local_dets):
                 plt.subplot(2, 2, idet + 1)
-                plt.plot(tod.local_signal(det, sig.name), label=sig.name)
+                plt.plot(tod.local_signal(det, sig.name), label=sig.name, zorder=zorder)
         plt.legend(loc="best")
         plt.savefig("test.png")
-        pdb.set_trace()
+        plt.close()
+        #pdb.set_trace()
         """
         # DEBUG end
         return outsignal
@@ -1250,9 +1252,6 @@ class OpMapMaker(Operator):
         # noise = UnitMatrix()  # DEBUG
         # projection = UnitMatrix()  # DEBUG
         signal = Signal(data, name=self.name)
-        # DEBUG begin
-        # signal += 100
-        # DEBUG end
 
         solver = PCGSolver(
             self.comm,
@@ -1300,7 +1299,7 @@ class OpMapMaker(Operator):
             zmap=dist_map,
             name=self.name,
             detweights=self.detweights[0],
-            common_flag_mask=self.common_flag_mask,
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
             flag_mask=self.flag_mask,
         )
         build_dist_map.exec(data)
@@ -1401,7 +1400,7 @@ class OpMapMaker(Operator):
             detweights=self.detweights[0],
             invnpp=self.white_noise_cov_matrix,
             hits=hits,
-            common_flag_mask=self.common_flag_mask,
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
             flag_mask=self.flag_mask,
         )
         build_wcov.exec(data)

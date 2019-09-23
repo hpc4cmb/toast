@@ -44,12 +44,12 @@ class OpMapMakerTest(MPITestCase):
                     pass
 
         # One observation per group
-        self.nobs = 1
+        self.nobs = 3
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
         self.ndet = 4  # self.data.comm.group_size
         self.sigma = 1
-        self.rate = 100.0
+        self.rate = 50.0
         self.net = self.sigma / np.sqrt(self.rate)
         self.alpha = 2
         self.fknee = 1e0
@@ -60,14 +60,14 @@ class OpMapMakerTest(MPITestCase):
         )
 
         # Pixelization
-        self.sim_nside = 64
-        self.map_nside = 64
+        self.sim_nside = 32
+        self.map_nside = 32
         self.pointingmode = "IQU"
         self.nnz = 3
 
         # Samples per observation
         self.npix = 12 * self.sim_nside ** 2
-        self.ninterval = 10
+        self.ninterval = 4
         self.totsamp = self.ninterval * self.npix
 
         # Define intervals
@@ -296,7 +296,7 @@ class OpMapMakerTest(MPITestCase):
         print("amplitudes1:", amplitudes1)
         print("reference:", reference)
         print("amplitudes3:", amplitudes3)
-        
+
         return
 
     """
@@ -323,8 +323,7 @@ class OpMapMakerTest(MPITestCase):
         )
         distmap.read_healpix_fits(self.inmapfile)
         scansim = OpSimScan(distmap=distmap, out=name)
-        # DEBUG: no signal, just noise
-        #scansim.exec(self.data)
+        scansim.exec(self.data)
 
         # Add simulated noise
         opnoise = OpSimNoise(realization=0, out=name)
@@ -352,6 +351,8 @@ class OpMapMakerTest(MPITestCase):
         )
         mapmaker.exec(self.data)
 
+        """
+        # Run the destriper again
         mapmaker = OpMapMaker(
             nside=self.map_nside,
             nnz=self.nnz,
@@ -366,6 +367,7 @@ class OpMapMakerTest(MPITestCase):
             use_noise_prior=True,
         )
         mapmaker.exec(self.data)
+        """
 
         # Run Madam
 
@@ -388,13 +390,33 @@ class OpMapMakerTest(MPITestCase):
         pars["info"] = 3
 
         madam = OpMadam(
-            params=pars, name=name_madam, flag_mask=1, detweights=mapmaker.detweights[0]
+            params=pars,
+            name=name_madam,
+            name_out=name_madam,
+            flag_mask=1,
+            detweights=mapmaker.detweights[0],
         )
         if not madam.available:
             print("libmadam not available, skipping mapmaker comparison")
             return
 
         madam.exec(self.data)
+
+        # DEBUG begin
+        """
+        import pdb
+        import matplotlib.pyplot as plt
+        tod = self.data.obs[0]["tod"]
+        sig1 = tod.local_signal("d00", name)
+        sig2 = tod.local_signal("d00", name_madam)
+        plt.plot(sig1, '.', label="TOAST mapmaker")
+        plt.plot(sig2, '.', label="Madam")
+        plt.plot(sig2 - sig1, '.', label="Madam - TOAST")
+        plt.legend(loc="best")
+        plt.savefig("test2.png")
+        pdb.set_trace()
+        """
+        # DEBUG end
 
         # Compare
 
