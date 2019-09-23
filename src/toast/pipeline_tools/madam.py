@@ -34,6 +34,18 @@ def add_madam_args(parser):
         required=False,
         default=100,
         type=np.int,
+        help="Width of the Madam band preconditioner",
+    )
+    parser.add_argument(
+        "--madam-precond-width-min",
+        required=False,
+        type=np.int,
+        help="Minimum width of the Madam band preconditioner",
+    )
+    parser.add_argument(
+        "--madam-precond-width-max",
+        required=False,
+        type=np.int,
         help="Maximum width of the Madam band preconditioner",
     )
     parser.add_argument(
@@ -298,8 +310,21 @@ def setup_madam(args):
 
     pars["base_first"] = args.madam_baseline_length
     pars["basis_order"] = args.madam_baseline_order
-    pars["precond_width_min"] = max(10, args.madam_precond_width // 10)
-    pars["precond_width_max"] = max(10, args.madam_precond_width)
+    # Adaptive preconditioner width
+    width_min = args.madam_precond_width_min
+    width_max = args.madam_precond_width_max
+    if width_min is None:
+        # madam-precond-width has a default value
+        width_min = args.madam_precond_width
+    if width_max is None:
+        # madam-precond-width has a default value
+        width_max = args.madam_precond_width
+    if width_min > width_max:
+        # it is not an error for these two to match
+        width_min = width_max
+    pars["precond_width_min"] = width_min
+    pars["precond_width_max"] = width_max
+    #
     pars["nside_map"] = args.nside
     if args.madam_noisefilter:
         if args.madam_baseline_order != 0:
