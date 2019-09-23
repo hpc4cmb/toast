@@ -359,13 +359,17 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
+    double eps = std::numeric_limits <float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
         && toast::is_aligned(rtz)) {
         #pragma omp simd
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             int64_t x;
             int64_t y;
@@ -435,8 +439,11 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
         }
     } else {
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             int64_t x;
             int64_t y;
@@ -519,13 +526,17 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
+    double eps = std::numeric_limits <float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
         && toast::is_aligned(rtz)) {
         #pragma omp simd
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             double tp;
             int64_t longpart;
@@ -569,8 +580,11 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
         }
     } else {
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             double tp;
             int64_t longpart;
