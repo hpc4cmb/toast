@@ -42,12 +42,12 @@ class TOASTMatrix:
         """
         raise NotImplementedError("Virtual apply not implemented in derived class")
 
-    def applyTranspose(self, vector, inplace=False):
+    def apply_transpose(self, vector, inplace=False):
         """ Every TOASTMatrix can apply itself to a distributed vectors
         of signal, map or template offsets as is appropriate.
         """
         raise NotImplementedError(
-            "Virtual applyTranspose not implemented in derived class"
+            "Virtual apply_transpose not implemented in derived class"
         )
 
 
@@ -311,24 +311,25 @@ class OffsetTemplate(TODTemplate):
             noisefilters = {}  # this observation
             preconditioners = {}  # this observation
             for det in tod.local_dets:
-                psdfreq = noise.freq(det)
-                psd = noise.psd(det)
-                # Remove the white noise component from the PSD
-                psd = psd.copy()
-                psd -= np.amin(psd[psdfreq > 1.0])
-                psd[psd < 1e-30] = 1e-30
-                offset_psd = self._get_offset_psd(psdfreq, psd, freq)
+                offset_psd = self._get_offset_psd(noise, freq, det)
                 # Store real space filters for every interval and every detector.
-                noisefilters[det], preconditioners[
-                    det
-                ] = self._get_noisefilter_and_preconditioner(
-                    freq, offset_psd, self.offset_slices[iobs][det]
-                )
+                noisefilters[det], preconditioners[det] = \
+                    self._get_noisefilter_and_preconditioner(
+                        freq, offset_psd, self.offset_slices[iobs][det]
+                    )
             self.filters.append(noisefilters)
             self.preconditioners.append(preconditioners)
         return
 
-    def _get_offset_psd(self, psdfreq, psd, freq):
+    def _get_offset_psd(self, noise, freq, det):
+        psdfreq = noise.freq(det)
+        psd = noise.psd(det)
+        rate = noise.rate(det)
+        # Remove the white noise component from the PSD
+        psd = psd.copy() * np.sqrt(rate)
+        psd -= np.amin(psd[psdfreq > 1.0])
+        psd[psd < 1e-30] = 1e-30
+
         # The calculation of `offset_psd` is from Keihänen, E. et al:
         # "Making CMB temperature and polarization maps with Madam",
         # A&A 510:A57, 2010
@@ -465,19 +466,8 @@ class OffsetTemplate(TODTemplate):
 
     def project_signal(self, signal, amplitudes):
         offset_amplitudes = amplitudes[self.name]
-        # print("PROJECTING SIGNAL {}: before:".format(signal.name), offset_amplitudes)  # DEBUG
-        # if not np.all(offset_amplitudes == 0):
-        #    import pdb
-        #    pdb.set_trace()
-        # n = 0  # DEBUG
         for itemplate, iobs, det, todslice, sqsigma in self.offset_templates:
-            # print("n = {}, itemplate = {}, iobs = {}, det = {}, todslice = {}, sum = {}".format(
-            #    n, itemplate, iobs, det, todslice, np.sum(signal[iobs, det, todslice])))  # DEBUG
             offset_amplitudes[itemplate] += np.sum(signal[iobs, det, todslice])
-            # offset_amplitudes[itemplate] = np.sum(signal[iobs, det, todslice])  # DEBUG
-            # n += 1  # DEBUG
-        # print("PROJECTED {} templates".format(n))  # DEBUG
-        # print("PROJECTING SIGNAL {}: after:".format(signal.name), offset_amplitudes)  # DEBUG
         return
 
     def add_prior(self, amplitudes_in, amplitudes_out):
@@ -495,7 +485,7 @@ class OffsetTemplate(TODTemplate):
                     # scipy.signal.convolve will use either `convolve` or `fftconvolve`
                     # depending on the size of the inputs
                     amps_out = scipy.signal.convolve(amps_in, noisefilter, mode="same")
-                    offset_amplitudes_out[offsetslice] = amps_out
+                    offset_amplitudes_out[offsetslice] += amps_out
         return
 
     def apply_precond(self, amplitudes_in, amplitudes_out):
@@ -548,7 +538,7 @@ class TemplateMatrix(TOASTMatrix):
             template.add_to_signal(new_signal, amplitudes)
         return new_signal
 
-    def applyTranspose(self, signal):
+    def apply_transpose(self, signal):
         """ Compute and return a = F^T.y
         """
         new_amplitudes = self.zero_amplitudes()
@@ -589,12 +579,36 @@ class TemplateMatrix(TOASTMatrix):
         """ Clean the given distributed signal vector by subtracting
         the templates multiplied by the given amplitudes.
         """
+        # DEBUG begin
+        """
+        import pdb
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=[18, 12])
+        for sig in [signal]:
+            tod = sig.data.obs[0]["tod"]
+            for idet, det in enumerate(tod.local_dets):
+                plt.subplot(2, 2, idet + 1)
+                plt.plot(tod.local_signal(det, sig.name), label=sig.name)
+        """
+        # DEBUG end
         if in_place:
             outsignal = signal
         else:
             outsignal = signal.copy()
         template_tod = self.apply(amplitudes)
         outsignal -= template_tod
+        # DEBUG begin
+        """
+        for sig in [template_tod, outsignal]:
+            tod = sig.data.obs[0]["tod"]
+            for idet, det in enumerate(tod.local_dets):
+                plt.subplot(2, 2, idet + 1)
+                plt.plot(tod.local_signal(det, sig.name), label=sig.name)
+        plt.legend(loc="best")
+        plt.savefig("test.png")
+        pdb.set_trace()
+        """
+        # DEBUG end
         return outsignal
 
 
@@ -788,7 +802,7 @@ class NoiseMatrix(TOASTMatrix):
         new_signal.apply_weightmap(self.weightmap)
         return new_signal
 
-    def applyTranspose(self, signal):
+    def apply_transpose(self, signal):
         # Symmetric matrix
         return self.apply(signal)
 
@@ -935,7 +949,7 @@ class PCGSolver:
         self.niter_max = niter_max
         self.convergence_limit = convergence_limit
 
-        self.rhs = self.templates.applyTranspose(
+        self.rhs = self.templates.apply_transpose(
             self.noise.apply(self.projection.apply(self.signal))
         )
         # print("RHS {}: {}".format(self.signal.name, self.rhs))  # DEBUG
@@ -944,7 +958,7 @@ class PCGSolver:
     def apply_lhs(self, amplitudes):
         """ Return A.x
         """
-        new_amplitudes = self.templates.applyTranspose(
+        new_amplitudes = self.templates.apply_transpose(
             self.noise.apply(self.projection.apply(self.templates.apply(amplitudes)))
         )
         self.templates.add_prior(amplitudes, new_amplitudes)

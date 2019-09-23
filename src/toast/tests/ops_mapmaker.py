@@ -23,6 +23,7 @@ from ..todmap import (
     get_submaps_nested,
     OpSimScan,
 )
+from ..todmap.mapmaker import TemplateMatrix, OffsetTemplate, Signal
 from .. import qarray as qa
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
@@ -43,16 +44,19 @@ class OpMapMakerTest(MPITestCase):
                     pass
 
         # One observation per group
-        self.nobs = 3
+        self.nobs = 1
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
         self.ndet = 4  # self.data.comm.group_size
-        self.rate = 50.0
-        self.fknee = 1.0
+        self.sigma = 1
+        self.rate = 100.0
+        self.net = self.sigma / np.sqrt(self.rate)
+        self.alpha = 2
+        self.fknee = 1e0
 
-        # Create detectors with defaults
+        # Create detectors
         dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate, fknee=self.fknee,
+            self.ndet, samplerate=self.rate, fknee=self.fknee, alpha=self.alpha, net=self.net,
         )
 
         # Pixelization
@@ -63,7 +67,7 @@ class OpMapMakerTest(MPITestCase):
 
         # Samples per observation
         self.npix = 12 * self.sim_nside ** 2
-        self.ninterval = 4
+        self.ninterval = 10
         self.totsamp = self.ninterval * self.npix
 
         # Define intervals
@@ -96,9 +100,9 @@ class OpMapMakerTest(MPITestCase):
         # Populate the observations
 
         for iobs in range(self.nobs):
-            if iobs == 1:
+            if iobs % 3 == 1:
                 rot = qa.from_angles(np.pi/2, 0, 0)
-            if iobs == 2:
+            if iobs % 3 == 2:
                 rot = qa.from_angles(np.pi/2, np.pi/2, 0)
             else:
                 rot = None
@@ -156,6 +160,7 @@ class OpMapMakerTest(MPITestCase):
             pol=True,
             pixwin=True,
             fwhm=np.radians(30),
+            verbose=False,
         )
         self.inmap = hp.reorder(self.inmap, r2n=True)
         self.inmapfile = os.path.join(self.outdir, "input_map.fits")
@@ -247,6 +252,54 @@ class OpMapMakerTest(MPITestCase):
         return
     """
 
+    """
+    def test_offset_template(self):
+
+        name = "testtod2"
+        init = OpCacheInit(name=name, init_val=0)
+
+        # Add simulated noise
+        opnoise = OpSimNoise(realization=0, out=name)
+        opnoise.exec(self.data)
+
+        # Build detector weights
+        all_detweights = []
+        for obs in self.data.obs:
+            detweights = {}
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                detweights[det] = 1
+            all_detweights.append(detweights)
+
+        # Create offset template
+        step_time = 1
+        step_size = int(step_time * self.rate)
+        offset_template = OffsetTemplate(
+            self.data,
+            all_detweights,
+            step_length=step_time,
+            intervals="intervals",
+            use_noise_prior=True,
+        )
+
+        # Create Signal
+        signal = Signal(self.data, name=name)
+
+        # Create template matrix
+        templates = TemplateMatrix(self.data, self.comm, [offset_template])
+
+        amplitudes1 = templates.zero_amplitudes()
+        reference = templates.apply_transpose(signal)
+        reference /= step_size
+        amplitudes3 = templates.zero_amplitudes()
+        templates.add_prior(reference, amplitudes3)
+        print("amplitudes1:", amplitudes1)
+        print("reference:", reference)
+        print("amplitudes3:", amplitudes3)
+        
+        return
+
+    """
     def test_mapmaker_madam(self):
 
         name = "testtod2"
@@ -257,27 +310,6 @@ class OpMapMakerTest(MPITestCase):
             nside=self.map_nside, nest=True, mode=self.pointingmode
         )
         pointing.exec(self.data)
-
-        """
-        pix0 = 49103
-        all_weights = {}
-        for obs in self.data.obs:
-            tod = obs["tod"]
-            for det in tod.local_dets:
-                pix = tod.cache.reference("pixels_{}".format(det))
-                good = pix == pix0
-                weights = tod.cache.reference("weights_{}".format(det))
-                if det not in all_weights:
-                    all_weights[det] = []
-                all_weights[det].append(weights[good])
-        pnt = []
-        for det, weights in all_weights.items():
-            for w in weights[0]:
-                pnt.append(w)
-        pnt = np.vstack(pnt)
-        import pdb
-        pdb.set_trace()
-        """
 
         localpix, localsm, subnpix = get_submaps_nested(self.data, self.sim_nside)
         # Scan the signal from a map
@@ -291,7 +323,8 @@ class OpMapMakerTest(MPITestCase):
         )
         distmap.read_healpix_fits(self.inmapfile)
         scansim = OpSimScan(distmap=distmap, out=name)
-        scansim.exec(self.data)
+        # DEBUG: no signal, just noise
+        #scansim.exec(self.data)
 
         # Add simulated noise
         opnoise = OpSimNoise(realization=0, out=name)
