@@ -62,15 +62,41 @@ void TOASTsfTest::SetUp() {
         xin[i] = cosout[i];
         yin[i] = sinout[i];
         atanout[i] = ::atan2(yin[i], xin[i]);
+    }
 
+    sqin[0] = 0.0;
+    sqin[1] = eps;
+    sqin[2] = 2.0 * eps;
+
+    rsqin[0] = eps;
+    rsqin[1] = 2.0 * eps;
+    rsqin[2] = 3.0 * eps;
+
+    for (int i = 3; i < size; ++i) {
         sqin[i] = (double)i / (double)size;
         rsqin[i] = sqin[i];
+    }
+
+    for (int i = 0; i < size; ++i) {
         sqout[i] = ::sqrt(sqin[i]);
         rsqout[i] = 1.0 / ::sqrt(rsqin[i]);
+    }
 
-        expin[i] = -10.0 + (double)i * 20.0 / (double)size;
-        expout[i] = ::exp(expin[i]);
+    expin[0] = -1.0e300;
+    expin[1] = -1.0e200;
+    expin[2] = -1.0e100;
+
+    login[0] = eps;
+    login[1] = 2.0 * eps;
+    login[2] = 3.0 * eps;
+
+    for (int i = 3; i < size; ++i) {
+        expin[i] = 0.005 * (double)i;
         login[i] = expout[i];
+    }
+
+    for (int i = 0; i < size; ++i) {
+        expout[i] = ::exp(expin[i]);
         logout[i] = ::log(login[i]);
     }
 
