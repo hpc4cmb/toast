@@ -58,7 +58,11 @@ class OpMapMakerTest(MPITestCase):
 
         # Create detectors
         dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate, fknee=self.fknee, alpha=self.alpha, net=self.net,
+            self.ndet,
+            samplerate=self.rate,
+            fknee=self.fknee,
+            alpha=self.alpha,
+            net=self.net,
         )
 
         # Pixelization
@@ -103,9 +107,9 @@ class OpMapMakerTest(MPITestCase):
 
         for iobs in range(self.nobs):
             if iobs % 3 == 1:
-                rot = qa.from_angles(np.pi/2, 0, 0)
+                rot = qa.from_angles(np.pi / 2, 0, 0)
             if iobs % 3 == 2:
-                rot = qa.from_angles(np.pi/2, np.pi/2, 0)
+                rot = qa.from_angles(np.pi / 2, np.pi / 2, 0)
             else:
                 rot = None
 
@@ -302,6 +306,7 @@ class OpMapMakerTest(MPITestCase):
         return
 
     """
+
     def test_mapmaker_madam(self):
 
         name = "testtod2"
@@ -353,9 +358,10 @@ class OpMapMakerTest(MPITestCase):
             subharmonic_order=None,
             iter_max=100,
             use_noise_prior=True,
-            precond_width=20,
+            precond_width=30,
         )
         mapmaker.exec(self.data)
+        mapmaker.report_timing()
 
         gt.stop_all()
         alltimers = gather_timers(comm=self.comm)

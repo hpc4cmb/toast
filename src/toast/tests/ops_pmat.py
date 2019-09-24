@@ -56,7 +56,9 @@ class OpPointingHpixTest(MPITestCase):
         npix = 12 * nside ** 2
         hpix = HealpixPixels(64)
         nest = True
-        phivec = np.radians([-360, -270, -180, -135, -90, -45, 0, 45, 90, 135, 180, 270, 360])
+        phivec = np.radians(
+            [-360, -270, -180, -135, -90, -45, 0, 45, 90, 135, 180, 270, 360]
+        )
         nsamp = phivec.size
         eps = 0.0
         cal = 1.0
@@ -90,7 +92,11 @@ class OpPointingHpixTest(MPITestCase):
         bad = np.logical_or(pixels < 0, pixels > npix - 1)
         nbad = np.sum(bad)
         if nbad > 0:
-            print("{} pixels are outside of the map. phi = {} deg".format(nbad, np.degrees(phivec[bad])))
+            print(
+                "{} pixels are outside of the map. phi = {} deg".format(
+                    nbad, np.degrees(phivec[bad])
+                )
+            )
             failed = True
         self.assertFalse(failed)
         return

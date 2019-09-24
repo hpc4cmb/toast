@@ -9,6 +9,7 @@ import scipy.signal
 from toast import Operator
 from toast.mpi import MPI
 
+from ..timing import gather_timers, GlobalTimers
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 from .sim_det_map import OpSimScan
@@ -317,10 +318,11 @@ class OffsetTemplate(TODTemplate):
             for det in tod.local_dets:
                 offset_psd = self._get_offset_psd(noise, freq, det)
                 # Store real space filters for every interval and every detector.
-                noisefilters[det], preconditioners[det] = \
-                    self._get_noisefilter_and_preconditioner(
-                        freq, offset_psd, self.offset_slices[iobs][det]
-                    )
+                noisefilters[det], preconditioners[
+                    det
+                ] = self._get_noisefilter_and_preconditioner(
+                    freq, offset_psd, self.offset_slices[iobs][det]
+                )
             self.filters.append(noisefilters)
             self.preconditioners.append(preconditioners)
         return
@@ -410,14 +412,11 @@ class OffsetTemplate(TODTemplate):
                 preconditioner = np.zeros([precond_width, nstep], dtype=np.float64)
                 preconditioner[0] = sigmasqs
                 preconditioner[:wband, :] += np.repeat(
-                    noisefilter[icenter : icenter + wband, np.newaxis], nstep, 1,
+                    noisefilter[icenter : icenter + wband, np.newaxis], nstep, 1
                 )
                 lower = True
                 scipy.linalg.cholesky_banded(
-                    preconditioner,
-                    overwrite_ab=True,
-                    lower=lower,
-                    check_finite=True,
+                    preconditioner, overwrite_ab=True, lower=lower, check_finite=True
                 )
             preconditioners.append((preconditioner, lower))
         return noisefilters, preconditioners
@@ -449,7 +448,6 @@ class OffsetTemplate(TODTemplate):
                 stop_indices = np.hstack([start_indices[1:], [ival.last]])
                 todslices = []
                 for istart, istop in zip(start_indices, stop_indices):
-                    #todslices.append(slice(istart, istop + 1))
                     todslices.append(slice(istart, istop))
                 for idet, det in enumerate(tod.local_dets):
                     istart = self.namplitude
@@ -469,7 +467,9 @@ class OffsetTemplate(TODTemplate):
                     # This is the domain we apply the noise filter in.
                     if det not in offset_slices:
                         offset_slices[det] = []
-                    offset_slices[det].append((slice(istart, self.namplitude), sigmasqs))
+                    offset_slices[det].append(
+                        (slice(istart, self.namplitude), sigmasqs)
+                    )
             self.offset_slices.append(offset_slices)
         return
 
@@ -492,15 +492,31 @@ class OffsetTemplate(TODTemplate):
     @function_timer
     def add_to_signal(self, signal, amplitudes):
         offset_amplitudes = amplitudes[self.name]
+        last_obs = None
+        last_det = None
+        last_ref = None
         for itemplate, iobs, det, todslice, sigmasq in self.offset_templates:
-            signal[iobs, det, todslice] += offset_amplitudes[itemplate]
+            if iobs != last_obs or det != last_det:
+                last_obs = iobs
+                last_det = det
+                last_ref = signal[iobs, det, :]
+            last_ref[todslice] += offset_amplitudes[itemplate]
+            # signal[iobs, det, todslice] += offset_amplitudes[itemplate]
         return
 
     @function_timer
     def project_signal(self, signal, amplitudes):
         offset_amplitudes = amplitudes[self.name]
+        last_obs = None
+        last_det = None
+        last_ref = None
         for itemplate, iobs, det, todslice, sqsigma in self.offset_templates:
-            offset_amplitudes[itemplate] += np.sum(signal[iobs, det, todslice])
+            if iobs != last_obs or det != last_det:
+                last_obs = iobs
+                last_det = det
+                last_ref = signal[iobs, det, :]
+            offset_amplitudes[itemplate] += np.sum(last_ref[todslice])
+            # offset_amplitudes[itemplate] += np.sum(signal[iobs, det, todslice])
         return
 
     @function_timer
@@ -533,7 +549,9 @@ class OffsetTemplate(TODTemplate):
                 for det in tod.local_dets:
                     slices = self.offset_slices[iobs][det]
                     preconditioners = self.preconditioners[iobs][det]
-                    for (offsetslice, sigmasqs), preconditioner in zip(slices, preconditioners):
+                    for (offsetslice, sigmasqs), preconditioner in zip(
+                        slices, preconditioners
+                    ):
                         amps_in = offset_amplitudes_in[offsetslice]
                         if self.precond_width <= 1:
                             # Use C_a prior
@@ -1176,6 +1194,212 @@ class OpMapMaker(Operator):
         self.use_noise_prior = use_noise_prior
         self.precond_width = precond_width
 
+    def report_timing(self):
+        # gt.stop_all()
+        all_timers = gather_timers(comm=self.comm)
+        names = OrderedDict()
+        names["OpMapMaker.exec"] = OrderedDict(
+            [
+                ("OpMapMaker.flag_gaps", None),
+                ("OpMapMaker.get_detweights", None),
+                ("OpMapMaker.initialize_binning", None),
+                ("OpMapMaker.bin_map", None),
+                ("OpMapMaker.load_mask", None),
+                ("OpMapMaker.load_weightmap", None),
+                ("OpMapMaker.get_templatematrix", None),
+                ("OpMapMaker.get_noisematrix", None),
+                ("OpMapMaker.get_projectionmatrix", None),
+                ("OpMapMaker.get_solver", None),
+                (
+                    "PCGSolver.solve",
+                    OrderedDict(
+                        [
+                            ("TemplateMatrix.zero_amplitudes", None),
+                            (
+                                "PCGSolver.apply_lhs",
+                                OrderedDict(
+                                    [
+                                        (
+                                            "TemplateMatrix.apply_transpose",
+                                            OrderedDict(
+                                                [
+                                                    (
+                                                        "OffsetTemplate.project_signal",
+                                                        None,
+                                                    ),
+                                                    (
+                                                        "SubharmonicTemplate.project_signal",
+                                                        None,
+                                                    ),
+                                                ]
+                                            ),
+                                        ),
+                                        ("NoiseMatrix.apply", None),
+                                        (
+                                            "ProjectionMatrix.apply",
+                                            OrderedDict(
+                                                [
+                                                    ("ProjectionMatrix.bin_map", None),
+                                                    ("ProjectionMatrix.scan_map", None),
+                                                ]
+                                            ),
+                                        ),
+                                        (
+                                            "TemplateMatrix.apply",
+                                            OrderedDict(
+                                                [
+                                                    (
+                                                        "OffsetTemplate.add_to_signal",
+                                                        None,
+                                                    ),
+                                                    (
+                                                        "SubharmonicTemplate.add_to_signal",
+                                                        None,
+                                                    ),
+                                                ]
+                                            ),
+                                        ),
+                                        ("TemplateMatrix.add_prior", None),
+                                    ]
+                                ),
+                            ),
+                            ("TemplateMatrix.apply_precond", None),
+                        ]
+                    ),
+                ),
+                ("TemplateMatrix.clean_signal", None),
+            ]
+        )
+        if self.rank == 0:
+
+            def report_line(name, indent):
+                full_name = name
+                if full_name not in all_timers:
+                    full_name += " (function_timer)"
+                if full_name not in all_timers:
+                    return
+                t = all_timers[full_name]["time_max"]
+                print(indent, "{:.<60}{:8.1f}".format(name, t))
+                return
+
+            def report(names, indent):
+                if names is None:
+                    return
+                if isinstance(names, str):
+                    report_line(names, indent)
+                else:
+                    for name, entries in names.items():
+                        report_line(name, indent)
+                        report(entries, " " * 8 + indent)
+
+            report(names, "-")
+            print(flush=True)
+        return
+
+    @function_timer
+    def get_noisematrix(self, data):
+        timer = Timer()
+        timer.start()
+        noise = NoiseMatrix(
+            self.comm,
+            self.detweights,
+            self.weightmap,
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
+            flag_mask=(self.flag_mask | self.mask_bit),
+        )
+        if self.rank == 0:
+            timer.report_clear("Initialize projection matrix")
+        return noise
+
+    @function_timer
+    def get_projectionmatrix(self, data):
+        timer = Timer()
+        timer.start()
+        projection = ProjectionMatrix(
+            data,
+            self.comm,
+            self.detweights,
+            self.npix,
+            self.nnz,
+            self.subnpix,
+            self.localsm,
+            self.white_noise_cov_matrix,
+            common_flag_mask=(self.common_flag_mask | self.gap_bit),
+            # Do not add mask_bit here since it is not
+            # included in the white noise matrices
+            flag_mask=self.flag_mask,
+        )
+        if self.rank == 0:
+            timer.report_clear("Initialize projection matrix")
+        return projection
+
+    @function_timer
+    def get_templatematrix(self, data):
+        timer = Timer()
+        timer.start()
+        log = Logger.get()
+        templatelist = []
+        if self.baseline_length is not None:
+            log.info(
+                "Initializing offset template, step_length = {}".format(
+                    self.baseline_length
+                )
+            )
+            templatelist.append(
+                OffsetTemplate(
+                    data,
+                    self.detweights,
+                    step_length=self.baseline_length,
+                    intervals=self.intervals,
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
+                    use_noise_prior=self.use_noise_prior,
+                    precond_width=self.precond_width,
+                )
+            )
+        if self.subharmonic_order is not None:
+            log.info(
+                "Initializing subharmonic template, order = {}".format(
+                    self.subharmonic_order
+                )
+            )
+            templatelist.append(
+                SubharmonicTemplate(
+                    data,
+                    self.detweights,
+                    order=self.subharmonic_order,
+                    intervals=self.intervals,
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
+                )
+            )
+        if len(templatelist) == 0:
+            if self.rank == 0:
+                log.info("No templates to fit, no destriping done.")
+            templates = None
+        else:
+            templates = TemplateMatrix(data, self.comm, templatelist)
+        if self.rank == 0:
+            timer.report_clear("Initialize templates")
+        return templates
+
+    @function_timer
+    def get_solver(self, data, templates, noise, projection, signal):
+        timer = Timer()
+        timer.start()
+        solver = PCGSolver(
+            self.comm,
+            templates,
+            noise,
+            projection,
+            signal,
+            niter_min=self.iter_min,
+            niter_max=self.iter_max,
+        )
+        if self.rank == 0:
+            timer.report_clear("Initialize PCG solver")
+        return solver
+
     @function_timer
     def load_mask(self, data):
         """ Load processing mask and generate appropriate flag bits
@@ -1239,113 +1463,31 @@ class OpMapMaker(Operator):
     def exec(self, data):
         log = Logger.get()
         timer = Timer()
-        timer.start()
+
         # Initialize objects
         self.comm = data.comm.comm_world
         if self.comm is None:
             self.rank = 0
         else:
             self.rank = self.comm.rank
-        # Add flag bits between the intervals
-        flag_gaps = OpFlagGaps(common_flag_value=self.gap_bit, intervals=self.intervals)
-        flag_gaps.exec(data)
-        if self.rank == 0:
-            timer.report_clear("Flag gaps")
+        self.flag_gaps(data)
         self.get_detweights(data)
-        if self.rank == 0:
-            timer.report_clear("Get detector weights")
         self.initialize_binning(data)
         if self.write_binned:
             self.bin_map(data, "binned")
         self.load_mask(data)
         self.load_weightmap(data)
-        if self.rank == 0:
-            timer.report_clear("Initialize mapmaking")
 
         # Solve template amplitudes
 
-        templatelist = []
-        if self.baseline_length is not None:
-            log.info(
-                "Initializing offset template, step_length = {}".format(
-                    self.baseline_length
-                )
-            )
-            templatelist.append(
-                OffsetTemplate(
-                    data,
-                    self.detweights,
-                    step_length=self.baseline_length,
-                    intervals=self.intervals,
-                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
-                    flag_mask=(self.flag_mask | self.mask_bit),
-                    use_noise_prior=self.use_noise_prior,
-                    precond_width=self.precond_width,
-                )
-            )
-        if self.subharmonic_order is not None:
-            log.info(
-                "Initializing subharmonic template, order = {}".format(
-                    self.subharmonic_order
-                )
-            )
-            templatelist.append(
-                SubharmonicTemplate(
-                    data,
-                    self.detweights,
-                    order=self.subharmonic_order,
-                    intervals=self.intervals,
-                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
-                    flag_mask=(self.flag_mask | self.mask_bit),
-                )
-            )
-
-        if len(templatelist) == 0:
-            if self.rank == 0:
-                log.info("No templates to fit, no destriping done.")
+        templates = self.get_templatematrix(data)
+        if templates is None:
             return
-
-        templates = TemplateMatrix(data, self.comm, templatelist)
-        noise = NoiseMatrix(
-            self.comm,
-            self.detweights,
-            self.weightmap,
-            common_flag_mask=(self.common_flag_mask | self.gap_bit),
-            flag_mask=(self.flag_mask | self.mask_bit),
-        )
-        if self.rank == 0:
-            timer.report_clear("Initialize templates")
-
-        projection = ProjectionMatrix(
-            data,
-            self.comm,
-            self.detweights,
-            self.npix,
-            self.nnz,
-            self.subnpix,
-            self.localsm,
-            self.white_noise_cov_matrix,
-            common_flag_mask=(self.common_flag_mask | self.gap_bit),
-            # Do not add mask_bit here since it is not included in the white noise matrices
-            flag_mask=self.flag_mask,
-        )
-        if self.rank == 0:
-            timer.report_clear("Initialize projection matrix")
-        # noise = UnitMatrix()  # DEBUG
-        # projection = UnitMatrix()  # DEBUG
+        noise = self.get_noisematrix(data)
+        projection = self.get_projectionmatrix(data)
         signal = Signal(data, name=self.name)
-
-        solver = PCGSolver(
-            self.comm,
-            templates,
-            noise,
-            projection,
-            signal,
-            niter_min=self.iter_min,
-            niter_max=self.iter_max,
-        )
-        if self.rank == 0:
-            timer.report_clear("Initialize PCG solver")
+        solver = self.get_solver(data, templates, noise, projection, signal)
+        timer.start()
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
@@ -1357,9 +1499,19 @@ class OpMapMaker(Operator):
 
         if self.write_destriped:
             self.bin_map(data, "destriped")
-            if self.rank == 0:
-                timer.report_clear("Write destriped map")
 
+        return
+
+    @function_timer
+    def flag_gaps(self, data):
+        """ Add flag bits between the intervals
+        """
+        timer = Timer()
+        timer.start()
+        flag_gaps = OpFlagGaps(common_flag_value=self.gap_bit, intervals=self.intervals)
+        flag_gaps.exec(data)
+        if self.rank == 0:
+            timer.report_clear("Flag gaps")
         return
 
     @function_timer
@@ -1407,6 +1559,8 @@ class OpMapMaker(Operator):
     def get_detweights(self, data):
         """ Each observation will have its own detweight dictionary
         """
+        timer = Timer()
+        timer.start()
         self.detweights = []
         for obs in data.obs:
             tod = obs["tod"]
@@ -1429,6 +1583,8 @@ class OpMapMaker(Operator):
                     noisevar = np.median(psd[ind])
                 detweights[det] = 1 / noisevar
             self.detweights.append(detweights)
+        if self.rank == 0:
+            timer.report_clear("Get detector weights")
         return
 
     @function_timer

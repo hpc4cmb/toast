@@ -25,7 +25,7 @@ def function_timer(f):
         if inspect.ismethod(f):
             nm = f.__self__.__name__
         else:
-            nm = f.__name__
+            nm = f.__qualname__
         tnm = "{} (function_timer)".format(nm)
 
         @wraps(f)

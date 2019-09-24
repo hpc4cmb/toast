@@ -247,7 +247,8 @@ class OpAccumDiag(Operator):
             else:
                 if self._nsub != hits.nsubmap:
                     raise RuntimeError(
-                        "All pixel domain objects must have the same number of local submaps."
+                        "All pixel domain objects must have the same number "
+                        "of local submaps."
                     )
                 if self._subsize != hits.submap:
                     raise RuntimeError(
@@ -288,12 +289,14 @@ class OpAccumDiag(Operator):
 
         if self._do_invn and (not self._do_hits):
             raise RuntimeError(
-                "When accumulating the diagonal pixel covariance, you must also accumulate the hit map"
+                "When accumulating the diagonal pixel covariance, you must "
+                "also accumulate the hit map"
             )
 
         if self._do_z and (self._do_hits != self._do_invn):
             raise RuntimeError(
-                "When accumulating the noise weighted map, you must accumulate either both the hits and covariance or neither."
+                "When accumulating the noise weighted map, you must accumulate "
+                "either both the hits and covariance or neither."
             )
 
         # We call the parent class constructor, which currently does nothing
@@ -364,7 +367,7 @@ class OpAccumDiag(Operator):
                 if self._detweights is not None:
                     if det not in self._detweights.keys():
                         raise RuntimeError(
-                            "no detector weights found for {}" "".format(det)
+                            "no detector weights found for {}".format(det)
                         )
                     detweight = self._detweights[det]
                     if detweight == 0:
