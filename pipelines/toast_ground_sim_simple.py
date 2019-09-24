@@ -102,7 +102,7 @@ def parse_arguments(comm):
         "--outdir", required=False, default="out", help="Output directory"
     )
 
-    add_madam_args(parser, ground_data=True)
+    add_madam_args(parser)
     add_binner_args(parser)
 
     parser.add_argument(

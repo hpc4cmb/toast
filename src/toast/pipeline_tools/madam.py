@@ -15,16 +15,8 @@ from ..utils import Logger, Environment
 from ..map import OpMadam
 
 
-def add_madam_args(parser, ground_data=True):
+def add_madam_args(parser):
     """ Add libmadam arguments
-
-    Args:
-        ground_data (bool) :  If true, assume that Madam will be used to
-            process ground experiment data and every process will have
-            approximately equal sky coverage.  Madam will use the "allreduce"
-            communication pattern which involves allocating the entire
-            observed sky on every process, instead of just the submaps
-            each process has data for.
     """
 
     parser.add_argument(
@@ -41,6 +33,18 @@ def add_madam_args(parser, ground_data=True):
         "--madam-precond-width",
         required=False,
         default=100,
+        type=np.int,
+        help="Width of the Madam band preconditioner",
+    )
+    parser.add_argument(
+        "--madam-precond-width-min",
+        required=False,
+        type=np.int,
+        help="Minimum width of the Madam band preconditioner",
+    )
+    parser.add_argument(
+        "--madam-precond-width-max",
+        required=False,
         type=np.int,
         help="Maximum width of the Madam band preconditioner",
     )
@@ -69,29 +73,37 @@ def add_madam_args(parser, ground_data=True):
         "--madam-parfile", required=False, default=None, help="Madam parameter file"
     )
 
-    if ground_data:
-        suffix = " [default]"
-    else:
-        suffix = ""
     parser.add_argument(
         "--madam-allreduce",
         required=False,
         action="store_true",
-        help="Use the allreduce commucation pattern in Madam" + suffix,
+        help="Use the allreduce commucation pattern in Madam",
         dest="madam_allreduce",
     )
-    if ground_data:
-        suffix = ""
-    else:
-        suffix = " [default]"
     parser.add_argument(
         "--no-madam-allreduce",
         required=False,
         action="store_false",
-        help="Do not use the allreduce commucation pattern in Madam" + suffix,
+        help="Do not use the allreduce commucation pattern in Madam",
         dest="madam_allreduce",
     )
-    parser.set_defaults(madam_allreduce=ground_data)
+    parser.set_defaults(madam_allreduce=False)
+
+    parser.add_argument(
+        "--madam-concatenate-messages",
+        required=False,
+        action="store_true",
+        help="Use the alltoallv commucation pattern in Madam",
+        dest="madam_concatenate_messages",
+    )
+    parser.add_argument(
+        "--no-madam-concatenate-messages",
+        required=False,
+        action="store_false",
+        help="Use the point-to-point commucation pattern in Madam",
+        dest="madam_concatenate_messages",
+    )
+    parser.set_defaults(madam_concatenate_messages=True)
 
     try:
         parser.add_argument(
@@ -259,7 +271,20 @@ def setup_madam(args):
     pars["write_hits"] = args.write_hits
     pars["nside_cross"] = cross
     pars["nside_submap"] = submap
-    pars["allreduce"] = args.madam_allreduce
+    if args.madam_concatenate_messages:
+        # Collective communication is fast but requires memory
+        pars["concatenate_messages"] = True
+        if args.madam_allreduce:
+            # Every process will allocate a copy of every observed submap.
+            pars["allreduce"] = True
+        else:
+            # Every process will allocate complete send and receive buffers
+            pars["allreduce"] = False
+    else:
+        # Slow but memory-efficient point-to-point communication.  Allocate
+        # only enough memory to communicate with one process at a time.
+        pars["concatenate_messages"] = False
+        pars["allreduce"] = False
     pars["reassign_submaps"] = True
     pars["pixlim_cross"] = 1e-3
     pars["pixmode_cross"] = 2
@@ -285,8 +310,21 @@ def setup_madam(args):
 
     pars["base_first"] = args.madam_baseline_length
     pars["basis_order"] = args.madam_baseline_order
-    pars["precond_width_min"] = max(10, args.madam_precond_width // 10)
-    pars["precond_width_max"] = max(10, args.madam_precond_width)
+    # Adaptive preconditioner width
+    width_min = args.madam_precond_width_min
+    width_max = args.madam_precond_width_max
+    if width_min is None:
+        # madam-precond-width has a default value
+        width_min = args.madam_precond_width
+    if width_max is None:
+        # madam-precond-width has a default value
+        width_max = args.madam_precond_width
+    if width_min > width_max:
+        # it is not an error for these two to match
+        width_min = width_max
+    pars["precond_width_min"] = width_min
+    pars["precond_width_max"] = width_max
+    #
     pars["nside_map"] = args.nside
     if args.madam_noisefilter:
         if args.madam_baseline_order != 0:

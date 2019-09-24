@@ -115,7 +115,7 @@ def parse_arguments(comm):
     add_atmosphere_args(parser)
     add_noise_args(parser)
     add_gainscrambler_args(parser)
-    add_madam_args(parser, ground_data=True)
+    add_madam_args(parser)
     add_sky_map_args(parser)
     add_pysm_args(parser)
     add_sss_args(parser)
@@ -287,6 +287,9 @@ def create_observation(args, comm, telescope, ces, verbose=True):
             coord=args.coord,
             sampsizes=None,
             report_timing=args.debug,
+            hwprpm=args.hwp_rpm,
+            hwpstep=args.hwp_step_deg,
+            hwpsteptime=args.hwp_step_time_s,
         )
     except RuntimeError as e:
         raise RuntimeError(

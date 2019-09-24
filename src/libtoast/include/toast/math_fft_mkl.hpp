@@ -14,7 +14,6 @@
 # include <mkl_dfti.h>
 
 namespace toast {
-
 class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
     public:
 
@@ -45,7 +44,6 @@ class FFTPlanReal1DMKL : public toast::FFTPlanReal1D {
         std::vector <double *> fview_;
         int64_t buflength_;
 };
-
 }
 
 #endif // ifdef HAVE_MKL

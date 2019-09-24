@@ -97,7 +97,7 @@ def parse_arguments(comm, procs):
         help="Write diagnostics",
     )
 
-    add_madam_args(parser, ground_data=False)
+    add_madam_args(parser)
     add_binner_args(parser)
 
     parser.add_argument(
@@ -284,6 +284,9 @@ def create_observations(args, comm, focalplane, groupsize):
             precangle=args.prec_angle_deg,
             detindx=detindx,
             detranks=comm.group_size,
+            hwprpm=hwprpm,
+            hwpstep=hwpstep,
+            hwpsteptime=hwpsteptime,
         )
 
         obs = {}

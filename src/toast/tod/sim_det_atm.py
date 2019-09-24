@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-from ..utils import Logger
+from ..utils import Logger, memreport
 
 from ..timing import function_timer, Timer
 
@@ -226,7 +226,7 @@ class OpSimAtmosphere(Operator):
             # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
 
-            scan_range = self._get_scan_range(obs, comm)
+            scan_range = self._get_scan_range(obs, comm, prefix)
 
             # Loop over the time span in "wind_time"-sized chunks.
             # wind_time is intended to reflect the correlation length
@@ -569,7 +569,7 @@ class OpSimAtmosphere(Operator):
         return cachedir
 
     @function_timer
-    def _get_scan_range(self, obs, comm):
+    def _get_scan_range(self, obs, comm, prefix):
         tod = self._get_from_obs("tod", obs)
         fp_radius = np.radians(self._get_from_obs("fpradius", obs))
         # Read the extent of the AZ/EL boresight pointing, and use that
@@ -602,8 +602,12 @@ class OpSimAtmosphere(Operator):
 
         if elmin < 0 or elmax > np.pi / 2:
             raise RuntimeError(
-                "Error in CES elevation: elmin = {:.2f}, elmax = {:.2f}"
-                "".format(elmin, elmax)
+                "{}Error in CES elevation: elmin = {:.3f} deg, elmax = {:.3f} deg, "
+                "elmin_bore = {:.3f} deg, elmax_bore = {:.3f} deg, "
+                "fp_radius = {:.3f} deg".format(
+                    prefix, np.degrees(elmin), np.degrees(elmax),
+                    np.degrees(min_el_bore), np.degrees(max_el_bore),
+                    np.degrees(fp_radius))
             )
 
         return azmin, azmax, elmin, elmax
@@ -891,6 +895,11 @@ class OpSimAtmosphere(Operator):
                     azmin <= azmin_det - 2 * np.pi and azmax_det - 2 * np.pi <= azmax
                 )
             ) or not (elmin <= elmin_det and elmin_det <= elmax):
+                # DEBUG begin
+                import pickle
+                with open("bad_quats_{}_{}.pck".format(rank, det), "wb") as fout:
+                    pickle.dump([scan_range, az, el, azelquat, tod._boresight_azel], fout)
+                # DEBUG end
                 raise RuntimeError(
                     prefix + "Detector Az/El: [{:.5f}, {:.5f}], "
                     "[{:.5f}, {:.5f}] is not contained in "

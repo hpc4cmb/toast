@@ -103,7 +103,7 @@ def set_numba_threading():
 try:
     import psutil
 
-    def memreport(comm=None, msg=""):
+    def memreport(msg="", comm=None):
         """ Gather and report the amount of allocated, free and swapped system memory
         """
         if psutil is None:
@@ -184,7 +184,7 @@ try:
 
 except ImportError:
 
-    def memreport(comm=None, msg=""):
+    def memreport(msg="", comm=None):
         return
 
 

@@ -21,9 +21,24 @@ from .debug import add_debug_args
 
 
 class Schedule:
-    def __init__(self, telescope=None, ceslist=None):
+    def __init__(self, telescope=None, ceslist=None, sort=False):
         self.telescope = telescope
         self.ceslist = ceslist
+        if sort:
+            self.sort_ceslist()
+        return
+
+    def sort_ceslist(self):
+        """ Sort the list of CES by name
+        """
+        nces = len(self.ceslist)
+        for i in range(nces - 1):
+            for j in range(i + 1, nces):
+                if self.ceslist[j].name < self.ceslist[j - 1].name:
+                    temp = self.ceslist[j]
+                    self.ceslist[j] = self.ceslist[j - 1]
+                    self.ceslist[j - 1] = temp
+        return
 
 
 class Site:
@@ -161,8 +176,56 @@ def add_todground_args(parser):
         required=False,
         help="Only use a subset of the schedule.  The argument is a string "
         'of the form "[isplit],[nsplit]" and only observations that satisfy '
-        "scan % nsplit == isplit are included",
+        "scan modulo nsplit == isplit are included",
     )
+    parser.add_argument(
+        "--sort-schedule",
+        required=False,
+        action="store_true",
+        help="Reorder the observing schedule so that observations of the"
+        "same patch are consecutive.  This will reduce the sky area observed "
+        "by individual process groups.",
+        dest="sort_schedule",
+    )
+    parser.add_argument(
+        "--no-sort-schedule",
+        required=False,
+        action="store_false",
+        help="Do not reorder the observing schedule so that observations of the"
+        "same patch are consecutive.",
+        dest="sort_schedule",
+    )
+    parser.set_defaults(sort_schedule=True)
+
+    # The HWP arguments may also be added by other TOD classes
+    try:
+        parser.add_argument(
+            "--hwp-rpm",
+            required=False,
+            type=np.float,
+            help="The rate (in RPM) of the HWP rotation",
+        )
+    except argparse.ArgumentError:
+        pass
+    try:
+        parser.add_argument(
+            "--hwp-step-deg",
+            required=False,
+            type=np.float,
+            help="For stepped HWP, the angle in degrees of each step",
+        )
+    except argparse.ArgumentError:
+        pass
+    try:
+        parser.add_argument(
+            "--hwp-step-time-s",
+            required=False,
+            type=np.float,
+            help="For stepped HWP, the time in seconds between steps",
+        )
+    except argparse.ArgumentError:
+        pass
+    return
 
 
 @function_timer
@@ -340,6 +403,7 @@ def load_schedule(args, comm):
                     telescope = Telescope(telescope_name, site=site)
                     break
                 all_ces = []
+                last_name = None
                 for line in f:
                     if line.startswith("#"):
                         continue
@@ -371,7 +435,7 @@ def load_schedule(args, comm):
                         # Only accept 1 / `nsplit` of the rising and setting
                         # scans in patch `name`.  Selection is performed
                         # during the first subscan.
-                        if int(subscan) == 0:
+                        if name != last_name:
                             if name not in scan_counters:
                                 scan_counters[name] = {}
                             counter = scan_counters[name]
@@ -381,6 +445,7 @@ def load_schedule(args, comm):
                             else:
                                 counter[rs] += 1
                             iscan = counter[rs]
+                        last_name = name
                         if iscan % nsplit != isplit:
                             continue
                     start_time = start_date + " " + start_time
@@ -427,7 +492,7 @@ def load_schedule(args, comm):
                             el_sun=el_sun,
                         )
                     )
-            schedules.append(Schedule(telescope, all_ces))
+            schedules.append(Schedule(telescope, all_ces, sort=args.sort_schedule))
             timer1.report_clear("Load {} (sub)scans in {}".format(len(all_ces), fn))
 
     if comm.comm_world is not None:

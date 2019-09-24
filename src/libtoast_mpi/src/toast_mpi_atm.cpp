@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-// #if !defined(DEBUG)
-// #   define DEBUG
-// #endif
+//#if !defined(DEBUG)
+//#   define DEBUG
+//#endif
 
 #include <toast_mpi_internal.hpp>
 
@@ -231,13 +231,14 @@ void toast::mpi_atm_sim::load_realization() {
     if (rank == 0) {
         // Load metadata
 
-        success = 1;
-
         std::ostringstream fname;
         fname << cachedir << "/" << name.str() << "_metadata.txt";
 
         std::ifstream f(fname.str());
-        if (f.good()) {
+        bool there = f.good();
+
+        success = 0;
+        if (there) {
             f >> nn;
             f >> nelem;
             f >> nx;
@@ -259,40 +260,46 @@ void toast::mpi_atm_sim::load_realization() {
             f >> wdir;
             f >> z0;
             f >> T0;
+            success = f.good();
             f.close();
+        }
 
-            if (rank == 0 and verbosity > 0) {
+        if (success) {
+            if (verbosity > 0) {
                 std::cerr << "Loaded metada from "
                           << fname.str() << std::endl;
+                std::cerr << std::endl;
+                std::cerr << "Simulation volume:" << std::endl;
+                std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
+                std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
+                std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
+                std::cerr << "    xstart = " << xstart << " m" << std::endl;
+                std::cerr << "    ystart = " << ystart << " m" << std::endl;
+                std::cerr << "    zstart = " << zstart << " m" << std::endl;
+                std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
+                std::cerr << "        nx = " << nx << std::endl;
+                std::cerr << "        ny = " << ny << std::endl;
+                std::cerr << "        nz = " << nz << std::endl;
+                std::cerr << "        nn = " << nn << std::endl;
+                std::cerr << "Atmospheric realization parameters:" << std::endl;
+                std::cerr << " lmin = " << lmin << " m" << std::endl;
+                std::cerr << " lmax = " << lmax << " m" << std::endl;
+                std::cerr << "    w = " << w << " m/s" << std::endl;
+                std::cerr << "   wx = " << wx << " m/s" << std::endl;
+                std::cerr << "   wy = " << wy << " m/s" << std::endl;
+                std::cerr << "   wz = " << wz << " m/s" << std::endl;
+                std::cerr << " wdir = " << wdir * 180. / M_PI << " degrees" <<
+                    std::endl;
+                std::cerr << "   z0 = " << z0 << " m" << std::endl;
+                std::cerr << "   T0 = " << T0 << " K" << std::endl;
+                std::cerr << "rcorr = " << rcorr << " m (corrlim = "
+                          << corrlim << ")" << std::endl;
             }
-        } else success = 0;
-
-        if ((verbosity > 0) && success) {
-            std::cerr << std::endl;
-            std::cerr << "Simulation volume:" << std::endl;
-            std::cerr << "   delta_x = " << delta_x << " m" << std::endl;
-            std::cerr << "   delta_y = " << delta_y << " m" << std::endl;
-            std::cerr << "   delta_z = " << delta_z << " m" << std::endl;
-            std::cerr << "    xstart = " << xstart << " m" << std::endl;
-            std::cerr << "    ystart = " << ystart << " m" << std::endl;
-            std::cerr << "    zstart = " << zstart << " m" << std::endl;
-            std::cerr << "   maxdist = " << maxdist << " m" << std::endl;
-            std::cerr << "        nx = " << nx << std::endl;
-            std::cerr << "        ny = " << ny << std::endl;
-            std::cerr << "        nz = " << nz << std::endl;
-            std::cerr << "        nn = " << nn << std::endl;
-            std::cerr << "Atmospheric realization parameters:" << std::endl;
-            std::cerr << " lmin = " << lmin << " m" << std::endl;
-            std::cerr << " lmax = " << lmax << " m" << std::endl;
-            std::cerr << "    w = " << w << " m/s" << std::endl;
-            std::cerr << "   wx = " << wx << " m/s" << std::endl;
-            std::cerr << "   wy = " << wy << " m/s" << std::endl;
-            std::cerr << "   wz = " << wz << " m/s" << std::endl;
-            std::cerr << " wdir = " << wdir * 180. / M_PI << " degrees" << std::endl;
-            std::cerr << "   z0 = " << z0 << " m" << std::endl;
-            std::cerr << "   T0 = " << T0 << " K" << std::endl;
-            std::cerr << "rcorr = " << rcorr << " m (corrlim = "
-                      << corrlim << ")" << std::endl;
+        } else {
+            if (there) {
+                std::cerr << "FAILED to load metadata from "
+                          << fname.str() << std::endl;
+            }
         }
     }
 
@@ -383,21 +390,45 @@ void toast::mpi_atm_sim::load_realization() {
 
         freal.read((char *)&(*full_index)[0],
                    full_index->size() * sizeof(long));
-        for (int i = 0; i < nelem; ++i) {
-            long ifull = (*full_index)[i];
-            (*compressed_index)[ifull] = i;
+        success = freal.good();
+
+        if (success) {
+            for (int i = 0; i < nelem; ++i) {
+                long ifull = (*full_index)[i];
+                if (ifull < 0 || ifull > compressed_index->size() - 1) {
+                    // Cached file must be corrupt
+                    success = false;
+                    break;
+                }
+                (*compressed_index)[ifull] = i;
+            }
+            if (success) {
+                freal.read((char *)&(*realization)[0],
+                           realization->size() * sizeof(double));
+                success = freal.good();
+            }
         }
-
-        freal.read((char *)&(*realization)[0],
-                   realization->size() * sizeof(double));
-
         freal.close();
 
-        if (verbosity > 0) std::cerr << "Loaded realization from "
-                                     << fname_real.str() << std::endl;
+        if (success) {
+            if (verbosity > 0) std::cerr << "Loaded realization from "
+                                         << fname_real.str() << std::endl;
+        } else {
+            std::cerr << "FAILED to load realization from "
+                      << fname_real.str() << std::endl;
+        }
     }
 
-    cached = true;
+    if (MPI_Allreduce(MPI_IN_PLACE, &success, 1, MPI_CHAR, MPI_MIN,
+                      comm)) throw std::runtime_error("Failed to allreduce success");
+
+    if (!success) {
+        delete compressed_index;
+        delete full_index;
+        delete realization;
+    } else {
+        cached = true;
+    }
 
     return;
 }
@@ -516,6 +547,7 @@ int toast::mpi_atm_sim::simulate(bool use_cache) {
                                         ind_stop);
                 cholmod_free_sparse(&sqrt_cov, chcommon);
             }
+
             // Advance the RNG counter on all processes
             counter2 += ind_stop - ind_start;
 
@@ -775,7 +807,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
             if ((x < xstart) || (x > xstart + delta_x) ||
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
-                o << "atmsim::observe : (x,y,z) out of bounds: "
+                std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
                   << std::endl
                   << "x = " << x << std::endl
                   << "y = " << y << std::endl
@@ -1517,6 +1549,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
           << x << ", " << y << ", " << z << ") = ("
           << ix << " /  " << nx << ", " << iy << " / " << ny << ", "
           << iz << ", " << nz << ")";
+        std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
 # endif // ifdef DEBUG
@@ -1550,6 +1583,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
           << "dx = " << dx << std::endl
           << "dy = " << dy << std::endl
           << "dz = " << dz << std::endl;
+        std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
 # endif // ifdef DEBUG
@@ -1568,6 +1602,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << ix << "/" << nx << ", "
               << iy << "/" << ny << ", "
               << iz << "/" << nz << ")";
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1606,6 +1641,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << "ifull101 = " << ifull101 << std::endl
               << "ifull110 = " << ifull110 << std::endl
               << "ifull111 = " << ifull111 << std::endl;
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1646,6 +1682,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << std::endl
               << "in_cone(x, y, z) = " << in_cone(x, y, z)
               << std::endl;
+            std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1918,7 +1955,6 @@ cholmod_sparse * toast::mpi_atm_sim::sqrt_sparse_covariance(cholmod_sparse * cov
                         fclose(covfile);
                         exit(-1);
                     }
-
                     // DEBUG end
                     std::cerr << rank
                               << " : Factorization failed, trying a band "

@@ -324,7 +324,7 @@ class Patch(object):
 
 
 class SSOPatch(Patch):
-    def __init__(self, name, weight, radius):
+    def __init__(self, name, weight, radius, el_min, el_max):
         self.name = name
         self.weight = weight
         self.radius = radius
@@ -333,6 +333,10 @@ class SSOPatch(Patch):
         except:
             raise RuntimeError("Failed to initialize {} from pyEphem".format(name))
         self.corners = None
+        self.el_min0 = el_min
+        self.el_max0 = el_max
+        self.el_min = self.el_min0
+        self.el_max = self.el_max0
         return
 
     def update(self, observer):
@@ -357,6 +361,11 @@ class SSOPatch(Patch):
             patch_corner._dec = theta + delta_theta
             self.corners.append(patch_corner)
         return
+
+    def get_area(self, observer, **kwargs):
+        if self._area is None:
+            self._area = 2 * np.pi * (1 - np.cos(self.radius))
+        return self._area
 
 
 class CoolerCyclePatch(Patch):
@@ -2123,7 +2132,13 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    patch = SSOPatch(name, weight, radius)
+    patch = SSOPatch(
+        name,
+        weight,
+        radius,
+        np.radians(args.el_min),
+        np.radians(args.el_max),
+    )
     return patch
 
 
@@ -2391,7 +2406,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
 
         log.debug(
             "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
+            " Sky fraction = {}".format(patches[-1].el_max0 / degree, patch._area)
         )
 
     if args.debug:
@@ -2516,7 +2531,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             hp.graticule(30, verbose=False)
 
             # Plot patches
+            observer.date = to_DJD(start_timestamp)
             for patch in patches:
+                patch.update(observer)
                 lon = [corner._ra / degree for corner in patch.corners]
                 lat = [corner._dec / degree for corner in patch.corners]
                 if len(lon) == 0:

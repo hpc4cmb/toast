@@ -15,11 +15,9 @@
 
 
 namespace toast {
-
 void mpi_init(int argc, char * argv[]);
 
 void mpi_finalize();
-
 }
 
 #endif // ifndef TOAST_MPI_HPP

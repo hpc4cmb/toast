@@ -77,8 +77,10 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
     if prefix_in == prefix_out or prefix_in is None or prefix_out is None:
         return
     log = Logger.get()
-    if (comm is None or comm.world_rank == 0) and verbose:
-        log.info("Adding signal from {} to {}" "".format(prefix_in, prefix_out))
+    if comm.world_rank == 0 and verbose:
+        log.info("Adding signal from {} to {}." "".format(prefix_in, prefix_out))
+        if purge:
+            log.info("Purging {} after adding".format(prefix_in))
     timer = Timer()
     timer.start()
     for obs in data.obs:
@@ -93,9 +95,13 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
             else:
                 ref_out = tod.cache.put(cachename_out, ref_in)
             del ref_in, ref_out
+        # Purge only after all detectors are added, just in case
+        # any one is an alias
         if purge:
-            tod.cache.clear(prefix_in + ".*")
-    if (comm is None or comm.world_rank == 0) and verbose:
+            for det in tod.local_dets:
+                cachename_in = "{}_{}".format(prefix_in, det)
+                tod.cache.clear(cachename_in)
+    if comm.world_rank == 0 and verbose:
         timer.report_clear("Add signal")
     return
 
@@ -109,13 +115,13 @@ def copy_signal(args, comm, data, cache_prefix_in, cache_prefix_out, verbose=Tru
         return
     log = Logger.get()
     timer = Timer()
-    if (comm is None or comm.world_rank == 0) and verbose:
+    timer.start()
+    if comm.world_rank == 0 and verbose:
         log.info(
             "Copying signal from {} to {}" "".format(cache_prefix_in, cache_prefix_out)
         )
     cachecopy = OpCacheCopy(cache_prefix_in, cache_prefix_out, force=True)
     cachecopy.exec(data)
-    timer.stop()
-    if (comm is None or comm.world_rank == 0) and verbose:
-        timer.report("Copy signal")
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("Copy signal")
     return

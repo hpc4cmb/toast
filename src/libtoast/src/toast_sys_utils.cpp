@@ -107,7 +107,7 @@ double toast::Timer::elapsed_seconds() const {
     auto now = std::chrono::high_resolution_clock::now();
     std::chrono::duration <double> elapsed =
         std::chrono::duration_cast <std::chrono::duration <double> >
-        (now - start_);
+            (now - start_);
     return total_ + elapsed.count();
 }
 

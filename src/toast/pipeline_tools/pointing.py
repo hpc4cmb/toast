@@ -33,26 +33,22 @@ def add_pointing_args(parser):
         )
     except argparse.ArgumentError:
         pass
+
     parser.add_argument(
-        "--hwp-rpm",
+        "--single-precision-pointing",
         required=False,
-        default=0,
-        type=np.float,
-        help="The rate (in RPM) of the HWP rotation",
+        action="store_true",
+        help="Use single precision for pointing in memory.",
+        dest="single_precision_pointing",
     )
     parser.add_argument(
-        "--hwp-step-deg",
+        "--no-single-precision-pointing",
         required=False,
-        default=None,
-        help="For stepped HWP, the angle in degrees of each step",
+        action="store_false",
+        help="Use single precision for pointing in memory.",
+        dest="single_precision_pointing",
     )
-    parser.add_argument(
-        "--hwp-step-time-s",
-        required=False,
-        default=0,
-        type=np.float,
-        help="For stepped HWP, the the time in seconds between steps",
-    )
+    parser.set_defaults(single_precision_pointing=False)
 
     # Common flag mask may already be added
     try:
@@ -101,9 +97,7 @@ def expand_pointing(args, comm, data):
         nside=args.nside,
         nest=True,
         mode="IQU",
-        hwprpm=hwprpm,
-        hwpstep=hwpstep,
-        hwpsteptime=hwpsteptime,
+        single_precision=args.single_precision_pointing,
     )
 
     pointing.exec(data)
@@ -142,6 +136,10 @@ def get_submaps(args, comm, data):
             "Process {} has no hit pixels. Perhaps there are fewer "
             "detectors than processes in the group?".format(comm.world_rank)
         )
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    if comm.world_rank == 0:
+        timer.report_clear("Identify local pixels")
 
     # find the locally hit submaps.
     localsm = np.unique(np.floor_divide(localpix, subnpix))

@@ -10,7 +10,6 @@
 
 
 namespace toast {
-
 enum class fft_plan_type {
     fast,
     best
@@ -81,7 +80,6 @@ class FFTPlanReal1DStore {
         std::map <std::pair <int64_t, int64_t>, FFTPlanReal1D::pshr> fplans_;
         std::map <std::pair <int64_t, int64_t>, FFTPlanReal1D::pshr> rplans_;
 };
-
 }
 
 #endif // ifndef TOAST_RNG_HPP

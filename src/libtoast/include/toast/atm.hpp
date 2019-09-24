@@ -13,7 +13,6 @@ extern "C" {
 }
 
 namespace toast {
-
 using mem_long = std::unique_ptr <AlignedVector <long> >;
 using mem_double = std::unique_ptr <AlignedVector <double> >;
 
@@ -167,7 +166,6 @@ class atm_sim {
         void load_realization();
         void save_realization();
 };
-
 }
 
 #endif // ifdef HAVE_CHOLMOD

@@ -157,8 +157,7 @@ class Cache(object):
                 realname = self._aliases[name]
             addr = None
             if self._pymem:
-                p_ref = \
-                self._buffers[realname].ctypes.data_as(ctypes.c_void_p).value
+                p_ref = self._buffers[realname].ctypes.data_as(ctypes.c_void_p).value
             else:
                 p_ref = self._buffers[realname].address()
 

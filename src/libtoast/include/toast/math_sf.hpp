@@ -9,7 +9,6 @@
 
 
 namespace toast {
-
 void vsin(int n, double const * ang, double * sinout);
 void vcos(int n, double const * ang, double * cosout);
 void vsincos(int n, double const * ang, double * sinout, double * cosout);
@@ -28,7 +27,6 @@ void vfast_rsqrt(int n, double const * in, double * out);
 void vfast_exp(int n, double const * in, double * out);
 void vfast_log(int n, double const * in, double * out);
 void vfast_erfinv(int n, double const * in, double * out);
-
 }
 
 #endif // ifndef TOAST_SF_HPP

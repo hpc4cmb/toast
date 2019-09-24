@@ -35,6 +35,8 @@ class MapGroundTest(MPITestCase):
         # one detector per process and a single chunk.
 
         self.data = create_distdata(self.comm, obs_per_group=1)
+        self.data_fast_hwp = create_distdata(self.comm, obs_per_group=1)
+        self.data_const_hwp = create_distdata(self.comm, obs_per_group=1)
 
         self.ndet = self.data.comm.group_size
         self.rate = 20.0
@@ -68,56 +70,84 @@ class MapGroundTest(MPITestCase):
 
         # Populate the single observation per group
 
-        tod = TODGround(
-            self.data.comm.comm_group,
-            dquat,
-            self.totsamp,
-            detranks=self.data.comm.group_size,
-            firsttime=0.0,
-            rate=self.rate,
-            site_lon=self.site_lon,
-            site_lat=self.site_lat,
-            site_alt=self.site_alt,
-            azmin=self.azmin,
-            azmax=self.azmax,
-            el=self.el,
-            coord=self.coord,
-            scanrate=self.scanrate,
-            scan_accel=self.scan_accel,
-            CES_start=self.CES_start,
+        common_args = [dquat, self.totsamp]
+        common_kwargs = {
+            "detranks": self.data.comm.group_size,
+            "firsttime": 0.0,
+            "rate": self.rate,
+            "site_lon": self.site_lon,
+            "site_lat": self.site_lat,
+            "site_alt": self.site_alt,
+            "azmin": self.azmin,
+            "azmax": self.azmax,
+            "el": self.el,
+            "coord": self.coord,
+            "scanrate": self.scanrate,
+            "scan_accel": self.scan_accel,
+            "CES_start": self.CES_start,
+        }
+
+        # No HWP
+        tod_no_hwp = TODGround(self.data.comm.comm_group, *common_args, **common_kwargs)
+
+        # CHWP
+        hwprate = self.rate * 60.0
+        tod_fast_hwp = TODGround(
+            self.data_fast_hwp.comm.comm_group,
+            *common_args,
+            **common_kwargs,
+            hwprpm=hwprate
         )
 
-        self.common_flag_mask = tod.TURNAROUND
-
-        common_flags = tod.read_common_flags()
-
-        # Number of flagged samples in each observation.  Only the first row
-        # of the process grid needs to contribute, since all process columns
-        # have identical common flags.
-        nflagged = 0
-        if (tod.grid_comm_col is None) or (tod.grid_comm_col.rank == 0):
-            nflagged += np.sum((common_flags & self.common_flag_mask) != 0)
-
-        # Number of flagged samples across all observations
-        self.nflagged = None
-        if self.comm is None:
-            self.nflagged = nflagged
-        else:
-            self.nflagged = self.data.comm.comm_world.allreduce(nflagged)
-
-        # add analytic noise model with white noise
-
-        nse = AnalyticNoise(
-            rate=drate,
-            fmin=dfmin,
-            detectors=dnames,
-            fknee=dfknee,
-            alpha=dalpha,
-            NET=dnet,
+        # Stepped HWP
+        hwpstep = 2.0 * np.pi
+        hwpsteptime = (self.totsamp / self.rate) / 60.0
+        tod_const_hwp = TODGround(
+            self.data_const_hwp.comm.comm_group,
+            *common_args,
+            **common_kwargs,
+            hwpstep=hwpstep,
+            hwpsteptime=hwpsteptime
         )
 
-        self.data.obs[0]["tod"] = tod
-        self.data.obs[0]["noise"] = nse
+        for data, tod in [
+            (self.data, tod_no_hwp),
+            (self.data_fast_hwp, tod_fast_hwp),
+            (self.data_const_hwp, tod_const_hwp),
+        ]:
+
+            self.common_flag_mask = tod.TURNAROUND
+
+            common_flags = tod.read_common_flags()
+
+            # Number of flagged samples in each observation.  Only the first row
+            # of the process grid needs to contribute, since all process columns
+            # have identical common flags.
+            nflagged = 0
+            if (tod.grid_comm_col is None) or (tod.grid_comm_col.rank == 0):
+                nflagged += np.sum((common_flags & self.common_flag_mask) != 0)
+
+            # Number of flagged samples across all observations
+            self.nflagged = None
+            if self.comm is None:
+                self.nflagged = nflagged
+            else:
+                self.nflagged = self.data.comm.comm_world.allreduce(nflagged)
+
+            # add analytic noise model with white noise
+
+            nse = AnalyticNoise(
+                rate=drate,
+                fmin=dfmin,
+                detectors=dnames,
+                fknee=dfknee,
+                alpha=dalpha,
+                NET=dnet,
+            )
+
+            data.obs[0]["tod"] = tod
+            data.obs[0]["noise"] = nse
+        return
 
     def test_azel(self):
         quats1 = []
@@ -448,13 +478,13 @@ class MapGroundTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
         # make a pointing matrix with a HWP that rotates 2*PI every sample
-        hwprate = self.rate * 60.0
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True, hwprpm=hwprate)
-        pointing.exec(self.data)
+        data = self.data_fast_hwp
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing.exec(data)
 
         # get locally hit pixels
         lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
+        localpix = lc.exec(data)
 
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
@@ -468,7 +498,7 @@ class MapGroundTest(MPITestCase):
         # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(
-            comm=self.data.comm.comm_group,
+            comm=data.comm.comm_group,
             size=npix,
             nnz=1,
             dtype=np.float64,
@@ -482,14 +512,14 @@ class MapGroundTest(MPITestCase):
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
-        scansim.exec(self.data)
+        scansim.exec(data)
 
         handle = None
         if rank == 0:
             handle = open(
                 os.path.join(self.outdir, "out_test_ground_hwpfast_info"), "w"
             )
-        self.data.info(handle, common_flag_mask=self.common_flag_mask)
+        data.info(handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -520,7 +550,7 @@ class MapGroundTest(MPITestCase):
             params=pars, name="scan", common_flag_mask=self.common_flag_mask
         )
         if madam.available:
-            madam.exec(self.data)
+            madam.exec(data)
 
             if rank == 0:
                 import matplotlib.pyplot as plt
@@ -545,8 +575,7 @@ class MapGroundTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(
-                    self.ndet
-                    * ((self.data.comm.ngroups * self.totsamp) - self.nflagged),
+                    self.ndet * ((data.comm.ngroups * self.totsamp) - self.nflagged),
                     tothits,
                 )
                 mask = bins > -1.0e20
@@ -560,16 +589,13 @@ class MapGroundTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
         # make a pointing matrix with a HWP that is constant
-        hwpstep = 2.0 * np.pi
-        hwpsteptime = (self.totsamp / self.rate) / 60.0
-        pointing = OpPointingHpix(
-            nside=self.map_nside, nest=True, hwpstep=hwpstep, hwpsteptime=hwpsteptime
-        )
-        pointing.exec(self.data)
+        data = self.data_const_hwp
+        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing.exec(data)
 
         # get locally hit pixels
         lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
+        localpix = lc.exec(data)
 
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
@@ -583,7 +609,7 @@ class MapGroundTest(MPITestCase):
         # construct a distributed map which has the gradient
         npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(
-            comm=self.data.comm.comm_group,
+            comm=data.comm.comm_group,
             size=npix,
             nnz=1,
             dtype=np.float64,
@@ -597,14 +623,14 @@ class MapGroundTest(MPITestCase):
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
-        scansim.exec(self.data)
+        scansim.exec(data)
 
         handle = None
         if rank == 0:
             handle = open(
                 os.path.join(self.outdir, "out_test_ground_hwpconst_info"), "w"
             )
-        self.data.info(handle, common_flag_mask=self.common_flag_mask)
+        data.info(handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -635,7 +661,7 @@ class MapGroundTest(MPITestCase):
             params=pars, name="scan", common_flag_mask=self.common_flag_mask
         )
         if madam.available:
-            madam.exec(self.data)
+            madam.exec(data)
 
             if rank == 0:
                 import matplotlib.pyplot as plt
@@ -660,8 +686,7 @@ class MapGroundTest(MPITestCase):
 
                 tothits = np.sum(hits)
                 nt.assert_equal(
-                    self.ndet
-                    * ((self.data.comm.ngroups * self.totsamp) - self.nflagged),
+                    self.ndet * ((data.comm.ngroups * self.totsamp) - self.nflagged),
                     tothits,
                 )
                 mask = bins > -1.0e20

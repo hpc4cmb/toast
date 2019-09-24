@@ -13,6 +13,7 @@ from ..tod import OpPointingHpix, TODHpixSpiral
 from ._helpers import create_outdir, create_distdata, uniform_chunks
 
 from ..map import pysm
+
 if pysm is not None:
     from ..map import PySMSky
     from ..tod import OpSimPySM

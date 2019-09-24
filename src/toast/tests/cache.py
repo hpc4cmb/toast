@@ -276,7 +276,7 @@ class CacheTest(MPITestCase):
 
         memreport(
             comm=self.comm,
-            msg="After creation of {} small buffers".format(self.memnbuf)
+            msg="After creation of {} small buffers".format(self.memnbuf),
         )
         mem = memcache.report(silent=True)
         self.assertEqual(mem, self.memnbuf * smallbytes)
