@@ -1241,54 +1241,7 @@ class OpMapMaker(Operator):
                     OrderedDict(
                         [
                             ("TemplateMatrix.zero_amplitudes", None),
-                            (
-                                "PCGSolver.apply_lhs",
-                                OrderedDict(
-                                    [
-                                        (
-                                            "TemplateMatrix.apply_transpose",
-                                            OrderedDict(
-                                                [
-                                                    (
-                                                        "OffsetTemplate.project_signal",
-                                                        None,
-                                                    ),
-                                                    (
-                                                        "SubharmonicTemplate.project_signal",
-                                                        None,
-                                                    ),
-                                                ]
-                                            ),
-                                        ),
-                                        ("NoiseMatrix.apply", None),
-                                        (
-                                            "ProjectionMatrix.apply",
-                                            OrderedDict(
-                                                [
-                                                    ("ProjectionMatrix.bin_map", None),
-                                                    ("ProjectionMatrix.scan_map", None),
-                                                ]
-                                            ),
-                                        ),
-                                        (
-                                            "TemplateMatrix.apply",
-                                            OrderedDict(
-                                                [
-                                                    (
-                                                        "OffsetTemplate.add_to_signal",
-                                                        None,
-                                                    ),
-                                                    (
-                                                        "SubharmonicTemplate.add_to_signal",
-                                                        None,
-                                                    ),
-                                                ]
-                                            ),
-                                        ),
-                                        ("TemplateMatrix.add_prior", None),
-                                    ]
-                                ),
-                            ),
+                            ("PCGSolver.apply_lhs", None),
                             ("TemplateMatrix.apply_precond", None),
                         ]
                     ),
@@ -1296,7 +1249,80 @@ class OpMapMaker(Operator):
                 ("TemplateMatrix.clean_signal", None),
             ]
         )
+        names["OpMapMaker.exec"]["PCGSolver.solve"][
+            "PCGSolver.apply_lhs"
+        ] = OrderedDict(
+            [
+                (
+                    "TemplateMatrix.apply_transpose",
+                    OrderedDict(
+                        [
+                            ("OffsetTemplate.project_signal", None),
+                            ("SubharmonicTemplate.project_signal", None),
+                        ]
+                    ),
+                ),
+                ("NoiseMatrix.apply", None),
+                (
+                    "ProjectionMatrix.apply",
+                    OrderedDict(
+                        [
+                            (
+                                "ProjectionMatrix.bin_map",
+                                OrderedDict(
+                                    [
+                                        (
+                                            "OpAccumDiag.exec",
+                                            OrderedDict(
+                                                [
+                                                    (
+                                                        "OpAccumDiag.exec.global_to_local",
+                                                        None,
+                                                    ),
+                                                    ("cov_accum_zmap", None),
+                                                ]
+                                            ),
+                                        ),
+                                        ("covariance_apply", None),
+                                    ]
+                                ),
+                            ),
+                            (
+                                "ProjectionMatrix.scan_map",
+                                OrderedDict(
+                                    [
+                                        (
+                                            "OpSimScan.exec",
+                                            OrderedDict(
+                                                [
+                                                    (
+                                                        "OpSimScan.exec.global_to_local",
+                                                        None,
+                                                    ),
+                                                    ("OpSimScan.exec.scan_map", None),
+                                                ]
+                                            ),
+                                        )
+                                    ]
+                                ),
+                            ),
+                        ]
+                    ),
+                ),
+                (
+                    "TemplateMatrix.apply",
+                    OrderedDict(
+                        [
+                            ("OffsetTemplate.add_to_signal", None),
+                            ("SubharmonicTemplate.add_to_signal", None),
+                        ]
+                    ),
+                ),
+                ("TemplateMatrix.add_prior", None),
+            ]
+        )
         if self.rank == 0:
+            print("all_timers:", all_timers)  # DEBUG
 
             def report_line(name, indent):
                 full_name = name

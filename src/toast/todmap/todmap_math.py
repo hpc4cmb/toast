@@ -5,7 +5,7 @@
 import scipy.constants as constants
 import numpy as np
 
-from ..timing import function_timer
+from ..timing import function_timer, GlobalTimers
 
 from ..op import Operator
 
@@ -360,7 +360,10 @@ class OpAccumDiag(Operator):
 
                 # local pointing
 
+                gt = GlobalTimers.get()
+                gt.start("OpAccumDiag.exec.global_to_local")
                 sm, lpix = self._globloc.global_to_local(pixels)
+                gt.stop("OpAccumDiag.exec.global_to_local")
 
                 detweight = 1.0
 

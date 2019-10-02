@@ -183,6 +183,8 @@ class OpMapMakerTest(MPITestCase):
 
         return
 
+    """
+
     def test_project_signal_offset(self):
         from .._libtoast import project_signal_offset
 
@@ -234,6 +236,7 @@ class OpMapMakerTest(MPITestCase):
         project_signal_offsets(x, todslices, amplitudes, np.array(itemplates))
         t3 = MPI.Wtime()
         print("Time1 =", t2 - t1, ", Time2 =", t3 - t2, flush=True)
+    """
 
     """
     def test_subharmonic_template(self):

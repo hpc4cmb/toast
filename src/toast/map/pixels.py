@@ -267,6 +267,12 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
+        from .._libtoast import global_to_local
+
+        lsm = np.zeros_like(gl)
+        pix = np.zeros_like(gl)
+        global_to_local(gl, self._submap, self._glob2loc, lsm, pix)
+        """
         safe_gl = np.zeros(len(gl), dtype=np.int64)
         good = gl >= 0
         bad = gl < 0
@@ -275,6 +281,7 @@ class DistPixels(object):
         pix = np.mod(safe_gl, self._submap)
         pix[bad] = -1
         lsm = self._glob2loc[sm]
+        """
         return (lsm, pix)
 
     @function_timer
