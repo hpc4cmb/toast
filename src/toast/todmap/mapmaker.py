@@ -1276,6 +1276,10 @@ class OpMapMaker(Operator):
                                             OrderedDict(
                                                 [
                                                     (
+                                                        "OpAccumDiag.exec.apply_flags",
+                                                        None,
+                                                    ),
+                                                    (
                                                         "OpAccumDiag.exec.global_to_local",
                                                         None,
                                                     ),

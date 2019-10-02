@@ -18,6 +18,7 @@ from .._libtoast import (
     cov_accum_diag_invnpp,
     scan_map_float64,
     scan_map_float32,
+    apply_flags_to_pixels,
 )
 
 from ..map import DistPixels
@@ -318,6 +319,7 @@ class OpAccumDiag(Operator):
         # the communicator with all processes with
         # the same rank within their group
         crank = comm.comm_rank
+        gt = GlobalTimers.get()
 
         for obs in data.obs:
             tod = obs["tod"]
@@ -327,7 +329,6 @@ class OpAccumDiag(Operator):
             commonflags = None
             if self._apply_flags:
                 commonflags = tod.local_common_flags(self._common_flag_name).copy()
-                commonflags &= self._common_flag_mask
 
             for det in tod.local_dets:
 
@@ -347,20 +348,21 @@ class OpAccumDiag(Operator):
                 # get flags
 
                 if self._apply_flags:
-                    detflags = tod.local_flags(det, self._flag_name)
-                    flags = np.logical_or(
-                        (detflags & self._flag_mask) != 0, commonflags != 0
-                    )
-
-                    del detflags
-
+                    gt.start("OpAccumDiag.exec.apply_flags")
                     # Don't change the cached pixel numbers
                     pixels = pixels.copy()
-                    pixels[flags] = -1
+                    detflags = tod.local_flags(det, self._flag_name)
+                    apply_flags_to_pixels(
+                        commonflags,
+                        self._common_flag_mask,
+                        detflags,
+                        self._flag_mask,
+                        pixels,
+                    )
+                    gt.stop("OpAccumDiag.exec.apply_flags")
 
                 # local pointing
 
-                gt = GlobalTimers.get()
                 gt.start("OpAccumDiag.exec.global_to_local")
                 sm, lpix = self._globloc.global_to_local(pixels)
                 gt.stop("OpAccumDiag.exec.global_to_local")
