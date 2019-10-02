@@ -15,7 +15,7 @@ void add_offsets_to_signal(py::array_t <double> ref, py::list todslices,
     size_t ntemplate = itemplates.size();
 
     // Parsing the slices cannot be threaded due to GIL
-    std::vector< std::pair<size_t, size_t> > slices;
+    std::vector <std::pair <size_t, size_t> > slices;
     for (int i = 0; i < ntemplate; ++i) {
         py::slice todslice = py::slice(todslices[i]);
         py::size_t istart, istop, istep, islicelength;
@@ -25,7 +25,7 @@ void add_offsets_to_signal(py::array_t <double> ref, py::list todslices,
     }
 
     // Enabling parallelization made this loop run 10% slower in testing...
-    //#pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t i = 0; i < ntemplate; ++i) {
         int itemplate = fast_itemplates(i);
         double offset = fast_amplitudes(itemplate);
@@ -33,7 +33,6 @@ void add_offsets_to_signal(py::array_t <double> ref, py::list todslices,
             fast_ref(j) += offset;
         }
     }
-
 }
 
 void project_signal_offsets(py::array_t <double> ref, py::list todslices,
@@ -45,7 +44,7 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     size_t ntemplate = itemplates.size();
 
     // Parsing the slices cannot be threaded due to GIL
-    std::vector< std::pair<size_t, size_t> > slices;
+    std::vector <std::pair <size_t, size_t> > slices;
     for (int i = 0; i < ntemplate; ++i) {
         py::slice todslice = py::slice(todslices[i]);
         py::size_t istart, istop, istep, islicelength;
@@ -55,7 +54,7 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     }
 
     // Enabling parallelization made this loop run 20% slower in testing...
-    //#pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t i = 0; i < ntemplate; ++i) {
         double sum = 0;
         for (size_t j = slices[i].first; j < slices[i].second; ++j) {
@@ -64,7 +63,6 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
         int itemplate = fast_itemplates(i);
         fast_amplitudes(itemplate) += sum;
     }
-
 }
 
 void init_todmap_mapmaker(py::module & m)

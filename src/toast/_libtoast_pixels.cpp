@@ -32,7 +32,6 @@ void global_to_local(py::array_t <long> global_pixels,
         submap = fast_global2local(submap);
         fast_submap(i) = submap;
     }
-
 }
 
 void init_pixels(py::module & m) {
