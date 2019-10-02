@@ -5,29 +5,6 @@
 
 #include <_libtoast.hpp>
 
-/*
-   last_obs = None
-   last_det = None
-   last_ref = None
-   for itemplate, iobs, det, todslice, sqsigma in self.offset_templates:
-   if iobs != last_obs or det != last_det:
-      last_obs = iobs
-      last_det = det
-      last_ref = signal[iobs, det, :]
-   offset_amplitudes[itemplate] += np.sum(last_ref[todslice])
- */
-void add_offset_to_signal(py::array_t <double> ref, py::slice todslice,
-                          py::array_t <double> amplitudes, int itemplate) {
-    py::size_t istart, istop, istep, islicelength;
-    if (!todslice.compute(ref.size(), &istart, &istop, &istep,
-                          &islicelength)) throw py::error_already_set();
-    auto fast_amplitudes = amplitudes.unchecked <1>();
-    double offset = fast_amplitudes(itemplate);
-    auto fast_ref = ref.mutable_unchecked <1>();
-    for (ssize_t i = istart; i < istop; ++i) {
-        fast_ref(i) += offset;
-    }
-}
 
 void add_offsets_to_signal(py::array_t <double> ref, py::list todslices,
                            py::array_t <double> amplitudes,
@@ -35,33 +12,28 @@ void add_offsets_to_signal(py::array_t <double> ref, py::list todslices,
     auto fast_ref = ref.mutable_unchecked <1>();
     auto fast_amplitudes = amplitudes.unchecked <1>();
     auto fast_itemplates = itemplates.unchecked <1>();
+    size_t ntemplate = itemplates.size();
 
-    for (int i = 0; i < itemplates.size(); ++i)
-    {
+    // Parsing the slices cannot be threaded due to GIL
+    std::vector< std::pair<size_t, size_t> > slices;
+    for (int i = 0; i < ntemplate; ++i) {
         py::slice todslice = py::slice(todslices[i]);
         py::size_t istart, istop, istep, islicelength;
         if (!todslice.compute(ref.size(), &istart, &istop, &istep,
                               &islicelength)) throw py::error_already_set();
+        slices.push_back(std::make_pair(istart, istop));
+    }
+
+    // Enabling parallelization made this loop run 10% slower in testing...
+    //#pragma omp parallel for
+    for (size_t i = 0; i < ntemplate; ++i) {
         int itemplate = fast_itemplates(i);
         double offset = fast_amplitudes(itemplate);
-        for (ssize_t i = istart; i < istop; ++i) {
-            fast_ref(i) += offset;
+        for (size_t j = slices[i].first; j < slices[i].second; ++j) {
+            fast_ref(j) += offset;
         }
     }
-}
 
-void project_signal_offset(py::array_t <double> ref, py::slice todslice,
-                           py::array_t <double> amplitudes, int itemplate) {
-    py::size_t istart, istop, istep, islicelength;
-    if (!todslice.compute(ref.size(), &istart, &istop, &istep,
-                          &islicelength)) throw py::error_already_set();
-    auto fast_ref = ref.unchecked <1>();
-    double sum = 0;
-    for (ssize_t i = istart; i < istop; ++i) {
-        sum += fast_ref(i);
-    }
-    auto fast_amplitudes = amplitudes.mutable_unchecked <1>();
-    fast_amplitudes(itemplate) += sum;
 }
 
 void project_signal_offsets(py::array_t <double> ref, py::list todslices,
@@ -70,28 +42,35 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     auto fast_ref = ref.unchecked <1>();
     auto fast_amplitudes = amplitudes.mutable_unchecked <1>();
     auto fast_itemplates = itemplates.unchecked <1>();
+    size_t ntemplate = itemplates.size();
 
-    for (int i = 0; i < itemplates.size(); ++i)
-    {
+    // Parsing the slices cannot be threaded due to GIL
+    std::vector< std::pair<size_t, size_t> > slices;
+    for (int i = 0; i < ntemplate; ++i) {
         py::slice todslice = py::slice(todslices[i]);
         py::size_t istart, istop, istep, islicelength;
         if (!todslice.compute(ref.size(), &istart, &istop, &istep,
                               &islicelength)) throw py::error_already_set();
+        slices.push_back(std::make_pair(istart, istop));
+    }
+
+    // Enabling parallelization made this loop run 20% slower in testing...
+    //#pragma omp parallel for
+    for (size_t i = 0; i < ntemplate; ++i) {
         double sum = 0;
-        for (ssize_t i = istart; i < istop; ++i) {
-            sum += fast_ref(i);
+        for (size_t j = slices[i].first; j < slices[i].second; ++j) {
+            sum += fast_ref(j);
         }
         int itemplate = fast_itemplates(i);
         fast_amplitudes(itemplate) += sum;
     }
+
 }
 
 void init_todmap_mapmaker(py::module & m)
 {
     m.doc() = "Compiled kernels to support TOAST mapmaker";
 
-    m.def("project_signal_offset", &project_signal_offset);
     m.def("project_signal_offsets", &project_signal_offsets);
-    m.def("add_offset_to_signal", &add_offset_to_signal);
     m.def("add_offsets_to_signal", &add_offsets_to_signal);
 }

@@ -160,30 +160,33 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
                            double * zdata) {
-    #pragma \
-    omp parallel default(none) shared(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, signal, zdata)
+    #pragma omp parallel
     {
-        int threads = 1;
-        int trank = 0;
-
         #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
         #endif // ifdef _OPENMP
 
         for (int64_t i = 0; i < nsamp; ++i) {
-            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
-                int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                int64_t tpix = hpx % threads;
-                if (tpix == trank) {
-                    int64_t zpx = (indx_submap[i] * subsize * nnz)
-                                  + (indx_pix[i] * nnz);
+            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0))
+                continue;
+            int64_t isubmap = indx_submap[i] * subsize;
+            int64_t ipix = indx_pix[i];
+            int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if (hpx < first_pix || hpx > last_pix)
+                continue;
+            #endif // ifdef _OPENMP
+            int64_t zpx = hpx * nnz;
 
-                    for (int64_t j = 0; j < nnz; ++j) {
-                        zdata[zpx + j] += scale * signal[i] *
-                                          weights[i * nnz + j];
-                    }
-                }
+            double scaled_signal = scale * signal[i];
+            double *zpointer = zdata + zpx;
+            const double *wpointer = weights + i * nnz;
+            for (int64_t j = 0; j < nnz; ++j, ++zpointer, ++wpointer) {
+                *zpointer += *wpointer * scaled_signal;
             }
         }
     }

@@ -184,32 +184,6 @@ class OpMapMakerTest(MPITestCase):
         return
 
     """
-
-    def test_project_signal_offset(self):
-        from .._libtoast import project_signal_offset
-
-        x = np.arange(1000, dtype=np.float64)
-        todslice = slice(100, 200)
-        amplitudes = np.zeros(100, dtype=np.float64)
-        itemplate = 10
-        testvalue = np.sum(x[todslice])
-        project_signal_offset(x, todslice, amplitudes, itemplate)
-        print("testvalue =", testvalue, ", value = ", amplitudes[itemplate], flush=True)
-        # Timing
-        from ..mpi import MPI
-
-        n = 1000000
-        t1 = MPI.Wtime()
-        for i in range(n):
-            testvalue = np.sum(x[todslice])
-        t2 = MPI.Wtime()
-        istart = todslice.start
-        istop = todslice.stop
-        for i in range(n):
-            project_signal_offset(x, todslice, amplitudes, itemplate)
-        t3 = MPI.Wtime()
-        print("Time1 =", t2 - t1, ", Time2 =", t3 - t2, flush=True)
-
     def test_project_signal_offsets(self):
         from .._libtoast import project_signal_offsets
 
