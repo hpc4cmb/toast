@@ -948,7 +948,7 @@ class OpMadam(Operator):
                 tod = obs["tod"]
                 nlocal = tod.local_samples[1]
                 for idet, det in enumerate(detectors):
-                    pixels = -np.ones(nlocal, dtype=pixels_dtype)
+                    pixels = -(np.ones(nlocal, dtype=pixels_dtype))
                     offset = global_offset
                     for istart, istop in period_ranges:
                         nn = istop - istart

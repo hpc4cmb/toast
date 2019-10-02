@@ -101,7 +101,7 @@ class OpLocalPixels(Operator):
             if self._pixmin is None or self._pixmax is None:
                 # Find the overall pixel range before allocating the hit map
                 pixmin = 2 ** 60
-                pixmax = -2 ** 60
+                pixmax = -(2 ** 60)
                 for obs in data.obs:
                     tod = obs["tod"]
                     for det in tod.local_dets:
@@ -111,7 +111,7 @@ class OpLocalPixels(Operator):
                         pixmax = max(pixmax, np.amax(pixels))
                         del pixels
 
-                if pixmin == 2 ** 60 and pixmax == -2 ** 60:
+                if pixmin == 2 ** 60 and pixmax == -(2 ** 60):
                     # No pixels
                     return np.array([], dtype=np.int64)
 
@@ -379,13 +379,13 @@ class OpAccumDiag(Operator):
                 if self._do_invn and self._do_z:
                     invnpp = self._invnpp.flatdata
                     if invnpp is None:
-                        invnpp = np.empty(shape=(0), dtype=np.float64)
+                        invnpp = np.empty(shape=0, dtype=np.float64)
                     zmap = self._zmap.flatdata
                     if zmap is None:
-                        zmap = np.empty(shape=(0), dtype=np.float64)
+                        zmap = np.empty(shape=0, dtype=np.float64)
                     hits = self._hits.flatdata
                     if hits is None:
-                        hits = np.empty(shape=(0), dtype=np.int64)
+                        hits = np.empty(shape=0, dtype=np.int64)
                     cov_accum_diag(
                         self._nsub,
                         self._subsize,
@@ -403,10 +403,10 @@ class OpAccumDiag(Operator):
                 elif self._do_invn:
                     invnpp = self._invnpp.flatdata
                     if invnpp is None:
-                        invnpp = np.empty(shape=(0), dtype=np.float64)
+                        invnpp = np.empty(shape=0, dtype=np.float64)
                     hits = self._hits.flatdata
                     if hits is None:
-                        hits = np.empty(shape=(0), dtype=np.int64)
+                        hits = np.empty(shape=0, dtype=np.int64)
                     cov_accum_diag_invnpp(
                         self._nsub,
                         self._subsize,
@@ -422,7 +422,7 @@ class OpAccumDiag(Operator):
                 elif self._do_z:
                     zmap = self._zmap.flatdata
                     if zmap is None:
-                        zmap = np.empty(shape=(0), dtype=np.float64)
+                        zmap = np.empty(shape=0, dtype=np.float64)
                     cov_accum_zmap(
                         self._nsub,
                         self._subsize,
@@ -438,7 +438,7 @@ class OpAccumDiag(Operator):
                 elif self._do_hits:
                     hits = self._hits.flatdata
                     if hits is None:
-                        hits = np.empty(shape=(0), dtype=np.int64)
+                        hits = np.empty(shape=0, dtype=np.int64)
                     cov_accum_diag_hits(
                         self._nsub, self._subsize, self._nnz, sm, lpix, hits
                     )

@@ -40,9 +40,16 @@ class CovarianceTest(MPITestCase):
         self.hwprpm = 50
 
         # Create detectors
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate, net=7.0
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate, net=7.0)
 
         # Samples per observation
         self.totsamp = 240000

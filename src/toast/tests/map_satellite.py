@@ -54,7 +54,16 @@ class MapSatelliteTest(MPITestCase):
         # Create detectors with white noise
         self.NET = 7.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet, samplerate=self.rate, net=self.NET, fknee=0.0
         )
 

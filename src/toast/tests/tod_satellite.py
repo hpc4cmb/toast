@@ -37,9 +37,16 @@ class TODSatelliteTest(MPITestCase):
         self.ndet = 1
         self.rate = 1.0 / 60.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Scan strategy.
         # Choose scan parameters so that we return to the origin.

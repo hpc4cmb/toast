@@ -29,7 +29,16 @@ class OpGroundFilterTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet,
             samplerate=self.rate,
             net=self.NET,

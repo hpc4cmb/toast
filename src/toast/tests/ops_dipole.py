@@ -40,9 +40,16 @@ class OpSimDipoleTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Pixelization
         self.nside = 64

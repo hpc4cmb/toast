@@ -40,9 +40,16 @@ class BinnedTest(MPITestCase):
         self.hwprpm = 100
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Samples per observation
         self.totsamp = 2000000

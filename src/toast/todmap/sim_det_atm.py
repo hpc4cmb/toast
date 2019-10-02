@@ -605,9 +605,13 @@ class OpSimAtmosphere(Operator):
                 "{}Error in CES elevation: elmin = {:.3f} deg, elmax = {:.3f} deg, "
                 "elmin_bore = {:.3f} deg, elmax_bore = {:.3f} deg, "
                 "fp_radius = {:.3f} deg".format(
-                    prefix, np.degrees(elmin), np.degrees(elmax),
-                    np.degrees(min_el_bore), np.degrees(max_el_bore),
-                    np.degrees(fp_radius))
+                    prefix,
+                    np.degrees(elmin),
+                    np.degrees(elmax),
+                    np.degrees(min_el_bore),
+                    np.degrees(max_el_bore),
+                    np.degrees(fp_radius),
+                )
             )
 
         return azmin, azmax, elmin, elmax
@@ -897,8 +901,11 @@ class OpSimAtmosphere(Operator):
             ) or not (elmin <= elmin_det and elmin_det <= elmax):
                 # DEBUG begin
                 import pickle
+
                 with open("bad_quats_{}_{}.pck".format(rank, det), "wb") as fout:
-                    pickle.dump([scan_range, az, el, azelquat, tod._boresight_azel], fout)
+                    pickle.dump(
+                        [scan_range, az, el, azelquat, tod._boresight_azel], fout
+                    )
                 # DEBUG end
                 raise RuntimeError(
                     prefix + "Detector Az/El: [{:.5f}, {:.5f}], "

@@ -45,7 +45,16 @@ class MapGroundTest(MPITestCase):
         # Create detectors with white noise
         self.NET = 5.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet, samplerate=self.rate, fknee=0.0, net=self.NET
         )
 

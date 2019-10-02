@@ -34,7 +34,7 @@ def covariance_invert(npp, threshold, rcond=None):
     mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
     nppdata = npp.flatdata
     if nppdata is None:
-        nppdata = np.empty(shape=(0), dtype=np.float64)
+        nppdata = np.empty(shape=0, dtype=np.float64)
     if rcond is not None:
         if rcond.size != npp.size:
             raise RuntimeError(
@@ -50,7 +50,7 @@ def covariance_invert(npp, threshold, rcond=None):
 
         rdata = rcond.flatdata
         if rdata is None:
-            rdata = np.empty(shape=(0), dtype=np.float64)
+            rdata = np.empty(shape=0, dtype=np.float64)
         cov_eigendecompose_diag(
             npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, True
         )
@@ -90,10 +90,10 @@ def covariance_multiply(npp1, npp2):
 
     npp1data = npp1.flatdata
     if npp1data is None:
-        npp1data = np.empty(shape=(0), dtype=np.float64)
+        npp1data = np.empty(shape=0, dtype=np.float64)
     npp2data = npp2.flatdata
     if npp2data is None:
-        npp2data = np.empty(shape=(0), dtype=np.float64)
+        npp2data = np.empty(shape=0, dtype=np.float64)
     cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1data, npp2data)
     return
 
@@ -124,10 +124,10 @@ def covariance_apply(npp, m):
 
     nppdata = npp.flatdata
     if nppdata is None:
-        nppdata = np.empty(shape=(0), dtype=np.float64)
+        nppdata = np.empty(shape=0, dtype=np.float64)
     mdata = m.flatdata
     if mdata is None:
-        mdata = np.empty(shape=(0), dtype=np.float64)
+        mdata = np.empty(shape=0, dtype=np.float64)
     cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, nppdata, mdata)
     return
 
@@ -161,11 +161,11 @@ def covariance_rcond(npp):
 
     nppdata = npp.flatdata
     if nppdata is None:
-        nppdata = np.empty(shape=(0), dtype=np.float64)
+        nppdata = np.empty(shape=0, dtype=np.float64)
 
     rdata = rcond.flatdata
     if rdata is None:
-        rdata = np.empty(shape=(0), dtype=np.float64)
+        rdata = np.empty(shape=0, dtype=np.float64)
 
     cov_eigendecompose_diag(
         npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, False

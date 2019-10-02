@@ -231,7 +231,7 @@ class TODTidas(TOD):
         sampsizes = None
 
         if distintervals is not None:
-            if isinstance(distintervals, (str)):
+            if isinstance(distintervals, str):
                 # This is the name of a TIDAS intervals object.  Check that
                 # it exists.
                 inames = tmpblock.intervals_names()

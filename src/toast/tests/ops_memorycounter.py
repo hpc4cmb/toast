@@ -35,9 +35,16 @@ class OpMemoryCounterTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with default properties.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate, net=self.NET
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate, net=self.NET)
 
         # Total samples per observation
         self.totsamp = 100000

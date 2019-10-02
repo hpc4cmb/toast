@@ -29,9 +29,16 @@ class OpMadamTest(MPITestCase):
         self.rate = 50.0
 
         # Create detectors with defaults
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Samples per observation
         self.totsamp = 3 * 49152

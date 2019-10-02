@@ -18,6 +18,7 @@ from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGa
 from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
 from toast.pipeline_tools.pointing import get_submaps
 
+from .._libtoast import add_offsets_to_signal, project_signal_offsets
 
 temporary_names = set()
 
@@ -318,9 +319,10 @@ class OffsetTemplate(TODTemplate):
             for det in tod.local_dets:
                 offset_psd = self._get_offset_psd(noise, freq, det)
                 # Store real space filters for every interval and every detector.
-                noisefilters[det], preconditioners[
-                    det
-                ] = self._get_noisefilter_and_preconditioner(
+                (
+                    noisefilters[det],
+                    preconditioners[det],
+                ) = self._get_noisefilter_and_preconditioner(
                     freq, offset_psd, self.offset_slices[iobs][det]
                 )
             self.filters.append(noisefilters)
@@ -495,13 +497,25 @@ class OffsetTemplate(TODTemplate):
         last_obs = None
         last_det = None
         last_ref = None
+        todslices = []
+        itemplates = []
         for itemplate, iobs, det, todslice, sigmasq in self.offset_templates:
             if iobs != last_obs or det != last_det:
+                if len(todslices) != 0:
+                    add_offsets_to_signal(
+                        last_ref, todslices, offset_amplitudes, np.array(itemplates)
+                    )
+                todslices = []
+                itemplates = []
                 last_obs = iobs
                 last_det = det
                 last_ref = signal[iobs, det, :]
-            last_ref[todslice] += offset_amplitudes[itemplate]
-            # signal[iobs, det, todslice] += offset_amplitudes[itemplate]
+            todslices.append(todslice)
+            itemplates.append(itemplate)
+        if len(todslices) != 0:
+            add_offsets_to_signal(
+                last_ref, todslices, offset_amplitudes, np.array(itemplates)
+            )
         return
 
     @function_timer
@@ -510,13 +524,25 @@ class OffsetTemplate(TODTemplate):
         last_obs = None
         last_det = None
         last_ref = None
+        todslices = []
+        itemplates = []
         for itemplate, iobs, det, todslice, sqsigma in self.offset_templates:
             if iobs != last_obs or det != last_det:
+                if len(todslices) != 0:
+                    project_signal_offsets(
+                        last_ref, todslices, offset_amplitudes, np.array(itemplates)
+                    )
+                todslices = []
+                itemplates = []
                 last_obs = iobs
                 last_det = det
                 last_ref = signal[iobs, det, :]
-            offset_amplitudes[itemplate] += np.sum(last_ref[todslice])
-            # offset_amplitudes[itemplate] += np.sum(signal[iobs, det, todslice])
+            todslices.append(todslice)
+            itemplates.append(itemplate)
+        if len(todslices) != 0:
+            project_signal_offsets(
+                last_ref, todslices, offset_amplitudes, np.array(itemplates)
+            )
         return
 
     @function_timer

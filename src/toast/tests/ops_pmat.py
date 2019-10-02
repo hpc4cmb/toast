@@ -30,9 +30,16 @@ class OpPointingHpixTest(MPITestCase):
         self.ndet = self.data.comm.group_size
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet)
 
         # A small number of samples
         self.totsamp = 10

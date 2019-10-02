@@ -239,9 +239,14 @@ class SimFocalplaneTest(MPITestCase):
         detpolcolor = dict()
         detlabels = dict()
         for w, c in enumerate(cquats):
-            wdets, wdetquats, wdetfwhm, wdetcolor, wdetpolcolor, wdetlabels = generate_rhombus(
-                rpix, rwidth, 7.0, "{}".format(w), c
-            )
+            (
+                wdets,
+                wdetquats,
+                wdetfwhm,
+                wdetcolor,
+                wdetpolcolor,
+                wdetlabels,
+            ) = generate_rhombus(rpix, rwidth, 7.0, "{}".format(w), c)
             dets.update(wdets)
             detquats.update(wdetquats)
             detfwhm.update(wdetfwhm)

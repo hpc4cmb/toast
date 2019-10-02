@@ -57,7 +57,16 @@ class OpMapMakerTest(MPITestCase):
         self.fknee = 1e0
 
         # Create detectors
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet,
             samplerate=self.rate,
             fknee=self.fknee,
@@ -173,6 +182,58 @@ class OpMapMakerTest(MPITestCase):
         hp.write_map(self.inmapfile, self.inmap, overwrite=True, nest=True)
 
         return
+
+    def test_project_signal_offset(self):
+        from .._libtoast import project_signal_offset
+
+        x = np.arange(1000, dtype=np.float64)
+        todslice = slice(100, 200)
+        amplitudes = np.zeros(100, dtype=np.float64)
+        itemplate = 10
+        testvalue = np.sum(x[todslice])
+        project_signal_offset(x, todslice, amplitudes, itemplate)
+        print("testvalue =", testvalue, ", value = ", amplitudes[itemplate], flush=True)
+        # Timing
+        from ..mpi import MPI
+
+        n = 1000000
+        t1 = MPI.Wtime()
+        for i in range(n):
+            testvalue = np.sum(x[todslice])
+        t2 = MPI.Wtime()
+        istart = todslice.start
+        istop = todslice.stop
+        for i in range(n):
+            project_signal_offset(x, todslice, amplitudes, itemplate)
+        t3 = MPI.Wtime()
+        print("Time1 =", t2 - t1, ", Time2 =", t3 - t2, flush=True)
+
+    def test_project_signal_offsets(self):
+        from .._libtoast import project_signal_offsets
+
+        x = np.arange(1000, dtype=np.float64)
+        todslice = slice(100, 200)
+        amplitudes = np.zeros(100, dtype=np.float64)
+        itemplate = 10
+        testvalue = np.sum(x[todslice])
+        project_signal_offsets(x, [todslice], amplitudes, [itemplate])
+        print("testvalue =", testvalue, ", value = ", amplitudes[itemplate], flush=True)
+        # Timing
+        from ..mpi import MPI
+
+        n = 1000000
+        t1 = MPI.Wtime()
+        for i in range(n):
+            testvalue = np.sum(x[todslice])
+        t2 = MPI.Wtime()
+        todslices = []
+        itemplates = []
+        for i in range(n):
+            todslices.append(todslice)
+            itemplates.append(itemplate)
+        project_signal_offsets(x, todslices, amplitudes, np.array(itemplates))
+        t3 = MPI.Wtime()
+        print("Time1 =", t2 - t1, ", Time2 =", t3 - t2, flush=True)
 
     """
     def test_subharmonic_template(self):
@@ -361,6 +422,7 @@ class OpMapMakerTest(MPITestCase):
             precond_width=30,
         )
         mapmaker.exec(self.data)
+        # User needs to set TOAST_FUNCTIME to see timing results
         mapmaker.report_timing()
 
         gt.stop_all()
@@ -370,23 +432,21 @@ class OpMapMakerTest(MPITestCase):
             dump_timing(alltimers, out)
             print("Saved timers in {}".format(out))
 
-        """
         # Run the destriper again
-        mapmaker = OpMapMaker(
-            nside=self.map_nside,
-            nnz=self.nnz,
-            name=name,
-            outdir=self.outdir,
-            outprefix="toast_test2_",
-            baseline_length=1,
-            maskfile=self.maskfile_binary,
-            # weightmapfile=self.maskfile_smooth,
-            subharmonic_order=None,
-            iter_max=100,
-            use_noise_prior=True,
-        )
-        mapmaker.exec(self.data)
-        """
+        # mapmaker = OpMapMaker(
+        #    nside=self.map_nside,
+        #    nnz=self.nnz,
+        #    name=name,
+        #    outdir=self.outdir,
+        #    outprefix="toast_test2_",
+        #    baseline_length=1,
+        #    maskfile=self.maskfile_binary,
+        #    # weightmapfile=self.maskfile_smooth,
+        #    subharmonic_order=None,
+        #    iter_max=100,
+        #    use_noise_prior=True,
+        # )
+        # mapmaker.exec(self.data)
 
         # Run Madam
 
@@ -422,19 +482,17 @@ class OpMapMakerTest(MPITestCase):
         madam.exec(self.data)
 
         # DEBUG begin
-        """
-        import pdb
-        import matplotlib.pyplot as plt
-        tod = self.data.obs[0]["tod"]
-        sig1 = tod.local_signal("d00", name)
-        sig2 = tod.local_signal("d00", name_madam)
-        plt.plot(sig1, '.', label="TOAST mapmaker")
-        plt.plot(sig2, '.', label="Madam")
-        plt.plot(sig2 - sig1, '.', label="Madam - TOAST")
-        plt.legend(loc="best")
-        plt.savefig("test2.png")
-        pdb.set_trace()
-        """
+        # import pdb
+        # import matplotlib.pyplot as plt
+        # tod = self.data.obs[0]["tod"]
+        # sig1 = tod.local_signal("d00", name)
+        # sig2 = tod.local_signal("d00", name_madam)
+        # plt.plot(sig1, '.', label="TOAST mapmaker")
+        # plt.plot(sig2, '.', label="Madam")
+        # plt.plot(sig2 - sig1, '.', label="Madam - TOAST")
+        # plt.legend(loc="best")
+        # plt.savefig("test2.png")
+        # pdb.set_trace()
         # DEBUG end
 
         # Compare

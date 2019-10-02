@@ -1173,7 +1173,7 @@ class TODGround(TOD):
         # longitude counter-clockwise
         my_azelquats = qa.from_angles(
             np.pi / 2 - np.ones(my_nsamp) * self._el,
-            -self._az[my_ind],
+            -(self._az[my_ind]),
             np.zeros(my_nsamp),
             IAU=False,
         )

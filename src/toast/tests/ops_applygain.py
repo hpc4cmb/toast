@@ -38,9 +38,16 @@ class TestApplyGain(MPITestCase):
         # Two detectors, default properties
         self.ndet = 2
         self.dets = ["1a", "1b"]
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet)
 
         # Pick some number of samples per observation
         self.samples_per_obs = 10
