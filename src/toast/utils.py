@@ -60,22 +60,36 @@ def set_numba_threading():
     global numba_threading_layer
     # Get the number of threads used by TOAST at runtime.
     env = Environment.get()
+    log = Logger.get()
     toastthreads = env.max_threads()
+
+    rank = 0
+    if env.use_mpi:
+        from .mpi import MPI
+
+        rank = MPI.COMM_WORLD.rank
 
     threading = "default"
     try:
         from numba.npyufunc import omppool
 
         threading = "omp"
+        if rank == 0:
+            log.debug("Numba has OpenMP threading support")
     except ImportError:
         # no OpenMP support
+        if rank == 0:
+            log.debug("Numba does not support OpenMP")
         try:
             from numba.npyufunc import tbbpool
 
             threading = "tbb"
+            if rank == 0:
+                log.debug("Numba has TBB threading support")
         except ImportError:
             # no TBB
-            pass
+            if rank == 0:
+                log.debug("Numba does not support TBB")
     try:
         from numba import vectorize, threading_layer
 
@@ -94,10 +108,12 @@ def set_numba_threading():
 
         # Log the layer that was selected
         numba_threading_layer = threading_layer()
-
+        if rank == 0:
+            log.debug("Numba threading layer set to {}".format(numba_threading_layer))
     except ImportError:
         # Numba not available at all
-        pass
+        if rank == 0:
+            log.debug("Cannot import numba- ignoring threading layer.")
 
 
 try:
