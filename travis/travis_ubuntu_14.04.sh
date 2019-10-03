@@ -55,18 +55,13 @@ echo "  FC = ${FC} $(${FC} -dumpversion)"
 # fi
 source ${HOME}/virtualenv/python3.6/bin/activate
 
-
-# Clone the cmbenv package
+# Clone the cmbenv package and build the travis version
 git clone https://github.com/hpc4cmb/cmbenv.git
 cd cmbenv
 ./cmbenv -c travis_14.04 -p ${HOME}/software
-
 mkdir -p build
 cd build
 ../install_travis_14.04.sh | tee log
-
-
-
 
 # Package up tarball
 cd "${HOME}" \
