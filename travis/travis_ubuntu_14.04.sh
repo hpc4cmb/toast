@@ -55,6 +55,10 @@ echo "  FC = ${FC} $(${FC} -dumpversion)"
 # fi
 source ${HOME}/virtualenv/python3.6/bin/activate
 
+# Set python site version
+export PYSITE=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+echo "Python site version = ${PYSITE}"
+
 # Clone the cmbenv package and build the travis version
 git clone https://github.com/hpc4cmb/cmbenv.git
 cd cmbenv

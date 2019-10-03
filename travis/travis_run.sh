@@ -34,12 +34,12 @@ export OMP_NUM_THREADS=2
 # Run tests with MPI disabled
 #===========================================================================
 
-TOAST_MPI_DISABLE=1 python -c "import toast.tests; toast.tests.run()"
+TOAST_MPI_DISABLE=1 python3 -c "import toast.tests; toast.tests.run()"
 
 # Run tests with MPI
 #===========================================================================
 
-mpirun -np 2 python -c "import toast.tests; toast.tests.run()"
+mpirun -np 2 python3 -c "import toast.tests; toast.tests.run()"
 
 # Run tiny MPI example pipelines
 #===========================================================================
