@@ -64,7 +64,7 @@ def set_numba_threading():
     toastthreads = env.max_threads()
 
     rank = 0
-    if env.use_mpi:
+    if env.use_mpi():
         from .mpi import MPI
 
         rank = MPI.COMM_WORLD.rank

@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-from numba import njit
+from numba import njit, config
 
 # This function mimics the pysm use of the inner nested njit call to
 # compute_spdust_scaling_numba.  In particular, it calls a numpy.interp,
@@ -100,11 +100,23 @@ def test_numba(comm):
     xdata = np.arange(1000001.0)
     ydata = 0.001 * np.arange(1000001.0)
     out = outer_numba(xdata, ydata)
+    print(
+        "test_numba post:  NUMBA_NUM_THREADS = {} / {}"
+        .format(os.environ["NUMBA_NUM_THREADS"], config.NUMBA_NUM_THREADS),
+        flush=True
+    )
     # out = outer(xdata, ydata)
 
 
 def main():
-    comm = MPI.COMM_WORLD
+    print(
+        "main:  NUMBA_NUM_THREADS = {} / {}"
+        .format(os.environ["NUMBA_NUM_THREADS"], config.NUMBA_NUM_THREADS),
+        flush=True
+    )
+    comm = None
+    if MPI is not None:
+        comm = MPI.COMM_WORLD
     test_numba(comm)
 
 
