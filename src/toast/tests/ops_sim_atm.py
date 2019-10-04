@@ -207,7 +207,7 @@ class OpsSimAtmosphereTest(MPITestCase):
             flag_mask=255,
             report_timing=True,
             wind_dist=10000,
-            cachedir=cachedir,
+            cachedir=None,  # cachedir,
             flush=False,
             freq=None,
         )
@@ -240,7 +240,7 @@ class OpsSimAtmosphereTest(MPITestCase):
                 flag_mask=255,
                 report_timing=True,
                 wind_dist=10000,
-                cachedir=cachedir,
+                cachedir=None,  # cachedir,
                 flush=False,
                 freq=freq,
             )

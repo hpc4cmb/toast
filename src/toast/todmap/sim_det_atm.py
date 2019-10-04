@@ -682,6 +682,13 @@ class OpSimAtmosphere(Operator):
 
         azmin, azmax, elmin, elmax = scan_range
 
+        if cachedir is None:
+            # The wrapper requires a string argument
+            use_cache = False
+            cachedir = ""
+        else:
+            use_cache = True
+
         sim = None
         if comm is None:
             sim = AtmSim(
@@ -763,7 +770,6 @@ class OpSimAtmosphere(Operator):
                     "{}OpSimAtmosphere: Initialize atmosphere".format(prefix)
                 )
 
-        use_cache = cachedir is not None
         if rank == 0:
             fname = os.path.join(
                 cachedir,
