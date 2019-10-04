@@ -91,7 +91,7 @@ def set_numba_threading():
             if rank == 0:
                 log.debug("Numba does not support TBB")
     try:
-        from numba import vectorize, threading_layer
+        from numba import vectorize, config, threading_layer
 
         # Set threading layer and number of threads by way of
         # the environment.
@@ -110,6 +110,14 @@ def set_numba_threading():
         numba_threading_layer = threading_layer()
         if rank == 0:
             log.debug("Numba threading layer set to {}".format(numba_threading_layer))
+            log.debug(
+                "Numba original max threads = {}".format(
+                    config.NUMBA_DEFAULT_NUM_THREADS
+                )
+            )
+            log.debug(
+                "Numba max threads now forced to {}".format(config.NUMBA_NUM_THREADS)
+            )
     except ImportError:
         # Numba not available at all
         if rank == 0:
