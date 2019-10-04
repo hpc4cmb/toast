@@ -75,8 +75,8 @@ class OpMapMakerTest(MPITestCase):
         )
 
         # Pixelization
-        self.sim_nside = 64
-        self.map_nside = 64
+        self.sim_nside = 32
+        self.map_nside = 32
         self.pointingmode = "IQU"
         self.nnz = 3
 
