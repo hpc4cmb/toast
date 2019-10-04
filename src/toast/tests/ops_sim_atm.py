@@ -205,8 +205,6 @@ class OpsSimAtmosphereTest(MPITestCase):
             print("No MPI available, skipping MPI/serial test")
             return
 
-        rank = self.comm.rank
-
         # Generate an atmosphere sim with no loading or absorption.
         # Verify that serial and MPI results agree
 
@@ -251,8 +249,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         return
 
     def test_atm_caching(self):
-        rank = self.comm.rank
-        if rank == 0:
+        if self.comm is None or self.comm.rank == 0:
             try:
                 shutil.rmtree(self.atm_cache)
             except OSError:
