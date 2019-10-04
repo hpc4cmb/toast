@@ -46,7 +46,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.data_serial = create_distdata(None, obs_per_group=1)
 
         self.ndet = self.data.comm.group_size
-        self.rate = 20.0
+        self.rate = 10.0
 
         # Create detectors with white noise
         self.NET = 5.0
@@ -69,7 +69,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         )
 
         # Samples per observation
-        self.totsamp = 100000
+        self.totsamp = 10000
 
         # Pixelization
         nside = 256
@@ -85,7 +85,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.azmax = 55
         self.el = 60
         self.scanrate = 1.0
-        self.scan_accel = 0.1
+        self.scan_accel = 3.0
         self.CES_start = None
 
         # Populate the single observation per group
