@@ -184,5 +184,8 @@ class DataTest(MPITestCase):
 
     def test_none(self):
         # test that Comm with None argument returns a None communicator
-        comm = Comm(MPI.COMM_SELF)
+        if MPI is None:
+            comm = Comm(None)
+        else:
+            comm = Comm(MPI.COMM_SELF)
         assert comm.comm_world is None
