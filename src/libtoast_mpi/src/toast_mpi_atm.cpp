@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-// #if !defined(DEBUG)
-// #   define DEBUG
-// #endif
+#if !defined(DEBUG)
+#   define DEBUG
+#endif
 
 #include <toast_mpi_internal.hpp>
 
@@ -524,7 +524,7 @@ int toast::mpi_atm_sim::simulate(bool use_cache) {
 
         long ind_start = 0, ind_stop = 0, slice = 0;
 
-        // Simulate the atmosphere in indepedent slices, each slice
+        // Simulate the atmosphere in independent slices, each slice
         // assigned to one process
 
         std::vector <int> slice_starts;
