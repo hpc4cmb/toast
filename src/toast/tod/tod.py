@@ -159,11 +159,6 @@ class TOD(object):
                         "WARNING: detector rank {} has no detectors"
                         " assigned.".format(d)
                     )
-                    # DEBUG begin
-                    import pdb
-
-                    pdb.set_trace()
-                    # DEBUG end
             for r in range(self._sampranks):
                 if self._dist_samples[r][1] <= 0:
                     print(
