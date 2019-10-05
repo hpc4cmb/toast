@@ -10,6 +10,7 @@ import shutil
 import numpy as np
 import numpy.testing as nt
 
+from ..mpi import MPI
 from ..tod import AnalyticNoise, OpSimNoise
 
 from ..todmap import (
@@ -41,7 +42,10 @@ class OpSimScanSynchronousSignalTest(MPITestCase):
         self.data = create_distdata(self.comm, obs_per_group=1)
 
         # This serial data will exist separately on each process
-        self.data_serial = create_distdata(None, obs_per_group=1)
+        if MPI is None:
+            self.data_serial = create_distdata(None, obs_per_group=1)
+        else:
+            self.data_serial = create_distdata(MPI.COMM_SELF, obs_per_group=1)
 
         self.ndet = self.data.comm.group_size
         self.rate = 20.0
