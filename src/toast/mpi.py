@@ -128,6 +128,10 @@ class Comm(object):
                     "argument."
                 )
                 world = None
+            # Special case, MPI available but the user want a serial
+            # data object
+            if world == MPI.COMM_SELF:
+                world = None
 
         self._wcomm = world
         self._wrank = 0

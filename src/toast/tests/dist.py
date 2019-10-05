@@ -10,6 +10,7 @@ import numpy as np
 import numpy.testing as nt
 
 from ..dist import distribute_uniform, distribute_discrete, Data
+from ..mpi import Comm, MPI
 
 from ._helpers import create_outdir, create_distdata
 
@@ -180,3 +181,8 @@ class DataTest(MPITestCase):
 
         nt.assert_equal(sum1, sum2)
         return
+
+    def test_none(self):
+        # test that Comm with None argument returns a None communicator
+        comm = Comm(MPI.COMM_SELF)
+        assert comm.comm_world is None
