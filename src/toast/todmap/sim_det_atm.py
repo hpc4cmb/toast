@@ -562,10 +562,18 @@ class OpSimAtmosphere(Operator):
             subsubsubdir = str(obsindx % 10)
             cachedir = os.path.join(self._cachedir, subdir, subsubdir, subsubsubdir)
             if (comm is None) or (comm.rank == 0):
-                try:
-                    os.makedirs(cachedir)
-                except FileExistsError:
-                    pass
+                # Handle a rare race condition when two process groups
+                # are creating the cache directories at the same time
+                while True:
+                    print("Creating {}".format(cachedir), flush=True)
+                    try:
+                        os.makedirs(cachedir, exist_ok=True)
+                    except OSError:
+                        continue
+                    except FileNotFoundError:
+                        continue
+                    else:
+                        break
         return cachedir
 
     @function_timer
