@@ -60,28 +60,48 @@ def set_numba_threading():
     global numba_threading_layer
     # Get the number of threads used by TOAST at runtime.
     env = Environment.get()
+    log = Logger.get()
     toastthreads = env.max_threads()
+
+    rank = 0
+    if env.use_mpi():
+        from .mpi import MPI
+
+        rank = MPI.COMM_WORLD.rank
 
     threading = "default"
     try:
         from numba.npyufunc import omppool
 
         threading = "omp"
+        if rank == 0:
+            log.debug("Numba has OpenMP threading support")
     except ImportError:
         # no OpenMP support
+        if rank == 0:
+            log.debug("Numba does not support OpenMP")
         try:
             from numba.npyufunc import tbbpool
 
             threading = "tbb"
+            if rank == 0:
+                log.debug("Numba has TBB threading support")
         except ImportError:
             # no TBB
-            pass
+            if rank == 0:
+                log.debug("Numba does not support TBB")
     try:
-        from numba import vectorize, threading_layer
+        from numba import vectorize, config, threading_layer
 
-        # Set threading layer and number of threads by way of
-        # the environment.
+        # Set threading layer and number of threads.  Note that this still
+        # does not always work.  The conf structure is repopulated from the
+        # environment on every compilation if any of the NUMBA_* variables
+        # have changed.
+        config.THREADING_LAYER = threading
+        config.NUMBA_DEFAULT_NUM_THREADS = toastthreads
+        config.NUMBA_NUM_THREADS = toastthreads
         os.environ["NUMBA_THREADING_LAYER"] = threading
+        os.environ["NUMBA_DEFAULT_NUM_THREADS"] = "{:d}".format(toastthreads)
         os.environ["NUMBA_NUM_THREADS"] = "{:d}".format(toastthreads)
 
         # In order to get numba to actually select a threading layer, we must
@@ -94,10 +114,15 @@ def set_numba_threading():
 
         # Log the layer that was selected
         numba_threading_layer = threading_layer()
-
+        if rank == 0:
+            log.debug("Numba threading layer set to {}".format(numba_threading_layer))
+            log.debug(
+                "Numba max threads now forced to {}".format(config.NUMBA_NUM_THREADS)
+            )
     except ImportError:
         # Numba not available at all
-        pass
+        if rank == 0:
+            log.debug("Cannot import numba- ignoring threading layer.")
 
 
 try:
