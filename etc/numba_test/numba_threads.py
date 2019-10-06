@@ -2,8 +2,6 @@
 
 from toast.mpi import MPI
 
-import os
-
 import numpy as np
 
 from numba import njit, config
@@ -101,8 +99,8 @@ def test_numba(comm):
     ydata = 0.001 * np.arange(1000001.0)
     out = outer_numba(xdata, ydata)
     print(
-        "test_numba post:  NUMBA_NUM_THREADS = {} / {}"
-        .format(os.environ["NUMBA_NUM_THREADS"], config.NUMBA_NUM_THREADS),
+        "test_numba post:  NUMBA_NUM_THREADS = {}"
+        .format(config.NUMBA_NUM_THREADS),
         flush=True
     )
     # out = outer(xdata, ydata)
@@ -110,8 +108,8 @@ def test_numba(comm):
 
 def main():
     print(
-        "main:  NUMBA_NUM_THREADS = {} / {}"
-        .format(os.environ["NUMBA_NUM_THREADS"], config.NUMBA_NUM_THREADS),
+        "main:  NUMBA_NUM_THREADS = {}"
+        .format(config.NUMBA_NUM_THREADS),
         flush=True
     )
     comm = None

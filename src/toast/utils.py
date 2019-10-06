@@ -93,9 +93,15 @@ def set_numba_threading():
     try:
         from numba import vectorize, config, threading_layer
 
-        # Set threading layer and number of threads by way of
-        # the environment.
+        # Set threading layer and number of threads.  Note that this still
+        # does not always work.  The conf structure is repopulated from the
+        # environment on every compilation if any of the NUMBA_* variables
+        # have changed.
+        config.THREADING_LAYER = threading
+        config.NUMBA_DEFAULT_NUM_THREADS = toastthreads
+        config.NUMBA_NUM_THREADS = toastthreads
         os.environ["NUMBA_THREADING_LAYER"] = threading
+        os.environ["NUMBA_DEFAULT_NUM_THREADS"] = "{:d}".format(toastthreads)
         os.environ["NUMBA_NUM_THREADS"] = "{:d}".format(toastthreads)
 
         # In order to get numba to actually select a threading layer, we must
@@ -110,11 +116,6 @@ def set_numba_threading():
         numba_threading_layer = threading_layer()
         if rank == 0:
             log.debug("Numba threading layer set to {}".format(numba_threading_layer))
-            log.debug(
-                "Numba original max threads = {}".format(
-                    config.NUMBA_DEFAULT_NUM_THREADS
-                )
-            )
             log.debug(
                 "Numba max threads now forced to {}".format(config.NUMBA_NUM_THREADS)
             )
