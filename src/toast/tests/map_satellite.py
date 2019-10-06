@@ -14,18 +14,19 @@ import healpy as hp
 
 from .. import qarray as qa
 
-from ..tod import (
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import (
     TODSatellite,
     OpPointingHpix,
-    AnalyticNoise,
     OpSimGradient,
-    OpSimNoise,
     slew_precession_axis,
     satellite_scanning,
     OpSimScan,
+    OpLocalPixels,
+    OpMadam,
 )
 
-from ..map import OpLocalPixels, OpMadam, DistPixels
+from ..map import DistPixels
 
 from ._helpers import (
     create_outdir,
@@ -53,7 +54,16 @@ class MapSatelliteTest(MPITestCase):
         # Create detectors with white noise
         self.NET = 7.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet, samplerate=self.rate, net=self.NET, fknee=0.0
         )
 

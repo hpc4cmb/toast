@@ -450,7 +450,7 @@ int toast::atm_sim::simulate(bool use_cache) {
 
         long ind_start = 0, ind_stop = 0, slice = 0;
 
-        // Simulate the atmosphere in indepedent slices, each slice
+        // Simulate the atmosphere in independent slices, each slice
         // assigned to one process
 
         std::vector <int> slice_starts;
@@ -480,26 +480,6 @@ int toast::atm_sim::simulate(bool use_cache) {
             if (ind_stop == nelem) break;
 
             ++slice;
-        }
-
-        // Gather the slices
-
-        for (size_t slice = 0; slice < slice_starts.size(); ++slice) {
-            ind_start = slice_starts[slice];
-            ind_stop = slice_stops[slice];
-            int nind = ind_stop - ind_start;
-            int root = slice % ntask;
-            std::vector <double> tempvec(nind);
-            if (rank == root) {
-                std::memcpy(tempvec.data(), realization->data() + ind_start,
-                            sizeof(double) * nind);
-            }
-
-            // if (realization->rank() == 0) {
-            std::memcpy(realization->data() + ind_start, tempvec.data(),
-                        sizeof(double) * nind);
-
-            // }
         }
 
         // smooth();

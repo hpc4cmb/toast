@@ -10,7 +10,7 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..tod import OpSimScanSynchronousSignal
+from ..todmap import OpSimScanSynchronousSignal
 
 
 def add_sss_args(parser):

@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-//#if !defined(DEBUG)
-//#   define DEBUG
-//#endif
+// #if !defined(DEBUG)
+// #   define DEBUG
+// #endif
 
 #include <toast_mpi_internal.hpp>
 
@@ -395,7 +395,7 @@ void toast::mpi_atm_sim::load_realization() {
         if (success) {
             for (int i = 0; i < nelem; ++i) {
                 long ifull = (*full_index)[i];
-                if (ifull < 0 || ifull > compressed_index->size() - 1) {
+                if ((ifull < 0) || (ifull > compressed_index->size() - 1)) {
                     // Cached file must be corrupt
                     success = false;
                     break;
@@ -524,7 +524,7 @@ int toast::mpi_atm_sim::simulate(bool use_cache) {
 
         long ind_start = 0, ind_stop = 0, slice = 0;
 
-        // Simulate the atmosphere in indepedent slices, each slice
+        // Simulate the atmosphere in independent slices, each slice
         // assigned to one process
 
         std::vector <int> slice_starts;
@@ -808,10 +808,10 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
                 std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
-                  << std::endl
-                  << "x = " << x << std::endl
-                  << "y = " << y << std::endl
-                  << "z = " << z << std::endl;
+                          << std::endl
+                          << "x = " << x << std::endl
+                          << "y = " << y << std::endl
+                          << "z = " << z << std::endl;
                 error = 1;
                 #  pragma omp flush (error)
                 break;
@@ -1955,6 +1955,7 @@ cholmod_sparse * toast::mpi_atm_sim::sqrt_sparse_covariance(cholmod_sparse * cov
                         fclose(covfile);
                         exit(-1);
                     }
+
                     // DEBUG end
                     std::cerr << rank
                               << " : Factorization failed, trying a band "

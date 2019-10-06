@@ -10,9 +10,8 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..map import OpMadam, OpLocalPixels, DistPixels
-
-from ..tod import OpSimPySM, OpSimScan
+from ..map import DistPixels
+from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpLocalPixels
 
 
 def add_sky_map_args(parser):
@@ -46,7 +45,7 @@ def add_pysm_args(parser):
     parser.add_argument(
         "--pysm-model",
         required=False,
-        help='Comma separated models for on-the-fly PySM '
+        help="Comma separated models for on-the-fly PySM "
         'simulation, e.g. "s1,d6,f1,a2"',
     )
 

@@ -8,7 +8,8 @@ import os
 
 import numpy as np
 
-from ..tod import OpGainScrambler, TODHpixSpiral, AnalyticNoise, OpSimNoise
+from ..tod import OpGainScrambler, AnalyticNoise, OpSimNoise
+from ..todmap import TODHpixSpiral
 
 from ._helpers import (
     create_outdir,
@@ -30,7 +31,16 @@ class OpGainScramblerTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet,
             samplerate=self.rate,
             net=10.0,

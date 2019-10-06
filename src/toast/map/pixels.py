@@ -26,7 +26,9 @@ class OpLocalPixels(Operator):
 
     """
 
-    def __init__(self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False, verbose=False):
+    def __init__(
+        self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False, verbose=False
+    ):
 
         # We call the parent class constructor, which currently does nothing
         super().__init__()
@@ -75,7 +77,7 @@ class OpLocalPixels(Operator):
             if self._pixmin is None or self._pixmax is None:
                 # Find the overall pixel range before allocating the hit map
                 pixmin = 2 ** 60
-                pixmax = -2 ** 60
+                pixmax = -(2 ** 60)
                 for obs in data.obs:
                     tod = obs["tod"]
                     for det in tod.local_dets:
@@ -87,7 +89,7 @@ class OpLocalPixels(Operator):
                 if self._verbose:
                     timer.report_clear("Identify pixel range")
 
-                if pixmin == 2 ** 60 and pixmax == -2 ** 60:
+                if pixmin == 2 ** 60 and pixmax == -(2 ** 60):
                     # No pixels
                     return np.array([], dtype=np.int64)
 
@@ -158,7 +160,7 @@ class DistPixels(object):
 
         if self._size % self._submap != 0:
             raise RuntimeError(
-                "submap size must evenly divide into total " "number of pixels"
+                "submap size must evenly divide into total number of pixels"
             )
 
         if localpix is not None:
@@ -188,8 +190,8 @@ class DistPixels(object):
                     "glob2loc", np.int64, (self._nglob,)
                 )
                 self._glob2loc[:] = -1
-                for g in enumerate(self._local):
-                    self._glob2loc[g[1]] = g[0]
+                for ilocal_submap, iglobal_submap in enumerate(self._local):
+                    self._glob2loc[iglobal_submap] = ilocal_submap
                 if (self._submap * self._local.max()) > self._size:
                     raise RuntimeError("local submap indices out of range")
                 self.data = self._cache.create(
@@ -265,6 +267,12 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
+        from .._libtoast import global_to_local
+
+        lsm = np.zeros_like(gl)
+        pix = np.zeros_like(gl)
+        global_to_local(gl, self._submap, self._glob2loc, lsm, pix)
+        """
         safe_gl = np.zeros(len(gl), dtype=np.int64)
         good = gl >= 0
         bad = gl < 0
@@ -273,6 +281,7 @@ class DistPixels(object):
         pix = np.mod(safe_gl, self._submap)
         pix[bad] = -1
         lsm = self._glob2loc[sm]
+        """
         return (lsm, pix)
 
     @function_timer
@@ -433,9 +442,8 @@ class DistPixels(object):
             if "ordering" in h[1].header and "NEST" in h[1].header["ordering"].upper():
                 map_nested = True
             if map_nested != self._nest:
-                errors += (
-                    "Wrong ordering: {} has nest={}, expected nest={}\n"
-                    "".format(path, map_nested, self._nest)
+                errors += "Wrong ordering: {} has nest={}, expected nest={}\n" "".format(
+                    path, map_nested, self._nest
                 )
             map_nnz = h[1].header["tfields"]
             if map_nnz != self._nnz:

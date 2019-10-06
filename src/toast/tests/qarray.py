@@ -325,11 +325,13 @@ class QarrayTest(MPITestCase):
 
         np.testing.assert_array_almost_equal(check, phi, decimal=6)
 
-        check = -np.arctan2(
-            orient[:, 0] * dir[:, 1] - orient[:, 1] * dir[:, 0],
-            -(orient[:, 0] * dir[:, 2] * dir[:, 0])
-            - (orient[:, 1] * dir[:, 2] * dir[:, 1])
-            + (orient[:, 2] * (dir[:, 0] * dir[:, 0] + dir[:, 1] * dir[:, 1])),
+        check = -(
+            np.arctan2(
+                orient[:, 0] * dir[:, 1] - orient[:, 1] * dir[:, 0],
+                -(orient[:, 0] * dir[:, 2] * dir[:, 0])
+                - (orient[:, 1] * dir[:, 2] * dir[:, 1])
+                + (orient[:, 2] * (dir[:, 0] * dir[:, 0] + dir[:, 1] * dir[:, 1])),
+            )
         )
 
         check[check < -np.pi] += 2.0 * np.pi

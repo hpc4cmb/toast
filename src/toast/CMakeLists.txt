@@ -35,6 +35,8 @@ pybind11_add_module(_libtoast MODULE
     _libtoast_tod_simnoise.cpp
     _libtoast_todmap_scanning.cpp
     _libtoast_map_cov.cpp
+    _libtoast_pixels.cpp
+    _libtoast_todmap_mapmaker.cpp
     _libtoast_atm.cpp
 )
 
@@ -135,6 +137,7 @@ endif(MPI_FOUND AND MPI4PY_FOUND)
 # Process the sub directories
 add_subdirectory(tests)
 add_subdirectory(tod)
-add_subdirectory(fod)
 add_subdirectory(map)
+add_subdirectory(todmap)
+add_subdirectory(fod)
 add_subdirectory(pipeline_tools)

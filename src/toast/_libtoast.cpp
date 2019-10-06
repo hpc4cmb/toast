@@ -38,6 +38,8 @@ PYBIND11_MODULE(_libtoast, m) {
     init_tod_simnoise(m);
     init_todmap_scanning(m);
     init_map_cov(m);
+    init_pixels(m);
+    init_todmap_mapmaker(m);
     init_atm(m);
 
     // Internal unit test runner

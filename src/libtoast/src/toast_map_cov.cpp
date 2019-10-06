@@ -18,50 +18,43 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal, double * zdata,
                            int64_t * hits, double * invnpp) {
-    #pragma \
-    omp parallel default(none) shared(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, signal, zdata, hits, invnpp)
+    const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    #pragma omp parallel
     {
-        int64_t i, j, k;
-        int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-        int64_t zpx;
-        int64_t hpx;
-        int64_t ipx;
-        int64_t off;
-
-        int threads = 1;
-        int trank = 0;
-
         #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
         #endif // ifdef _OPENMP
 
-        int tpix;
+        for (size_t i = 0; i < nsamp; ++i) {
+            const int64_t isubmap = indx_submap[i] * subsize;
+            const int64_t ipix = indx_pix[i];
+            if ((isubmap < 0) || (ipix < 0)) continue;
 
-        for (i = 0; i < nsamp; ++i) {
-            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
-                hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                tpix = hpx % threads;
-                if (tpix == trank) {
-                    zpx = (indx_submap[i] * subsize * nnz) +
-                          (indx_pix[i] * nnz);
-                    ipx = (indx_submap[i] * subsize * block) +
-                          (indx_pix[i] * block);
+            const int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            const int64_t zpx = hpx * nnz;
+            const int64_t ipx = hpx * block;
 
-                    off = 0;
-                    for (j = 0; j < nnz; ++j) {
-                        zdata[zpx + j] += scale * signal[i] *
-                                          weights[i * nnz + j];
-                        for (k = j; k < nnz; ++k) {
-                            invnpp[ipx + off] += scale * weights[i * nnz + j] *
-                                                 weights[i * nnz + k];
-                            off += 1;
-                        }
-                    }
-
-                    hits[hpx] += 1;
+            const double scaled_signal = scale * signal[i];
+            double * zpointer = zdata + zpx;
+            const double * wpointer = weights + i * nnz;
+            double * covpointer = invnpp + ipx;
+            for (size_t j = 0; j < nnz; ++j, ++zpointer, ++wpointer) {
+                *zpointer += *wpointer * scaled_signal;
+                const double scaled_weight = *wpointer * scale;
+                const double * wpointer2 = wpointer;
+                for (size_t k = j; k < nnz; ++k, ++wpointer2, ++covpointer) {
+                    *covpointer += *wpointer2 * scaled_weight;
                 }
             }
+
+            hits[hpx] += 1;
         }
     }
 
@@ -72,30 +65,24 @@ void toast::cov_accum_diag_hits(int64_t nsub, int64_t subsize, int64_t nnz,
                                 int64_t nsamp,
                                 int64_t const * indx_submap,
                                 int64_t const * indx_pix, int64_t * hits) {
-    #pragma \
-    omp parallel default(none) shared(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, hits)
+    #pragma omp parallel
     {
-        int64_t i, j, k;
-        int64_t hpx;
-
-        int threads = 1;
-        int trank = 0;
-
         #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
         #endif // ifdef _OPENMP
 
-        int tpix;
+        for (size_t i = 0; i < nsamp; ++i) {
+            if ((indx_submap[i] < 0) || (indx_pix[i] < 0)) continue;
 
-        for (i = 0; i < nsamp; ++i) {
-            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
-                hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                tpix = hpx % threads;
-                if (tpix == trank) {
-                    hits[hpx] += 1;
-                }
-            }
+            const int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            hits[hpx] += 1;
         }
     }
 
@@ -109,45 +96,39 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   double const * weights,
                                   double scale, int64_t * hits,
                                   double * invnpp) {
-    #pragma \
-    omp parallel default(none) shared(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, hits, invnpp)
+    const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    #pragma omp parallel
     {
-        int64_t i, j, k;
-        int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-        int64_t hpx;
-        int64_t ipx;
-        int64_t off;
-
-        int threads = 1;
-        int trank = 0;
-
         #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
         #endif // ifdef _OPENMP
 
-        int tpix;
+        for (size_t i = 0; i < nsamp; ++i) {
+            const int64_t isubmap = indx_submap[i] * subsize;
+            const int64_t ipix = indx_pix[i];
+            if ((isubmap < 0) || (ipix < 0)) continue;
 
-        for (i = 0; i < nsamp; ++i) {
-            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
-                hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                tpix = hpx % threads;
-                if (tpix == trank) {
-                    ipx = (indx_submap[i] * subsize * block) +
-                          (indx_pix[i] * block);
+            const int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            const int64_t ipx = hpx * block;
 
-                    off = 0;
-                    for (j = 0; j < nnz; ++j) {
-                        for (k = j; k < nnz; ++k) {
-                            invnpp[ipx + off] += scale * weights[i * nnz + j] *
-                                                 weights[i * nnz + k];
-                            off += 1;
-                        }
-                    }
-
-                    hits[hpx] += 1;
+            const double * wpointer = weights + i * nnz;
+            double * covpointer = invnpp + ipx;
+            for (size_t j = 0; j < nnz; ++j, ++wpointer) {
+                const double scaled_weight = *wpointer * scale;
+                const double * wpointer2 = wpointer;
+                for (size_t k = j; k < nnz; ++k, ++wpointer2, ++covpointer) {
+                    *covpointer += *wpointer2 * scaled_weight;
                 }
             }
+
+            hits[hpx] += 1;
         }
     }
 
@@ -160,30 +141,32 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
                            double * zdata) {
-    #pragma \
-    omp parallel default(none) shared(nsub, subsize, nnz, nsamp, indx_submap, indx_pix, weights, scale, signal, zdata)
+    #pragma omp parallel
     {
-        int threads = 1;
-        int trank = 0;
-
         #ifdef _OPENMP
-        threads = omp_get_num_threads();
-        trank = omp_get_thread_num();
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
         #endif // ifdef _OPENMP
 
         for (int64_t i = 0; i < nsamp; ++i) {
-            if ((indx_submap[i] >= 0) && (indx_pix[i] >= 0)) {
-                int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
-                int64_t tpix = hpx % threads;
-                if (tpix == trank) {
-                    int64_t zpx = (indx_submap[i] * subsize * nnz)
-                                  + (indx_pix[i] * nnz);
+            const int64_t isubmap = indx_submap[i] * subsize;
+            const int64_t ipix = indx_pix[i];
+            if ((isubmap < 0) || (ipix < 0)) continue;
 
-                    for (int64_t j = 0; j < nnz; ++j) {
-                        zdata[zpx + j] += scale * signal[i] *
-                                          weights[i * nnz + j];
-                    }
-                }
+            const int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            const int64_t zpx = hpx * nnz;
+
+            const double scaled_signal = scale * signal[i];
+            double * zpointer = zdata + zpx;
+            const double * wpointer = weights + i * nnz;
+            for (int64_t j = 0; j < nnz; ++j, ++zpointer, ++wpointer) {
+                *zpointer += *wpointer * scaled_signal;
             }
         }
     }

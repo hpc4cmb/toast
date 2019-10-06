@@ -12,9 +12,7 @@ import numpy as np
 
 import healpy as hp
 
-from ..tod import TODHpixSpiral, OpSimGradient, OpPointingHpix
-
-from ..map import OpMadam
+from ..todmap import TODHpixSpiral, OpSimGradient, OpPointingHpix, OpMadam
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
@@ -31,9 +29,16 @@ class OpMadamTest(MPITestCase):
         self.rate = 50.0
 
         # Create detectors with defaults
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Samples per observation
         self.totsamp = 3 * 49152

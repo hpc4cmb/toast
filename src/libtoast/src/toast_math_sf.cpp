@@ -252,12 +252,25 @@ void toast::vfast_sin(int n, double const * ang, double * sinout) {
     double quot;
     double rem;
     double x;
+    double rang;
     int quad;
     int i;
+    double eps = std::numeric_limits <float>::epsilon();
 
     # pragma \
-    omp parallel for default(shared) private(i, sx, sx2, ssign, quot, rem, x, quad) schedule(static)
+    omp parallel for default(shared) private(i, sx, sx2, ssign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
+        rang = ang[i];
+        while (rang < 0.0) {
+            rang += toast::TWOPI;
+        }
+        while (rang > toast::TWOPI) {
+            rang -= toast::TWOPI;
+        }
+        if ((fabs(rang) < eps) || (fabs(rang - toast::TWOPI) < eps)) {
+            sinout[i] = 0.0;
+            continue;
+        }
         quot = ang[i] * toast::INV_TWOPI;
         rem = quot - floor(quot);
         x = rem * toast::TWOPI;
@@ -314,13 +327,26 @@ void toast::vfast_cos(int n, double const * ang, double * cosout) {
     double quot;
     double rem;
     double x;
+    double rang;
     int quad;
     int i;
+    double eps = std::numeric_limits <float>::epsilon();
 
     # pragma \
-    omp parallel for default(shared) private(i, cx, cx2, csign, quot, rem, x, quad) schedule(static)
+    omp parallel for default(shared) private(i, cx, cx2, csign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
-        quot = ang[i] * toast::INV_TWOPI;
+        rang = ang[i];
+        while (rang < 0.0) {
+            rang += toast::TWOPI;
+        }
+        while (rang > toast::TWOPI) {
+            rang -= toast::TWOPI;
+        }
+        if ((fabs(rang) < eps) || (fabs(rang - toast::TWOPI) < eps)) {
+            cosout[i] = 1.0;
+            continue;
+        }
+        quot = rang * toast::INV_TWOPI;
         rem = quot - floor(quot);
         x = rem * toast::TWOPI;
         while (x < 0.0) {
@@ -378,13 +404,27 @@ void toast::vfast_sincos(int n, double const * ang, double * sinout,
     double quot;
     double rem;
     double x;
+    double rang;
     int quad;
     int i;
+    double eps = std::numeric_limits <float>::epsilon();
 
     # pragma \
-    omp parallel for default(shared) private(i, sx, cx, sx2, cx2, ssign, csign, quot, rem, x, quad) schedule(static)
+    omp parallel for default(shared) private(i, sx, cx, sx2, cx2, ssign, csign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
-        quot = ang[i] * toast::INV_TWOPI;
+        rang = ang[i];
+        while (rang < 0.0) {
+            rang += toast::TWOPI;
+        }
+        while (rang > toast::TWOPI) {
+            rang -= toast::TWOPI;
+        }
+        if ((fabs(rang) < eps) || (fabs(rang - toast::TWOPI) < eps)) {
+            sinout[i] = 0.0;
+            cosout[i] = 1.0;
+            continue;
+        }
+        quot = rang * toast::INV_TWOPI;
         rem = quot - floor(quot);
         x = rem * toast::TWOPI;
         while (x < 0.0) {

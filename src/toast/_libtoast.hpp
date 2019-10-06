@@ -217,6 +217,8 @@ void init_tod_pointing(py::module & m);
 void init_tod_simnoise(py::module & m);
 void init_todmap_scanning(py::module & m);
 void init_map_cov(py::module & m);
+void init_pixels(py::module & m);
+void init_todmap_mapmaker(py::module & m);
 void init_atm(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

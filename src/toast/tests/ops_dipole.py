@@ -13,15 +13,16 @@ import healpy as hp
 
 from .. import qarray as qa
 
-from ..tod import TODHpixSpiral, OpPointingHpix, OpSimDipole, dipole
-
-from ..map import (
+from ..todmap import (
+    TODHpixSpiral,
+    OpPointingHpix,
+    OpSimDipole,
+    dipole,
     OpLocalPixels,
     OpAccumDiag,
-    DistPixels,
-    covariance_invert,
-    covariance_apply,
 )
+
+from ..map import DistPixels, covariance_invert, covariance_apply
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 
@@ -39,9 +40,16 @@ class OpSimDipoleTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with default properties
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Pixelization
         self.nside = 64

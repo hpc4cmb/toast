@@ -10,12 +10,12 @@ import shutil
 import numpy as np
 import numpy.testing as nt
 
-from ..tod import (
+from ..mpi import MPI
+from ..tod import AnalyticNoise, OpSimNoise
+from ..todmap import (
     TODGround,
     OpPointingHpix,
-    AnalyticNoise,
     OpSimGradient,
-    OpSimNoise,
     OpSimScan,
     OpSimAtmosphere,
     atm_available,
@@ -37,6 +37,7 @@ class OpsSimAtmosphereTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
+        self.atm_cache = os.path.join(self.outdir, "atm_cache")
 
         # Create one observation per group, and each observation will have
         # one detector per process and a single chunk.
@@ -44,15 +45,27 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.data = create_distdata(self.comm, obs_per_group=1)
 
         # This serial data will exist separately on each process
-        self.data_serial = create_distdata(None, obs_per_group=1)
+        if MPI is None:
+            self.data_serial = create_distdata(None, obs_per_group=1)
+        else:
+            self.data_serial = create_distdata(MPI.COMM_SELF, obs_per_group=1)
 
         self.ndet = self.data.comm.group_size
-        self.rate = 20.0
+        self.rate = 10.0
 
         # Create detectors with white noise
         self.NET = 5.0
 
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet, samplerate=self.rate, fknee=0.0, net=self.NET
         )
 
@@ -61,7 +74,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         )
 
         # Samples per observation
-        self.totsamp = 100000
+        self.totsamp = 1000
 
         # Pixelization
         nside = 256
@@ -77,7 +90,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.azmax = 55
         self.el = 60
         self.scanrate = 1.0
-        self.scan_accel = 0.1
+        self.scan_accel = 3.0
         self.CES_start = None
 
         # Populate the single observation per group
@@ -161,80 +174,50 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.data_serial.obs[0]["weather"] = Weather(wfile, site=123)
         self.data_serial.obs[0]["altitude"] = 2000
         self.data_serial.obs[0]["fpradius"] = 1.0
+
+        self.common_params = {
+            "realization": 0,
+            "component": 123456,
+            "lmin_center": 0.01,
+            "lmin_sigma": 0.001,
+            "lmax_center": 10,
+            "lmax_sigma": 10,
+            "zatm": 40000.0,
+            "zmax": 2000.0,
+            "xstep": 100.0,
+            "ystep": 100.0,
+            "zstep": 100.0,
+            "nelem_sim_max": 10000,
+            "verbosity": 0,
+            "gain": 1,
+            "z0_center": 2000,
+            "z0_sigma": 0,
+            "apply_flags": True,
+            "common_flag_name": None,
+            "common_flag_mask": self.common_flag_mask,
+            "flag_name": None,
+            "flag_mask": 255,
+            "report_timing": True,
+            "wind_dist": 10000,
+            "flush": False,
+        }
         return
 
     def test_atm(self):
-        rank = 0
-        do_serial = False
-        if self.comm is not None:
-            rank = self.comm.rank
-            do_serial = True
-
-        freq = None
-        cachedir = self.outdir
+        if self.comm is None:
+            # Cannot perform serial/MPI test
+            print("No MPI available, skipping MPI/serial test")
+            return
 
         # Generate an atmosphere sim with no loading or absorption.
-        atm = OpSimAtmosphere(
-            out="atm",
-            realization=0,
-            component=123456,
-            lmin_center=0.01,
-            lmin_sigma=0.001,
-            lmax_center=10,
-            lmax_sigma=10,
-            zatm=40000.0,
-            zmax=2000.0,
-            xstep=100.0,
-            ystep=100.0,
-            zstep=100.0,
-            nelem_sim_max=10000,
-            verbosity=0,
-            gain=1,
-            z0_center=2000,
-            z0_sigma=0,
-            apply_flags=True,
-            common_flag_name=None,
-            common_flag_mask=self.common_flag_mask,
-            flag_name=None,
-            flag_mask=255,
-            report_timing=True,
-            wind_dist=10000,
-            cachedir=cachedir,
-            flush=False,
-            freq=None,
-        )
+        # Verify that serial and MPI results agree
+
+        atm = OpSimAtmosphere(out="atm", cachedir=None, freq=None, **self.common_params)
 
         atm_utils = None
         if atm_available_utils:
-            freq = 150.0
             atm_utils = OpSimAtmosphere(
-                out="atm-utils",
-                realization=0,
-                component=123456,
-                lmin_center=0.01,
-                lmin_sigma=0.001,
-                lmax_center=10,
-                lmax_sigma=10,
-                zatm=40000.0,
-                zmax=2000.0,
-                xstep=100.0,
-                ystep=100.0,
-                zstep=100.0,
-                nelem_sim_max=10000,
-                verbosity=0,
-                gain=1,
-                z0_center=2000,
-                z0_sigma=0,
-                apply_flags=True,
-                common_flag_name=None,
-                common_flag_mask=self.common_flag_mask,
-                flag_name=None,
-                flag_mask=255,
-                report_timing=True,
-                wind_dist=10000,
-                cachedir=cachedir,
-                flush=False,
-                freq=freq,
+                out="atm-utils", cachedir=None, freq=150, **self.common_params
             )
 
         # Do the simulation with the default data distribution and communicator
@@ -260,11 +243,49 @@ class OpsSimAtmosphereTest(MPITestCase):
                     cname = "atm_{}".format(d)
                     ref = tod.cache.reference(cname)
                     ref_serial = tod_serial.cache.reference(cname)
-                    nt.assert_almost_equal(ref[:], ref_serial[:])
+                    nt.assert_allclose(ref[:], ref_serial[:], rtol=1e-7)
                     if atm_utils is not None:
                         cname = "atm-utils_{}".format(d)
                         ref = tod.cache.reference(cname)
                         ref_serial = tod_serial.cache.reference(cname)
-                        nt.assert_almost_equal(ref[:], ref_serial[:])
+                        nt.assert_allclose(ref[:], ref_serial[:], rtol=1e-7)
+
+        return
+
+    def test_atm_caching(self):
+        if self.comm is None or self.comm.rank == 0:
+            try:
+                shutil.rmtree(self.atm_cache)
+            except OSError:
+                pass
+
+        # Generate an atmosphere sim with no loading or absorption.
+        # Verify that serial and MPI results agree
+
+        atm = OpSimAtmosphere(
+            out="atm", cachedir=self.atm_cache, freq=None, **self.common_params
+        )
+
+        # Do the simulation, caching the atmosphere
+
+        atm.exec(self.data)
+
+        # Re-run, this time loading the cached atmosphere
+
+        atm = OpSimAtmosphere(
+            out="cached_atm", cachedir=self.atm_cache, freq=None, **self.common_params
+        )
+
+        atm.exec(self.data)
+
+        # Check that the two cases agree on the process which has overlap between them
+        tod = self.data.obs[0]["tod"]
+        for d in tod.local_dets:
+            if d in tod.local_dets:
+                cname = "atm_{}".format(d)
+                ref1 = tod.cache.reference(cname)
+                cname = "cached_atm_{}".format(d)
+                ref2 = tod.cache.reference(cname)
+                nt.assert_allclose(ref1[:], ref2, rtol=1e-7)
 
         return

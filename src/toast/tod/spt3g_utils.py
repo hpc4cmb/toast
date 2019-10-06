@@ -50,11 +50,11 @@ def g3_dtype(ar):
 def to_g3_type(val):
     if val is None:
         return c3g.G3String("NONE")
-    elif isinstance(val, (bool)):
+    elif isinstance(val, bool):
         return c3g.G3Bool(val)
-    elif isinstance(val, (int)):
+    elif isinstance(val, int):
         return c3g.G3Int(val)
-    elif isinstance(val, (float)):
+    elif isinstance(val, float):
         return c3g.G3Double(val)
     else:
         return c3g.G3String(val)

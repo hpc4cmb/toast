@@ -2133,11 +2133,7 @@ def parse_patch_sso(args, parts):
     weight = float(parts[2])
     radius = float(parts[3]) * degree
     patch = SSOPatch(
-        name,
-        weight,
-        radius,
-        np.radians(args.el_min),
-        np.radians(args.el_max),
+        name, weight, radius, np.radians(args.el_min), np.radians(args.el_max)
     )
     return patch
 

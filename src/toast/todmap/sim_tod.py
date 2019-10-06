@@ -17,11 +17,9 @@ from .. import qarray as qa
 
 from ..timing import function_timer, Timer
 
-from .interval import Interval
+from ..tod import Interval, TOD
 
 from ..healpix import ang2vec
-
-from .tod import TOD
 
 from .pointing_math import quat_equ2ecl, quat_equ2gal, quat_ecl2gal
 
@@ -322,6 +320,7 @@ class TODHpixSpiral(TOD):
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         nside (int): sky NSIDE to use.
+        rot (ndarray):  Extra quaternion to rotate the  quaternions with.
         Other keyword arguments are passed to the parent class constructor.
 
     """
@@ -334,6 +333,7 @@ class TODHpixSpiral(TOD):
         firsttime=0.0,
         rate=100.0,
         nside=512,
+        rot=None,
         **kwargs
     ):
 
@@ -347,6 +347,7 @@ class TODHpixSpiral(TOD):
         self._rate = rate
         self._nside = nside
         self._npix = 12 * self._nside * self._nside
+        self._rot = rot
 
     def detoffset(self):
         return {d: np.asarray(self._fp[d]) for d in self._detlist}
@@ -394,6 +395,7 @@ class TODHpixSpiral(TOD):
         # pixel offset
         start_pix = int(start_abs % self._npix)
         pixels = np.linspace(start_pix, start_pix + n, num=n, endpoint=False)
+        step = (start_abs + pixels) // self._npix
         pixels = np.mod(pixels, self._npix * np.ones(n, dtype=np.int64)).astype(
             np.int64
         )
@@ -422,10 +424,17 @@ class TODHpixSpiral(TOD):
         # axis
         v *= np.sin(ang)
 
-        # build the un-normalized quaternion
-        boresight = np.concatenate((v, s), axis=1)
+        # build the normalized quaternion
+        boresight = qa.norm(np.concatenate((v, s), axis=1))
 
-        return qa.norm(boresight)
+        # Add rotation around the boresight
+        zrot = qa.rotation(zaxis, np.radians(45) * step)
+        boresight = qa.mult(boresight, zrot)
+        if self._rot is not None:
+            boresight = qa.mult(self._rot, boresight)
+        boresight = qa.norm(boresight)
+
+        return boresight
 
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
@@ -1164,7 +1173,7 @@ class TODGround(TOD):
         # longitude counter-clockwise
         my_azelquats = qa.from_angles(
             np.pi / 2 - np.ones(my_nsamp) * self._el,
-            -self._az[my_ind],
+            -(self._az[my_ind]),
             np.zeros(my_nsamp),
             IAU=False,
         )

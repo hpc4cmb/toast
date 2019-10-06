@@ -8,7 +8,7 @@ import healpy as hp
 
 from ..timing import function_timer
 
-from .tod_math import dipole
+from .todmap_math import dipole
 
 from ..op import Operator
 

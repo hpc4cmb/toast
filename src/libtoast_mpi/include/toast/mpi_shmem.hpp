@@ -205,10 +205,10 @@ class mpi_shmem {
 
         ~mpi_shmem() {
             free();
-	    if (shmcomm_ != MPI_COMM_NULL) {
-	        MPI_Comm_free(&shmcomm_);
+            if (shmcomm_ != MPI_COMM_NULL) {
+                MPI_Comm_free(&shmcomm_);
                 shmcomm_ = MPI_COMM_NULL;
-	    }
+            }
         }
 
     private:

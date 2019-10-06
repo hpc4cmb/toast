@@ -16,7 +16,7 @@ from .. import qarray as qa
 
 from ..timing import Timer, function_timer
 
-from ..map import MapSampler
+from ..todmap import MapSampler
 
 from ..tod import flagged_running_average, Interval
 
@@ -692,7 +692,12 @@ class OpNoiseEstim:
             my_psds1, my_cov1 = result, None
 
         if self._nsum > 1:
-            my_psds1, my_cov1, my_psds2, my_cov2 = self.process_downsampled_noise_estimate(
+            (
+                my_psds1,
+                my_cov1,
+                my_psds2,
+                my_cov2,
+            ) = self.process_downsampled_noise_estimate(
                 timestamps,
                 fsample,
                 signal1,

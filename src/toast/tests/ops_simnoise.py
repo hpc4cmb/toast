@@ -8,7 +8,8 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..tod import Noise, sim_noise_timestream, AnalyticNoise, OpSimNoise, TODHpixSpiral
+from ..tod import Noise, sim_noise_timestream, AnalyticNoise, OpSimNoise
+from ..todmap import TODHpixSpiral
 
 from .. import rng as rng
 
@@ -38,7 +39,16 @@ class OpSimNoiseTest(MPITestCase):
         self.rate = 20.0
 
         # Create detectors with a range of knee frequencies.
-        dnames, dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
+        (
+            dnames,
+            dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(
             self.ndet,
             samplerate=self.rate,
             net=10.0,

@@ -10,9 +10,8 @@ import numpy as np
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
-from ..map import OpMadam, OpLocalPixels, DistPixels
-
-from ..tod import OpPointingHpix
+from ..map import DistPixels
+from ..todmap import OpMadam, OpLocalPixels, OpPointingHpix, get_submaps_nested
 
 
 def add_pointing_args(parser):
@@ -117,32 +116,11 @@ def get_submaps(args, comm, data):
     """
     log = Logger.get()
     if comm.world_rank == 0:
-        log.info("Scanning local pixels")
+        log.info("Scanning local submaps")
     timer = Timer()
     timer.start()
 
-    # Prepare for using distpixels objects
-    nside = args.nside
-    subnside = 16
-    if subnside > nside:
-        subnside = nside
-    subnpix = 12 * subnside * subnside
-
-    # get locally hit pixels
-    lc = OpLocalPixels()
-    localpix = lc.exec(data)
-    if localpix is None:
-        raise RuntimeError(
-            "Process {} has no hit pixels. Perhaps there are fewer "
-            "detectors than processes in the group?".format(comm.world_rank)
-        )
-    if comm.comm_world is not None:
-        comm.comm_world.barrier()
-    if comm.world_rank == 0:
-        timer.report_clear("Identify local pixels")
-
-    # find the locally hit submaps.
-    localsm = np.unique(np.floor_divide(localpix, subnpix))
+    localpix, localsm, subnpix = get_submaps_nested(data, args.nside)
 
     if comm.comm_world is not None:
         comm.comm_world.barrier()

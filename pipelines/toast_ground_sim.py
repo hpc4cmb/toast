@@ -36,7 +36,7 @@ from toast.utils import Logger, Environment, memreport
 from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
 
-from toast.tod import TODGround
+from toast.todmap import TODGround
 
 from toast.pipeline_tools import (
     add_debug_args,

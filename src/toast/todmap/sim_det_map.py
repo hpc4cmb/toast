@@ -6,7 +6,7 @@ import numpy as np
 
 import healpy as hp
 
-from ..timing import function_timer
+from ..timing import function_timer, GlobalTimers
 
 from .. import qarray as qa
 
@@ -86,6 +86,7 @@ class OpSimGradient(Operator):
                 pdata[totflags != 0, :] = nullquat
 
                 dir = qa.rotate(pdata, zaxis)
+
                 pixels = hp.vec2pix(
                     self._nside, dir[:, 0], dir[:, 1], dir[:, 2], nest=self._nest
                 )
@@ -151,6 +152,7 @@ class OpSimScan(Operator):
         self._out = out
         self._dets = dets
 
+    @function_timer
     def exec(self, data):
         """Create the timestreams by scanning from the map.
 
@@ -181,7 +183,10 @@ class OpSimScan(Operator):
 
                 nsamp, nnz = weights.shape
 
+                gt = GlobalTimers.get()
+                gt.start("OpSimScan.exec.global_to_local")
                 sm, lpix = self._map.global_to_local(pixels)
+                gt.stop("OpSimScan.exec.global_to_local")
 
                 # f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
                 #     if (lpix[x] >= 0) else 0
@@ -189,6 +194,7 @@ class OpSimScan(Operator):
                 # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
                 maptype = np.dtype(self._map.dtype)
+                gt.start("OpSimScan.exec.scan_map")
                 if maptype.char == "d":
                     scan_map_float64(
                         self._map.submap,
@@ -213,6 +219,7 @@ class OpSimScan(Operator):
                     raise RuntimeError(
                         "Scanning from a map only supports float32 and float64 maps"
                     )
+                gt.stop("OpSimScan.exec.scan_map")
 
                 cachename = "{}_{}".format(self._out, det)
                 if not tod.cache.exists(cachename):

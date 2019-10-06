@@ -4,19 +4,11 @@
 
 # import functions in our public API
 
-from .pixels import OpLocalPixels, DistPixels
-
-from .pysm import pysm
-
-if pysm is not None:
-    from .pysm import PySMSky
+from .pixels import DistPixels
 
 from .cov import (
-    OpAccumDiag,
     covariance_invert,
     covariance_rcond,
     covariance_multiply,
     covariance_apply,
 )
-
-from .madam import OpMadam

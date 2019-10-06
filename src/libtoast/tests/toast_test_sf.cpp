@@ -9,6 +9,16 @@
 const int TOASTsfTest::size = 1000;
 
 
+void compare_fast(double out, double expected) {
+    double f32eps = std::numeric_limits <float>::epsilon();
+    if ((fabs(out) < f32eps) && (fabs(expected) < f32eps)) {
+        // Both are zero within expected error
+        return;
+    }
+    EXPECT_FLOAT_EQ(out, expected);
+    return;
+}
+
 void TOASTsfTest::SetUp() {
     angin.resize(size);
     sinout.resize(size);
@@ -25,8 +35,28 @@ void TOASTsfTest::SetUp() {
     login.resize(size);
     logout.resize(size);
 
+    double eps = 0.5 * std::numeric_limits <double>::epsilon();
+
+    // Make sure to sample around zero and 2PI
+    angin[0] = -3.0 * eps;
+    angin[1] = -2.0 * eps;
+    angin[2] = -eps;
+    angin[3] = 0.0;
+    angin[4] = eps;
+    angin[5] = 2.0 * eps;
+    angin[6] = 3.0 * eps;
+    angin[size - 7] = 2.0 * toast::PI - 3.0 * eps;
+    angin[size - 6] = 2.0 * toast::PI - 2.0 * eps;
+    angin[size - 5] = 2.0 * toast::PI - eps;
+    angin[size - 4] = 2.0 * toast::PI;
+    angin[size - 3] = 2.0 * toast::PI + eps;
+    angin[size - 2] = 2.0 * toast::PI + 2.0 * eps;
+    angin[size - 1] = 2.0 * toast::PI + 3.0 * eps;
+    for (int i = 7; i < size - 7; ++i) {
+        angin[i] = (double)i * (2.0 * toast::PI / (double)(size - 1));
+    }
+
     for (int i = 0; i < size; ++i) {
-        angin[i] = (double)(i + 1) * (2.0 * toast::PI / (double)(size + 1));
         sinout[i] = ::sin(angin[i]);
         cosout[i] = ::cos(angin[i]);
         xin[i] = cosout[i];
@@ -84,23 +114,32 @@ TEST_F(TOASTsfTest, fasttrig) {
 
     toast::vfast_sin(size, angin.data(), comp1.data());
     for (int i = 0; i < size; ++i) {
-        EXPECT_FLOAT_EQ(sinout[i], comp1[i]);
+        // std::cout << "sin ang = " << angin[i] << ", libm = " << sinout[i] <<
+        // ", fast = " << comp1[i] << std::endl;
+        compare_fast(comp1[i], sinout[i]);
     }
 
     toast::vfast_cos(size, angin.data(), comp2.data());
     for (int i = 0; i < size; ++i) {
-        EXPECT_FLOAT_EQ(cosout[i], comp2[i]);
+        // std::cout << "cos ang = " << angin[i] << ", libm = " <<
+        //     cosout[i] << ", fast = " << comp2[i] << std::endl;
+        compare_fast(comp2[i], cosout[i]);
     }
 
     toast::vfast_sincos(size, angin.data(), comp1.data(), comp2.data());
     for (int i = 0; i < size; ++i) {
-        EXPECT_FLOAT_EQ(sinout[i], comp1[i]);
-        EXPECT_FLOAT_EQ(cosout[i], comp2[i]);
+        // std::cout << "sincos ang = " << angin[i] << ", libm = " << sinout[i] << " "
+        // <<
+        //     cosout[i] << ", fast = " << comp1[i] << " " << comp2[i] << std::endl;
+        compare_fast(comp1[i], sinout[i]);
+        compare_fast(comp2[i], cosout[i]);
     }
 
     toast::vfast_atan2(size, yin.data(), xin.data(), comp1.data());
     for (int i = 0; i < size; ++i) {
-        EXPECT_FLOAT_EQ(atanout[i], comp1[i]);
+        // std::cout << "atan in = " << yin[i] << " " << xin[i] << ", libm = " <<
+        // atanout[i] << ", fast = " << comp1[i] << std::endl;
+        compare_fast(comp1[i], atanout[i]);
     }
 }
 

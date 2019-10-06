@@ -1,12 +1,12 @@
 Pre-building TOAST Dependencies for Travis
 ==================================================
 
-We want to be able to run travis tests quickly, and we want to test TOAST, not
-just spend our time compiling dependencies.  Travis supports caching pieces of
-its build, but there is a hard limit of 50 minutes for all open source (i.e.
-unpaid) projects.  Our dependencies (mainly MPI and Elemental) take longer than
-that to build.  So we cannot even build our dependencies once with travis in
-order to cache them for the future.
+We want to be able to run travis tests quickly, and we want to test TOAST, not just
+spend our time compiling dependencies.  Travis supports caching pieces of its
+build, but there is a hard limit of 50 minutes for all open source (i.e. unpaid)
+projects.  Our optional dependencies (mainly MPI, Boost and SuiteSparse) take
+longer than that to build.  So we cannot even build our dependencies once with
+travis in order to cache them for the future.
 
 Instead, we use scripts in this directory to build our dependencies inside the
 same (or very similar) docker container used by the travis service.  Whenever

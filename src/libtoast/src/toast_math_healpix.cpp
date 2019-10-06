@@ -289,7 +289,10 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
     }
 
     toast::vfast_sqrt(n, work1.data(), rtz);
-    toast::vfast_atan2(n, work3.data(), work2.data(), phi);
+
+    // FIXME:  revert to fast version after unit tests in place
+    // toast::vfast_atan2(n, work3.data(), work2.data(), phi);
+    toast::vatan2(n, work3.data(), work2.data(), phi);
 
     return;
 }
@@ -307,6 +310,8 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
 
     toast::AlignedVector <double> work1(n);
 
+    // FIXME:  revert to fast version once unit tests pass
+    // toast::vcos(static_cast <int> (n), theta, z);
     toast::vfast_cos(static_cast <int> (n), theta, z);
 
     if (toast::is_aligned(theta) && toast::is_aligned(region)
@@ -354,13 +359,17 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
+    double eps = std::numeric_limits <float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
         && toast::is_aligned(rtz)) {
         #pragma omp simd
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             int64_t x;
             int64_t y;
@@ -430,8 +439,11 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
         }
     } else {
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             int64_t x;
             int64_t y;
@@ -514,13 +526,17 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
+    double eps = std::numeric_limits <float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
         toast::is_aligned(region) && toast::is_aligned(z)
         && toast::is_aligned(rtz)) {
         #pragma omp simd
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             double tp;
             int64_t longpart;
@@ -564,8 +580,11 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
         }
     } else {
         for (int64_t i = 0; i < n; ++i) {
-            double tt =
-                (phi[i] >= 0.0) ? phi[i] * TWOINVPI : phi[i] * TWOINVPI + 4.0;
+            double ph = phi[i];
+            if (fabs(ph) < eps) {
+                ph = 0.0;
+            }
+            double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
 
             double tp;
             int64_t longpart;

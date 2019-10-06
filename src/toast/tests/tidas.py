@@ -43,9 +43,16 @@ class TidasTest(MPITestCase):
         self.ndet = 8
         self.rate = 20.0
 
-        self.dnames, self.dquat, depsilon, drate, dnet, dfmin, dfknee, dalpha = boresight_focalplane(
-            self.ndet, samplerate=self.rate
-        )
+        (
+            self.dnames,
+            self.dquat,
+            depsilon,
+            drate,
+            dnet,
+            dfmin,
+            dfknee,
+            dalpha,
+        ) = boresight_focalplane(self.ndet, samplerate=self.rate)
 
         # Create a set of intervals that sub-divide each observation.
 

@@ -12,6 +12,8 @@ void init_map_cov(py::module & m) {
              py::buffer subpix,
              py::buffer weights, double scale, py::buffer tod, py::buffer invnpp,
              py::buffer hits, py::buffer zmap) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_accum_diag");
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
               pybuffer_check_1D <double> (invnpp);
@@ -47,6 +49,7 @@ void init_map_cov(py::module & m) {
               toast::cov_accum_diag(
                   nsub, nsubpix, nnz, nsamp, rawsubmap, rawsubpix, rawweights, scale,
                   rawtod, rawzmap, rawhits, rawinvnpp);
+              gt.stop("cov_accum_diag");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("tod"),
@@ -83,6 +86,8 @@ void init_map_cov(py::module & m) {
     m.def("cov_accum_diag_hits",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
              py::buffer subpix, py::buffer hits) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_accum_diag_hits");
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
               pybuffer_check_1D <int64_t> (hits);
@@ -102,6 +107,7 @@ void init_map_cov(py::module & m) {
               int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
               toast::cov_accum_diag_hits(
                   nsub, nsubpix, nnz, nsamp, rawsubmap, rawsubpix, rawhits);
+              gt.stop("cov_accum_diag_hits");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg(
@@ -129,6 +135,8 @@ void init_map_cov(py::module & m) {
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
              py::buffer subpix, py::buffer weights, double scale, py::buffer invnpp,
              py::buffer hits) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_accum_diag_invnpp");
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
               pybuffer_check_1D <double> (invnpp);
@@ -157,6 +165,7 @@ void init_map_cov(py::module & m) {
               toast::cov_accum_diag_invnpp(
                   nsub, nsubpix, nnz, nsamp, rawsubmap, rawsubpix, rawweights, scale,
                   rawhits, rawinvnpp);
+              gt.stop("cov_accum_diag_invnpp");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("invnpp"),
@@ -191,6 +200,8 @@ void init_map_cov(py::module & m) {
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
              py::buffer subpix, py::buffer weights, double scale, py::buffer tod,
              py::buffer zmap) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_accum_zmap");
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
               pybuffer_check_1D <double> (weights);
@@ -220,6 +231,7 @@ void init_map_cov(py::module & m) {
               toast::cov_accum_zmap(
                   nsub, nsubpix, nnz, nsamp, rawsubmap, rawsubpix, rawweights, scale,
                   rawtod, rawzmap);
+              gt.stop("cov_accum_zmap");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("tod"),
@@ -256,6 +268,8 @@ void init_map_cov(py::module & m) {
     m.def("cov_eigendecompose_diag",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer data,
              py::buffer cond, double threshold, bool invert) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_eigendecompose_diag");
               pybuffer_check_1D <double> (data);
               pybuffer_check_1D <double> (cond);
               py::buffer_info info_data = data.request();
@@ -273,6 +287,7 @@ void init_map_cov(py::module & m) {
               double * rawcond = reinterpret_cast <double *> (info_cond.ptr);
               toast::cov_eigendecompose_diag(nsub, nsubpix, nnz, rawdata, rawcond,
                                              threshold, invert);
+              gt.stop("cov_eigendecompose_diag");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("data"),
           py::arg("cond"), py::arg("threshold"), py::arg(
@@ -303,6 +318,8 @@ void init_map_cov(py::module & m) {
     m.def("cov_mult_diag",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer data1,
              py::buffer data2) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_mult_diag");
               pybuffer_check_1D <double> (data1);
               pybuffer_check_1D <double> (data2);
               py::buffer_info info_data1 = data1.request();
@@ -317,6 +334,7 @@ void init_map_cov(py::module & m) {
               double * rawdata1 = reinterpret_cast <double *> (info_data1.ptr);
               double * rawdata2 = reinterpret_cast <double *> (info_data2.ptr);
               toast::cov_mult_diag(nsub, nsubpix, nnz, rawdata1, rawdata2);
+              gt.stop("cov_mult_diag");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("data1"),
           py::arg(
@@ -344,6 +362,8 @@ void init_map_cov(py::module & m) {
     m.def("cov_apply_diag",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer mat,
              py::buffer vec) {
+              auto & gt = toast::GlobalTimers::get();
+              gt.start("cov_apply_diag");
               pybuffer_check_1D <double> (mat);
               pybuffer_check_1D <double> (vec);
               py::buffer_info info_mat = mat.request();
@@ -361,6 +381,7 @@ void init_map_cov(py::module & m) {
               double * rawmat = reinterpret_cast <double *> (info_mat.ptr);
               double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
               toast::cov_apply_diag(nsub, nsubpix, nnz, rawmat, rawvec);
+              gt.stop("cov_apply_diag");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("mat"),
           py::arg(

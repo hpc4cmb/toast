@@ -31,13 +31,8 @@ from toast.vis import set_backend
 from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
 from toast.timing import dump as dump_timing
 
-from toast.tod import (
-    regular_intervals,
-    plot_focalplane,
-    OpApplyGain,
-    slew_precession_axis,
-    TODSatellite,
-)
+from toast.tod import regular_intervals, plot_focalplane, OpApplyGain
+from toast.todmap import TODSatellite, slew_precession_axis
 
 from toast.pipeline_tools import (
     add_dist_args,

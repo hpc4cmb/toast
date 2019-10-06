@@ -113,11 +113,8 @@ before_install:
     - wget ${DEPSURL}
     - tar xjf travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2 --directory ${HOME}
     # Load dependencies into our search paths
-    - export PATH="${HOME}/software/bin:${PATH}"
-    - export CPATH="${HOME}/software/include:${CPATH}"
-    - export LIBRARY_PATH="${HOME}/software/lib:${LIBRARY_PATH}"
-    - export LD_LIBRARY_PATH="${HOME}/software/lib:${LD_LIBRARY_PATH}"
-    - export PYTHONPATH="${HOME}/software/lib/python${PYSITE}/site-packages:${PYTHONPATH}"
+    - export PATH="${HOME}/software/cmbenv_python/bin:${PATH}"
+    - source cmbenv
     # MPI compilers
     - export MPICC=$(which mpicc)
     - export MPICXX=$(which mpicxx)

@@ -12,10 +12,10 @@ from ..utils import Logger, Environment
 
 from .. import qarray as qa
 
-from ..tod import OpSimAtmosphere, atm_available_utils
+from ..todmap import OpSimAtmosphere, atm_available_utils
 
 if atm_available_utils:
-    from ..tod.atm import (
+    from ..todmap.atm import (
         atm_atmospheric_loading,
         atm_absorption_coefficient,
         atm_absorption_coefficient_vec,
