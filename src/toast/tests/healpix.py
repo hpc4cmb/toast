@@ -62,17 +62,25 @@ class HealpixTest(MPITestCase):
             for ph in range(self.nreg):
                 theta = np.radians(th * 180.0 / self.nreg)
                 phi = np.radians(ph * 360.0 / self.nreg)
-                print(theta, phi, flush=True)
+                print(th, ph, theta, phi, flush=True)
                 self.regular.append((theta, phi))
-                self.regcompnest.append(hp.ang2pix(self.nside, th, ph, nest=True))
-                self.regcompring.append(hp.ang2pix(self.nside, th, ph, nest=False))
+                self.regcompnest.append(
+                    hp.ang2pix(self.nside, theta, phi, nest=True)
+                )
+                self.regcompring.append(
+                    hp.ang2pix(self.nside, theta, phi, nest=False)
+                )
 
 
     def test_roundtrip(self):
-        angs = np.array(self.regular)
-        theta = angs[:, 0]
-        phi = angs[:, 1]
+        theta = np.array([x[0] for x in self.regular])
+        print(theta)
+        phi = np.array([x[1] for x in self.regular])
+        print(phi)
         vec = ang2vec(theta, phi)
+        print(vec)
         comptheta, compphi = vec2ang(vec)
+        print(comptheta)
+        print(compphi, flush=True)
         np.testing.assert_array_almost_equal(comptheta, theta)
         np.testing.assert_array_almost_equal(compphi, phi)
