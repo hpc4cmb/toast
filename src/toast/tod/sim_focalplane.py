@@ -610,4 +610,4 @@ def plot_focalplane(
     else:
         plt.savefig(outfile)
         plt.close()
-    return
+    return fig
