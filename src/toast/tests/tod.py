@@ -49,6 +49,15 @@ class TODTest(MPITestCase):
         pass
 
     def test_props(self):
+        comm = self.tod.mpicomm
+        if comm is None:
+            print(self.tod, flush=True)
+        else:
+            for p in range(comm.size):
+                if p == comm.rank:
+                    print(self.tod, flush=True)
+                comm.barrier()
+
         self.assertEqual(sorted(self.tod.detectors), sorted(self.dets))
         self.assertEqual(sorted(self.tod.local_dets), sorted(self.dets))
         self.assertEqual(self.tod.total_samples, self.totsamp)
