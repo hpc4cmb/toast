@@ -68,7 +68,7 @@ def get_comm():
     env = Environment.get()
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        env.print()
+        print(env)
     if mpiworld is None:
         log.info("Running serially with one process at {}".format(str(datetime.now())))
     else:
