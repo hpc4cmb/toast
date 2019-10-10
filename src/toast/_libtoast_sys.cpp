@@ -50,10 +50,6 @@ void init_sys(py::module & m) {
          R"(
             Return a list of the currently available signals.
         )")
-    .def("print", &toast::Environment::print,
-         R"(
-            Print the current environment to STDOUT.
-        )")
     .def("use_mpi", &toast::Environment::use_mpi,
          R"(
             Return True if TOAST was compiled with MPI support **and** MPI
@@ -86,7 +82,18 @@ void init_sys(py::module & m) {
             Returns:
                 None
 
-        )");
+        )")
+    .def("__repr__",
+         [](toast::Environment const & self) {
+             std::ostringstream o;
+             o << "<toast.Environment" << std::endl;
+             auto strngs = self.info();
+             for (auto const & line : strngs) {
+                 o << "  " << line << std::endl;
+             }
+             o << ">";
+             return o.str();
+         });
 
     // Simple timer
 

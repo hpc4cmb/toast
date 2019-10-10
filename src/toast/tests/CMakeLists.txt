@@ -6,6 +6,7 @@ install(FILES
     _helpers.py
     runner.py
     mpi.py
+    env.py
     dist.py
     timing.py
     cache.py

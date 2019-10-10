@@ -281,14 +281,17 @@ std::vector <std::string> toast::Environment::signals() const {
     return signals_avail_;
 }
 
-void toast::Environment::print() const {
-    std::string prefix("TOAST ENV");
+std::vector <std::string> toast::Environment::info() const {
+    std::vector <std::string> ret;
+    std::ostringstream o;
 
-    fprintf(stdout, "%s: Source code version = %s\n", prefix.c_str(),
-            version_.c_str());
+    o.str("");
+    o << "Source code version = " << version_;
+    ret.push_back(o.str());
 
-    fprintf(stdout, "%s: Logging level = %s\n", prefix.c_str(),
-            loglvl_.c_str());
+    o.str("");
+    o << "Logging level = " << loglvl_;
+    ret.push_back(o.str());
 
     std::vector <std::string> signals;
     for (auto const & sig : signals_avail_) {
@@ -299,29 +302,52 @@ void toast::Environment::print() const {
         }
     }
 
-    fprintf(stdout, "%s: Handling enabled for %lu signals:\n", prefix.c_str(),
-            signals.size());
+    o.str("");
+    o << "Handling enabled for " << signals.size() << " signals:";
+    ret.push_back(o.str());
 
     for (auto const & sig : signals) {
-        fprintf(stdout, "%s:   %9s\n", prefix.c_str(), sig.c_str());
+        o.str("");
+        o << "  " << sig;
+        ret.push_back(o.str());
     }
 
-    fprintf(stdout, "%s: Max threads = %d\n", prefix.c_str(),
-            max_threads_);
+    o.str("");
+    o << "Max threads = " << max_threads_;
+    ret.push_back(o.str());
+
+    o.str("");
     if (have_mpi_) {
-        fprintf(stdout, "%s: MPI build enabled\n", prefix.c_str());
+        o << "MPI build enabled";
     } else {
-        fprintf(stdout, "%s: MPI build disabled\n", prefix.c_str());
+        o << "MPI build disabled";
     }
+    ret.push_back(o.str());
+
+    o.str("");
     if (use_mpi_) {
-        fprintf(stdout, "%s: MPI runtime enabled\n", prefix.c_str());
+        o << "MPI runtime enabled";
     } else {
-        fprintf(stdout, "%s: MPI runtime disabled\n", prefix.c_str());
+        o << "MPI runtime disabled";
         if (at_nersc_ && !in_slurm_) {
-            fprintf(stdout, "%s:   Cannot use MPI on NERSC login nodes\n",
-                    prefix.c_str());
+            ret.push_back(o.str());
+            o.str("");
+            o << "Cannot use MPI on NERSC login nodes";
         }
     }
+    ret.push_back(o.str());
+
+    return ret;
+}
+
+void toast::Environment::print() const {
+    std::string prefix("TOAST ENV");
+
+    auto strngs = info();
+    for (auto const & str : strngs) {
+        fprintf(stdout, "%s: %s\n", prefix.c_str(), str.c_str());
+    }
+
     fflush(stdout);
     return;
 }
