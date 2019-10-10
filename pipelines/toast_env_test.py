@@ -39,7 +39,7 @@ def main():
 
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        env.print()
+        print(env)
         log.info("Numba threading layer set to '{}'".format(numba_threading_layer))
     if mpiworld is None:
         log.info("Running serially with one process")

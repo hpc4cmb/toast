@@ -234,6 +234,18 @@ class Comm(object):
         """
         return self._rcomm
 
+    def __repr__(self):
+        lines = [
+            "  World MPI communicator = {}".format(self._wcomm),
+            "  World MPI size = {}".format(self._wsize),
+            "  World MPI rank = {}".format(self._wrank),
+            "  Group MPI communicator = {}".format(self._gcomm),
+            "  Group MPI size = {}".format(self._gsize),
+            "  Group MPI rank = {}".format(self._grank),
+            "  Rank MPI communicator = {}".format(self._rcomm),
+        ]
+        return "<toast.Comm\n{}\n>".format("\n".join(lines))
+
 
 #
 # These general purpose MPI tools taken from:

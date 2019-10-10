@@ -168,6 +168,30 @@ class TOD(object):
 
         self.cache = Cache()
 
+    def __repr__(self):
+        clsname = self.__class__.__name__
+        csize = self.cache.report(silent=True)
+        lsamp = self._dist_samples[self._rank_samp]
+        ldet = self._dist_dets[self._rank_det]
+        ldetstr = ["      {}".format(x) for x in ldet]
+        lines = [
+            "  {} total detectors and {} total samples".format(
+                len(self._dets), self._nsamp
+            ),
+            "  Using MPI communicator {}".format(self._mpicomm),
+            "    In grid dimensions {} sample ranks x {} detranks".format(
+                self._sampranks, self._detranks
+            ),
+            "  Process at ({}, {}) in grid has data for:".format(
+                self._rank_samp, self._rank_det
+            ),
+            "    Samples {} - {} (inclusive)".format(lsamp[0], lsamp[0] + lsamp[1] - 1),
+            "    Detectors:",
+        ]
+        lines.extend(ldetstr)
+        lines.append("    Cache contains {} bytes".format(csize))
+        return "<{}\n{}\n>".format(clsname, "\n".join(lines))
+
     @property
     def detectors(self):
         """

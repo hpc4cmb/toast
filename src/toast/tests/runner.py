@@ -14,6 +14,7 @@ from ..vis import set_backend
 
 from .._libtoast import libtoast_tests
 
+from . import env as testenv
 from . import cache as testcache
 from . import timing as testtiming
 from . import rng as testrng
@@ -108,6 +109,7 @@ def test(name=None, verbosity=2):
     suite = unittest.TestSuite()
 
     if name is None:
+        suite.addTest(loader.loadTestsFromModule(testenv))
         suite.addTest(loader.loadTestsFromModule(testcache))
         suite.addTest(loader.loadTestsFromModule(testtiming))
         suite.addTest(loader.loadTestsFromModule(testrng))
