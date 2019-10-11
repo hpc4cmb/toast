@@ -45,6 +45,17 @@ def add_noise_args(parser):
         dest="simulate_noise",
     )
     parser.set_defaults(simulate_noise=False)
+    # `sample-rate` may be already added
+    try:
+        parser.add_argument(
+            "--sample-rate",
+            required=False,
+            default=100.0,
+            type=np.float,
+            help="Detector sample rate (Hz)",
+        )
+    except argparse.ArgumentError:
+        pass
     return
 
 

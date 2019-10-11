@@ -1302,6 +1302,7 @@ class TODGround(TOD):
         a = (xvec[1] / 2 - b * c) / d
         # qarray has the scalar part as the last index
         quat = qa.norm(np.array([b, c, d, a]))
+        """
         # DEBUG begin
         errors = np.array(
             [
@@ -1317,6 +1318,7 @@ class TODGround(TOD):
                 "Quaternion is not right: ({}), ({} {} {})" "".format(errors, X, Y, Z)
             )
         # DEBUG end
+        """
         return quat
 
     @function_timer
