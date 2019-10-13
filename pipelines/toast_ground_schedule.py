@@ -2333,11 +2333,11 @@ def parse_patch_center_and_width(args, parts):
     else:
         raise RuntimeError("Unknown coordinate system: {}".format(args.patch_coord))
     center = ephem.Equatorial(center)
-    # Synthesize 8 corners around the center
+    # Synthesize 12 corners around the center
     phi = center.ra
     theta = center.dec
     r = width / 2
-    ncorner = 8
+    ncorner = 12
     angstep = 2 * np.pi / ncorner
     for icorner in range(ncorner):
         ang = angstep * icorner
