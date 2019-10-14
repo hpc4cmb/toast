@@ -58,6 +58,7 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
+    double eps = std::numeric_limits <double>::epsilon();
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(vec)) {
         #pragma omp simd
@@ -67,8 +68,11 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
                                        + vec[offset + 1] * vec[offset + 1]
                                        + vec[offset + 2] * vec[offset + 2]);
             theta[i] = ::acos(vec[offset + 2] * norm);
+            bool small_theta = (::fabs(theta[i]) <= eps) ? true : false;
+            bool big_theta = (::fabs(toast::PI - theta[i]) <= eps) ? true : false;
             double phitemp = ::atan2(vec[offset + 1], vec[offset]);
             phi[i] = (phitemp < 0) ? phitemp + toast::TWOPI : phitemp;
+            phi[i] = (small_theta || big_theta) ? 0.0 : phi[i];
         }
     } else {
         for (int64_t i = 0; i < n; ++i) {
@@ -77,8 +81,11 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
                                        + vec[offset + 1] * vec[offset + 1]
                                        + vec[offset + 2] * vec[offset + 2]);
             theta[i] = ::acos(vec[offset + 2] * norm);
+            bool small_theta = (::fabs(theta[i]) <= eps) ? true : false;
+            bool big_theta = (::fabs(toast::PI - theta[i]) <= eps) ? true : false;
             double phitemp = ::atan2(vec[offset + 1], vec[offset]);
             phi[i] = (phitemp < 0) ? phitemp + toast::TWOPI : phitemp;
+            phi[i] = (small_theta || big_theta) ? 0.0 : phi[i];
         }
     }
 
@@ -311,8 +318,8 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
     toast::AlignedVector <double> work1(n);
 
     // FIXME:  revert to fast version once unit tests pass
-    // toast::vcos(static_cast <int> (n), theta, z);
-    toast::vfast_cos(static_cast <int> (n), theta, z);
+    // toast::vfast_cos(static_cast <int> (n), theta, z);
+    toast::vcos(static_cast <int> (n), theta, z);
 
     if (toast::is_aligned(theta) && toast::is_aligned(region)
         && toast::is_aligned(z) && toast::is_aligned(rtz)) {

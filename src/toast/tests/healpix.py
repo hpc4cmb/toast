@@ -20,7 +20,7 @@ class HealpixTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
-        self.nside = 64
+        self.nside = 256
         self.eps32 = np.finfo(np.float32).eps
         self.eps64 = np.finfo(np.float64).eps
 
@@ -35,7 +35,7 @@ class HealpixTest(MPITestCase):
             np.radians(90.0) + self.eps32,
             np.radians(180.0) - self.eps32,
             np.radians(180.0) - self.eps64,
-            np.radians(180.0)
+            np.radians(180.0),
         ]
         phi = list()
         for pts in [0.0, 90.0, 180.0, 270.0, 360.0]:
@@ -54,7 +54,7 @@ class HealpixTest(MPITestCase):
                 self.extcompnest.append(hp.ang2pix(self.nside, th, ph, nest=True))
                 self.extcompring.append(hp.ang2pix(self.nside, th, ph, nest=False))
 
-        self.nreg = 10
+        self.nreg = 500
         self.regular = list()
         self.regcompnest = list()
         self.regcompring = list()
@@ -62,25 +62,32 @@ class HealpixTest(MPITestCase):
             for ph in range(self.nreg):
                 theta = np.radians(th * 180.0 / self.nreg)
                 phi = np.radians(ph * 360.0 / self.nreg)
-                print(th, ph, theta, phi, flush=True)
                 self.regular.append((theta, phi))
-                self.regcompnest.append(
-                    hp.ang2pix(self.nside, theta, phi, nest=True)
-                )
-                self.regcompring.append(
-                    hp.ang2pix(self.nside, theta, phi, nest=False)
-                )
-
+                self.regcompnest.append(hp.ang2pix(self.nside, theta, phi, nest=True))
+                self.regcompring.append(hp.ang2pix(self.nside, theta, phi, nest=False))
 
     def test_roundtrip(self):
-        theta = np.array([x[0] for x in self.regular])
-        print(theta)
-        phi = np.array([x[1] for x in self.regular])
-        print(phi)
+        # Test roundtrip except for the pole, where input phi will not
+        # match the zero values returned.
+        theta = np.array([x[0] for x in self.regular if x[0] > 0])
+        phi = np.array([x[1] for x in self.regular if x[0] > 0])
         vec = ang2vec(theta, phi)
-        print(vec)
         comptheta, compphi = vec2ang(vec)
-        print(comptheta)
-        print(compphi, flush=True)
         np.testing.assert_array_almost_equal(comptheta, theta)
         np.testing.assert_array_almost_equal(compphi, phi)
+
+    def test_pix(self):
+        theta = np.array([x[0] for x in self.regular])
+        phi = np.array([x[1] for x in self.regular])
+        hpix = Pixels(nside=self.nside)
+        pixnest = hpix.ang2nest(theta, phi)
+        pixring = hpix.ang2ring(theta, phi)
+        # for th, ph, nst, hnst, rng, hrng in zip(
+        #     theta, phi, pixnest, self.regcompnest, pixring, self.regcompring
+        # ):
+        #     if (nst != hnst) or (rng != hrng):
+        #         print(th, ph, nst, hnst, rng, hrng, "  <-----", flush=True)
+        #     else:
+        #         print(th, ph, nst, hnst, rng, hrng, flush=True)
+        np.testing.assert_equal(pixnest, self.regcompnest)
+        np.testing.assert_equal(pixring, self.regcompring)
