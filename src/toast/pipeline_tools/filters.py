@@ -104,7 +104,7 @@ def add_groundfilter_args(parser):
         help="Do not apply ground filter",
         dest="apply_groundfilter",
     )
-    parser.set_defaults(apply_groundfilter=True)
+    parser.set_defaults(apply_groundfilter=False)
 
     parser.add_argument(
         "--ground-order",
