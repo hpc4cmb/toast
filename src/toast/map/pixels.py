@@ -641,12 +641,16 @@ class DistPixels(object):
 
         # Determine which processes "own" each submap.
 
-        owners = np.zeros(nsubmap, dtype=np.int32)
-        allowners = None
         if self._comm is None:
-            allowners = owners
+            NO_OWNER = 1
+            allowners = np.zeros(nsubmap, dtype=np.int32)
+            allowners.fill(NO_OWNER)
+            for m in self._local:
+                allowners[m] = rank
         else:
-            owners.fill(self._comm.size)
+            NO_OWNER = self._comm.size
+            owners = np.zeros(nsubmap, dtype=np.int32)
+            owners.fill(NO_OWNER)
             for m in self._local:
                 owners[m] = self._comm.rank
             allowners = np.zeros_like(owners)
@@ -677,9 +681,11 @@ class DistPixels(object):
             while submap_off < nsubmap:
                 if submap_off + ncomm > nsubmap:
                     ncomm = nsubmap - submap_off
-                if np.sum(allowners[submap_off : submap_off + ncomm]) != ncomm:
+                if np.any(allowners[submap_off : submap_off + ncomm] != NO_OWNER):
                     # at least one submap has some hits
                     for c in range(ncomm):
+                        if allowners[submap_off + c] == NO_OWNER:
+                            continue
                         dview[c, :, :] = self.data[self._glob2loc[submap_off + c], :, :]
                     # copy into FITS buffers
                     for c in range(ncomm):
@@ -709,8 +715,7 @@ class DistPixels(object):
                 if submap_off + ncomm > nsubmap:
                     ncomm = nsubmap - submap_off
                 if (
-                    np.sum(allowners[submap_off : submap_off + ncomm])
-                    != ncomm * self._comm.size
+                    np.any(allowners[submap_off : submap_off + ncomm] != NO_OWNER)
                 ):
                     # at least one submap has some hits.  reduce.
                     for c in range(ncomm):
