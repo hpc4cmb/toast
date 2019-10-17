@@ -16,13 +16,25 @@ MPI C++ compiler wrapper.  You must also have an FFT library and both FFTW and
 Intel's MKL are supported by configure checks.  Additionally a BLAS/LAPACK
 installation is required.
 
-Several optional compiled dependencies will enable extra features in TOAST.
-If the `Elemental library <http://libelemental.org/>`_ is found at configure
-time then internal atmosphere simulation code will be enabled in the build.
-If the `MADAM destriping mapmaker <https://github.com/hpc4cmb/libmadam>`_ is
-available at runtime, then the python code will support calling that library.
+Several optional compiled dependencies will enable extra features in
+TOAST.  If the `Elemental library <http://libelemental.org/>`_ is
+found at configure time then internal atmosphere simulation code will
+be enabled in the build.  If the `MADAM destriping mapmaker
+<https://github.com/hpc4cmb/libmadam>`_ is available at runtime, then
+the python code will support calling that library; the same applies
+for `Libconviqt <https://github.com/hpc4cmb/libconviqt>`_.
 
+You are advised to setup and install these dependencies in a dedicated
+folder, like ``$HOME/toast-deps``. For ``libmadam`` and
+``libconviqt``, you should compile both of them as follows::
 
+    mkdir $HOME/toast-deps
+    ./autogen.sh && ./configure --prefix=$HOME/toast-deps && make && make install
+
+Then you should updated ``LD_LIBRARY_PATH`` to point to
+``$HOME/toast-deps/lib``: we will show how to do this below.
+
+    
 Python Dependencies
 ------------------------
 
@@ -106,6 +118,7 @@ This will compile and install TOAST in the folder ``~/toast``. Now, every
 time you want to run TOAST you must tell Python where it was installed::
 
     export PATH=$HOME/toast/bin:$PATH
+    export LD_LIBRARY_PATH=$HOME/toast-deps:$LD_LIBRARY_PATH
     export PYTHONPATH=$HOME/toast/lib/python${PYVER}/site-packages/:$PYTHONPATH
 
 Replace ``${PYVER}`` with the version of the Python interpreter you
@@ -154,10 +167,11 @@ See the top-level "platforms" directory for other examples of running CMake.
 Testing the Installation
 -----------------------------
 
-After installation, you can run both the compiled and python unit tests.
-These tests will create an output directory in your current working directory::
+After installation, you can run both the compiled and python unit
+tests.  These tests will create an output directory named ``out`` in
+your current working directory::
 
-    $HOME/toast/bin/toast_test
+    python -c "import toast.tests; toast.tests.run()"
 
 
 Building the Documentation
