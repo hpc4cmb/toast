@@ -24,7 +24,7 @@
 /examples/*.png
 
 # Build directories when using ./cmake/platforms/...
-/build-*
+/build*
 
 # *_test_output
 

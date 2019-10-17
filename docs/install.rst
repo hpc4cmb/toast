@@ -16,13 +16,25 @@ MPI C++ compiler wrapper.  You must also have an FFT library and both FFTW and
 Intel's MKL are supported by configure checks.  Additionally a BLAS/LAPACK
 installation is required.
 
-Several optional compiled dependencies will enable extra features in TOAST.
-If the `Elemental library <http://libelemental.org/>`_ is found at configure
-time then internal atmosphere simulation code will be enabled in the build.
-If the `MADAM destriping mapmaker <https://github.com/hpc4cmb/libmadam>`_ is
-available at runtime, then the python code will support calling that library.
+Several optional compiled dependencies will enable extra features in
+TOAST.  If the `Elemental library <http://libelemental.org/>`_ is
+found at configure time then internal atmosphere simulation code will
+be enabled in the build.  If the `MADAM destriping mapmaker
+<https://github.com/hpc4cmb/libmadam>`_ is available at runtime, then
+the python code will support calling that library; the same applies
+for `Libconviqt <https://github.com/hpc4cmb/libconviqt>`_.
 
+You are advised to setup and install these dependencies in a dedicated
+folder, like ``$HOME/toast-deps``. For ``libmadam`` and
+``libconviqt``, you should compile both of them as follows::
 
+    mkdir $HOME/toast-deps
+    ./autogen.sh && ./configure --prefix=$HOME/toast-deps && make && make install
+
+Then you should updated ``LD_LIBRARY_PATH`` to point to
+``$HOME/toast-deps/lib``: we will show how to do this below.
+
+    
 Python Dependencies
 ------------------------
 
@@ -35,6 +47,7 @@ several common scientific python packages:
     * pyephem
     * mpi4py (>= 2.0.0)
     * healpy
+    * sphinx, sphinx_rtd_theme (if you want to rebuild the documentation)
 
 For mpi4py, ensure that this package is compatible with the MPI C++ compiler
 used during TOAST installation.  When installing healpy, you might encounter
@@ -87,34 +100,87 @@ install the dependencies that are available through conda::
 
     %> conda install -c conda-forge numpy scipy matplotlib mpi4py healpy pyephem
 
-Using Configure
+Using CMake
 -----------------------
 
-TOAST uses autotools to configure, build, and install both the compiled code
-and the python tools.  If you are running from a git checkout (instead of a
-distribution tarball), then first do::
+TOAST uses CMake to configure, build, and install both the compiled code
+and the python tools.  The suggested way to run TOAST is to install it in a
+directory within your home folder, and then make it visible using the
+``PYTHONPATH`` environment variable.
 
-    %> ./autogen.sh
+Within the ``toast`` directory, run the following commands::
 
-Now run configure::
+    mkdir build && cd build
+    cmake -DCMAKE_INSTALL_PREFIX=$HOME/toast ..    % Pick the directory you want
+    make && make install
 
-    %> ./configure --prefix=/path/to/install
+This will compile and install TOAST in the folder ``~/toast``. Now, every
+time you want to run TOAST you must tell Python where it was installed::
 
-See the top-level "platforms" directory for other examples of running the
-configure script.  Now build and install the tools::
+    export PATH=$HOME/toast/bin:$PATH
+    export LD_LIBRARY_PATH=$HOME/toast-deps:$LD_LIBRARY_PATH
+    export PYTHONPATH=$HOME/toast/lib/python${PYVER}/site-packages/:$PYTHONPATH
 
-    %> make install
+Replace ``${PYVER}`` with the version of the Python interpreter you
+are using (e.g., ``3.7``). This should be enough to run TOAST. (If you
+do not like to run the previous line every time you need TOAST, you
+can put it in your ``.profile``.)
 
-In order to use the installed tools, you must make sure that the installed
-location has been added to the search paths for your shell.  For example,
-the "<prefix>/bin" directory should be in your PATH and the python install
-location "<prefix>/lib/pythonX.X/site-packages" should be in your PYTHONPATH.
+If you need to customize the way TOAST gets compiled, the following
+variables can be defined in the invocation to ``cmake`` using the
+``-D`` flag:
+
+``CMAKE_INSTALL_PREFIX``
+   Location where TOAST will be installed. (We used it in the example above.)
+
+``CMAKE_C_COMPILER``
+   Path to the C compiler
+
+``CMAKE_C_FLAGS``
+   Flags to be passed to the C compiler (e.g., ``-O3``)
+
+``CMAKE_CXX_COMPILER``
+   Path to the C++ compiler
+
+``CMAKE_CXX_FLAGS``
+   Flags to be passed to the C++ compiler
+
+``MPI_C_COMPILER``
+   Path to the MPI wrapper for the C compiler
+
+``MPI_CXX_COMPILER``
+   Path to the MPI wrapper for the C++ compiler
+
+``PYTHON_EXECUTABLE``
+   Path to the Python interpreter
+
+``BLAS_LIBRARIES``
+   Full path to the BLAS dynamical library
+
+``LAPACK_LIBRARIES``
+   Full path to the LAPACK dynamical library
+
+
+See the top-level "platforms" directory for other examples of running CMake.
 
 
 Testing the Installation
 -----------------------------
 
-After installation, you can run both the compiled and python unit tests.
-These tests will create an output directory in your current working directory::
+After installation, you can run both the compiled and python unit
+tests.  These tests will create an output directory named ``out`` in
+your current working directory::
 
-    %> python -c "import toast.tests; toast.tests.run()"
+    python -c "import toast.tests; toast.tests.run()"
+
+
+Building the Documentation
+-----------------------------
+
+You will need the two Python packages ``sphinx`` and
+``sphinx_rtd_theme``, which can be installed using ``pip`` or
+``conda`` (if you are running Anaconda)::
+
+    cd docs && make html
+
+The documentation will be available in ``docs/_build/html``.
