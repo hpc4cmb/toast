@@ -5,6 +5,9 @@
 
 #include <_libtoast_mpi.hpp>
 
+// This fixes compilation errors with OpenMPI 4
+// (see https://github.com/hpc4cmb/toast/issues/298)
+struct ompi_communicator_t{};
 
 // Currently the only compiled code that uses MPI and needs to be bound to python is
 // the atmosphere simulation code.  If the number of things increases, we should split
