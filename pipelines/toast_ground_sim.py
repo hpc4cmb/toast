@@ -461,6 +461,11 @@ def main():
 
     expand_pointing(args, comm, data)
 
+    # Optionally rewrite the noise PSD:s in each observation to include
+    # elevation-dependence
+
+    get_elevation_noise(args, comm, data)
+
     # Purge the pointing if we are NOT going to export the
     # data to a TIDAS volume
     if (args.tidas is None) and (args.spt3g is None):
