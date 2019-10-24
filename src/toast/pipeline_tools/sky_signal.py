@@ -72,6 +72,14 @@ def add_pysm_args(parser):
         'it overrides any model defined in pysm_model"',
     )
 
+    parser.add_argument(
+        "--pysm-mpi-comm",
+        required=False,
+        help="MPI communicator used by the PySM operator, either 'rank' or 'group'",
+        dest="pysm_mpi_comm",
+    )
+    parser.set_defaults(pysm_mpi_comm="group")
+
     # The nside may already be added
     try:
         parser.add_argument(
@@ -145,7 +153,7 @@ def simulate_sky_signal(
     timer.start()
     # Convolve a signal TOD from PySM
     op_sim_pysm = OpSimPySM(
-        comm=comm.comm_rank,
+        comm=getattr(comm, "comm_" + args.pysm_mpi_comm),
         out=cache_prefix,
         pysm_model=args.pysm_model.split(","),
         pysm_precomputed_cmb_K_CMB=args.pysm_precomputed_cmb_K_CMB,
