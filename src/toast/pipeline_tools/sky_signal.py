@@ -145,7 +145,7 @@ def simulate_sky_signal(
     timer.start()
     # Convolve a signal TOD from PySM
     op_sim_pysm = OpSimPySM(
-        comm=comm.comm_rank,
+        comm=comm.comm_group,
         out=cache_prefix,
         pysm_model=args.pysm_model.split(","),
         pysm_precomputed_cmb_K_CMB=args.pysm_precomputed_cmb_K_CMB,
