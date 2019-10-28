@@ -269,19 +269,9 @@ class DistPixels(object):
         """
         from .._libtoast import global_to_local
 
-        lsm = np.zeros_like(gl)
-        pix = np.zeros_like(gl)
-        global_to_local(gl, self._submap, self._glob2loc, lsm, pix)
-        """
-        safe_gl = np.zeros(len(gl), dtype=np.int64)
-        good = gl >= 0
-        bad = gl < 0
-        safe_gl[good] = gl[good]
-        sm = np.floor_divide(safe_gl, self._submap)
-        pix = np.mod(safe_gl, self._submap)
-        pix[bad] = -1
-        lsm = self._glob2loc[sm]
-        """
+        lsm = np.zeros(gl.size, dtype=np.int64)
+        pix = np.zeros(gl.size, dtype=np.int64)
+        global_to_local(gl.astype(np.int64), self._submap, self._glob2loc, lsm, pix)
         return (lsm, pix)
 
     @function_timer
