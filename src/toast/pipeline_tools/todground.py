@@ -228,7 +228,7 @@ def add_todground_args(parser):
     # Modulate noise PSD by observing elevation
     parser.add_argument(
         "--elevation-noise-a",
-        required=False
+        required=False,
         type=np.float,
         help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
     )
