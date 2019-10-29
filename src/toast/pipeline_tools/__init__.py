@@ -38,6 +38,7 @@ from .sky_signal import (
 from .sss import add_sss_args, simulate_sss
 from .todground import (
     add_todground_args,
+    get_elevation_noise,
     get_breaks,
     load_schedule,
     load_weather,

@@ -9,6 +9,7 @@ import os
 import healpy as hp
 import numpy as np
 
+from .. import qarray
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 from ..weather import Weather
@@ -252,7 +253,7 @@ def get_elevation_noise(args, comm, data, key="noise"):
     timer.start()
     a = args.elevation_noise_a
     b = args.elevation_noise_b
-    fsample = args.samplerate
+    fsample = args.sample_rate
     for obs in data.obs:
         tod = obs["tod"]
         noise = obs[key]
@@ -274,7 +275,7 @@ def get_elevation_noise(args, comm, data, key="noise"):
                     detector=det, local_start=local_start, n=n, azel=True)
                 # Convert Az/El quaternion of the detector back into
                 # angles for the simulation.
-                theta, _ = qa.to_position(azelquat)
+                theta, _ = qarray.to_position(azelquat)
                 el = np.pi / 2 - theta
             # The model evaluates to uK / sqrt(Hz)
             # Translate it to K_CMB ** 2
