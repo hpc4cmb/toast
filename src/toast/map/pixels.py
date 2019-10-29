@@ -16,7 +16,7 @@ from ..op import Operator
 
 from ..cache import Cache
 
-from .._libtoast import global_to_local as libtoast_g2l
+from .._libtoast import global_to_local as libtoast_global_to_local
 
 
 class OpLocalPixels(Operator):
@@ -269,7 +269,7 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
-        return libtoast_g2l(gl, self._submap, self._glob2loc)
+        return libtoast_global_to_local(gl, self._submap, self._glob2loc)
 
     @function_timer
     def duplicate(self):
