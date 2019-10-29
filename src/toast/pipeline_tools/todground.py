@@ -279,7 +279,9 @@ def get_elevation_noise(args, comm, data, key="noise"):
             # The model evaluates to uK / sqrt(Hz)
             # Translate it to K_CMB ** 2
             el = np.median(el)
-            psd[:] = (a / np.sin(el) + b) ** 2 * fsample * 1e-12
+            old_net = np.median(psd[-10:])
+            new_net = (a / np.sin(el) + b) ** 2 * fsample * 1e-12
+            psd[:] *= new_net / old_net
     if comm.comm_world is None or comm.world_rank == 0:
         timer.report_clear("Elevation noise")
     return
