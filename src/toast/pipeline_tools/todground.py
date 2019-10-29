@@ -272,7 +272,8 @@ def get_elevation_noise(args, comm, data, key="noise"):
                 local_start = nlocal // 2 - nlocal // 20
                 n = nlocal // 10
                 azelquat = tod.read_pntg(
-                    detector=det, local_start=local_start, n=n, azel=True)
+                    detector=det, local_start=local_start, n=n, azel=True
+                )
                 # Convert Az/El quaternion of the detector back into
                 # angles for the simulation.
                 theta, _ = qarray.to_position(azelquat)
