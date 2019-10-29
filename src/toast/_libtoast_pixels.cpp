@@ -5,37 +5,61 @@
 
 #include <_libtoast.hpp>
 
-void global_to_local(py::array_t <long> global_pixels,
-                     long npix_submap,
-                     py::array_t <long> global2local,
-                     py::array_t <long> local_submaps,
-                     py::array_t <long> local_pixels) {
-    auto fast_global_pixels = global_pixels.unchecked <1>();
-    auto fast_global2local = global2local.unchecked <1>();
-    auto fast_submap = local_submaps.mutable_unchecked <1>();
-    auto fast_local_pixels = local_pixels.mutable_unchecked <1>();
 
-    double npix_submap_inv = 1. / npix_submap;
-    size_t nsamp = global_pixels.size();
+template <typename T>
+py::tuple global_to_local(
+    py::array_t <T> global_pixels,
+    size_t npix_submap,
+    py::array_t <int64_t> global2local
+    ) {
+    // Get raw pointers to input.
+    py::buffer_info gpinfo = global_pixels.request();
+    py::buffer_info glinfo = global2local.request();
+    T * rawgpdata = reinterpret_cast <T *> (gpinfo.ptr);
+    int64_t * rawgldata = reinterpret_cast <int64_t *> (glinfo.ptr);
 
-    #pragma omp parallel for schedule(static, 64)
-    for (size_t i = 0; i < nsamp; ++i) {
-        long pixel = fast_global_pixels(i);
-        long submap = 0;
-        if (pixel < 0) {
-            pixel = -1;
-        } else {
-            submap = pixel * npix_submap_inv;
-            pixel -= submap * npix_submap;
-        }
-        fast_local_pixels(i) = pixel;
-        submap = fast_global2local(submap);
-        fast_submap(i) = submap;
-    }
+    size_t nsamp = gpinfo.size;
+
+    // Allocate output arrays.
+    auto local_submaps = py::array_t <T> ();
+    auto local_pixels = py::array_t <T> ();
+    local_submaps.resize({nsamp});
+    local_pixels.resize({nsamp});
+
+    // Get raw pointers to outputs
+    py::buffer_info lsinfo = local_submaps.request();
+    py::buffer_info lpinfo = local_pixels.request();
+    T * rawlsdata = reinterpret_cast <T *> (lsinfo.ptr);
+    T * rawlpdata = reinterpret_cast <T *> (lpinfo.ptr);
+
+    // Call internal function
+    toast::global_to_local <T> (
+        nsamp, rawgpdata, npix_submap,
+        rawgldata, rawlsdata, rawlpdata
+        );
+    return py::make_tuple(local_submaps, local_pixels);
 }
 
 void init_pixels(py::module & m) {
     m.doc() = "Compiled kernels to support TOAST pixels classes";
 
-    m.def("global_to_local", &global_to_local);
+    // Register versions of the function for likely integer types we want to
+    // support.  We do not support unsigned types since we use the "-1" value
+    // to mean invalid pixels.
+    m.def("global_to_local", &global_to_local <int64_t>, py::arg("global_pixels"),
+          py::arg("npix_submap"), py::arg(
+              "global2local"), R"(
+        Convert global pixel indices to local submaps and pixels within the submap.
+
+        Args:
+            global_pixels (array):  The global pixel indices.
+            npix_submap (int):  The number of pixels in each submap.
+            global2local (array, int64):  The local submap for each global submap.
+
+        Returns:
+            (tuple):  The (local submap, pixel within submap) for each global pixel.
+
+    )");
+    m.def("global_to_local", &global_to_local <int32_t> );
+    m.def("global_to_local", &global_to_local <int16_t> );
 }
