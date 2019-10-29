@@ -16,6 +16,8 @@ from ..op import Operator
 
 from ..cache import Cache
 
+from .._libtoast import global_to_local as libtoast_global_to_local
+
 
 class OpLocalPixels(Operator):
     """Operator which computes the set of locally hit pixels.
@@ -267,22 +269,7 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
-        from .._libtoast import global_to_local
-
-        lsm = np.zeros_like(gl)
-        pix = np.zeros_like(gl)
-        global_to_local(gl, self._submap, self._glob2loc, lsm, pix)
-        """
-        safe_gl = np.zeros(len(gl), dtype=np.int64)
-        good = gl >= 0
-        bad = gl < 0
-        safe_gl[good] = gl[good]
-        sm = np.floor_divide(safe_gl, self._submap)
-        pix = np.mod(safe_gl, self._submap)
-        pix[bad] = -1
-        lsm = self._glob2loc[sm]
-        """
-        return (lsm, pix)
+        return libtoast_global_to_local(gl, self._submap, self._glob2loc)
 
     @function_timer
     def duplicate(self):
@@ -442,8 +429,9 @@ class DistPixels(object):
             if "ordering" in h[1].header and "NEST" in h[1].header["ordering"].upper():
                 map_nested = True
             if map_nested != self._nest:
-                errors += "Wrong ordering: {} has nest={}, expected nest={}\n" "".format(
-                    path, map_nested, self._nest
+                errors += (
+                    "Wrong ordering: {} has nest={}, expected nest={}\n"
+                    "".format(path, map_nested, self._nest)
                 )
             map_nnz = h[1].header["tfields"]
             if map_nnz != self._nnz:
@@ -714,9 +702,7 @@ class DistPixels(object):
             while submap_off < nsubmap:
                 if submap_off + ncomm > nsubmap:
                     ncomm = nsubmap - submap_off
-                if (
-                    np.any(allowners[submap_off : submap_off + ncomm] != NO_OWNER)
-                ):
+                if np.any(allowners[submap_off : submap_off + ncomm] != NO_OWNER):
                     # at least one submap has some hits.  reduce.
                     for c in range(ncomm):
                         if allowners[submap_off + c] == self._comm.rank:

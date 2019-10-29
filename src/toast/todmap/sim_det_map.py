@@ -199,8 +199,8 @@ class OpSimScan(Operator):
                     scan_map_float64(
                         self._map.submap,
                         nnz,
-                        sm,
-                        lpix,
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
                         self._map.flatdata,
                         weights.astype(np.float64).reshape(-1),
                         maptod,
@@ -209,8 +209,8 @@ class OpSimScan(Operator):
                     scan_map_float32(
                         self._map.submap,
                         nnz,
-                        sm,
-                        lpix,
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
                         self._map.flatdata,
                         weights.astype(np.float64).reshape(-1),
                         maptod,
