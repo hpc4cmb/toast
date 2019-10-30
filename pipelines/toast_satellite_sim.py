@@ -361,7 +361,8 @@ def main():
             outpath = os.path.join(args.outdir, "mc_{:03d}".format(mc))
 
             pipeline_tools.simulate_noise(
-                args, comm, data, mc, "tot_signal", overwrite=True)
+                args, comm, data, mc, "tot_signal", overwrite=True
+            )
 
             # add sky signal
             pipeline_tools.add_signal(args, comm, data, "tot_signal", signalname)
@@ -421,7 +422,8 @@ def main():
             outpath = os.path.join(args.outdir, "mc_{:03d}".format(mc))
 
             pipeline_tools.simulate_noise(
-                args, comm, data, mc, "tot_signal", overwrite=True)
+                args, comm, data, mc, "tot_signal", overwrite=True
+            )
 
             # add sky signal
             pipeline_tools.add_signal(args, comm, data, "tot_signal", signalname)
