@@ -44,7 +44,7 @@ def add_pointing_args(parser):
         "--no-single-precision-pointing",
         required=False,
         action="store_false",
-        help="Use single precision for pointing in memory.",
+        help="Use double precision for pointing in memory.",
         dest="single_precision_pointing",
     )
     parser.set_defaults(single_precision_pointing=False)

@@ -38,53 +38,7 @@ from toast.timing import dump as dump_timing
 
 from toast.todmap import TODGround
 
-from toast.pipeline_tools import (
-    add_debug_args,
-    add_dist_args,
-    get_time_communicators,
-    get_comm,
-    add_polyfilter_args,
-    apply_polyfilter,
-    add_groundfilter_args,
-    apply_groundfilter,
-    add_atmosphere_args,
-    simulate_atmosphere,
-    scale_atmosphere_by_frequency,
-    update_atmospheric_noise_weights,
-    add_noise_args,
-    simulate_noise,
-    get_analytic_noise,
-    add_gainscrambler_args,
-    scramble_gains,
-    add_pointing_args,
-    expand_pointing,
-    get_submaps,
-    add_madam_args,
-    setup_madam,
-    apply_madam,
-    add_sky_map_args,
-    add_pysm_args,
-    scan_sky_signal,
-    simulate_sky_signal,
-    add_sss_args,
-    simulate_sss,
-    add_signal,
-    copy_signal,
-    add_tidas_args,
-    output_tidas,
-    add_spt3g_args,
-    output_spt3g,
-    add_todground_args,
-    get_breaks,
-    Telescope,
-    Focalplane,
-    Site,
-    Schedule,
-    CES,
-    load_schedule,
-    load_weather,
-    add_mc_args,
-)
+from toast import pipeline_tools
 
 # import warnings
 # warnings.filterwarnings('error')
@@ -106,22 +60,22 @@ def parse_arguments(comm):
         fromfile_prefix_chars="@",
     )
 
-    add_dist_args(parser)
-    add_debug_args(parser)
-    add_todground_args(parser)
-    add_pointing_args(parser)
-    add_polyfilter_args(parser)
-    add_groundfilter_args(parser)
-    add_atmosphere_args(parser)
-    add_noise_args(parser)
-    add_gainscrambler_args(parser)
-    add_madam_args(parser)
-    add_sky_map_args(parser)
-    add_pysm_args(parser)
-    add_sss_args(parser)
-    add_tidas_args(parser)
-    add_spt3g_args(parser)
-    add_mc_args(parser)
+    pipeline_tools.add_dist_args(parser)
+    pipeline_tools.add_debug_args(parser)
+    pipeline_tools.add_todground_args(parser)
+    pipeline_tools.add_pointing_args(parser)
+    pipeline_tools.add_polyfilter_args(parser)
+    pipeline_tools.add_groundfilter_args(parser)
+    pipeline_tools.add_atmosphere_args(parser)
+    pipeline_tools.add_noise_args(parser)
+    pipeline_tools.add_gainscrambler_args(parser)
+    pipeline_tools.add_madam_args(parser)
+    pipeline_tools.add_sky_map_args(parser)
+    pipeline_tools.add_pysm_args(parser)
+    pipeline_tools.add_sss_args(parser)
+    pipeline_tools.add_tidas_args(parser)
+    pipeline_tools.add_spt3g_args(parser)
+    pipeline_tools.add_mc_args(parser)
 
     parser.add_argument(
         "--outdir", required=False, default="out", help="Output directory"
@@ -210,7 +164,7 @@ def load_focalplanes(args, comm, schedules):
     if comm.world_rank == 0:
         for fpfile in args.focalplane.split(","):
             focalplanes.append(
-                Focalplane(
+                pipeline_tools.Focalplane(
                     fname_pickle=fpfile,
                     sample_rate=args.sample_rate,
                     radius_deg=args.focalplane_radius_deg,
@@ -356,7 +310,7 @@ def create_observations(args, comm, schedules):
         all_ces = schedule.ceslist
         nces = len(all_ces)
 
-        breaks = get_breaks(comm, all_ces, args)
+        breaks = pipeline_tools.get_breaks(comm, all_ces, args)
 
         groupdist = distribute_uniform(nces, comm.ngroups, breaks=breaks)
         group_firstobs = groupdist[comm.group][0]
@@ -427,21 +381,21 @@ def main():
     timer0 = Timer()
     timer0.start()
 
-    mpiworld, procs, rank, comm = get_comm()
+    mpiworld, procs, rank, comm = pipeline_tools.get_comm()
 
     args, comm = parse_arguments(comm)
 
     # Initialize madam parameters
 
-    madampars = setup_madam(args)
+    madampars = pipeline_tools.setup_madam(args)
 
     # Load and broadcast the schedule file
 
-    schedules = load_schedule(args, comm)
+    schedules = pipeline_tools.load_schedule(args, comm)
 
     # Load the weather and append to schedules
 
-    load_weather(args, comm, schedules)
+    pipeline_tools.load_weather(args, comm, schedules)
 
     # load or simulate the focalplane
 
@@ -454,12 +408,17 @@ def main():
 
     # Split the communicator for day and season mapmaking
 
-    time_comms = get_time_communicators(args, comm, data)
+    time_comms = pipeline_tools.get_time_communicators(args, comm, data)
 
     # Expand boresight quaternions into detector pointing weights and
     # pixel numbers
 
-    expand_pointing(args, comm, data)
+    pipeline_tools.expand_pointing(args, comm, data)
+
+    # Optionally rewrite the noise PSD:s in each observation to include
+    # elevation-dependence
+
+    pipeline_tools.get_elevation_noise(args, comm, data)
 
     # Purge the pointing if we are NOT going to export the
     # data to a TIDAS volume
@@ -470,15 +429,17 @@ def main():
 
     # Prepare auxiliary information for distributed map objects
 
-    _, localsm, subnpix = get_submaps(args, comm, data)
+    _, localsm, subnpix = pipeline_tools.get_submaps(args, comm, data)
 
     if args.pysm_model:
         focalplanes = [s.telescope.focalplane.detector_data for s in schedules]
-        signalname = simulate_sky_signal(
+        signalname = pipeline_tools.simulate_sky_signal(
             args, comm, data, focalplanes, subnpix, localsm, "signal"
         )
     else:
-        signalname = scan_sky_signal(args, comm, data, localsm, subnpix, "signal")
+        signalname = pipeline_tools.scan_sky_signal(
+            args, comm, data, localsm, subnpix, "signal"
+        )
 
     # Set up objects to take copies of the TOD at appropriate times
 
@@ -494,7 +455,7 @@ def main():
 
     for mc in range(firstmc, firstmc + nsimu):
 
-        simulate_atmosphere(args, comm, data, mc, totalname)
+        pipeline_tools.simulate_atmosphere(args, comm, data, mc, totalname)
 
         # Loop over frequencies with identical focal planes and identical
         # atmospheric noise.
@@ -510,37 +471,43 @@ def main():
 
             # Make a copy of the atmosphere so we can scramble the gains and apply
             # frequency-dependent scaling.
-            copy_signal(args, comm, data, totalname, totalname_freq)
+            pipeline_tools.copy_signal(args, comm, data, totalname, totalname_freq)
 
-            scale_atmosphere_by_frequency(
+            pipeline_tools.scale_atmosphere_by_frequency(
                 args, comm, data, freq=freq, mc=mc, cache_name=totalname_freq
             )
 
-            update_atmospheric_noise_weights(args, comm, data, freq, mc)
+            pipeline_tools.update_atmospheric_noise_weights(args, comm, data, freq, mc)
 
             # Add previously simulated sky signal to the atmospheric noise.
 
-            add_signal(args, comm, data, totalname_freq, signalname, purge=(nsimu == 1))
+            pipeline_tools.add_signal(
+                args, comm, data, totalname_freq, signalname, purge=(nsimu == 1)
+            )
 
             mcoffset = ifreq * 1000000
 
-            simulate_noise(args, comm, data, mc + mcoffset, totalname_freq)
+            pipeline_tools.simulate_noise(
+                args, comm, data, mc + mcoffset, totalname_freq
+            )
 
-            simulate_sss(args, comm, data, mc + mcoffset, totalname_freq)
+            pipeline_tools.simulate_sss(args, comm, data, mc + mcoffset, totalname_freq)
 
-            scramble_gains(args, comm, data, mc + mcoffset, totalname_freq)
+            pipeline_tools.scramble_gains(
+                args, comm, data, mc + mcoffset, totalname_freq
+            )
 
             if (mc == firstmc) and (ifreq == 0):
                 # For the first realization and frequency, optionally
                 # export the timestream data.
-                output_tidas(args, comm, data, totalname)
-                output_spt3g(args, comm, data, totalname)
+                pipeline_tools.output_tidas(args, comm, data, totalname)
+                pipeline_tools.output_spt3g(args, comm, data, totalname)
 
             outpath = setup_output(args, comm, mc + mcoffset, freq)
 
             # Bin and destripe maps
 
-            apply_madam(
+            pipeline_tools.apply_madam(
                 args,
                 comm,
                 data,
@@ -558,13 +525,13 @@ def main():
 
                 # Filter signal
 
-                apply_polyfilter(args, comm, data, totalname_freq)
+                pipeline_tools.apply_polyfilter(args, comm, data, totalname_freq)
 
-                apply_groundfilter(args, comm, data, totalname_freq)
+                pipeline_tools.apply_groundfilter(args, comm, data, totalname_freq)
 
                 # Bin filtered maps
 
-                apply_madam(
+                pipeline_tools.apply_madam(
                     args,
                     comm,
                     data,

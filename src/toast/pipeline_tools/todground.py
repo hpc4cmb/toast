@@ -9,6 +9,7 @@ import os
 import healpy as hp
 import numpy as np
 
+from .. import qarray
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 from ..weather import Weather
@@ -44,7 +45,7 @@ class Schedule:
 class Site:
     def __init__(self, name, lat, lon, alt, weather=None):
         """ Instantiate a Site object
-        
+
         args:
             name (str)
             lat (str) :  Site latitude as a pyEphem string
@@ -225,6 +226,66 @@ def add_todground_args(parser):
         )
     except argparse.ArgumentError:
         pass
+    # Modulate noise PSD by observing elevation
+    parser.add_argument(
+        "--elevation-noise-a",
+        required=False,
+        type=np.float,
+        help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
+    )
+    parser.add_argument(
+        "--elevation-noise-b",
+        default=0,
+        type=np.float,
+        help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
+    )
+
+    return
+
+
+@function_timer
+def get_elevation_noise(args, comm, data, key="noise"):
+    """ Insert elevation-dependent noise
+    """
+    if args.elevation_noise_a == 0 and args.elevation_noise_b == 0:
+        return
+    timer = Timer()
+    timer.start()
+    a = args.elevation_noise_a
+    b = args.elevation_noise_b
+    fsample = args.sample_rate
+    for obs in data.obs:
+        tod = obs["tod"]
+        noise = obs[key]
+        for det in tod.local_dets:
+            if det not in noise.keys:
+                raise RuntimeError(
+                    'Detector "{}" does not have a PSD in the noise object'.format(det)
+                )
+            # freq = noise.freq[det]
+            psd = noise.psd(det)
+            try:
+                # Some TOD classes provide a shortcut to Az/El
+                _, el = tod.read_azel(detector=det)
+            except Exception as e:
+                nlocal = tod.local_samples[1]
+                local_start = nlocal // 2 - nlocal // 20
+                n = nlocal // 10
+                azelquat = tod.read_pntg(
+                    detector=det, local_start=local_start, n=n, azel=True
+                )
+                # Convert Az/El quaternion of the detector back into
+                # angles for the simulation.
+                theta, _ = qarray.to_position(azelquat)
+                el = np.pi / 2 - theta
+            # The model evaluates to uK / sqrt(Hz)
+            # Translate it to K_CMB ** 2
+            el = np.median(el)
+            old_net = np.median(psd[-10:])
+            new_net = (a / np.sin(el) + b) ** 2 * fsample * 1e-12
+            psd[:] *= new_net / old_net
+    if comm.comm_world is None or comm.world_rank == 0:
+        timer.report_clear("Elevation noise")
     return
 
 
@@ -365,7 +426,7 @@ def min_sso_dist(el, azmin, azmax, sso_el1, sso_az1, sso_el2, sso_az2):
 @function_timer
 def load_schedule(args, comm):
     """ Load the observing schedule(s).
-    
+
     Returns:
         schedules (list): List of tuples of the form
             (`site`, `all_ces`) where `all_ces` is
