@@ -54,6 +54,7 @@ def parse_arguments(comm, procs):
     pipeline_tools.add_mc_args(parser)
     pipeline_tools.add_noise_args(parser)
     pipeline_tools.add_todsatellite_args(parser)
+    pipeline_tools.add_conviqt_args(parser)
 
     parser.add_argument(
         "--outdir", required=False, default="out", help="Output directory"
@@ -147,6 +148,7 @@ def load_focalplane(args, comm):
             fake["fmin"] = 1.0e-5
             fake["alpha"] = 1.0
             fake["NET"] = 1.0
+            fake["polangle_deg"] = 0
             fake["color"] = "r"
             fp = {}
             fp["bore"] = fake
@@ -265,6 +267,7 @@ def create_observations(args, comm, focalplane, groupsize):
         obs["baselines"] = None
         obs["noise"] = noise
         obs["id"] = ob
+        obs["focalplane"] = pipeline_tools.Focalplane(focalplane)
 
         data.obs.append(obs)
 
@@ -334,6 +337,10 @@ def main():
 
     signalname = None
     skyname = pipeline_tools.simulate_sky_signal(args, comm, data, [focalplane], "signal")
+    if skyname is not None:
+        signalname = skyname
+
+    skyname = pipeline_tools.apply_conviqt(args, comm, data, "signal")
     if skyname is not None:
         signalname = skyname
 
