@@ -30,10 +30,12 @@ class OpSimConviqt(Operator):
     Args:
         comm (MPI.Comm) : MPI communicator to use for the convolution.
             libConviqt does not work without MPI.
-        sky_file (str) : File containing the sky a_lm expansion.
+        sky_file (dict or str) : File containing the sky a_lm expansion.
             Tag "DETECTOR" will be replaced with the detector name
-        beam_file (str) : File containing the beam a_lm expansion.
-            Tag "DETECTOR" will be replaced with the detector name
+            If sky_file is a dict, then each detector must have an entry.
+        beam_file (dict or str) : File containing the beam a_lm expansion.
+            Tag "DETECTOR" will be replaced with the detector name.
+            If beam_file is a dict, then each detector must have an entry.
         lmax (int) : Maximum ell (and m).  Actual resolution in the
             Healpix FITS file may differ.  If not set, will use the
             maximum expansion order from file.
@@ -132,10 +134,16 @@ class OpSimConviqt(Operator):
         for det in detectors:
             verbose = self._comm.rank == 0 and self._verbosity > 0
 
-            sky_file = self._sky_file.replace("DETECTOR", det)
+            try:
+                sky_file = self._sky_file[det]
+            except TypeError:
+                sky_file = self._sky_file.replace("DETECTOR", det)
             sky = self.get_sky(sky_file, det, verbose)
 
-            beam_file = self._beam_file.replace("DETECTOR", det)
+            try:
+                beam_file = self._beam_file[det]
+            except TypeError:
+                beam_file = self._beam_file.replace("DETECTOR", det)
             beam = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
@@ -179,9 +187,9 @@ class OpSimConviqt(Operator):
         """
         if det not in focalplane:
             raise RuntimeError("focalplane does not include {}".format(det))
-        if "pol_angle_deg" in focalplane:
+        if "pol_angle_deg" in focalplane[det]:
             psipol = np.radians(focalplane[det]["pol_angle_deg"])
-        elif "pol_angle_rad" in focalplane:
+        elif "pol_angle_rad" in focalplane[det]:
             psipol = focalplane[det]["pol_angle_rad"]
         else:
             raise RuntimeError("focalplane[{}] does not include psi".format(det))
