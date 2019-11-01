@@ -46,7 +46,9 @@ class OpSimConviqt(Operator):
         fwhm (float) : width of a symmetric gaussian beam [in arcmin] already
             present in the skyfile (will be deconvolved away).
         order (int) : conviqt order parameter (expert mode)
-        calibrate (bool) : Calibrate intensity to 1.0, rather than (1+epsilon)/2
+        calibrate (bool) : Calibrate intensity to 1.0, rather than
+            (1 + epsilon) / 2.  Calibrate has no effect if the beam is found
+            to be normalized rather than scaled with the leakage factor.
         dxx (bool) : The beam frame is either Dxx or Pxx.  Pxx includes the
             rotation to polarization sensitive basis, Dxx does not.  When
             Dxx=True, detector orientation from attitude quaternions is
@@ -154,7 +156,7 @@ class OpSimConviqt(Operator):
 
             convolved_data = self.convolve(sky, beam, detector, pnt, det, verbose)
 
-            self.calibrate(data, det, convolved_data, verbose)
+            self.calibrate(data, det, beam, convolved_data, verbose)
             self.cache(data, det, convolved_data, verbose)
 
             del pnt, detector, beam, sky
@@ -330,14 +332,14 @@ class OpSimConviqt(Operator):
 
         return convolved_data
 
-    def calibrate(self, data, det, convolved_data, verbose):
+    def calibrate(self, data, det, beam, convolved_data, verbose):
         """ By default, libConviqt results returns a signal that conforms to
         TOD = (1 + epsilon) / 2 * intensity + (1 - epsilon) / 2 * polarization.
 
         When calibrate = True, we rescale the TOD to
         TOD = intensity + (1 - epsilon) / (1 + epsilon) * polarization
         """
-        if not self.calibrate:
+        if not self.calibrate or beam.normalized():
             return
         timer = Timer()
         timer.start()
