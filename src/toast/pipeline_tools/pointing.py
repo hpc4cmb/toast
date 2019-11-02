@@ -11,7 +11,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
 from ..map import DistPixels
-from ..todmap import OpMadam, OpLocalPixels, OpPointingHpix, get_submaps_nested
+from ..todmap import OpMadam, OpPointingHpix
 
 
 def add_pointing_args(parser):
@@ -25,6 +25,13 @@ def add_pointing_args(parser):
         )
     except argparse.ArgumentError:
         pass
+    parser.add_argument(
+        "--nside-submap",
+        required=False,
+        default=16,
+        type=np.int,
+        help="Number of sub pixels is 12 * nside-submap ** 2",
+    )
     # `coord` may already be added
     try:
         parser.add_argument(
@@ -97,6 +104,7 @@ def expand_pointing(args, comm, data):
         nest=True,
         mode="IQU",
         single_precision=args.single_precision_pointing,
+        nside_submap=args.nside_submap,
     )
 
     pointing.exec(data)
@@ -107,24 +115,3 @@ def expand_pointing(args, comm, data):
         timer.report_clear("Pointing generation")
 
     return
-
-
-@function_timer
-def get_submaps(args, comm, data):
-    """ Get a list of locally hit pixels and submaps on every process.
-
-    """
-    log = Logger.get()
-    if comm.world_rank == 0:
-        log.info("Scanning local submaps")
-    timer = Timer()
-    timer.start()
-
-    localpix, localsm, subnpix = get_submaps_nested(data, args.nside)
-
-    if comm.comm_world is not None:
-        comm.comm_world.barrier()
-    if comm.world_rank == 0:
-        timer.report_clear("Identify local submaps")
-
-    return localpix, localsm, subnpix

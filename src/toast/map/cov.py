@@ -36,12 +36,12 @@ def covariance_invert(npp, threshold, rcond=None):
     if nppdata is None:
         nppdata = np.empty(shape=0, dtype=np.float64)
     if rcond is not None:
-        if rcond.size != npp.size:
+        if rcond.npix != npp.npix:
             raise RuntimeError(
                 "covariance matrix and condition number map must have same number "
                 "of pixels"
             )
-        if rcond.submap != npp.submap:
+        if rcond.npix_submap != npp.npix_submap:
             raise RuntimeError(
                 "covariance matrix and condition number map must have same submap size"
             )
@@ -52,13 +52,13 @@ def covariance_invert(npp, threshold, rcond=None):
         if rdata is None:
             rdata = np.empty(shape=0, dtype=np.float64)
         cov_eigendecompose_diag(
-            npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, True
+            npp.nsubmap, npp.npix_submap, mapnnz, nppdata, rdata, threshold, True
         )
 
     else:
-        temp = np.zeros(shape=(npp.nsubmap * npp.submap), dtype=np.float64)
+        temp = np.zeros(shape=(npp.nsubmap * npp.npix_submap), dtype=np.float64)
         cov_eigendecompose_diag(
-            npp.nsubmap, npp.submap, mapnnz, nppdata, temp, threshold, True
+            npp.nsubmap, npp.npix_submap, mapnnz, nppdata, temp, threshold, True
         )
     return
 
@@ -81,9 +81,9 @@ def covariance_multiply(npp1, npp2):
     """
     mapnnz = int(((np.sqrt(8 * npp1.nnz) - 1) / 2) + 0.5)
 
-    if npp1.size != npp2.size:
+    if npp1.npix != npp2.npix:
         raise RuntimeError("covariance matrices must have same number of pixels")
-    if npp1.submap != npp2.submap:
+    if npp1.npix_submap != npp2.npix_submap:
         raise RuntimeError("covariance matrices must have same submap size")
     if npp1.nnz != npp2.nnz:
         raise RuntimeError("covariance matrices must have same NNZ values")
@@ -94,7 +94,7 @@ def covariance_multiply(npp1, npp2):
     npp2data = npp2.flatdata
     if npp2data is None:
         npp2data = np.empty(shape=0, dtype=np.float64)
-    cov_mult_diag(npp1.nsubmap, npp1.submap, mapnnz, npp1data, npp2data)
+    cov_mult_diag(npp1.nsubmap, npp1.npix_submap, mapnnz, npp1data, npp2data)
     return
 
 
@@ -115,9 +115,9 @@ def covariance_apply(npp, m):
     """
     mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
 
-    if m.size != npp.size:
+    if m.npix != npp.npix:
         raise RuntimeError("covariance matrix and map must have same number of pixels")
-    if m.submap != npp.submap:
+    if m.npix_submap != npp.npix_submap:
         raise RuntimeError("covariance matrix and map must have same submap size")
     if m.nnz != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
@@ -128,7 +128,7 @@ def covariance_apply(npp, m):
     mdata = m.flatdata
     if mdata is None:
         mdata = np.empty(shape=0, dtype=np.float64)
-    cov_apply_diag(npp.nsubmap, npp.submap, mapnnz, nppdata, mdata)
+    cov_apply_diag(npp.nsubmap, npp.npix_submap, mapnnz, nppdata, mdata)
     return
 
 
@@ -147,15 +147,7 @@ def covariance_rcond(npp):
     """
     mapnnz = int(((np.sqrt(8 * npp.nnz) - 1) / 2) + 0.5)
 
-    rcond = DistPixels(
-        comm=npp.comm,
-        size=npp.size,
-        nnz=1,
-        dtype=np.float64,
-        submap=npp.submap,
-        local=npp.local,
-        nest=npp.nested,
-    )
+    rcond = npp.duplicate(copy=False, nnz=1)
 
     threshold = np.finfo(np.float64).eps
 
@@ -168,7 +160,7 @@ def covariance_rcond(npp):
         rdata = np.empty(shape=0, dtype=np.float64)
 
     cov_eigendecompose_diag(
-        npp.nsubmap, npp.submap, mapnnz, nppdata, rdata, threshold, False
+        npp.nsubmap, npp.npix_submap, mapnnz, nppdata, rdata, threshold, False
     )
 
     return rcond

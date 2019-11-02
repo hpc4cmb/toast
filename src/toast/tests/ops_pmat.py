@@ -11,7 +11,7 @@ import numpy as np
 
 from .._libtoast import pointing_matrix_healpix
 from ..healpix import HealpixPixels
-from ..todmap import TODHpixSpiral, OpPointingHpix, OpLocalPixels
+from ..todmap import TODHpixSpiral, OpPointingHpix
 from .. import qarray as qa
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
@@ -171,9 +171,6 @@ class OpPointingHpixTest(MPITestCase):
             rank = self.comm.rank
         op = OpPointingHpix()
         op.exec(self.data)
-
-        lc = OpLocalPixels()
-        local = lc.exec(self.data)
 
         handle = None
         if rank == 0:

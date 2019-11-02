@@ -19,104 +19,6 @@ from ..cache import Cache
 from .._libtoast import global_to_local as libtoast_global_to_local
 
 
-class OpLocalPixels(Operator):
-    """Operator which computes the set of locally hit pixels.
-
-    Args:
-        pixels (str): the name of the cache object (<pixels>_<detector>)
-            containing the pixel indices to use.
-
-    """
-
-    def __init__(
-        self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False, verbose=False
-    ):
-
-        # We call the parent class constructor, which currently does nothing
-        super().__init__()
-        # madam uses time-based distribution
-        self._timedist = True
-        self._pixels = pixels
-        self._pixmin = pixmin
-        self._pixmax = pixmax
-        self._no_hitmap = no_hitmap
-        self._verbose = verbose
-
-    @function_timer
-    def exec(self, data):
-        """Iterate over all observations and detectors and compute local pixels.
-
-        Args:
-            data (toast.Data): The distributed data.
-
-        Returns:
-            (array): An array of the locally hit pixel indices.
-
-        """
-        # initialize the local pixel set
-        local = None
-        timer = Timer()
-        timer.start()
-
-        if self._no_hitmap:
-            # Avoid allocating extra memory at the cost of slower operation
-            for obs in data.obs:
-                tod = obs["tod"]
-                for det in tod.local_dets:
-                    pixelsname = "{}_{}".format(self._pixels, det)
-                    pixels = tod.cache.reference(pixelsname)
-                    if local is None:
-                        local = np.unique(pixels)
-                    else:
-                        local = np.unique(np.concatenate((local, np.unique(pixels))))
-                    del pixels
-            if self._verbose:
-                timer.report_clear("Identify unique pixels")
-        else:
-            pixmin = self._pixmin
-            pixmax = self._pixmax
-
-            if self._pixmin is None or self._pixmax is None:
-                # Find the overall pixel range before allocating the hit map
-                pixmin = 2 ** 60
-                pixmax = -(2 ** 60)
-                for obs in data.obs:
-                    tod = obs["tod"]
-                    for det in tod.local_dets:
-                        pixelsname = "{}_{}".format(self._pixels, det)
-                        pixels = tod.cache.reference(pixelsname)
-                        pixmin = min(pixmin, np.amin(pixels))
-                        pixmax = max(pixmax, np.amax(pixels))
-                        del pixels
-                if self._verbose:
-                    timer.report_clear("Identify pixel range")
-
-                if pixmin == 2 ** 60 and pixmax == -(2 ** 60):
-                    # No pixels
-                    return np.array([], dtype=np.int64)
-
-            npix = pixmax - pixmin + 1
-            hitmap = np.zeros(npix, dtype=np.bool)
-
-            for obs in data.obs:
-                tod = obs["tod"]
-                for det in tod.local_dets:
-                    pixelsname = "{}_{}".format(self._pixels, det)
-                    pixels = tod.cache.reference(pixelsname)
-                    hitmap[pixels - pixmin] = True
-                    del pixels
-
-            if self._verbose:
-                timer.report_clear("Build hit map")
-
-            local = np.arange(pixmin, pixmax + 1, dtype=np.int)[hitmap]
-
-            if self._verbose:
-                timer.report_clear("hit map to list")
-
-        return local
-
-
 class DistPixels(object):
     """A distributed map with multiple values per pixel.
 
@@ -131,47 +33,53 @@ class DistPixels(object):
     "owner" for operations like serialization.
 
     Args:
+        data (toast.Data) : TOAST data object containing the
+            pixelization metadata
         comm (mpi4py.MPI.Comm): the MPI communicator containing all
-            processes (or None).
-        size (int): the total number of pixels.
+            processes (if None, use data.comm.comm_world).
+        npix (int): the total number of pixels.
+        npix_submap (int): the locally stored data is in units of this size.
+        local_submaps (array): the list of local submaps (integers).
         nnz (int): the number of values per pixel.
-        submap (int): the locally stored data is in units of this size.
-        local (array): the list of local submaps (integers).
-        localpix (array): the list of local pixels (integers).
         nest (bool): nested pixel order flag
-
+        pixels (str):  cache prefix used for pixel numbers
     """
 
     def __init__(
         self,
+        data,
         comm=None,
-        size=0,
         nnz=1,
         dtype=np.float64,
-        submap=None,
-        local=None,
-        localpix=None,
+        npix=None,  # if data is None
+        npix_submap=None,  # if data is None
+        local_submaps=None,  # if data is None
         nest=True,
+        pixels="pixels",
     ):
-        self._comm = comm
-        self._size = size
+        if data is None:
+            self._npix = npix
+            self._npix_submap = npix_submap
+            self._local_submaps = local_submaps
+            self._comm = comm
+            if self._npix % self._npix_submap != 0:
+                raise RuntimeError(
+                    "submap size must evenly divide into total number of pixels"
+                )
+            self._nglob = self._npix // self._npix_submap
+        else:
+            self._npix = data["{}_npix".format(pixels)]
+            self._npix_submap = data["{}_npix_submap".format(pixels)]
+            self._local_submaps = data["{}_local_submaps".format(pixels)]
+            self._nglob = data["{}_nsubmap".format(pixels)]
+            if comm is None:
+                self._comm = data.comm.comm_world
+            else:
+                self._comm = comm
         self._nnz = nnz
         self._dtype = dtype
-        self._submap = submap
         self._nest = nest
 
-        if self._size % self._submap != 0:
-            raise RuntimeError(
-                "submap size must evenly divide into total number of pixels"
-            )
-
-        if localpix is not None:
-            if local is not None:
-                raise RuntimeError("Must not set local with localpix")
-            local = np.unique(np.floor_divide(localpix, self._submap))
-
-        self._local = local
-        self._nglob = self._size // self._submap
         self._glob2loc = None
         self._cache = Cache()
         self._commsize = 5000000
@@ -181,26 +89,28 @@ class DistPixels(object):
 
         self.data = None
         self.flatdata = None
-        if self._local is None:
+        if self._local_submaps is None:
             self._nsub = 0
         else:
-            if len(self._local) == 0:
+            if len(self._local_submaps) == 0:
                 self._nsub = 0
             else:
-                self._nsub = len(self._local)
+                self._nsub = len(self._local_submaps)
                 self._glob2loc = self._cache.create(
                     "glob2loc", np.int64, (self._nglob,)
                 )
                 self._glob2loc[:] = -1
-                for ilocal_submap, iglobal_submap in enumerate(self._local):
+                for ilocal_submap, iglobal_submap in enumerate(self._local_submaps):
                     self._glob2loc[iglobal_submap] = ilocal_submap
-                if (self._submap * self._local.max()) > self._size:
+                if (self._npix_submap * self._local_submaps.max()) > self._npix:
                     raise RuntimeError("local submap indices out of range")
                 self.data = self._cache.create(
-                    "data", dtype, (self._nsub, self._submap, self._nnz)
+                    "data", dtype, (self._nsub, self._npix_submap, self._nnz)
                 )
                 self.flatdata = self.data.view()
-                self.flatdata.shape = tuple([self._nsub * self._submap * self._nnz])
+                self.flatdata.shape = tuple(
+                    [self._nsub * self._npix_submap * self._nnz]
+                )
 
     def __del__(self):
         if self._glob2loc is not None:
@@ -216,10 +126,10 @@ class DistPixels(object):
         return self._comm
 
     @property
-    def size(self):
+    def npix(self):
         """(int): The global number of pixels.
         """
-        return self._size
+        return self._npix
 
     @property
     def nnz(self):
@@ -234,16 +144,16 @@ class DistPixels(object):
         return self._dtype
 
     @property
-    def local(self):
+    def local_submaps(self):
         """(array): The list of local submaps or None if process has no data.
         """
-        return self._local
+        return self._local_submaps
 
     @property
-    def submap(self):
+    def npix_submap(self):
         """(int): The number of pixels in each submap.
         """
-        return self._submap
+        return self._npix_submap
 
     @property
     def nsubmap(self):
@@ -269,10 +179,10 @@ class DistPixels(object):
                 pixel index local to that submap (int).
 
         """
-        return libtoast_global_to_local(gl, self._submap, self._glob2loc)
+        return libtoast_global_to_local(gl, self._npix_submap, self._glob2loc)
 
     @function_timer
-    def duplicate(self):
+    def duplicate(self, copy=True, nnz=None):
         """Perform a deep copy of the distributed data.
 
         Returns:
@@ -280,14 +190,15 @@ class DistPixels(object):
 
         """
         ret = DistPixels(
+            None,
             comm=self._comm,
-            size=self._size,
-            nnz=self._nnz,
+            npix=self._npix,
+            npix_submap=self._npix_submap,
+            local_submaps=self._local_submaps,
+            nnz=(self._nnz if nnz is None else nnz),
             dtype=self._dtype,
-            submap=self._submap,
-            local=self._local,
         )
-        if self.data is not None:
+        if self.data is not None and copy:
             ret.data[:, :, :] = self.data
         return ret
 
@@ -302,10 +213,10 @@ class DistPixels(object):
 
         """
         dbytes = self._dtype(1).itemsize
-        nsub = int(bytes / (dbytes * self._submap * self._nnz))
+        nsub = int(bytes / (dbytes * self._npix_submap * self._nnz))
         if nsub == 0:
             nsub = 1
-        allsub = int(self._size / self._submap)
+        allsub = int(self._npix / self._npix_submap)
         if nsub > allsub:
             nsub = allsub
         return nsub
@@ -327,17 +238,21 @@ class DistPixels(object):
         if comm_bytes is None:
             comm_bytes = self._commsize
         comm_submap = self._comm_nsubmap(comm_bytes)
-        nsub = int(self._size / self._submap)
+        nsub = int(self._npix / self._npix_submap)
 
-        sendbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
-        sendview = sendbuf.reshape(comm_submap, self._submap, self._nnz)
+        sendbuf = np.zeros(
+            comm_submap * self._npix_submap * self._nnz, dtype=self._dtype
+        )
+        sendview = sendbuf.reshape(comm_submap, self._npix_submap, self._nnz)
 
-        recvbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
-        recvview = recvbuf.reshape(comm_submap, self._submap, self._nnz)
+        recvbuf = np.zeros(
+            comm_submap * self._npix_submap * self._nnz, dtype=self._dtype
+        )
+        recvview = recvbuf.reshape(comm_submap, self._npix_submap, self._nnz)
 
         owners = np.zeros(nsub, dtype=np.int32)
         owners.fill(self._comm.size)
-        for m in self._local:
+        for m in self._local_submaps:
             owners[m] = self._comm.rank
         allowners = np.zeros_like(owners)
         self._comm.Allreduce(owners, allowners, op=MPI.MIN)
@@ -357,7 +272,7 @@ class DistPixels(object):
                 # bunch of zeros.
                 for c in range(ncomm):
                     glob = submap_off + c
-                    if glob in self._local:
+                    if glob in self._local_submaps:
                         # copy our data in.
                         loc = self._glob2loc[glob]
                         sendview[c, :, :] = self.data[loc, :, :]
@@ -366,7 +281,7 @@ class DistPixels(object):
 
                 for c in range(ncomm):
                     glob = submap_off + c
-                    if glob in self._local:
+                    if glob in self._local_submaps:
                         # copy the reduced data
                         loc = self._glob2loc[glob]
                         self.data[loc, :, :] = recvview[c, :, :]
@@ -417,7 +332,7 @@ class DistPixels(object):
             # Check that the file is in expected format
             errors = ""
             h = hp.fitsfunc.pf.open(path, "readonly")
-            nside = hp.npix2nside(self._size)
+            nside = hp.npix2nside(self._npix)
             nside_map = h[1].header["nside"]
             if nside_map != nside:
                 errors += "Wrong NSide: {} has {}, expected {}\n" "".format(
@@ -453,22 +368,22 @@ class DistPixels(object):
             if self._nnz == 1:
                 fdata = (fdata,)
 
-        buf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
-        view = buf.reshape(comm_submap, self._submap, self._nnz)
+        buf = np.zeros(comm_submap * self._npix_submap * self._nnz, dtype=self._dtype)
+        view = buf.reshape(comm_submap, self._npix_submap, self._nnz)
 
         in_off = 0
         out_off = 0
         submap_off = 0
 
         rows = optrows
-        while in_off < self._size:
-            if in_off + rows > self._size:
-                rows = self._size - in_off
+        while in_off < self._npix:
+            if in_off + rows > self._npix:
+                rows = self._npix - in_off
             # is this the last block for this communication?
             islast = False
             copyrows = rows
-            if out_off + rows > (comm_submap * self._submap):
-                copyrows = (comm_submap * self._submap) - out_off
+            if out_off + rows > (comm_submap * self._npix_submap):
+                copyrows = (comm_submap * self._npix_submap) - out_off
                 islast = True
 
             if rank == 0:
@@ -486,7 +401,7 @@ class DistPixels(object):
                     self._comm.Bcast(buf, root=0)
                 # loop over these submaps, and copy any that we are assigned
                 for sm in range(submap_off, submap_off + comm_submap):
-                    if sm in self._local:
+                    if sm in self._local_submaps:
                         loc = self._glob2loc[sm]
                         self.data[loc, :, :] = view[sm - submap_off, :, :]
                 out_off = 0
@@ -500,7 +415,7 @@ class DistPixels(object):
                 self._comm.Bcast(buf, root=0)
             # loop over these submaps, and copy any that we are assigned
             for sm in range(submap_off, submap_off + comm_submap):
-                if sm in self._local:
+                if sm in self._local_submaps:
                     loc = self._glob2loc[sm]
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
@@ -541,22 +456,22 @@ class DistPixels(object):
             if self._nnz == 1:
                 fdata = (fdata,)
 
-        buf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
-        view = buf.reshape(comm_submap, self._submap, self._nnz)
+        buf = np.zeros(comm_submap * self._npix_submap * self._nnz, dtype=self._dtype)
+        view = buf.reshape(comm_submap, self._npix_submap, self._nnz)
 
         in_off = 0
         out_off = 0
         submap_off = 0
 
         rows = optrows
-        while in_off < self._size:
-            if in_off + rows > self._size:
-                rows = self._size - in_off
+        while in_off < self._npix:
+            if in_off + rows > self._npix:
+                rows = self._npix - in_off
             # is this the last block for this communication?
             islast = False
             copyrows = rows
-            if out_off + rows > (comm_submap * self._submap):
-                copyrows = (comm_submap * self._submap) - out_off
+            if out_off + rows > (comm_submap * self._npix_submap):
+                copyrows = (comm_submap * self._npix_submap) - out_off
                 islast = True
 
             if rank == 0:
@@ -574,7 +489,7 @@ class DistPixels(object):
                     self._comm.Bcast(buf, root=0)
                 # loop over these submaps, and copy any that we are assigned
                 for sm in range(submap_off, submap_off + comm_submap):
-                    if sm in self._local:
+                    if sm in self._local_submaps:
                         loc = self._glob2loc[sm]
                         self.data[loc, :, :] = view[sm - submap_off, :, :]
                 out_off = 0
@@ -589,7 +504,7 @@ class DistPixels(object):
                 self._comm.Bcast(buf, root=0)
             # loop over these submaps, and copy any that we are assigned
             for sm in range(submap_off, submap_off + comm_submap):
-                if sm in self._local:
+                if sm in self._local_submaps:
                     loc = self._glob2loc[sm]
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
@@ -619,12 +534,12 @@ class DistPixels(object):
         # Find the number of submaps that fit into the requested
         # communication size.
         dbytes = self._dtype(1).itemsize
-        comm_submap = int(comm_bytes / (dbytes * self._submap * self._nnz))
+        comm_submap = int(comm_bytes / (dbytes * self._npix_submap * self._nnz))
         if comm_submap == 0:
             comm_submap = 1
 
-        nsubmap = int(self._size / self._submap)
-        if nsubmap * self._submap < self._size:
+        nsubmap = int(self._npix / self._npix_submap)
+        if nsubmap * self._npix_submap < self._npix:
             nsubmap += 1
 
         # Determine which processes "own" each submap.
@@ -633,13 +548,13 @@ class DistPixels(object):
             NO_OWNER = 1
             allowners = np.zeros(nsubmap, dtype=np.int32)
             allowners.fill(NO_OWNER)
-            for m in self._local:
+            for m in self._local_submaps:
                 allowners[m] = rank
         else:
             NO_OWNER = self._comm.size
             owners = np.zeros(nsubmap, dtype=np.int32)
             owners.fill(NO_OWNER)
-            for m in self._local:
+            for m in self._local_submaps:
                 owners[m] = self._comm.rank
             allowners = np.zeros_like(owners)
             self._comm.Allreduce(owners, allowners, op=MPI.MIN)
@@ -657,12 +572,14 @@ class DistPixels(object):
             temp = Cache()
             for col in range(self._nnz):
                 name = "col{}".format(col)
-                temp.create(name, self._dtype, (self._size,))
+                temp.create(name, self._dtype, (self._npix,))
                 fdata.append(temp.reference(name))
 
         if self._comm is None:
-            dbuf = np.zeros(comm_submap * self._submap * self._nnz, dtype=self._dtype)
-            dview = dbuf.reshape(comm_submap, self._submap, self._nnz)
+            dbuf = np.zeros(
+                comm_submap * self._npix_submap * self._nnz, dtype=self._dtype
+            )
+            dview = dbuf.reshape(comm_submap, self._npix_submap, self._nnz)
 
             submap_off = 0
             ncomm = comm_submap
@@ -677,25 +594,25 @@ class DistPixels(object):
                         dview[c, :, :] = self.data[self._glob2loc[submap_off + c], :, :]
                     # copy into FITS buffers
                     for c in range(ncomm):
-                        sampoff = (submap_off + c) * self._submap
+                        sampoff = (submap_off + c) * self._npix_submap
                         for col in range(self._nnz):
-                            fdata[col][sampoff : sampoff + self._submap] = dview[
+                            fdata[col][sampoff : sampoff + self._npix_submap] = dview[
                                 c, :, col
                             ]
                 submap_off += ncomm
         else:
             sendbuf = np.zeros(
-                comm_submap * self._submap * self._nnz, dtype=self._dtype
+                comm_submap * self._npix_submap * self._nnz, dtype=self._dtype
             )
-            sendview = sendbuf.reshape(comm_submap, self._submap, self._nnz)
+            sendview = sendbuf.reshape(comm_submap, self._npix_submap, self._nnz)
 
             recvbuf = None
             recvview = None
             if rank == 0:
                 recvbuf = np.zeros(
-                    comm_submap * self._submap * self._nnz, dtype=self._dtype
+                    comm_submap * self._npix_submap * self._nnz, dtype=self._dtype
                 )
-                recvview = recvbuf.reshape(comm_submap, self._submap, self._nnz)
+                recvview = recvbuf.reshape(comm_submap, self._npix_submap, self._nnz)
 
             submap_off = 0
             ncomm = comm_submap
@@ -713,11 +630,11 @@ class DistPixels(object):
                     if rank == 0:
                         # copy into FITS buffers
                         for c in range(ncomm):
-                            sampoff = (submap_off + c) * self._submap
+                            sampoff = (submap_off + c) * self._npix_submap
                             for col in range(self._nnz):
-                                fdata[col][sampoff : sampoff + self._submap] = recvview[
-                                    c, :, col
-                                ]
+                                fdata[col][
+                                    sampoff : sampoff + self._npix_submap
+                                ] = recvview[c, :, col]
                     sendbuf.fill(0)
                     if rank == 0:
                         recvbuf.fill(0)

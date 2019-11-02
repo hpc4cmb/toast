@@ -18,7 +18,6 @@ from ..todmap import (
     OpPointingHpix,
     OpSimDipole,
     dipole,
-    OpLocalPixels,
     OpAccumDiag,
 )
 
@@ -54,10 +53,6 @@ class OpSimDipoleTest(MPITestCase):
         # Pixelization
         self.nside = 64
         self.npix = 12 * self.nside ** 2
-        self.subnside = 16
-        if self.subnside > self.nside:
-            self.subnside = self.nside
-        self.subnpix = 12 * self.subnside * self.subnside
 
         # Samples per observation
         self.totsamp = self.npix
@@ -151,47 +146,16 @@ class OpSimDipoleTest(MPITestCase):
 
         # make a binned map
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-            nest=False,
-        )
+        invnpp = DistPixels(self.data, nnz=1, dtype=np.float64, nest=False,)
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-            nest=False,
-        )
+        zmap = DistPixels(self.data, nnz=1, dtype=np.float64, nest=False,)
         zmap.data.fill(0.0)
 
-        hits = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.npix,
-            nnz=1,
-            dtype=np.int64,
-            submap=self.subnpix,
-            local=localsm,
-            nest=False,
-        )
+        hits = DistPixels(self.data, nnz=1, dtype=np.int64, nest=False,)
         hits.data.fill(0)
 
         # accumulate the inverse covariance and noise weighted map.

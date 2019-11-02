@@ -197,7 +197,7 @@ class OpSimScan(Operator):
                 gt.start("OpSimScan.exec.scan_map")
                 if maptype.char == "d":
                     scan_map_float64(
-                        self._map.submap,
+                        self._map.npix_submap,
                         nnz,
                         sm.astype(np.int64),
                         lpix.astype(np.int64),
@@ -207,7 +207,7 @@ class OpSimScan(Operator):
                     )
                 elif maptype.char == "f":
                     scan_map_float32(
-                        self._map.submap,
+                        self._map.npix_submap,
                         nnz,
                         sm.astype(np.int64),
                         lpix.astype(np.int64),

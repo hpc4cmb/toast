@@ -11,7 +11,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
 from ..map import DistPixels
-from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpLocalPixels
+from ..todmap import OpSimPySM, OpSimScan, OpMadam
 
 
 def add_sky_map_args(parser):
@@ -100,7 +100,7 @@ def add_pysm_args(parser):
 
 @function_timer
 def scan_sky_signal(
-    args, comm, data, localsm, subnpix, cache_prefix="signal", verbose=True
+    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels",
 ):
     """ Scan sky signal from a map.
 
@@ -120,14 +120,7 @@ def scan_sky_signal(
     # Scan the sky signal
     if comm.world_rank == 0 and not os.path.isfile(args.input_map):
         raise RuntimeError("Input map does not exist: {}".format(args.input_map))
-    distmap = DistPixels(
-        comm=comm.comm_world,
-        size=npix,
-        nnz=3,
-        dtype=np.float32,
-        submap=subnpix,
-        local=localsm,
-    )
+    distmap = DistPixels(data, nnz=3, dtype=np.float32, pixels=pixels,)
     distmap.read_healpix_fits(args.input_map)
     scansim = OpSimScan(distmap=distmap, out=cache_prefix)
     scansim.exec(data)
@@ -142,7 +135,7 @@ def scan_sky_signal(
 
 @function_timer
 def simulate_sky_signal(
-    args, comm, data, focalplanes, subnpix, localsm, cache_prefix, verbose=False
+    args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels",
 ):
     """ Use PySM to simulate smoothed sky signal.
 
@@ -153,16 +146,15 @@ def simulate_sky_signal(
     timer.start()
     # Convolve a signal TOD from PySM
     op_sim_pysm = OpSimPySM(
+        data,
         comm=getattr(comm, "comm_" + args.pysm_mpi_comm),
         out=cache_prefix,
         pysm_model=args.pysm_model.split(","),
         pysm_precomputed_cmb_K_CMB=args.pysm_precomputed_cmb_K_CMB,
         focalplanes=focalplanes,
-        nside=args.nside,
-        subnpix=subnpix,
-        localsm=localsm,
         apply_beam=args.pysm_apply_beam,
         coord=args.coord,
+        pixels=pixels,
     )
     op_sim_pysm.exec(data)
     if comm.comm_world is not None:

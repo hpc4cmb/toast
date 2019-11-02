@@ -11,8 +11,7 @@ from healpy import nside2npix
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 from ..map import covariance_apply, covariance_invert, DistPixels
-from ..todmap import OpSimDipole, OpAccumDiag, OpLocalPixels
-from .pointing import get_submaps
+from ..todmap import OpSimDipole, OpAccumDiag
 
 
 def add_binner_args(parser):
@@ -102,7 +101,7 @@ def add_binner_args(parser):
     return
 
 
-def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbose=True):
+def init_binner(args, comm, data, detweights, verbose=True, pixels="pixels"):
     """construct distributed maps to store the covariance,
     noise weighted map, and hits
 
@@ -128,35 +127,11 @@ def init_binner(args, comm, data, detweights, subnpix=None, localsm=None, verbos
     timer = Timer()
     timer.start()
 
-    if subnpix is None or localsm is None:
-        localpix, localsm, subnpix = get_submaps(args, comm, data, verbose=verbose)
-
     npix = nside2npix(args.nside)
 
-    white_noise_cov_matrix = DistPixels(
-        comm=comm.comm_world,
-        size=npix,
-        nnz=6,
-        dtype=np.float64,
-        submap=subnpix,
-        local=localsm,
-    )
-    hits = DistPixels(
-        comm=comm.comm_world,
-        size=npix,
-        nnz=1,
-        dtype=np.int64,
-        submap=subnpix,
-        local=localsm,
-    )
-    dist_map = DistPixels(
-        comm=comm.comm_world,
-        size=npix,
-        nnz=3,
-        dtype=np.float64,
-        submap=subnpix,
-        local=localsm,
-    )
+    white_noise_cov_matrix = DistPixels(data, nnz=6, dtype=np.float64, pixels=pixels)
+    hits = DistPixels(data, nnz=1, dtype=np.int64, pixels=pixels)
+    dist_map = DistPixels(data, nnz=3, dtype=np.float64, pixels=pixels)
 
     # compute the hits and covariance once, since the pointing and noise
     # weights are fixed.

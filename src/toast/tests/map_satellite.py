@@ -22,7 +22,6 @@ from ..todmap import (
     slew_precession_axis,
     satellite_scanning,
     OpSimScan,
-    OpLocalPixels,
     OpMadam,
 )
 
@@ -73,6 +72,7 @@ class MapSatelliteTest(MPITestCase):
         # Pixelization
         self.sim_nside = 64
         self.map_nside = 64
+        self.nside_submap = 16
 
         # Scan strategy
         self.spinperiod = 10.0
@@ -373,35 +373,17 @@ class MapSatelliteTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(self.data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         sig = grad.sigmap()
 
-        # pick a submap size and find the local submaps.
-        submapsize = np.floor_divide(self.sim_nside, 16)
-        localsm = np.unique(np.floor_divide(localpix, submapsize))
-
         # construct a distributed map which has the gradient
-        npix = 12 * self.sim_nside * self.sim_nside
         distsig = DistPixels(
-            comm=self.data.comm.comm_group,
-            size=npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=submapsize,
-            local=localsm,
+            self.data, comm=self.data.comm.comm_group, nnz=1, dtype=np.float64,
         )
 
-        lsub, lpix = distsig.global_to_local(localpix)
-
-        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
-            -1, 1
-        )
+        distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
@@ -481,36 +463,15 @@ class MapSatelliteTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True)
         pointing.exec(data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(data)
-
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         sig = grad.sigmap()
 
-        # pick a submap size and find the local submaps.
-        submapsize = np.floor_divide(self.sim_nside, 16)
-        localsm = np.unique(np.floor_divide(localpix, submapsize))
-
         # construct a distributed map which has the gradient
-        npix = 12 * self.sim_nside * self.sim_nside
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
 
-        distsig = DistPixels(
-            comm=data.comm.comm_group,
-            size=npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=submapsize,
-            local=localsm,
-        )
-
-        lsub, lpix = distsig.global_to_local(localpix)
-
-        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
-            -1, 1
-        )
+        distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)
@@ -587,39 +548,20 @@ class MapSatelliteTest(MPITestCase):
             rank = self.comm.rank
         # make a pointing matrix with a HWP that is constant
         data = self.data_const_hwp
-        pointing = OpPointingHpix(nside=self.map_nside, nest=True)
+        pointing = OpPointingHpix(
+            nside=self.map_nside, nest=True, nside_submap=self.nside_submap
+        )
         pointing.exec(data)
-
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(data)
 
         # construct a sky gradient operator, just to get the signal
         # map- we are not going to use the operator on the data.
         grad = OpSimGradient(nside=self.sim_nside, nest=True)
         sig = grad.sigmap()
 
-        # pick a submap size and find the local submaps.
-        submapsize = np.floor_divide(self.sim_nside, 16)
-        localsm = np.unique(np.floor_divide(localpix, submapsize))
-
         # construct a distributed map which has the gradient
-        npix = 12 * self.sim_nside * self.sim_nside
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
 
-        distsig = DistPixels(
-            comm=data.comm.comm_group,
-            size=npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=submapsize,
-            local=localsm,
-        )
-
-        lsub, lpix = distsig.global_to_local(localpix)
-
-        distsig.data[lsub, lpix, :] = np.array([sig[x] for x in localpix]).reshape(
-            -1, 1
-        )
+        distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
         scansim = OpSimScan(distmap=distsig)

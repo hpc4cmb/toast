@@ -13,10 +13,9 @@ from ..timing import gather_timers, GlobalTimers
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 from .sim_det_map import OpSimScan
-from .todmap_math import OpAccumDiag, OpLocalPixels, OpScanScale, OpScanMask
+from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
 from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGaps
 from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
-from toast.pipeline_tools.pointing import get_submaps
 
 from .._libtoast import add_offsets_to_signal, project_signal_offsets
 
@@ -825,10 +824,7 @@ class ProjectionMatrix(TOASTMatrix):
         data,
         comm,
         detweights,
-        npix,
         nnz,
-        subnpix,
-        localsm,
         white_noise_cov_matrix,
         common_flag_mask=1,
         flag_mask=1,
@@ -836,14 +832,7 @@ class ProjectionMatrix(TOASTMatrix):
         self.data = data
         self.comm = comm
         self.detweights = detweights
-        self.dist_map = DistPixels(
-            comm=self.comm,
-            size=npix,
-            nnz=nnz,
-            dtype=np.float64,
-            submap=subnpix,
-            local=localsm,
-        )
+        self.dist_map = DistPixels(data, comm=self.comm, nnz=nnz, dtype=np.float64,)
         self.white_noise_cov_matrix = white_noise_cov_matrix
         self.common_flag_mask = common_flag_mask
         self.flag_mask = flag_mask
@@ -1189,12 +1178,11 @@ class OpMapMaker(Operator):
         iter_max=100,
         use_noise_prior=True,
         precond_width=20,
+        pixels="pixels",
     ):
         self.nside = nside
         self.npix = 12 * self.nside ** 2
         self.name = name
-        self.subnside = min(16, self.nside)
-        self.subnpix = 12 * self.subnside ** 2
         self.nnz = nnz
         self.ncov = self.nnz * (self.nnz + 1) // 2
         self.outdir = outdir
@@ -1219,6 +1207,7 @@ class OpMapMaker(Operator):
         self.iter_max = iter_max
         self.use_noise_prior = use_noise_prior
         self.precond_width = precond_width
+        self.pixels = pixels
 
     def report_timing(self):
         # gt.stop_all()
@@ -1375,10 +1364,7 @@ class OpMapMaker(Operator):
             data,
             self.comm,
             self.detweights,
-            self.npix,
             self.nnz,
-            self.subnpix,
-            self.localsm,
             self.white_noise_cov_matrix,
             common_flag_mask=(self.common_flag_mask | self.gap_bit),
             # Do not add mask_bit here since it is not
@@ -1469,14 +1455,7 @@ class OpMapMaker(Operator):
             raise RuntimeError(
                 "Processing mask does not exist: {}".format(self.maskfile)
             )
-        distmap = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=1,
-            dtype=np.float32,
-            submap=self.subnpix,
-            local=self.localsm,
-        )
+        distmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32,)
         distmap.read_healpix_fits(self.maskfile)
         if self.rank == 0:
             timer.report_clear("Read processing mask from {}".format(self.maskfile))
@@ -1502,14 +1481,7 @@ class OpMapMaker(Operator):
             raise RuntimeError(
                 "Weight map does not exist: {}".format(self.weightmapfile)
             )
-        self.weightmap = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=1,
-            dtype=np.float32,
-            submap=self.subnpix,
-            local=self.localsm,
-        )
+        self.weightmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32,)
         self.weightmap.read_healpix_fits(self.weightmapfile)
         if self.rank == 0:
             timer.report_clear("Read weight map from {}".format(self.weightmapfile))
@@ -1575,14 +1547,7 @@ class OpMapMaker(Operator):
         log = Logger.get()
         timer = Timer()
 
-        dist_map = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=self.nnz,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=self.localsm,
-        )
+        dist_map = DistPixels(data, comm=self.comm, nnz=self.nnz, dtype=np.float64,)
         if dist_map.data is not None:
             dist_map.data.fill(0.0)
         # FIXME: OpAccumDiag should support separate detweights for each observation
@@ -1652,40 +1617,16 @@ class OpMapMaker(Operator):
         if self.rank == 0:
             os.makedirs(self.outdir, exist_ok=True)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(data)
-        if localpix is None:
-            raise RuntimeError(
-                "Process {} has no hit pixels. Perhaps there are fewer "
-                "detectors than processes in the group?".format(self.rank)
-            )
-
-        # find the locally hit submaps.
-        self.localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         if self.rank == 0:
             timer.report_clear("Identify local submaps")
 
         self.white_noise_cov_matrix = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=self.ncov,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=self.localsm,
+            data, comm=self.comm, nnz=self.ncov, dtype=np.float64,
         )
         if self.white_noise_cov_matrix.data is not None:
             self.white_noise_cov_matrix.data.fill(0.0)
 
-        hits = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=1,
-            dtype=np.int64,
-            submap=self.subnpix,
-            local=self.localsm,
-        )
+        hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64,)
         if hits.data is not None:
             hits.data.fill(0)
 

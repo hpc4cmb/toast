@@ -9,7 +9,7 @@
 template <typename T>
 void register_scan_map(py::module & m, char const * name) {
     m.def(name,
-          [](int64_t subnpix, int64_t nmap, py::buffer submap, py::buffer subpix,
+          [](int64_t npix_submap, int64_t nmap, py::buffer submap, py::buffer subpix,
              py::buffer mapdata, py::buffer weights, py::buffer tod) {
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
@@ -43,10 +43,10 @@ void register_scan_map(py::module & m, char const * name) {
               T * rawmapdata = reinterpret_cast <T *> (info_mapdata.ptr);
               double * rawweights = reinterpret_cast <double *> (info_weights.ptr);
               double * rawtod = reinterpret_cast <double *> (info_tod.ptr);
-              toast::scan_local_map <T> (rawsubmap, subnpix, rawweights, nmap,
+              toast::scan_local_map <T> (rawsubmap, npix_submap, rawweights, nmap,
                                          rawsubpix, rawmapdata, rawtod, nsamp);
               return;
-          }, py::arg("subnpix"), py::arg("nmap"), py::arg("submap"), py::arg("subpix"),
+          }, py::arg("npix_submap"), py::arg("nmap"), py::arg("submap"), py::arg("subpix"),
           py::arg("mapdata"), py::arg("weights"), py::arg(
               "tod"), R"(
         Sample a map into a timestream.
@@ -55,7 +55,7 @@ void register_scan_map(py::module & m, char const * name) {
         to generate timestream values.
 
         Args:
-            subnpix (int):  The number of pixels in each submap.
+            npix_submap (int):  The number of pixels in each submap.
             nmap (int):  The number of non-zeros in each row of the pointing matrix.
             submap (array, int64):  For each time domain sample, the submap index
                 within the local map (i.e. including only submap)

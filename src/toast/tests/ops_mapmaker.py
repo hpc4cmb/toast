@@ -22,7 +22,6 @@ from ..todmap import (
     OpPointingHpix,
     OpMadam,
     OpMapMaker,
-    get_submaps_nested,
     OpSimScan,
 )
 from ..todmap.mapmaker import TemplateMatrix, OffsetTemplate, Signal
@@ -224,7 +223,6 @@ class OpMapMakerTest(MPITestCase):
         )
         pointing.exec(self.data)
 
-        localpix, localsm, subnpix = get_submaps_nested(self.data, self.sim_nside)
         # Scan the signal from a map
         distmap = DistPixels(
             comm=self.comm,
@@ -356,16 +354,8 @@ class OpMapMakerTest(MPITestCase):
         )
         pointing.exec(self.data)
 
-        localpix, localsm, subnpix = get_submaps_nested(self.data, self.sim_nside)
         # Scan the signal from a map
-        distmap = DistPixels(
-            comm=self.comm,
-            size=self.npix,
-            nnz=self.nnz,
-            dtype=np.float32,
-            submap=subnpix,
-            local=localsm,
-        )
+        distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
         distmap.read_healpix_fits(self.inmapfile)
         scansim = OpSimScan(distmap=distmap, out=name)
         scansim.exec(self.data)
