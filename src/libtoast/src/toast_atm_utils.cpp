@@ -173,7 +173,7 @@ int toast::atm_get_atmospheric_loading_vec(double altitude,
     atm::SkyStatus ss = get_sky_status_vec(altitude, temperature, pressure,
                                            freqmin, freqmax, nfreq);
     ss.setUserWH2O(pwv, "mm");
-    for (unsigned int i = 0; i < nfreq; ++i) {
+    for (size_t i = 0; i < nfreq; ++i) {
         loading[i] = ss.getTebbSky(i).get();
     }
 
