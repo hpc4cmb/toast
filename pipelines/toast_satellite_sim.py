@@ -336,7 +336,9 @@ def main():
     pipeline_tools.expand_pointing(args, comm, data)
 
     signalname = None
-    skyname = pipeline_tools.simulate_sky_signal(args, comm, data, [focalplane], "signal")
+    skyname = pipeline_tools.simulate_sky_signal(
+        args, comm, data, [focalplane], "signal"
+    )
     if skyname is not None:
         signalname = skyname
 
