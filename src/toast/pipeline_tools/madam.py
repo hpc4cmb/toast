@@ -77,14 +77,14 @@ def add_madam_args(parser):
         "--madam-allreduce",
         required=False,
         action="store_true",
-        help="Use the allreduce commucation pattern in Madam",
+        help="Use the allreduce communication pattern in Madam",
         dest="madam_allreduce",
     )
     parser.add_argument(
         "--no-madam-allreduce",
         required=False,
         action="store_false",
-        help="Do not use the allreduce commucation pattern in Madam",
+        help="Do not use the allreduce communication pattern in Madam",
         dest="madam_allreduce",
     )
     parser.set_defaults(madam_allreduce=False)
@@ -100,7 +100,7 @@ def add_madam_args(parser):
         "--no-madam-concatenate-messages",
         required=False,
         action="store_false",
-        help="Use the point-to-point commucation pattern in Madam",
+        help="Use the point-to-point communication pattern in Madam",
         dest="madam_concatenate_messages",
     )
     parser.set_defaults(madam_concatenate_messages=True)
