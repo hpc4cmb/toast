@@ -429,17 +429,13 @@ def main():
 
     # Prepare auxiliary information for distributed map objects
 
-    _, localsm, subnpix = pipeline_tools.get_submaps(args, comm, data)
-
     if args.pysm_model:
         focalplanes = [s.telescope.focalplane.detector_data for s in schedules]
         signalname = pipeline_tools.simulate_sky_signal(
-            args, comm, data, focalplanes, subnpix, localsm, "signal"
+            args, comm, data, focalplanes, "signal"
         )
     else:
-        signalname = pipeline_tools.scan_sky_signal(
-            args, comm, data, localsm, subnpix, "signal"
-        )
+        signalname = pipeline_tools.scan_sky_signal(args, comm, data, "signal")
 
     # Set up objects to take copies of the TOD at appropriate times
 

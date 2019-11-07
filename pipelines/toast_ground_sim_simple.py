@@ -42,12 +42,10 @@ from toast.pipeline_tools import (
     add_atmosphere_args,
     add_noise_args,
     simulate_noise,
-    get_analytic_noise,
     add_gainscrambler_args,
     scramble_gains,
     add_pointing_args,
     expand_pointing,
-    get_submaps,
     add_madam_args,
     setup_madam,
     apply_madam,
@@ -55,9 +53,6 @@ from toast.pipeline_tools import (
     add_pysm_args,
     scan_sky_signal,
     simulate_sky_signal,
-    add_sss_args,
-    simulate_sss,
-    add_signal,
     copy_signal,
     add_tidas_args,
     output_tidas,
@@ -65,12 +60,8 @@ from toast.pipeline_tools import (
     output_spt3g,
     add_todground_args,
     get_breaks,
-    Telescope,
     Focalplane,
-    Site,
-    CES,
     load_schedule,
-    load_weather,
     add_mc_args,
     add_binner_args,
     init_binner,
@@ -411,13 +402,9 @@ def main():
 
     expand_pointing(args, comm, data)
 
-    # Prepare auxiliary information for distributed map objects
-
-    localpix, localsm, subnpix = get_submaps(args, comm, data)
-
     # Scan input map
 
-    signalname = scan_sky_signal(args, comm, data, localsm, subnpix, "signal")
+    signalname = scan_sky_signal(args, comm, data, "signal")
 
     # Simulate noise
 
@@ -430,9 +417,7 @@ def main():
 
     signalname_madam, sigcopy_madam, sigclear = setup_sigcopy(args, comm, signalname)
 
-    npp, zmap = init_binner(
-        args, comm, data, detweights, subnpix=subnpix, localsm=localsm
-    )
+    npp, zmap = init_binner(args, comm, data, detweights)
 
     output_tidas(args, comm, data, signalname)
 

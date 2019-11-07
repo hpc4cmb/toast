@@ -56,6 +56,7 @@ class OpPointingHpix(Operator):
             with the common_flag_mask, and then flag the pointing matrix.
         single_precision (bool):  Return the pixel numbers and pointing
              weights in single precision.  Default=False.
+        nside_submap (int):  Size of a submap is 12 * nside_submap ** 2
     """
 
     def __init__(
@@ -72,6 +73,7 @@ class OpPointingHpix(Operator):
         apply_flags=False,
         keep_quats=False,
         single_precision=False,
+        nside_submap=16,
     ):
         self._pixels = pixels
         self._weights = weights
@@ -85,6 +87,10 @@ class OpPointingHpix(Operator):
         self._common_flag_name = common_flag_name
         self._keep_quats = keep_quats
         self._single_precision = single_precision
+        self._nside_submap = min(nside, nside_submap)
+        self._npix_submap = 12 * self._nside_submap ** 2
+        self._nsubmap = (self._nside // self._nside_submap) ** 2
+        self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
 
         # initialize the healpix pixels object
         self.hpix = HealpixPixels(self._nside)
@@ -116,6 +122,16 @@ class OpPointingHpix(Operator):
         """(str): the pointing mode "I", "IQU", etc.
         """
         return self._mode
+
+    @property
+    def local_submaps(self):
+        """(list): Indices of locally hit submaps
+        """
+        if self._single_precision:
+            dtype = np.int32
+        else:
+            dtype = np.int64
+        return np.arange(self._nsubmap, dtype=dtype)[self._hit_submaps]
 
     @function_timer
     def exec(self, data):
@@ -238,10 +254,30 @@ class OpPointingHpix(Operator):
                     weightsref = tod.cache.put(weightsname, weights, replace=True)
                     del weights
 
+                self._hit_submaps[pixelsref // self._npix_submap] = True
+
                 del pixelsref
                 del weightsref
                 del pdata
 
             del common
+
+        # Store the local submaps in the data object under the same name
+        # as the pixel numbers
+
+        if self._single_precision:
+            dtype = np.int32
+        else:
+            dtype = np.int64
+
+        local_submaps = np.arange(self._nsubmap, dtype=dtype)[self._hit_submaps]
+        submap_name = "{}_local_submaps".format(self._pixels)
+        data[submap_name] = local_submaps
+        npix_submap_name = "{}_npix_submap".format(self._pixels)
+        data[npix_submap_name] = self._npix_submap
+        nsubmap_name = "{}_nsubmap".format(self._pixels)
+        data[nsubmap_name] = self._nsubmap
+        npix_name = "{}_npix".format(self._pixels)
+        data[npix_name] = 12 * self._nside ** 2
 
         return

@@ -13,7 +13,7 @@ import numpy.testing as nt
 import healpy as hp
 
 from ..tod import AnalyticNoise, OpSimNoise
-from ..todmap import TODSatellite, OpPointingHpix, OpLocalPixels, OpAccumDiag
+from ..todmap import TODSatellite, OpPointingHpix, OpAccumDiag
 from ..todmap.todmap_math import cov_accum_diag
 from ..map import DistPixels, covariance_invert, covariance_rcond, covariance_multiply
 
@@ -61,10 +61,6 @@ class CovarianceTest(MPITestCase):
 
         self.map_nside = 32
         self.map_npix = 12 * self.map_nside ** 2
-
-        self.subnside = int(self.map_nside / 4)
-        self.subnpix = 12 * self.subnside ** 2
-        self.nsubmap = int(self.map_npix / self.subnpix)
 
         # Scan strategy
 
@@ -119,32 +115,35 @@ class CovarianceTest(MPITestCase):
         nsamp = nsm * npix
 
         fake = DistPixels(
+            None,
             comm=self.data.comm.comm_world,
-            size=nsm * npix,
+            npix=nsm * npix,
             nnz=nnz,
             dtype=np.float64,
-            submap=npix,
-            local=np.arange(nsm, dtype=np.int64),
+            npix_submap=npix,
+            local_submaps=np.arange(nsm, dtype=np.int64),
         )
         check = fake.duplicate()
 
         hits = DistPixels(
+            None,
             comm=self.data.comm.comm_world,
-            size=nsm * npix,
+            npix=nsm * npix,
             nnz=1,
             dtype=np.int64,
-            submap=npix,
-            local=np.arange(nsm, dtype=np.int64),
+            npix_submap=npix,
+            local_submaps=np.arange(nsm, dtype=np.int64),
         )
         checkhits = hits.duplicate()
 
         invn = DistPixels(
+            None,
             comm=self.data.comm.comm_world,
-            size=nsm * npix,
+            npix=nsm * npix,
             nnz=block,
             dtype=np.float64,
-            submap=npix,
-            local=np.arange(nsm, dtype=np.int64),
+            npix_submap=npix,
+            local_submaps=np.arange(nsm, dtype=np.int64),
         )
         checkinvn = invn.duplicate()
 
@@ -225,12 +224,13 @@ class CovarianceTest(MPITestCase):
         threshold = 1.0e-6
 
         invn = DistPixels(
+            None,
             comm=self.data.comm.comm_world,
-            size=nsm * npix,
+            npix=nsm * npix,
             nnz=nelem,
             dtype=np.float64,
-            submap=npix,
-            local=np.arange(nsm, dtype=np.int64),
+            npix_submap=npix,
+            local_submaps=np.arange(nsm, dtype=np.int64),
         )
         check = invn.duplicate()
 
@@ -269,33 +269,12 @@ class CovarianceTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=6,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
         invnpp.data.fill(0.0)
 
-        hits = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=1,
-            dtype=np.int64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
         hits.data.fill(0)
 
         # accumulate the inverse covariance.  Use detector weights
@@ -340,34 +319,9 @@ class CovarianceTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=6,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-        )
-
-        invnpp2 = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=6,
-            dtype=np.float64,
-            submap=self.subnpix,
-            localpix=localpix,
-        )
-
-        nt.assert_equal(invnpp.local, invnpp2.local)
+        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
 
         return
 
@@ -376,32 +330,11 @@ class CovarianceTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=6,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
 
-        hits = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.sim_npix,
-            nnz=1,
-            dtype=np.int64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
@@ -452,41 +385,13 @@ class CovarianceTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.map_nside, nest=True, mode="IQU")
         pointing.exec(self.data)
 
-        # get locally hit pixels
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-
-        # find the locally hit submaps.
-        localsm = np.unique(np.floor_divide(localpix, self.subnpix))
-
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.map_npix,
-            nnz=6,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
 
-        rcond = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.map_npix,
-            nnz=1,
-            dtype=np.float64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        rcond = DistPixels(self.data, nnz=1, dtype=np.float64,)
 
-        hits = DistPixels(
-            comm=self.data.comm.comm_world,
-            size=self.map_npix,
-            nnz=1,
-            dtype=np.int64,
-            submap=self.subnpix,
-            local=localsm,
-        )
+        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
@@ -516,7 +421,9 @@ class CovarianceTest(MPITestCase):
 
         # write this out...
 
-        subsum = [np.sum(invnpp.data[x, :, :]) for x in range(len(invnpp.local))]
+        subsum = [
+            np.sum(invnpp.data[x, :, :]) for x in range(len(invnpp.local_submaps))
+        ]
 
         outfile = os.path.join(self.outdir, "covtest.fits")
         if rank == 0:

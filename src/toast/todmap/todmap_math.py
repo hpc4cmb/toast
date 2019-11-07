@@ -24,117 +24,6 @@ from .._libtoast import (
 from ..map import DistPixels
 
 
-@function_timer
-def get_submaps_nested(data, nside, subnside=16):
-    """ Get a list of locally hit pixels and submaps on every process.
-
-    Assumes nested pixel numbers
-    """
-    # Prepare for using distpixels objects
-    subnside = min(subnside, nside)
-    subnpix = 12 * subnside * subnside
-
-    # get locally hit pixels
-    lc = OpLocalPixels()
-    localpix = lc.exec(data)
-    if localpix is None:
-        raise RuntimeError(
-            "Process {} has no hit pixels. Perhaps there are fewer "
-            "detectors than processes in the group?".format(data.comm.world_rank)
-        )
-
-    # find the locally hit submaps.
-    localsm = np.unique(np.floor_divide(localpix, subnpix))
-
-    return localpix, localsm, subnpix
-
-
-class OpLocalPixels(Operator):
-    """Operator which computes the set of locally hit pixels.
-
-    Args:
-        pixels (str): the name of the cache object (<pixels>_<detector>)
-            containing the pixel indices to use.
-
-    """
-
-    def __init__(self, pixels="pixels", pixmin=None, pixmax=None, no_hitmap=False):
-
-        # We call the parent class constructor, which currently does nothing
-        super().__init__()
-        # madam uses time-based distribution
-        self._timedist = True
-        self._pixels = pixels
-        self._pixmin = pixmin
-        self._pixmax = pixmax
-        self._no_hitmap = no_hitmap
-
-    @function_timer
-    def exec(self, data):
-        """Iterate over all observations and detectors and compute local pixels.
-
-        Args:
-            data (toast.Data): The distributed data.
-
-        Returns:
-            (array): An array of the locally hit pixel indices.
-
-        """
-        # initialize the local pixel set
-        local = None
-
-        if self._no_hitmap:
-            # Avoid allocating extra memory at the cost of slower operation
-            for obs in data.obs:
-                tod = obs["tod"]
-                for det in tod.local_dets:
-                    pixelsname = "{}_{}".format(self._pixels, det)
-                    pixels = tod.cache.reference(pixelsname)
-                    if local is None:
-                        local = np.unique(pixels)
-                    else:
-                        local = np.unique(np.concatenate((local, np.unique(pixels))))
-                    del pixels
-        else:
-            pixmin = self._pixmin
-            pixmax = self._pixmax
-
-            if self._pixmin is None or self._pixmax is None:
-                # Find the overall pixel range before allocating the hit map
-                pixmin = 2 ** 60
-                pixmax = -(2 ** 60)
-                for obs in data.obs:
-                    tod = obs["tod"]
-                    for det in tod.local_dets:
-                        pixelsname = "{}_{}".format(self._pixels, det)
-                        pixels = tod.cache.reference(pixelsname)
-                        pixmin = min(pixmin, np.amin(pixels))
-                        pixmax = max(pixmax, np.amax(pixels))
-                        del pixels
-
-                if pixmin == 2 ** 60 and pixmax == -(2 ** 60):
-                    # No pixels
-                    return np.array([], dtype=np.int64)
-
-            npix = pixmax - pixmin + 1
-            hitmap = np.zeros(npix, dtype=np.bool)
-
-            for obs in data.obs:
-                tod = obs["tod"]
-                for det in tod.local_dets:
-                    pixelsname = "{}_{}".format(self._pixels, det)
-                    pixels = tod.cache.reference(pixelsname)
-                    hitmap[pixels - pixmin] = True
-                    del pixels
-
-            local = []
-            for pixel, hit in enumerate(hitmap):
-                if hit:
-                    local.append(pixel + pixmin)
-
-        return np.array(local)
-
-
 class OpAccumDiag(Operator):
     """Operator which accumulates the diagonal covariance and noise weighted map.
 
@@ -233,7 +122,7 @@ class OpAccumDiag(Operator):
         if zmap is not None:
             self._do_z = True
             self._nsub = zmap.nsubmap
-            self._subsize = zmap.submap
+            self._subsize = zmap.npix_submap
             self._nnz = zmap.nnz
             if self._globloc is None:
                 self._globloc = self._zmap
@@ -244,14 +133,14 @@ class OpAccumDiag(Operator):
                 raise RuntimeError("Hit map should always have NNZ == 1")
             if self._nsub is None:
                 self._nsub = hits.nsubmap
-                self._subsize = hits.submap
+                self._subsize = hits.npix_submap
             else:
                 if self._nsub != hits.nsubmap:
                     raise RuntimeError(
                         "All pixel domain objects must have the same number "
                         "of local submaps."
                     )
-                if self._subsize != hits.submap:
+                if self._subsize != hits.npix_submap:
                     raise RuntimeError(
                         "All pixel domain objects must have the same submap size."
                     )
@@ -264,14 +153,14 @@ class OpAccumDiag(Operator):
             blocknnz = int(((np.sqrt(8 * block) - 1) / 2) + 0.5)
             if self._nsub is None:
                 self._nsub = invnpp.nsubmap
-                self._subsize = invnpp.submap
+                self._subsize = invnpp.npix_submap
                 self._nnz = blocknnz
             else:
                 if self._nsub != invnpp.nsubmap:
                     raise RuntimeError(
                         "All pixel domain objects must have the same submap size."
                     )
-                if self._subsize != invnpp.submap:
+                if self._subsize != invnpp.npix_submap:
                     raise RuntimeError(
                         "All pixel domain objects must have the same submap size."
                     )
@@ -514,7 +403,7 @@ class OpScanScale(Operator):
                 # We pass the signal to be scaled in place of the pointing weights
                 # The returned TOD is already TOD x weigths
                 scan_map(
-                    self.map.submap,
+                    self.map.npix_submap,
                     1,
                     sm,
                     lpix,
@@ -581,7 +470,13 @@ class OpScanMask(Operator):
                 weights = np.ones(nsamp, dtype=np.float64)
                 masktod = np.zeros(nsamp, dtype=np.float64)
                 scan_map(
-                    self.map.submap, 1, sm, lpix, self.map.flatdata, weights, masktod
+                    self.map.npix_submap,
+                    1,
+                    sm,
+                    lpix,
+                    self.map.flatdata,
+                    weights,
+                    masktod,
                 )
                 flags = tod.local_flags(det, self.flags)
                 flags[masktod < 0.5] |= self.flagmask

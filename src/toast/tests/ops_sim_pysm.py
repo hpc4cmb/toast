@@ -8,7 +8,7 @@ import numpy as np
 
 from .mpi import MPITestCase
 
-from ..todmap import OpPointingHpix, TODHpixSpiral, pysm, OpLocalPixels
+from ..todmap import OpPointingHpix, TODHpixSpiral, pysm
 
 from ._helpers import create_outdir, create_distdata, uniform_chunks
 
@@ -163,14 +163,6 @@ class OpSimPySMTest(MPITestCase):
         pointing = OpPointingHpix(nside=self.nside, nest=False, mode="IQU")
         pointing.exec(self.data)
 
-        # Get locally hit pixels.  Only do this if the PySM operator
-        # needs local pixels...
-        lc = OpLocalPixels()
-        localpix = lc.exec(self.data)
-        # subnpix = np.floor_divide(self.nside, 4)
-        # localsm = np.unique(np.floor_divide(localpix, subnpix))
-
-        subnpix, localsm = 64, np.arange(12)
         focalplane = {
             "fake_0A": {
                 "bandcenter_ghz": 22.5,
@@ -180,13 +172,11 @@ class OpSimPySMTest(MPITestCase):
             }
         }
         op_sim_pysm = OpSimPySM(
+            self.data,
             comm=self.comm,
             out="signal",
             pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],
-            nside=self.nside,
-            subnpix=subnpix,
-            localsm=localsm,
             apply_beam=False,
             nest=False,
             units="uK_RJ",
@@ -227,18 +217,15 @@ class OpSimPySMTestSmooth(MPITestCase):
         pointing = OpPointingHpix(nside=self.nside, nest=False, mode="IQU")
         pointing.exec(self.data)
 
-        subnpix, localsm = self.nside ** 2, np.arange(12)
         focalplane = {
             "fake_0A": {"bandcenter_ghz": 22.5, "bandwidth_ghz": 5, "fwhm": 600}
         }  # fwhm is in arcmin
         op_sim_pysm = OpSimPySM(
+            self.data,
             comm=self.comm,
             out="signal",
             pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],
-            nside=self.nside,
-            subnpix=subnpix,
-            localsm=localsm,
             apply_beam=True,
             nest=False,
             units="uK_RJ",

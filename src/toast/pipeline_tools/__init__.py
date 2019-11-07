@@ -28,7 +28,7 @@ from .filters import (
 from .gain import add_gainscrambler_args, scramble_gains
 from .madam import add_madam_args, setup_madam, apply_madam
 from .noise import add_noise_args, simulate_noise, get_analytic_noise
-from .pointing import add_pointing_args, expand_pointing, get_submaps
+from .pointing import add_pointing_args, expand_pointing
 from .sky_signal import (
     add_sky_map_args,
     add_pysm_args,

@@ -83,6 +83,7 @@ class OpSimPySM(Operator):
     For PySM related arguments, see the PySMSky docstring
 
     Args:
+        data (toast.Data) : Data object with pixelization metadata
         comm (mpi4py.MPI.Comm): MPI communicator
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
@@ -90,34 +91,32 @@ class OpSimPySM(Operator):
             name as key, another dictionary with keys "bandcenter_ghz", "bandwidth_ghz",
             "fmin", "fwhm" (in arcmin)
         nside (int): :math:`N_{side}` for PySM
-        subnpix (int): FIXME
-        localsm : FIXME
         apply_beam (bool): Whether to perform gaussian smoothing with libsharp using the
             fwhm defined in the focalplane
         nest (bool): HEALPix nest or ring pixels
         units (str): Output units.
         debug (bool):  Verbose progress reports.
         coord (str): Output reference frame
+        pixels (str) :  Cache prefix for precomputed pixels
     """
 
     @function_timer
     def __init__(
         self,
+        data,
         comm=None,
         out="signal",
         pysm_model=None,
         pysm_precomputed_cmb_K_CMB=None,
         pysm_component_objects=None,
         focalplanes=None,
-        nside=None,
-        subnpix=None,
-        localsm=None,
         apply_beam=False,
         nest=True,
         units="K_CMB",
         debug=False,
         coord="G",
         map_dist=None,
+        pixels="pixels",
     ):
         if pysm is None:
             raise RuntimeError("PySM not available")
@@ -129,11 +128,14 @@ class OpSimPySM(Operator):
         self._debug = debug
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.coord = coord
+        self.pixels = pixels
+        self.npix = data["{}_npix".format(self.pixels)]
+        self.nside = hp.npix2nside(self.npix)
 
         self.pysm_sky = PySMSky(
             comm=self.comm,
             pixel_indices=None,
-            nside=nside,
+            nside=self.nside,
             pysm_sky_config=pysm_model,
             pysm_component_objects=pysm_component_objects,
             pysm_precomputed_cmb_K_CMB=self.pysm_precomputed_cmb_K_CMB,
@@ -141,16 +143,9 @@ class OpSimPySM(Operator):
             map_dist=map_dist,
         )
 
-        self.nside = nside
         self.focalplanes = focalplanes
-        self.npix = hp.nside2npix(nside)
         self.distmap = DistPixels(
-            comm=comm,
-            size=self.npix,
-            nnz=3,
-            dtype=np.float32,
-            submap=subnpix,
-            local=localsm,
+            data, comm=comm, nnz=3, dtype=np.float32, pixels=self.pixels,
         )
         self.apply_beam = apply_beam
 

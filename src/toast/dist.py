@@ -277,6 +277,16 @@ class Data(object):
         self.obs = []
         """The list of observations.
         """
+        self._metadata = {}
+
+    def __contains__(self, key):
+        return key in self._metadata
+
+    def __getitem__(self, key):
+        return self._metadata[key]
+
+    def __setitem__(self, key, value):
+        self._metadata[key] = value
 
     @property
     def comm(self):

@@ -10,12 +10,10 @@ if pysm is not None:
     from .pysm import PySMSky
 
 from .todmap_math import (
-    OpLocalPixels,
     OpAccumDiag,
     OpScanScale,
     OpScanMask,
     dipole,
-    get_submaps_nested,
 )
 
 from .pointing import OpPointingHpix

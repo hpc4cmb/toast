@@ -48,7 +48,6 @@ from toast.pipeline_tools import (
     add_signal,
     add_noise_args,
     simulate_noise,
-    get_submaps,
     add_pointing_args,
     expand_pointing,
     get_analytic_noise,
@@ -279,9 +278,9 @@ def create_observations(args, comm, focalplane, groupsize):
             precangle=args.prec_angle_deg,
             detindx=detindx,
             detranks=comm.group_size,
-            hwprpm=hwprpm,
-            hwpstep=hwpstep,
-            hwpsteptime=hwpsteptime,
+            hwprpm=args.hwp_rpm,
+            hwpstep=args.hwp_step_deg,
+            hwpsteptime=args.hwp_step_time_s,
         )
 
         obs = {}
@@ -358,12 +357,8 @@ def main():
 
     expand_pointing(args, comm, data)
 
-    localpix, localsm, subnpix = get_submaps(args, comm, data)
-
     signalname = None
-    skyname = simulate_sky_signal(
-        args, comm, data, [focalplane], subnpix, localsm, "signal"
-    )
+    skyname = simulate_sky_signal(args, comm, data, [focalplane], "signal")
     if skyname is not None:
         signalname = skyname
 
@@ -377,9 +372,7 @@ def main():
         if comm.world_rank == 0:
             log.info("Not using Madam, will only make a binned map")
 
-        npp, zmap = init_binner(
-            args, comm, data, detweights, subnpix=subnpix, localsm=localsm
-        )
+        npp, zmap = init_binner(args, comm, data, detweights)
 
         # Loop over Monte Carlos
 
