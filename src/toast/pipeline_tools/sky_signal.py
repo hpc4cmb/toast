@@ -104,7 +104,7 @@ def add_conviqt_args(parser):
     """
     parser.add_argument(
         "--conviqt-sky-file",
-        required=True,
+        required=False,
         help="Path to sky alm files. Tag DETECTOR will be "
         "replaced with detector name.",
     )
@@ -122,7 +122,7 @@ def add_conviqt_args(parser):
     )
     parser.add_argument(
         "--conviqt-beam-file",
-        required=True,
+        required=False,
         help="Path to beam alm files. Tag DETECTOR will be "
         "replaced with detector name.",
     )
@@ -207,11 +207,11 @@ def add_conviqt_args(parser):
 
 @function_timer
 def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
+    if args.conviqt_sky_file is None or args.conviqt_beam_file is None:
+        return
     log = Logger.get()
     timer = Timer()
     timer.start()
-
-    # Assemble detector data (name, sky file, beam file, epsilon, psipol)
 
     if comm.world_rank == 0 and verbose:
         log.info("Running Conviqt")
