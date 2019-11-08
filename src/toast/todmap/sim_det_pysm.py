@@ -90,7 +90,6 @@ class OpSimPySM(Operator):
         focalplanes (list(dict)): List of focalplanes dictionaries with channel
             name as key, another dictionary with keys "bandcenter_ghz", "bandwidth_ghz",
             "fmin", "fwhm" (in arcmin)
-        nside (int): :math:`N_{side}` for PySM
         apply_beam (bool): Whether to perform gaussian smoothing with libsharp using the
             fwhm defined in the focalplane
         nest (bool): HEALPix nest or ring pixels
