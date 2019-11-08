@@ -251,7 +251,7 @@ def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
 
 @function_timer
 def scan_sky_signal(
-    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels",
+    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", mc=0,
 ):
     """ Scan sky signal from a map.
 
@@ -266,13 +266,11 @@ def scan_sky_signal(
     if comm.world_rank == 0 and verbose:
         log.info("Scanning input map")
 
-    npix = 12 * args.nside ** 2
-
     # Scan the sky signal
     if comm.world_rank == 0 and not os.path.isfile(args.input_map):
         raise RuntimeError("Input map does not exist: {}".format(args.input_map))
-    distmap = DistPixels(data, nnz=3, dtype=np.float32, pixels=pixels,)
-    distmap.read_healpix_fits(args.input_map)
+    distmap = DistPixels(data, nnz=3, dtype=np.float32, pixels=pixels)
+    distmap.read_healpix_fits(args.input_map.format(mc))
     scansim = OpSimScan(distmap=distmap, out=cache_prefix)
     scansim.exec(data)
 
@@ -286,7 +284,7 @@ def scan_sky_signal(
 
 @function_timer
 def simulate_sky_signal(
-    args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels",
+    args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels", mc=0,
 ):
     """ Use PySM to simulate smoothed sky signal.
 
@@ -295,13 +293,16 @@ def simulate_sky_signal(
         return None
     timer = Timer()
     timer.start()
+    fn_cmb = args.pysm_precomputed_cmb_K_CMB
+    if fn_cmb is not None:
+        fn_cmb = fn_cmb.format(mc)
     # Convolve a signal TOD from PySM
     op_sim_pysm = OpSimPySM(
         data,
         comm=getattr(comm, "comm_" + args.pysm_mpi_comm),
         out=cache_prefix,
         pysm_model=args.pysm_model.split(","),
-        pysm_precomputed_cmb_K_CMB=args.pysm_precomputed_cmb_K_CMB,
+        pysm_precomputed_cmb_K_CMB=fn_cmb,
         focalplanes=focalplanes,
         apply_beam=args.pysm_apply_beam,
         coord=args.coord,
