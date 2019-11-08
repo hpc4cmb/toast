@@ -54,6 +54,57 @@ class Focalplane:
                 self.detector_data.update(pickle.load(picklefile))
         self.sample_rate = sample_rate
         self._radius = radius_deg
+        self._get_pol_angles()
+        self._get_pol_efficiency()
+
+    def _get_pol_angles(self):
+        """ Get the detector polarization angles from the quaternions
+        """
+        for detname, detdata in self.detector_data.items():
+            if "pol_angle_deg" not in detdata and "pol_angle_rad" not in detdata:
+                quat = detdata["quat"]
+                psi = qarray.to_angles(quat)[2]
+                detdata["pol_angle_rad"] = psi
+        return
+
+    def _get_pol_efficiency(self):
+        """ Get the polarization efficiency from polarization leakage
+        or vice versa
+        """
+        for detname, detdata in self.detector_data.items():
+            if "pol_leakage" in detdata and "pol_efficiency" not in detdata:
+                # Derive efficiency from leakage
+                epsilon = detdata["pol_leakage"]
+                eta = (1 - epsilon) / (1 + epsilon)
+                detdata["pol_efficiency"] = eta
+            elif "pol_leakage" not in detdata and "pol_efficiency" in detdata:
+                # Derive leakage from efficiency
+                eta = detdata["pol_effiency"]
+                epsilon = (1 - eta) / (1 + eta)
+                detdata["pol_leakage"] = epsilon
+            elif "pol_leakage" not in detdata and "pol_efficiency" not in detdata:
+                # Assume a perfectly polarized detector
+                detdata["pol_efficiency"] = 1
+                detdata["pol_leakage"] = 0
+            else:
+                # Check that efficiency and leakage are consistent
+                epsilon = detdata["pol_leakage"]
+                eta = detdata["pol_efficiency"]
+                np.testing.assert_almost_equal(
+                    eta,
+                    (1 + epsilon) / (1 - epsilon),
+                    err_msg="inconsistent polarization leakage and efficiency",
+                )
+        return
+
+    def __contains__(self, key):
+        return key in self.detector_data
+
+    def __getitem__(self, key):
+        return self.detector_data[key]
+
+    def __setitem__(self, key, value):
+        self.detector_data[key] = value
 
     def reset_properties(self):
         """ Clear automatic properties so they will be re-generated

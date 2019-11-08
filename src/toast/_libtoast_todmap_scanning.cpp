@@ -46,7 +46,8 @@ void register_scan_map(py::module & m, char const * name) {
               toast::scan_local_map <T> (rawsubmap, npix_submap, rawweights, nmap,
                                          rawsubpix, rawmapdata, rawtod, nsamp);
               return;
-          }, py::arg("npix_submap"), py::arg("nmap"), py::arg("submap"), py::arg("subpix"),
+          }, py::arg("npix_submap"), py::arg("nmap"), py::arg("submap"),
+          py::arg("subpix"),
           py::arg("mapdata"), py::arg("weights"), py::arg(
               "tod"), R"(
         Sample a map into a timestream.

@@ -34,6 +34,8 @@ from .sky_signal import (
     add_pysm_args,
     scan_sky_signal,
     simulate_sky_signal,
+    add_conviqt_args,
+    apply_conviqt,
 )
 from .sss import add_sss_args, simulate_sss
 from .todground import (

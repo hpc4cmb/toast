@@ -299,6 +299,7 @@ def hex_layout(
 
         dprops = {}
         dprops["quat"] = qa.mult(center, qa.mult(pixrot, polrot))
+        dprops["polangle_deg"] = pol[pix]
 
         dets[dname] = dprops
 

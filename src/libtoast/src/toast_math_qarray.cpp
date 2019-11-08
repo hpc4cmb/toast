@@ -1229,6 +1229,17 @@ void toast::qa_to_angles(size_t n, double const * quat, double * theta,
         }
     }
 
+    // Quaternions describing a rotation about the Z-axis alone
+    // require a special treatment
+
+    for (size_t i = 0; i < n; ++i) {
+        size_t qf = 4 * i;
+        if ((::fabs(quat[qf]) < 1e-10) && (::fabs(quat[qf + 1]) < 1e-10)) {
+            pa[i] = ::atan2(2 * quat[qf + 2] * quat[qf + 3],
+                            1 - 2 * quat[qf + 2] * quat[qf + 2]);
+        }
+    }
+
     return;
 }
 

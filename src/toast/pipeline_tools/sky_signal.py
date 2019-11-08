@@ -11,7 +11,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
 from ..map import DistPixels
-from ..todmap import OpSimPySM, OpSimScan, OpMadam
+from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpSimConviqt
 
 
 def add_sky_map_args(parser):
@@ -96,6 +96,157 @@ def add_pysm_args(parser):
         pass
 
     return
+
+
+def add_conviqt_args(parser):
+    """ Add arguments for synthesizing signal with libConviqt
+
+    """
+    parser.add_argument(
+        "--conviqt-sky-file",
+        required=False,
+        help="Path to sky alm files. Tag DETECTOR will be "
+        "replaced with detector name.",
+    )
+    parser.add_argument(
+        "--conviqt-lmax",
+        required=False,
+        type=np.int,
+        help="Simulation lmax.  May not exceed the expansion order in conviqt-sky-file",
+    )
+    parser.add_argument(
+        "--conviqt-fwhm",
+        required=False,
+        type=np.float,
+        help="Sky fwhm [arcmin] to deconvolve",
+    )
+    parser.add_argument(
+        "--conviqt-beam-file",
+        required=False,
+        help="Path to beam alm files. Tag DETECTOR will be "
+        "replaced with detector name.",
+    )
+    parser.add_argument(
+        "--conviqt-beam-mmax",
+        required=False,
+        type=np.int,
+        help="Beam mmax.  May not exceed the expansion order in conviqt-beam-file",
+    )
+    parser.add_argument(
+        "--conviqt-pxx",
+        required=False,
+        action="store_false",
+        help="Beams are in Pxx frame, not Dxx",
+        dest="conviqt_dxx",
+    )
+    parser.add_argument(
+        "--conviqt-dxx",
+        required=False,
+        action="store_true",
+        help="Beams are in Dxx frame, not Pxx",
+        dest="conviqt_dxx",
+    )
+    parser.set_defaults(conviqt_dxx=True)
+    parser.add_argument(
+        "--conviqt-order", default=11, type=np.int, help="Iteration order",
+    )
+    parser.add_argument(
+        "--conviqt-normalize-beam",
+        required=False,
+        action="store_true",
+        help="Normalize the beams",
+        dest="conviqt_normalize_beam",
+    )
+    parser.add_argument(
+        "--no-conviqt-normalize-beam",
+        required=False,
+        action="store_false",
+        help="Do not normalize the beams",
+        dest="conviqt_normalize_beam",
+    )
+    parser.set_defaults(conviqt_normalize_beam=False)
+    parser.add_argument(
+        "--conviqt-remove-monopole",
+        required=False,
+        action="store_true",
+        help="Remove the sky monopole before convolution",
+        dest="conviqt_remove_monopole",
+    )
+    parser.add_argument(
+        "--no-conviqt-remove-monopole",
+        required=False,
+        action="store_false",
+        help="Do not remove the sky monopole before convolution",
+        dest="conviqt_remove_monopole",
+    )
+    parser.set_defaults(conviqt_remove_monopole=False)
+    parser.add_argument(
+        "--conviqt-remove-dipole",
+        required=False,
+        action="store_true",
+        help="Remove the sky dipole before convolution",
+    )
+    parser.add_argument(
+        "--no-conviqt-remove-dipole",
+        required=False,
+        action="store_false",
+        help="Do not remove the sky dipole before convolution",
+    )
+    parser.set_defaults(conviqt_remove_dipole=False)
+    parser.add_argument(
+        "--conviqt-mpi-comm",
+        required=False,
+        help="MPI communicator used by the OpSimConviqt operator, "
+        "either 'rank' or 'group'",
+        dest="conviqt_mpi_comm",
+    )
+    parser.set_defaults(conviqt_mpi_comm="rank")
+
+    return
+
+
+@function_timer
+def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
+    if args.conviqt_sky_file is None or args.conviqt_beam_file is None:
+        return
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    if comm.world_rank == 0 and verbose:
+        log.info("Running Conviqt")
+
+    verbosity = 0
+    if verbose:
+        verbosity = 1
+    if args.debug:
+        verbosity = 10
+
+    conviqt = OpSimConviqt(
+        getattr(comm, "comm_" + args.conviqt_mpi_comm),
+        args.conviqt_sky_file,
+        args.conviqt_beam_file,
+        lmax=args.conviqt_lmax,
+        beammmax=args.conviqt_beam_mmax,
+        pol=True,
+        fwhm=args.conviqt_fwhm,
+        order=args.conviqt_order,
+        calibrate=True,
+        dxx=args.conviqt_dxx,
+        out=cache_prefix,
+        remove_monopole=args.conviqt_remove_monopole,
+        remove_dipole=args.conviqt_remove_dipole,
+        normalize_beam=args.conviqt_normalize_beam,
+        verbosity=verbosity,
+    )
+    conviqt.exec(data)
+
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("Read and sample map")
+
+    return cache_prefix
 
 
 @function_timer

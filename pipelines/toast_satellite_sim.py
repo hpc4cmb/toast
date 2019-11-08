@@ -34,32 +34,7 @@ from toast.timing import dump as dump_timing
 from toast.tod import regular_intervals, plot_focalplane, OpApplyGain
 from toast.todmap import TODSatellite, slew_precession_axis
 
-from toast.pipeline_tools import (
-    add_dist_args,
-    add_mc_args,
-    get_comm,
-    add_madam_args,
-    setup_madam,
-    apply_madam,
-    add_tidas_args,
-    output_tidas,
-    add_spt3g_args,
-    output_spt3g,
-    add_signal,
-    add_noise_args,
-    simulate_noise,
-    add_pointing_args,
-    expand_pointing,
-    get_analytic_noise,
-    add_dipole_args,
-    simulate_dipole,
-    add_pysm_args,
-    simulate_sky_signal,
-    add_binner_args,
-    init_binner,
-    apply_binner,
-    add_todsatellite_args,
-)
+from toast import pipeline_tools
 
 
 def parse_arguments(comm, procs):
@@ -70,15 +45,16 @@ def parse_arguments(comm, procs):
         fromfile_prefix_chars="@",
     )
 
-    add_dist_args(parser)
-    add_pointing_args(parser)
-    add_tidas_args(parser)
-    add_spt3g_args(parser)
-    add_dipole_args(parser)
-    add_pysm_args(parser)
-    add_mc_args(parser)
-    add_noise_args(parser)
-    add_todsatellite_args(parser)
+    pipeline_tools.add_dist_args(parser)
+    pipeline_tools.add_pointing_args(parser)
+    pipeline_tools.add_tidas_args(parser)
+    pipeline_tools.add_spt3g_args(parser)
+    pipeline_tools.add_dipole_args(parser)
+    pipeline_tools.add_pysm_args(parser)
+    pipeline_tools.add_mc_args(parser)
+    pipeline_tools.add_noise_args(parser)
+    pipeline_tools.add_todsatellite_args(parser)
+    pipeline_tools.add_conviqt_args(parser)
 
     parser.add_argument(
         "--outdir", required=False, default="out", help="Output directory"
@@ -91,8 +67,8 @@ def parse_arguments(comm, procs):
         help="Write diagnostics",
     )
 
-    add_madam_args(parser)
-    add_binner_args(parser)
+    pipeline_tools.add_madam_args(parser)
+    pipeline_tools.add_binner_args(parser)
 
     parser.add_argument(
         "--madam",
@@ -172,6 +148,7 @@ def load_focalplane(args, comm):
             fake["fmin"] = 1.0e-5
             fake["alpha"] = 1.0
             fake["NET"] = 1.0
+            fake["polangle_deg"] = 0
             fake["color"] = "r"
             fp = {}
             fp["bore"] = fake
@@ -252,7 +229,7 @@ def create_observations(args, comm, focalplane, groupsize):
         3600 * args.gap_h,
     )
 
-    noise = get_analytic_noise(args, comm, focalplane)
+    noise = pipeline_tools.get_analytic_noise(args, comm, focalplane)
 
     # The distributed timestream data
 
@@ -290,6 +267,7 @@ def create_observations(args, comm, focalplane, groupsize):
         obs["baselines"] = None
         obs["noise"] = noise
         obs["id"] = ob
+        obs["focalplane"] = pipeline_tools.Focalplane(focalplane)
 
         data.obs.append(obs)
 
@@ -340,7 +318,7 @@ def main():
     timer0 = Timer()
     timer0.start()
 
-    mpiworld, procs, rank, comm = get_comm()
+    mpiworld, procs, rank, comm = pipeline_tools.get_comm()
     args, comm, groupsize = parse_arguments(comm, procs)
 
     # Parse options
@@ -355,14 +333,20 @@ def main():
 
     data = create_observations(args, comm, focalplane, groupsize)
 
-    expand_pointing(args, comm, data)
+    pipeline_tools.expand_pointing(args, comm, data)
 
     signalname = None
-    skyname = simulate_sky_signal(args, comm, data, [focalplane], "signal")
+    skyname = pipeline_tools.simulate_sky_signal(
+        args, comm, data, [focalplane], "signal"
+    )
     if skyname is not None:
         signalname = skyname
 
-    diponame = simulate_dipole(args, comm, data, "signal")
+    skyname = pipeline_tools.apply_conviqt(args, comm, data, "signal")
+    if skyname is not None:
+        signalname = skyname
+
+    diponame = pipeline_tools.simulate_dipole(args, comm, data, "signal")
     if diponame is not None:
         signalname = diponame
 
@@ -372,7 +356,7 @@ def main():
         if comm.world_rank == 0:
             log.info("Not using Madam, will only make a binned map")
 
-        npp, zmap = init_binner(args, comm, data, detweights)
+        npp, zmap = pipeline_tools.init_binner(args, comm, data, detweights)
 
         # Loop over Monte Carlos
 
@@ -385,10 +369,12 @@ def main():
 
             outpath = os.path.join(args.outdir, "mc_{:03d}".format(mc))
 
-            simulate_noise(args, comm, data, mc, "tot_signal", overwrite=True)
+            pipeline_tools.simulate_noise(
+                args, comm, data, mc, "tot_signal", overwrite=True
+            )
 
             # add sky signal
-            add_signal(args, comm, data, "tot_signal", signalname)
+            pipeline_tools.add_signal(args, comm, data, "tot_signal", signalname)
 
             if gain is not None:
                 timer = Timer()
@@ -404,10 +390,12 @@ def main():
                 # we could pass "use_interval=True" to the export operators,
                 # which would ensure breaks in the exported data at
                 # acceptable places.
-                output_tidas(args, comm, data, "tot_signal")
-                output_spt3g(args, comm, data, "tot_signal")
+                pipeline_tools.output_tidas(args, comm, data, "tot_signal")
+                pipeline_tools.output_spt3g(args, comm, data, "tot_signal")
 
-            apply_binner(args, comm, data, npp, zmap, detweights, outpath, "tot_signal")
+            pipeline_tools.apply_binner(
+                args, comm, data, npp, zmap, detweights, outpath, "tot_signal"
+            )
 
             if comm.world_rank == 0:
                 mctmr.report_clear("  Map-making {:04d}".format(mc))
@@ -415,7 +403,7 @@ def main():
 
         # Initialize madam parameters
 
-        madampars = setup_madam(args)
+        madampars = pipeline_tools.setup_madam(args)
 
         # in debug mode, print out data distribution information
         if args.debug:
@@ -442,10 +430,12 @@ def main():
             # create output directory for this realization
             outpath = os.path.join(args.outdir, "mc_{:03d}".format(mc))
 
-            simulate_noise(args, comm, data, mc, "tot_signal", overwrite=True)
+            pipeline_tools.simulate_noise(
+                args, comm, data, mc, "tot_signal", overwrite=True
+            )
 
             # add sky signal
-            add_signal(args, comm, data, "tot_signal", signalname)
+            pipeline_tools.add_signal(args, comm, data, "tot_signal", signalname)
 
             if gain is not None:
                 op_apply_gain = OpApplyGain(gain, name="tot_signal")
@@ -456,7 +446,9 @@ def main():
             if comm.world_rank == 0:
                 tmr.report_clear("  Apply gains {:04d}".format(mc))
 
-            apply_madam(args, comm, data, madampars, outpath, detweights, "tot_signal")
+            pipeline_tools.apply_madam(
+                args, comm, data, madampars, outpath, detweights, "tot_signal"
+            )
 
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
