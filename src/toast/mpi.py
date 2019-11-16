@@ -4,7 +4,6 @@
 
 import sys
 import itertools
-import ctypes as ct
 
 import numpy as np
 
@@ -26,16 +25,6 @@ if use_mpi and (MPI is None):
             "not found at run time.  Is mpi4py currently in "
             "your python search path?"
         )
-    try:
-        if MPI._sizeof(MPI.Comm) == ct.sizeof(ct.c_int):
-            MPI_Comm = ct.c_int
-        else:
-            MPI_Comm = ct.c_void_p
-    except Exception as e:
-        raise Exception(
-            "Failed to set the portable MPI communicator datatype. MPI4py is "
-            "probably too old. You need to have at least version 2.0. ({})".format(e)
-        )
 
 # We set the numba threading here, **after** importing MPI.  The reasons are:
 #
@@ -51,15 +40,6 @@ _have_set_numba_threading = False
 if not _have_set_numba_threading:
     set_numba_threading()
     _have_set_numba_threading = True
-
-
-def comm_py2c(comm):
-    if MPI_Comm is None:
-        return None
-    else:
-        comm_ptr = MPI._addressof(comm)
-        return MPI_Comm.from_address(comm_ptr)
-
 
 def get_world():
     """Retrieve the default world communicator and its properties.

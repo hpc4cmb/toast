@@ -1,21 +1,20 @@
 #!/bin/bash
 
-# Pass extra configure options to this script, including
-# things like --prefix, --with-elemental, etc.
+# Pass extra cmake options to this script, including
+# things like -DCMAKE_INSTALL_PREFIX=/path/to/install, etc.
 
-OPTS="$@"
+opts="$@"
 
-export PYTHON=python3
-export CC=mpiicc
-export CXX=mpiicpc
-export MPICC=mpiicc
-export MPICXX=mpiicpc
-export CFLAGS="-O3 -g -fPIC -pthread"
-export CXXFLAGS="-O3 -g -fPIC -pthread"
-export OPENMP_CFLAGS="-qopenmp"
-export OPENMP_CXXFLAGS="-qopenmp"
-
-./configure ${OPTS} \
-    --with-math="-limf -lsvml" \
-    --with-mkl="${MKLROOT}/lib/intel64" \
-    --with-tbb="${TBBROOT}/lib/intel64/gcc4.7"
+cmake \
+    -DCMAKE_C_COMPILER="icc" \
+    -DCMAKE_CXX_COMPILER="icpc" \
+    -DMPI_C_COMPILER="mpiicc" \
+    -DMPI_CXX_COMPILER="mpiicpc" \
+    -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
+    -DBLAS_LIBRARIES=${MKLROOT}/lib/intel64/libmkl_rt.so \
+    -DLAPACK_LIBRARIES=${MKLROOT}/lib/intel64/libmkl_rt.so \
+    -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    ${opts} \
+    ..

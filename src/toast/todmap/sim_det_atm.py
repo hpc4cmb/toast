@@ -28,7 +28,7 @@ if available:
 if available_mpi:
     from .atm import AtmSimMPI
 
-from toast.mpi import MPI, comm_py2c
+from toast.mpi import MPI
 
 import toast.qarray as qa
 
@@ -760,7 +760,7 @@ class OpSimAtmosphere(Operator):
                 self._zstep,
                 self._nelem_sim_max,
                 self._verbosity,
-                comm_py2c(comm).value,
+                comm,
                 key1,
                 key2,
                 counter1,
