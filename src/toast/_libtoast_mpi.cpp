@@ -5,9 +5,28 @@
 
 #include <_libtoast_mpi.hpp>
 
-// This fixes compilation errors with OpenMPI 4
-// (see https://github.com/hpc4cmb/toast/issues/298)
-struct ompi_communicator_t {};
+#include <mpi4py/mpi4py.h>
+
+
+MPI_Comm toast_mpi_extract_comm(py::object & pycomm) {
+    PyObject * pp = pycomm.ptr();
+
+    // For some reason this official way segfaults.  So we access the
+    // structure directly.  Although an internal detail, this has been
+    // consistent in mpi4py since version 1.2.2.
+    // MPI_Comm * comm = PyMPIComm_Get(pp);
+    MPI_Comm * comm = &(((struct PyMPICommObject *)pp)->ob_mpi);
+
+    if (import_mpi4py() < 0) {
+        throw std::runtime_error("could not import mpi4py\n");
+    }
+    if (comm == nullptr) {
+        throw std::runtime_error("mpi4py Comm pointer is null\n");
+    }
+    MPI_Comm newcomm;
+    int ret = MPI_Comm_dup((*comm), &newcomm);
+    return newcomm;
+}
 
 // Currently the only compiled code that uses MPI and needs to be bound to python is
 // the atmosphere simulation code.  If the number of things increases, we should split
@@ -66,23 +85,36 @@ void init_mpi_atm(py::module & m) {
             rmax (float):  Maximum line of sight observing distance.
 
         )")
-    .def(py::init <double, double, double, double, double, double, double, double,
-                   double, double, double, double, double, double, double, double,
-                   double, double,
-                   double, double, double, double, double, long, int, MPI_Comm,
-                   uint64_t, uint64_t, uint64_t,
-                   uint64_t, std::string, double, double> (), py::arg("azmin"), py::arg(
-             "azmax"), py::arg("elmin"), py::arg("elmax"), py::arg("tmin"), py::arg(
-             "tmax"), py::arg("lmin_center"), py::arg("lmin_sigma"), py::arg(
-             "lmax_center"), py::arg("lmax_sigma"), py::arg("w_center"), py::arg(
-             "w_sigma"), py::arg("wdir_center"), py::arg("wdir_sigma"), py::arg(
-             "z0_center"), py::arg("z0_sigma"), py::arg("T0_center"), py::arg(
-             "T0_sigma"), py::arg("zatm"), py::arg("zmax"), py::arg("xstep"), py::arg(
-             "ystep"), py::arg("zstep"), py::arg("nelem_sim_max"), py::arg(
-             "verbosity"), py::arg("comm"), py::arg("key1"), py::arg("key2"),
-         py::arg("counterval1"), py::arg("counterval2"), py::arg("cachedir"), py::arg(
-             "rmin"), py::arg("rmax")
-         )
+    .def(
+        py::init(
+            [](double azmin, double azmax, double elmin, double elmax,
+               double tmin, double tmax, double lmin_center, double lmin_sigma,
+               double lmax_center, double lmax_sigma, double w_center, double w_sigma,
+               double wdir_center, double wdir_sigma, double z0_center, double z0_sigma,
+               double T0_center, double T0_sigma, double zatm, double zmax,
+               double xstep, double ystep, double zstep, long nelem_sim_max,
+               int verbosity, py::object & pycomm, uint64_t key1, uint64_t key2,
+               uint64_t counterval1, uint64_t counterval2, std::string cachedir,
+               double rmin, double rmax) {
+                MPI_Comm comm = toast_mpi_extract_comm(pycomm);
+                return new toast::mpi_atm_sim(
+                    azmin, azmax, elmin, elmax, tmin, tmax, lmin_center, lmin_sigma,
+                    lmax_center, lmax_sigma, w_center, w_sigma, wdir_center,
+                    wdir_sigma, z0_center, z0_sigma, T0_center, T0_sigma, zatm,
+                    zmax, xstep, ystep, zstep, nelem_sim_max, verbosity, comm, key1,
+                    key2, counterval1, counterval2, cachedir, rmin, rmax);
+            }), py::arg("azmin"), py::arg("azmax"), py::arg("elmin"), py::arg("elmax"),
+        py::arg("tmin"), py::arg("tmax"), py::arg("lmin_center"),
+        py::arg("lmin_sigma"), py::arg("lmax_center"), py::arg("lmax_sigma"),
+        py::arg("w_center"), py::arg("w_sigma"), py::arg("wdir_center"),
+        py::arg("wdir_sigma"), py::arg("z0_center"), py::arg("z0_sigma"),
+        py::arg("T0_center"), py::arg("T0_sigma"), py::arg("zatm"),
+        py::arg("zmax"), py::arg("xstep"), py::arg("ystep"), py::arg("zstep"),
+        py::arg("nelem_sim_max"), py::arg("verbosity"), py::arg("comm"),
+        py::arg("key1"), py::arg("key2"), py::arg("counterval1"),
+        py::arg("counterval2"), py::arg("cachedir"), py::arg("rmin"),
+        py::arg("rmax")
+        )
     .def("simulate", &toast::mpi_atm_sim::simulate, py::arg(
              "use_cache"), R"(
         Perform the simulation.

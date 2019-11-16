@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Pass extra configure options to this script, including
-# things like --prefix, --with-elemental, etc.
+# Pass extra cmake options to this script, including
+# things like -DCMAKE_INSTALL_PREFIX=/path/to/install, etc.
 
 opts="$@"
 
