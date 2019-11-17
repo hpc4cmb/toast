@@ -10,12 +10,12 @@ additional external packages are available.  The best installation method will d
 User Installation
 --------------------------
 
-If you are using TOAST to build simulation and analysis workflows, including mixing built-in functionality with your own custom tools, then you can use of these methods to get started.  If you want to hack on the TOAST package itself, see the section on Developer Installation.
+If you are using TOAST to build simulation and analysis workflows, including mixing built-in functionality with your own custom tools, then you can use of these methods to get started.  If you want to hack on the TOAST package itself, see the section :ref:`devinstall`.
 
 Conda Packages
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The easiest way to install TOAST and all of its optional dependencies is to use the conda package manager.  The conda-forge ecosystem allows us to create packages that are built consistently with all their dependencies.  We recommend following the setup guidelines used by conda-forge:  https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge , specifically:
+The easiest way to install TOAST and all of its optional dependencies is to use the conda package manager.  The conda-forge ecosystem allows us to create packages that are built consistently with all their dependencies.  We recommend following the `setup guidelines used by conda-forge <https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge>`_, specifically:
 
     1.  Install a "miniconda" base system (not the full Anaconda distribution).
 
@@ -25,22 +25,74 @@ The easiest way to install TOAST and all of its optional dependencies is to use 
 
     4.  Always create a new environment (i.e. not the base one) when setting up a python stack for a particular purpose.  This allows you to upgrade the conda base system in a reliable way, and to wipe and recreate whole conda environments whenever needed.
 
-conda config --add channels conda-forge
-conda config --set channel_priority strict
+Here are the detailed steps of how you could do this from the UNIX shell, installing the base conda system to ``${HOME}/conda``.  First download the installer.  For OS X you would do::
+
+    curl -SL https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -o miniconda.sh
+
+For Linux you would do this::
+
+    curl -SL https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+
+Next we will run the installer.  The install prefix should not exist previously::
+
+    bash miniconda.sh -b -p "${HOME}/conda"
+
+Now load this conda "root" environment::
+
+    source ${HOME}/conda/etc/profile.d/conda.sh
+    conda activate
+
+We are going to make sure to preferentially get packages from the conda-forge channel::
+
+    conda config --add channels conda-forge
+    conda config --set channel_priority strict
+
+Next, we are going to create a conda environment for a particular purpose (installing TOAST).  You can create as many environments as you like and install different packages within them- they are independent.  In this example, we will call this environment "toast", but you can call it anything::
+
+    conda create -y -n toast
+
+Now we can activate our new (and mostly empty) toast environment::
+
+    conda activate toast
+
+Finally, we can install the toast package.  I recommend installing the MPICH version of TOAST.  There is also a version of TOAST without MPI, but most of the parallelism in TOAST comes from using MPI::
+
+    conda install toast=*=mpi_mpich*
+
+OR::
+
+    conda install toast=*=nompi*
+
+There is also an OpenMPI version of the package, but that is mainly intended for installing toast into environments that also use / require OpenMPI.  Assuming this is the only conda installation on your system, you can add the line ``source ${HOME}/conda/etc/profile.d/conda.sh`` to your shell resource file (usually ``~/.bashrc`` on Linux or ``~/.profile`` on OS X).  You can read many articles on login shells versus non-login shells and decide where to put this line for your specific use case.
+
+Now you can always activate your toast environment with::
+
+    conda activate toast
+
+And leave that environment with::
+
+    conda deactivate
+
+If you want to use other packages with TOAST (e.g. Jupyter Lab), then you can activate the toast environment and install them with conda.  See the conda documentation for more details on managing environments, installing packages, etc.
 
 
 Minimal Install with PIP
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you cannot or do not want to use the conda package manager, then it is possible to install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will be missing support for MPI and atmospheric simulation.  Additionally, you must first ensure that a BLAS/LAPACK library is installed and available in the default compiler search paths.  You should also install the FFTW package, either through your OS package manager or manually.  After doing those steps, you can do::
+If you cannot or do not want to use the conda package manager, then it is possible to install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will be missing support for MPI and atmospheric simulations.  Additionally, you must first ensure that you have a serial compiler installed and that a BLAS/LAPACK library is available in the default compiler search paths.  You should also install the FFTW package, either through your OS package manager or manually.  After doing those steps, you can do::
 
-    $> pip install ....
+    $> pip install https://github.com/hpc4cmb/toast/archive/2.3.3.tar.gz
+
+Specify the URL to the version tarball you want to install (see the releases on the TOAST github page).
+
 
 Something Else
 ~~~~~~~~~~~~~~~~~~~~~
 
 If you have a custom install situation that is not met by the above solutions, then you should follow the instructions below for a "Developer install".
 
+
+.. _devinstall:
 
 Developer Installation
 -----------------------------
@@ -49,13 +101,54 @@ Before setting up a software stack for TOAST development, you should become fami
 
     1.  What serial C++11 compilers are you using?
 
-    2.  If using MPI, your MPI installation must be compatible with your serial compilers
-
-    mpicxx -show
+    2.  If using MPI, your MPI installation must be compatible with your serial compilers.
 
     3.  What python3 installation are you using?
 
-    4.  Your mpi4py installation must be compatible with #3 and #2
+    4.  Your mpi4py installation must be compatible with #3 and #2.
+
+The rest of this section describes a recommended procedure for getting everything set up.  If you are an expert in software package management then there are many variations that will work, but there are also many pitfalls.
+
+Compilers
+~~~~~~~~~~~~~~~~
+
+On Linux, you are likely using the GNU compilers.  You can install these through your OS package manager.  On OS X, you can use the clang compiler provided by XCode developer tools, or the macports and homebrew packaging systems provide versions of newer GNU compilers.
+
+When choosing an MPI version, we recommend installing an MPICH version from the same source as your serial compilers (Linux package manager, homebrew, macports, etc).  You can also use OpenMPI, but make sure that you can run an MPI program before trying to use it with TOAST.  Some Linux installs of OpenMPI require you to edit a config file for your system first.  If there is no compatible MPI version available, you can install MPICH manually using your serial compilers, or just skip using MPI on your development system.
+
+There also exist conda packages for compilers, but I recommend *not* using those for compiling general software outside of conda packages.  The reason is that these compilers are cross-compilers and care needs to be taken to ensure that they are not mixed with other system libraries.
+
+
+Python 3
+~~~~~~~~~~~~~
+
+You can obtain a compatible version of Python (>=3.4) from OS packages, homebrew / macports, or conda.  In addition to Python, you will need to install::
+
+    numpy
+    scipy
+    astropy
+    healpy
+    pyephem
+
+If you are using an OS packaged python, you likely want to first create a virtualenv before installing these packages with pip.  If you are using conda, consider creating a new env for this development work.
+
+
+Compiled Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~
+
+After selecting your compilers and your Python, choose a separate installation prefix to install TOAST and any manually compiled dependencies.  Do not install this software into a conda environment.  For this example, we will put our compiled dependencies and TOAST into ``${HOME}/toastdev``.
+
+The required dependencies for TOAST are LAPACK/BLAS, FFTW, and CMake.  If you want to do atmosphere simulations, then you additionally need to install SuiteSparse and the libaatm package.  On a recent Ubuntu, you can get all of these with::
+
+    apt update
+    apt install \
+        cmake \
+        libopenblas-dev \
+        liblapack-dev \
+        libfftw3-dev \
+        libsuitesparse-dev
+
+To install libaatm, `download a release tarball here <https://github.com/hpc4cmb/libaatm/releases>`_
 
 
 Compiled Dependencies
@@ -84,7 +177,7 @@ folder, like ``$HOME/toast-deps``. For ``libmadam`` and
 Then you should updated ``LD_LIBRARY_PATH`` to point to
 ``$HOME/toast-deps/lib``: we will show how to do this below.
 
-    
+
 Python Dependencies
 ------------------------
 
