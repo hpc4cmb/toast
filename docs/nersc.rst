@@ -1,9 +1,9 @@
 .. _nersc:
 
-Using at NERSC
+Using TOAST at NERSC
 ====================
 
-To use TOAST at NERSC, you need to have a Python3 software stack with all dependencies installed.  There is already such a software stack installed on edison and cori.
+To use TOAST at NERSC, you need to have a Python3 software stack with all dependencies installed.  There is already such a software stack installed on the NERSC machines.
 
 
 Module Files

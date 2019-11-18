@@ -15,7 +15,6 @@ Contents:
     intro.rst
     install.rst
     utils.rst
-
 #workflow.rst
 #data.rst
 #tod.rst
@@ -25,7 +24,7 @@ Contents:
 #sim.rst
 #maptools.rst
 #timing.rst
-#nersc.rst
+    nersc.rst
 #dev.rst
 
 
