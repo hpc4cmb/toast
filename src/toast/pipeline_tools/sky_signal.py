@@ -14,6 +14,43 @@ from ..map import DistPixels
 from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpSimConviqt
 
 
+def add_sky_signal_args(parser):
+    # The sky signal flag may be already added
+    try:
+        parser.add_argument(
+            "--sky",
+            required=False,
+            action="store_true",
+            help="Add simulated sky signal",
+            dest="simulate_sky",
+        )
+        parser.add_argument(
+            "--simulate-sky",
+            required=False,
+            action="store_true",
+            help="Add simulated sky",
+            dest="simulate_sky",
+        )
+        parser.add_argument(
+            "--no-sky",
+            required=False,
+            action="store_false",
+            help="Do not add simulated sky",
+            dest="simulate_sky",
+        )
+        parser.add_argument(
+            "--no-simulate-sky",
+            required=False,
+            action="store_false",
+            help="Do not add simulated sky",
+            dest="simulate_sky",
+        )
+        parser.set_defaults(simulate_sky=True)
+    except argparse.ArgumentError:
+        pass
+    return
+
+
 def add_sky_map_args(parser):
     """ Add the sky arguments
     """
@@ -34,6 +71,7 @@ def add_sky_map_args(parser):
         )
     except argparse.ArgumentError:
         pass
+    add_sky_signal_args(parser)
 
     return
 
@@ -95,6 +133,8 @@ def add_pysm_args(parser):
     except argparse.ArgumentError:
         pass
 
+    add_sky_signal_args(parser)
+
     return
 
 
@@ -148,7 +188,7 @@ def add_conviqt_args(parser):
     )
     parser.set_defaults(conviqt_dxx=True)
     parser.add_argument(
-        "--conviqt-order", default=11, type=np.int, help="Iteration order",
+        "--conviqt-order", default=11, type=np.int, help="Iteration order"
     )
     parser.add_argument(
         "--conviqt-normalize-beam",
@@ -202,12 +242,16 @@ def add_conviqt_args(parser):
     )
     parser.set_defaults(conviqt_mpi_comm="rank")
 
+    add_sky_signal_args(parser)
+
     return
 
 
 @function_timer
 def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
     if args.conviqt_sky_file is None or args.conviqt_beam_file is None:
+        return
+    if not args.simulate_sky:
         return
     log = Logger.get()
     timer = Timer()
@@ -251,12 +295,12 @@ def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
 
 @function_timer
 def scan_sky_signal(
-    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", mc=0,
+    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", mc=0
 ):
     """ Scan sky signal from a map.
 
     """
-    if not args.input_map:
+    if not args.input_map or not args.simulate_sky:
         return None
 
     log = Logger.get()
@@ -284,12 +328,12 @@ def scan_sky_signal(
 
 @function_timer
 def simulate_sky_signal(
-    args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels", mc=0,
+    args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels", mc=0
 ):
     """ Use PySM to simulate smoothed sky signal.
 
     """
-    if not args.pysm_model:
+    if not args.pysm_model or not args.simulate_sky:
         return None
     timer = Timer()
     timer.start()
