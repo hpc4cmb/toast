@@ -175,7 +175,7 @@ class OpPointingHpixTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_hpix_simple_info"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
         return
@@ -190,7 +190,7 @@ class OpPointingHpixTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_hpix_hwpnull_info"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
         return

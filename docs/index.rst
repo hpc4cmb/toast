@@ -14,18 +14,18 @@ Contents:
 
     intro.rst
     install.rst
+    data.rst
+    pipelines.rst
     utils.rst
+    nersc.rst
 
-#workflow.rst
-#data.rst
-#tod.rst
+
 #intervals.rst
 #noise.rst
 #pointing.rst
 #sim.rst
 #maptools.rst
 #timing.rst
-#nersc.rst
 #dev.rst
 
 

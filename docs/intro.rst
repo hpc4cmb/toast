@@ -21,23 +21,6 @@ The TOAST framework contains:
 The highest-level control of the workflow is done by the user, often by writing a small Python "pipeline" script (some examples are included).  Such pipeline scripts make use of TOAST functions for distributing data and then call built-in or custom operators to process the timestream data.
 
 
-Data Organization
------------------------
-
-The TOAST framework groups data into one or more "observations".  Each observation represents data from a group of detectors for some time span.  Detectors in the same observation must have the same number of samples for the length of the observation.  We currently also assume that the noise properties of the detectors are constant across this observation (i.e. the noise is stationary).  A TOAST "dataset" is simply a collection of one or more observations.
-
-
-Workflow
----------------------
-
-
-Example:  Satellite
-
-
-Example:  Ground-Based
-
-
-
 Support for Specific Experiments
 -------------------------------------
 

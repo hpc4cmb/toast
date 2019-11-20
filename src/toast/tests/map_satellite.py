@@ -202,7 +202,7 @@ class MapSatelliteTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_grad_info"), "w"
             )
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -281,7 +281,7 @@ class MapSatelliteTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_noise_info"), "w"
             )
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -380,7 +380,7 @@ class MapSatelliteTest(MPITestCase):
 
         # construct a distributed map which has the gradient
         distsig = DistPixels(
-            self.data, comm=self.data.comm.comm_group, nnz=1, dtype=np.float64,
+            self.data, comm=self.data.comm.comm_group, nnz=1, dtype=np.float64
         )
 
         distsig.broadcast_healpix_map(sig)
@@ -394,7 +394,7 @@ class MapSatelliteTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_scanmap_info"), "w"
             )
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -469,7 +469,7 @@ class MapSatelliteTest(MPITestCase):
         sig = grad.sigmap()
 
         # construct a distributed map which has the gradient
-        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64)
 
         distsig.broadcast_healpix_map(sig)
 
@@ -482,7 +482,7 @@ class MapSatelliteTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_hwpfast_info"), "w"
             )
-        data.info(handle)
+        data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -559,7 +559,7 @@ class MapSatelliteTest(MPITestCase):
         sig = grad.sigmap()
 
         # construct a distributed map which has the gradient
-        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64)
 
         distsig.broadcast_healpix_map(sig)
 
@@ -572,7 +572,7 @@ class MapSatelliteTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_satellite_hwpconst_info"), "w"
             )
-        data.info(handle)
+        data.info(handle=handle)
         if rank == 0:
             handle.close()
 

@@ -134,7 +134,7 @@ class DataTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_construct_info"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
