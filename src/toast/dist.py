@@ -268,7 +268,7 @@ class Data(object):
     each process group in the Comm.
 
     Args:
-        comm (toast.Comm): the toast Comm class for distributing the data.
+        comm (:class:`toast.Comm`): the toast Comm class for distributing the data.
 
     """
 
@@ -301,7 +301,7 @@ class Data(object):
             ob.clear()
         return
 
-    def info(self, handle, flag_mask=255, common_flag_mask=255, intervals=None):
+    def info(self, handle=None, flag_mask=255, common_flag_mask=255, intervals=None):
         """Print information about the distributed data.
 
         Information is written to the specified file handle.  Only the rank 0
@@ -310,7 +310,7 @@ class Data(object):
 
         Args:
             handle (descriptor):  file descriptor supporting the write()
-                method.
+                method.  If None, use print().
             flag_mask (int):  bit mask to use when computing the number of
                 good detector samples.
             common_flag_mask (int):  bit mask to use when computing the
@@ -332,13 +332,20 @@ class Data(object):
         rcomm = self._comm.comm_rank
 
         if wcomm is None:
-            handle.write("Data distributed over a single process (no MPI)")
+            msg = "Data distributed over a single process (no MPI)"
+            if handle is None:
+                print(msg, flush=True)
+            else:
+                handle.write()
         else:
             if wcomm.rank == 0:
-                handle.write(
-                    "Data distributed over {} processes in {} groups\n"
-                    "".format(self._comm.world_size, self._comm.ngroups)
+                msg = "Data distributed over {} processes in {} groups\n".format(
+                    self._comm.world_size, self._comm.ngroups
                 )
+                if handle is None:
+                    print(msg, flush=True)
+                else:
+                    handle.write(msg)
 
         def _get_optional(k, dt):
             if k in dt:
@@ -481,12 +488,18 @@ class Data(object):
 
         recvgrp = ""
         if self._comm.world_rank == 0:
-            handle.write(groupstr)
+            if handle is None:
+                print(groupstr, flush=True)
+            else:
+                handle.write(groupstr)
         if wcomm is not None:
             for g in range(1, self._comm.ngroups):
                 if wcomm.rank == 0:
                     recvgrp = rcomm.recv(source=g, tag=g)
-                    handle.write(recvgrp)
+                    if handle is None:
+                        print(recvgrp, flush=True)
+                    else:
+                        handle.write(recvgrp)
                 elif g == self._comm.group:
                     if gcomm.rank == 0:
                         rcomm.send(groupstr, dest=0, tag=g)

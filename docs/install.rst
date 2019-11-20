@@ -12,6 +12,8 @@ User Installation
 
 If you are using TOAST to build simulation and analysis workflows, including mixing built-in functionality with your own custom tools, then you can use of these methods to get started.  If you want to hack on the TOAST package itself, see the section :ref:`devinstall`.
 
+If you want to use TOAST at NERSC, see :ref:`nersc`.
+
 Conda Packages
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -27,11 +29,15 @@ The easiest way to install TOAST and all of its optional dependencies is to use 
 
 Here are the detailed steps of how you could do this from the UNIX shell, installing the base conda system to ``${HOME}/conda``.  First download the installer.  For OS X you would do::
 
-    curl -SL https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -o miniconda.sh
+    curl -SL \
+    https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh \
+    -o miniconda.sh
 
 For Linux you would do this::
 
-    curl -SL https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+    curl -SL \
+    https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    -o miniconda.sh
 
 Next we will run the installer.  The install prefix should not exist previously::
 
@@ -81,7 +87,7 @@ Minimal Install with PIP
 
 If you cannot or do not want to use the conda package manager, then it is possible to install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will be missing support for MPI and atmospheric simulations.  Additionally, you must first ensure that you have a serial compiler installed and that a BLAS/LAPACK library is available in the default compiler search paths.  You should also install the FFTW package, either through your OS package manager or manually.  After doing those steps, you can do::
 
-    $> pip install https://github.com/hpc4cmb/toast/archive/2.3.3.tar.gz
+    $> pip install https://github.com/hpc4cmb/toast/archive/2.3.5.tar.gz
 
 Specify the URL to the version tarball you want to install (see the releases on the TOAST github page).
 
@@ -97,55 +103,69 @@ If you have a custom install situation that is not met by the above solutions, t
 Developer Installation
 -----------------------------
 
-Before setting up a software stack for TOAST development, you should become familiar with the following:
+Here we will discuss several specific system configurations that are known to work.  The best one for you will depend on your OS and preferences.
 
-    1.  What serial C++11 compilers are you using?
-
-    2.  If using MPI, your MPI installation must be compatible with your serial compilers.
-
-    3.  What python3 installation are you using?
-
-    4.  Your mpi4py installation must be compatible with #3 and #2.
-
-The rest of this section describes a recommended procedure for getting everything set up.  If you are an expert in software package management then there are many variations that will work, but there are also many pitfalls.
-
-Compilers
+Ubuntu Linux
 ~~~~~~~~~~~~~~~~
 
-On Linux, you are likely using the GNU compilers.  You can install these through your OS package manager.  On OS X, you can use the clang compiler provided by XCode developer tools, or the macports and homebrew packaging systems provide versions of newer GNU compilers.
+You can install all but one required TOAST dependency using packages provided by the OS.  Note that this assumes a recent version of ubuntu (tested on 19.04)::
 
-When choosing an MPI version, we recommend installing an MPICH version from the same source as your serial compilers (Linux package manager, homebrew, macports, etc).  You can also use OpenMPI, but make sure that you can run an MPI program before trying to use it with TOAST.  Some Linux installs of OpenMPI require you to edit a config file for your system first.  If there is no compatible MPI version available, you can install MPICH manually using your serial compilers, or just skip using MPI on your development system.
-
-There also exist conda packages for compilers, but I recommend *not* using those for compiling general software outside of conda packages.  The reason is that these compilers are cross-compilers and care needs to be taken to ensure that they are not mixed with other system libraries.
-
-
-Python 3
-~~~~~~~~~~~~~
-
-You can obtain a compatible version of Python (>=3.4) from OS packages, homebrew / macports, or conda.  In addition to Python itself, you will need to install::
-
-    numpy
-    scipy
-    astropy
-    healpy
-    pyephem
-
-Option 1
-+++++++++++++
-
-On Ubuntu Linux, there are packages for all these::
-
+    apt update
     apt install \
+        cmake \
+        build-essential \
+        gfortran \
+        libopenblas-dev \
+        libmpich-dev \
+        liblapack-dev \
+        libfftw3-dev \
+        libsuitesparse-dev \
+        python3-dev \
+        libpython3-dev \
         python3-scipy \
         python3-matplotlib \
         python3-healpy \
         python3-astropy \
         python3-pyephem
 
-Option 2
-+++++++++++++
 
-On other Linux distros or OS X, you can first create a virtualenv with your python3.  You may need to install the virtualenv package (e.g. ``python3-virtualenv``).  Create the virtualenv, activate it, and then use pip to install these packages::
+NOTE:  if you are using another package on your system that requires OpenMPI, then you may get a conflict installing libmpich-dev.  In that case, just install libopenmpi-dev instead.
+
+Next, download a `release of libaatm <https://github.com/hpc4cmb/libaatm/releases>`_ and install it.  For example::
+
+    cd libaatm
+    mkdir build
+    cd build
+    cmake \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        ..
+    make -j 4
+    sudo make install
+
+You can also install it to the same prefix as TOAST or to a separate location for just the TOAST dependencies.  If you install it somewhere other than /usr/local then make sure it is in your environment search paths (see the "installing TOAST" section).
+
+You can also now install the optional dependencies:
+
+    * `libconviqt <https://github.com/hpc4cmb/libconviqt>`_ for 4PI beam convolution.
+    * `libmadam <https://github.com/hpc4cmb/libmadam>`_ for optimized destriping mapmaking.
+
+
+Other Linux
+~~~~~~~~~~~~~~~~
+
+If you have a different distro or an older version of Ubuntu, you should try to install at least these packages with your OS package manager::
+
+    gcc
+    g++
+    mpich or openmpi
+    lapack
+    fftw
+    suitesparse
+    python3
+    python3 development library (e.g. libpython3-dev)
+    virtualenv (e.g. python3-virtualenv)
+
+The you can create a python3 virtualenv, activate it, and then use pip to install these packages::
 
     pip install \
         scipy \
@@ -154,45 +174,38 @@ On other Linux distros or OS X, you can first create a virtualenv with your pyth
         astropy \
         pyephem
 
-Option 3
-++++++++++++
-
-Install a conda root environment (see the section on User Installation), and then create a conda env for toast development.  Use conda to install these packages.  For example::
-
-    conda create -n toastdev
-    conda activate toastdev
-    conda install \
-        numpy \
-        scipy \
-        matplotlib \
-        healpy \
-        astropy \
-        pyephem
+Then install libaatm as discussed in the previous section.
 
 
-Compiled Dependencies
-~~~~~~~~~~~~~~~~~~~~~~~
+Conda Isolated Environment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-At this point you have your serial and MPI compilers set up, and you have a python3 install from one of the options above, as well as some python packages.
+This is still a work in progress.  Conda provides compilers as well as packages, but in order to use them we must isolate **everything** from the surrounding OS.  The obvious appeal is that we can then install all dependencies easily and just build TOAST using the conda compilers.  We will add more details here after more testing.
 
-Now we are going to install several compiled dependencies into a separate location.  Do not install this software into a conda env- we will be exporting the library directory of our install prefix into our environment and this will cause problems if libraries installed by conda conflict with system libraries.  For this example, we will put our compiled dependencies and TOAST into ``${HOME}/toastdeps``.
+OS X with MacPorts
+~~~~~~~~~~~~~~~~~~~~~~
 
-The required dependencies for TOAST are LAPACK/BLAS, FFTW, and CMake.  If you want to do atmosphere simulations, then you additionally need to install SuiteSparse and the libaatm package.  On a recent Ubuntu, you can get everything except libaatm with::
 
-    apt update
-    apt install \
-        cmake \
-        libopenblas-dev \
-        liblapack-dev \
-        libfftw3-dev \
-        libsuitesparse-dev
+OS X with Homebrew
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-On other Linux systems and homebrew / macports there are similar packages for most of these.  Any standard BLAS / LAPACK will work.  If you need to build any of these manually, install them to your selected prefix for all these compiled tools.  To install libaatm, `download a release tarball here <https://github.com/hpc4cmb/libaatm/releases>`_ and follow the install instructions.  Install this to our chosen prefix (e.g. ``${HOME}/toastdeps``).
 
-In order to find the software we have installed here, we need to export this location into our environment.  Here is a small shell function as an example of how to do this.  You can put this function in your shell resource file (``~/.bashrc`` or ``~/.profile``)::
 
-    toastdeps () {
-        dir="${HOME}/software/${name}"
+Full Custom Install with CMBENV
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `cmbenv package <https://github.com/hpc4cmb/cmbenv>`_ can generate an install script that selectively compiles packages using specified compilers.  This allows you to "pick and choose" what packages are installed from the OS versus being built from source.  See the example configs in that package and the README.  For example, there is an "ubuntu-19.04" config that gets everything from OS packages but also compiles the optional dependencies like libconviqt and libmadam.
+
+
+Installing TOAST
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Decide where you want to install your development copy of TOAST.  I recommend picking a standalone directory somewhere.  For this example, we will use ```${HOME}/software/toast``.  This should **NOT** be the same location as your git checkout.
+
+We want to define a small shell function that will load this directory into our environment.  You can put this function in your shell resource file (``~/.bashrc`` or ``~/.profile``)::
+
+    load_toast () {
+        dir="${HOME}/software/toast"
         export PATH="${dir}/bin:${PATH}"
         export CPATH="${dir}/include:${CPATH}"
         export LIBRARY_PATH="${dir}/lib:${LIBRARY_PATH}"
@@ -200,226 +213,65 @@ In order to find the software we have installed here, we need to export this loc
         pysite=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
         export PYTHONPATH="${dir}/lib/python${pysite}/site-packages:${PYTHONPATH}"
     }
-I
-Now from a new shell, you can run ``toastdeps`` to load the dependencies into your environment.
 
+When installing dependencies, you may have chosen to install libaatm, libconviqt, and libmadam into this same location.  If so, load this location into your search paths now, before installing TOAST::
 
-Building TOAST
-~~~~~~~~~~~~~~~~~~~~~
-
-OAST uses CMake to configure, build, and install both the compiled code
-and the python tools.  The suggested way to run TOAST is to install it in a
-directory within your home folder, and then make it visible using the
-``PYTHONPATH`` environment variable.
-
-Within the ``toast`` directory, run the following commands::
-
-    mkdir build && cd build
-    cmake -DCMAKE_INSTALL_PREFIX=$HOME/toast ..    % Pick the directory you want
-    make && make install
-
-This will compile and install TOAST in the folder ``~/toast``. Now, every
-time you want to run TOAST you must tell Python where it was installed::
-
-    export PATH=$HOME/toast/bin:$PATH
-    export LD_LIBRARY_PATH=$HOME/toast-deps:$LD_LIBRARY_PATH
-    export PYTHONPATH=$HOME/toast/lib/python${PYVER}/site-packages/:$PYTHONPATH
-
-Replace ``${PYVER}`` with the version of the Python interpreter you
-are using (e.g., ``3.7``). This should be enough to run TOAST. (If you
-do not like to run the previous line every time you need TOAST, you
-can put it in your ``.profile``.)
-
-If you need to customize the way TOAST gets compiled, the following
-variables can be defined in the invocation to ``cmake`` using the
-``-D`` flag:
-
-``CMAKE_INSTALL_PREFIX``
-   Location where TOAST will be installed. (We used it in the example above.)
-
-``CMAKE_C_COMPILER``
-   Path to the C compiler
-
-``CMAKE_C_FLAGS``
-   Flags to be passed to the C compiler (e.g., ``-O3``)
-
-``CMAKE_CXX_COMPILER``
-   Path to the C++ compiler
-
-``CMAKE_CXX_FLAGS``
-   Flags to be passed to the C++ compiler
-
-``MPI_C_COMPILER``
-   Path to the MPI wrapper for the C compiler
-
-``MPI_CXX_COMPILER``
-   Path to the MPI wrapper for the C++ compiler
-
-``PYTHON_EXECUTABLE``
-   Path to the Python interpreter
-
-``BLAS_LIBRARIES``
-   Full path to the BLAS dynamical library
-
-``LAPACK_LIBRARIES``
-   Full path to the LAPACK dynamical library
-
-
-See the top-level "platforms" directory for other examples of running CMake.
-
-
-Compiled Dependencies
---------------------------
-
-TOAST compilation requires a C++11 compatible compiler as well as a compatible
-MPI C++ compiler wrapper.  You must also have an FFT library and both FFTW and
-Intel's MKL are supported by configure checks.  Additionally a BLAS/LAPACK
-installation is required.
-
-Several optional compiled dependencies will enable extra features in
-TOAST.  If the `Elemental library <http://libelemental.org/>`_ is
-found at configure time then internal atmosphere simulation code will
-be enabled in the build.  If the `MADAM destriping mapmaker
-<https://github.com/hpc4cmb/libmadam>`_ is available at runtime, then
-the python code will support calling that library; the same applies
-for `Libconviqt <https://github.com/hpc4cmb/libconviqt>`_.
-
-You are advised to setup and install these dependencies in a dedicated
-folder, like ``$HOME/toast-deps``. For ``libmadam`` and
-``libconviqt``, you should compile both of them as follows::
-
-    mkdir $HOME/toast-deps
-    ./autogen.sh && ./configure --prefix=$HOME/toast-deps && make && make install
-
-Then you should updated ``LD_LIBRARY_PATH`` to point to
-``$HOME/toast-deps/lib``: we will show how to do this below.
-
-
-Python Dependencies
-------------------------
-
-You should have a reasonably new (>= 3.4.0) version of python3.  We also require
-several common scientific python packages:
-
-    * numpy
-    * scipy
-    * matplotlib
-    * pyephem
-    * mpi4py (>= 2.0.0)
-    * healpy
-    * sphinx, sphinx_rtd_theme (if you want to rebuild the documentation)
-
-For mpi4py, ensure that this package is compatible with the MPI C++ compiler
-used during TOAST installation.  When installing healpy, you might encounter
-difficulties if you are in a cross-compile situation.  In that case, I
-recommend installing the `repackaged healpix here <https://github.com/tskisner/healpix-autotools>`_.
-
-There are obviously several ways to meet these python requirements.
-
-Option #0
-~~~~~~~~~~~~~
-
-If you are using machines at NERSC, see :ref:`nersc`.
-
-Option #1
-~~~~~~~~~~~~~
-
-If you are using a linux distribution which is fairly recent (e.g. the
-latest Ubuntu version), then you can install all the dependencies with
-the system package manager::
-
-    %> apt-get install fftw-dev python3-scipy \
-       python3-matplotlib python3-ephem python3-healpy \
-       python3-mpi4py
-
-On OS X, you can also get the dependencies with macports.  However, on some
-systems OpenMPI from macports is broken and MPICH should be installed
-as the dependency for the mpi4py package.
-
-Option #2
-~~~~~~~~~~~~~
-
-If your OS is old, you could use a virtualenv to install updated versions
-of packages into an isolated location.  This is also useful if you want to
-separate your packages from the system installed versions, or if you do not
-have root access to the machine.  Make sure that you have python3 and the
-corresponding python3-virtualenv packages installed on your system.  Also
-make sure that you have some kind of MPI (OpenMPI or MPICH) installed with
-your system package manager.  Then:
-
-    1.  create a virtualenv and activate it.
-
-    2.  once inside the virtualenv, pip install the dependencies
-
-Option #3
-~~~~~~~~~~~~~~
-
-Use Anaconda.  Download and install Miniconda or the full Anaconda distribution.
-Make sure to install the Python3 version.  If you are starting from Miniconda,
-install the dependencies that are available through conda::
-
-    %> conda install -c conda-forge numpy scipy matplotlib mpi4py healpy pyephem
-
-Using CMake
------------------------
+    load_toast
 
 TOAST uses CMake to configure, build, and install both the compiled code
-and the python tools.  The suggested way to run TOAST is to install it in a
-directory within your home folder, and then make it visible using the
-``PYTHONPATH`` environment variable.
+and the python tools.  Within the ``toast`` git checkout, run the following commands::
 
-Within the ``toast`` directory, run the following commands::
+    mkdir -p build && cd build
+    cmake -DCMAKE_INSTALL_PREFIX=$HOME/software/toast ..
+    make -j 2 install
 
-    mkdir build && cd build
-    cmake -DCMAKE_INSTALL_PREFIX=$HOME/toast ..    % Pick the directory you want
-    make && make install
+This will compile and install TOAST in the folder ``~/software/toast``. Now, every
+time you want to use toast, just call the shell function::
 
-This will compile and install TOAST in the folder ``~/toast``. Now, every
-time you want to run TOAST you must tell Python where it was installed::
-
-    export PATH=$HOME/toast/bin:$PATH
-    export LD_LIBRARY_PATH=$HOME/toast-deps:$LD_LIBRARY_PATH
-    export PYTHONPATH=$HOME/toast/lib/python${PYVER}/site-packages/:$PYTHONPATH
-
-Replace ``${PYVER}`` with the version of the Python interpreter you
-are using (e.g., ``3.7``). This should be enough to run TOAST. (If you
-do not like to run the previous line every time you need TOAST, you
-can put it in your ``.profile``.)
+    load_toast
 
 If you need to customize the way TOAST gets compiled, the following
 variables can be defined in the invocation to ``cmake`` using the
 ``-D`` flag:
 
 ``CMAKE_INSTALL_PREFIX``
-   Location where TOAST will be installed. (We used it in the example above.)
+    Location where TOAST will be installed. (We used it in the example above.)
 
 ``CMAKE_C_COMPILER``
-   Path to the C compiler
+    Path to the C compiler
 
 ``CMAKE_C_FLAGS``
-   Flags to be passed to the C compiler (e.g., ``-O3``)
+    Flags to be passed to the C compiler (e.g., ``-O3``)
 
 ``CMAKE_CXX_COMPILER``
-   Path to the C++ compiler
+    Path to the C++ compiler
 
 ``CMAKE_CXX_FLAGS``
-   Flags to be passed to the C++ compiler
+    Flags to be passed to the C++ compiler
 
 ``MPI_C_COMPILER``
-   Path to the MPI wrapper for the C compiler
+    Path to the MPI wrapper for the C compiler
 
 ``MPI_CXX_COMPILER``
-   Path to the MPI wrapper for the C++ compiler
+    Path to the MPI wrapper for the C++ compiler
 
 ``PYTHON_EXECUTABLE``
-   Path to the Python interpreter
+    Path to the Python interpreter
 
 ``BLAS_LIBRARIES``
-   Full path to the BLAS dynamical library
+    Full path to the BLAS dynamical library
 
 ``LAPACK_LIBRARIES``
-   Full path to the LAPACK dynamical library
+    Full path to the LAPACK dynamical library
 
+``FFTW_ROOT``
+    The install prefix of the FFTW package
+
+``SUITESPARSE_INCLUDE_DIR_HINTS``
+    The include directory for SuiteSparse headers
+
+``SUITESPARSE_LIBRARY_DIR_HINTS``
+    The directory containing SuiteSparse libraries
 
 See the top-level "platforms" directory for other examples of running CMake.
 
@@ -441,6 +293,6 @@ You will need the two Python packages ``sphinx`` and
 ``sphinx_rtd_theme``, which can be installed using ``pip`` or
 ``conda`` (if you are running Anaconda)::
 
-    cd docs && make html
+    cd docs && make clean && make html
 
 The documentation will be available in ``docs/_build/html``.

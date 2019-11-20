@@ -18,16 +18,6 @@ from .interval import Interval
 
 
 class TOD(object):
-
-    TIMESTAMP_NAME = "timestamps"
-    COMMON_FLAG_NAME = "common_flags"
-    VELOCITY_NAME = "velocity"
-    POSITION_NAME = "position"
-    SIGNAL_NAME = "signal"
-    FLAG_NAME = "flags"
-    POINTING_NAME = "quat"
-    HWP_ANGLE_NAME = "hwp_angle"
-
     """
     Base class for an object that provides detector pointing and
     timestreams for a single observation.
@@ -69,7 +59,6 @@ class TOD(object):
         sampbreaks=None,
         meta=None,
     ):
-
         self._mpicomm = mpicomm
         self._detranks = detranks
 
@@ -167,6 +156,30 @@ class TOD(object):
                     )
 
         self.cache = Cache()
+
+    TIMESTAMP_NAME = "timestamps"
+    """Default cache name for timestamps."""
+
+    COMMON_FLAG_NAME = "common_flags"
+    """Default cache name for common flags."""
+
+    VELOCITY_NAME = "velocity"
+    """Default cache name for velociyt."""
+
+    POSITION_NAME = "position"
+    """Default cache name for position."""
+
+    SIGNAL_NAME = "signal"
+    """Default cache name for signal."""
+
+    FLAG_NAME = "flags"
+    """Default cache name for flags."""
+
+    POINTING_NAME = "quat"
+    """Default cache name for pointing quaternions."""
+
+    HWP_ANGLE_NAME = "hwp_angle"
+    """Default cache name for HWP angle."""
 
     def __repr__(self):
         clsname = self.__class__.__name__
@@ -1357,7 +1370,8 @@ class TODCache(TOD):
             # boresight pointing and detector quaternions.
             if self.cache.exists(self._bore) and (self._detquats is not None):
                 return qa.mult(
-                    self._bore[start : start + n, :], self._detquats[detector]
+                    self.cache.reference(self._bore)[start : start + n, :],
+                    self._detquats[detector],
                 )
             else:
                 raise ValueError(

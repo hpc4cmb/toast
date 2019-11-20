@@ -127,8 +127,8 @@ class TODTidas(TOD):
 
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear("TODTidas open block {}".format(self._blockname))
+        # if rank == 0:
+        #     tmr.report_clear("TODTidas open block {}".format(self._blockname))
 
         # Read detectors and focalplane offsets
 
@@ -156,8 +156,8 @@ class TODTidas(TOD):
         self._detlist = sorted(list(self._detquats.keys()))
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear("TODTidas read fp group {}".format(self._blockname))
+        # if rank == 0:
+        #     tmr.report_clear("TODTidas read fp group {}".format(self._blockname))
 
         # Read detector data group properties and size.
 
@@ -175,10 +175,10 @@ class TODTidas(TOD):
         meta = tdsutils.to_dict(tmpdgrp.dictionary())
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear(
-                "TODTidas read det data group {} meta".format(self._blockname)
-            )
+        # if rank == 0:
+        #     tmr.report_clear(
+        #         "TODTidas read det data group {} meta".format(self._blockname)
+        #     )
 
         # See whether we have ground based data
 
@@ -191,8 +191,8 @@ class TODTidas(TOD):
         del schm
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear("TODTidas check {} azel".format(self._blockname))
+        # if rank == 0:
+        #     tmr.report_clear("TODTidas check {} azel".format(self._blockname))
 
         # We need to assign a unique integer index to each detector.  This
         # is used when seeding the streamed RNG in order to simulate
@@ -216,8 +216,8 @@ class TODTidas(TOD):
 
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear("TODTidas make {} detindx".format(self._blockname))
+        # if rank == 0:
+        #     tmr.report_clear("TODTidas make {} detindx".format(self._blockname))
 
         # Create an MPI lock to use for writing to the TIDAS volume.  We must
         # have only one writing process at a time.  Note that this lock is over
@@ -257,8 +257,8 @@ class TODTidas(TOD):
 
         if mpicomm is not None:
             mpicomm.barrier()
-        if rank == 0:
-            tmr.report_clear("TODTidas read {} chunks".format(self._blockname))
+        # if rank == 0:
+        #     tmr.report_clear("TODTidas read {} chunks".format(self._blockname))
 
         # Delete our temp handles
         del tmpdgrp
@@ -371,29 +371,29 @@ class TODTidas(TOD):
 
         if group_fp in grpnames:
             fpgrp = block.group_get(group_fp)
-            tmr.report_clear("create {} fp group get".format(blockname))
+            # tmr.report_clear("create {} fp group get".format(blockname))
             for d in sorted(detectors.keys()):
                 check = fpgrp.read(d, 0, 4)
                 if not np.allclose(detectors[d], check):
                     raise RuntimeError(
                         "existing focalplane offset for {} " "does not match".format(d)
                     )
-            tmr.report_clear("create {} fp group read".format(blockname))
+            # tmr.report_clear("create {} fp group read".format(blockname))
             del fpgrp
         else:
             # Create the FP schema
             schm = cls._create_fp_schema(list(sorted(detectors.keys())))
-            tmr.report_clear("create {} fp schema".format(blockname))
+            # tmr.report_clear("create {} fp schema".format(blockname))
 
             # Create the FP group
             g = block.group_add(group_fp, tds.Group(schm, tds.Dictionary(), 4))
-            tmr.report_clear("create {} fp group add".format(blockname))
+            # tmr.report_clear("create {} fp group add".format(blockname))
 
             # Write the FP offsets
             for d in sorted(detectors.keys()):
                 g.write(d, 0, np.ascontiguousarray(detectors[d]))
 
-            tmr.report_clear("create {} fp group write offsets".format(blockname))
+            # tmr.report_clear("create {} fp group write offsets".format(blockname))
 
             del schm
             del g
@@ -402,17 +402,17 @@ class TODTidas(TOD):
 
         # Detector data group properties
         gprops = tdsutils.from_dict(meta)
-        tmr.report_clear("create {} det gprops".format(blockname))
+        # tmr.report_clear("create {} det gprops".format(blockname))
 
         # Create the detector data schema
         schm = cls._create_det_schema(
             list(sorted(detectors.keys())), tds.DataType.float64, units, azel
         )
-        tmr.report_clear("create {} det schema".format(blockname))
+        # tmr.report_clear("create {} det schema".format(blockname))
 
         # Create the detector data group
         g = block.group_add(group_dets, tds.Group(schm, gprops, samples))
-        tmr.report_clear("create {} det group add".format(blockname))
+        # tmr.report_clear("create {} det group add".format(blockname))
 
         del schm
         del gprops
@@ -1133,15 +1133,28 @@ class OpTidasExport(Operator):
             for obs in data.obs:
                 # The existing TOD
                 oldtod = obs["tod"]
+                oldcomm = oldtod.mpicomm
 
                 # Sanity check- the group communicator should be the same
-                if cgroup is not None:
-                    comp = MPI.Comm.Compare(oldtod.mpicomm, cgroup)
-                    if comp not in (MPI.IDENT, MPI.CONGRUENT):
-                        msg = "On export, original TOD comm is different from group comm ({})".format(
-                            comp
-                        )
-                        log.error(msg)
+                different_comm = False
+                if cgroup is None:
+                    if oldcomm is not None:
+                        different_comm = True
+                else:
+                    if oldcomm is None:
+                        different_comm = True
+                    else:
+                        comp = MPI.Comm.Compare(oldtod.mpicomm, cgroup)
+                        if comp not in (MPI.IDENT, MPI.CONGRUENT):
+                            different_comm = True
+                if different_comm:
+                    msg = "On export, original TOD comm ({}) is different from group comm ({}).  Comm compare = {}".format(
+                        oldcomm, cgroup, comp
+                    )
+                    log.error(msg)
+                    if cgroup is None:
+                        raise RuntimeError(msg)
+                    else:
                         cworld.Abort()
 
                 # Get the name
@@ -1169,8 +1182,6 @@ class OpTidasExport(Operator):
                 for k, v in obs.items():
                     if isinstance(v, (bool, int, float, str)):
                         oprops["obs_{}".format(k)] = v
-
-                # print("export: ",oprops, flush=True)
 
                 # Create or open the block in the volume that corresponds to
                 # this observation.
@@ -1256,7 +1267,7 @@ class OpTidasExport(Operator):
                     "/".join([blockpath, obsname]),
                     oldtod.detoffset(),
                     oldtod.total_samples,
-                    oldtod.meta(),
+                    oldtod.meta,
                     azel,
                     **self._create_opts
                 )

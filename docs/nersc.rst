@@ -3,7 +3,7 @@
 Using TOAST at NERSC
 ====================
 
-To use TOAST at NERSC, you need to have a Python3 software stack with all dependencies installed.  There is already such a software stack installed on the NERSC machines.
+A recent version of TOAST is already installed at NERSC, along with all necessary dependencies.  You can use this installation directly, or use it as the basis for your own development.
 
 
 Module Files
@@ -11,102 +11,55 @@ Module Files
 
 To get access to the needed module files, add the machine-specific module file location to your search path::
 
-    %> module use /global/common/software/cmb/${NERSC_HOST}/modulefiles
+    module use /global/common/software/cmb/${NERSC_HOST}/default/modulefiles
 
-You can safely put the above line in your ~/.bashrc.ext inside the sections for edison and cori.
+The `default` part of this path is a symlink to the latest stable installation.  There are usually several older versions kept here as well.
 
-
-Load Dependencies
---------------------
-
-In order to load a full python-3.6 stack, and also all dependencies needed by toast, do::
-
-    %> module load toast-deps
+You can safely put the above line in your ~/.bashrc.ext inside the section for cori.  It does not actually load anything into your environment.
 
 
-Install TOAST
-------------------
+Loading the Software
+----------------------
 
-The TOAST codebase is evolving daily, therefore we do not maintain a `toast` module.
-You have to install TOAST yourself from source.
+To load the software do the following:
 
-When installing *any* software at NERSC, we need to
-keep several things in mind:
+    module load cmbenv
+    source cmbenv
 
-    *  The home directories are small.
+Note that the "source" command above is not "reversible" like normal module operations.  This is required in order to activate the underlying conda environment.  After running the above commands, TOAST and many other common software tools will be in your environment, including a Python3 stack.
 
-    *  The performance of the home directories when accessed by many processes
-       is very bad.
 
-    *  The scratch space has lots of room, and very good performance.
+Installing TOAST (Optional)
+-------------------------------
 
-    *  Any file on the scratch space that has not be accessed for some number of
-       weeks will be deleted.
+The cmbenv stack contains a recent version of TOAST, but if you want to build your own copy then you can use the cmbenv stack as a starting point.  Here are the steps:
 
-So unfortunately there is no location which has good performance and also
-persistent file storage.  For this example, we will install software to scratch
-and assume that we will be using the software frequently enough that it will never
-be purged.  If you have not used the tools for a month or so, you should probably
-reinstall just to be sure that everything is in place.
+1.  Decide on the installation location.  You should install software either to one of the project software spaces in `/global/common/software` or in your home directory.  If you plan on using this installation for large parallel jobs, you should install to `/global/common/software`.
 
-First, we pick a location to install our software.  For this example, we will
-be installing to a "software" directory in our scratch space.  First make sure
-that exists::
+2.  Load the cmbenv stack.
 
-    %> mkdir -p ${SCRATCH}/software
+3.  Go into your git checkout of TOAST and make a build directory:
 
-Now we will create a small shell function that loads this location into our search
-paths for executables and python packages.  Add this function to ~/.bashrc.ext and
-you can rename it to whatever you like::
+    cd toast
+    mkdir build
+    cd build
 
-    loadtoast () {
-        export PREFIX=${SCRATCH}/software/toast
-        export PATH=$PREFIX/bin:${PATH}
-        export PYTHONPATH=$PREFIX/lib/python3.6/site-packages:${PYTHONPATH}
+4.  Use the cori-intel platform file to build TOAST and install:
+
+    ../platforms/cori-intel.sh \
+    -DCMAKE_INSTALL_PREFIX=/path/to/somewhere
+    make -j 4 install
+
+5.  Set up a shell function in `~/.bashrc.ext` to load this into your environment search paths before the cmbenv stack:
+
+    load_toast () {
+        dir=/path/to/your/install
+        export PATH="${dir}/bin:${PATH}"
+        pysite=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+        export PYTHONPATH="${dir}/lib/python${pysite}/site-packages:${PYTHONPATH}"
     }
 
-Log out and back in to make this function visible to your shell environment.
-Now checkout the toast source in your home directory somewhere::
 
-    %> cd
-    %> git clone https://github.com/hpc4cmb/toast
+Now whenever you want to override the cmbenv TOAST installation you can just do:
 
-Then configure and build the software.  Unless you know what you are doing, you
-should probably use the platform config example for the machine you are building
-for, consider that the `toast-deps` environment requires Intel compilers::
-
-    %> cd toast
-    %> ./autogen.sh
-    %> ./platforms/edison-intel.sh --prefix=${SCRATCH}/software/toast
-
-Now we can run our function to load this installation into our environment::
-
-    %> loadtoast
-
-On NERSC systems, MPI is not allowed to be run on the login nodes.  In order to
-run our unittests, we first get an interactive compute node::
-
-    %> salloc
-
-and then run the tests::
-
-    %> srun python -c "import toast.tests; toast.tests.run()"
-
-You should read through the many good NERSC webpages that describe how to use the
-different machines.  There are `pages for edison <http://www.nersc.gov/users/computational-systems/edison/running-jobs/>`_
-and `pages for cori <http://www.nersc.gov/users/computational-systems/cori/running-jobs/>`_.
-
-
-Install Experiment Packages
-------------------------------------------
-
-If you are a member of Planck, Core, or LiteBIRD, you can get access to separate
-git repos with experiment-specific scripts and tools.  You can install these to
-the same location as toast.  All of those packages currently use distutils, and
-you will need to do the installation from a compute node (since importing the
-toast python module will load MPI)::
-
-    %> cd toast-<experiment>
-    %> salloc
-    %> srun python setup.py clean
-    %> srun python setup.py install --prefix=${SCRATCH}/software/toast
+    load_toast
