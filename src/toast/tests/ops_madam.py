@@ -83,7 +83,7 @@ class OpMadamTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(mapdir, "out_test_madam_info"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -151,7 +151,7 @@ class OpMadamTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(mapdir, "out_test_madam_info"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 

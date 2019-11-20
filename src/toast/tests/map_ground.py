@@ -13,13 +13,7 @@ import numpy.testing as nt
 import healpy as hp
 
 from ..tod import AnalyticNoise, OpSimNoise
-from ..todmap import (
-    TODGround,
-    OpPointingHpix,
-    OpSimGradient,
-    OpSimScan,
-    OpMadam,
-)
+from ..todmap import TODGround, OpPointingHpix, OpSimGradient, OpSimScan, OpMadam
 
 from ..map import DistPixels
 
@@ -190,7 +184,7 @@ class MapGroundTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_ground_grad_info"), "w")
-        self.data.info(handle, common_flag_mask=self.common_flag_mask)
+        self.data.info(handle=handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -276,7 +270,7 @@ class MapGroundTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_ground_noise_info"), "w")
-        self.data.info(handle, common_flag_mask=self.common_flag_mask)
+        self.data.info(handle=handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -386,7 +380,7 @@ class MapGroundTest(MPITestCase):
 
         # construct a distributed map which has the gradient
         distsig = DistPixels(
-            self.data, comm=self.data.comm.comm_group, nnz=1, dtype=np.float64,
+            self.data, comm=self.data.comm.comm_group, nnz=1, dtype=np.float64
         )
         distsig.broadcast_healpix_map(sig)
 
@@ -399,7 +393,7 @@ class MapGroundTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_ground_scanmap_info"), "w"
             )
-        self.data.info(handle, common_flag_mask=self.common_flag_mask)
+        self.data.info(handle=handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -480,7 +474,7 @@ class MapGroundTest(MPITestCase):
         sig = grad.sigmap()
 
         # construct a distributed map which has the gradient
-        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64)
         distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
@@ -492,7 +486,7 @@ class MapGroundTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_ground_hwpfast_info"), "w"
             )
-        data.info(handle, common_flag_mask=self.common_flag_mask)
+        data.info(handle=handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 
@@ -572,7 +566,7 @@ class MapGroundTest(MPITestCase):
         sig = grad.sigmap()
 
         # construct a distributed map which has the gradient
-        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64,)
+        distsig = DistPixels(data, comm=data.comm.comm_group, nnz=1, dtype=np.float64)
         distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
@@ -584,7 +578,7 @@ class MapGroundTest(MPITestCase):
             handle = open(
                 os.path.join(self.outdir, "out_test_ground_hwpconst_info"), "w"
             )
-        data.info(handle, common_flag_mask=self.common_flag_mask)
+        data.info(handle=handle, common_flag_mask=self.common_flag_mask)
         if rank == 0:
             handle.close()
 

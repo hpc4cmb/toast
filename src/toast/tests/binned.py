@@ -142,7 +142,7 @@ class BinnedTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "info.txt"), "w")
-        self.data.info(handle)
+        self.data.info(handle=handle)
         if rank == 0:
             handle.close()
 
@@ -150,17 +150,17 @@ class BinnedTest(MPITestCase):
         # noise weighted map, and hits
 
         invnpp = DistPixels(
-            self.data, comm=self.data.comm.comm_world, nnz=6, dtype=np.float64,
+            self.data, comm=self.data.comm.comm_world, nnz=6, dtype=np.float64
         )
         invnpp.data.fill(0.0)
 
         zmap = DistPixels(
-            self.data, comm=self.data.comm.comm_world, nnz=3, dtype=np.float64,
+            self.data, comm=self.data.comm.comm_world, nnz=3, dtype=np.float64
         )
         zmap.data.fill(0.0)
 
         hits = DistPixels(
-            self.data, comm=self.data.comm.comm_world, nnz=1, dtype=np.int64,
+            self.data, comm=self.data.comm.comm_world, nnz=1, dtype=np.int64
         )
         hits.data.fill(0)
 
