@@ -336,7 +336,7 @@ class Data(object):
             if handle is None:
                 print(msg, flush=True)
             else:
-                handle.write()
+                handle.write(msg)
         else:
             if wcomm.rank == 0:
                 msg = "Data distributed over {} processes in {} groups\n".format(
