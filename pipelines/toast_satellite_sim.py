@@ -195,6 +195,7 @@ def load_focalplane(args, comm):
 def create_observations(args, comm, focalplane, groupsize):
     timer = Timer()
     timer.start()
+    log = Logger.get()
 
     if groupsize > len(focalplane.keys()):
         if comm.world_rank == 0:
