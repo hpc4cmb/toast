@@ -41,6 +41,7 @@ if not _have_set_numba_threading:
     set_numba_threading()
     _have_set_numba_threading = True
 
+
 def get_world():
     """Retrieve the default world communicator and its properties.
 

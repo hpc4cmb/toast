@@ -249,10 +249,13 @@ def add_conviqt_args(parser):
 
 @function_timer
 def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
-    if args.conviqt_sky_file is None or args.conviqt_beam_file is None:
-        return
-    if not args.simulate_sky:
-        return
+    if (
+        args.conviqt_sky_file is None
+        or args.conviqt_beam_file is None
+        or not args.simulate_sky
+    ):
+        return None
+
     log = Logger.get()
     timer = Timer()
     timer.start()
