@@ -17,7 +17,11 @@ If you want to use TOAST at NERSC, see :ref:`nersc`.
 Conda Packages
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The easiest way to install TOAST and all of its optional dependencies is to use the conda package manager.  The conda-forge ecosystem allows us to create packages that are built consistently with all their dependencies.  We recommend following the `setup guidelines used by conda-forge <https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge>`_, specifically:
+The easiest way to install TOAST and all of its optional dependencies is to use the conda package manager.  The conda-forge ecosystem allows us to create packages that are built consistently with all their dependencies.  If you already have Anaconda installed and it is a recent version...
+
+
+
+We recommend following the `setup guidelines used by conda-forge <https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge>`_, specifically:
 
     1.  Install a "miniconda" base system (not the full Anaconda distribution).
 
@@ -63,11 +67,11 @@ Now we can activate our new (and mostly empty) toast environment::
 
 Finally, we can install the toast package.  I recommend installing the MPICH version of TOAST.  There is also a version of TOAST without MPI, but most of the parallelism in TOAST comes from using MPI::
 
-    conda install toast=*=*mpich*
+    conda install python=3 toast=*=*mpich*
 
 OR::
 
-    conda install toast=*=*nompi*
+    conda install python=3 toast=*=*nompi*
 
 There is also an OpenMPI version of the package, but that is mainly intended for installing toast into environments that also use / require OpenMPI.  Assuming this is the only conda installation on your system, you can add the line ``source ${HOME}/conda/etc/profile.d/conda.sh`` to your shell resource file (usually ``~/.bashrc`` on Linux or ``~/.profile`` on OS X).  You can read many articles on login shells versus non-login shells and decide where to put this line for your specific use case.
 
@@ -87,7 +91,7 @@ Minimal Install with PIP
 
 If you cannot or do not want to use the conda package manager, then it is possible to install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will be missing support for MPI and atmospheric simulations.  Additionally, you must first ensure that you have a serial compiler installed and that a BLAS/LAPACK library is available in the default compiler search paths.  You should also install the FFTW package, either through your OS package manager or manually.  After doing those steps, you can do::
 
-    $> pip install https://github.com/hpc4cmb/toast/archive/2.3.5.tar.gz
+    pip install https://github.com/hpc4cmb/toast/archive/2.3.5.tar.gz
 
 Specify the URL to the version tarball you want to install (see the releases on the TOAST github page).
 

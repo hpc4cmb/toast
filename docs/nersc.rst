@@ -21,7 +21,7 @@ You can safely put the above line in your ~/.bashrc.ext inside the section for c
 Loading the Software
 ----------------------
 
-To load the software do the following:
+To load the software do the following::
 
     module load cmbenv
     source cmbenv
@@ -38,28 +38,27 @@ The cmbenv stack contains a recent version of TOAST, but if you want to build yo
 
 2.  Load the cmbenv stack.
 
-3.  Go into your git checkout of TOAST and make a build directory:
+3.  Go into your git checkout of TOAST and make a build directory::
 
-    cd toast
-    mkdir build
-    cd build
+        cd toast
+        mkdir build
+        cd build
 
-4.  Use the cori-intel platform file to build TOAST and install:
+4.  Use the cori-intel platform file to build TOAST and install::
 
-    ../platforms/cori-intel.sh \
-    -DCMAKE_INSTALL_PREFIX=/path/to/somewhere
-    make -j 4 install
+        ../platforms/cori-intel.sh \
+        -DCMAKE_INSTALL_PREFIX=/path/to/somewhere
+        make -j 4 install
 
-5.  Set up a shell function in `~/.bashrc.ext` to load this into your environment search paths before the cmbenv stack:
+5.  Set up a shell function in `~/.bashrc.ext` to load this into your environment search paths before the cmbenv stack::
 
-    load_toast () {
-        dir=/path/to/your/install
-        export PATH="${dir}/bin:${PATH}"
-        pysite=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
-        export PYTHONPATH="${dir}/lib/python${pysite}/site-packages:${PYTHONPATH}"
-    }
+        load_toast () {
+            dir=/path/to/your/install
+            export PATH="${dir}/bin:${PATH}"
+            pysite=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+            export PYTHONPATH="${dir}/lib/python${pysite}/site-packages:${PYTHONPATH}"
+        }
 
-
-Now whenever you want to override the cmbenv TOAST installation you can just do:
+Now whenever you want to override the cmbenv TOAST installation you can just do::
 
     load_toast
