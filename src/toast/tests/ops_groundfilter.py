@@ -50,7 +50,7 @@ class OpGroundFilterTest(MPITestCase):
         self.totsamp = 100000
 
         # bin size
-        self.order = 3
+        self.order = 5
 
         # Populate the observation
         tod = TODGround(
@@ -111,7 +111,52 @@ class OpGroundFilterTest(MPITestCase):
                 old = orms[det]
                 if np.abs(rms / old) > 1.0e-3:
                     raise RuntimeError(
-                        "det {} old rms = {}, new rms = {}" "".format(det, old, rms)
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
+                    )
+                del y
+        return
+
+    def test_filter_split(self):
+        # generate timestreams
+        op = OpSimNoise()
+        op.exec(self.data)
+
+        # Replace the noise with a ground-synchronous signal
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            az = tod.read_boresight_az()
+            orms = {}
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                y[:] = np.sin(az)
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
+
+        # Filter timestreams
+        op = OpGroundFilter(
+            name="noise",
+            filter_order=self.order,
+            common_flag_mask=0,
+            split_template=True,
+            trend_order=1,
+            detrend=True,
+        )
+        op.exec(self.data)
+
+        # Ensure all timestreams are zeroed out by the filter
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) > 1.0e-3:
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
                     )
                 del y
         return

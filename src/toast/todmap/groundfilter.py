@@ -110,6 +110,9 @@ class OpGroundFilter(Operator):
         # Assemble the joint template
         if det in tod.local_dets:
             try:
+                import pdb
+
+                pdb.set_trace()
                 cov = np.linalg.inv(invcov)
                 coeff = np.dot(cov, proj)
             except np.linalg.LinAlgError as e:
@@ -175,11 +178,8 @@ class OpGroundFilter(Operator):
             else:
                 # Create separate templates for alternating scans
                 cheby_filter = []
-                mask1 = common_ref != 0
-                mask2 = mask1.copy()
-                for i, ival in enumerate(local_intervals):
-                    mask = [mask1, mask2][i % 2]
-                    mask[ival.first : ival.last + 1] = True
+                mask1 = common_ref & tod.LEFTRIGHT_SCAN == 0
+                mask2 = common_ref & tod.RIGHTLEFT_SCAN == 0
                 for template in cheby_templates:
                     for mask in mask1, mask2:
                         temp = template.copy()
