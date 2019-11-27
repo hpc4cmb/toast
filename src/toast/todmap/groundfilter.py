@@ -110,9 +110,6 @@ class OpGroundFilter(Operator):
         # Assemble the joint template
         if det in tod.local_dets:
             try:
-                import pdb
-
-                pdb.set_trace()
                 cov = np.linalg.inv(invcov)
                 coeff = np.dot(cov, proj)
             except np.linalg.LinAlgError as e:
