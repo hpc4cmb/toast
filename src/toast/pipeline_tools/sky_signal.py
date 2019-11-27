@@ -310,13 +310,14 @@ def scan_sky_signal(
     timer = Timer()
     timer.start()
 
-    if comm.world_rank == 0 and verbose:
-        log.info("Scanning input map")
-
     # Scan the sky signal
+
     input_map = args.input_map.format(mc)
-    if comm.world_rank == 0 and not os.path.isfile(input_map):
+    if not os.path.isfile(input_map):
         raise RuntimeError("Input map does not exist: {}".format(input_map))
+    if comm.world_rank == 0 and verbose:
+        log.info("Scanning {}".format(input_map))
+
     distmap = DistPixels(data, nnz=3, dtype=np.float32, pixels=pixels)
     distmap.read_healpix_fits(input_map)
     scansim = OpSimScan(distmap=distmap, out=cache_prefix)
