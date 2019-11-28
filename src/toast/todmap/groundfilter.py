@@ -87,13 +87,13 @@ class OpGroundFilter(Operator):
         else:
             intervals = None
         local_intervals = tod.local_intervals(intervals)
-        
+
         # Construct trend templates.  Full domain for x is [-1, 1]
 
         my_offset, my_nsamp = tod.local_samples
         nsamp_tot = tod.total_samples
         x = np.arange(my_offset, my_offset + my_nsamp) / nsamp_tot * 2 - 1
-        
+
         # Do not include the offset in the trend.  It will be part of
         # of the ground template
         cheby_trend = chebval(x, np.eye(self._trend_order + 1), tensor=True)[1:]
@@ -117,17 +117,16 @@ class OpGroundFilter(Operator):
             cheby_filter = cheby_templates
         else:
             # Create separate templates for alternating scans
+            common_ref = tod.local_common_flags(self._common_flag_name)
             cheby_filter = []
-            mask1 = common_ref != 0
-            mask2 = mask1.copy()
-            for i, ival in enumerate(local_intervals):
-                mask = [mask1, mask2][i % 2]
-                mask[ival.first : ival.last + 1] = True
+            mask1 = common_ref & tod.LEFTRIGHT_SCAN == 0
+            mask2 = common_ref & tod.RIGHTLEFT_SCAN == 0
             for template in cheby_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()
                     temp[mask] = 0
                     cheby_filter.append(temp)
+            del common_ref
 
         templates = []
         for temp in cheby_trend, cheby_filter:
@@ -186,21 +185,21 @@ class OpGroundFilter(Operator):
         return coeff
 
     @function_timer
-    def subtract_templates(self, tod, coeff, cheby_trend, cheby_filter):
-        if det in tod.local_dets:
-            # Trend
-            trend = np.zeros_like(ref)
-            for cc, template in zip(coeff[:self._trend_order], cheby_trend):
-                trend += cc * template
-            if self._detrend:
-                ref[good] -= trend[good]
-            # Ground template
-            grtemplate = np.zeros_like(ref)
-            for cc, template in zip(coeff[self._trend_order:], cheby_filter):
-                grtemplate += cc * template
-            ref[good] -= grtemplate[good]
-            ref[np.logical_not(good)] = 0
-            del ref
+    def subtract_templates(self, ref, good, coeff, cheby_trend, cheby_filter):
+        if ref is None:
+            return
+        # Trend
+        trend = np.zeros_like(ref)
+        for cc, template in zip(coeff[:self._trend_order], cheby_trend):
+            trend += cc * template
+        if self._detrend:
+            ref[good] -= trend[good]
+        # Ground template
+        grtemplate = np.zeros_like(ref)
+        for cc, template in zip(coeff[self._trend_order:], cheby_filter):
+            grtemplate += cc * template
+        ref[good] -= grtemplate[good]
+        ref[np.logical_not(good)] = 0
         return
 
     @function_timer
@@ -234,7 +233,9 @@ class OpGroundFilter(Operator):
                     good = None
 
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                self subtract_templates(tod, coeff, cheby_trend, cheby_filter)
+                self.subtract_templates(ref, good, coeff, cheby_trend, cheby_filter)
+
+                del ref
 
             del common_ref
 
