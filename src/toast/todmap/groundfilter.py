@@ -150,7 +150,7 @@ class OpGroundFilter(Operator):
 
         # Bin the local data
 
-        if det in tod.local_dets:
+        if ref is not None:
             for i in range(ntemplate):
                 proj[i] = np.sum((templates[i] * ref)[good])
                 for j in range(i, ntemplate):
@@ -159,15 +159,14 @@ class OpGroundFilter(Operator):
                     if i != j:
                         invcov[j, i] = invcov[i, j]
 
-        if comm is not None:
-            if sampranks > 1:
-                # Reduce the binned data.  The detector signals is
-                # distributed across the group communicator.
-                comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
-                comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
+        if sampranks > 1:
+            # Reduce the binned data.  The detector signals is
+            # distributed across the group communicator.
+            comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
+            comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
 
         # Assemble the joint template
-        if det in tod.local_dets:
+        if ref is not None:
             try:
                 cov = np.linalg.inv(invcov)
                 coeff = np.dot(cov, proj)
@@ -186,8 +185,6 @@ class OpGroundFilter(Operator):
 
     @function_timer
     def subtract_templates(self, ref, good, coeff, cheby_trend, cheby_filter):
-        if ref is None:
-            return
         # Trend
         trend = np.zeros_like(ref)
         for cc, template in zip(coeff[:self._trend_order], cheby_trend):
@@ -233,7 +230,8 @@ class OpGroundFilter(Operator):
                     good = None
 
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                self.subtract_templates(ref, good, coeff, cheby_trend, cheby_filter)
+                if ref is not None:
+                    self.subtract_templates(ref, good, coeff, cheby_trend, cheby_filter)
 
                 del ref
 
