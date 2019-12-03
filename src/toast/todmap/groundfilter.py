@@ -152,12 +152,14 @@ class OpGroundFilter(Operator):
 
         if ref is not None:
             for i in range(ntemplate):
-                proj[i] = np.sum((templates[i] * ref)[good])
+                temp = templates[i] * good
+                proj[i] = np.dot(temp, ref)
                 for j in range(i, ntemplate):
-                    invcov[i, j] = np.sum((templates[i] * templates[j])[good])
+                    invcov[i, j] = np.dot(temp, templates[j])
                     # Symmetrize invcov
                     if i != j:
                         invcov[j, i] = invcov[i, j]
+                del temp
 
         if sampranks > 1:
             # Reduce the binned data.  The detector signals is
