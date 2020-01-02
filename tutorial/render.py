@@ -10,7 +10,7 @@ import stat
 lesson_dir = os.path.dirname(sys.argv[0])
 print("Scanning {}".format(lesson_dir))
 
-nersc_dir = "/project/projectdirs/cmb/www/toast-tutorial"
+nersc_dir = "toast-tutorial"
 
 for root, dirs, files in os.walk(lesson_dir):
     for d in dirs:
