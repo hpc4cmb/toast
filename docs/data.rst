@@ -151,7 +151,17 @@ observations.  For this case, we are going to use `detranks = 2`.  Here is a pic
 what data each process would have. The global process number is shown as well as the
 rank within the group:
 
-.. image:: _static/toast_data_dist.png
+It is useful to walk through the process of how data is distributed for a simple case.  We have some number of observations in our data, and we also have some number of MPI processes in our world communicator:
+
+.. figure:: _static/data_dist_1.png
+
+Starting point:  Observations and MPI Processes.
+
+.. figure:: _static/data_dist_2.png
+
+Defining the process groups:  We divide the total processes into equal-sized groups.
+
+.. figure:: _static/data_dist_3.png
 
 
 .. include:: data_builtin.inc
