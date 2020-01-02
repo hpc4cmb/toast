@@ -9,6 +9,9 @@ time.  The intrinsic detector noise is assumed to be stationary within an observ
 Typically there are other quantities which are constant for an observation (e.g.
 elevation, weather conditions, satellite procession axis, etc).
 
+Classes
+-----------
+
 An observation is just a dictionary with at least one member ("tod") which is an
 instance of a class that derives from the `toast.TOD` base class.  Every experiment will
 have their own TOD derived classes, but TOAST includes some built-in ones as well.
@@ -24,7 +27,7 @@ The inputs to a TOD class constructor are at least:
     :members:
 
 The TOD class can act as a storage container for different "flavors" of timestreams as
-well as a source and sink for the observation data (with the read_\*() and write_\*()
+well as a source and sink for the observation data (with the `read_*()` and `write_*()`
 methods).  The TOD base class has one member which is a `Cache` class.
 
 .. autoclass:: toast.cache.Cache
@@ -86,16 +89,37 @@ are:
 
 The detranks parameter must divide evenly into the number of processes in the group communicator.
 
-As a concrete example, imagine that MPI.COMM_WORLD has 24 processes. We split this into
-4 groups of 6 procesess. There are 6 observations of varying lengths and every group has
-one or 2 observations. Here is a picture of what data each process would have. The
-global process number is shown as well as the rank within the group:
+Examples
+--------------
+
+It is useful to walk through the process of how data is distributed for a simple case.  We have some number of observations in our data, and we also have some number of MPI processes in our world communicator:
+
+.. figure:: _static/data_dist_1.png
+
+Starting point:  Observations and MPI Processes.
+
+.. figure:: _static/data_dist_2.png
+
+Defining the process groups:  We divide the total processes into equal-sized groups.
+
+.. figure:: _static/data_dist_3.png
+
+Assign observations to groups:  Each observation is assigned to exactly one group.  Each group has one or more observations.
+
+.. figure:: _static/data_dist_4.png
+
+The `detranks` TOD constructor argument specifies how data **within** an observation is distributed among the processes in the group.  The value sets the dimension of the process grid in the detector direction.  In the above case, `detranks = 1`, so the process group is arranged in a one-dimensional grid in the time direction.
+
+.. figure:: _static/data_dist_5.png
+
+In the above case, the `detranks` parameter is set to the size of the group.  This means that the process group is arranged in a one-dimensional grid in the process direction.
+
+Now imagine a more complicated case (not currently used often if at all) where the
+process group is arranged in a two-dimensional grid.  This is useful as a visualization
+exercise.  Let's say that MPI.COMM_WORLD has 24 processes. We split this into 4 groups
+of 6 procesess. There are 6 observations of varying lengths and every group has one or 2
+observations.  For this case, we are going to use `detranks = 2`.  Here is a picture of
+what data each process would have. The global process number is shown as well as the
+rank within the group:
 
 .. image:: _static/toast_data_dist.png
-
-In either case the full dataset is divided into one or more observations, and
-each observation has one TOD object (and optionally other objects that describe
-the noise, valid data intervals, etc).  The toast "Comm" class has two levels of
-MPI communicators that can be used to divide many observations between whole
-groups of processes.  In practice this is not always needed, and the default
-construction of the Comm object just results in one group with all processes.

@@ -169,7 +169,7 @@ If you have a different distro or an older version of Ubuntu, you should try to 
     python3 development library (e.g. libpython3-dev)
     virtualenv (e.g. python3-virtualenv)
 
-The you can create a python3 virtualenv, activate it, and then use pip to install these packages::
+Then you can create a python3 virtualenv, activate it, and then use pip to install these packages::
 
     pip install \
         scipy \
@@ -189,11 +189,12 @@ This is still a work in progress.  Conda provides compilers as well as packages,
 OS X with MacPorts
 ~~~~~~~~~~~~~~~~~~~~~~
 
+.. todo::  Document using macports to get gcc and installing optional dependencies.
 
 OS X with Homebrew
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-
+.. todo::  Document installing compiled dependencies and using a virtualenv.
 
 Full Custom Install with CMBENV
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

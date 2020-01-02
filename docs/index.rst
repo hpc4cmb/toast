@@ -18,6 +18,7 @@ Contents:
     pipelines.rst
     utils.rst
     nersc.rst
+    tutorial.rst
 
 
 #intervals.rst
