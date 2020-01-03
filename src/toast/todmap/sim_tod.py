@@ -727,6 +727,8 @@ class TODGround(TOD):
         scanrate (float): Sky scanning rate in degrees / second.
         scan_accel (float): Sky scanning rate acceleration in
             degrees / second^2 for the turnarounds.
+        sinc_modulation (bool): Modulate the scan rate according to
+             1/sin(az) to achieve uniform integration depth.
         CES_start (float): Start time of the constant elevation scan
         CES_stop (float): Stop time of the constant elevation scan
         sun_angle_min (float): Minimum angular distance for the scan and
@@ -745,8 +747,6 @@ class TODGround(TOD):
         hwpstep (float): If None, then a stepped HWP is not included.
             Otherwise, this is the step in degrees.
         hwpsteptime (float): The time in minutes between HWP steps.
-        sinc_modulation (bool): Modulate the scan rate according to
-             1/sin(az) to achieve uniform integration depth.
         All other keyword arguments are passed to the parent constructor.
 
     """
