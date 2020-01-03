@@ -125,6 +125,22 @@ def add_todground_args(parser):
         help="Scanning rate change [deg / s^2]",
     )
     parser.add_argument(
+        "--scan-sinc-modulate",
+        required=False,
+        action="store_true",
+        help="Modulate scan rate so integration depth is constant at "
+        "all declinations.  The --scan-rate becomes the *minimum* scan rate.",
+        dest="scan_sinc_modulate",
+    )
+    parser.add_argument(
+        "--no-scan-sinc-modulate",
+        required=False,
+        action="store_false",
+        help="Use constant sky scan rate according to --scan-rate.",
+        dest="scan_sinc_modulate",
+    )
+    parser.set_defaults(scan_sinc_modulate=False)
+    parser.add_argument(
         "--sun-angle-min",
         required=False,
         default=30.0,
@@ -183,7 +199,7 @@ def add_todground_args(parser):
         "--sort-schedule",
         required=False,
         action="store_true",
-        help="Reorder the observing schedule so that observations of the"
+        help="Reorder the observing schedule so that observations of the "
         "same patch are consecutive.  This will reduce the sky area observed "
         "by individual process groups.",
         dest="sort_schedule",
@@ -192,7 +208,7 @@ def add_todground_args(parser):
         "--no-sort-schedule",
         required=False,
         action="store_false",
-        help="Do not reorder the observing schedule so that observations of the"
+        help="Do not reorder the observing schedule so that observations of the "
         "same patch are consecutive.",
         dest="sort_schedule",
     )

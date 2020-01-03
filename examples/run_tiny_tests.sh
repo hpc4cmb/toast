@@ -17,7 +17,7 @@ set -e
 # * updated `TOASTDATACOMMIT` below to the latest commit
 # * run `run_tiny_tests.sh` again and check that the test passes
 
-TOASTDATACOMMIT=d50dfea8a1d939bfc4681171198f5c31eed5fee7
+TOASTDATACOMMIT=6db99526a590fbbbd858eddbdcc5cd54f1e6d385
 
 if [ "x${TYPES}" = "x" ]; then
     TYPES="satellite ground ground_simple ground_multisite"

@@ -280,6 +280,7 @@ def create_observations(args, comm, schedule):
                 el=ces.el,
                 scanrate=args.scan_rate,
                 scan_accel=args.scan_accel,
+                sinc_modulation=args.scan_sinc_modulate,
                 CES_start=None,
                 CES_stop=None,
                 sun_angle_min=args.sun_angle_min,
