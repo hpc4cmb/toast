@@ -338,6 +338,16 @@ def setup_madam(args):
     pars["fsample"] = args.sample_rate
     pars["iter_max"] = args.madam_iter_max
     pars["file_root"] = args.madam_prefix
+
+    # Translate boolean values.  Madam knows how to do this but it
+    # simplifies pipeline_tools/madam.py
+
+    for key, value in pars.items():
+        if value == "T":
+            pars[key] = True
+        elif value == "F":
+            pars[key] = False
+
     return pars
 
 

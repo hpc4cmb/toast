@@ -739,11 +739,14 @@ class TODGround(TOD):
             C (Equatorial), E (Ecliptic) or G (Galactic)
         report_timing (bool):  Report the time spent simulating the scan
             and translating the pointing.
-        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
-            it is the rate (in RPM) of constant rotation.
-        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
-            is the step in degrees.
-        hwpsteptime: The time in minutes between HWP steps.
+        hwprpm (float): If None, a constantly rotating HWP is not
+            included. Otherwise it is the rate (in RPM) of constant
+            rotation.
+        hwpstep (float): If None, then a stepped HWP is not included.
+            Otherwise, this is the step in degrees.
+        hwpsteptime (float): The time in minutes between HWP steps.
+        sinc_modulation (bool): Modulate the scan rate according to
+             1/sin(az) to achieve uniform integration depth.
         All other keyword arguments are passed to the parent constructor.
 
     """
@@ -783,6 +786,7 @@ class TODGround(TOD):
         hwprpm=None,
         hwpstep=None,
         hwpsteptime=None,
+        sinc_modulation=False,
         **kwargs
     ):
         if samples < 1:
@@ -792,13 +796,11 @@ class TODGround(TOD):
             )
 
         if ephem is None:
-            raise RuntimeError(
-                "Cannot instantiate a TODGround object " "without pyephem."
-            )
+            raise RuntimeError("Cannot instantiate a TODGround object without pyephem.")
 
         if sampsizes is not None or sampbreaks is not None:
             raise RuntimeError(
-                "TODGround will synthesize the sizes to match " "the subscans."
+                "TODGround will synthesize the sizes to match the subscans."
             )
 
         if CES_start is None:
@@ -822,6 +824,8 @@ class TODGround(TOD):
         self._site_lon = site_lon
         self._site_lat = site_lat
         self._site_alt = site_alt
+        if azmin == azmax:
+            raise RuntimeError("TODGround requires non-empty azimuth range")
         self._azmin = azmin * degree
         self._azmax = azmax * degree
         if el < 1 or el > 89:
@@ -837,6 +841,7 @@ class TODGround(TOD):
             raise RuntimeError("Unknown coordinate system: {}".format(coord))
         self._coord = coord
         self._report_timing = report_timing
+        self._sinc_modulation = sinc_modulation
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -1013,140 +1018,166 @@ class TODGround(TOD):
 
     @function_timer
     def simulate_scan(self, samples):
-        # simulate the scanning with turnarounds. Regardless of firsttime,
-        # we must simulate from the beginning of the CES.
-        # Generate matching common flags.
-        # Sets self._boresight.
+        """ Simulate a constant elevation scan, either constant rate or
+        1/sin(az)-modulated.
 
-        self._az = np.zeros(samples)
-        self._commonflags = np.zeros(samples, dtype=np.uint8)
-        # Scan starts from the left edge of the patch at the fixed scan rate
-        lim_left = self._azmin
-        lim_right = self._azmax
-        if lim_right < lim_left:
-            # We are scanning across the zero meridian
-            lim_right += 2 * np.pi
-        az_last = lim_left
-        scanrate = self._scanrate / self._rate  # per sample, not per second
-        # Modulate scan rate so that the rate on sky is constant
-        scanrate /= np.cos(self._el)
-        scan_accel = self._scan_accel / self._rate  # per sample, not per second
-        scan_accel /= np.cos(self._el)
-        tol = self._rate / 10
-        # the index, i, is relative to the start of the tod object.
-        # If CES begun before the TOD, first values of i are negative.
-        i = int((self._CES_start - self._firsttime - tol) * self._rate)
-        starts = [0]  # Subscan start indices
-        self._stable_starts = []
-        self._stable_stops = []
-        while True:
-            #
-            # Left to right, fixed rate
-            #
-            self._stable_starts.append(i)
-            dazdt = scanrate
-            nstep = min(int((lim_right - az_last) // dazdt) + 1, samples - i)
-            offset_in = max(0, -i)
-            offset_out = max(0, i)
-            ngood = nstep - offset_in
-            if ngood > 0:
-                self._commonflags[
-                    offset_out : offset_out + ngood
-                ] |= self.LEFTRIGHT_SCAN
-                self._az[offset_out : offset_out + ngood] = (
-                    az_last + np.arange(offset_in, offset_in + ngood) * dazdt
-                )
-            i += nstep
-            self._stable_stops.append(i)
-            if i == samples:
-                break
-            az_last += dazdt * nstep
-            #
-            # Left to right, turnaround
-            #
-            nstep_full = int((2 * scanrate) // scan_accel) + 1
-            nstep = min(int(nstep_full), samples - i)
-            offset_in = max(0, -i)
-            offset_out = max(0, i)
-            ngood = nstep - offset_in
-            if ngood > 0:
-                self._commonflags[
-                    offset_out : offset_out + ngood
-                ] |= self.LEFTRIGHT_TURNAROUND
-                ii = np.arange(offset_in, offset_in + ngood)
-                self._az[offset_out : offset_out + ngood] = (
-                    az_last + ii * dazdt - 0.5 * scan_accel * ii ** 2
-                )
-                halfway = i + nstep_full // 2
-                if halfway > 0 and halfway < samples:
-                    starts.append(halfway)
-            i += nstep
-            if i == samples:
-                break
-            az_last += dazdt * nstep - 0.5 * scan_accel * nstep ** 2
-            #
-            # Right to left, fixed rate
-            #
-            self._stable_starts.append(i)
-            dazdt = -scanrate
-            nstep = min(int((lim_left - az_last) // dazdt) + 1, samples - i)
-            offset_in = max(0, -i)
-            offset_out = max(0, i)
-            ngood = nstep - offset_in
-            if ngood > 0:
-                self._commonflags[
-                    offset_out : offset_out + ngood
-                ] |= self.RIGHTLEFT_SCAN
-                self._az[offset_out : offset_out + ngood] = (
-                    az_last + np.arange(offset_in, offset_in + ngood) * dazdt
-                )
-            i += nstep
-            self._stable_stops.append(i)
-            if i == samples:
-                break
-            az_last += dazdt * nstep
-            #
-            # Right to left, turnaround
-            #
-            nstep_full = int((2 * scanrate) // scan_accel) + 1
-            nstep = min(int(nstep_full), samples - i)
-            offset_in = max(0, -i)
-            offset_out = max(0, i)
-            ngood = nstep - offset_in
-            if ngood > 0:
-                self._commonflags[
-                    offset_out : offset_out + ngood
-                ] |= self.RIGHTLEFT_TURNAROUND
-                ii = np.arange(offset_in, offset_in + ngood)
-                self._az[offset_out : offset_out + ngood] = (
-                    az_last + ii * dazdt + 0.5 * scan_accel * ii ** 2
-                )
-                halfway = i + nstep_full // 2
-                if halfway > 0 and halfway < samples:
-                    starts.append(halfway)
-            i += nstep
-            if i == samples:
-                break
-            az_last += dazdt * nstep + 0.5 * scan_accel * nstep ** 2
+        """
 
-        starts.append(samples)
+        # Begin by simulating one full scan with turnarounds.
+        # It will be used to interpolate the full CES.
+        # `nstep` is the number of steps used for one sweep or one
+        # turnaround.
+
+        nstep = 10000
+
+        azmin, azmax = [self._azmin, self._azmax]
+        if self._sinc_modulation:
+            # We always simulate a rising sinc scan and then
+            # mirror it if necessary
+            azmin %= np.pi
+            azmax %= np.pi
+            if azmin > azmax:
+                raise RuntimeError(
+                    "Cannot scan across zero meridian with sinc-modulated scan"
+                )
+        elif azmax < azmin:
+            azmax += 2 * np.pi
+        t = self._CES_start
+        all_t = []
+        all_az = []
+        all_flags = []
+        # translate scan rate from sky to mount coordinates
+        base_rate = self._scanrate / np.cos(self._el)
+        # scan acceleration is already in the mount coordinates
+        scan_accel = self._scan_accel
+
+        # left-to-right
+
+        tvec = []
+        azvec = []
+        t0 = t
+        if self._sinc_modulation:
+            t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
+            tvec = np.linspace(t0, t1, nstep, endpoint=True)
+            azvec = np.arccos(np.cos(azmin) + base_rate * t0 - base_rate * tvec)
+        else:
+            # Constant scanning rate, only requires two data points
+            t1 = t0 + (azmax - azmin) / base_rate
+            tvec = np.array([t0, t1])
+            azvec = np.array([azmin, azmax])
+        all_t.append(np.array(tvec))
+        all_az.append(np.array(azvec))
+        all_flags.append(np.zeros(tvec.size, dtype=np.uint8) | self.LEFTRIGHT_SCAN)
+        t = t1
+
+        # turnaround
+
+        t0 = t
+        if self._sinc_modulation:
+            dazdt = base_rate / np.abs(np.sin(azmax))
+        else:
+            dazdt = base_rate
+        t1 = t0 + 2 * dazdt / scan_accel
+        tvec = np.linspace(t0, t1, nstep, endpoint=True)[1:]
+        azvec = azmax + (tvec - t0) * dazdt - 0.5 * scan_accel * (tvec - t0) ** 2
+        all_t.append(tvec[:-1])
+        all_az.append(azvec[:-1])
+        all_flags.append(
+            np.zeros(tvec.size - 1, dtype=np.uint8) | self.LEFTRIGHT_TURNAROUND
+        )
+        t = t1
+
+        # right-to-left
+
+        tvec = []
+        azvec = []
+        t0 = t
+        if self._sinc_modulation:
+            t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
+            tvec = np.linspace(t0, t1, nstep, endpoint=True)
+            azvec = np.arccos(np.cos(azmax) - base_rate * t0 + base_rate * tvec)
+        else:
+            # Constant scanning rate, only requires two data points
+            t1 = t0 + (azmax - azmin) / base_rate
+            tvec = np.array([t0, t1])
+            azvec = np.array([azmax, azmin])
+        all_t.append(np.array(tvec))
+        all_az.append(np.array(azvec))
+        all_flags.append(np.zeros(tvec.size, dtype=np.uint8) | self.RIGHTLEFT_SCAN)
+        t = t1
+
+        # turnaround
+
+        t0 = t
+        if self._sinc_modulation:
+            dazdt = base_rate / np.abs(np.sin(azmin))
+        else:
+            dazdt = base_rate
+        t1 = t0 + 2 * dazdt / scan_accel
+        tvec = np.linspace(t0, t1, nstep, endpoint=True)[1:]
+        azvec = azmin - (tvec - t0) * dazdt + 0.5 * scan_accel * (tvec - t0) ** 2
+        all_t.append(tvec)
+        all_az.append(azvec)
+        all_flags.append(
+            np.zeros(tvec.size, dtype=np.uint8) | self.RIGHTLEFT_TURNAROUND
+        )
+
+        # Concatenate
+
+        tvec = np.hstack(all_t)
+        azvec = np.hstack(all_az)
+        flags = np.hstack(all_flags)
+
+        # Now interpolate the simulated scan to timestamps
+
+        times = self._CES_start + np.arange(samples) / self._rate
+        tmin, tmax = tvec[0], tvec[-1]
+        tdelta = tmax - tmin
+        self._az = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
+        if self._sinc_modulation and self._azmin > np.pi:
+            # We always simulate a rising sinc scan and then
+            # mirror it if necessary
+            self._az += np.pi
+        ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
+        ind[ind == tvec.size] = tvec.size - 1
+        self._commonflags = flags[ind]
+
+        # Subscan start indices
+
+        daz = np.diff(self._az)
+        starts = np.hstack(
+            [
+                [0],
+                np.argwhere(np.logical_and(daz[:-1] < 0, daz[1:] > 0)).ravel() + 2,
+                [samples],
+            ]
+        )
+        turnflags = self._commonflags & self.TURNAROUND
+        self._stable_starts = (
+            np.argwhere(np.logical_and(turnflags[:-1] != 0, turnflags[1:] == 0)).ravel()
+            + 1
+        )
+        if turnflags[0] == 0:
+            self._stable_starts = np.hstack([[0], self._stable_starts])
+        self._stable_stops = (
+            np.argwhere(np.logical_and(turnflags[:-1] == 0, turnflags[1:] != 0)).ravel()
+            + 2
+        )
+        if turnflags[-1] == 0:
+            self._stable_stops = np.hstack([self._stable_stops, [samples]])
+
         sizes = np.diff(starts)
         if np.sum(sizes) != samples:
             raise RuntimeError("Subscans do not match samples")
 
-        # Store the scan range before discarding samples not assigned
-        # to this process
+        # Store the scan range
 
         self._az %= 2 * np.pi
-        if np.ptp(self._az) < np.pi:
-            self._min_az = np.amin(self._az)
-            self._max_az = np.amax(self._az)
-        else:
-            # Scanning across the zero azimuth.
-            self._min_az = np.amin(self._az[self._az > np.pi]) - 2 * np.pi
-            self._max_az = np.amax(self._az[self._az < np.pi])
+        self._min_az = np.amin(self._az)
+        self._max_az = np.amax(self._az)
         self._min_el = self._el
         self._max_el = self._el
+
         return sizes, starts[:-1]
 
     @function_timer
