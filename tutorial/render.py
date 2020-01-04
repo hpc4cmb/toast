@@ -12,6 +12,9 @@ print("Scanning {}".format(lesson_dir))
 
 nersc_dir = "toast-tutorial"
 
+# After running this script, do:
+#   rsync -a -e ssh ./toast-tutorial/ dtn01.nersc.gov:/project/projectdirs/cmb/www/toast-tutorial/
+
 for root, dirs, files in os.walk(lesson_dir):
     for d in dirs:
         if re.match(r"\d\d_.*", d) is None:

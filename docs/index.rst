@@ -13,21 +13,15 @@ Contents:
     :maxdepth: 2
 
     intro.rst
+    changes.rst
     install.rst
     data.rst
+    operators.rst
     pipelines.rst
     utils.rst
     nersc.rst
     tutorial.rst
-
-
-#intervals.rst
-#noise.rst
-#pointing.rst
-#sim.rst
-#maptools.rst
-#timing.rst
-#dev.rst
+    dev.rst
 
 
 Indices and tables
