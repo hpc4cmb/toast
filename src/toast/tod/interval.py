@@ -137,7 +137,7 @@ class OpFlagGaps(Operator):
         """
         for obs in data.obs:
             tod = obs["tod"]
-            if self._intervals:
+            if (self._intervals is not None) and (self._intervals in obs):
                 intervals = obs[self._intervals]
             else:
                 intervals = None
