@@ -1585,9 +1585,9 @@ class OpMapMaker(Operator):
         self.detweights = []
         for obs in data.obs:
             tod = obs["tod"]
-            try:
+            if "noise" in obs:
                 noise = obs["noise"]
-            except:
+            else:
                 noise = None
             detweights = {}
             for det in tod.local_dets:
