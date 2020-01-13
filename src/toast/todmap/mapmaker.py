@@ -144,7 +144,7 @@ class SubharmonicTemplate(TODTemplate):
             tod = obs["tod"]
             common_flags = tod.local_common_flags(self.common_flags)
             common_flags = (common_flags & self.common_flag_mask) != 0
-            if self.intervals and self.intervals in obs:
+            if (self.intervals is not None) and (self.intervals in obs):
                 intervals = obs[self.intervals]
             else:
                 intervals = None
@@ -432,7 +432,7 @@ class OffsetTemplate(TODTemplate):
             tod = obs["tod"]
             common_flags = tod.local_common_flags(self.common_flags)
             common_flags = (common_flags & self.common_flag_mask) != 0
-            if self.intervals and self.intervals in obs:
+            if (self.intervals is not None) and (self.intervals in obs):
                 intervals = obs[self.intervals]
             else:
                 intervals = None
@@ -832,7 +832,7 @@ class ProjectionMatrix(TOASTMatrix):
         self.data = data
         self.comm = comm
         self.detweights = detweights
-        self.dist_map = DistPixels(data, comm=self.comm, nnz=nnz, dtype=np.float64,)
+        self.dist_map = DistPixels(data, comm=self.comm, nnz=nnz, dtype=np.float64)
         self.white_noise_cov_matrix = white_noise_cov_matrix
         self.common_flag_mask = common_flag_mask
         self.flag_mask = flag_mask
@@ -1455,7 +1455,7 @@ class OpMapMaker(Operator):
             raise RuntimeError(
                 "Processing mask does not exist: {}".format(self.maskfile)
             )
-        distmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32,)
+        distmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32)
         distmap.read_healpix_fits(self.maskfile)
         if self.rank == 0:
             timer.report_clear("Read processing mask from {}".format(self.maskfile))
@@ -1481,7 +1481,7 @@ class OpMapMaker(Operator):
             raise RuntimeError(
                 "Weight map does not exist: {}".format(self.weightmapfile)
             )
-        self.weightmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32,)
+        self.weightmap = DistPixels(data, comm=self.comm, nnz=1, dtype=np.float32)
         self.weightmap.read_healpix_fits(self.weightmapfile)
         if self.rank == 0:
             timer.report_clear("Read weight map from {}".format(self.weightmapfile))
@@ -1547,7 +1547,7 @@ class OpMapMaker(Operator):
         log = Logger.get()
         timer = Timer()
 
-        dist_map = DistPixels(data, comm=self.comm, nnz=self.nnz, dtype=np.float64,)
+        dist_map = DistPixels(data, comm=self.comm, nnz=self.nnz, dtype=np.float64)
         if dist_map.data is not None:
             dist_map.data.fill(0.0)
         # FIXME: OpAccumDiag should support separate detweights for each observation
@@ -1585,9 +1585,9 @@ class OpMapMaker(Operator):
         self.detweights = []
         for obs in data.obs:
             tod = obs["tod"]
-            try:
+            if "noise" in obs:
                 noise = obs["noise"]
-            except:
+            else:
                 noise = None
             detweights = {}
             for det in tod.local_dets:
@@ -1621,12 +1621,12 @@ class OpMapMaker(Operator):
             timer.report_clear("Identify local submaps")
 
         self.white_noise_cov_matrix = DistPixels(
-            data, comm=self.comm, nnz=self.ncov, dtype=np.float64,
+            data, comm=self.comm, nnz=self.ncov, dtype=np.float64
         )
         if self.white_noise_cov_matrix.data is not None:
             self.white_noise_cov_matrix.data.fill(0.0)
 
-        hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64,)
+        hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64)
         if hits.data is not None:
             hits.data.fill(0)
 
