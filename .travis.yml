@@ -108,7 +108,7 @@ before_install:
     - pip install -q numpy scipy matplotlib cmake cython astropy ephem healpy numba toml
     - pip install -q https://github.com/healpy/pysm/archive/master.tar.gz
     # Install all compiled dependencies from a pre-cached location
-    - export DEPSURL="http://portal.nersc.gov/project/cmb/toast_travis/travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2"
+    - export DEPSURL="https://www.dropbox.com/sh/svo7fcm63nj6s39/AAB1TWT79DEcLmhxH3IPLcwya/travis_14.04_gcc-${DEPGCC}_python${PYSITE}.tar.bz2"
     - echo "Fetching dependencies from ${DEPSURL}"
     - wget ${DEPSURL}
     - tar xjf travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2 --directory ${HOME}
