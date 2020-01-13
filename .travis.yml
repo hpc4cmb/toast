@@ -35,6 +35,7 @@ matrix:
             - gfortran-4.9
       env:
         - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9) && export DEPGCC=-4.9"
+        - DEPSURL="https://www.dropbox.com/s/dhpj6vb1fch6xb5/travis_14.04_gcc-4.9_python3.6.tar.bz2"
     # GCC 5 - default version for ubuntu 16.04 LTS
     - os: linux
       dist: trusty
@@ -60,6 +61,7 @@ matrix:
             - gfortran-5
       env:
         - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5) && export DEPGCC=-5"
+        - DEPSURL="https://www.dropbox.com/s/yoqu6z1e7eto03b/travis_14.04_gcc-5_python3.6.tar.bz2"
     # GCC 7 - default version for ubuntu 18.04 LTS
     - os: linux
       dist: trusty
@@ -85,6 +87,7 @@ matrix:
             - gfortran-7
       env:
         - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7) && export DEPGCC=-7"
+        - DEPSURL="https://www.dropbox.com/s/diy5gchpwh8og6v/travis_14.04_gcc-7_python3.6.tar.bz2"
 
 # The python versions to test.
 python:
@@ -108,7 +111,6 @@ before_install:
     - pip install -q numpy scipy matplotlib cmake cython astropy ephem healpy numba toml
     - pip install -q https://github.com/healpy/pysm/archive/master.tar.gz
     # Install all compiled dependencies from a pre-cached location
-    - export DEPSURL="https://www.dropbox.com/sh/svo7fcm63nj6s39/AAB1TWT79DEcLmhxH3IPLcwya/travis_14.04_gcc-${DEPGCC}_python${PYSITE}.tar.bz2"
     - echo "Fetching dependencies from ${DEPSURL}"
     - wget ${DEPSURL}
     - tar xjf travis_14.04_gcc${DEPGCC}_python${PYSITE}.tar.bz2 --directory ${HOME}
