@@ -41,7 +41,7 @@ class OpSimConviqt(Operator):
             maximum expansion order from file.
         beammmax (int) : beam maximum m.  Actual resolution in the
             Healpix FITS file may differ.  If not set, will use the
-            maximum expansion order from file. 
+            maximum expansion order from file.
         pol (bool) : boolean to determine if polarized simulation is needed
         fwhm (float) : width of a symmetric gaussian beam [in arcmin] already
             present in the skyfile (will be deconvolved away).
@@ -339,7 +339,7 @@ class OpSimConviqt(Operator):
         When calibrate = True, we rescale the TOD to
         TOD = intensity + (1 - epsilon) / (1 + epsilon) * polarization
         """
-        if not self.calibrate or beam.normalized():
+        if not self._calibrate or beam.normalized():
             return
         timer = Timer()
         timer.start()
