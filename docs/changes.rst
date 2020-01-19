@@ -3,16 +3,16 @@
 Change Log
 -------------------------
 
-2.3.6 (unreleased)
+2.3.6 (2020-01-19)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Overhaul documentation (PR `#321`_).
+* Overhaul documentation (PR `#320`_).
 * Small typo fix for conviqt operator (PR `#319`_).
 * Support high-cadence ground scan strategies (PR `#316`_).
 * Fix BLAS / LAPACK name mangling detection (PR `#315`_).
 * Allow disabling sky sim in example pipeline (PR `#313`_).
 
-.. _`#321`: https://github.com/hpc4cmb/toast/pull/321
+.. _`#321`: https://github.com/hpc4cmb/toast/pull/320
 .. _`#319`: https://github.com/hpc4cmb/toast/pull/319
 .. _`#316`: https://github.com/hpc4cmb/toast/pull/316
 .. _`#315`: https://github.com/hpc4cmb/toast/pull/315
