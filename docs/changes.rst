@@ -12,7 +12,7 @@ Change Log
 * Fix BLAS / LAPACK name mangling detection (PR `#315`_).
 * Allow disabling sky sim in example pipeline (PR `#313`_).
 
-.. _`#321`: https://github.com/hpc4cmb/toast/pull/320
+.. _`#320`: https://github.com/hpc4cmb/toast/pull/320
 .. _`#319`: https://github.com/hpc4cmb/toast/pull/319
 .. _`#316`: https://github.com/hpc4cmb/toast/pull/316
 .. _`#315`: https://github.com/hpc4cmb/toast/pull/315
