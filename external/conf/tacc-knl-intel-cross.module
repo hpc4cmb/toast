@@ -1,5 +1,0 @@
-
-if [ module-info mode load ] {
-  module load git
-  module load cmake
-}

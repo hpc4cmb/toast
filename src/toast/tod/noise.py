@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class Noise(object):
             detector must be defined in `freqs` and `psds`.
         indices (dict):  Integer index for every PSD, useful for
             generating indepedendent and repeateable noise realizations.
-            If absent, runnign indices will be assigned and provided.
+            If absent, running indices will be assigned and provided.
 
     Attributes:
         detectors (list): List of detector names

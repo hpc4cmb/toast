@@ -3,14 +3,18 @@
 Pipelines
 =================================
 
-TOAST workflows are usually called "pipelines" and consist of a :class:`toast.Data` object that is passed through one or more "operators":
+TOAST pipelines are a top-level python script which instantiates a `toast.Data` object
+as well as one or more `toast.Operator` classes which are applied to the data.
 
-.. autoclass:: toast.Operator
-    :members:
+Each operator might take many arguments in its constructor.  There are helper functions
+in `toast.pipeline_tools` that can be used to create some built-in operators in a
+pipeline script.  Currently these helper functions add arguments to an `argparse`
+namespace for control at the command line.  In the future, we intend to support loading
+operator configuration from other config file formats.
 
-There are very few restrictions on an "operator" class.  It can have arbitrary constructor arguments and must define an `exec()` method which takes a `toast.Data` instance.
-
-Each operator might take many arguments.  There are helper functions in `toast.pipeline_tools` that can be used to create an operator in a pipeline.  Currently these helper functions add arguments to `argparse` for control at the command line.  In the future, we intend to support loading operator configuration from other config file formats.
+The details of how the global data object is created will depend on a particular project
+and likely use classes specific to that experiment.  Here we look at several examples
+using built-in classes.
 
 
 Example:  Simple Satellite Simulation

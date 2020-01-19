@@ -9,7 +9,7 @@
     python: {}
   editor:
     autoIndentOnPaste: false
-    fontSize: 18
+    fontSize: 16
     preferredLineLength: 88
     scrollPastEnd: true
     showInvisibles: true
@@ -17,8 +17,6 @@
     softWrapAtPreferredLineLength: true
     tabLength: 4
     tabType: "soft"
-  "linter-flake8":
-    maxLineLength: 88
   "python-black":
     fmtOnSave: true
     lineLength: 88

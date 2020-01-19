@@ -39,3 +39,7 @@
 
 # Darwin Finder files
 *.DS_Store
+
+# Jupyter notebooks
+.ipynb_checkpoints
+__pycache__
