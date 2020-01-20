@@ -12,6 +12,7 @@ install(FILES
   export.py
   filters.py
   gain.py
+  mapmaker.py
   madam.py
   noise.py
   pointing.py
