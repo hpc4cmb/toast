@@ -131,7 +131,7 @@ available in the default compiler search paths.  You should also install the FFT
 package, either through your OS package manager or manually.  After doing those steps,
 you can do::
 
-    pip install https://github.com/hpc4cmb/toast/archive/2.3.5.tar.gz
+    pip install https://github.com/hpc4cmb/toast/archive/2.3.6.tar.gz
 
 Specify the URL to the version tarball you want to install (see the releases on the
 TOAST github page).
