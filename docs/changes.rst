@@ -13,7 +13,7 @@ Change Log
 
 * Overhaul documentation (PR `#320`_).
 * Small typo fix for conviqt operator (PR `#319`_).
-* Support high-cadence ground scan strategies (PR `#316`_).
+* Support high-cadence ground scan strategies and fix a bug in turnaround simulation (PR `#316`_).
 * Fix BLAS / LAPACK name mangling detection (PR `#315`_).
 * Allow disabling sky sim in example pipeline (PR `#313`_).
 
