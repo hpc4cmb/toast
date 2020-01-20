@@ -108,6 +108,17 @@ If you want to use other packages with TOAST (e.g. Jupyter Lab), then you can ac
 the toast environment and install them with conda.  See the conda documentation for more
 details on managing environments, installing packages, etc.
 
+If you want to use PySM with TOAST for sky simulations, you should install the ``pysm3``
+and ``libsharp`` packages.  The libsharp package has the same variants as the toast
+package, so you should choose the same variant as you used when installing TOAST.  For
+example::
+
+    conda install pysm3 libsharp=*=*mpich*
+
+OR::
+
+    conda install pysm3 libsharp=*=*nompi*
+
 
 Minimal Install with PIP
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
