@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2019 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -68,6 +68,8 @@ class Patch(object):
     dec_amplitude = None
     dec_period = 10
     corners = []
+    preferred_el = None
+    el_count = None #How many times have we scanned this patch at each elevation/drift?
 
     def __init__(
         self,
@@ -322,7 +324,7 @@ class Patch(object):
 
 
 class SSOPatch(Patch):
-    def __init__(self, name, weight, radius, el_min, el_max):
+    def __init__(self, name, weight, radius):
         self.name = name
         self.weight = weight
         self.radius = radius
@@ -331,10 +333,6 @@ class SSOPatch(Patch):
         except:
             raise RuntimeError("Failed to initialize {} from pyEphem".format(name))
         self.corners = None
-        self.el_min0 = el_min
-        self.el_max0 = el_max
-        self.el_min = self.el_min0
-        self.el_max = self.el_max0
         return
 
     def update(self, observer):
@@ -359,11 +357,6 @@ class SSOPatch(Patch):
             patch_corner._dec = theta + delta_theta
             self.corners.append(patch_corner)
         return
-
-    def get_area(self, observer, **kwargs):
-        if self._area is None:
-            self._area = 2 * np.pi * (1 - np.cos(self.radius))
-        return self._area
 
 
 class CoolerCyclePatch(Patch):
@@ -888,8 +881,36 @@ def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible
     """ Determine the elevation at which to scan.
     """
     log = Logger.get()
+
     azs, els = patch.corner_coordinates(observer)
     el = None
+    
+    #Handle fixed elevation mode
+    if args.elevations is not None:
+        #Initialize, if necessary
+        if patch.el_count == None:
+            patch.el_count = [[0, 0] for x in range(len(args.elevations))]; #(rising count, setting count)
+
+        #Prioritize the elevations
+        #Don't assume the user entered the elevations in any particular order.
+        #Try to observe at whichever elevation has been observed the least.
+        #In the event of a tie, try to observe at the elevation that maximizes scan time on the patch.
+        obs_els = [degree*float(x) for x in args.elevations.split(',')];
+        if rising:
+            obs_els = [ (x, y[0]) for x, y in zip(obs_els, patch.el_count) ];
+            obs_els.sort(key=lambda x: x[0]);
+            obs_els.sort(key=lambda x: x[1]);
+        else:
+            obs_els = [ (x, y[1]) for x, y in zip(obs_els, patch.el_count) ];
+            obs_els.sort(key=lambda x: x[0], reverse=True);
+            obs_els.sort(key=lambda x: x[1]);
+        
+        for el in obs_els:
+            has_extent = current_extent([],[],[],patch.corners,fp_radius,el[0],azs,els,rising, 0)
+            if has_extent:
+                return el[0];
+        return None;
+    
     if rising:
         ind = azs <= np.pi
         if np.sum(ind) == 0:
@@ -1362,25 +1383,36 @@ def add_scan(
         moon_too_close, moon_time = check_sso(
             observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
         )
-        if (
-            isinstance(patch, HorizontalPatch)
-            and sun_time > tstart + 1
-            and moon_time > tstart + 1
-        ):
-            # Simply terminate the scan when the Sun or the Moon is too close
-            t2 = min(sun_time, moon_time)
-            if sun_too_close or moon_too_close:
-                tstop = t2
-                if t1 == t2:
-                    break
-        else:
-            # For regular patches, this is a failure condition
-            if sun_too_close:
-                log.debug("Sun too close")
-                raise SunTooClose
-            if moon_too_close:
-                log.debug("Moon too close")
-                raise MoonTooClose
+        
+        #The new code. We'll just replicate what horizontal patches used to do, but for all patches. JRS
+        if args.elevations!=None:
+            if (sun_time > tstart + 1 and moon_time > tstart + 1):
+                t2 = min(sun_time, moon_time)
+                if sun_too_close or moon_too_close:
+                    tstop = t2
+                    if t1==t2:
+                        break
+        else: #The original code, use this if elevations is not specified.
+            if (
+                    isinstance(patch, HorizontalPatch)
+                    and sun_time > tstart + 1
+                    and moon_time > tstart + 1
+            ):
+                # Simply terminate the scan when the Sun or the Moon is too close
+                t2 = min(sun_time, moon_time)
+                if sun_too_close or moon_too_close:
+                    tstop = t2
+                    if t1 == t2:
+                        break
+            else:
+                # For regular patches, this is a failure condition
+                if sun_too_close:
+                    log.debug("Sun too close")
+                    raise SunTooClose
+                if moon_too_close:
+                    log.debug("Moon too close")
+                    raise MoonTooClose
+        
         observer.date = to_DJD(t2)
         sun.compute(observer)
         moon.compute(observer)
@@ -1412,6 +1444,13 @@ def add_scan(
             subscan,
         )
         entries.append(entry)
+        #Accumulate the count for the number of scans of this elevation and drift.
+        #The += 1 could be changed if desired; for example, to amount of time spent, or something, instead of 1.
+        if args.elevations is not None:
+            if rising:
+                patch.el_count[[float(x) for x in args.elevations.split(',')].index(el/degree)][0] += 1;
+            else:
+                patch.el_count[[float(x) for x in args.elevations.split(',')].index(el/degree)][1] += 1;
         t1 = t2 + args.gap_small
 
     # Write the entries
@@ -1522,13 +1561,13 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             moon,
             args.sun_avoidance_angle,
             args.moon_avoidance_angle,
-            not args.delay_sso_check,
+            (args.elevations is None) and not args.delay_sso_check,
         )
         if not in_view:
             not_visible.append((patch.name, msg))
 
         if in_view:
-            if not args.delay_sso_check:
+            if (args.elevations is None) and not args.delay_sso_check:
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
                 if args.moon_avoidance_angle >= 0 and patch.in_patch(moon):
@@ -2144,6 +2183,7 @@ def parse_args():
         default=0,
         type=np.float,
         help="Optional offset added to every observing azimuth",
+        "--elevations", required=False, default=None, help="Set fixed elevations and enable that mode."
     )
 
     try:
@@ -2188,9 +2228,7 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    patch = SSOPatch(
-        name, weight, radius, np.radians(args.el_min), np.radians(args.el_max)
-    )
+    patch = SSOPatch(name, weight, radius)
     return patch
 
 
@@ -2389,11 +2427,11 @@ def parse_patch_center_and_width(args, parts):
     else:
         raise RuntimeError("Unknown coordinate system: {}".format(args.patch_coord))
     center = ephem.Equatorial(center)
-    # Synthesize 12 corners around the center
+    # Synthesize 8 corners around the center
     phi = center.ra
     theta = center.dec
     r = width / 2
-    ncorner = 12
+    ncorner = 8
     angstep = 2 * np.pi / ncorner
     for icorner in range(ncorner):
         ang = angstep * icorner
@@ -2458,7 +2496,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
 
         log.debug(
             "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {}".format(patches[-1].el_max0 / degree, patch._area)
+            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
         )
 
     if args.debug:
@@ -2583,9 +2621,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             hp.graticule(30, verbose=False)
 
             # Plot patches
-            observer.date = to_DJD(start_timestamp)
             for patch in patches:
-                patch.update(observer)
                 lon = [corner._ra / degree for corner in patch.corners]
                 lat = [corner._dec / degree for corner in patch.corners]
                 if len(lon) == 0:
