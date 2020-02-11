@@ -76,6 +76,7 @@ class CES:
         self,
         start_time,
         stop_time,
+        boresight_angle,
         name,
         mjdstart,
         scan,
@@ -92,6 +93,7 @@ class CES:
     ):
         self.start_time = start_time
         self.stop_time = stop_time
+        self.boresight_angle = boresight_angle
         self.name = name
         self.mjdstart = mjdstart
         self.scan = scan
@@ -360,36 +362,68 @@ def get_breaks(comm, all_ces, args, verbose=True):
     return breaks
 
 
-def _parse_line(line, all_ces):
+def _parse_line(line):
     """ Parse one line of the schedule file
     """
     if line.startswith("#"):
-        return
+        return None
 
-    (
-        start_date,
-        start_time,
-        stop_date,
-        stop_time,
-        mjdstart,
-        mjdstop,
-        name,
-        azmin,
-        azmax,
-        el,
-        rs,
-        sun_el1,
-        sun_az1,
-        sun_el2,
-        sun_az2,
-        moon_el1,
-        moon_az1,
-        moon_el2,
-        moon_az2,
-        moon_phase,
-        scan,
-        subscan,
-    ) = line.split()
+    fields = line.split()
+    nfield = len(fields)
+    if nfield == 22:
+        # Deprecated prior to 2020-02 schedule format without boresight rotation field
+        (
+            start_date,
+            start_time,
+            stop_date,
+            stop_time,
+            mjdstart,
+            mjdstop,
+            name,
+            azmin,
+            azmax,
+            el,
+            rs,
+            sun_el1,
+            sun_az1,
+            sun_el2,
+            sun_az2,
+            moon_el1,
+            moon_az1,
+            moon_el2,
+            moon_az2,
+            moon_phase,
+            scan,
+            subscan,
+        ) = line.split()
+        boresight_angle = 0
+    else:
+        # 2020-02 schedule format with boresight rotation field
+        (
+            start_date,
+            start_time,
+            stop_date,
+            stop_time,
+            mjdstart,
+            mjdstop,
+            boresight_angle,
+            name,
+            azmin,
+            azmax,
+            el,
+            rs,
+            sun_el1,
+            sun_az1,
+            sun_el2,
+            sun_az2,
+            moon_el1,
+            moon_az1,
+            moon_el2,
+            moon_az2,
+            moon_phase,
+            scan,
+            subscan,
+        ) = line.split()
     start_time = start_date + " " + start_time
     stop_time = stop_date + " " + stop_time
     # Define season as a calendar year.  This can be
@@ -403,20 +437,36 @@ def _parse_line(line, all_ces):
         stop_time = dateutil.parser.parse(stop_time)
     start_timestamp = start_time.timestamp()
     stop_timestamp = stop_time.timestamp()
-    all_ces.append(
-        [
-            start_timestamp,
-            stop_timestamp,
-            name,
-            float(mjdstart),
-            int(scan),
-            int(subscan),
-            float(azmin),
-            float(azmax),
-            float(el),
-            season,
-            start_date,
-        ]
+    # useful metadata
+    mindist_sun = min_sso_dist(
+        *np.array([el, azmin, azmax, sun_el1, sun_az1, sun_el2, sun_az2]).astype(
+            np.float
+        )
+    )
+    mindist_moon = min_sso_dist(
+        *np.array([el, azmin, azmax, moon_el1, moon_az1, moon_el2, moon_az2]).astype(
+            np.float
+        )
+    )
+    el_sun = max(float(sun_el1), float(sun_el2))
+    return (
+        start_timestamp,
+        start_date,
+        stop_timestamp,
+        season,
+        float(mjdstart),
+        float(mjdstop),
+        float(boresight_angle),
+        name,
+        float(azmin),
+        float(azmax),
+        float(el),
+        int(scan),
+        int(subscan),
+        mindist_sun,
+        mindist_moon,
+        el_sun,
+        rs.upper() == "R",
     )
 
 
@@ -485,29 +535,24 @@ def load_schedule(args, comm):
                     if line.startswith("#"):
                         continue
                     (
+                        start_timestamp,
                         start_date,
-                        start_time,
-                        stop_date,
-                        stop_time,
+                        stop_timestamp,
+                        season,
                         mjdstart,
                         mjdstop,
+                        boresight_angle,
                         name,
                         azmin,
                         azmax,
                         el,
-                        rs,
-                        sun_el1,
-                        sun_az1,
-                        sun_el2,
-                        sun_az2,
-                        moon_el1,
-                        moon_az1,
-                        moon_el2,
-                        moon_az2,
-                        moon_phase,
                         scan,
                         subscan,
-                    ) = line.split()
+                        mindist_sun,
+                        mindist_moon,
+                        el_sun,
+                        rising,
+                    ) = _parse_line(line)
                     if nsplit:
                         # Only accept 1 / `nsplit` of the rising and setting
                         # scans in patch `name`.  Selection is performed
@@ -525,45 +570,21 @@ def load_schedule(args, comm):
                         last_name = name
                         if iscan % nsplit != isplit:
                             continue
-                    start_time = start_date + " " + start_time
-                    stop_time = stop_date + " " + stop_time
-                    # Define season as a calendar year.  This can be
-                    # changed later and could even be in the schedule file.
-                    season = int(start_date.split("-")[0])
-                    # Gather other useful metadata
-                    mindist_sun = min_sso_dist(
-                        *np.array(
-                            [el, azmin, azmax, sun_el1, sun_az1, sun_el2, sun_az2]
-                        ).astype(np.float)
-                    )
-                    mindist_moon = min_sso_dist(
-                        *np.array(
-                            [el, azmin, azmax, moon_el1, moon_az1, moon_el2, moon_az2]
-                        ).astype(np.float)
-                    )
-                    el_sun = max(float(sun_el1), float(sun_el2))
-                    try:
-                        start_time = dateutil.parser.parse(start_time + " +0000")
-                        stop_time = dateutil.parser.parse(stop_time + " +0000")
-                    except Exception:
-                        start_time = dateutil.parser.parse(start_time)
-                        stop_time = dateutil.parser.parse(stop_time)
-                    start_timestamp = start_time.timestamp()
-                    stop_timestamp = stop_time.timestamp()
                     all_ces.append(
                         CES(
                             start_time=start_timestamp,
                             stop_time=stop_timestamp,
+                            boresight_angle=boresight_angle,
                             name=name,
-                            mjdstart=float(mjdstart),
-                            scan=int(scan),
-                            subscan=int(subscan),
-                            azmin=float(azmin),
-                            azmax=float(azmax),
-                            el=float(el),
+                            mjdstart=mjdstart,
+                            scan=scan,
+                            subscan=subscan,
+                            azmin=azmin,
+                            azmax=azmax,
+                            el=el,
                             season=season,
                             start_date=start_date,
-                            rising=(rs.upper() == "R"),
+                            rising=rising,
                             mindist_sun=mindist_sun,
                             mindist_moon=mindist_moon,
                             el_sun=el_sun,

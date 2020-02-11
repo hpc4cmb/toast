@@ -717,6 +717,8 @@ class TODGround(TOD):
         detectors (dictionary): each key is the detector name, and each
             value is a quaternion tuple.
         samples (int):  The total number of samples.
+        boresight_angle (float):  Extra rotation to apply around the
+             boresight [degrees]
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         site_lon (float/str): Observing site Earth longitude in radians
@@ -765,6 +767,7 @@ class TODGround(TOD):
         mpicomm,
         detectors,
         samples,
+        boresight_angle=0,
         firsttime=0.0,
         rate=100.0,
         site_lon=0,
@@ -818,6 +821,7 @@ class TODGround(TOD):
                 "TODGround: lasttime > CES_stop: {} > {}" "".format(lasttime, CES_stop)
             )
 
+        self._boresight_angle = boresight_angle * degree
         self._firsttime = firsttime
         self._lasttime = lasttime
         self._rate = rate
@@ -1208,6 +1212,12 @@ class TODGround(TOD):
             np.zeros(my_nsamp),
             IAU=False,
         )
+
+        if self._boresight_angle != 0:
+            zaxis = np.array([0, 0, 1.0])
+            rot = qa.rotation(zaxis, self._boresight_angle)
+            my_azelquats = qa.mult(my_azelquats, rot)
+
         azelquats = None
         if self._mpicomm is None:
             azelquats = my_azelquats
@@ -1226,6 +1236,7 @@ class TODGround(TOD):
             quats = my_quats
         else:
             quats = np.vstack(self._mpicomm.allgather(my_quats))
+
         self._boresight = quats
         del my_quats
         return
@@ -1318,38 +1329,12 @@ class TODGround(TOD):
         X = (xvec[1] + yvec[0]) / 4
         Y = (xvec[2] + zvec[0]) / 4
         Z = (yvec[2] + zvec[1]) / 4
-        """
-        if np.abs(X) < 1e-6 and np.abs(Y) < 1e-6:
-            # Avoid dividing with small numbers
-            c = .5 * np.sqrt(1 - xvec[0] + yvec[1] - zvec[2])
-            d = np.sqrt(c**2 + .5 * (zvec[2] - yvec[1]))
-            b = np.sqrt(.5 * (1 - zvec[2]) - c**2)
-            a = np.sqrt(1 - b**2 - c**2 - d**2)
-        else:
-        """
         d = np.sqrt(np.abs(Y * Z / X))  # Choose positive root
         c = d * X / Y
         b = X / c
         a = (xvec[1] / 2 - b * c) / d
         # qarray has the scalar part as the last index
         quat = qa.norm(np.array([b, c, d, a]))
-        """
-        # DEBUG begin
-        errors = np.array(
-            [
-                np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
-                np.dot(qa.rotate(quat, [0, 1, 0]), yvec),
-                np.dot(qa.rotate(quat, [0, 0, 1]), zvec),
-            ]
-        )
-        errors[errors > 1] = 1
-        errors = np.degrees(np.arccos(errors))
-        if np.any(errors > 1) or np.any(np.isnan(errors)):
-            raise RuntimeError(
-                "Quaternion is not right: ({}), ({} {} {})" "".format(errors, X, Y, Z)
-            )
-        # DEBUG end
-        """
         return quat
 
     @function_timer
