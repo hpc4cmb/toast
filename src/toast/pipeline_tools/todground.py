@@ -127,21 +127,21 @@ def add_todground_args(parser):
         help="Scanning rate change [deg / s^2]",
     )
     parser.add_argument(
-        "--scan-sinc-modulate",
+        "--scan-cosecant-modulate",
         required=False,
         action="store_true",
         help="Modulate scan rate so integration depth is constant at "
         "all declinations.  The --scan-rate becomes the *minimum* scan rate.",
-        dest="scan_sinc_modulate",
+        dest="scan_cosecant_modulate",
     )
     parser.add_argument(
-        "--no-scan-sinc-modulate",
+        "--no-scan-cosecant-modulate",
         required=False,
         action="store_false",
         help="Use constant sky scan rate according to --scan-rate.",
-        dest="scan_sinc_modulate",
+        dest="scan_cosecant_modulate",
     )
-    parser.set_defaults(scan_sinc_modulate=False)
+    parser.set_defaults(scan_cosecant_modulate=False)
     parser.add_argument(
         "--sun-angle-min",
         required=False,

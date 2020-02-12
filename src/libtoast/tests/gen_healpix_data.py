@@ -1,7 +1,7 @@
 # This generates a small dataset with healpy
 # that can be inserted into the unit tests.
 # To update test data, do:
-# 
+#
 # %> python gen_healpix_data.py > data_healpix.cpp
 #
 
