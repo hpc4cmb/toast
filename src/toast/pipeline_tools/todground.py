@@ -562,11 +562,11 @@ def load_schedule(args, comm):
                                 scan_counters[name] = {}
                             counter = scan_counters[name]
                             # Separate counters for rising and setting scans
-                            if rs not in counter:
-                                counter[rs] = 0
+                            if rising not in counter:
+                                counter[rising] = 0
                             else:
-                                counter[rs] += 1
-                            iscan = counter[rs]
+                                counter[rising] += 1
+                            iscan = counter[rising]
                         last_name = name
                         if iscan % nsplit != isplit:
                             continue
