@@ -3,6 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
+#include <omp.h>
+
 #include <toast/sys_utils.hpp>
 #include <toast/math_lapack.hpp>
 #include <toast/tod_filter.hpp>
@@ -154,6 +156,48 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 // Subtract noise
 
                 for (int64_t i = 0; i < scanlen; ++i) signal[i] -= noise[i];
+            }
+        }
+    }
+
+    return;
+}
+
+void toast::bin_templates(double * signal, std::vector <double *> templates,
+                          uint8_t * good, double * invcov, double * proj,
+                          size_t nsample, size_t ntemplate) {
+    for (size_t row = 0; row < ntemplate; row++) {
+        proj[row] = 0;
+        for (size_t col = 0; col < ntemplate; col++) {
+            invcov[ntemplate * row + col] = 0;
+        }
+    }
+
+#pragma omp parallel for \
+    schedule(static) default(none) shared(proj, templates, signal, good, ntemplate, nsample)
+    for (size_t row = 0; row < ntemplate; ++row) {
+        for (size_t i = 0; i < nsample; ++i) {
+            proj[row] += templates[row][i] * signal[i] * good[i];
+        }
+    }
+
+#pragma omp parallel \
+    default(none) shared(invcov, templates, signal, good, ntemplate, nsample)
+    {
+        int nthread = omp_get_num_threads();
+        int id_thread = omp_get_thread_num();
+
+        int worker = -1;
+        for (size_t row = 0; row < ntemplate; row++) {
+            for (size_t col = row; col < ntemplate; ++col) {
+                ++worker;
+                if (worker % nthread == id_thread) {
+                    for (size_t i = 0; i < nsample; ++i) {
+                        invcov[ntemplate * row + col] += templates[row][i] *
+                                                         templates[col][i] * good[i];
+                    }
+                    invcov[ntemplate * col + row] = invcov[ntemplate * row + col];
+                }
             }
         }
     }

@@ -8,6 +8,8 @@ import numpy as np
 
 from numpy.polynomial.chebyshev import chebval
 
+from .._libtoast import bin_templates
+
 from ..op import Operator
 
 from ..utils import Logger
@@ -136,6 +138,23 @@ class OpGroundFilter(Operator):
         return templates, cheby_trend, cheby_filter
 
     @function_timer
+    def bin_templates(self, ref, templates, good, invcov, proj):
+
+        # Bin the local data
+
+        for i in range(ntemplate):
+            temp = templates[i] * good
+            proj[i] = np.dot(temp, ref)
+            for j in range(i, ntemplate):
+                invcov[i, j] = np.dot(temp, templates[j])
+                # Symmetrize invcov
+                if i != j:
+                    invcov[j, i] = invcov[i, j]
+            del temp
+
+        return
+
+    @function_timer
     def fit_templates(self, tod, det, templates, ref, good):
         log = Logger.get()
         comm = tod.mpicomm
@@ -147,19 +166,9 @@ class OpGroundFilter(Operator):
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
-
-        # Bin the local data
-
         if ref is not None:
-            for i in range(ntemplate):
-                temp = templates[i] * good
-                proj[i] = np.dot(temp, ref)
-                for j in range(i, ntemplate):
-                    invcov[i, j] = np.dot(temp, templates[j])
-                    # Symmetrize invcov
-                    if i != j:
-                        invcov[j, i] = invcov[i, j]
-                del temp
+            # self.bin_templates(ref, templates, good, invcov, proj)
+            bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
 
         if sampranks > 1:
             # Reduce the binned data.  The detector signals is
@@ -189,13 +198,13 @@ class OpGroundFilter(Operator):
     def subtract_templates(self, ref, good, coeff, cheby_trend, cheby_filter):
         # Trend
         trend = np.zeros_like(ref)
-        for cc, template in zip(coeff[:self._trend_order], cheby_trend):
+        for cc, template in zip(coeff[: self._trend_order], cheby_trend):
             trend += cc * template
         if self._detrend:
             ref[good] -= trend[good]
         # Ground template
         grtemplate = np.zeros_like(ref)
-        for cc, template in zip(coeff[self._trend_order:], cheby_filter):
+        for cc, template in zip(coeff[self._trend_order :], cheby_filter):
             grtemplate += cc * template
         ref[good] -= grtemplate[good]
         ref[np.logical_not(good)] = 0

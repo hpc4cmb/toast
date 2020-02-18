@@ -234,7 +234,11 @@ def add_madam_args(parser):
     # `nside_submap` may already be added
     try:
         parser.add_argument(
-            "--nside_submap", required=False, default=16, type=np.int, help="Number of submaps is 12 * nside_submap ** 2"
+            "--nside_submap",
+            required=False,
+            default=16,
+            type=np.int,
+            help="Number of submaps is 12 * nside_submap ** 2",
         )
     except argparse.ArgumentError:
         pass
