@@ -1212,9 +1212,16 @@ class TODGround(TOD):
         if np.sum(sizes) != samples:
             raise RuntimeError("Subscans do not match samples")
 
+        # Limit azimuth to [-2pi, 2pi] but do not
+        # introduce discontinuities with modulo.
+
+        if np.amin(self._az) < -2 * np.pi:
+            self._az += 2 * np.pi
+        if np.amax(self._az) > 2 * np.pi:
+            self._az -= 2 * np.pi
+
         # Store the scan range
 
-        self._az %= 2 * np.pi
         self._min_az = np.amin(self._az)
         self._max_az = np.amax(self._az)
         self._min_el = self._el
