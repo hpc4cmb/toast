@@ -7,19 +7,56 @@
 
 
 void init_tod_filter(py::module & m) {
+    m.def("chebyshev",
+          [](py::buffer x, py::buffer templates, size_t start_order,
+             size_t stop_order) {
+              pybuffer_check_1D <double> (x);
+              py::buffer_info info_x = x.request();
+              py::buffer_info info_templates = templates.request();
+
+              size_t nsample = info_x.size;
+              size_t ntemplate = info_templates.size / nsample;
+              if (ntemplate != stop_order - start_order) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Size of templates does not match x, and order";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+
+              double * px = reinterpret_cast <double *> (info_x.ptr);
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
+              toast::chebyshev(px, ptemplates, start_order, stop_order, nsample);
+
+              return;
+          }, py::arg("x"), py::arg("templates"), py::arg("start_order"),
+          py::arg(
+              "stop_order"),
+          R"(
+        Populate an array of Chebyshev polynomials at x (in range [-1, 1])
+
+        Args:
+
+        Returns:
+            None.
+
+    )");
+
     m.def("bin_templates",
-          [](py::buffer signal, py::list templates, py::buffer good, py::buffer invcov,
+          [](py::buffer signal, py::buffer templates, py::buffer good,
+             py::buffer invcov,
              py::buffer proj) {
               pybuffer_check_1D <double> (signal);
               pybuffer_check_1D <double> (proj);
               pybuffer_check_1D <uint8_t> (good);
               py::buffer_info info_signal = signal.request();
+              py::buffer_info info_templates = templates.request();
               py::buffer_info info_good = good.request();
               py::buffer_info info_invcov = invcov.request();
               py::buffer_info info_proj = proj.request();
 
               size_t nsample = info_signal.size;
-              size_t ntemplate = templates.size();
+              size_t ntemplate = info_templates.size / nsample;
               if ((ntemplate * ntemplate != info_invcov.size) ||
                   (ntemplate != info_proj.size)) {
                   auto log = toast::Logger::get();
@@ -29,22 +66,8 @@ void init_tod_filter(py::module & m) {
                   throw std::runtime_error(o.str().c_str());
               }
 
-              std::vector <double *> ptemplates;
-              for (auto const & temp : templates) {
-                  auto buf = temp.cast <py::buffer> ();
-                  pybuffer_check_1D <double> (buf);
-                  py::buffer_info info_template = buf.request();
-                  if (info_template.size != nsample) {
-                      auto log = toast::Logger::get();
-                      std::ostringstream o;
-                      o << "Signal and template buffer sizes are not consistent.";
-                      log.error(o.str().c_str());
-                      throw std::runtime_error(o.str().c_str());
-                  }
-                  ptemplates.push_back(reinterpret_cast <double *> (info_template.ptr));
-              }
-
               double * psignal = reinterpret_cast <double *> (info_signal.ptr);
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
               double * pinvcov = reinterpret_cast <double *> (info_invcov.ptr);
               double * pproj = reinterpret_cast <double *> (info_proj.ptr);
               uint8_t * pgood = reinterpret_cast <uint8_t *> (info_good.ptr);
@@ -57,6 +80,41 @@ void init_tod_filter(py::module & m) {
               "proj"),
           R"(
         Perform dot products between signal and templates
+
+        Args:
+
+        Returns:
+            None.
+
+    )");
+
+    m.def("add_templates",
+          [](py::buffer signal, py::buffer templates, py::buffer coeff) {
+              pybuffer_check_1D <double> (signal);
+              py::buffer_info info_signal = signal.request();
+              py::buffer_info info_templates = templates.request();
+              py::buffer_info info_coeff = coeff.request();
+
+              size_t nsample = info_signal.size;
+              size_t ntemplate = info_coeff.size;
+              if (ntemplate * nsample != info_templates.size) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "signal, templates and coeff have inconsistent sizes";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+
+              double * psignal = reinterpret_cast <double *> (info_signal.ptr);
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
+              double * pcoeff = reinterpret_cast <double *> (info_coeff.ptr);
+              toast::add_templates(psignal, ptemplates, pcoeff, nsample, ntemplate);
+
+              return;
+          }, py::arg("signal"), py::arg("templates"), py::arg(
+              "coeff"),
+          R"(
+        Co-add templates using coeff onto signal
 
         Args:
 

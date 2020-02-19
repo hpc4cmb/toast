@@ -3,6 +3,7 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
+#include <string.h>
 #include <omp.h>
 
 #include <toast/sys_utils.hpp>
@@ -163,7 +164,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     return;
 }
 
-void toast::bin_templates(double * signal, std::vector <double *> templates,
+void toast::bin_templates(double * signal, double * templates,
                           uint8_t * good, double * invcov, double * proj,
                           size_t nsample, size_t ntemplate) {
     for (size_t row = 0; row < ntemplate; row++) {
@@ -176,8 +177,9 @@ void toast::bin_templates(double * signal, std::vector <double *> templates,
 #pragma omp parallel for \
     schedule(static) default(none) shared(proj, templates, signal, good, ntemplate, nsample)
     for (size_t row = 0; row < ntemplate; ++row) {
+        double * ptemplate = templates + row * nsample;
         for (size_t i = 0; i < nsample; ++i) {
-            proj[row] += templates[row][i] * signal[i] * good[i];
+            proj[row] += ptemplate[i] * signal[i] * good[i];
         }
     }
 
@@ -192,12 +194,86 @@ void toast::bin_templates(double * signal, std::vector <double *> templates,
             for (size_t col = row; col < ntemplate; ++col) {
                 ++worker;
                 if (worker % nthread == id_thread) {
+                    double * rowtemplate = templates + row * nsample;
+                    double * coltemplate = templates + col * nsample;
+                    double * pcov = invcov + ntemplate * row + col;
                     for (size_t i = 0; i < nsample; ++i) {
-                        invcov[ntemplate * row + col] += templates[row][i] *
-                                                         templates[col][i] * good[i];
+                        *pcov += rowtemplate[i] * coltemplate[i] * good[i];
                     }
-                    invcov[ntemplate * col + row] = invcov[ntemplate * row + col];
+                    invcov[ntemplate * col + row] = *pcov;
                 }
+            }
+        }
+    }
+
+    return;
+}
+
+void toast::chebyshev(double * x, double * templates, size_t start_order,
+                      size_t stop_order, size_t nsample) {
+    // order == 0
+    if (start_order == 0) {
+        for (size_t i = 0; i < nsample; ++i) templates[i] = 1;
+    }
+
+    // order == 1
+    if (start_order <= 1) {
+        memcpy(templates + (1 - start_order) * nsample, x, nsample * sizeof(double));
+    }
+
+    const size_t buflen = 1000;
+    size_t nbuf = nsample / buflen + 1;
+
+#pragma omp parallel for \
+    schedule(static) default(none) shared(x, templates, start_order, stop_order, nsample, nbuf)
+    for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
+        size_t istart = ibuf * buflen;
+        size_t istop = istart + buflen;
+        if (istop > nsample) istop = nsample;
+        if (istop <= istart) continue;
+        size_t n = istop - istart;
+        size_t nbyte = n * sizeof(double);
+
+        // Initialize to order = 1
+        std::vector <double> val(n);
+        memcpy(val.data(), x + istart, nbyte);
+        std::vector <double> prev(n, 1);
+        std::vector <double> next(n);
+
+        for (size_t order = 2; order < stop_order; ++order) {
+            // Evaluate current order and store in val
+            for (size_t i = 0; i < n;
+                 ++i) next[i] = 2 * x[istart + i] * val[i] - prev[i];
+            memcpy(prev.data(), val.data(), nbyte);
+            memcpy(val.data(), next.data(), nbyte);
+            if (order >= start_order) {
+                memcpy(templates + istart + (order - start_order) * nsample,
+                       val.data(), nbyte);
+            }
+        }
+    }
+
+    return;
+}
+
+void toast::add_templates(double * signal, double * templates, double * coeff,
+                          size_t nsample, size_t ntemplate) {
+    const size_t buflen = 1000;
+    size_t nbuf = nsample / buflen + 1;
+
+#pragma omp parallel for \
+    schedule(static) default(none) shared(signal, templates, coeff, nsample, ntemplate, nbuf)
+    for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
+        size_t istart = ibuf * buflen;
+        size_t istop = istart + buflen;
+        if (istop > nsample) istop = nsample;
+        if (istop <= istart) continue;
+        size_t n = istop - istart;
+        for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+            double * ptemplate = templates + itemplate * nsample;
+            double c = coeff[itemplate];
+            for (size_t i = istart; i < istop; ++i) {
+                signal[i] += c * ptemplate[i];
             }
         }
     }
