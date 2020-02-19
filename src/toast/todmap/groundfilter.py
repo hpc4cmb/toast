@@ -8,7 +8,7 @@ import numpy as np
 
 from numpy.polynomial.chebyshev import chebval
 
-from .._libtoast import bin_templates
+from .._libtoast import bin_templates, add_templates, chebyshev
 
 from ..op import Operator
 
@@ -98,7 +98,9 @@ class OpGroundFilter(Operator):
 
         # Do not include the offset in the trend.  It will be part of
         # of the ground template
-        cheby_trend = chebval(x, np.eye(self._trend_order + 1), tensor=True)[1:]
+        # cheby_trend = chebval(x, np.eye(self._trend_order + 1), tensor=True)[1:]
+        cheby_trend = np.zeros([self._trend_order, x.size])
+        chebyshev(x, cheby_trend, 1, self._trend_order + 1)
 
         try:
             (azmin, azmax, _, _) = tod.scan_range
@@ -114,7 +116,9 @@ class OpGroundFilter(Operator):
 
         phase = (az - azmin) / (azmax - azmin) * 2 - 1
         nfilter = self._filter_order + 1
-        cheby_templates = chebval(phase, np.eye(nfilter), tensor=True)
+        # cheby_templates = chebval(phase, np.eye(nfilter), tensor=True)
+        cheby_templates = np.zeros([nfilter, phase.size])
+        chebyshev(phase, cheby_templates, 0, nfilter)
         if not self._split_template:
             cheby_filter = cheby_templates
         else:
@@ -129,11 +133,13 @@ class OpGroundFilter(Operator):
                     temp[mask] = 0
                     cheby_filter.append(temp)
             del common_ref
+            cheby_filter = np.vstack(cheby_filter)
 
-        templates = []
-        for temp in cheby_trend, cheby_filter:
-            for template in temp:
-                templates.append(template)
+        # templates = []
+        # for temp in cheby_trend, cheby_filter:
+        #    for template in temp:
+        #        templates.append(template)
+        templates = np.vstack([cheby_trend, cheby_filter])
 
         return templates, cheby_trend, cheby_filter
 
@@ -197,15 +203,17 @@ class OpGroundFilter(Operator):
     @function_timer
     def subtract_templates(self, ref, good, coeff, cheby_trend, cheby_filter):
         # Trend
-        trend = np.zeros_like(ref)
-        for cc, template in zip(coeff[: self._trend_order], cheby_trend):
-            trend += cc * template
         if self._detrend:
+            trend = np.zeros_like(ref)
+            # for cc, template in zip(coeff[: self._trend_order], cheby_trend):
+            #    trend += cc * template
+            add_templates(trend, cheby_trend, coeff[: self._trend_order])
             ref[good] -= trend[good]
         # Ground template
         grtemplate = np.zeros_like(ref)
-        for cc, template in zip(coeff[self._trend_order :], cheby_filter):
-            grtemplate += cc * template
+        # for cc, template in zip(coeff[self._trend_order :], cheby_filter):
+        #    grtemplate += cc * template
+        add_templates(grtemplate, cheby_filter, coeff[self._trend_order :])
         ref[good] -= grtemplate[good]
         ref[np.logical_not(good)] = 0
         return
