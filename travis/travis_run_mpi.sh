@@ -30,12 +30,6 @@ trap 'error_handler' ERR
 
 export OMP_NUM_THREADS=2
 
-
-# Run tests with MPI disabled
-#===========================================================================
-
-TOAST_MPI_DISABLE=1 python3 -c "import toast.tests; toast.tests.run()"
-
 # Run tests with MPI
 #===========================================================================
 
