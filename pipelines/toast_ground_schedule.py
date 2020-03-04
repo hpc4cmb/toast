@@ -1375,9 +1375,9 @@ def add_scan(
             to_MJD(t1),
             to_MJD(t2),
             patch.name,
-            azmin,
-            azmax,
-            el / degree,
+            (azmin + args.boresight_offset_az_deg) % 360,
+            (azmax + args.boresight_offset_az_deg) % 360,
+            (el / degree + args.boresight_offset_el_deg),
             rising_string,
             sun_el1,
             sun_az1,
@@ -2088,6 +2088,20 @@ def parse_args():
     )
     parser.add_argument(
         "--out", required=False, default="schedule.txt", help="Output filename"
+    )
+    parser.add_argument(
+        "--boresight-offset-el-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Optional offset added to every observing elevation",
+    )
+    parser.add_argument(
+        "--boresight-offset-az-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Optional offset added to every observing azimuth",
     )
 
     try:
