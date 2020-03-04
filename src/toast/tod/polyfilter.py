@@ -82,6 +82,9 @@ class OpPolyFilter(Operator):
             else:
                 intervals = None
             local_intervals = tod.local_intervals(intervals)
+            if len(local_intervals) == 0:
+                # No intervals to filter
+                continue
             common_ref = tod.local_common_flags(self._common_flag_name)
 
             pat = re.compile(self._pattern)
