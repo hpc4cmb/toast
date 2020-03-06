@@ -789,11 +789,7 @@ class TODGround(TOD):
         hwprpm=None,
         hwpstep=None,
         hwpsteptime=None,
-<<<<<<< HEAD
         cosecant_modulation=False,
-=======
-        sinc_modulation=False,
->>>>>>> High cadence scans (#316)
         **kwargs
     ):
         if samples < 1:
@@ -849,11 +845,7 @@ class TODGround(TOD):
             raise RuntimeError("Unknown coordinate system: {}".format(coord))
         self._coord = coord
         self._report_timing = report_timing
-<<<<<<< HEAD
         self._cosecant_modulation = cosecant_modulation
-=======
-        self._sinc_modulation = sinc_modulation
->>>>>>> High cadence scans (#316)
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -1043,23 +1035,14 @@ class TODGround(TOD):
         nstep = 10000
 
         azmin, azmax = [self._azmin, self._azmax]
-<<<<<<< HEAD
         if self._cosecant_modulation:
             # We always simulate a rising cosecant scan and then
-=======
-        if self._sinc_modulation:
-            # We always simulate a rising sinc scan and then
->>>>>>> High cadence scans (#316)
             # mirror it if necessary
             azmin %= np.pi
             azmax %= np.pi
             if azmin > azmax:
                 raise RuntimeError(
-<<<<<<< HEAD
                     "Cannot scan across zero meridian with cosecant-modulated scan"
-=======
-                    "Cannot scan across zero meridian with sinc-modulated scan"
->>>>>>> High cadence scans (#316)
                 )
         elif azmax < azmin:
             azmax += 2 * np.pi
@@ -1077,11 +1060,7 @@ class TODGround(TOD):
         tvec = []
         azvec = []
         t0 = t
-<<<<<<< HEAD
         if self._cosecant_modulation:
-=======
-        if self._sinc_modulation:
->>>>>>> High cadence scans (#316)
             t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
             tvec = np.linspace(t0, t1, nstep, endpoint=True)
             azvec = np.arccos(np.cos(azmin) + base_rate * t0 - base_rate * tvec)
@@ -1098,11 +1077,7 @@ class TODGround(TOD):
         # turnaround
 
         t0 = t
-<<<<<<< HEAD
         if self._cosecant_modulation:
-=======
-        if self._sinc_modulation:
->>>>>>> High cadence scans (#316)
             dazdt = base_rate / np.abs(np.sin(azmax))
         else:
             dazdt = base_rate
@@ -1121,11 +1096,7 @@ class TODGround(TOD):
         tvec = []
         azvec = []
         t0 = t
-<<<<<<< HEAD
         if self._cosecant_modulation:
-=======
-        if self._sinc_modulation:
->>>>>>> High cadence scans (#316)
             t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
             tvec = np.linspace(t0, t1, nstep, endpoint=True)
             azvec = np.arccos(np.cos(azmax) - base_rate * t0 + base_rate * tvec)
@@ -1142,11 +1113,7 @@ class TODGround(TOD):
         # turnaround
 
         t0 = t
-<<<<<<< HEAD
         if self._cosecant_modulation:
-=======
-        if self._sinc_modulation:
->>>>>>> High cadence scans (#316)
             dazdt = base_rate / np.abs(np.sin(azmin))
         else:
             dazdt = base_rate
@@ -1171,13 +1138,8 @@ class TODGround(TOD):
         tmin, tmax = tvec[0], tvec[-1]
         tdelta = tmax - tmin
         self._az = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
-<<<<<<< HEAD
         if self._cosecant_modulation and self._azmin > np.pi:
             # We always simulate a rising cosecant scan and then
-=======
-        if self._sinc_modulation and self._azmin > np.pi:
-            # We always simulate a rising sinc scan and then
->>>>>>> High cadence scans (#316)
             # mirror it if necessary
             self._az += np.pi
         ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
