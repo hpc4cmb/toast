@@ -31,15 +31,15 @@ def fake_focalplane():
     fov = 5.0
     # ...converted to size of hexagon
     angwidth = fov * np.cos(30.0 * np.pi / 180.0)
-
+    
     # Alternating polarization orientations
     Apol = tt.hex_pol_angles_qu(npix, offset=0.0)
     Bpol = tt.hex_pol_angles_qu(npix, offset=90.0)
-
+    
     # Build a simple hexagon layout
     Adets = tt.hex_layout(npix, angwidth, "fake_", "A", Apol)
     Bdets = tt.hex_layout(npix, angwidth, "fake_", "B", Bpol)
-
+    
     # Combine into a single dictionary
     dets = Adets.copy()
     dets.update(Bdets)
@@ -87,8 +87,8 @@ class TextTOD(toast.tod.TOD):
             by this number.
         meta (dict): Some extra metadata
     """
-
-    def __init__(self, path, mpicomm, detectors, rate=100.0, detranks=1, meta=None):
+    def __init__(self, path, mpicomm, detectors, rate=100.0, detranks=1, 
+        meta=None):
         self._path = path
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -98,26 +98,21 @@ class TextTOD(toast.tod.TOD):
         # processes.
         self._boresight = None
         if mpicomm.rank == 0:
-            self._boresight = np.loadtxt(self._path, dtype=np.float64).reshape((-1, 4))
+            self._boresight = np.loadtxt(self._path, 
+                dtype=np.float64).reshape((-1,4))
         self._boresight = mpicomm.bcast(self._boresight, root=0)
         detindx = {}
         for d in detectors.keys():
             detindx[d] = detectors[d]["index"]
         # Call base class constructor, which computes the data distribution.
-        super().__init__(
-            mpicomm,
-            self._detlist,
-            self._boresight.shape[0],
-            detindx=detindx,
-            detranks=detranks,
-            meta=meta,
-        )
-
+        super().__init__(mpicomm, self._detlist, self._boresight.shape[0],
+            detindx=detindx, detranks=detranks, meta=meta)
+        
     def detoffset(self):
         """
         Return the quaternion offsets for all detectors.
         """
-        return {d: np.asarray(self._fp[d]) for d in self._detlist}
+        return { d : np.asarray(self._fp[d]) for d in self._detlist }
 
     # The rest of the overrides for these TOD base class methods mostly
     # just return zeros or throw exceptions.  For a TOD class that reads
@@ -148,9 +143,7 @@ class TextTOD(toast.tod.TOD):
         start_abs = self.local_samples[0] + start
         start_time = self._firsttime + float(start_abs) / self._rate
         stop_time = start_time + float(n) / self._rate
-        stamps = np.linspace(
-            start_time, stop_time, num=n, endpoint=False, dtype=np.float64
-        )
+        stamps = np.linspace(start_time, stop_time, num=n, endpoint=False, dtype=np.float64)
         return stamps
 
     def _put_times(self, start, stamps):
@@ -158,7 +151,7 @@ class TextTOD(toast.tod.TOD):
         return
 
     def _get_boresight(self, start, n):
-        return self._boresight[start : start + n, :]
+        return self._boresight[start:start+n,:]
 
     def _put_boresight(self, start, data):
         raise RuntimeError("cannot write boresight to simulated data streams")
@@ -166,7 +159,7 @@ class TextTOD(toast.tod.TOD):
 
     def _get_pntg(self, detector, start, n):
         detquat = np.asarray(self._fp[detector]["quat"])
-        boresight = self._boresight[start : start + n, :]
+        boresight = self._boresight[start:start+n,:]
         data = qa.mult(boresight, detquat)
         return data
 
@@ -175,14 +168,14 @@ class TextTOD(toast.tod.TOD):
         return
 
     def _get_position(self, start, n):
-        return np.zeros((n, 3), dtype=np.float64)
+        return np.zeros((n,3), dtype=np.float64)
 
     def _put_position(self, start, pos):
         raise RuntimeError("cannot write data to simulated position")
         return
 
     def _get_velocity(self, start, n):
-        return np.zeros((n, 3), dtype=np.float64)
+        return np.zeros((n,3), dtype=np.float64)
 
     def _put_velocity(self, start, vel):
         raise RuntimeError("cannot write data to simulated velocity")
@@ -196,7 +189,7 @@ def create_observations(comm, rate, fp, borefiles):
     # The distributed timestream data.  This is a container for holding our
     # observations.
     data = toast.Data(comm)
-
+    
     # Every process group creates its observations.  In this case, we have
     # only one process group.
 
@@ -205,10 +198,12 @@ def create_observations(comm, rate, fp, borefiles):
     obindx = 0
     for bf in borefiles:
         # Some contrived metadata
-        meta = {"boresightfile": bf}
+        meta = {
+            "boresightfile" : bf
+        }
         # The TOD class
         tod = TextTOD(bf, comm.comm_group, fp, rate=rate, meta=meta)
-
+        
         # Let's add a noise model too, so we can do simulations
         # Create the noise model used for all observations
         fmin = {}
@@ -223,14 +218,8 @@ def create_observations(comm, rate, fp, borefiles):
             alpha[d] = fp[d]["alpha"]
             NET[d] = fp[d]["NET"]
 
-        noise = tt.AnalyticNoise(
-            rate=rates,
-            fmin=fmin,
-            detectors=list(fp.keys()),
-            fknee=fknee,
-            alpha=alpha,
-            NET=NET,
-        )
+        noise = tt.AnalyticNoise(rate=rates, fmin=fmin, 
+            detectors=list(fp.keys()), fknee=fknee, alpha=alpha, NET=NET)
 
         obs = {
             "name": "observation_{:05d}".format(obindx),
@@ -277,7 +266,7 @@ def main():
     # Read in 2 boresight files
     borefiles = [
         "../data/custom_example_boresight_1.txt",
-        "../data/custom_example_boresight_2.txt",
+        "../data/custom_example_boresight_2.txt"
     ]
 
     # Set up the distributed data
@@ -288,14 +277,13 @@ def main():
     # also the "submap" resolution, which sets granularity of the locally
     # stored pieces of the sky.
     map_nside = 512
-    map_npix = 12 * map_nside ** 2
+    map_npix = 12 * map_nside**2
     sub_nside = 4
-    sub_npix = 12 * sub_nside ** 2
+    sub_npix = 12 * sub_nside**2
 
     # Compute a pointing matrix with healpix pixels and weights.
-    pointing = tt.OpPointingHpix(
-        nside=map_nside, nest=True, mode="IQU", pixels="pixels", weights="weights"
-    )
+    pointing = tt.OpPointingHpix(nside=map_nside, nest=True, mode="IQU",
+        pixels="pixels", weights="weights")
     pointing.exec(data)
 
     # Compute the locally hit submaps
@@ -304,19 +292,12 @@ def main():
     # Sources of simulated data:  scan from a symmetric beam convolved sky
     # and then add some simulated noise.
 
-    signalmap = tm.DistPixels(
-        comm=comm.comm_world,
-        size=map_npix,
-        nnz=3,
-        dtype=np.float64,
-        submap=sub_npix,
-        local=local_submaps,
-    )
+    signalmap = tm.DistPixels(comm=comm.comm_world, size=map_npix, nnz=3, 
+        dtype=np.float64, submap=sub_npix, local=local_submaps)
     signalmap.read_healpix_fits("../data/custom_example_sky.fits")
 
-    scanmap = tt.OpSimScan(
-        distmap=signalmap, pixels="pixels", weights="weights", out="sim"
-    )
+    scanmap = tt.OpSimScan(distmap=signalmap, pixels='pixels', 
+        weights='weights', out="sim")
     scanmap.exec(data)
 
     nse = tt.OpSimNoise(out="sim", realization=0)
@@ -329,41 +310,22 @@ def main():
     for d in fp.keys():
         net = fp[d]["NET"]
         detweights[d] = 1.0 / (rate * net * net)
+        
+    invnpp = tm.DistPixels(comm=comm.comm_world, size=map_npix, nnz=6, 
+        dtype=np.float64, submap=sub_npix, local=local_submaps)
 
-    invnpp = tm.DistPixels(
-        comm=comm.comm_world,
-        size=map_npix,
-        nnz=6,
-        dtype=np.float64,
-        submap=sub_npix,
-        local=local_submaps,
-    )
-
-    hits = tm.DistPixels(
-        comm=comm.comm_world,
-        size=map_npix,
-        nnz=1,
-        dtype=np.int64,
-        submap=sub_npix,
-        local=local_submaps,
-    )
-
-    zmap = tm.DistPixels(
-        comm=comm.comm_world,
-        size=map_npix,
-        nnz=3,
-        dtype=np.float64,
-        submap=sub_npix,
-        local=local_submaps,
-    )
+    hits = tm.DistPixels(comm=comm.comm_world, size=map_npix, nnz=1, 
+        dtype=np.int64, submap=sub_npix, local=local_submaps)
+    
+    zmap = tm.DistPixels(comm=comm.comm_world, size=map_npix, nnz=3, 
+        dtype=np.float64, submap=sub_npix, local=local_submaps)
 
     invnpp.data.fill(0.0)
     hits.data.fill(0)
     zmap.data.fill(0.0)
 
-    build_invnpp = tm.OpAccumDiag(
-        detweights=detweights, invnpp=invnpp, hits=hits, zmap=zmap, name="sim"
-    )
+    build_invnpp = tm.OpAccumDiag(detweights=detweights, invnpp=invnpp, 
+        hits=hits, zmap=zmap, name="sim")
     build_invnpp.exec(data)
 
     invnpp.allreduce()
@@ -377,7 +339,7 @@ def main():
     zmap.write_healpix_fits("custom_example_zmap.fits")
 
     # Invert the covariance and write
-
+    
     tm.covariance_invert(invnpp, 1.0e-3)
     invnpp.write_healpix_fits("custom_example_npp.fits")
 
@@ -387,6 +349,7 @@ def main():
     zmap.write_healpix_fits("custom_example_binned.fits")
 
     return
+
 
 
 if __name__ == "__main__":

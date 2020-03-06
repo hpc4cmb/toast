@@ -99,14 +99,19 @@ def test_numba(comm):
     ydata = 0.001 * np.arange(1000001.0)
     out = outer_numba(xdata, ydata)
     print(
-        "test_numba post:  NUMBA_NUM_THREADS = {}".format(config.NUMBA_NUM_THREADS),
-        flush=True,
+        "test_numba post:  NUMBA_NUM_THREADS = {}"
+        .format(config.NUMBA_NUM_THREADS),
+        flush=True
     )
     # out = outer(xdata, ydata)
 
 
 def main():
-    print("main:  NUMBA_NUM_THREADS = {}".format(config.NUMBA_NUM_THREADS), flush=True)
+    print(
+        "main:  NUMBA_NUM_THREADS = {}"
+        .format(config.NUMBA_NUM_THREADS),
+        flush=True
+    )
     comm = None
     if MPI is not None:
         comm = MPI.COMM_WORLD
