@@ -30,11 +30,10 @@ def check_nersc(reservation=None, repo=None):
         # Be kind to the login node
         os.environ["OMP_NUM_THREADS"] = "4"
         import subprocess as sp
-
         repos = sp.check_output(
-            "getnim -U $(whoami) | awk '{print $1}'",
+            "getnim -U $(whoami) | awk '{print $1}'", 
             shell=True,
-            universal_newlines=True,
+            universal_newlines=True
         ).split()
         print(
             "Running on NERSC machine '{}'\n  with access to repos: {}".format(
@@ -53,9 +52,9 @@ def check_nersc(reservation=None, repo=None):
         if reservation is not None:
             # We would like to use a reservation
             checkres = sp.check_output(
-                "scontrol show reservation {}".format(reservation),
+                "scontrol show reservation {}".format(reservation), 
                 shell=True,
-                universal_newlines=True,
+                universal_newlines=True
             ).split()
             # Does this reservation even exist?
             if re.match(r".*not found.*", checkres[0]) is not None:
@@ -74,19 +73,19 @@ def check_nersc(reservation=None, repo=None):
                     stopiso = stopmat.group(1)
                 if (startiso is None) or (stopiso is None):
                     print(
-                        "Could not parse scontrol output for reservation '{}'".format(
-                            reservation
-                        )
+                        "Could not parse scontrol output for reservation '{}'"
+                        .format(reservation)
                     )
                 else:
                     from datetime import datetime
-
                     start = datetime.strptime(startiso, "%Y-%m-%dT%H:%M:%S")
                     stop = datetime.strptime(stopiso, "%Y-%m-%dT%H:%M:%S")
                     now = datetime.now()
                     print(
                         "Reservation '{}' valid from {} to {}".format(
-                            reservation, start.isoformat(), stop.isoformat()
+                            reservation,
+                            start.isoformat(),
+                            stop.isoformat()
                         )
                     )
                     print("Current time is {}".format(now.isoformat()))
@@ -94,9 +93,7 @@ def check_nersc(reservation=None, repo=None):
                         print("Selecting reservation '{}'".format(reservation))
                         nersc_resv = reservation
                     else:
-                        print(
-                            "Reservation '{}' not currently valid".format(reservation)
-                        )
+                        print("Reservation '{}' not currently valid".format(reservation))
     else:
         print("Not running at NERSC, slurm jobs disabled.")
     return (nersc_host, nersc_repo, nersc_resv)
@@ -111,7 +108,7 @@ def fake_focalplane(
     fknee=0.05,
     fwhm=30,
     npix=7,
-    fov=3.0,
+    fov=3.0
 ):
     """Create a set of fake detectors.
 
@@ -126,13 +123,13 @@ def fake_focalplane(
 
     """
     zaxis = np.array([0, 0, 1.0])
-
+    
     pol_A = hex_pol_angles_qu(npix)
     pol_B = hex_pol_angles_qu(npix, offset=90.0)
-
+    
     dets_A = hex_layout(npix, fov, "", "", pol_A)
     dets_B = hex_layout(npix, fov, "", "", pol_B)
-
+    
     dets = dict()
     for p in range(npix):
         pstr = "{:01d}".format(p)
