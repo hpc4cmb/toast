@@ -194,10 +194,10 @@ def init_binner(args, comm, data, detweights, verbose=True, pixels="pixels"):
     # in debug mode, print out data distribution information
     if args.debug:
         handle = None
-        if rank == 0:
+        if comm.world_rank == 0:
             handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
         data.info(handle)
-        if rank == 0:
+        if comm.world_rank == 0:
             handle.close()
         if comm.world_rank == 0 and verbose:
             timer.report_clear("Dumping data distribution")
