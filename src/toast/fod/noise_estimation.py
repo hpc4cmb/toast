@@ -502,7 +502,6 @@ class OpNoiseEstim:
         hdu2.header["DET1"] = str(det1), "Detector1"
         hdu2.header["DET2"] = str(det2), "Detector2"
         hdulist.append(hdu2)
-        timer.report_clear("Create header")
 
         if self._save_cov:
             all_cov = np.array(all_cov)
@@ -528,14 +527,11 @@ class OpNoiseEstim:
             hdu3.header["DET1"] = str(det1), "Detector1"
             hdu3.header["DET2"] = str(det2), "Detector2"
             hdulist.append(hdu3)
-            timer.report_clear("Append covariance")
 
         hdulist = pf.HDUList(hdulist)
-        timer.report_clear("Assemble HDU list")
 
         with open(fn_out, "wb") as fits_out:
             hdulist.writeto(fits_out, overwrite=True)
-        timer.report_clear("Write PSD")
 
         print("Detector {} vs. {} PSDs stored in {}".format(det1, det2, fn_out))
         return
