@@ -39,6 +39,10 @@ void lapack_pocon(char * UPLO, int * N, double * A, int * LDA, double * ANORM,
                   double * RCOND, double * WORK, int * IWORK, int * INFO);
 
 void lapack_potri(char * UPLO, int * N, double * A, int * LDA, int * INFO);
+
+void lapack_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
+                   double * B, int * LDB, double * S, double * RCOND,
+                   int * RANK, double * WORK, int * LWORK, int * INFO);
 }
 
 #endif // ifndef TOAST_LAPACK_HPP
