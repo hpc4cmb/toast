@@ -40,6 +40,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             for (int64_t i = 0; i < scanlen; ++i) {
                 if (flags[start + i] == 0) ngood++;
             }
+            if (ngood == 0) continue;
 
             // Build the full template matrix used to clean the signal.
             // We subtract the template value even from flagged samples to
