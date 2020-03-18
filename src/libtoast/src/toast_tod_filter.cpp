@@ -83,8 +83,8 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 
             toast::AlignedVector <double> masked_templates(ngood * norder);
 
-            size_t offset = 0;
             for (size_t iorder = 0; iorder < norder; ++iorder) {
+                size_t offset = iorder * ngood;
                 current = &full_templates[iorder * scanlen];
                 for (int64_t i = 0; i < scanlen; ++i) {
                     if (flags[start + i] != 0) continue;
@@ -92,10 +92,16 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 }
             }
 
-            toast::AlignedVector <double> masked_signals(ngood * nsignal);
+            // leading order for masked signals must be able to
+            // accommodate the results as well.  norder < ngood is, of
+            // course, a rare condition.
 
-            offset = 0;
+            int ldb = std::max(ngood, norder);
+
+            toast::AlignedVector <double> masked_signals(ldb * nsignal);
+
             for (size_t isignal = 0; isignal < nsignal; ++isignal) {
+                size_t offset = isignal * ldb;
                 double * signal = signals[isignal] + start;
                 for (int64_t i = 0; i < scanlen; ++i) {
                     if (flags[start + i] != 0) continue;
@@ -107,17 +113,19 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             // minimize the norm of the difference and the solution
             // vector.
 
-            int nvalue = norder < ngood ? norder : ngood;
+            int nvalue = std::min(norder, ngood);
             toast::AlignedVector <double> singular_values(nvalue);
             int rank, info;
             double rcond_limit = 1e-3;
-            int lwork = 4 * (ngood + norder + nsignal);
+            int lwork = std::max(10 * (ngood + norder + nsignal), 1000000);
             toast::AlignedVector <double> work(lwork);
 
-            // DGELSS will overwrite masked_signals with the fitting coefficients
+            // DGELSS will overwrite masked_signals with the fitting
+            // coefficients.  masked_templates is overwritten with
+            // singular vectors.
             toast::lapack_dgelss(&ngood, &norder, &nsignal,
                                  masked_templates.data(), &ngood,
-                                 masked_signals.data(), &ngood,
+                                 masked_signals.data(), &ldb,
                                  singular_values.data(), &rcond_limit,
                                  &rank, work.data(), &lwork, &info);
 
@@ -125,7 +133,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 double * temp = &full_templates[iorder * scanlen];
                 for (int isignal = 0; isignal < nsignal; ++isignal) {
                     double * signal = &signals[isignal][start];
-                    double amp = masked_signals[iorder + isignal * ngood];
+                    double amp = masked_signals[iorder + isignal * ldb];
                     #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 }
