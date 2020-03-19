@@ -8,22 +8,22 @@
 # Abort on Error
 set -e
 
-# Time between keep-alive statements
-export KEEPALIVE=60s
-
-# Run the loop
-bash -c "while true; do echo \$(date) - Running tests...; sleep $KEEPALIVE; done" &
-KEEPALIVE_PID=$!
-
-error_handler() {
-    echo "ERROR: An error was encountered while running tests."
-    # We could do other cleanup / dumping here...
-    kill $KEEPALIVE_PID
-    exit 1
-}
-
-# If an error occurs, run our error handler
-trap 'error_handler' ERR
+# # Time between keep-alive statements
+# export KEEPALIVE=60s
+#
+# # Run the loop
+# bash -c "while true; do echo \$(date) - Running tests...; sleep $KEEPALIVE; done" &
+# KEEPALIVE_PID=$!
+#
+# error_handler() {
+#     echo "ERROR: An error was encountered while running tests."
+#     # We could do other cleanup / dumping here...
+#     kill $KEEPALIVE_PID
+#     exit 1
+# }
+#
+# # If an error occurs, run our error handler
+# trap 'error_handler' ERR
 
 # Run MPI tests
 #===========================================================================
@@ -48,5 +48,5 @@ cd ..
 #===========================================================================
 # End tests
 
-# Cleanly terminate the keep alive loop
-kill $KEEPALIVE_PID
+# # Cleanly terminate the keep alive loop
+# kill $KEEPALIVE_PID
