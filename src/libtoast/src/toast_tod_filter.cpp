@@ -23,8 +23,17 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     int nsignal = signals.size();
     int norder = order + 1;
 
-    #pragma \
-    omp parallel default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder)
+    char upper = 'U';
+    char lower = 'L';
+    char notrans = 'N';
+    char trans = 'T';
+    double fzero = 0.0;
+    double fone = 1.0;
+
+    #pragma                                                  \
+    omp parallel default(none)                               \
+    shared(order, signals, flags, n, nsignal, starts, stops, \
+    nscan, norder, upper, lower, notrans, trans, fzero, fone)
     {
         #pragma omp for schedule(static)
         for (size_t iscan = 0; iscan < nscan; ++iscan) {
@@ -33,11 +42,10 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             if (start < 0) start = 0;
             if (stop > n - 1) stop = n - 1;
             if (stop < start) continue;
-            int64_t scanlen = stop - start + 1;
-            int fscanlen = static_cast <int> (scanlen);
+            int scanlen = stop - start + 1;
 
             int ngood = 0;
-            for (int64_t i = 0; i < scanlen; ++i) {
+            for (size_t i = 0; i < scanlen; ++i) {
                 if (flags[start + i] == 0) ngood++;
             }
             if (ngood == 0) continue;
@@ -86,22 +94,25 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             for (size_t iorder = 0; iorder < norder; ++iorder) {
                 size_t offset = iorder * ngood;
                 current = &full_templates[iorder * scanlen];
-                for (int64_t i = 0; i < scanlen; ++i) {
+                for (size_t i = 0; i < scanlen; ++i) {
                     if (flags[start + i] != 0) continue;
                     masked_templates[offset++] = current[i];
                 }
             }
 
-            // leading order for masked signals must be able to
-            // accommodate the results as well.  norder < ngood is, of
-            // course, a rare condition.
+            // Square the template matrix for A^T.A
 
-            int ldb = std::max(ngood, norder);
+            toast::AlignedVector <double> invcov(norder * norder);
+            toast::lapack_syrk(&upper, &trans, &norder, &ngood, &fone,
+                               masked_templates.data(), &ngood, &fzero, invcov.data(),
+                               &norder);
 
-            toast::AlignedVector <double> masked_signals(ldb * nsignal);
+            // Project the signals against the templates
+
+            toast::AlignedVector <double> masked_signals(ngood * nsignal);
 
             for (size_t isignal = 0; isignal < nsignal; ++isignal) {
-                size_t offset = isignal * ldb;
+                size_t offset = isignal * ngood;
                 double * signal = signals[isignal] + start;
                 for (int64_t i = 0; i < scanlen; ++i) {
                     if (flags[start + i] != 0) continue;
@@ -109,23 +120,38 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 }
             }
 
+            toast::AlignedVector <double> proj(norder * nsignal);
+
+            toast::lapack_gemm(&trans, &notrans, &norder, &nsignal, &ngood,
+                               &fone, masked_templates.data(), &ngood,
+                               masked_signals.data(), &ngood,
+                               &fzero, proj.data(), &norder);
+
+            // Symmetrize the covariance matrix, dgells is written for
+            // generic matrices
+
+            for (size_t row = 0; row < norder; ++row) {
+                for (size_t col = row + 1; col < norder; ++col) {
+                    invcov[col + row * norder] = invcov[row + col * norder];
+                }
+            }
+
             // Fit the templates against the data.  DGELSS uses SVD to
             // minimize the norm of the difference and the solution
             // vector.
 
-            int nvalue = std::min(norder, ngood);
-            toast::AlignedVector <double> singular_values(nvalue);
+            toast::AlignedVector <double> singular_values(norder);
             int rank, info;
             double rcond_limit = 1e-3;
-            int lwork = std::max(10 * (ngood + norder + nsignal), 1000000);
+            int lwork = std::max(10 * (norder + nsignal), 1000000);
             toast::AlignedVector <double> work(lwork);
 
-            // DGELSS will overwrite masked_signals with the fitting
-            // coefficients.  masked_templates is overwritten with
+            // DGELSS will overwrite proj with the fitting
+            // coefficients.  invcov is overwritten with
             // singular vectors.
-            toast::lapack_dgelss(&ngood, &norder, &nsignal,
-                                 masked_templates.data(), &ngood,
-                                 masked_signals.data(), &ldb,
+            toast::lapack_dgelss(&norder, &norder, &nsignal,
+                                 invcov.data(), &norder,
+                                 proj.data(), &norder,
                                  singular_values.data(), &rcond_limit,
                                  &rank, work.data(), &lwork, &info);
 
@@ -133,7 +159,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 double * temp = &full_templates[iorder * scanlen];
                 for (int isignal = 0; isignal < nsignal; ++isignal) {
                     double * signal = &signals[isignal][start];
-                    double amp = masked_signals[iorder + isignal * ldb];
+                    double amp = proj[iorder + isignal * norder];
                     #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 }
