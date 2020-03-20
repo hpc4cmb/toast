@@ -6,6 +6,7 @@ import argparse
 import os
 
 import numpy as np
+from scipy.constants import h, k
 
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
@@ -23,6 +24,7 @@ if atm_available_utils:
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
+TCMB = 2.725
 
 
 def add_atmosphere_args(parser):
@@ -283,6 +285,9 @@ def scale_atmosphere_by_frequency(
     if not args.simulate_atmosphere:
         return
 
+    if freq is None:
+        raise RuntimeError("You must supply the nominal frequency")
+
     log = Logger.get()
     if comm.world_rank == 0 and verbose:
         log.info("Scaling atmosphere by frequency")
@@ -357,7 +362,15 @@ def scale_atmosphere_by_frequency(
             # Interpolate the absorption coefficient to do a top hat
             # integral across the bandpass
             det_freqs = np.linspace(center - width / 2, center + width / 2, nstep)
-            absorption_det = np.mean(np.interp(det_freqs, freqs, absorption))
+            absorption_det = np.interp(det_freqs, freqs, absorption)
+            # From brightness to thermodynamic units
+            x = h * det_freqs * 1e9 / k / TCMB
+            rj2cmb = (x / (np.exp(x / 2) - np.exp(-x / 2))) ** -2
+            # Normalize to unity at 150GHz
+            rj2cmb *= 0.5763279042527544
+            absorption_det *= rj2cmb
+            # Average across the bandpass
+            absorption_det = np.mean(absorption_det)
             cachename = "{}_{}".format(cache_name, det)
             ref = tod.cache.reference(cachename)
             ref *= absorption_det
