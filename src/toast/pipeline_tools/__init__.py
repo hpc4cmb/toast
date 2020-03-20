@@ -26,6 +26,7 @@ from .filters import (
     apply_groundfilter,
 )
 from .gain import add_gainscrambler_args, scramble_gains
+from .mapmaker import add_mapmaker_args, apply_mapmaker
 from .madam import add_madam_args, setup_madam, apply_madam
 from .noise import add_noise_args, simulate_noise, get_analytic_noise
 from .pointing import add_pointing_args, expand_pointing

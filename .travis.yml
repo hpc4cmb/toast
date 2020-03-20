@@ -10,7 +10,8 @@ language: python
 
 matrix:
   include:
-    # GCC 4.9 - this is the oldest version working well with libelemental.
+    # GCC 4.9 - this is the oldest version working well with C++11
+    # Serial test
     - os: linux
       dist: trusty
       sudo: false
@@ -36,7 +37,36 @@ matrix:
       env:
         - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9) && export DEPGCC=-4.9"
         - DEPSURL="https://www.dropbox.com/s/dhpj6vb1fch6xb5/travis_14.04_gcc-4.9_python3.6.tar.bz2"
+        - TRAVIS_TYPE=serial
+    # MPI test
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - git
+            - pkg-config
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
+            - gcc-4.9
+            - g++-4.9
+            - gfortran-4.9
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-4.9) && export CXX=$(which g++-4.9) && export FC=$(which gfortran-4.9) && export DEPGCC=-4.9"
+        - DEPSURL="https://www.dropbox.com/s/dhpj6vb1fch6xb5/travis_14.04_gcc-4.9_python3.6.tar.bz2"
+        - TRAVIS_TYPE=mpi
     # GCC 5 - default version for ubuntu 16.04 LTS
+    # Serial test
     - os: linux
       dist: trusty
       sudo: false
@@ -62,7 +92,36 @@ matrix:
       env:
         - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5) && export DEPGCC=-5"
         - DEPSURL="https://www.dropbox.com/s/yoqu6z1e7eto03b/travis_14.04_gcc-5_python3.6.tar.bz2"
+        - TRAVIS_TYPE=serial
+    # MPI test
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - git
+            - pkg-config
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
+            - gcc-5
+            - g++-5
+            - gfortran-5
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-5) && export CXX=$(which g++-5) && export FC=$(which gfortran-5) && export DEPGCC=-5"
+        - DEPSURL="https://www.dropbox.com/s/yoqu6z1e7eto03b/travis_14.04_gcc-5_python3.6.tar.bz2"
+        - TRAVIS_TYPE=mpi
     # GCC 7 - default version for ubuntu 18.04 LTS
+    # Serial test
     - os: linux
       dist: trusty
       sudo: false
@@ -88,6 +147,34 @@ matrix:
       env:
         - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7) && export DEPGCC=-7"
         - DEPSURL="https://www.dropbox.com/s/diy5gchpwh8og6v/travis_14.04_gcc-7_python3.6.tar.bz2"
+        - TRAVIS_TYPE=serial
+    # MPI test
+    - os: linux
+      dist: trusty
+      sudo: false
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - build-essential
+            - git
+            - pkg-config
+            - locales
+            - libgl1-mesa-glx
+            - xvfb
+            - libopenblas-dev
+            - liblapack-dev
+            - libfftw3-dev
+            - libhdf5-dev
+            - libcfitsio3-dev
+            - gcc-7
+            - g++-7
+            - gfortran-7
+      env:
+        - MATRIX_EVAL="export CC=$(which gcc-7) && export CXX=$(which g++-7) && export FC=$(which gfortran-7) && export DEPGCC=-7"
+        - DEPSURL="https://www.dropbox.com/s/diy5gchpwh8og6v/travis_14.04_gcc-7_python3.6.tar.bz2"
+        - TRAVIS_TYPE=mpi
 
 # The python versions to test.
 python:
@@ -149,7 +236,7 @@ install:
 # Run tests
 
 script:
-    - ./travis/travis_run.sh
+    - ./travis/travis_run_${TRAVIS_TYPE}.sh
 
 # Slack integration
 

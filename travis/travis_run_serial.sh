@@ -30,26 +30,10 @@ trap 'error_handler' ERR
 
 export OMP_NUM_THREADS=2
 
-
 # Run tests with MPI disabled
 #===========================================================================
 
 TOAST_MPI_DISABLE=1 python3 -c "import toast.tests; toast.tests.run()"
-
-# Run tests with MPI
-#===========================================================================
-
-mpirun -np 2 python3 -c "import toast.tests; toast.tests.run()"
-
-# Run tiny MPI example pipelines
-#===========================================================================
-
-cd examples/
-# Disable tests with PySM until https://github.com/astropy/astropy/pull/9190
-# is merged or otherwise resolved
-#bash run_tiny_tests.sh
-TYPES="ground ground_simple" bash run_tiny_tests.sh
-cd ..
 
 #===========================================================================
 # End tests
