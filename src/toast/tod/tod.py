@@ -164,7 +164,7 @@ class TOD(object):
     """Default cache name for common flags."""
 
     VELOCITY_NAME = "velocity"
-    """Default cache name for velociyt."""
+    """Default cache name for velocity."""
 
     POSITION_NAME = "position"
     """Default cache name for position."""
