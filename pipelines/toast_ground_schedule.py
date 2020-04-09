@@ -1815,7 +1815,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             log.debug(
                 "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
             )
-            t += args.tstep
+            t += args.time_step
         else:
             last_successful = t
 

@@ -13,15 +13,8 @@
 # Compiled extensions
 # *.so
 
-/examples/*.slurm
-/examples/tiny_*_shell.sh
-/examples/*ground*_shell.sh
-/examples/*satellite*_shell.sh
-/examples/out_*
+/examples/job_*
 /examples/data/
-/examples/*.out
-/examples/*.jpg
-/examples/*.png
 
 # Build directories when using ./cmake/platforms/...
 /build*
