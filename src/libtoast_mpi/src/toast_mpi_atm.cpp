@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-// #if !defined(DEBUG)
-// #   define DEBUG
-// #endif
+#if !defined(DEBUG)
+#   define DEBUG
+#endif
 
 #include <toast_mpi_internal.hpp>
 
@@ -1113,10 +1113,6 @@ void toast::mpi_atm_sim::initialize_kolmogorov() {
     double diag = sqrt(delta_x * delta_x + delta_y * delta_y);
     rmax_kolmo = sqrt(diag * diag + delta_z * delta_z) * 1.01;
     nr = 1000; // Size of the interpolation grid
-
-# ifdef DEBUG
-    nr /= 10;
-# endif // ifdef DEBUG
 
     rstep = (rmax_kolmo - rmin_kolmo) / (nr - 1);
     rstep_inv = 1. / rstep;
