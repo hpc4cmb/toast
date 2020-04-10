@@ -1132,6 +1132,22 @@ class TODGround(TOD):
         azvec = np.hstack(all_az)
         flags = np.hstack(all_flags)
 
+        # Limit azimuth to [-2pi, 2pi] but do not
+        # introduce discontinuities with modulo.
+
+        if np.amin(azvec) < -2 * np.pi:
+            azvec += 2 * np.pi
+        if np.amax(azvec) > 2 * np.pi:
+            azvec -= 2 * np.pi
+
+        # Store the scan range.  We use the high resolution azimuth so the
+        # actual sampling rate will not change the range.
+
+        self._min_az = np.amin(azvec)
+        self._max_az = np.amax(azvec)
+        self._min_el = self._el
+        self._max_el = self._el
+
         # Now interpolate the simulated scan to timestamps
 
         times = self._CES_start + np.arange(samples) / self._rate
@@ -1173,21 +1189,6 @@ class TODGround(TOD):
         sizes = np.diff(starts)
         if np.sum(sizes) != samples:
             raise RuntimeError("Subscans do not match samples")
-
-        # Limit azimuth to [-2pi, 2pi] but do not
-        # introduce discontinuities with modulo.
-
-        if np.amin(self._az) < -2 * np.pi:
-            self._az += 2 * np.pi
-        if np.amax(self._az) > 2 * np.pi:
-            self._az -= 2 * np.pi
-
-        # Store the scan range
-
-        self._min_az = np.amin(self._az)
-        self._max_az = np.amax(self._az)
-        self._min_el = self._el
-        self._max_el = self._el
 
         return sizes, starts[:-1]
 
