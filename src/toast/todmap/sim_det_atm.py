@@ -210,6 +210,8 @@ class OpSimAtmosphere(Operator):
             if comm is not None:
                 tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
                 tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
+            tmin_tot = np.floor(tmin_tot)
+            tmax_tot = np.ceil(tmax_tot)
             weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
@@ -658,7 +660,7 @@ class OpSimAtmosphere(Operator):
             tmax = tmax_tot
             istop = times.size
 
-        return istart, istop, tmax
+        return istart, istop, np.ceil(tmax)
 
     @function_timer
     def _simulate_atmosphere(
