@@ -4,8 +4,8 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #if !defined(DEBUG)
-#   define DEBUG
-#endif
+# define DEBUG
+#endif // if !defined(DEBUG)
 
 #include <toast/sys_utils.hpp>
 #include <toast/sys_environment.hpp>

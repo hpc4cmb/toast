@@ -950,7 +950,8 @@ class OpSimAtmosphere(Operator):
                 log.error(
                     "{}OpSimAtmosphere: Observing FAILED for {} ({:.2f} %) samples. "
                     "det = {}, rank = {}".format(
-                        prefix, nbad, nbad * 100 / ngood, det, rank)
+                        prefix, nbad, nbad * 100 / ngood, det, rank
+                    )
                 )
                 atmdata[bad] = 0
                 flag_ref[ind][good][bad] = 255
@@ -975,10 +976,10 @@ class OpSimAtmosphere(Operator):
         if nbad_tot > 0 and rank == 0:
             print(
                 "{}WARNING: Observe atmosphere FAILED on {:.2f}% of samples".format(
-                    prefix, nbad_tot * 100 / ngood_tot)
+                    prefix, nbad_tot * 100 / ngood_tot
                 )
+            )
         if self._report_timing:
             if rank == 0:
-                tmr.report_clear(
-                    "{}OpSimAtmosphere: Observe atmosphere".format(prefix))
+                tmr.report_clear("{}OpSimAtmosphere: Observe atmosphere".format(prefix))
         return

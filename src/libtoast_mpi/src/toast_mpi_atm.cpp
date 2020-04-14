@@ -4,8 +4,8 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #if !defined(DEBUG)
-#   define DEBUG
-#endif
+# define DEBUG
+#endif // if !defined(DEBUG)
 
 #include <toast_mpi_internal.hpp>
 
@@ -731,14 +731,14 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
 
     # pragma omp parallel for schedule(static, 100)
     for (long i = 0; i < nsamp; ++i) {
-        //# pragma omp flush(error)
-        //if (error) continue;
+        // # pragma omp flush(error)
+        // if (error) continue;
 
         if ((!((azmin <= az[i]) && (az[i] <= azmax)) &&
              !((azmin <= az[i] - 2 * M_PI) && (az[i] - 2 * M_PI <= azmax)))
             || !((elmin <= el[i]) && (el[i] <= elmax))) {
             # pragma omp flush(error)
-            if (error == 0 && verbosity > 0) {
+            if ((error == 0) && (verbosity > 0)) {
                 o.precision(16);
                 o << "atmsim::observe : observation out of bounds (az, el, t)"
                   << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
@@ -813,7 +813,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
                 #  pragma omp flush (error)
-                if (error == 0 && verbosity > 0) {
+                if ((error == 0) && (verbosity > 0)) {
                     std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
                               << std::endl
                               << "x = " << x << std::endl
@@ -840,7 +840,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                            * (1. - z * zatm_inv);
             } catch (const std::runtime_error & e) {
                 # pragma omp flush(error)
-                if (error == 0  && verbosity > 0) {
+                if ((error == 0) && (verbosity > 0)) {
                     std::ostringstream o;
                     o << "atmsim::observe : interp failed at " << std::endl
                       << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
