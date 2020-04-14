@@ -192,6 +192,12 @@ def add_atmosphere_args(parser):
         default="atm_cache",
         help="Atmosphere cache directory",
     )
+    parser.add_argument(
+        "--atm-apply-flags",
+        default=False,
+        action="store_true",
+        help="Only simulate unflagged samples.",
+    )
     # Common flag mask may already be added
     try:
         parser.add_argument(
@@ -252,7 +258,7 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
         verbosity=args.atm_verbosity,
         z0_center=args.atm_z0_center,
         z0_sigma=args.atm_z0_sigma,
-        apply_flags=False,
+        apply_flags=args.atm_apply_flags,
         common_flag_mask=args.common_flag_mask,
         cachedir=args.atm_cache,
         flush=args.flush,

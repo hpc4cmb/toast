@@ -731,21 +731,26 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
 
     # pragma omp parallel for schedule(static, 100)
     for (long i = 0; i < nsamp; ++i) {
-        # pragma omp flush(error)
-        if (error) continue;
+        //# pragma omp flush(error)
+        //if (error) continue;
 
         if ((!((azmin <= az[i]) && (az[i] <= azmax)) &&
              !((azmin <= az[i] - 2 * M_PI) && (az[i] - 2 * M_PI <= azmax)))
             || !((elmin <= el[i]) && (el[i] <= elmax))) {
-            o.precision(16);
-            o << "atmsim::observe : observation out of bounds (az, el, t)"
-              << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
-              << ") allowed: (" << azmin << " - " << azmax << ", "
-              << elmin << " - " << elmax << ", "
-              << tmin << " - " << tmax << ")"
-              << std::endl;
-            error = 1;
             # pragma omp flush(error)
+            if (error == 0 && verbosity > 0) {
+                o.precision(16);
+                o << "atmsim::observe : observation out of bounds (az, el, t)"
+                  << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
+                  << ") allowed: (" << azmin << " - " << azmax << ", "
+                  << elmin << " - " << elmax << ", "
+                  << tmin << " - " << tmax << ")"
+                  << std::endl;
+            }
+            if (error == 0) {
+                error = 1;
+                # pragma omp flush(error)
+            }
             continue;
         }
 
@@ -807,13 +812,19 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
             if ((x < xstart) || (x > xstart + delta_x) ||
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
-                std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
-                          << std::endl
-                          << "x = " << x << std::endl
-                          << "y = " << y << std::endl
-                          << "z = " << z << std::endl;
-                error = 1;
                 #  pragma omp flush (error)
+                if (error == 0 && verbosity > 0) {
+                    std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
+                              << std::endl
+                              << "x = " << x << std::endl
+                              << "y = " << y << std::endl
+                              << "z = " << z << std::endl;
+                }
+                if (error == 0) {
+                    error = 1;
+                    #  pragma omp flush (error)
+                }
+                val = 0;
                 break;
             }
 # endif // ifdef DEBUG
@@ -828,23 +839,29 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                 step_val = interp(x, y, z, last_ind, last_nodes)
                            * (1. - z * zatm_inv);
             } catch (const std::runtime_error & e) {
-                std::ostringstream o;
-                o << "atmsim::observe : interp failed at " << std::endl
-                  << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
-                  << std::endl
-                  << "xyz = (" << x << ", " << y << ", " << z << ")"
-                  << std::endl
-                  << "r = " << r << std::endl
-                  << "tele at (" << xtel_now << ", " << ytel_now << ", "
-                  << ztel_now << ")" << std::endl
-                  << "( t, az, el ) = " << "( " << t[i] - tmin << ", "
-                  << az_now * 180 / M_PI
-                  << " deg , " << el_now * 180 / M_PI << " deg) "
-                  << " in_cone(t) = " << in_cone(x, y, z, t_now)
-                  << " with "
-                  << std::endl << e.what() << std::endl;
-                error = 1;
                 # pragma omp flush(error)
+                if (error == 0  && verbosity > 0) {
+                    std::ostringstream o;
+                    o << "atmsim::observe : interp failed at " << std::endl
+                      << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
+                      << std::endl
+                      << "xyz = (" << x << ", " << y << ", " << z << ")"
+                      << std::endl
+                      << "r = " << r << std::endl
+                      << "tele at (" << xtel_now << ", " << ytel_now << ", "
+                      << ztel_now << ")" << std::endl
+                      << "( t, az, el ) = " << "( " << t[i] - tmin << ", "
+                      << az_now * 180 / M_PI
+                      << " deg , " << el_now * 180 / M_PI << " deg) "
+                      << " in_cone(t) = " << in_cone(x, y, z, t_now)
+                      << " with "
+                      << std::endl << e.what() << std::endl;
+                }
+                if (error == 0) {
+                    error = 1;
+                    # pragma omp flush(error)
+                }
+                val = 0;
                 break;
             }
             val += step_val;
@@ -1579,7 +1596,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
           << "dx = " << dx << std::endl
           << "dy = " << dy << std::endl
           << "dz = " << dz << std::endl;
-        std::cerr << o.str() << std::endl;
+        if (verbosity > 0) std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
 # endif // ifdef DEBUG
@@ -1598,7 +1615,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << ix << "/" << nx << ", "
               << iy << "/" << ny << ", "
               << iz << "/" << nz << ")";
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1637,7 +1654,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << "ifull101 = " << ifull101 << std::endl
               << "ifull110 = " << ifull110 << std::endl
               << "ifull111 = " << ifull111 << std::endl;
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
@@ -1678,7 +1695,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << std::endl
               << "in_cone(x, y, z) = " << in_cone(x, y, z)
               << std::endl;
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
 # endif // ifdef DEBUG
