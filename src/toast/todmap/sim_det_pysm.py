@@ -83,8 +83,10 @@ class OpSimPySM(Operator):
     For PySM related arguments, see the PySMSky docstring
 
     Args:
-        data (toast.Data) : Data object with pixelization metadata
-        comm (mpi4py.MPI.Comm): MPI communicator
+        data (toast.Data) : Data object with pixelization metadata and Comm
+            object.
+        comm_name (str): The name of the MPI sub communicator to use for
+            simulations.  Valid names are "group" or "rank".
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
         focalplanes (list(dict)): List of focalplanes dictionaries with channel
@@ -103,7 +105,7 @@ class OpSimPySM(Operator):
     def __init__(
         self,
         data,
-        comm=None,
+        comm_name=None,
         out="signal",
         pysm_model=None,
         pysm_precomputed_cmb_K_CMB=None,
@@ -123,7 +125,6 @@ class OpSimPySM(Operator):
         super().__init__()
         self._out = out
         self._nest = nest
-        self.comm = comm
         self._debug = debug
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
         self.coord = coord
@@ -131,8 +132,12 @@ class OpSimPySM(Operator):
         self.npix = data["{}_npix".format(self.pixels)]
         self.nside = hp.npix2nside(self.npix)
 
+        self._comm_name = comm_name
+        toast_comm = data.comm
+
         self.pysm_sky = PySMSky(
-            comm=self.comm,
+            comm=toast_comm,
+            mpi_comm_name=self._comm_name,
             pixel_indices=None,
             nside=self.nside,
             pysm_sky_config=pysm_model,
@@ -142,9 +147,11 @@ class OpSimPySM(Operator):
             map_dist=map_dist,
         )
 
+        self.comm = self.pysm_sky.mpi_comm
+
         self.focalplanes = focalplanes
         self.distmap = DistPixels(
-            data, comm=comm, nnz=3, dtype=np.float32, pixels=self.pixels,
+            data, comm=self.comm, nnz=3, dtype=np.float32, pixels=self.pixels,
         )
         self.apply_beam = apply_beam
 

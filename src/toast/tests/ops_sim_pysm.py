@@ -83,11 +83,12 @@ class OpSimPySMTest(MPITestCase):
             "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(
+            comm=self.data.comm,
+            mpi_comm_name="group",
             pixel_indices=local_pixels,
             nside=self.nside,
             pysm_sky_config=pysm_sky_config,
             units="uK_RJ",
-            comm=self.comm,
         )
         local_map = {}  # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
@@ -125,10 +126,11 @@ class OpSimPySMTest(MPITestCase):
             "2b": (np.linspace(19, 24, 10), np.ones(10)),
         }
         op = PySMSky(
+            comm=self.data.comm,
+            mpi_comm_name="group",
             nside=self.nside,
             pysm_sky_config=pysm_sky_config,
             units="uK_RJ",
-            comm=self.comm,
         )
         local_map = {}  # it should be Cache in production
         op.exec(local_map, out="sky", bandpasses=bandpasses)
@@ -173,7 +175,7 @@ class OpSimPySMTest(MPITestCase):
         }
         op_sim_pysm = OpSimPySM(
             self.data,
-            comm=self.comm,
+            comm_name="rank",
             out="signal",
             pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],
@@ -222,7 +224,7 @@ class OpSimPySMTestSmooth(MPITestCase):
         }  # fwhm is in arcmin
         op_sim_pysm = OpSimPySM(
             self.data,
-            comm=self.comm,
+            comm_name="rank",
             out="signal",
             pysm_model=["a1", "f1", "s1"],
             focalplanes=[focalplane],

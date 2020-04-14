@@ -5,6 +5,8 @@
 import os
 import gc
 
+from functools import wraps
+
 import numpy as np
 
 from ._libtoast import Environment, Timer, GlobalTimers, Logger
@@ -36,6 +38,49 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
+
+def astropy_override():
+    """Override astropy locations.
+
+    The astropy package assumes that software is able to download
+    arbitrary data files at any time and to put those in a user's home
+    directory.  Both of these assumptions may be bad on a distributed system.
+    Astropy also forcibly loads a config file from the home directory which
+    may have a performance impact when done concurrently from thousands of
+    processes.
+
+    This function checks for the "TOAST_ASTROPY_HOME" environment variable.
+    If set it gets the astropy.config.set_temp_config and set_temp_cache
+    decorators and returns them.  Otherwise it returns empty decorators.
+    These decorators can be used when calling external functions that
+    use astropy in order to force them to relocate astropy files to an
+    alternate location, like a fast scratch disk or a ramdisk.
+
+    Returns:
+        (tuple):  the config and cache decorators.
+
+    """
+    if "TOAST_ASTROPY_HOME" in os.environ:
+        from astropy.config import set_temp_config, set_temp_cache
+        return (
+            set_temp_config(os.environ["TOAST_ASTROPY_HOME"]),
+            set_temp_cache(os.environ["TOAST_ASTROPY_HOME"])
+        )
+    else:
+        @wraps(f)
+        def config_dec(*args, **kwargs):
+            result = f(*args, **kwargs)
+            return result
+
+        @wraps(f)
+        def cache_dec(*args, **kwargs):
+            result = f(*args, **kwargs)
+            return result
+
+        return (config_dec, cache_dec)
+
+
+
 numba_threading_layer = "NA"
 
 
@@ -62,6 +107,11 @@ def set_numba_threading():
     env = Environment.get()
     log = Logger.get()
     toastthreads = env.max_threads()
+
+    # Allow user-override of numba threads
+    if "NUMBA_NUM_THREADS" in os.environ:
+        if int(os.environ["NUMBA_NUM_THREADS"]) < toastthreads:
+            toastthreads = int(os.environ["NUMBA_NUM_THREADS"])
 
     rank = 0
     if env.use_mpi():

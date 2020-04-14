@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 from ..utils import set_numba_threading
 
 from ..timing import function_timer
@@ -29,7 +31,9 @@ class PySMSky(object):
     however a different pixel distribution can only be used if performing no smoothing.
 
     Args:
-        comm (mpi4py.MPI.Comm): MPI communicator
+        comm (toast.Comm): Toast communicator.
+        mpi_comm_name (str): The name of the MPI sub communicator to use.
+            Valid names are "group" or "rank".
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
         out (str): accumulate data to the cache with name <out>_<detector>.
@@ -49,6 +53,7 @@ class PySMSky(object):
     def __init__(
         self,
         comm=None,
+        mpi_comm_name=None,
         pixels="pixels",
         out="pysm",
         nside=None,
@@ -64,9 +69,25 @@ class PySMSky(object):
         self._pixels = pixels
         self._out = out
         self._pixel_indices = pixel_indices
-        self._comm = comm
         self._units = u.Unit(units)
         self.map_dist = map_dist
+
+        if comm is None:
+            raise RuntimeError("You must specify the toast Comm instance.")
+
+        # This is the toast.Comm object
+        self._comm = comm
+
+        # This is the name of the MPI sub-communicator that we will use
+        # to collectively simulate data
+        self._mpi_comm_name = mpi_comm_name
+
+        # Select the MPI communicator based on the name.
+        self.mpi_comm = None
+        if self._mpi_comm_name == "rank":
+            self.mpi_comm = self._comm.comm_rank
+        else:
+            self.mpi_comm = self._comm.comm_group
 
         self.pysm_sky_config = pysm_sky_config
         self.pysm_precomputed_cmb_K_CMB = pysm_precomputed_cmb_K_CMB
@@ -109,20 +130,66 @@ class PySMSky(object):
         if self.map_dist is None:
             self.map_dist = (
                 None
-                if self._comm is None
+                if self.mpi_comm is None
                 else pysm.MapDistribution(
                     pixel_indices=self._pixel_indices,
                     nside=self._nside,
-                    mpi_comm=self._comm,
+                    mpi_comm=self.mpi_comm,
                 )
             )
-        return pysm.Sky(
-            nside=self._nside,
-            preset_strings=pysm_sky_config,
-            component_objects=self.pysm_component_objects,
-            map_dist=self.map_dist,
-            output_unit=self._units,
-        )
+        # The world communicator
+        world_comm = self._comm.comm_world
+
+        if (world_comm is None) or (world_comm.rank == 0):
+            # Instantiating a Sky object may trigger downloading and
+            # caching of data with astropy.  We do that once here on a single
+            # process to avoid concurrent downloading of the same file.
+            temp_sky = pysm.Sky(
+                nside=self._nside,
+                preset_strings=pysm_sky_config,
+                component_objects=self.pysm_component_objects,
+                map_dist=None,
+                output_unit=self._units,
+            )
+            del temp_sky
+        if world_comm is not None:
+            world_comm.barrier()
+
+        # Now load and return a Sky object.  Even though we have cached the
+        # data with astropy, concurrent reads of the data seem to produce
+        # astropy locking errors.  So here we ensure that only one process
+        # at a time reads the cached data.  If our Sky object is using the
+        # "group" communicator, then serialize the construction across groups.
+        # If we are using the "rank" communicator, then serialize across the
+        # ranks.
+        pysm_sky = None
+        reader_comm = None
+        if self._mpi_comm_name == "rank":
+            reader_comm = self._comm.comm_group
+        else:
+            reader_comm = self._comm.comm_rank
+        if reader_comm is None:
+            # Only one reader, no need to take turns
+            pysm_sky = pysm.Sky(
+                nside=self._nside,
+                preset_strings=pysm_sky_config,
+                component_objects=self.pysm_component_objects,
+                map_dist=self.map_dist,
+                output_unit=self._units,
+            )
+        else:
+            for reader in range(reader_comm.size):
+                if reader == reader_comm.rank:
+                    # My turn
+                    pysm_sky = pysm.Sky(
+                        nside=self._nside,
+                        preset_strings=pysm_sky_config,
+                        component_objects=self.pysm_component_objects,
+                        map_dist=self.map_dist,
+                        output_unit=self._units,
+                    )
+                reader_comm.barrier()
+        return pysm_sky
 
     @function_timer
     def exec(self, local_map, out, bandpasses=None):

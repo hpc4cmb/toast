@@ -348,7 +348,7 @@ def simulate_sky_signal(
     # Convolve a signal TOD from PySM
     op_sim_pysm = OpSimPySM(
         data,
-        comm=getattr(comm, "comm_" + args.pysm_mpi_comm),
+        comm_name=args.pysm_mpi_comm,
         out=cache_prefix,
         pysm_model=args.pysm_model.split(","),
         pysm_precomputed_cmb_K_CMB=fn_cmb,
@@ -357,10 +357,14 @@ def simulate_sky_signal(
         coord=args.coord,
         pixels=pixels,
     )
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    if comm.world_rank == 0:
+        timer.report_clear("Construct PySM operator (load model)")
     op_sim_pysm.exec(data)
     if comm.comm_world is not None:
         comm.comm_world.barrier()
     if comm.world_rank == 0 and verbose:
-        timer.report_clear("PySM")
+        timer.report_clear("Execute PySM")
 
     return cache_prefix

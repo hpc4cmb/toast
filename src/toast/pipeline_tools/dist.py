@@ -10,7 +10,7 @@ import numpy as np
 
 from ..mpi import get_world, Comm
 from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
+from ..utils import Logger, Environment, numba_threading_layer
 
 
 def add_dist_args(parser):
@@ -68,7 +68,8 @@ def get_comm():
     env = Environment.get()
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        print(env)
+        print(env, flush=True)
+        log.info("Numba threading layer set to '{}'".format(numba_threading_layer))
     if mpiworld is None:
         log.info("Running serially with one process at {}".format(str(datetime.now())))
     else:
