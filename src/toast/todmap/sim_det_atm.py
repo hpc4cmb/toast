@@ -263,15 +263,15 @@ class OpSimAtmosphere(Operator):
                 # Optimization indicates that we can skip the first two r-ranges:
                 # r = [0, 100] and r = [100, 1000].
                 # We start from r = [1000, 10000] and scale the volume element size accordingly
-                rmin = 1000
-                rmax = 10000
+                rmin = 0
+                rmax = 100
                 scale = 10
                 counter2start = counter2
                 counter1 = counter1start
                 xstart, ystart, zstart = self._xstep, self._ystep, self._zstep
-                self._xstep *= scale
-                self._ystep *= scale
-                self._zstep *= scale
+                #self._xstep *= scale ** .5
+                #self._ystep *= scale ** .5
+                #self._zstep *= scale ** .5
 
                 while rmax < 100000:
                     sim, counter2 = self._simulate_atmosphere(

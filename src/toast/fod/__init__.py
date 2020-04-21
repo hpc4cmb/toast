@@ -4,4 +4,4 @@
 
 from .psd_math import autocov_psd, crosscov_psd
 
-# from .noise_estimation import OpNoiseEstim
+from .noise_estimation import OpNoiseEstim
