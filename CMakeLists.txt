@@ -44,9 +44,24 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # External packages
 
+# In some situations (like building python wheels), it is useful to statically link to
+# our external dependencies.  This allows us to ship self-contained compiled
+# extensions.  We check a variable here, and if set, we look for static versions of
+# our dependencies.
+#
+if(NOT TOAST_STATIC_DEPS AND ENV{TOAST_STATIC_DEPS})
+  set(TOAST_STATIC_DEPS $ENV{TOAST_STATIC_DEPS})
+endif()
+
 find_package(OpenMP)
 
-find_package(BLAS)
+if(TOAST_STATIC_DEPS)
+    set(BLA_STATIC TRUE)
+    find_package(BLAS)
+else()
+    find_package(BLAS)
+endif()
+
 if(BLAS_FOUND)
     find_package(LAPACK)
     if(LAPACK_FOUND)
@@ -56,11 +71,26 @@ if(BLAS_FOUND)
     endif(LAPACK_FOUND)
 endif(BLAS_FOUND)
 
-find_package(FFTW)
+if(TOAST_STATIC_DEPS)
+    set(FFTW_USE_STATIC_LIBS TRUE)
+    find_package(FFTW)
+else()
+    find_package(FFTW)
+endif()
 
-find_package(AATM)
+if(TOAST_STATIC_DEPS)
+    set(AATM_USE_STATIC_LIBS TRUE)
+    find_package(AATM)
+else()
+    find_package(AATM)
+endif()
 
-find_package(SuiteSparse)
+if(TOAST_STATIC_DEPS)
+    set(SUITESPARSE_USE_STATIC_LIBS TRUE)
+    find_package(SuiteSparse)
+else()
+    find_package(SuiteSparse)
+endif()
 
 find_package(MPI)
 
