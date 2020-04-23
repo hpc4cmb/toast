@@ -973,7 +973,7 @@ class OpSimAtmosphere(Operator):
             comm.Barrier()
             ngood_tot = comm.reduce(ngood_tot)
             nbad_tot = comm.reduce(nbad_tot)
-        if nbad_tot > 0 and rank == 0:
+        if rank == 0 and nbad_tot > 0:
             print(
                 "{}WARNING: Observe atmosphere FAILED on {:.2f}% of samples".format(
                     prefix, nbad_tot * 100 / ngood_tot
