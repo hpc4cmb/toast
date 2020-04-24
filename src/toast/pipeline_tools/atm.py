@@ -306,7 +306,7 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
             verbosity=args.atm_verbosity,
             z0_center=args.atm_z0_center,
             z0_sigma=args.atm_z0_sigma,
-            apply_flags=False,
+            apply_flags=args.atm_apply_flags,
             common_flag_mask=args.common_flag_mask,
             cachedir=args.atm_cache,
             flush=args.flush,
