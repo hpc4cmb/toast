@@ -1805,6 +1805,10 @@ cholmod_sparse * toast::mpi_atm_sim::build_sparse_covariance(long ind_start,
                 if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
 
                 double val = cov_eval(colcoord, rowcoord);
+		if (icol == irow) {
+		  // Regularize the matrix by promoting the diagonal
+		  val *= 1.01;
+		}
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
