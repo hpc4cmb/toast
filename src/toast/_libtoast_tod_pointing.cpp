@@ -41,6 +41,13 @@ void init_tod_pointing(py::module & m) {
                   auto hwpbuf = py::cast <py::buffer> (hwpang);
                   pybuffer_check_1D <double> (hwpbuf);
                   py::buffer_info info_hwpang = hwpbuf.request();
+                  if (info_hwpang.size != n) {
+                      auto log = toast::Logger::get();
+                      std::ostringstream o;
+                      o << "HWP buffer size is not consistent.";
+                      log.error(o.str().c_str());
+                      throw std::runtime_error(o.str().c_str());
+                  }
                   rawhwpang = reinterpret_cast <double *> (info_hwpang.ptr);
               }
               toast::pointing_matrix_healpix(hpix, nest, eps, cal, mode, n,

@@ -164,7 +164,7 @@ class OpPointingHpix(Operator):
             try:
                 hwpang = tod.local_hwp_angle()
             except:
-                pass
+                hwpang = None
 
             # read the common flags and apply bitmask
 
