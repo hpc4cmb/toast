@@ -4,8 +4,9 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <string.h>
-#include <omp.h>
-
+#ifdef _OPENMP
+# include <omp.h>
+#endif // ifdef _OPENMP
 #include <toast/sys_utils.hpp>
 #include <toast/math_lapack.hpp>
 #include <toast/tod_filter.hpp>
@@ -160,8 +161,12 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 for (int isignal = 0; isignal < nsignal; ++isignal) {
                     double * signal = &signals[isignal][start];
                     double amp = proj[iorder + isignal * norder];
-                    #pragma omp simd
-                    for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
+                    if (toast::is_aligned(signal) && toast::is_aligned(temp)) {
+                        #pragma omp simd
+                        for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
+                    } else {
+                        for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
+                    }
                 }
             }
         }
