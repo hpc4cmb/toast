@@ -165,6 +165,95 @@ class OpPointingHpixTest(MPITestCase):
         self.assertFalse(failed)
         return
 
+    def test_pointing_matrix_healpix_hwp(self):
+        nside = 64
+        hpix = HealpixPixels(64)
+        nest = True
+        psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
+        nsamp = len(psivec)
+        eps = 0.0
+        cal = 1.0
+        mode = "IQU"
+        nnz = 3
+        flags = np.zeros(nsamp, dtype=np.uint8)
+        pix = 49103
+        theta, phi = hp.pix2ang(nside, pix, nest=nest)
+        xaxis, yaxis, zaxis = np.eye(3)
+        thetarot = qa.rotation(yaxis, theta)
+        phirot = qa.rotation(zaxis, phi)
+        pixrot = qa.mult(phirot, thetarot)
+        quats = []
+        for psi in psivec:
+            psirot = qa.rotation(zaxis, psi)
+            quats.append(qa.mult(pixrot, psirot))
+        quats = np.vstack(quats)
+
+        # First with HWP angle == 0.0
+        hwpang = np.zeros(nsamp)
+        pixels_zero = np.zeros(nsamp, dtype=np.int64)
+        weights_zero = np.zeros([nsamp, nnz], dtype=np.float64)
+        pointing_matrix_healpix(
+            hpix,
+            nest,
+            eps,
+            cal,
+            mode,
+            quats.reshape(-1),
+            hwpang,
+            flags,
+            pixels_zero,
+            weights_zero.reshape(-1),
+        )
+
+        # Now passing hwpang == None
+        pixels_none = np.zeros(nsamp, dtype=np.int64)
+        weights_none = np.zeros([nsamp, nnz], dtype=np.float64)
+        pointing_matrix_healpix(
+            hpix,
+            nest,
+            eps,
+            cal,
+            mode,
+            quats.reshape(-1),
+            None,
+            flags,
+            pixels_none,
+            weights_none.reshape(-1),
+        )
+        # print("")
+        # for i in range(nsamp):
+        #     print(
+        #         "HWP zero:  {} {} | {} {} {}".format(
+        #             psivec[i],
+        #             pixels_zero[i],
+        #             weights_zero[i][0],
+        #             weights_zero[i][1],
+        #             weights_zero[i][2],
+        #         )
+        #     )
+        #     print(
+        #         "    none:  {} {} | {} {} {}".format(
+        #             psivec[i],
+        #             pixels_none[i],
+        #             weights_none[i][0],
+        #             weights_none[i][1],
+        #             weights_none[i][2],
+        #         )
+        #     )
+        failed = False
+        if not np.all(np.equal(pixels_zero, pixels_none)):
+            print("HWP pixels do not agree {} != {}".format(pixels_zero, pixels_none))
+            failed = True
+
+        if not np.allclose(weights_zero, weights_none):
+            print(
+                "HWP weights do not agree {} != {}".format(weights_zero, weights_none)
+            )
+            failed = True
+
+        self.assertFalse(failed)
+        return
+
     def test_hpix_simple(self):
         rank = 0
         if self.comm is not None:
