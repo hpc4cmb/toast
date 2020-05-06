@@ -717,6 +717,8 @@ class TODGround(TOD):
         detectors (dictionary): each key is the detector name, and each
             value is a quaternion tuple.
         samples (int):  The total number of samples.
+        boresight_angle (float):  Extra rotation to apply around the
+             boresight [degrees]
         firsttime (float): starting time of data.
         rate (float): sample rate in Hz.
         site_lon (float/str): Observing site Earth longitude in radians
@@ -727,7 +729,7 @@ class TODGround(TOD):
         scanrate (float): Sky scanning rate in degrees / second.
         scan_accel (float): Sky scanning rate acceleration in
             degrees / second^2 for the turnarounds.
-        sinc_modulation (bool): Modulate the scan rate according to
+        cosecant_modulation (bool): Modulate the scan rate according to
              1/sin(az) to achieve uniform integration depth.
         CES_start (float): Start time of the constant elevation scan
         CES_stop (float): Stop time of the constant elevation scan
@@ -765,6 +767,7 @@ class TODGround(TOD):
         mpicomm,
         detectors,
         samples,
+        boresight_angle=0,
         firsttime=0.0,
         rate=100.0,
         site_lon=0,
@@ -786,7 +789,7 @@ class TODGround(TOD):
         hwprpm=None,
         hwpstep=None,
         hwpsteptime=None,
-        sinc_modulation=False,
+        cosecant_modulation=False,
         **kwargs
     ):
         if samples < 1:
@@ -818,6 +821,7 @@ class TODGround(TOD):
                 "TODGround: lasttime > CES_stop: {} > {}" "".format(lasttime, CES_stop)
             )
 
+        self._boresight_angle = boresight_angle * degree
         self._firsttime = firsttime
         self._lasttime = lasttime
         self._rate = rate
@@ -841,7 +845,7 @@ class TODGround(TOD):
             raise RuntimeError("Unknown coordinate system: {}".format(coord))
         self._coord = coord
         self._report_timing = report_timing
-        self._sinc_modulation = sinc_modulation
+        self._cosecant_modulation = cosecant_modulation
 
         self._observer = ephem.Observer()
         self._observer.lon = self._site_lon
@@ -1031,14 +1035,14 @@ class TODGround(TOD):
         nstep = 10000
 
         azmin, azmax = [self._azmin, self._azmax]
-        if self._sinc_modulation:
-            # We always simulate a rising sinc scan and then
+        if self._cosecant_modulation:
+            # We always simulate a rising cosecant scan and then
             # mirror it if necessary
             azmin %= np.pi
             azmax %= np.pi
             if azmin > azmax:
                 raise RuntimeError(
-                    "Cannot scan across zero meridian with sinc-modulated scan"
+                    "Cannot scan across zero meridian with cosecant-modulated scan"
                 )
         elif azmax < azmin:
             azmax += 2 * np.pi
@@ -1056,7 +1060,7 @@ class TODGround(TOD):
         tvec = []
         azvec = []
         t0 = t
-        if self._sinc_modulation:
+        if self._cosecant_modulation:
             t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
             tvec = np.linspace(t0, t1, nstep, endpoint=True)
             azvec = np.arccos(np.cos(azmin) + base_rate * t0 - base_rate * tvec)
@@ -1073,7 +1077,7 @@ class TODGround(TOD):
         # turnaround
 
         t0 = t
-        if self._sinc_modulation:
+        if self._cosecant_modulation:
             dazdt = base_rate / np.abs(np.sin(azmax))
         else:
             dazdt = base_rate
@@ -1092,7 +1096,7 @@ class TODGround(TOD):
         tvec = []
         azvec = []
         t0 = t
-        if self._sinc_modulation:
+        if self._cosecant_modulation:
             t1 = t0 + (np.cos(azmin) - np.cos(azmax)) / base_rate
             tvec = np.linspace(t0, t1, nstep, endpoint=True)
             azvec = np.arccos(np.cos(azmax) - base_rate * t0 + base_rate * tvec)
@@ -1109,7 +1113,7 @@ class TODGround(TOD):
         # turnaround
 
         t0 = t
-        if self._sinc_modulation:
+        if self._cosecant_modulation:
             dazdt = base_rate / np.abs(np.sin(azmin))
         else:
             dazdt = base_rate
@@ -1128,14 +1132,30 @@ class TODGround(TOD):
         azvec = np.hstack(all_az)
         flags = np.hstack(all_flags)
 
+        # Limit azimuth to [-2pi, 2pi] but do not
+        # introduce discontinuities with modulo.
+
+        if np.amin(azvec) < -2 * np.pi:
+            azvec += 2 * np.pi
+        if np.amax(azvec) > 2 * np.pi:
+            azvec -= 2 * np.pi
+
+        # Store the scan range.  We use the high resolution azimuth so the
+        # actual sampling rate will not change the range.
+
+        self._min_az = np.amin(azvec)
+        self._max_az = np.amax(azvec)
+        self._min_el = self._el
+        self._max_el = self._el
+
         # Now interpolate the simulated scan to timestamps
 
         times = self._CES_start + np.arange(samples) / self._rate
         tmin, tmax = tvec[0], tvec[-1]
         tdelta = tmax - tmin
         self._az = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
-        if self._sinc_modulation and self._azmin > np.pi:
-            # We always simulate a rising sinc scan and then
+        if self._cosecant_modulation and self._azmin > np.pi:
+            # We always simulate a rising cosecant scan and then
             # mirror it if necessary
             self._az += np.pi
         ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
@@ -1170,14 +1190,6 @@ class TODGround(TOD):
         if np.sum(sizes) != samples:
             raise RuntimeError("Subscans do not match samples")
 
-        # Store the scan range
-
-        self._az %= 2 * np.pi
-        self._min_az = np.amin(self._az)
-        self._max_az = np.amax(self._az)
-        self._min_el = self._el
-        self._max_el = self._el
-
         return sizes, starts[:-1]
 
     @function_timer
@@ -1208,6 +1220,12 @@ class TODGround(TOD):
             np.zeros(my_nsamp),
             IAU=False,
         )
+
+        if self._boresight_angle != 0:
+            zaxis = np.array([0, 0, 1.0])
+            rot = qa.rotation(zaxis, self._boresight_angle)
+            my_azelquats = qa.mult(my_azelquats, rot)
+
         azelquats = None
         if self._mpicomm is None:
             azelquats = my_azelquats
@@ -1226,6 +1244,7 @@ class TODGround(TOD):
             quats = my_quats
         else:
             quats = np.vstack(self._mpicomm.allgather(my_quats))
+
         self._boresight = quats
         del my_quats
         return
@@ -1318,38 +1337,12 @@ class TODGround(TOD):
         X = (xvec[1] + yvec[0]) / 4
         Y = (xvec[2] + zvec[0]) / 4
         Z = (yvec[2] + zvec[1]) / 4
-        """
-        if np.abs(X) < 1e-6 and np.abs(Y) < 1e-6:
-            # Avoid dividing with small numbers
-            c = .5 * np.sqrt(1 - xvec[0] + yvec[1] - zvec[2])
-            d = np.sqrt(c**2 + .5 * (zvec[2] - yvec[1]))
-            b = np.sqrt(.5 * (1 - zvec[2]) - c**2)
-            a = np.sqrt(1 - b**2 - c**2 - d**2)
-        else:
-        """
         d = np.sqrt(np.abs(Y * Z / X))  # Choose positive root
         c = d * X / Y
         b = X / c
         a = (xvec[1] / 2 - b * c) / d
         # qarray has the scalar part as the last index
         quat = qa.norm(np.array([b, c, d, a]))
-        """
-        # DEBUG begin
-        errors = np.array(
-            [
-                np.dot(qa.rotate(quat, [1, 0, 0]), xvec),
-                np.dot(qa.rotate(quat, [0, 1, 0]), yvec),
-                np.dot(qa.rotate(quat, [0, 0, 1]), zvec),
-            ]
-        )
-        errors[errors > 1] = 1
-        errors = np.degrees(np.arccos(errors))
-        if np.any(errors > 1) or np.any(np.isnan(errors)):
-            raise RuntimeError(
-                "Quaternion is not right: ({}), ({} {} {})" "".format(errors, X, Y, Z)
-            )
-        # DEBUG end
-        """
         return quat
 
     @function_timer

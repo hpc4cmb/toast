@@ -224,3 +224,24 @@ void toast::lapack_potri(char * UPLO, int * N, double * A, int * LDA,
     #endif // ifdef HAVE_LAPACK
     return;
 }
+
+#define dgelss LAPACK_FUNC(dgelss, DGELSS)
+
+extern "C" void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
+                       double * B, int * LDB, double * S, double * RCOND,
+                       int * RANK, double * WORK, int * LWORK, int * INFO);
+
+void toast::lapack_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
+                          double * B, int * LDB, double * S, double * RCOND,
+                          int * RANK, double * WORK, int * LWORK, int * INFO) {
+    #ifdef HAVE_LAPACK
+    dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
+    #else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #endif // ifdef HAVE_LAPACK
+    return;
+}

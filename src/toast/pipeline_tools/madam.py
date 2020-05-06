@@ -231,6 +231,17 @@ def add_madam_args(parser):
         )
     except argparse.ArgumentError:
         pass
+    # `nside_submap` may already be added
+    try:
+        parser.add_argument(
+            "--nside_submap",
+            required=False,
+            default=16,
+            type=np.int,
+            help="Number of submaps is 12 * nside_submap ** 2",
+        )
+    except argparse.ArgumentError:
+        pass
     # Common flag mask may already be added
     try:
         parser.add_argument(
@@ -265,7 +276,7 @@ def setup_madam(args):
     pars = {}
 
     cross = args.nside // 2
-    submap = 16
+    submap = args.nside_submap
     if submap > args.nside:
         submap = args.nside
 

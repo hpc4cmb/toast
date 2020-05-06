@@ -196,7 +196,7 @@ before_install:
     - pip install --upgrade pip
     - pip install --upgrade setuptools
     - pip install -q numpy scipy matplotlib cmake cython astropy ephem healpy numba toml
-    - pip install -q https://github.com/healpy/pysm/archive/master.tar.gz
+    - pip install -q pysm3
     # Install all compiled dependencies from a pre-cached location
     - echo "Fetching dependencies from ${DEPSURL}"
     - wget ${DEPSURL}

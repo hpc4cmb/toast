@@ -210,6 +210,8 @@ class OpSimAtmosphere(Operator):
             if comm is not None:
                 tmin_tot = comm.allreduce(tmin, op=MPI.MIN)
                 tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
+            tmin_tot = np.floor(tmin_tot)
+            tmax_tot = np.ceil(tmax_tot)
             weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
@@ -264,6 +266,7 @@ class OpSimAtmosphere(Operator):
                 counter2start = counter2
                 counter1 = counter1start
                 xstart, ystart, zstart = self._xstep, self._ystep, self._zstep
+
                 while rmax < 100000:
                     sim, counter2 = self._simulate_atmosphere(
                         weather,
@@ -651,7 +654,7 @@ class OpSimAtmosphere(Operator):
             tmax = tmax_tot
             istop = times.size
 
-        return istart, istop, tmax
+        return istart, istop, np.ceil(tmax)
 
     @function_timer
     def _simulate_atmosphere(
@@ -852,6 +855,9 @@ class OpSimAtmosphere(Operator):
         if rank == 0:
             log.info("{}Observing the atmosphere".format(prefix))
 
+        ngood_tot = 0
+        nbad_tot = 0
+
         for det in tod.local_dets:
             # Cache the output signal
             cachename = "{}_{}".format(self._out, det)
@@ -896,8 +902,6 @@ class OpSimAtmosphere(Operator):
                 az = 2 * np.pi - phi
                 el = np.pi / 2 - theta
 
-            atmdata = np.zeros(ngood, dtype=np.float64)
-
             if np.ptp(az) < np.pi:
                 azmin_det = np.amin(az)
                 azmax_det = np.amax(az)
@@ -939,15 +943,23 @@ class OpSimAtmosphere(Operator):
 
             # Integrate detector signal
 
+            atmdata = np.zeros(ngood, dtype=np.float64)
+
             err = sim.observe(times[ind][good], az, el, atmdata, -1.0)
             if err != 0:
                 # Observing failed
+                bad = np.abs(atmdata) < 1e-30
+                nbad = np.sum(bad)
                 log.error(
-                    "{}OpSimAtmosphere: Observing FAILED. "
-                    "det = {}, rank = {}".format(prefix, det, rank)
+                    "{}OpSimAtmosphere: Observing FAILED for {} ({:.2f} %) samples. "
+                    "det = {}, rank = {}".format(
+                        prefix, nbad, nbad * 100 / ngood, det, rank
+                    )
                 )
-                atmdata[:] = 0
-                flag_ref[ind] = 255
+                atmdata[bad] = 0
+                flag_ref[ind][good][bad] = 255
+                nbad_tot += nbad
+            ngood_tot += ngood
 
             if self._gain:
                 atmdata *= self._gain
@@ -960,10 +972,17 @@ class OpSimAtmosphere(Operator):
 
             del ref
 
+        if comm is not None:
+            comm.Barrier()
+            ngood_tot = comm.reduce(ngood_tot)
+            nbad_tot = comm.reduce(nbad_tot)
+        if rank == 0 and nbad_tot > 0:
+            print(
+                "{}WARNING: Observe atmosphere FAILED on {:.2f}% of samples".format(
+                    prefix, nbad_tot * 100 / ngood_tot
+                )
+            )
         if self._report_timing:
-            if comm is not None:
-                comm.Barrier()
             if rank == 0:
-                tmr.stop()
-                tmr.report("{}OpSimAtmosphere: Observe atmosphere".format(prefix))
+                tmr.report_clear("{}OpSimAtmosphere: Observe atmosphere".format(prefix))
         return

@@ -219,8 +219,8 @@ class OpNoiseEstim:
         """ Suppress the sub-harmonic modes in the TOD by high-pass
         filtering.
         """
-        tm = Timer()
-        tm.start()
+        timer = Timer()
+        timer.start()
         rank = 0
         if comm is not None:
             rank = comm.rank
@@ -240,9 +240,8 @@ class OpNoiseEstim:
                 sig -= trend
         if comm is not None:
             comm.barrier()
-        tm.stop()
         if rank == 0:
-            tm.report("TOD high pass")
+            timer.report_clear("TOD high pass")
         return
 
     def subtract_signal(self, tod, comm, masksampler, mapsampler, intervals):
@@ -251,8 +250,8 @@ class OpNoiseEstim:
         """
         if mapsampler is None and masksampler is None:
             return
-        tm = Timer()
-        tm.start()
+        timer = Timer()
+        timer.start()
         rank = 0
         if comm is not None:
             rank = comm.rank
@@ -304,9 +303,8 @@ class OpNoiseEstim:
                     sig -= bg
         if comm is not None:
             comm.barrier()
-        tm.stop()
         if rank == 0:
-            tm.report("TOD signal subtraction")
+            timer.report_clear("TOD signal subtraction")
         return
 
     def decimate(self, x, flg, gapflg, intervals):
@@ -475,6 +473,8 @@ class OpNoiseEstim:
     def save_psds(
         self, binfreq, all_psds, all_times, det1, det2, fsample, rootname, all_cov
     ):
+        timer = Timer()
+        timer.start()
         if det1 == det2:
             fn_out = os.path.join(self._out, "{}_{}.fits".format(rootname, det1))
         else:
@@ -530,9 +530,9 @@ class OpNoiseEstim:
 
         hdulist = pf.HDUList(hdulist)
 
-        if os.path.isfile(fn_out):
-            os.remove(fn_out)
-        hdulist.writeto(fn_out, overwrite=True)
+        with open(fn_out, "wb") as fits_out:
+            hdulist.writeto(fits_out, overwrite=True)
+
         print("Detector {} vs. {} PSDs stored in {}".format(det1, det2, fn_out))
         return
 
@@ -661,8 +661,8 @@ class OpNoiseEstim:
         if comm is not None:
             rank = comm.rank
 
-        tm = Timer()
-        tm.start()
+        timer = Timer()
+        timer.start()
         if signal2 is None:
             result = autocov_psd(
                 timestamps,
@@ -710,23 +710,19 @@ class OpNoiseEstim:
                 comm,
             )
 
-        tm.stop()
         if rank == 0:
-            tm.report("Compute Correlators and PSDs")
+            timer.report_clear("Compute Correlators and PSDs")
 
         # Now bin the PSDs
 
         fmin = 1 / self._stationary_period
         fmax = fsample / 2
 
-        tm.clear()
-        tm.start()
         my_binned_psds1, my_times1, binfreq10 = self.bin_psds(my_psds1, fmin, fmax)
         if self._nsum > 1:
             my_binned_psds2, _, binfreq20 = self.bin_psds(my_psds2, fmin, fmax)
-        tm.stop()
         if rank == 0:
-            tm.report("Bin PSDs")
+            timer.report_clear("Bin PSDs")
 
         # concatenate
 
@@ -754,8 +750,6 @@ class OpNoiseEstim:
         # Collect and write the PSDs.  Start by determining the first
         # process to have a valid PSD to determine binning
 
-        tm.clear()
-        tm.start()
         have_bins = binfreq0 is not None
         have_bins_all = None
         if comm is None:
@@ -800,7 +794,8 @@ class OpNoiseEstim:
                 all_cov = [my_cov]
             else:
                 all_cov = comm.gather(my_cov, root=0)
-        tm.stop()
+        if rank == 0:
+            timer.report_clear("Collect PSDs")
 
         if rank == 0:
             # FIXME: original code had no timing report here for the previous block.
@@ -835,6 +830,7 @@ class OpNoiseEstim:
             good_psds, good_times, nbad, good_cov = self.discard_outliers(
                 binfreq, all_psds, all_times, all_cov
             )
+            timer.report_clear("Discard outliers")
 
             self.save_psds(
                 binfreq, all_psds, all_times, det1, det2, fsample, fileroot, all_cov
@@ -851,4 +847,6 @@ class OpNoiseEstim:
                     fileroot + "_good",
                     good_cov,
                 )
+            timer.report_clear("Write PSDs")
+
         return

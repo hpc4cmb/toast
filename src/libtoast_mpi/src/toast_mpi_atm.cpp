@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-// #if !defined(DEBUG)
-// #   define DEBUG
-// #endif
+//#if !defined(NO_ATM_CHECKS)
+//# define NO_ATM_CHECKS
+//#endif // if !defined(NO_ATM_CHECKS)
 
 #include <toast_mpi_internal.hpp>
 
@@ -731,21 +731,26 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
 
     # pragma omp parallel for schedule(static, 100)
     for (long i = 0; i < nsamp; ++i) {
-        # pragma omp flush(error)
-        if (error) continue;
+        // # pragma omp flush(error)
+        // if (error) continue;
 
         if ((!((azmin <= az[i]) && (az[i] <= azmax)) &&
              !((azmin <= az[i] - 2 * M_PI) && (az[i] - 2 * M_PI <= azmax)))
             || !((elmin <= el[i]) && (el[i] <= elmax))) {
-            o.precision(16);
-            o << "atmsim::observe : observation out of bounds (az, el, t)"
-              << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
-              << ") allowed: (" << azmin << " - " << azmax << ", "
-              << elmin << " - " << elmax << ", "
-              << tmin << " - " << tmax << ")"
-              << std::endl;
-            error = 1;
             # pragma omp flush(error)
+            if ((error == 0) && (verbosity > 0)) {
+                o.precision(16);
+                o << "atmsim::observe : observation out of bounds (az, el, t)"
+                  << " = (" << az[i] << ",  " << el[i] << ", " << t[i]
+                  << ") allowed: (" << azmin << " - " << azmax << ", "
+                  << elmin << " - " << elmax << ", "
+                  << tmin << " - " << tmax << ")"
+                  << std::endl;
+            }
+            if (error == 0) {
+                error = 1;
+                # pragma omp flush(error)
+            }
             continue;
         }
 
@@ -803,20 +808,26 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
             y += ytel_now;
             z += ztel_now;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
             if ((x < xstart) || (x > xstart + delta_x) ||
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
-                std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
-                          << std::endl
-                          << "x = " << x << std::endl
-                          << "y = " << y << std::endl
-                          << "z = " << z << std::endl;
-                error = 1;
                 #  pragma omp flush (error)
+                if ((error == 0) && (verbosity > 0)) {
+                    std::cerr << "atmsim::observe : (x,y,z) out of bounds: "
+                              << std::endl
+                              << "x = " << x << std::endl
+                              << "y = " << y << std::endl
+                              << "z = " << z << std::endl;
+                }
+                if (error == 0) {
+                    error = 1;
+                    #  pragma omp flush (error)
+                }
+                val = 0;
                 break;
             }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
             // Combine atmospheric emission (via interpolation) with the
             // ambient temperature.
@@ -828,23 +839,29 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                 step_val = interp(x, y, z, last_ind, last_nodes)
                            * (1. - z * zatm_inv);
             } catch (const std::runtime_error & e) {
-                std::ostringstream o;
-                o << "atmsim::observe : interp failed at " << std::endl
-                  << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
-                  << std::endl
-                  << "xyz = (" << x << ", " << y << ", " << z << ")"
-                  << std::endl
-                  << "r = " << r << std::endl
-                  << "tele at (" << xtel_now << ", " << ytel_now << ", "
-                  << ztel_now << ")" << std::endl
-                  << "( t, az, el ) = " << "( " << t[i] - tmin << ", "
-                  << az_now * 180 / M_PI
-                  << " deg , " << el_now * 180 / M_PI << " deg) "
-                  << " in_cone(t) = " << in_cone(x, y, z, t_now)
-                  << " with "
-                  << std::endl << e.what() << std::endl;
-                error = 1;
                 # pragma omp flush(error)
+                if ((error == 0) && (verbosity > 0)) {
+                    std::ostringstream o;
+                    o << "atmsim::observe : interp failed at " << std::endl
+                      << "xxyyzz = (" << xx << ", " << yy << ", " << zz << ")"
+                      << std::endl
+                      << "xyz = (" << x << ", " << y << ", " << z << ")"
+                      << std::endl
+                      << "r = " << r << std::endl
+                      << "tele at (" << xtel_now << ", " << ytel_now << ", "
+                      << ztel_now << ")" << std::endl
+                      << "( t, az, el ) = " << "( " << t[i] - tmin << ", "
+                      << az_now * 180 / M_PI
+                      << " deg , " << el_now * 180 / M_PI << " deg) "
+                      << " in_cone(t) = " << in_cone(x, y, z, t_now)
+                      << " with "
+                      << std::endl << e.what() << std::endl;
+                }
+                if (error == 0) {
+                    error = 1;
+                    # pragma omp flush(error)
+                }
+                val = 0;
                 break;
             }
             val += step_val;
@@ -1114,10 +1131,6 @@ void toast::mpi_atm_sim::initialize_kolmogorov() {
     rmax_kolmo = sqrt(diag * diag + delta_z * delta_z) * 1.01;
     nr = 1000; // Size of the interpolation grid
 
-# ifdef DEBUG
-    nr /= 10;
-# endif // ifdef DEBUG
-
     rstep = (rmax_kolmo - rmin_kolmo) / (nr - 1);
     rstep_inv = 1. / rstep;
 
@@ -1132,10 +1145,13 @@ void toast::mpi_atm_sim::initialize_kolmogorov() {
     double invkappal = 1 / kappal;     // Optimize
     double kappa0 = 0.75 * kappamin;
     double kappa0sq = kappa0 * kappa0; // Optimize
-    long nkappa = 1000000;             // Number of integration steps needs to
-                                       // be large
-    double upper_limit = 10 * kappamax;
-    double kappastep = upper_limit / (nkappa - 1);
+    long nkappa = 10000;               // Number of integration steps
+    double kappastart = 1e-4;
+    double kappastop = 10 * kappamax;
+
+    // kappa = exp(ikappa * kappascale) * kappastart
+    double kappascale = log(kappastop / kappastart) / (nkappa - 1);
+
     double slope1 = 7. / 6.;
     double slope2 = -11. / 6.;
 
@@ -1159,26 +1175,31 @@ void toast::mpi_atm_sim::initialize_kolmogorov() {
     // Precalculate the power spectrum function
 
     std::vector <double> phi(last_kappa - first_kappa);
+    std::vector <double> kappa(last_kappa - first_kappa);
     # pragma omp parallel for schedule(static, 10)
     for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
-        double kappa = ikappa * kappastep;
-        double kkl = kappa * invkappal;
-        phi[ikappa - first_kappa] =
-            (1. + 1.802 * kkl - 0.254 * pow(kkl, slope1))
-            * exp(-kkl * kkl) * pow(kappa * kappa + kappa0sq, slope2);
+        kappa[ikappa - first_kappa] = exp(ikappa * kappascale) * kappastart;
     }
 
-    /*
-       if ( rank == 0 && verbosity > 0) {
-       std::ofstream f;
-       std::ostringstream fname;
-       fname << "kolmogorov_f.txt";
-       f.open( fname.str(), std::ios::out );
-       for ( int ikappa=0; ikappa<nkappa; ++ikappa )
-       f << ikappa*kappastep << " " << phi[ikappa] << std::endl;
-       f.close();
-       }
-     */
+    # pragma omp parallel for schedule(static, 10)
+    for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
+        double k = kappa[ikappa - first_kappa];
+        double kkl = k * invkappal;
+        phi[ikappa - first_kappa] =
+            (1. + 1.802 * kkl - 0.254 * pow(kkl, slope1))
+            * exp(-kkl * kkl) * pow(k * k + kappa0sq, slope2);
+    }
+
+    if ((rank == 0) && (verbosity > 0)) {
+        std::ofstream f;
+        std::ostringstream fname;
+        fname << "kolmogorov_f.txt";
+        f.open(fname.str(), std::ios::out);
+        for (int ikappa = 0; ikappa < nkappa; ++ikappa) {
+            f << kappa[ikappa] << " " << phi[ikappa] << std::endl;
+        }
+        f.close();
+    }
 
     // Newton's method factors, not part of the power spectrum
 
@@ -1197,25 +1218,33 @@ void toast::mpi_atm_sim::initialize_kolmogorov() {
     for (long ir = 0; ir < nr; ++ir) {
         double r = rmin_kolmo
                    + (exp(ir * nri * tau) - 1) * enorm * (rmax_kolmo - rmin_kolmo);
+        double rinv = 1 / r;
         double val = 0;
         if (r * kappamax < 1e-2) {
             // special limit r -> 0,
             // sin(kappa.r)/r -> kappa - kappa^3*r^2/3!
-            for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
-                double kappa = ikappa * kappastep;
-                double kappa2 = kappa * kappa;
+            double r2 = r * r;
+            for (long ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
+                double k = kappa[ikappa - first_kappa];
+                double kstep = kappa[ikappa + 1 - first_kappa] - k;
+                double kappa2 = k * k;
                 double kappa4 = kappa2 * kappa2;
-                double r2 = r * r;
-                val += phi[ikappa - first_kappa] * (kappa2 - r2 * kappa4 * ifac3);
+                val += phi[ikappa - first_kappa] * (kappa2 - r2 * kappa4 * ifac3) *
+                       kstep;
             }
         } else {
-            for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
-                double kappa = ikappa * kappastep;
-                val += phi[ikappa - first_kappa] * sin(kappa * r) * kappa;
+            for (long ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
+                double k1 = kappa[ikappa - first_kappa];
+                double k2 = kappa[ikappa + 1 - first_kappa];
+                double phi1 = phi[ikappa - first_kappa];
+                double phi2 = phi[ikappa + 1 - first_kappa];
+                val += .5 * (phi1 + phi2) * rinv *
+                       (k1 * cos(k1 * r) - k2 * cos(k2 * r)
+                        - rinv * (sin(k1 * r) - sin(k2 * r))
+                       );
             }
             val /= r;
         }
-        val *= kappastep;
         kolmo_x[ir] = r;
         kolmo_y[ir] = val;
     }
@@ -1333,11 +1362,11 @@ void toast::mpi_atm_sim::compress_volume() {
             for (long iz = 0; iz < nz - 1; ++iz) {
                 double z = zstart + iz * zstep;
                 if (in_cone(x, y, z)) {
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
                     hit.at(ix * xstride + iy * ystride + iz * zstride) = true;
-# else // ifdef DEBUG
+# else // ifndef NO_ATM_CHECKS
                     hit[ix * xstride + iy * ystride + iz * zstride] = true;
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
                 }
             }
         }
@@ -1376,13 +1405,13 @@ void toast::mpi_atm_sim::compress_volume() {
                             for (double zmul = -2; zmul < 4; ++zmul) {
                                 if ((iz + zmul < 0) || (iz + zmul > nz - 1)) continue;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
                                 hit.at(offset + xmul * xstride
                                        + ymul * ystride + zmul * zstride) = true;
-# else // ifdef DEBUG
+# else // ifdef NO_ATM_CHECKS
                                 hit[offset + xmul * xstride
                                     + ymul * ystride + zmul * zstride] = true;
-# endif // ifdef DEBUG
+# endif // ifdef NO_ATM_CHECKS
                             }
                         }
                     }
@@ -1540,7 +1569,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
     long iy = (y - ystart) * ystepinv;
     long iz = (z - zstart) * zstepinv;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
     if ((ix < 0) || (ix > nx - 1) || (iy < 0) || (iy > ny - 1) || (iz < 0) ||
         (iz > nz - 1)) {
         std::ostringstream o;
@@ -1552,7 +1581,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
         std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
     size_t ifull = ix * xstride + iy * ystride + iz * zstride;
 
@@ -1572,7 +1601,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
     double dy = (y - (ystart + (double)iy * ystep)) * ystepinv;
     double dz = (z - (zstart + (double)iz * zstep)) * zstepinv;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
     if ((dx < 0) || (dx > 1) || (dy < 0) || (dy > 1) || (dz < 0) || (dz > 1)) {
         std::ostringstream o;
         o.precision(16);
@@ -1583,15 +1612,15 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
           << "dx = " << dx << std::endl
           << "dy = " << dy << std::endl
           << "dz = " << dz << std::endl;
-        std::cerr << o.str() << std::endl;
+        if (verbosity > 0) std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
     double c000, c001, c010, c011, c100, c101, c110, c111;
 
     if ((ix != last_ind[0]) || (iy != last_ind[1]) || (iz != last_ind[2])) {
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         if ((ix < 0) || (ix > nx - 2) || (iy < 0) || (iy > ny - 2)
             || (iz < 0) || (iz > nz - 2)) {
             std::ostringstream o;
@@ -1602,10 +1631,10 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << ix << "/" << nx << ", "
               << iy << "/" << ny << ", "
               << iz << "/" << nz << ")";
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         size_t offset = ix * xstride + iy * ystride + iz * zstride;
 
@@ -1618,7 +1647,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
         size_t ifull110 = ifull100 + ystride;
         size_t ifull111 = ifull110 + zstride;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         long ifullmax = compressed_index->size() - 1;
         if (
             (ifull000 < 0) || (ifull000 > ifullmax) ||
@@ -1641,10 +1670,10 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << "ifull101 = " << ifull101 << std::endl
               << "ifull110 = " << ifull110 << std::endl
               << "ifull111 = " << ifull111 << std::endl;
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         long i000 = (*compressed_index)[ifull000];
         long i001 = (*compressed_index)[ifull001];
@@ -1655,7 +1684,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
         long i110 = (*compressed_index)[ifull110];
         long i111 = (*compressed_index)[ifull111];
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         long imax = realization->size() - 1;
         if (
             (i000 < 0) || (i000 > imax) ||
@@ -1682,10 +1711,10 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
               << std::endl
               << "in_cone(x, y, z) = " << in_cone(x, y, z)
               << std::endl;
-            std::cerr << o.str() << std::endl;
+            if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         c000 = (*realization)[i000];
         c001 = (*realization)[i001];
@@ -1776,6 +1805,10 @@ cholmod_sparse * toast::mpi_atm_sim::build_sparse_covariance(long ind_start,
                 if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
 
                 double val = cov_eval(colcoord, rowcoord);
+		if (icol == irow) {
+		  // Regularize the matrix by promoting the diagonal
+		  val *= 1.01;
+		}
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix

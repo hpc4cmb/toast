@@ -1617,9 +1617,6 @@ class OpMapMaker(Operator):
         if self.rank == 0:
             os.makedirs(self.outdir, exist_ok=True)
 
-        if self.rank == 0:
-            timer.report_clear("Identify local submaps")
-
         self.white_noise_cov_matrix = DistPixels(
             data, comm=self.comm, nnz=self.ncov, dtype=np.float64
         )
@@ -1643,11 +1640,15 @@ class OpMapMaker(Operator):
         )
         build_wcov.exec(data)
 
+        if self.comm is not None:
+            self.comm.Barrier()
         if self.rank == 0:
             timer.report_clear("Accumulate N_pp'^1")
 
         self.white_noise_cov_matrix.allreduce()
 
+        if self.comm is not None:
+            self.comm.Barrier()
         if self.rank == 0:
             timer.report_clear("All reduce N_pp'^1")
 
