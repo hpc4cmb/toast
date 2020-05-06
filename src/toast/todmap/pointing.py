@@ -33,7 +33,7 @@ class OpPointingHpix(Operator):
     the total response is:
 
     .. math::
-        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{4(a+w)} + U \\sin{4(a+w)}\\right]\\right]
+        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a+4w} + U \\sin{2a+4w}\\right]\\right]
 
     Args:
         pixels (str): write pixels to the cache with name <pixels>_<detector>.
@@ -165,8 +165,6 @@ class OpPointingHpix(Operator):
                 hwpang = tod.local_hwp_angle()
             except:
                 pass
-            if hwpang is None:
-                hwpang = np.zeros(nsamp, dtype=np.float64)
 
             # read the common flags and apply bitmask
 
@@ -227,7 +225,9 @@ class OpPointingHpix(Operator):
                         # Use cached version
                         detp = pdata[bslice, :]
 
-                    hslice = hwpang[bslice].reshape(-1)
+                    hslice = None
+                    if hwpang is not None:
+                        hslice = hwpang[bslice].reshape(-1)
                     fslice = common[bslice].reshape(-1)
 
                     pointing_matrix_healpix(

@@ -92,7 +92,11 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
         // FIXME:  Switch back to fast version after unit tests improved.
         toast::vatan2(n, by, bx, detang.data());
 
-        if (hwpang != NULL) {
+        if (hwpang == NULL) {
+            for (size_t i = 0; i < n; ++i) {
+                detang[i] *= 2.0;
+            }
+        } else {
             for (size_t i = 0; i < n; ++i) {
                 detang[i] += 2.0 * hwpang[i];
                 detang[i] *= 2.0;
