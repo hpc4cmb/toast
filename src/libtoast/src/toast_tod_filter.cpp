@@ -197,8 +197,12 @@ void toast::bin_templates(double * signal, double * templates,
 #pragma omp parallel \
     default(none) shared(invcov, templates, signal, good, ntemplate, nsample)
     {
-        int nthread = omp_get_num_threads();
-        int id_thread = omp_get_thread_num();
+        int nthread = 1;
+        int id_thread = 0;
+        #ifdef _OPENMP
+        nthread = omp_get_num_threads();
+        id_thread = omp_get_thread_num();
+        #endif
 
         int worker = -1;
         for (size_t row = 0; row < ntemplate; row++) {
