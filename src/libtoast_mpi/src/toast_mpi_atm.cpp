@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#if !defined(DEBUG)
-# define DEBUG
-#endif // if !defined(DEBUG)
+//#if !defined(NO_ATM_CHECKS)
+//# define NO_ATM_CHECKS
+//#endif // if !defined(NO_ATM_CHECKS)
 
 #include <toast_mpi_internal.hpp>
 
@@ -808,7 +808,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
             y += ytel_now;
             z += ztel_now;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
             if ((x < xstart) || (x > xstart + delta_x) ||
                 (y < ystart) || (y > ystart + delta_y) ||
                 (z < zstart) || (z > zstart + delta_z)) {
@@ -827,7 +827,7 @@ int toast::mpi_atm_sim::observe(double * t, double * az, double * el, double * t
                 val = 0;
                 break;
             }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
             // Combine atmospheric emission (via interpolation) with the
             // ambient temperature.
@@ -1362,11 +1362,11 @@ void toast::mpi_atm_sim::compress_volume() {
             for (long iz = 0; iz < nz - 1; ++iz) {
                 double z = zstart + iz * zstep;
                 if (in_cone(x, y, z)) {
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
                     hit.at(ix * xstride + iy * ystride + iz * zstride) = true;
-# else // ifdef DEBUG
+# else // ifndef NO_ATM_CHECKS
                     hit[ix * xstride + iy * ystride + iz * zstride] = true;
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
                 }
             }
         }
@@ -1405,13 +1405,13 @@ void toast::mpi_atm_sim::compress_volume() {
                             for (double zmul = -2; zmul < 4; ++zmul) {
                                 if ((iz + zmul < 0) || (iz + zmul > nz - 1)) continue;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
                                 hit.at(offset + xmul * xstride
                                        + ymul * ystride + zmul * zstride) = true;
-# else // ifdef DEBUG
+# else // ifdef NO_ATM_CHECKS
                                 hit[offset + xmul * xstride
                                     + ymul * ystride + zmul * zstride] = true;
-# endif // ifdef DEBUG
+# endif // ifdef NO_ATM_CHECKS
                             }
                         }
                     }
@@ -1569,7 +1569,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
     long iy = (y - ystart) * ystepinv;
     long iz = (z - zstart) * zstepinv;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
     if ((ix < 0) || (ix > nx - 1) || (iy < 0) || (iy > ny - 1) || (iz < 0) ||
         (iz > nz - 1)) {
         std::ostringstream o;
@@ -1581,7 +1581,7 @@ long toast::mpi_atm_sim::coord2ind(double x, double y, double z) {
         std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
     size_t ifull = ix * xstride + iy * ystride + iz * zstride;
 
@@ -1601,7 +1601,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
     double dy = (y - (ystart + (double)iy * ystep)) * ystepinv;
     double dz = (z - (zstart + (double)iz * zstep)) * zstepinv;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
     if ((dx < 0) || (dx > 1) || (dy < 0) || (dy > 1) || (dz < 0) || (dz > 1)) {
         std::ostringstream o;
         o.precision(16);
@@ -1615,12 +1615,12 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
         if (verbosity > 0) std::cerr << o.str() << std::endl;
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
     double c000, c001, c010, c011, c100, c101, c110, c111;
 
     if ((ix != last_ind[0]) || (iy != last_ind[1]) || (iz != last_ind[2])) {
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         if ((ix < 0) || (ix > nx - 2) || (iy < 0) || (iy > ny - 2)
             || (iz < 0) || (iz > nz - 2)) {
             std::ostringstream o;
@@ -1634,7 +1634,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
             if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         size_t offset = ix * xstride + iy * ystride + iz * zstride;
 
@@ -1647,7 +1647,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
         size_t ifull110 = ifull100 + ystride;
         size_t ifull111 = ifull110 + zstride;
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         long ifullmax = compressed_index->size() - 1;
         if (
             (ifull000 < 0) || (ifull000 > ifullmax) ||
@@ -1673,7 +1673,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
             if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         long i000 = (*compressed_index)[ifull000];
         long i001 = (*compressed_index)[ifull001];
@@ -1684,7 +1684,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
         long i110 = (*compressed_index)[ifull110];
         long i111 = (*compressed_index)[ifull111];
 
-# ifdef DEBUG
+# ifndef NO_ATM_CHECKS
         long imax = realization->size() - 1;
         if (
             (i000 < 0) || (i000 > imax) ||
@@ -1714,7 +1714,7 @@ double toast::mpi_atm_sim::interp(double x, double y, double z,
             if (verbosity > 0) std::cerr << o.str() << std::endl;
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifdef DEBUG
+# endif // ifndef NO_ATM_CHECKS
 
         c000 = (*realization)[i000];
         c001 = (*realization)[i001];
