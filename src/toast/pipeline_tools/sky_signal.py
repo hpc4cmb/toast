@@ -295,6 +295,7 @@ def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
 
     return cache_prefix
 
+
 @function_timer
 def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
     if (
@@ -342,6 +343,7 @@ def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True
         timer.report_clear("Read and sample map")
 
     return cache_prefix
+
 
 @function_timer
 def scan_sky_signal(

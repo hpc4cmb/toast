@@ -380,7 +380,6 @@ class OpSimConviqt(Operator):
         return
 
 
-
 class OpSimWeightedConviqt(Operator):
     """Operator which uses libconviqt to generate beam-convolved timestreams.
     This operator should be used in presence of a spinning  HWP which  makes the beam time-dependent,
@@ -508,14 +507,13 @@ class OpSimWeightedConviqt(Operator):
                 beam_file = self._beam_file[det]
             except TypeError:
                 beam_file = self._beam_file.replace("DETECTOR", det)
-                beam_file_i00= beam_file.replace('.fits', '_I000.fits')
-                beam_file_0i0= beam_file.replace('.fits', '_0I00.fits')
-                beam_file_00i= beam_file.replace('.fits', '_00I0.fits')
+                beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
+                beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
+                beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
 
-
-            beamI00 =self.get_beam(beam_file_i00, det,verbose )
-            beam0I0 =self.get_beam(beam_file_0i0, det,verbose )
-            beam00I =self.get_beam(beam_file_00i, det,verbose )
+            beamI00 = self.get_beam(beam_file_i00, det, verbose)
+            beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
+            beam00I = self.get_beam(beam_file_00i, det, verbose)
             detector = self.get_detector(det)
 
             theta, phi, psi = self.get_pointing(data, det, verbose)
@@ -524,21 +522,27 @@ class OpSimWeightedConviqt(Operator):
             for obs in data.obs:
                 tod = obs["tod"]
                 focalplane = obs["focalplane"]
-                psipol = self._get_psipol( focalplane, det )
-                #import pdb
-                #pdb.set_trace()
-                weight , hwpang = self._get_hwpangle(tod )
-                psitot = weight *( psipol + hwpang )
+                psipol = self._get_psipol(focalplane, det)
+                # import pdb
+                # pdb.set_trace()
+                weight, hwpang = self._get_hwpangle(tod)
+                psitot = weight * (psipol + hwpang)
 
-                convolved_data = self.convolve(sky, beamI00, detector, pnt, det, verbose)
+                convolved_data = self.convolve(
+                    sky, beamI00, detector, pnt, det, verbose
+                )
                 theta, phi, psi = self.get_pointing(data, det, verbose)
                 pnt = self.get_buffer(theta, phi, psi, det, verbose)
                 del theta, phi, psi
-                convolved_data +=    np.cos(psitot ) * self.convolve(sky, beam0I0, detector, pnt, det, verbose)
+                convolved_data += np.cos(psitot) * self.convolve(
+                    sky, beam0I0, detector, pnt, det, verbose
+                )
                 theta, phi, psi = self.get_pointing(data, det, verbose)
                 pnt = self.get_buffer(theta, phi, psi, det, verbose)
                 del theta, phi, psi
-                convolved_data += np.sin(psitot ) *  self.convolve(sky, beam00I, detector, pnt, det, verbose)
+                convolved_data += np.sin(psitot) * self.convolve(
+                    sky, beam00I, detector, pnt, det, verbose
+                )
 
                 self.calibrate(data, det, beamI00, convolved_data, verbose)
 
@@ -550,7 +554,6 @@ class OpSimWeightedConviqt(Operator):
                 timer.report_clear("conviqt process detector {}".format(det))
 
         return
-
 
     def _get_detectors(self, data):
         """ Assemble a list of detectors across all processes and
@@ -569,8 +572,7 @@ class OpSimWeightedConviqt(Operator):
         all_dets = self._comm.bcast(dets, root=0)
         return all_dets
 
-
-    def _get_hwpangle (self,tod  ):
+    def _get_hwpangle(self, tod):
         """
         Return  the spinning HWP angle and the multiplicative
         factor to be applied when added to the  signal polarization angle.
@@ -579,13 +581,13 @@ class OpSimWeightedConviqt(Operator):
         _, nsamp = tod.local_samples
         try:
             hwpang = tod.local_hwp_angle()
-            factor   = 4
+            factor = 4
         except:
             pass
-        if hwpang is None or   np.all(hwpang==0 ):
+        if hwpang is None or np.all(hwpang == 0):
             hwpang = np.zeros(nsamp, dtype=np.float64)
-            factor   = 2
-        return factor,hwpang
+            factor = 2
+        return factor, hwpang
 
     def _get_psipol(self, focalplane, det):
         """ Parse polarization angle in radians from the focalplane
