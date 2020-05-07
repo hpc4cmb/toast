@@ -525,8 +525,11 @@ class OpSimWeightedConviqt(Operator):
                 psipol = self._get_psipol(focalplane, det)
                 # import pdb
                 # pdb.set_trace()
-                weight, hwpang = self._get_hwpangle(tod)
-                psitot = weight * (psipol + hwpang)
+                hwpang = self._get_hwpangle(tod)
+                if hwpang is None:
+                    psitot = 2 * psipol
+                else:
+                    psitot = 2 * psipol + 4 * hwpang
 
                 convolved_data = self.convolve(
                     sky, beamI00, detector, pnt, det, verbose
@@ -581,13 +584,9 @@ class OpSimWeightedConviqt(Operator):
         _, nsamp = tod.local_samples
         try:
             hwpang = tod.local_hwp_angle()
-            factor = 4
         except:
             pass
-        if hwpang is None or np.all(hwpang == 0):
-            hwpang = np.zeros(nsamp, dtype=np.float64)
-            factor = 2
-        return factor, hwpang
+        return hwpang
 
     def _get_psipol(self, focalplane, det):
         """ Parse polarization angle in radians from the focalplane
