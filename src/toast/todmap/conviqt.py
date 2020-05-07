@@ -581,7 +581,6 @@ class OpSimWeightedConviqt(Operator):
         factor to be applied when added to the  signal polarization angle.
         """
         hwpang = None
-        _, nsamp = tod.local_samples
         try:
             hwpang = tod.local_hwp_angle()
         except:
