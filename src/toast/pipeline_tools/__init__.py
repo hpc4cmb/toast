@@ -37,6 +37,7 @@ from .sky_signal import (
     simulate_sky_signal,
     add_conviqt_args,
     apply_conviqt,
+    apply_weighted_conviqt,
 )
 from .sss import add_sss_args, simulate_sss
 from .todground import (

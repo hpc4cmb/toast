@@ -11,7 +11,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
 from ..map import DistPixels
-from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpSimConviqt
+from ..todmap import OpSimPySM, OpSimScan, OpMadam, OpSimConviqt, OpSimWeightedConviqt
 
 
 def add_sky_signal_args(parser):
@@ -205,6 +205,22 @@ def add_conviqt_args(parser):
         dest="conviqt_normalize_beam",
     )
     parser.set_defaults(conviqt_normalize_beam=False)
+
+    parser.add_argument(
+        "--conviqt-calibrate",
+        required=False,
+        action="store_true",
+        help="Normalize the beams",
+        dest="conviqt_calibrate",
+    )
+    parser.add_argument(
+        "--no-conviqt-calibrate",
+        required=False,
+        action="store_false",
+        help="Do not normalize the beams",
+        dest="conviqt_calibrate",
+    )
+    parser.set_defaults(conviqt_calibrate=True)
     parser.add_argument(
         "--conviqt-remove-monopole",
         required=False,
@@ -278,7 +294,7 @@ def apply_conviqt(args, comm, data, cache_prefix="signal", verbose=True):
         pol=True,
         fwhm=args.conviqt_fwhm,
         order=args.conviqt_order,
-        calibrate=True,
+        calibrate=args.conviqt_calibrate,
         dxx=args.conviqt_dxx,
         out=cache_prefix,
         remove_monopole=args.conviqt_remove_monopole,
@@ -310,7 +326,7 @@ def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True
     timer.start()
 
     if comm.world_rank == 0 and verbose:
-        log.info("Running Conviqt")
+        log.info("Running Weighted Conviqt")
 
     verbosity = 0
     if verbose:
@@ -327,7 +343,7 @@ def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True
         pol=True,
         fwhm=args.conviqt_fwhm,
         order=args.conviqt_order,
-        calibrate=True,
+        calibrate=args.conviqt_calibrate,
         dxx=args.conviqt_dxx,
         out=cache_prefix,
         remove_monopole=args.conviqt_remove_monopole,
