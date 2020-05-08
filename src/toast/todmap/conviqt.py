@@ -523,8 +523,6 @@ class OpSimWeightedConviqt(Operator):
                 tod = obs["tod"]
                 focalplane = obs["focalplane"]
                 psipol = self._get_psipol(focalplane, det)
-                # import pdb
-                # pdb.set_trace()
                 hwpang = self._get_hwpangle(tod)
                 if hwpang is None:
                     psitot = 2 * psipol
