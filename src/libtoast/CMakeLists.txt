@@ -1,4 +1,11 @@
 
+# Add internal googletest framework.  Must be added before the unit test
+# internal library in order to define some variables.
+
+add_subdirectory(gtest EXCLUDE_FROM_ALL)
+set(gtest_force_shared_crt TRUE)
+include_directories("${gtest_SOURCE_DIR}/include")
+
 # Add a custom command that produces version.cpp, plus
 # a dummy output that's not actually produced, in order
 # to force version.cmake to always be re-run before the build
@@ -9,9 +16,10 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
 )
 
-# Define the core internal lbirary
+# Define the sources
 
-set(toastcore_SOURCES
+set(toast_SOURCES
+    toast.cpp
     src/version.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
@@ -28,79 +36,6 @@ set(toastcore_SOURCES
     src/toast_tod_simnoise.cpp
     src/toast_atm_utils.cpp
     src/toast_atm.cpp
-)
-
-add_library(toastcore ${toastcore_SOURCES})
-
-target_include_directories(toastcore BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-# This compiler definition makes it possible to query the serial library
-# to see if we also have the MPI library.
-
-if(MPI_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_MPI=1)
-endif(MPI_FOUND)
-
-# Dependencies
-
-if(OpenMP_CXX_FOUND)
-    target_compile_options(toastcore PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(toastcore PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
-    target_link_libraries(toastcore "${OpenMP_CXX_LIBRARIES}")
-endif(OpenMP_CXX_FOUND)
-
-if(AATM_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_AATM=1)
-    target_include_directories(toastcore PUBLIC "${AATM_INCLUDE_DIRS}")
-    target_link_libraries(toastcore "${AATM_LIBRARIES}")
-endif(AATM_FOUND)
-
-if(CHOLMOD_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_CHOLMOD=1)
-    target_include_directories(toastcore PUBLIC "${CHOLMOD_INCLUDE_DIR}")
-    target_link_libraries(toastcore "${CHOLMOD_LIBRARY}")
-endif(CHOLMOD_FOUND)
-
-if(FFTW_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_FFTW=1)
-    target_include_directories(toastcore PUBLIC "${FFTW_INCLUDE_DIRS}")
-    target_link_libraries(toastcore "${FFTW_LIBRARIES}")
-    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
-        target_compile_definitions(toastcore PRIVATE HAVE_FFTW_THREADS=1)
-    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
-endif(FFTW_FOUND)
-
-if(LAPACK_FOUND)
-    target_compile_definitions(toastcore PRIVATE HAVE_LAPACK=1)
-    target_compile_definitions(toastcore PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toastcore PROPERTIES LINK_FLAGS
-        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
-    )
-    target_link_libraries(toastcore "${LAPACK_LIBRARIES}")
-    target_link_libraries(toastcore "${BLAS_LIBRARIES}")
-endif(LAPACK_FOUND)
-
-# FIXME: restore MKL linking here after testing on a machine with Intel
-# compilers.
-
-
-
-
-# Add internal googletest framework.  Must be added before the unit test
-# internal library in order to define some variables.
-
-add_subdirectory(gtest EXCLUDE_FROM_ALL)
-set(gtest_force_shared_crt TRUE)
-include_directories("${gtest_SOURCE_DIR}/include")
-
-# Define the unit test internal library.  We keep this separate so that we
-# can link it with different options to ensure that all unit tests are
-# included in the library.
-
-set(toasttest_SOURCES
     tests/toast_test_runner.cpp
     tests/toast_test_env.cpp
     tests/toast_test_utils.cpp
@@ -113,69 +48,70 @@ set(toasttest_SOURCES
     tests/toast_test_polyfilter.cpp
 )
 
-add_library(toasttest ${toasttest_SOURCES})
+add_library(toast ${toast_SOURCES})
 
-target_include_directories(toasttest BEFORE PRIVATE
+target_include_directories(toast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
 )
-
-if(OpenMP_CXX_FOUND)
-    target_compile_options(toasttest PRIVATE "${OpenMP_CXX_FLAGS}")
-endif(OpenMP_CXX_FOUND)
-
-if(AATM_FOUND)
-    target_compile_definitions(toasttest PRIVATE HAVE_AATM=1)
-    target_include_directories(toasttest PRIVATE "${AATM_INCLUDE_DIRS}")
-endif(AATM_FOUND)
-
-if(CHOLMOD_FOUND)
-    target_compile_definitions(toasttest PRIVATE HAVE_CHOLMOD=1)
-    target_include_directories(toasttest PRIVATE "${CHOLMOD_INCLUDE_DIR}")
-endif(CHOLMOD_FOUND)
-
-if(FFTW_FOUND)
-    target_compile_definitions(toasttest PRIVATE HAVE_FFTW=1)
-    target_include_directories(toasttest PRIVATE "${FFTW_INCLUDE_DIRS}")
-    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
-        target_compile_definitions(toasttest PRIVATE HAVE_FFTW_THREADS=1)
-    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
-endif(FFTW_FOUND)
-
-if(LAPACK_FOUND)
-    target_compile_definitions(toasttest PRIVATE HAVE_LAPACK=1)
-    target_compile_definitions(toasttest PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-endif(LAPACK_FOUND)
-
-target_link_libraries(toasttest gtest)
-
-
-# Define the full toast library
-
-add_library(toast toast.cpp)
 
 target_include_directories(toast BEFORE PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-if(APPLE)
-    SET(TOASTTESTLIB -Wl,-force_load toasttest)
-    SET(TOASTCORELIB toastcore)
-#    SET(TOASTCORELIB -Wl,-all_load toastcore -Wl,-noall_load)
-else()
-    SET(TOASTTESTLIB -Wl,--whole-archive toasttest -Wl,--no-whole-archive)
-    SET(TOASTCORELIB toastcore)
-#    SET(TOASTCORELIB -Wl,--whole-archive toastcore -Wl,--no-whole-archive)
-endif(APPLE)
+# This compiler definition makes it possible to query the serial library
+# to see if we also have the MPI library.
+
+if(MPI_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_MPI=1)
+endif(MPI_FOUND)
+
+# Dependencies
+
+target_link_libraries(toast gtest)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
     set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+    target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
 
-target_link_libraries(toast ${TOASTTESTLIB} ${TOASTCORELIB})
+if(AATM_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_AATM=1)
+    target_include_directories(toast PUBLIC "${AATM_INCLUDE_DIRS}")
+    target_link_libraries(toast "${AATM_LIBRARIES}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_CHOLMOD=1)
+    target_include_directories(toast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+    target_link_libraries(toast "${CHOLMOD_LIBRARY}")
+endif(CHOLMOD_FOUND)
+
+if(FFTW_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
+    target_include_directories(toast PUBLIC "${FFTW_INCLUDE_DIRS}")
+    target_link_libraries(toast "${FFTW_LIBRARIES}")
+    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
+        target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
+    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
+endif(FFTW_FOUND)
+
+if(LAPACK_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS
+        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
+    )
+    target_link_libraries(toast "${LAPACK_LIBRARIES}")
+    target_link_libraries(toast "${BLAS_LIBRARIES}")
+endif(LAPACK_FOUND)
+
+# FIXME: restore MKL linking here after testing on a machine with Intel
+# compilers.
+
 
 # Installation
 
@@ -185,7 +121,6 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 # to use on many systems.
 #install(TARGETS toast DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS toast DESTINATION lib)
-
 
 # Add the serial unit test executable
 

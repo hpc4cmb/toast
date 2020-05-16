@@ -10,7 +10,7 @@
 # __pycache__/
 # *.py[cod]
 
-# C extensions
+# Compiled extensions
 # *.so
 
 /examples/*.slurm
@@ -29,7 +29,7 @@
 # *_test_output
 
 # generated files
-/src/python/_version.py
+src/libtoast/src/version.cpp
 
 # vim
 *.swp

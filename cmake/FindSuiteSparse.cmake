@@ -57,6 +57,8 @@
 #                                search for SuiteSparse libraries,
 #                                e.g: /timbuktu/lib.
 #
+# SUITESPARSE_USE_STATIC_LIBS:   Search for static libraries.
+#
 # The following variables define the presence / includes & libraries for the
 # SuiteSparse components searched for, the SUITESPARSE_XX variables are the
 # union of the variables for all components.
@@ -105,6 +107,15 @@
 # == Serial Graph Partitioning and Fill-reducing Matrix Ordering (METIS)
 # METIS_FOUND
 # METIS_LIBRARY
+
+# Check whether to search static or dynamic libs
+set(CMAKE_FIND_LIBRARY_SUFFIXES_SAV ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if(${SUITESPARSE_USE_STATIC_LIBS})
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
+else()
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
+endif()
 
 # Reset CALLERS_CMAKE_FIND_LIBRARY_PREFIXES to its value when
 # FindSuiteSparse was invoked.
@@ -528,3 +539,6 @@ else (SUITESPARSE_FOUND)
     REQUIRED_VARS ${SUITESPARSE_FOUND_REQUIRED_VARS}
     FAIL_MESSAGE "Failed to find some/all required components of SuiteSparse.")
 endif (SUITESPARSE_FOUND)
+
+# Restore library search suffix
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})

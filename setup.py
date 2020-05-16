@@ -4,6 +4,7 @@
 
 import os
 import sys
+import re
 import subprocess
 from pathlib import Path
 
@@ -11,13 +12,105 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 
+def find_compilers():
+    cc = None
+    cxx = None
+    mpicc = None
+    mpicxx = None
+    # If we have mpi4py, then get the MPI compilers that were used to build that.
+    # Then get the serial compilers used by the MPI wrappers.  Otherwise, just the
+    # normal distutils compilers.
+    try:
+        from mpi4py import MPI
+        import mpi4py
+
+        mpiconf = mpi4py.get_config()
+        mpicc = mpiconf["mpicc"]
+        mpicxx = mpiconf["mpicxx"]
+        mpicc_com = None
+        mpicxx_com = None
+        try:
+            mpicc_com = subprocess.check_output(
+                "{} -show".format(mpicc), shell=True, universal_newlines=True
+            )
+        except CalledProcessError:
+            # Cannot run the MPI C compiler, give up
+            raise ImportError
+        try:
+            mpicxx_com = subprocess.check_output(
+                "{} -show".format(mpicxx), shell=True, universal_newlines=True
+            )
+        except CalledProcessError:
+            # Cannot run the MPI C++ compiler, give up
+            raise ImportError
+        # Extract the serial compilers
+        cc = mpicc_com.split()[0]
+        cxx = mpicxx_com.split()[0]
+
+    except ImportError:
+        pass
+
+    return (cc, cxx, mpicc, mpicxx)
+
+
+def get_version():
+    # Run the underlying cmake command that generates the version file, and then
+    # parse that output.  This way setup.py is using the exact same version as the
+    # (not yet built) compiled code.
+    topdir = Path(__file__).resolve().parent
+    ver = None
+    try:
+        version_dir = os.path.join(topdir, "src", "libtoast")
+        subprocess.check_call(
+            "cmake -P version.cmake", shell=True, cwd=version_dir,
+        )
+        version_cpp = os.path.join(version_dir, "src", "version.cpp")
+        git_ver = None
+        rel_ver = None
+        with open(version_cpp, "r") as f:
+            for line in f:
+                mat = re.match(r'.*GIT_VERSION = "(.*)".*', line)
+                if mat is not None:
+                    git_ver = mat.group(1)
+                mat = re.match(r'.*RELEASE_VERSION = "(.*)".*', line)
+                if mat is not None:
+                    rel_ver = mat.group(1)
+        if git_ver != "":
+            ver = git_ver
+        else:
+            ver = rel_ver
+    except CalledProcessError:
+        raise RuntimeError("Cannot generate version!")
+    return ver
+
+
 class CMakeExtension(Extension):
-    def __init__(self, name):
-        Extension.__init__(self, name, sources=[])
+    """
+    This overrides the built-in extension class and essentially does nothing,
+    since all extensions are compiled in one go by the custom build_ext class.
+    """
+
+    def __init__(self, name, sources=[]):
+        super().__init__(name=name, sources=sources)
 
 
 class CMakeBuild(build_ext):
+    """
+    Builds the full package using CMake.
+    """
+
     def run(self):
+        """
+        Perform build_cmake before doing the 'normal' stuff
+        """
+        for extension in self.extensions:
+            if extension.name == "toast._libtoast":
+                # We always build the serial extension, so we trigger the build
+                # on that.
+                self.build_cmake()
+        super().run()
+
+    def build_cmake(self):
         try:
             out = subprocess.check_output(["cmake", "--version"])
         except OSError:
@@ -26,6 +119,20 @@ class CMakeBuild(build_ext):
                 + ", ".join(e.name for e in self.extensions)
             )
 
+        (cc, cxx, mpicc, mpicxx) = find_compilers()
+
+        # Make a copy of the environment so that we can modify it
+        env = os.environ.copy()
+
+        # Search the environment for any variables starting with "TOAST_BUILD_".
+        # We extract these and convert them into cmake options.
+        cmake_opts = dict()
+        cpat = re.compile(r"TOAST_BUILD_(.*)")
+        for k, v in env.items():
+            mat = cpat.match(k)
+            if mat is not None:
+                cmake_opts[cpat.group(1)] = v
+
         cmake_args = ["-DPYTHON_EXECUTABLE=" + sys.executable]
 
         cfg = "Debug" if self.debug else "Release"
@@ -33,17 +140,37 @@ class CMakeBuild(build_ext):
 
         cmake_args += ["-DCMAKE_BUILD_TYPE=" + cfg]
 
-        # If a user is installing with setup.py (rather than using the actual
-        # cmake build system or conda packages), then it is unlikely that they have
-        # correctly installed MPI and a compatible mpi4py.  So we disable it here.
-        cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
+        # Set compilers
+
+        if cxx is not None:
+            # Use serial compilers that were used when building MPI
+            cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
+            cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
+        elif "CMAKE_CXX_COMPILER" in cmake_opts:
+            # Get these from the environment
+            cmake_args += [
+                "-DCMAKE_C_COMPILER={}".format(cmake_opts["CMAKE_C_COMPILER"])
+            ]
+            cmake_args += [
+                "-DCMAKE_CXX_COMPILER={}".format(cmake_opts["CMAKE_CXX_COMPILER"])
+            ]
+        else:
+            # We just let cmake guess the compilers and hope for the best...
+            pass
+
+        if mpicxx is not None:
+            # We have MPI
+            cmake_args += ["-DMPI_C_COMPILER={}".format(mpicc)]
+            cmake_args += ["-DMPI_CXX_COMPILER={}".format(mpicxx)]
+        else:
+            # Disable checking for MPI
+            cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
 
         # Assuming Makefiles
         build_args += ["--", "-j2"]
 
         self.build_args = build_args
 
-        env = os.environ.copy()
         env["CXXFLAGS"] = "{} -DVERSION_INFO=\\'{}\\'".format(
             env.get("CXXFLAGS", ""), self.distribution.get_version()
         )
@@ -75,20 +202,14 @@ class CMakeBuild(build_ext):
         self.copy_file(source_path, dest_path)
 
 
+version = get_version()
+
+(cc, cxx, mpicc, mpicxx) = find_compilers()
+
 ext_modules = [CMakeExtension("toast._libtoast")]
 
-try:
-    from mpi4py import MPI
-
-    # If we can import mpi4py, then assume that the MPI extension
-    # will be built.
+if mpicxx is not None:
     ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
-except ImportError:
-    pass
-
-version = None
-with open("RELEASE", "r") as rel:
-    version = rel.readline().rstrip()
 
 conf = dict()
 conf["name"] = "toast"

@@ -14,6 +14,7 @@
 # The following variables will be checked by the function
 #   AATM_ROOT                   ... if set, the libraries are exclusively
 #                                   searched under this path.
+#   AATM_USE_STATIC_LIBS        ... search for static versions of the libs
 #
 
 # Check if we can use PkgConfig
@@ -22,6 +23,15 @@ find_package(PkgConfig)
 # Determine from PKG
 if(PKG_CONFIG_FOUND AND NOT AATM_ROOT)
     pkg_check_modules(PKG_AATM QUIET "aatm")
+endif()
+
+# Check whether to search static or dynamic libs
+set(CMAKE_FIND_LIBRARY_SUFFIXES_SAV ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if(${AATM_USE_STATIC_LIBS})
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
+else()
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
 endif()
 
 if(AATM_ROOT)
@@ -59,6 +69,9 @@ endif(AATM_ROOT)
 if(AATM_LIB)
     set(AATM_LIBRARIES ${AATM_LIB})
 endif(AATM_LIB)
+
+# Restore variable
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
 
 include(FindPackageHandleStandardArgs)
 
