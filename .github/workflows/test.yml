@@ -1,0 +1,75 @@
+# Use pre-built docker containers to run our unit tests on different python versions.
+
+name:  Run Test Suite
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  py35:
+    name: Python 3.5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull Dependency Image
+        run: docker pull hpc4cmb/toast-deps-py35:latest
+      - name: Compile
+        run: docker run -v "$(pwd)":/home/toast --name="test_py35" hpc4cmb/toast-deps-py35:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py35 test_runner:py35
+      - name: Test Documentation Build
+        run: docker run -v "$(pwd)":/home/toast test_runner:py35 /home/toast/docs/build_docs.sh
+      - name: Run Serial Tests
+        run: docker run test_runner:py35 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: docker run test_runner:py35 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+  py36:
+    name: Python 3.6
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull Dependency Image
+        run: docker pull hpc4cmb/toast-deps-py36:latest
+      - name: Compile
+        run: docker run -v "$(pwd)":/home/toast --name="test_py36" hpc4cmb/toast-deps-py36:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py36 test_runner:py36
+      - name: Test Documentation Build
+        run: docker run -v "$(pwd)":/home/toast test_runner:py36 /home/toast/docs/build_docs.sh
+      - name: Run Serial Tests
+        run: docker run test_runner:py36 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: docker run test_runner:py36 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+  py37:
+    name: Python 3.7
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull Dependency Image
+        run: docker pull hpc4cmb/toast-deps-py37:latest
+      - name: Compile
+        run: docker run -v "$(pwd)":/home/toast --name="test_py37" hpc4cmb/toast-deps-py37:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py37 test_runner:py37
+      - name: Test Documentation Build
+        run: docker run -v "$(pwd)":/home/toast test_runner:py37 /home/toast/docs/build_docs.sh
+      - name: Run Serial Tests
+        run: docker run test_runner:py37 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: docker run test_runner:py37 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+  py38:
+    name: Python 3.8
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull Dependency Image
+        run: docker pull hpc4cmb/toast-deps-py38:latest
+      - name: Compile
+        run: docker run -v "$(pwd)":/home/toast --name="test_py38" hpc4cmb/toast-deps-py38:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py38 test_runner:py38
+      - name: Test Documentation Build
+        run: docker run -v "$(pwd)":/home/toast test_runner:py38 /home/toast/docs/build_docs.sh
+      - name: Run Serial Tests
+        run: docker run test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: docker run test_runner:py38 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
