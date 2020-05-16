@@ -64,18 +64,8 @@ copyright = u"2015-2020, Theodore Kisner, Reijo Keskitalo, Andrea Zonca"
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-# Parse the formal "RELEASE" file in the top-level directory.  This should
-# reflect the current tag or in-development version.
-#
-fvparts = None
-with open("../RELEASE", "r") as rel:
-    line = rel.readline().rstrip()
-    fvparts = line.split(".")
-
-# The short X.Y version.
-# version = "{}.{}".format(fvparts[0], fvparts[1])
 # The full version, including alpha/beta/rc tags.
-release = ".".join(fvparts)
+release = toast.__version__
 # Use the full version
 version = release
 
