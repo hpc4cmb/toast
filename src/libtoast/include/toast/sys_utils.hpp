@@ -135,11 +135,12 @@ class GlobalTimers {
 
 enum class log_level {
     none     = 0, ///< Undefined
-    debug    = 1, ///< Debug
-    info     = 2, ///< Info
-    warning  = 3, ///< Warning
-    error    = 4, ///< Error
-    critical = 5  ///< Critical
+    verbose  = 1, ///< Verbose
+    debug    = 2, ///< Debug
+    info     = 3, ///< Info
+    warning  = 4, ///< Warning
+    error    = 5, ///< Error
+    critical = 6  ///< Critical
 };
 
 
@@ -151,6 +152,9 @@ class Logger {
         // Singleton access
         static Logger & get();
 
+        void verbose(char const * msg);
+        void verbose(char const * msg,
+                   std::pair <std::string, int> const & here);
         void debug(char const * msg);
         void debug(char const * msg,
                    std::pair <std::string, int> const & here);

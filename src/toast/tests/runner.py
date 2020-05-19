@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
+from ..mpi import MPI, use_mpi4py
 
 import os
 import sys
@@ -60,10 +60,7 @@ from ..todmap import pysm
 if pysm is not None:
     from . import ops_sim_pysm as testopspysm
 
-from ..todmap import atm_available
-
-if atm_available:
-    from . import ops_sim_atm as testopsatm
+from . import ops_sim_atm as testopsatm
 
 from ..tod import tidas_available
 
@@ -83,7 +80,7 @@ def test(name=None, verbosity=2):
     # We run tests with COMM_WORLD if available
     comm = None
     rank = 0
-    if use_mpi:
+    if use_mpi4py:
         comm = MPI.COMM_WORLD
         rank = comm.rank
 
@@ -142,12 +139,10 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
+        suite.addTest(loader.loadTestsFromModule(testopsatm))
         if pysm is not None:
-            if (comm is None) or ("TRAVIS" not in os.environ):
-                # Remove this check after pysm works on travis with MPI
-                suite.addTest(loader.loadTestsFromModule(testopspysm))
-        if atm_available:
-            suite.addTest(loader.loadTestsFromModule(testopsatm))
+            suite.addTest(loader.loadTestsFromModule(testopspysm))
+
         if tidas_available:
             suite.addTest(loader.loadTestsFromModule(testtidas))
         if spt3g_available:

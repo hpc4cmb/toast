@@ -12,7 +12,5 @@
 // available external packages.  If the external dependencies are
 // ever made into requirements, move these includes into toast.hpp.
 
-#include <toast/mpi_atm.hpp>
-
 
 #endif // ifndef TOAST_MPI_HPP

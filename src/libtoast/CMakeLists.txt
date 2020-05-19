@@ -6,21 +6,20 @@ add_subdirectory(gtest EXCLUDE_FROM_ALL)
 set(gtest_force_shared_crt TRUE)
 include_directories("${gtest_SOURCE_DIR}/include")
 
-# Add a custom command that produces version.cpp, plus
-# a dummy output that's not actually produced, in order
-# to force version.cmake to always be re-run before the build
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/_version.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/src/version.cpp
-    COMMAND ${CMAKE_COMMAND} -P
-        ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
+# Add a custom command that produces version.cpp
+
+set(versioncpp ${CMAKE_CURRENT_BINARY_DIR}/version.cpp)
+
+add_custom_command(OUTPUT ${versioncpp}
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
+    COMMENT "Updating version.cpp if needed ..."
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
 # Define the sources
 
 set(toast_SOURCES
     toast.cpp
-    src/version.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
     src/toast_math_lapack.cpp
@@ -33,9 +32,16 @@ set(toast_SOURCES
     src/toast_fod_psd.cpp
     src/toast_tod_filter.cpp
     src/toast_tod_pointing.cpp
-    src/toast_tod_simnoise.cpp
+    src/toast_tod_simnoise.cpp#
+# add_custom_target(genversion COMMAND
+#     ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
+#     COMMENT "Updating version.cpp if needed ..."
+#     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+# )
     src/toast_atm_utils.cpp
     src/toast_atm.cpp
+    src/toast_atm_sim.cpp
+    src/toast_atm_observe.cpp
     tests/toast_test_runner.cpp
     tests/toast_test_env.cpp
     tests/toast_test_utils.cpp
@@ -48,7 +54,7 @@ set(toast_SOURCES
     tests/toast_test_polyfilter.cpp
 )
 
-add_library(toast ${toast_SOURCES})
+add_library(toast ${versioncpp} ${toast_SOURCES})
 
 target_include_directories(toast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -67,6 +73,10 @@ target_include_directories(toast BEFORE PUBLIC
 if(MPI_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_MPI=1)
 endif(MPI_FOUND)
+
+if(MPI4PY_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_MPI4PY=1)
+endif(MPI4PY_FOUND)
 
 # Dependencies
 

@@ -291,7 +291,9 @@ toast::Logger & toast::Logger::get() {
 void toast::Logger::check_level() {
     auto & env = toast::Environment::get();
     std::string val = env.log_level();
-    if (strncmp(val.c_str(), "DEBUG", 5) == 0) {
+    if (strncmp(val.c_str(), "VERBOSE", 7) == 0) {
+        level_ = log_level::verbose;
+    } else if (strncmp(val.c_str(), "DEBUG", 5) == 0) {
         level_ = log_level::debug;
     } else if (strncmp(val.c_str(), "INFO", 4) == 0) {
         level_ = log_level::info;
@@ -303,6 +305,25 @@ void toast::Logger::check_level() {
         level_ = log_level::critical;
     } else {
         level_ = log_level::none;
+    }
+    return;
+}
+
+void toast::Logger::verbose(char const * msg) {
+    if (level_ <= log_level::verbose) {
+        fprintf(stdout, "%sVERBOSE: %s\n", prefix_.c_str(), msg);
+        fflush(stdout);
+    }
+    return;
+}
+
+void toast::Logger::verbose(char const * msg,
+                          std::pair <std::string, int> const & here) {
+    if (level_ <= log_level::verbose) {
+        std::string hstr = toast::format_here(here);
+        fprintf(stdout, "%sVERBOSE: %s (%s)\n", prefix_.c_str(), msg,
+                hstr.c_str());
+        fflush(stdout);
     }
     return;
 }

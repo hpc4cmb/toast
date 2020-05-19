@@ -49,7 +49,7 @@ void init_atm(py::module & m) {
                                                double freqmin, double freqmax,
                                                size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({nfreq});
+              ret.resize({ nfreq });
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_absorption_coefficient_vec(
@@ -78,7 +78,7 @@ void init_atm(py::module & m) {
                                             double pressure, double pwv, double freqmin,
                                             double freqmax, size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({nfreq});
+              ret.resize({ nfreq });
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_atmospheric_loading_vec(
@@ -105,139 +105,375 @@ void init_atm(py::module & m) {
 #endif // ifdef HAVE_AATM
 
 #ifdef HAVE_CHOLMOD
-    py::class_ <toast::atm_sim, toast::atm_sim::puniq> (
-        m, "AtmSim",
-        R"(
-        Class representing a single atmosphere simulation.
 
-        This simulation consists of a particular realization of a "slab" of the
-        atmosphere that moves with a constant wind speed and can be observed by
-        individual detectors.
+    m.def("atm_sim_compute_slice",
+          [](long ind_start,
+             long ind_stop,
+             double rmin_kolmo,
+             double rmax_kolmo,
+             py::buffer kolmo_x,
+             py::buffer kolmo_y,
+             double rcorr,
+             double xstart,
+             double ystart,
+             double zstart,
+             double xstep,
+             double ystep,
+             double zstep,
+             long xstride,
+             long ystride,
+             long zstride,
+             double z0,
+             double cosel0,
+             double sinel0,
+             py::buffer full_index,
+             bool smooth,
+             double xxstep,
+             double zzstep,
+             int rank,
+             uint64_t key1,
+             uint64_t key2,
+             uint64_t counter1,
+             uint64_t counter2,
+             py::buffer realization) {
+              pybuffer_check_1D <double> (kolmo_x);
+              pybuffer_check_1D <double> (kolmo_y);
+              pybuffer_check_1D <long> (full_index);
+              pybuffer_check_1D <double> (realization);
+              py::buffer_info info_kolmo_x = kolmo_x.request();
+              py::buffer_info info_kolmo_y = kolmo_y.request();
+              py::buffer_info info_full_index = full_index.request();
+              py::buffer_info info_realization = realization.request();
+              int64_t nr = info_kolmo_x.size;
+              if (info_kolmo_y.size != nr) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "kolmo_x / kolmo_y sizes are not consistent.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int64_t nelem = info_realization.size;
+              if (info_full_index.size != nelem) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "full_index and realization sizes are not consistent.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              double * raw_kolmo_x = reinterpret_cast <double *> (info_kolmo_x.ptr);
+              double * raw_kolmo_y = reinterpret_cast <double *> (info_kolmo_y.ptr);
+              double * raw_realiz = reinterpret_cast <double *> (info_realization.ptr);
+              long * raw_full = reinterpret_cast <long *> (info_full_index.ptr);
+              toast::atm_sim_compute_slice(
+                  ind_start,
+                  ind_stop,
+                  nr,
+                  rmin_kolmo,
+                  rmax_kolmo,
+                  raw_kolmo_x,
+                  raw_kolmo_y,
+                  rcorr,
+                  xstart,
+                  ystart,
+                  zstart,
+                  xstep,
+                  ystep,
+                  zstep,
+                  xstride,
+                  ystride,
+                  zstride,
+                  z0,
+                  cosel0,
+                  sinel0,
+                  raw_full,
+                  smooth,
+                  xxstep,
+                  zzstep,
+                  rank,
+                  key1,
+                  key2,
+                  counter1,
+                  counter2,
+                  raw_realiz
+                  );
+              return;
+          }, R"(
+     Internal function used by AtmSim class.
+    )");
 
-        Args:
-            azmin (float):  The minimum of the azimuth range.
-            azmax (float):  The maximum of the azimuth range.
-            elmin (float):  The minimum of the elevation range.
-            elmax (float):  The maximum of the elevation range.
-            tmin (float):  The minimum of the time range.
-            tmax (float):  The maximum of the time range.
-            lmin_center (float):  Center point of the distribution of the dissipation
-                scale of the Kolmogorov turbulence.
-            lmin_sigma (float):  Width of the distribution of the dissipation
-                scale of the Kolmogorov turbulence.
-            lmax_center (float):  Center point of the distribution of the injection
-                scale of the Kolmogorov turbulence.
-            lmax_sigma (float):  Width of the distribution of the injection
-                scale of the Kolmogorov turbulence.
-            w_center (float):  Center point of the distribution of wind speed (m/s).
-            w_sigma (float):  Width of the distribution of wind speed.
-            wdir_center (float):  Center point of the distribution of wind direction
-                (radians).
-            wdir_sigma (float):  Width of the distribution of wind direction.
-            z0_center (float):  Center point of the distribution of the water vapor (m).
-            z0_sigma (float):  Width of the distribution of the water vapor.
-            T0_center (float):  Center point of the distribution of ground temperature
-                (Kelvin).
-            T0_sigma (float):  Width of the distribution of ground temperature.
-            zatm (float):  Atmosphere extent for temperature profile.
-            zmax (float):  Water vaport extent for integration.
-            xstep (float):  Size of volume element in the X direction.
-            ystep (float):  Size of volume element in the Y direction.
-            zstep (float):  Size of volume element in the Z direction.
-            nelem_sim_max (int):  Size of the simulation slices.
-            verbosity (int):  Controls logging.
-            key1 (uint64):  Streamed RNG key 1.
-            key2 (uint64):  Streamed RNG key 2.
-            counterval1 (uint64):  Streamed RNG counter 1.
-            counterval2 (uint64):  Streamed RNG counter 2.
-            cachedir (str):  The location of the cached simulation.
-            rmin (float):  Minimum line of sight observing distance.
-            rmax (float):  Maximum line of sight observing distance.
+    m.def("atm_sim_observe",
+          [](
+              py::buffer times,
+              py::buffer az,
+              py::buffer el,
+              py::buffer tod,
+              double T0,
+              double azmin,
+              double azmax,
+              double elmin,
+              double elmax,
+              double tmin,
+              double tmax,
+              double rmin,
+              double rmax,
+              double fixed_r,
+              double zatm,
+              double zmax,
+              double wx,
+              double wy,
+              double wz,
+              double xstep,
+              double ystep,
+              double zstep,
+              double xstart,
+              double delta_x,
+              double ystart,
+              double delta_y,
+              double zstart,
+              double delta_z,
+              double maxdist,
+              long nx,
+              long ny,
+              long nz,
+              long xstride,
+              long ystride,
+              long zstride,
+              py::buffer compressed_index,
+              py::buffer full_index,
+              py::buffer realization
+              ) {
+              pybuffer_check_1D <double> (times);
+              pybuffer_check_1D <double> (az);
+              pybuffer_check_1D <double> (el);
+              pybuffer_check_1D <double> (tod);
+              pybuffer_check_1D <long> (compressed_index);
+              pybuffer_check_1D <long> (full_index);
+              pybuffer_check_1D <double> (realization);
+              py::buffer_info info_times = times.request();
+              py::buffer_info info_az = az.request();
+              py::buffer_info info_el = el.request();
+              py::buffer_info info_tod = tod.request();
+              py::buffer_info info_comp_index = compressed_index.request();
+              py::buffer_info info_full_index = full_index.request();
+              py::buffer_info info_realiz = realization.request();
+              int64_t nsamp = info_times.size;
+              if ((info_az.size != nsamp) || (info_el.size != nsamp)
+                  || (info_tod.size != nsamp)) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "time domain buffer sizes are not consistent.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int64_t nelem = info_realiz.size;
+              if (info_full_index.size != nelem) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "full_index and realization sizes are not consistent.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int64_t nn = info_comp_index.size;
+              double * raw_times = reinterpret_cast <double *> (info_times.ptr);
+              double * raw_az = reinterpret_cast <double *> (info_az.ptr);
+              double * raw_el = reinterpret_cast <double *> (info_el.ptr);
+              double * raw_tod = reinterpret_cast <double *> (info_tod.ptr);
+              double * raw_realiz = reinterpret_cast <double *> (info_realiz.ptr);
+              long * raw_full = reinterpret_cast <long *> (info_full_index.ptr);
+              long * raw_comp = reinterpret_cast <long *> (info_comp_index.ptr);
+              int status = toast::atm_sim_observe(
+                  nsamp,
+                  raw_times,
+                  raw_az,
+                  raw_el,
+                  raw_tod,
+                  T0,
+                  azmin,
+                  azmax,
+                  elmin,
+                  elmax,
+                  tmin,
+                  tmax,
+                  rmin,
+                  rmax,
+                  fixed_r,
+                  zatm,
+                  zmax,
+                  wx,
+                  wy,
+                  wz,
+                  xstep,
+                  ystep,
+                  zstep,
+                  xstart,
+                  delta_x,
+                  ystart,
+                  delta_y,
+                  zstart,
+                  delta_z,
+                  maxdist,
+                  nn,
+                  nx,
+                  ny,
+                  nz,
+                  xstride,
+                  ystride,
+                  zstride,
+                  nelem,
+                  raw_comp,
+                  raw_full,
+                  raw_realiz
+                  );
+              return status;
+          }, R"(
+     Internal function used by AtmSim class.
+    )");
 
-        )")
-    .def(py::init <double, double, double, double, double, double, double, double,
-                   double, double, double, double, double, double, double, double,
-                   double, double,
-                   double, double, double, double, double, long, int, uint64_t,
-                   uint64_t, uint64_t,
-                   uint64_t, std::string, double, double> (), py::arg("azmin"), py::arg(
-             "azmax"), py::arg("elmin"), py::arg("elmax"), py::arg("tmin"), py::arg(
-             "tmax"), py::arg("lmin_center"), py::arg("lmin_sigma"), py::arg(
-             "lmax_center"), py::arg("lmax_sigma"), py::arg("w_center"), py::arg(
-             "w_sigma"), py::arg("wdir_center"), py::arg("wdir_sigma"), py::arg(
-             "z0_center"), py::arg("z0_sigma"), py::arg("T0_center"), py::arg(
-             "T0_sigma"), py::arg("zatm"), py::arg("zmax"), py::arg("xstep"), py::arg(
-             "ystep"), py::arg("zstep"), py::arg("nelem_sim_max"), py::arg(
-             "verbosity"), py::arg("key1"), py::arg("key2"), py::arg("counterval1"),
-         py::arg("counterval2"), py::arg("cachedir"), py::arg("rmin"), py::arg("rmax")
-         )
-    .def("simulate", &toast::atm_sim::simulate, py::arg(
-             "use_cache"), R"(
-        Perform the simulation.
+    m.def("atm_sim_compress_flag_hits_rank",
+          [](
+              py::buffer hit,
+              int ntask,
+              int rank,
+              long nx,
+              long ny,
+              long nz,
+              double xstart,
+              double ystart,
+              double zstart,
+              double delta_t,
+              double delta_az,
+              double elmin,
+              double elmax,
+              double wx,
+              double wy,
+              double wz,
+              double xstep,
+              double ystep,
+              double zstep,
+              long xstride,
+              long ystride,
+              long zstride,
+              double maxdist,
+              double cosel0,
+              double sinel0
+              ) {
+              pybuffer_check_1D <uint8_t> (hit);
+              py::buffer_info info_hit = hit.request();
+              int64_t nn = info_hit.size;
+              uint8_t * raw_hit = reinterpret_cast <uint8_t *> (info_hit.ptr);
+              toast::atm_sim_compress_flag_hits_rank(
+                  nn,
+                  raw_hit,
+                  ntask,
+                  rank,
+                  nx,
+                  ny,
+                  nz,
+                  xstart,
+                  ystart,
+                  zstart,
+                  delta_t,
+                  delta_az,
+                  elmin,
+                  elmax,
+                  wx,
+                  wy,
+                  wz,
+                  xstep,
+                  ystep,
+                  zstep,
+                  xstride,
+                  ystride,
+                  zstride,
+                  maxdist,
+                  cosel0,
+                  sinel0
+                  );
+              return;
+          }, R"(
+     Internal function used by AtmSim class.
+    )");
 
-        Args:
-            use_cache (bool):  If True, use the disk cache for save / load.
+    m.def("atm_sim_compress_flag_extend_rank",
+          [](
+              py::buffer hit,
+              py::buffer hit2,
+              int ntask,
+              int rank,
+              long nx,
+              long ny,
+              long nz,
+              long xstride,
+              long ystride,
+              long zstride
+              ) {
+              pybuffer_check_1D <uint8_t> (hit);
+              pybuffer_check_1D <uint8_t> (hit2);
+              py::buffer_info info_hit = hit.request();
+              py::buffer_info info_hit2 = hit2.request();
+              int64_t nn = info_hit.size;
+              if (info_hit2.size != nn) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "hit and hit2 sizes are not consistent.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              uint8_t * raw_hit = reinterpret_cast <uint8_t *> (info_hit.ptr);
+              uint8_t * raw_hit2 = reinterpret_cast <uint8_t *> (info_hit2.ptr);
+              toast::atm_sim_compress_flag_extend_rank(
+                  raw_hit,
+                  raw_hit2,
+                  ntask,
+                  rank,
+                  nx,
+                  ny,
+                  nz,
+                  xstride,
+                  ystride,
+                  zstride
+                  );
+              return;
+          }, R"(
+     Internal function used by AtmSim class.
+    )");
 
-        Returns:
-            (int):  A status value (zero == good).
+    m.def("atm_sim_kolmogorov_init_rank",
+          [](
+              long nr,
+              double rmin_kolmo,
+              double rmax_kolmo,
+              double rstep,
+              double lmin,
+              double lmax,
+              int ntask,
+              int rank
+              ) {
+              py::array_t <double> kolmo_x;
+              kolmo_x.resize({ nr });
+              py::array_t <double> kolmo_y;
+              kolmo_y.resize({ nr });
+              py::buffer_info info_kolmo_x = kolmo_x.request();
+              double * raw_kolmo_x = static_cast <double *> (info_kolmo_x.ptr);
+              py::buffer_info info_kolmo_y = kolmo_y.request();
+              double * raw_kolmo_y = static_cast <double *> (info_kolmo_y.ptr);
+              toast::atm_sim_kolmogorov_init_rank(
+                  nr,
+                  raw_kolmo_x,
+                  raw_kolmo_y,
+                  rmin_kolmo,
+                  rmax_kolmo,
+                  rstep,
+                  lmin,
+                  lmax,
+                  ntask,
+                  rank
+                  );
+              return py::make_tuple(kolmo_x, kolmo_y);
+          }, R"(
+       Internal function used by AtmSim class.
+      )");
 
-    )")
-    .def("observe", [](toast::atm_sim & self, py::buffer times,
-                       py::buffer az, py::buffer el, py::buffer tod, double fixed_r) {
-             pybuffer_check_1D <double> (times);
-             pybuffer_check_1D <double> (az);
-             pybuffer_check_1D <double> (el);
-             pybuffer_check_1D <double> (tod);
-             py::buffer_info info_times = times.request();
-             py::buffer_info info_az = az.request();
-             py::buffer_info info_el = el.request();
-             py::buffer_info info_tod = tod.request();
-             size_t nsamp = info_times.size;
-             if ((info_az.size != nsamp) ||
-                 (info_el.size != nsamp) ||
-                 (info_tod.size != nsamp)) {
-                 auto log = toast::Logger::get();
-                 std::ostringstream o;
-                 o << "Buffer sizes are not consistent.";
-                 log.error(o.str().c_str());
-                 throw std::runtime_error(o.str().c_str());
-             }
-             double * rawtimes = reinterpret_cast <double *> (info_times.ptr);
-             double * rawaz = reinterpret_cast <double *> (info_az.ptr);
-             double * rawel = reinterpret_cast <double *> (info_el.ptr);
-             double * rawtod = reinterpret_cast <double *> (info_tod.ptr);
-             auto status = self.observe(rawtimes, rawaz, rawel, rawtod, nsamp, fixed_r);
-             return status;
-         }, py::arg("times"), py::arg("az"), py::arg("el"), py::arg("tod"), py::arg(
-             "fixed_r") = -1.0, R"(
-            Observe the atmosphere with a detector.
-
-            The timestamps and Azimuth / Elevation pointing are provided.  The TOD
-            buffer is filled with the integrated atmospheric signal.
-
-            For each sample, integrate along the line of sight by summing the
-            atmosphere values. See Church (1995) Section 2.2, first equation.
-            We omit the optical depth factor which is close to unity.
-
-            Args:
-                times (array_like):  Detector timestamps.
-                az (array like):  Azimuth values.
-                el (array_like):  Elevation values.
-                tod (array_like):  The output buffer to fill.
-                fixed_r (float):  If greater than zero, use this single radial value.
-
-            Returns:
-                (int):  A status value (zero == good).
-
-        )")
-    .def("__repr__",
-         [](toast::atm_sim const & self) {
-             std::ostringstream o;
-             o << "<toast.AtmSim";
-             self.print(o);
-             o << ">";
-             return o.str();
-         });
 #endif // ifdef HAVE_CHOLMOD
 
     return;
