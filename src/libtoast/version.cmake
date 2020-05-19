@@ -46,13 +46,13 @@ endif()
 set(VERSION "const char* GIT_VERSION = \"${GIT_VERSION}\";
 const char* RELEASE_VERSION = \"${RELEASE_VERSION}\";")
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp)
-    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp VERSION_)
+if(EXISTS version.cpp)
+    file(READ version.cpp VERSION_)
     string(STRIP "${VERSION_}" CHECK_VERSION)
 else()
     set(CHECK_VERSION "")
 endif()
 
 if (NOT "${VERSION}" STREQUAL "${CHECK_VERSION}")
-    file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp "${VERSION}")
+    file(WRITE version.cpp "${VERSION}")
 endif()

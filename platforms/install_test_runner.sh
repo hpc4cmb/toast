@@ -6,18 +6,16 @@
 set -e
 
 # Get the absolute path to the source tree
-pushd $(dirname $(dirname $0)) > /dev/null
+pushd $(dirname $(dirname $0)) >/dev/null 2>&1
 toastdir=$(pwd -P)
-popd > /dev/null
+popd >/dev/null 2>&1
 
 mkdir build
-pushd build
+pushd build >/dev/null 2>&1
 
 cmake \
     -DCMAKE_C_COMPILER="gcc" \
     -DCMAKE_CXX_COMPILER="g++" \
-    -DMPI_C_COMPILER="mpicc" \
-    -DMPI_CXX_COMPILER="mpicxx" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
@@ -27,4 +25,4 @@ cmake \
 
 make -j 2 install
 
-popd > /dev/null
+popd >/dev/null 2>&1

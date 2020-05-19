@@ -241,6 +241,7 @@ conf["version"] = get_version()
 conf["provides"] = "toast"
 conf["python_requires"] = ">=3.6.0"
 conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib", "ephem"]
+conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules

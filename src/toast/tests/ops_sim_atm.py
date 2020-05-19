@@ -18,9 +18,7 @@ from ..todmap import (
     OpSimGradient,
     OpSimScan,
     OpSimAtmosphere,
-    atm_available,
     atm_available_utils,
-    atm_available_mpi,
 )
 
 from ..weather import Weather
@@ -188,7 +186,6 @@ class OpsSimAtmosphereTest(MPITestCase):
             "ystep": 100.0,
             "zstep": 100.0,
             "nelem_sim_max": 10000,
-            "verbosity": 0,
             "gain": 1,
             "z0_center": 2000,
             "z0_sigma": 0,
@@ -199,7 +196,7 @@ class OpsSimAtmosphereTest(MPITestCase):
             "flag_mask": 255,
             "report_timing": True,
             "wind_dist": 10000,
-            "flush": False,
+            "write_debug": False,
         }
         return
 
@@ -223,6 +220,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         # Do the simulation with the default data distribution and communicator
 
         atm.exec(self.data)
+
         if atm_utils is not None:
             atm_utils.exec(self.data)
 
@@ -249,7 +247,6 @@ class OpsSimAtmosphereTest(MPITestCase):
                         ref = tod.cache.reference(cname)
                         ref_serial = tod_serial.cache.reference(cname)
                         nt.assert_allclose(ref[:], ref_serial[:], rtol=1e-7)
-
         return
 
     def test_atm_caching(self):
@@ -258,6 +255,8 @@ class OpsSimAtmosphereTest(MPITestCase):
                 shutil.rmtree(self.atm_cache)
             except OSError:
                 pass
+        if self.comm is not None:
+            self.comm.barrier()
 
         # Generate an atmosphere sim with no loading or absorption.
         # Verify that serial and MPI results agree

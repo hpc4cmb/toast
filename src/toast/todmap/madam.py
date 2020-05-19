@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
+from ..mpi import MPI, use_mpi4py
 
 import os
 
@@ -15,7 +15,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, memreport
 
 madam = None
-if use_mpi:
+if use_mpi4py:
     try:
         import libmadam_wrapper as madam
     except ImportError:

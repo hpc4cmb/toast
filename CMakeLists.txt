@@ -74,7 +74,8 @@ find_package(AATM)
 
 find_package(SuiteSparse)
 
-find_package(MPI)
+# Re-enable if we ever add MPI compiled extensions.
+# find_package(MPI)
 
 find_package(PythonInterp REQUIRED)
 
