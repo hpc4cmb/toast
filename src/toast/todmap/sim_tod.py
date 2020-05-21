@@ -727,7 +727,7 @@ class TODGround(TOD):
             or a pyEphem string.
         site_alt (float/str): Observing site Earth altitude in meters.
         scanrate (float): Sky scanning rate in degrees / second.
-        scan_accel (float): Sky scanning rate acceleration in
+        scan_accel (float): Mount scanning rate acceleration in
             degrees / second^2 for the turnarounds.
         cosecant_modulation (bool): Modulate the scan rate according to
              1/sin(az) to achieve uniform integration depth.
