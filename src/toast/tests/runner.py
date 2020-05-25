@@ -112,7 +112,7 @@ def test(name=None, verbosity=2):
     if name is None:
         suite.addTest(loader.loadTestsFromModule(testenv))
         suite.addTest(loader.loadTestsFromModule(testcache))
-        if "CONDA_BUILD" not in os.environ:
+        if not (("CONDA_BUILD" in os.environ) or ("CIBUILDWHEEL" in os.environ)):
             # When doing a conda build on CI services in containers
             # the timing information is not accurate and these tests
             # fail.

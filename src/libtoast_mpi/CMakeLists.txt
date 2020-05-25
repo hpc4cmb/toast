@@ -52,6 +52,13 @@ endif(AATM_FOUND)
 if(CHOLMOD_FOUND)
     target_compile_definitions(toast_mpi PRIVATE HAVE_CHOLMOD=1)
     target_include_directories(toast_mpi PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+    target_link_libraries(toast_mpi
+        "${CHOLMOD_LIBRARY}"
+        "${CCOLAMD_LIBRARY}"
+        "${COLAMD_LIBRARY}"
+        "${AMD_LIBRARY}"
+        "${SUITESPARSE_CONFIG_LIBRARY}"
+    )
 endif(CHOLMOD_FOUND)
 
 

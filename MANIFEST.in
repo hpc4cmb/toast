@@ -1,0 +1,10 @@
+include README.md
+include AUTHORS
+include LICENSE
+include src
+include CMakeLists.txt
+include tutorial
+include example
+include platforms
+include cmake
+include docs

@@ -36,8 +36,8 @@ endif()
 # Separately parse the special "RELEASE" file that is manually updated when
 # making an actual release.
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../RELEASE)
-    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../../RELEASE REL_VERSION)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../toast/RELEASE)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../toast/RELEASE REL_VERSION)
     string(STRIP "${REL_VERSION}" RELEASE_VERSION)
 else()
     set(RELEASE_VERSION "")

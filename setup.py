@@ -57,13 +57,12 @@ def get_version():
     # Run the underlying cmake command that generates the version file, and then
     # parse that output.  This way setup.py is using the exact same version as the
     # (not yet built) compiled code.
-    topdir = Path(__file__).resolve().parent
+    # topdir = Path(__file__).resolve().parent
     ver = None
     try:
-        version_dir = os.path.join(topdir, "src", "libtoast")
-        subprocess.check_call(
-            "cmake -P version.cmake", shell=True, cwd=version_dir,
-        )
+        # version_dir = os.path.join(topdir, "src", "libtoast")
+        version_dir = os.path.join("src", "libtoast")
+        subprocess.check_call("cmake -P version.cmake", shell=True, cwd=version_dir)
         version_cpp = os.path.join(version_dir, "src", "version.cpp")
         git_ver = None
         rel_ver = None
@@ -75,7 +74,7 @@ def get_version():
                 mat = re.match(r'.*RELEASE_VERSION = "(.*)".*', line)
                 if mat is not None:
                     rel_ver = mat.group(1)
-        if git_ver != "":
+        if (git_ver is not None) and (git_ver != ""):
             ver = git_ver
         else:
             ver = rel_ver
@@ -131,7 +130,7 @@ class CMakeBuild(build_ext):
         for k, v in env.items():
             mat = cpat.match(k)
             if mat is not None:
-                cmake_opts[cpat.group(1)] = v
+                cmake_opts[mat.group(1)] = v
 
         cmake_args = ["-DPYTHON_EXECUTABLE=" + sys.executable]
 
@@ -142,18 +141,28 @@ class CMakeBuild(build_ext):
 
         # Set compilers
 
-        if cxx is not None:
+        if cc is not None:
             # Use serial compilers that were used when building MPI
             cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
-            cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
-        elif "CMAKE_CXX_COMPILER" in cmake_opts:
+        elif "CMAKE_C_COMPILER" in cmake_opts:
             # Get these from the environment
             cmake_args += [
                 "-DCMAKE_C_COMPILER={}".format(cmake_opts["CMAKE_C_COMPILER"])
             ]
+            _ = cmake_opts.pop("CMAKE_C_COMPILER")
+        else:
+            # We just let cmake guess the compilers and hope for the best...
+            pass
+
+        if cxx is not None:
+            # Use serial compilers that were used when building MPI
+            cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
+        elif "CMAKE_CXX_COMPILER" in cmake_opts:
+            # Get these from the environment
             cmake_args += [
                 "-DCMAKE_CXX_COMPILER={}".format(cmake_opts["CMAKE_CXX_COMPILER"])
             ]
+            _ = cmake_opts.pop("CMAKE_CXX_COMPILER")
         else:
             # We just let cmake guess the compilers and hope for the best...
             pass
@@ -166,13 +175,17 @@ class CMakeBuild(build_ext):
             # Disable checking for MPI
             cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
 
+        # Append any other TOAST_BUILD_ options to the cmake args
+        for k, v in cmake_opts.items():
+            cmake_args += ["-D{}={}".format(k, v)]
+
         # Assuming Makefiles
         build_args += ["--", "-j2"]
 
         self.build_args = build_args
 
         env["CXXFLAGS"] = "{} -DVERSION_INFO=\\'{}\\'".format(
-            env.get("CXXFLAGS", ""), self.distribution.get_version()
+            env.get("CXXFLAGS", ""), get_version()
         )
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -202,8 +215,6 @@ class CMakeBuild(build_ext):
         self.copy_file(source_path, dest_path)
 
 
-version = get_version()
-
 (cc, cxx, mpicc, mpicxx) = find_compilers()
 
 ext_modules = [CMakeExtension("toast._libtoast")]
@@ -211,28 +222,40 @@ ext_modules = [CMakeExtension("toast._libtoast")]
 if mpicxx is not None:
     ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
 
+
+def readme():
+    with open("README.md") as f:
+        return f.read()
+
+
 conf = dict()
 conf["name"] = "toast"
 conf["description"] = "Time Ordered Astrophysics Scalable Tools"
+conf["long_description"] = readme()
+conf["long_description_content_type"] = "text/markdown"
 conf["author"] = "Theodore Kisner, Reijo Keskitalo"
 conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
-conf["version"] = version
+conf["version"] = get_version()
 conf["provides"] = "toast"
-conf["python_requires"] = ">=3.4.0"
-conf["install_requires"] = [
-    "cmake",
-    "numpy",
-    "scipy",
-    "healpy",
-    "matplotlib",
-    "pyephem",
-]
+conf["python_requires"] = ">=3.5.0"
+conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib", "ephem"]
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
 conf["cmdclass"] = {"build_ext": CMakeBuild}
 conf["zip_safe"] = False
+conf["classifiers"] = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
 
 setup(**conf)

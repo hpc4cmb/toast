@@ -24,13 +24,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-# Copy the RELEASE file into the build directory
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/RELEASE"
-    "${CMAKE_CURRENT_BINARY_DIR}/RELEASE"
-    COPYONLY
-)
-
 # Use GNUInstallDirs to install libraries into correct locations on all
 # platforms.
 include(GNUInstallDirs)
@@ -69,8 +62,10 @@ if(BLAS_FOUND)
     if(LAPACK_FOUND)
         find_package(LAPACKnames)
     else(LAPACK_FOUND)
-        message(SEND_ERROR "Could not find a working LAPACK installation")
+        message(FATAL_ERROR "Could not find a working LAPACK installation")
     endif(LAPACK_FOUND)
+else(BLAS_FOUND)
+    message(FATAL_ERROR "Could not find a working BLAS installation")
 endif(BLAS_FOUND)
 
 find_package(FFTW)

@@ -87,7 +87,17 @@ endif(AATM_FOUND)
 if(CHOLMOD_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_CHOLMOD=1)
     target_include_directories(toast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
-    target_link_libraries(toast "${CHOLMOD_LIBRARY}")
+    target_link_libraries(toast
+        ${CHOLMOD_LIBRARY}
+        ${CCOLAMD_LIBRARY}
+        ${CAMD_LIBRARY}
+        ${COLAMD_LIBRARY}
+        ${AMD_LIBRARY}
+        ${SUITESPARSE_CONFIG_LIBRARY}
+    )
+    if (METIS_FOUND)
+        target_link_libraries(toast ${METIS_LIBRARY})
+    endif (METIS_FOUND)
 endif(CHOLMOD_FOUND)
 
 if(FFTW_FOUND)
