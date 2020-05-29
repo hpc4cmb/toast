@@ -26,6 +26,18 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefix",
     )
     parser.add_argument(
+        "--mapmaker-mask",
+        required=False,
+        help="Destriping mask",
+        dest="mapmaker_mask",
+    )
+    parser.add_argument(
+        "--mapmaker-weightmap",
+        required=False,
+        help="Destriping weight map",
+        dest="mapmaker_weightmap",
+    )
+    parser.add_argument(
         "--mapmaker-iter-max",
         required=False,
         default=1000,
@@ -194,35 +206,83 @@ def apply_mapmaker(
     if outpath is None:
         outpath = args.out
 
-    mapmaker = OpMapMaker(
-        nside=args.nside,
-        nnz=3,
-        name=cache_name,
-        outdir=outpath,
-        outprefix=args.mapmaker_prefix,
-        write_hits=args.write_hits,
-        zip_maps=args.zip_maps,
-        write_wcov_inv=args.write_wcov_inv,
-        write_wcov=args.write_wcov,
-        write_binned=args.write_binmap,
-        write_destriped=True,
-        write_rcond=True,
-        rcond_limit=1e-3,
-        baseline_length=args.mapmaker_baseline_length,
-        maskfile=None,
-        weightmapfile=None,
-        common_flag_mask=args.common_flag_mask,
-        flag_mask=1,
-        intervals="intervals",
-        subharmonic_order=None,
-        iter_min=3,
-        iter_max=args.mapmaker_iter_max,
-        use_noise_prior=args.mapmaker_noisefilter,
-        precond_width=args.mapmaker_precond_width,
-        pixels="pixels",
-    )
+    file_root = args.mapmaker_prefix
+    if extra_prefix is not None:
+        if len(file_root) > 0 and not file_root.endswith("_"):
+            file_root += "_"
+        file_root += "{}".format(extra_prefix)
 
-    mapmaker.exec(data)
+    if time_comms is None:
+        time_comms = [("all", comm.comm_world)]
+
+    if telescope_data is None:
+        telescope_data = [("all", data)]
+
+    for time_name, time_comm in time_comms:
+        for tele_name, tele_data in telescope_data:
+
+            write_hits = args.write_hits and first_call
+            write_wcov_inv = args.write_wcov_inv and first_call
+            write_wcov = args.write_wcov and first_call
+            if bin_only:
+                baseline_length = None
+                write_binned = True
+                write_destriped = False
+            else:
+                baseline_length = args.mapmaker_baseline_length
+                write_binned = args.write_binmap
+                write_destriped = True
+            
+            if len(time_name.split("-")) == 3:
+                # Special rules for daily maps
+                if not args.do_daymaps:
+                    continue
+                if len(telescope_data) > 1 and tele_name == "all":
+                    # Skip daily maps over multiple telescopes
+                    continue
+                # Do not destripe daily maps
+                baseline_length = None
+                write_binned = True
+                write_destriped = False
+
+            timer.start()
+            madam.params["file_root"] = "{}_telescope_{}_time_{}".format(
+                file_root, tele_name, time_name
+            )
+            
+            prefix = "{}_telescope_{}_time_{}".format(
+                file_root, tele_name, time_name
+            )
+
+            mapmaker = OpMapMaker(
+                nside=args.nside,
+                nnz=3,
+                name=cache_name,
+                outdir=outpath,
+                outprefix=prefix,
+                write_hits=(args.write_hits and first_call),
+                zip_maps=args.zip_maps,
+                write_wcov_inv=(args.write_wcov_inv and first_call),
+                write_wcov=(args.write_wcov and first_call),
+                write_binned=write_binned,
+                write_destriped=write_destriped,
+                write_rcond=True,
+                rcond_limit=1e-3,
+                baseline_length=baseline_length
+                maskfile=args.mapmaker_mask,
+                weightmapfile=args.mapmaker_weightmap,
+                common_flag_mask=args.common_flag_mask,
+                flag_mask=1,
+                intervals="intervals",
+                subharmonic_order=None,
+                iter_min=3,
+                iter_max=args.mapmaker_iter_max,
+                use_noise_prior=args.mapmaker_noisefilter,
+                precond_width=args.mapmaker_precond_width,
+                pixels="pixels",
+            )
+
+            mapmaker.exec(tele_data, time_comm)
 
     if comm.world_rank == 0 and verbose:
         timer.report_clear("  OpMapMaker")
