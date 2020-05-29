@@ -57,11 +57,11 @@ def get_version():
     # Run the underlying cmake command that generates the version file, and then
     # parse that output.  This way setup.py is using the exact same version as the
     # (not yet built) compiled code.
-    # topdir = Path(__file__).resolve().parent
+    topdir = Path(__file__).resolve().parent
     ver = None
     try:
-        # version_dir = os.path.join(topdir, "src", "libtoast")
-        version_dir = os.path.join("src", "libtoast")
+        version_dir = os.path.join(topdir, "src", "libtoast")
+        # version_dir = os.path.join("src", "libtoast")
         subprocess.check_call("cmake -P version.cmake", shell=True, cwd=version_dir)
         version_cpp = os.path.join(version_dir, "src", "version.cpp")
         git_ver = None
