@@ -202,7 +202,7 @@ void toast::bin_templates(double * signal, double * templates,
         #ifdef _OPENMP
         nthread = omp_get_num_threads();
         id_thread = omp_get_thread_num();
-        #endif
+        #endif // ifdef _OPENMP
 
         int worker = -1;
         for (size_t row = 0; row < ntemplate; row++) {

@@ -26,10 +26,7 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefix",
     )
     parser.add_argument(
-        "--mapmaker-mask",
-        required=False,
-        help="Destriping mask",
-        dest="mapmaker_mask",
+        "--mapmaker-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
     )
     parser.add_argument(
         "--mapmaker-weightmap",
@@ -232,7 +229,7 @@ def apply_mapmaker(
                 baseline_length = args.mapmaker_baseline_length
                 write_binned = args.write_binmap
                 write_destriped = True
-            
+
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
                 if not args.do_daymaps:
@@ -249,9 +246,7 @@ def apply_mapmaker(
 
             if len(file_root) > 0 and not file_root.endswith("_"):
                 file_root += "_"
-            prefix = "{}telescope_{}_time_{}_".format(
-                file_root, tele_name, time_name
-            )
+            prefix = "{}telescope_{}_time_{}_".format(file_root, tele_name, time_name)
 
             mapmaker = OpMapMaker(
                 nside=args.nside,
