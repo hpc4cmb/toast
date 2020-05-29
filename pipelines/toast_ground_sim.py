@@ -581,7 +581,6 @@ def main():
                         data,
                         outpath,
                         totalname_freq,
-                        freq=freq,
                         time_comms=time_comms,
                         telescope_data=telescope_data,
                         first_call=False,

@@ -246,11 +246,10 @@ def apply_mapmaker(
                 write_destriped = False
 
             timer.start()
-            madam.params["file_root"] = "{}_telescope_{}_time_{}".format(
-                file_root, tele_name, time_name
-            )
-            
-            prefix = "{}_telescope_{}_time_{}".format(
+
+            if len(file_root) > 0 and not file_root.endswith("_"):
+                file_root += "_"
+            prefix = "{}telescope_{}_time_{}_".format(
                 file_root, tele_name, time_name
             )
 
@@ -268,7 +267,7 @@ def apply_mapmaker(
                 write_destriped=write_destriped,
                 write_rcond=True,
                 rcond_limit=1e-3,
-                baseline_length=baseline_length
+                baseline_length=baseline_length,
                 maskfile=args.mapmaker_mask,
                 weightmapfile=args.mapmaker_weightmap,
                 common_flag_mask=args.common_flag_mask,
