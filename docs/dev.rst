@@ -102,3 +102,37 @@ exposed through pybind11 should also have docstrings defined in the bindings.  C
 that is not exposed to python is considered internal, expert-level code that does not
 require formal documentation.  However, such code should have sufficient comments to
 describe the algorithm and design choices.
+
+Testing Workflow
+--------------------------
+
+We are using a github workflow to pull docker containers with our dependencies and run
+our unit tests.  Those docker containers are re-generated whenever a new tag is made on
+the `cmbenv git repository <https://github.com/hpc4cmb/cmbenv>`_.  So if there are
+dependencies that need to be updated, open a PR against cmbenv which updates the version
+or build in the package file.  After merging and tagging a new cmbenv release the
+updated docker images will be available in an hour or two and be used automatically.
+
+Release Process
+---------------------------
+
+There are some github workflows that only run when a new tag is created.  Unless you are
+sure everything works, create a "release candidate" tag first.  Before making a tag,
+ensure that the `docs/changes.rst` file contains all pull requests that have been merged
+since the last tag.  Also edit the `src/toast/RELEASE` file and set the version to a
+`PEP-440 compatible string <https://www.python.org/dev/peps/pep-0440/>`_.  Next go onto
+the github releases page and create a new release from the master branch.  Briefly, the
+format for a stable release, a release candidate or alpha version is:
+
+    2.6.9
+    2.6.7rc2
+    2.6.8a1
+
+After tagging the release, verify that the github workflow to deploy pip wheels runs and
+uploads these to PyPI.  The conda-forge bots will automatically detect the new tag and
+open a PR to update the feedstock.  Also, after the release is complete, update the
+`RELEASE` file to be at the "alpha" of the next release.  For example, after tagging
+version 3.4.5, set the version in the RELEASE file to 3.4.6a1.  This version is **only**
+used when building pip wheels.  Anyone installing locally with setup.py or with pip
+running on the local source tree will get a version constructed from the number of
+commits since the last git tag.
