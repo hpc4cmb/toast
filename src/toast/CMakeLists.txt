@@ -1,6 +1,13 @@
 # pybind11
 add_subdirectory(pybind11)
 
+# Copy the RELEASE file into the build directory
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/RELEASE"
+    "${CMAKE_CURRENT_BINARY_DIR}/RELEASE"
+    COPYONLY
+)
+
 # Determine our python install location and set up a rule to install the
 # modules
 

@@ -1,6 +1,6 @@
 # Time Ordered Astrophysics Scalable Tools
 
-[![Build Status](https://travis-ci.org/hpc4cmb/toast.svg?branch=master)](https://travis-ci.org/hpc4cmb/toast)
+![Build Status](https://github.com/hpc4cmb/toast/workflows/Run%20Test%20Suite/badge.svg?branch=master)
 
 See the full documentation here:
 

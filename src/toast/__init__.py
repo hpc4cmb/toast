@@ -29,7 +29,7 @@ except ImportError:
     #
     # Just manually read the release file.
     thisdir = os.path.abspath(os.path.dirname(__file__))
-    relfile = os.path.join(thisdir, "..", "..", "RELEASE")
+    relfile = os.path.join(thisdir, "RELEASE")
     with open(relfile, "r") as rel:
         if __version__ is None:
             __version__ = rel.readline().rstrip()

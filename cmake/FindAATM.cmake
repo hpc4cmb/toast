@@ -26,19 +26,18 @@ if(PKG_CONFIG_FOUND AND NOT AATM_ROOT)
 endif()
 
 # Check whether to search static or dynamic libs
-set(CMAKE_FIND_LIBRARY_SUFFIXES_SAV ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+set(AATM_LIB_NAME "aatm")
 
 if(${AATM_USE_STATIC_LIBS})
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
-else()
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
+  set(AATM_LIB_NAME "aatm_static")
 endif()
 
 if(AATM_ROOT)
     # find libs
     find_library(
         AATM_LIB
-        NAMES "aatm"
+        NAMES ${AATM_LIB_NAME}
         PATHS ${AATM_ROOT}
         PATH_SUFFIXES "lib" "lib64"
         NO_DEFAULT_PATH
@@ -54,7 +53,7 @@ if(AATM_ROOT)
 else(AATM_ROOT)
     find_library(
         AATM_LIB
-        NAMES "aatm"
+        NAMES ${AATM_LIB_NAME}
         PATHS "${PKG_AATM_PREFIX}"
         PATH_SUFFIXES "lib" "lib64"
     )
@@ -69,9 +68,6 @@ endif(AATM_ROOT)
 if(AATM_LIB)
     set(AATM_LIBRARIES ${AATM_LIB})
 endif(AATM_LIB)
-
-# Restore variable
-set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
 
 include(FindPackageHandleStandardArgs)
 
