@@ -1,0 +1,546 @@
+
+[systems]
+
+    [systems.local]
+        max_nodes = 1            # Maximum number of nodes to use.
+        node_mem_gb = 4          # Approximate usable memory per node in GB
+        node_max_procs = 4       # Max number of processes to run per node
+        node_slots = 8           # Number of available thread placements per node
+        omp_min_threads = 2      # Number of OMP threads at max process count
+        mpi_launch = "mpirun"    # The MPI launching command
+        mpi_nodes = ""
+        mpi_procs = "-np"
+        mpi_depth = ""
+        mpi_extra = ""
+        batch_extra = ""
+        template = "template_shell.sh"
+
+    [systems.nersc-cori-haswell]
+        max_nodes = 512          # Maximum number of nodes to use.
+        node_mem_gb = 122        # Approximate usable memory per node in GB
+        node_max_procs = 16      # Max number of processes to run per node
+        node_slots = 64          # Number of available thread placements per node
+        omp_min_threads = 2      # Number of OMP threads at max process count
+        mpi_launch = "srun"
+        mpi_nodes = "-N"
+        mpi_procs = "-n"
+        mpi_depth = "-c"
+        mpi_extra = "--cpu_bind=cores"
+        batch_extra = "#SBATCH --constraint=haswell"
+        template = "template_nersc.slurm"
+
+    [systems.nersc-cori-knl]
+        max_nodes = 4096         # Maximum number of nodes to use.
+        node_mem_gb = 90         # Approximate usable memory per node in GB
+        node_max_procs = 16      # Max number of processes to run per node
+        node_slots = 256         # Number of available thread placements per node
+        omp_min_threads = 4      # Number of OMP threads at max process count
+        mpi_launch = "srun"
+        mpi_nodes = "-N"
+        mpi_procs = "-n"
+        mpi_depth = "-c"
+        mpi_extra = "--cpu_bind=cores"
+        batch_extra = "#SBATCH --constraint=knl,quad,cache"
+        template = "template_nersc.slurm"
+
+[jobs]
+
+    [jobs.satellite]
+
+        [jobs.satellite.common]
+
+            [[jobs.satellite.common.telescopes]]
+                # Only one telescope in this case for a satellite
+                name = "satellite"
+                [jobs.satellite.common.telescopes.focalplane]
+                    fwhm = 10.0
+                    psd_fknee = 0.05
+                    psd_NET = 6.0e-5
+                    psd_alpha = 1.0
+                    psd_fmin = 1.0e-5
+                    bandcenter_ghz = 25.0
+                    bandwidth_ghz = 6.3
+
+            [jobs.satellite.common.pipeline]
+                spin-period-min = 10.0
+                spin-angle-deg = 30.0
+                prec-period-min = 50.0
+                prec-angle-deg = 65.0
+                hwp-rpm = 20.0
+                obs-time-h = 24.0
+                gap = 4.0
+                nside = 512
+                flush = true
+                noise = true
+                dipole-mode = "total"
+                dipole-solar-speed-kms = 369.0
+                dipole-solar-gal-lat-deg = 48.26
+                dipole-solar-gal-lon-deg = 263.99
+                coord = "G"
+                input-map = "input_sky.fits"
+                madam = true
+                madam-baseline-length = 1.0
+                madam-baseline-order = 0
+                madam-noisefilter = true
+                madam-precond-width = 100
+
+        [jobs.satellite.tiny]
+
+            [jobs.satellite.tiny.requirements]
+                obs_max_procs = 1
+                obs_mem_gb = 0.4
+                obs_count = 4
+                pipe_script = "toast_satellite_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.satellite.tiny.telescopes]]
+                # Only one telescope in this case for a satellite
+                name = "satellite"
+                [jobs.satellite.tiny.telescopes.focalplane]
+                    minpix = 1
+
+            [jobs.satellite.tiny.pipeline]
+                obs-num = 4
+
+        [jobs.satellite.small]
+
+            [jobs.satellite.small.requirements]
+                obs_max_procs = 1
+                obs_mem_gb = 0.4
+                obs_count = 64
+                pipe_script = "toast_satellite_sim.py"
+
+            [[jobs.satellite.small.telescopes]]
+                name = "satellite"
+                [jobs.satellite.small.telescopes.focalplane]
+                    minpix = 1
+
+            [jobs.satellite.small.pipeline]
+                obs-num = 64
+
+        [jobs.satellite.medium]
+
+            [jobs.satellite.medium.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 15.0
+                obs_count = 157
+                pipe_script = "toast_satellite_sim.py"
+
+            [[jobs.satellite.medium.telescopes]]
+                name = "satellite"
+                [jobs.satellite.medium.telescopes.focalplane]
+                    minpix = 19
+
+            [jobs.satellite.medium.pipeline]
+                obs-num = 157
+
+        [jobs.satellite.large]
+
+            [jobs.satellite.large.requirements]
+                obs_max_procs = 217
+                obs_mem_gb = 180
+                obs_count = 157
+                pipe_script = "toast_satellite_sim.py"
+
+            [[jobs.satellite.large.telescopes]]
+                name = "satellite"
+                [jobs.satellite.large.telescopes.focalplane]
+                    minpix = 217
+
+            [jobs.satellite.large.pipeline]
+                obs-num = 157
+
+    # For ground-based simulations, we do not know ahead of time the number of
+    # observations, since that is not known until the scheduler is run.  Instead
+    # we use the operational days as our unit of data for computing job sizes.
+
+    [jobs.ground]
+
+        [jobs.ground.common]
+
+            [[jobs.ground.common.telescopes]]
+                name = "atacama"
+                [jobs.ground.common.telescopes.focalplane]
+                    fwhm = 2.0
+                    psd_fknee = 0.05
+                    psd_NET = 6.0e-5
+                    psd_alpha = 1.0
+                    psd_fmin = 1.0e-5
+                    bandcenter_ghz = 100.0
+                    bandwidth_ghz = 20.0
+                [jobs.ground.common.telescopes.schedule]
+                    site-lat = -22.958064
+                    site-lon = -67.786222
+                    site-alt = 5200.0
+                    site-name = "ATACAMA"
+                    telescope = "atacama_telescope"
+                    patch-coord = "C"
+                    el-min = 30.0
+                    el-max = 80.0
+                    sun-el-max = 90.0
+                    sun-avoidance-angle = 30.0
+                    moon-avoidance-angle = 10.0
+                    start = "2016-06-01 00:00:00"
+                    gap = 600.0
+                    gap-small = 0.0
+                    fp-radius = 0.0
+
+            [jobs.ground.common.pipeline]
+                noise = true
+                atmosphere = true
+                sample-rate = 100.0
+                scan-rate = 6.0
+                scan-accel = 1.0
+                poly-order = 3
+                polyfilter = true
+                flush = true
+                atm-lmax-center = 100.0
+                atm-lmax-sigma = 30.0
+                atm-cache = "atm_cache"
+                weather = "data/weather_Atacama.fits"
+                madam-baseline-length = 1.0
+                madam-baseline-order = 0
+                madam-noisefilter = true
+                madam-precond-width = 100
+                freq = 100.0
+                nside = 2048
+                hwp-rpm = 2.0
+                focalplane-radius = 2.0
+                atm-wind-dist = 6000.0
+                coord = "G"
+                input-map = "input_sky.fits"
+
+        [jobs.ground.tiny]
+
+            [jobs.ground.tiny.requirements]
+                obs_max_procs = 1
+                obs_mem_gb = 3.5
+                obs_count = 1
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground.tiny.telescopes]]
+                name = "atacama"
+                [jobs.ground.tiny.telescopes.focalplane]
+                    minpix = 1
+                    fov = 1.0
+                [jobs.ground.tiny.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    ces-max-time = 3600.0
+                    operational-days = 1
+
+            [jobs.ground.tiny.pipeline]
+                atm-xstep = 30
+                atm-ystep = 30
+                atm-zstep = 30
+                madam-iter-max = 1000
+                sample-rate = 20.0
+                scan-rate = 1.0
+
+        [jobs.ground.small]
+
+            [jobs.ground.small.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 1
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground.small.telescopes]]
+                name = "atacama"
+                [jobs.ground.small.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground.small.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    ces-max-time = 3600.0
+                    operational-days = 1
+
+            [jobs.ground.small.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0
+
+        [jobs.ground.medium]
+
+            [jobs.ground.medium.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 10
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground.medium.telescopes]]
+                name = "atacama"
+                [jobs.ground.medium.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground.medium.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    ces-max-time = 3600.0
+                    operational-days = 10
+
+            [jobs.ground.medium.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0
+
+        [jobs.ground.large]
+
+            [jobs.ground.large.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 100
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground.large.telescopes]]
+                name = "atacama"
+                [jobs.ground.large.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground.large.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    ces-max-time = 3600.0
+                    operational-days = 100
+
+            [jobs.ground.large.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0
+
+    [jobs.ground-multisite]
+
+        [jobs.ground-multisite.common]
+
+            [[jobs.ground-multisite.common.telescopes]]
+                name = "atacama"
+                [jobs.ground-multisite.common.telescopes.focalplane]
+                    fwhm = 2.0
+                    psd_fknee = 0.05
+                    psd_NET = 6.0e-5
+                    psd_alpha = 1.0
+                    psd_fmin = 1.0e-5
+                    bandcenter_ghz = 100.0
+                    bandwidth_ghz = 20.0
+                [jobs.ground-multisite.common.telescopes.schedule]
+                    site-lat = -22.958064
+                    site-lon = -67.786222
+                    site-alt = 5200.0
+                    site-name = "ATACAMA"
+                    telescope = "atacama_telescope"
+                    patch-coord = "C"
+                    el-min = 30.0
+                    el-max = 80.0
+                    sun-el-max = 90.0
+                    sun-avoidance-angle = 30.0
+                    moon-avoidance-angle = 10.0
+                    start = "2016-06-01 00:00:00"
+                    gap = 600.0
+                    gap-small = 0.0
+                    ces-max-time = 3600.0
+                    fp-radius = 0.0
+
+            [[jobs.ground-multisite.common.telescopes]]
+                name = "pole"
+                [jobs.ground-multisite.common.telescopes.focalplane]
+                    fwhm = 2.0
+                    psd_fknee = 0.05
+                    psd_NET = 6.0e-5
+                    psd_alpha = 1.0
+                    psd_fmin = 1.0e-5
+                    bandcenter_ghz = 100.0
+                    bandwidth_ghz = 20.0
+                [jobs.ground-multisite.common.telescopes.schedule]
+                    pole-mode = true
+                    site-lat = -90.00
+                    site-lon = -0.00
+                    site-alt = 2835.0
+                    site-name = "SOUTH_POLE"
+                    telescope = "pole_telescope"
+                    patch-coord = "C"
+                    el-min = 30.0
+                    el-max = 80.0
+                    sun-el-max = 90.0
+                    sun-avoidance-angle = 30.0
+                    moon-avoidance-angle = 10.0
+                    start = "2016-06-01 00:00:00"
+                    gap = 600.0
+                    gap-small = 0.0
+                    pole-ces-time = 1200.0
+                    fp-radius = 0.0
+                    one-scan-per-day = true
+
+            [jobs.ground-multisite.common.pipeline]
+                noise = true
+                atmosphere = true
+                sample-rate = 100.0
+                scan-rate = 6.0
+                scan-accel = 1.0
+                poly-order = 3
+                polyfilter = true
+                flush = true
+                atm-lmax-center = 100.0
+                atm-lmax-sigma = 30.0
+                atm-cache = "atm_cache"
+                weather = "data/weather_Atacama.fits,data/weather_South_Pole.fits"
+                madam-baseline-length = 1.0
+                madam-baseline-order = 0
+                madam-noisefilter = true
+                madam-precond-width = 100
+                freq = 100.0
+                nside = 2048
+                hwp-rpm = 2.0
+                focalplane-radius = 2.0
+                atm-wind-dist = 6000.0
+                coord = "G"
+                input-map = "input_sky.fits"
+
+        [jobs.ground-multisite.tiny]
+
+            [jobs.ground-multisite.tiny.requirements]
+                obs_max_procs = 1
+                obs_mem_gb = 3.5
+                obs_count = 2
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground-multisite.tiny.telescopes]]
+                name = "atacama"
+                [jobs.ground-multisite.tiny.telescopes.focalplane]
+                    minpix = 1
+                    fov = 1.0
+                [jobs.ground-multisite.tiny.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 1
+
+            [[jobs.ground-multisite.tiny.telescopes]]
+                name = "pole"
+                [jobs.ground-multisite.tiny.telescopes.focalplane]
+                    minpix = 1
+                    fov = 1.0
+                [jobs.ground-multisite.tiny.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 1
+
+            [jobs.ground-multisite.tiny.pipeline]
+                atm-xstep = 30
+                atm-ystep = 30
+                atm-zstep = 30
+                madam-iter-max = 1000
+                sample-rate = 20.0
+                scan-rate = 1.0
+
+        [jobs.ground-multisite.small]
+
+            [jobs.ground-multisite.small.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 2
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground-multisite.small.telescopes]]
+                name = "atacama"
+                [jobs.ground-multisite.small.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.small.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 1
+
+            [[jobs.ground-multisite.small.telescopes]]
+                name = "pole"
+                [jobs.ground-multisite.small.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.small.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 1
+
+            [jobs.ground-multisite.small.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0
+
+        [jobs.ground-multisite.medium]
+
+            [jobs.ground-multisite.medium.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 20
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground-multisite.medium.telescopes]]
+                name = "atacama"
+                [jobs.ground-multisite.medium.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.medium.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 10
+
+            [[jobs.ground-multisite.medium.telescopes]]
+                name = "pole"
+                [jobs.ground-multisite.medium.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.medium.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 10
+
+            [jobs.ground-multisite.medium.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0
+
+        [jobs.ground-multisite.large]
+
+            [jobs.ground-multisite.large.requirements]
+                obs_max_procs = 19
+                obs_mem_gb = 70
+                obs_count = 200
+                pipe_script = "toast_ground_sim.py"
+
+            # NOTE:  The telescope names must match those defined in the common section.
+            [[jobs.ground-multisite.large.telescopes]]
+                name = "atacama"
+                [jobs.ground-multisite.large.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.large.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 100
+
+            [[jobs.ground-multisite.large.telescopes]]
+                name = "pole"
+                [jobs.ground-multisite.large.telescopes.focalplane]
+                    minpix = 19
+                    fov = 1.0
+                [jobs.ground-multisite.large.telescopes.schedule]
+                    patch = "BICEP,1,-10,-55,10,-58"
+                    operational-days = 100
+
+            [jobs.ground-multisite.large.pipeline]
+                atm-xstep = 10
+                atm-ystep = 10
+                atm-zstep = 10
+                madam-iter-max = 1000
+                sample-rate = 100.0
+                scan-rate = 6.0

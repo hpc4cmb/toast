@@ -277,6 +277,7 @@ class OpSimPySM(Operator):
 
         tm.stop()
         if rank == 0:
-            tm.report("PySM Operator")
+            # tm.report("PySM Operator")
+            pass
 
         return
