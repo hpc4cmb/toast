@@ -417,16 +417,16 @@ def main():
             args, comm, data, mc, "tot_signal", overwrite=True
         )
         if comm.comm_world is not None:
-                comm.comm_world.barrier()
-            if comm.world_rank == 0:
-                tmr.report_clear("    Simulate noise {:04d}".format(mc))
+            comm.comm_world.barrier()
+        if comm.world_rank == 0:
+            tmr.report_clear("    Simulate noise {:04d}".format(mc))
 
         # add sky signal
         pipeline_tools.add_signal(args, comm, data, "tot_signal", signalname)
         if comm.comm_world is not None:
-                comm.comm_world.barrier()
-            if comm.world_rank == 0:
-                tmr.report_clear("    Add sky signal {:04d}".format(mc))
+            comm.comm_world.barrier()
+        if comm.world_rank == 0:
+            tmr.report_clear("    Add sky signal {:04d}".format(mc))
 
         if gain is not None:
             op_apply_gain = OpApplyGain(gain, name="tot_signal")
@@ -434,7 +434,7 @@ def main():
             if comm.comm_world is not None:
                 comm.comm_world.barrier()
             if comm.world_rank == 0:
-	        tmr.report_clear("    Apply gains {:04d}".format(mc))
+                tmr.report_clear("    Apply gains {:04d}".format(mc))
 
         if mc == firstmc:
             # For the first realization, optionally export the
