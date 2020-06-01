@@ -278,6 +278,10 @@ def apply_mapmaker(
 
             mapmaker.exec(tele_data, time_comm)
 
+            # User needs to set TOAST_FUNCTIME to see timing results
+            if "TOAST_FUNCTIME" in os.environ and os.environ["TOAST_FUNCTIME"]:
+                mapmaker.report_timing()
+
     if comm.world_rank == 0 and verbose:
         timer.report_clear("  OpMapMaker")
 
