@@ -80,6 +80,9 @@ def add_madam_args(parser):
     parser.add_argument(
         "--madam-parfile", required=False, default=None, help="Madam parameter file"
     )
+    parser.add_argument(
+        "--madam-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
+    )
 
     parser.add_argument(
         "--madam-allreduce",
@@ -304,6 +307,8 @@ def setup_madam(args):
         # only enough memory to communicate with one process at a time.
         pars["concatenate_messages"] = False
         pars["allreduce"] = False
+    if args.mapmaker_mask:
+        pars["file_inmask"] = args.mapmaker_mask
     pars["reassign_submaps"] = True
     pars["pixlim_cross"] = 1e-3
     pars["pixmode_cross"] = 2
@@ -484,7 +489,7 @@ def apply_madam(
         for tele_name, tele_data in telescope_data:
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
-                if args.do_daymaps:
+                if not args.do_daymaps:
                     continue
                 if len(telescope_data) > 1 and tele_name == "all":
                     # Skip daily maps over multiple telescopes

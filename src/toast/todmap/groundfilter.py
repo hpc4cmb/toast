@@ -135,10 +135,6 @@ class OpGroundFilter(Operator):
             del common_ref
             cheby_filter = np.vstack(cheby_filter)
 
-        # templates = []
-        # for temp in cheby_trend, cheby_filter:
-        #    for template in temp:
-        #        templates.append(template)
         templates = np.vstack([cheby_trend, cheby_filter])
 
         return templates, cheby_trend, cheby_filter

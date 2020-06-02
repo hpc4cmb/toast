@@ -202,7 +202,7 @@ void toast::bin_templates(double * signal, double * templates,
         #ifdef _OPENMP
         nthread = omp_get_num_threads();
         id_thread = omp_get_thread_num();
-        #endif
+        #endif // ifdef _OPENMP
 
         int worker = -1;
         for (size_t row = 0; row < ntemplate; row++) {
@@ -226,21 +226,24 @@ void toast::bin_templates(double * signal, double * templates,
 
 void toast::chebyshev(double * x, double * templates, size_t start_order,
                       size_t stop_order, size_t nsample) {
+
     // order == 0
-    if (start_order == 0) {
+    if (start_order == 0 && stop_order > 0) {
         for (size_t i = 0; i < nsample; ++i) templates[i] = 1;
     }
 
     // order == 1
-    if (start_order <= 1) {
+    if (start_order <= 1 && stop_order > 1) {
         memcpy(templates + (1 - start_order) * nsample, x, nsample * sizeof(double));
     }
 
+    // Calculate the hierarchy of polynomials, one buffer length
+    // at a time
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-#pragma omp parallel for \
-    schedule(static) default(none) shared(x, templates, start_order, stop_order, nsample, nbuf)
+#pragma omp parallel for schedule(static) default(none) \
+    shared(x, templates, start_order, stop_order, nsample, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
         size_t istop = istart + buflen;
@@ -257,8 +260,9 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
 
         for (size_t order = 2; order < stop_order; ++order) {
             // Evaluate current order and store in val
-            for (size_t i = 0; i < n;
-                 ++i) next[i] = 2 * x[istart + i] * val[i] - prev[i];
+            for (size_t i = 0; i < n; ++i) {
+                next[i] = 2 * x[istart + i] * val[i] - prev[i];
+            }
             memcpy(prev.data(), val.data(), nbyte);
             memcpy(val.data(), next.data(), nbyte);
             if (order >= start_order) {

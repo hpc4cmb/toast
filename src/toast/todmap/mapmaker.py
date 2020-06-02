@@ -1488,12 +1488,15 @@ class OpMapMaker(Operator):
         return
 
     @function_timer
-    def exec(self, data):
+    def exec(self, data, comm=None):
         log = Logger.get()
         timer = Timer()
 
         # Initialize objects
-        self.comm = data.comm.comm_world
+        if comm is None:
+            self.comm = data.comm.comm_world
+        else:
+            self.comm = comm
         if self.comm is None:
             self.rank = 0
         else:

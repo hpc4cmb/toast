@@ -3,9 +3,9 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-//#if !defined(NO_ATM_CHECKS)
-//# define NO_ATM_CHECKS
-//#endif // if !defined(NO_ATM_CHECKS)
+// #if !defined(NO_ATM_CHECKS)
+// # define NO_ATM_CHECKS
+// #endif // if !defined(NO_ATM_CHECKS)
 
 #include <toast/sys_utils.hpp>
 #include <toast/sys_environment.hpp>
@@ -1660,10 +1660,10 @@ cholmod_sparse * toast::atm_sim::build_sparse_covariance(long ind_start,
                 if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
 
                 double val = cov_eval(colcoord, rowcoord);
-		if (icol == irow) {
-		  // Regularize the matrix by promoting the diagonal
-		  val *= 1.01;
-		}
+                if (icol == irow) {
+                    // Regularize the matrix by promoting the diagonal
+                    val *= 1.01;
+                }
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
