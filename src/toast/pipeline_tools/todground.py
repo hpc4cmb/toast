@@ -113,6 +113,12 @@ def add_todground_args(parser):
     """ Add TODGround arguments
     """
     parser.add_argument(
+        "--el-nod-deg",
+        required=False,
+        type=np.float,
+        help="Begin each observation with an el-nod of given size [deg]",
+    )
+    parser.add_argument(
         "--scan-rate",
         required=False,
         default=1.0,
