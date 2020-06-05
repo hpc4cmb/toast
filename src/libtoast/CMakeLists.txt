@@ -32,12 +32,7 @@ set(toast_SOURCES
     src/toast_fod_psd.cpp
     src/toast_tod_filter.cpp
     src/toast_tod_pointing.cpp
-    src/toast_tod_simnoise.cpp#
-# add_custom_target(genversion COMMAND
-#     ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
-#     COMMENT "Updating version.cpp if needed ..."
-#     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-# )
+    src/toast_tod_simnoise.cpp
     src/toast_atm_utils.cpp
     src/toast_atm.cpp
     src/toast_atm_sim.cpp
