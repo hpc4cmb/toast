@@ -726,13 +726,12 @@ class OpSimAtmosphere(Operator):
 
         # Check if the cache already exists.
 
-        load_cache = None
-        save_cache = None
+        use_cache = False
+        have_cache = False
         if rank == 0:
-            save_cache = False
             if cachedir is not None:
                 # We are saving to cache
-                save_cache = True
+                use_cache = True
             fname = None
             if cachedir is not None:
                 fname = os.path.join(
@@ -744,9 +743,7 @@ class OpSimAtmosphere(Operator):
                         prefix, tmin - tmin_tot, fname
                     )
                 )
-                load_cache = True
-                # Cached data already exists, don't save it.
-                save_cache = False
+                have_cache = True
             else:
                 log.debug(
                     "{}Simulating the atmosphere for t = {}".format(
@@ -754,10 +751,9 @@ class OpSimAtmosphere(Operator):
                     )
                 )
         if comm is not None:
-            load_cache = comm.bcast(load_cache, root=0)
-            save_cache = comm.bcast(save_cache, root=0)
+            use_cache = comm.bcast(use_cache, root=0)
 
-        err = sim.simulate(load_cache=load_cache, save_cache=save_cache)
+        err = sim.simulate(use_cache=use_cache)
         if err != 0:
             raise RuntimeError(prefix + "Simulation failed.")
 
@@ -771,7 +767,7 @@ class OpSimAtmosphere(Operator):
                 comm.Barrier()
             if rank == 0:
                 op = None
-                if load_cache:
+                if have_cache:
                     op = "Loaded"
                 else:
                     op = "Simulated"

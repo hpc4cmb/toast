@@ -263,19 +263,18 @@ class AtmSim(object):
         self._nelem = None
 
     @function_timer
-    def simulate(self, load_cache=False, save_cache=False, smooth=False):
+    def simulate(self, use_cache=False, smooth=False):
         """Perform the simulation.
 
         Args:
-            load_cache (bool):  If True, load from cachedir.
-            save_cache (bool):  If True, save to cachedir.
+            use_cache (bool):  If True, load / save from / to cachedir.
             smooth (bool):  If True, apply smoothing.
 
         Returns:
             (int):  A status value (zero == good).
 
         """
-        if load_cache:
+        if use_cache:
             if self._cachedir is None:
                 raise RuntimeError("Cannot use the cache if cachedir is not set")
             self.load_realization()
@@ -410,13 +409,11 @@ class AtmSim(object):
         # self.smooth()
 
         self._cached = True
-        if save_cache:
-            if self._cachedir is None:
-                raise RuntimeError("Cannot use the cache if cachedir is not set")
+        if use_cache:
             self.save_realization()
 
         timer.stop()
-        if save_cache and self._rank == 0:
+        if use_cache and self._rank == 0:
             log.debug("Saved realization in {} s".format(timer.seconds()))
 
         return 0
@@ -1025,6 +1022,22 @@ class AtmSim(object):
 
     @function_timer
     def load_realization(self):
+        rname = None
+        cachefile = None
+        found = False
+        if self._rank == 0:
+            rname = "{}_{}_{}_{}".format(
+                self._key1, self._key2, self._counter1start, self._counter2start
+            )
+            cachefile = os.path.join(self._cachedir, "{}.h5".format(rname))
+            if os.path.isfile(cachefile):
+                found = True
+        if self._comm is not None:
+            found = self._comm.bcast(found, root=0)
+
+        if not found:
+            return
+
         if self._realization is not None:
             del self._realization
         if self._full_index is not None:
@@ -1033,17 +1046,11 @@ class AtmSim(object):
             del self._compressed_index
 
         mdata = dict()
-
         hf = None
         if self._rank == 0:
             log = Logger.get()
 
-            rname = "{}_{}_{}_{}".format(
-                self._key1, self._key2, self._counter1start, self._counter2start
-            )
-            outfile = os.path.join(self._cachedir, "{}.h5".format(rname))
-
-            hf = h5py.File(outfile, "r")
+            hf = h5py.File(cachefile, "r")
             # Read metadata
             meta = hf.attrs
             for k, tp in self._meta_keys():
@@ -1064,14 +1071,25 @@ class AtmSim(object):
         self._compressed_index = MPIShared((self._nn,), np.int64, self._comm)
         self._full_index = MPIShared((self._nelem,), np.int64, self._comm)
 
-        # Read the data directly into shared memory
+        # Read and set shared memory
+        buffer = None
         if self._rank == 0:
-            hf["realization"].read_direct(self._realization.data)
+            buffer = np.zeros(self._nelem, dtype=np.float64)
+            hf["realization"].read_direct(buffer)
             log.debug("Loaded realization for {}".format(rname))
-            hf["full_index"].read_direct(self._full_index.data)
+        self._realization.set(buffer, (0,), fromrank=0)
+
+        if self._rank == 0:
+            buffer = np.zeros(self._nelem, dtype=np.int64)
+            hf["full_index"].read_direct(buffer)
             log.debug("Loaded full index for {}".format(rname))
-            hf["compressed_index"].read_direct(self._compressed_index.data)
+        self._full_index.set(buffer, (0,), fromrank=0)
+
+        if self._rank == 0:
+            buffer = np.zeros(self._nn, dtype=np.int64)
+            hf["compressed_index"].read_direct(buffer)
             log.debug("Loaded compressed index for {}".format(rname))
+        self._compressed_index.set(buffer, (0,), fromrank=0)
 
         if self._comm is not None:
             self._comm.barrier()
