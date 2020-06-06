@@ -993,8 +993,9 @@ class AtmSim(object):
                 self._key1, self._key2, self._counter1start, self._counter2start
             )
             outfile = os.path.join(self._cachedir, "{}.h5".format(rname))
+            tmpfile = "{}.tmp".format(outfile)
 
-            hf = h5py.File(outfile, "w")
+            hf = h5py.File(tmpfile, "w")
 
             # Store metadata as attributes of the root group
             meta = hf.attrs
@@ -1015,6 +1016,9 @@ class AtmSim(object):
             log.debug("Saved compressed index for {}".format(rname))
             hf.flush()
             hf.close()
+
+            # Move file into place
+            os.rename(tmpfile, outfile)
 
         if self._comm is not None:
             self._comm.barrier()
