@@ -344,9 +344,6 @@ def scale_atmosphere_by_frequency(
     if not args.simulate_atmosphere:
         return
 
-    if freq is None:
-        raise RuntimeError("You must supply the nominal frequency")
-
     log = Logger.get()
     if comm.world_rank == 0 and verbose:
         log.info("Scaling atmosphere by frequency")
@@ -370,7 +367,10 @@ def scale_atmosphere_by_frequency(
         # Use the entire processing group to sample the absorption
         # coefficient as a function of frequency
         freqmin = 0
-        freqmax = 2 * freq
+        if freq is None:
+            freqmax = 1000
+        else:
+            freqmax = 2 * freq
         nfreq = 1001
         freqstep = (freqmax - freqmin) / (nfreq - 1)
         if todcomm is None:
@@ -426,6 +426,11 @@ def scale_atmosphere_by_frequency(
                 width = focalplane[det]["bandwidth_ghz"]
             except Exception:
                 # Use default values for the entire focalplane
+                if freq is None:
+                    raise RuntimeError(
+                        "You must supply the nominal frequency if bandpasses "
+                        "are not available"
+                    )
                 center = freq
                 width = 0.2 * freq
             nstep = 101
