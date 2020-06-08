@@ -63,7 +63,7 @@ def get_version():
         version_dir = os.path.join(topdir, "src", "libtoast")
         # version_dir = os.path.join("src", "libtoast")
         subprocess.check_call("cmake -P version.cmake", shell=True, cwd=version_dir)
-        version_cpp = os.path.join(version_dir, "src", "version.cpp")
+        version_cpp = os.path.join(version_dir, "version.cpp")
         git_ver = None
         rel_ver = None
         with open(version_cpp, "r") as f:
@@ -229,7 +229,7 @@ def readme():
 
 
 conf = dict()
-conf["name"] = "toast"
+conf["name"] = "toast-cmb"
 conf["description"] = "Time Ordered Astrophysics Scalable Tools"
 conf["long_description"] = readme()
 conf["long_description_content_type"] = "text/markdown"
@@ -238,7 +238,6 @@ conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
-conf["provides"] = "toast"
 conf["python_requires"] = ">=3.6.0"
 conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib", "ephem"]
 conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
