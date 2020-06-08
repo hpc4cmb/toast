@@ -115,22 +115,78 @@ def add_todground_args(parser):
     parser.add_argument(
         "--el-nod-deg",
         required=False,
-        type=np.float,
-        help="Begin each observation with an el-nod of given size [deg]",
+        help="Comma-separated list of elevation changes to perform in degrees",
     )
+    parser.add_argument(
+        "--el-nod-every-scan",
+        required=False,
+        action="store_true",
+        help="Append el nods to every scan, not just the first one",
+        dest="el_nod_every_scan",
+    )
+    parser.add_argument(
+        "--no-el-nod-every-scan",
+        required=False,
+        action="store_false",
+        help="Only apped el-nod to the first sub scan",
+        dest="el_nod_every_scan",
+    )
+    parser.set_defaults(el_nod_every_scan=True)
+    parser.add_argument(
+        "--start-with-el-nod",
+        required=False,
+        action="store_true",
+        help="When requested, el-nod should be appended to the beginning of each CES",
+        dest="start_with_el_nod",
+    )
+    parser.add_argument(
+        "--no-start-with-el-nod",
+        required=False,
+        action="store_false",
+        help="When requested, el-nod should not be appended to the beginning of each CES",
+        dest="start_with_el_nod",
+    )
+    parser.set_defaults(start_with_el_nod=True)
+    parser.add_argument(
+        "--end-with-el-nod",
+        required=False,
+        action="store_true",
+        help="When requested, el-nod should be appended to the end of each CES",
+        dest="end_with_el_nod",
+    )
+    parser.add_argument(
+        "--no-end-with-el-nod",
+        required=False,
+        action="store_false",
+        help="When requested, el-nod should not be appended to the end of each CES",
+        dest="end_with_el_nod",
+    )
+    parser.set_defaults(end_with_el_nod=False)
     parser.add_argument(
         "--scan-rate",
         required=False,
         default=1.0,
         type=np.float,
-        help="Scanning rate [deg / s]",
+        help="Azimuthal on-sky scanning rate [deg / s]",
+    )
+    parser.add_argument(
+        "--scan-rate-el",
+        required=False,
+        type=np.float,
+        help="Elevation scanning rate [deg / s]",
     )
     parser.add_argument(
         "--scan-accel",
         required=False,
         default=1.0,
         type=np.float,
-        help="Scanning rate change [deg / s^2]",
+        help="Mount azimuthal scanning rate change [deg / s^2]",
+    )
+    parser.add_argument(
+        "--scan-accel-el",
+        required=False,
+        type=np.float,
+        help="Mount elevation scanning rate change [deg / s^2]",
     )
     parser.add_argument(
         "--scan-cosecant-modulate",

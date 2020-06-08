@@ -18,6 +18,7 @@ from ..todmap import OpSimAtmosphere, atm_available_utils
 if atm_available_utils:
     from ..todmap.atm import (
         atm_atmospheric_loading,
+        atm_atmospheric_loading_vec,
         atm_absorption_coefficient,
         atm_absorption_coefficient_vec,
     )
@@ -393,6 +394,15 @@ def scale_atmosphere_by_frequency(
                     my_freqs[-1],
                     my_nfreq,
                 )
+                my_loading = atm_atmospheric_loading_vec(
+                    altitude,
+                    air_temperature,
+                    surface_pressure,
+                    pwv,
+                    my_freqs[0],
+                    my_freqs[-1],
+                    my_nfreq,
+                )
             else:
                 raise RuntimeError(
                     "Atmosphere utilities from libaatm are not available"
@@ -400,13 +410,15 @@ def scale_atmosphere_by_frequency(
         else:
             my_freqs = np.array([])
             my_absorption = np.array([])
+            my_loading = np.array([])
         if todcomm is None:
             freqs = my_freqs
             absorption = my_absorption
+            loading = my_loading
         else:
             freqs = np.hstack(todcomm.allgather(my_freqs))
             absorption = np.hstack(todcomm.allgather(my_absorption))
-        # loading = atm_atmospheric_loading(altitude, pwv, freq)
+            loading = np.hstack(todcomm.allgather(my_loading))
         for det in tod.local_dets:
             try:
                 # Use detector bandpass from the focalplane
@@ -421,6 +433,7 @@ def scale_atmosphere_by_frequency(
             # integral across the bandpass
             det_freqs = np.linspace(center - width / 2, center + width / 2, nstep)
             absorption_det = np.interp(det_freqs, freqs, absorption)
+            loading_det = np.interp(det_freqs, freqs, loading)
             # From brightness to thermodynamic units
             x = h * det_freqs * 1e9 / k / TCMB
             rj2cmb = (x / (np.exp(x / 2) - np.exp(-x / 2))) ** -2
@@ -429,9 +442,19 @@ def scale_atmosphere_by_frequency(
             absorption_det *= rj2cmb
             # Average across the bandpass
             absorption_det = np.mean(absorption_det)
+            loading_det = np.mean(loading_det)
             cachename = "{}_{}".format(cache_name, det)
             ref = tod.cache.reference(cachename)
             ref *= absorption_det
+            # Add loading, accounting for the observing elevation
+            try:
+                # Some TOD classes provide a shortcut to Az/El
+                az, el = tod.read_azel(detector=det)
+            except Exception as e:
+                azelquat = tod.read_pntg(detector=det, azel=True)
+                theta, phi = qa.to_position(azelquat)
+                el = np.pi / 2 - theta
+            ref += loading_det / np.cos(np.pi / 2 - el)
             del ref
 
     if comm.comm_world is not None:

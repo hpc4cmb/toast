@@ -454,9 +454,7 @@ def main():
                 args, comm, data, madampars, outpath, detweights, "tot_signal"
             )
         else:
-            pipeline_tools.apply_mapmaker(
-                args, comm, data, outpath, "tot_signal"
-            )
+            pipeline_tools.apply_mapmaker(args, comm, data, outpath, "tot_signal")
 
         if comm.comm_world is not None:
             comm.comm_world.barrier()

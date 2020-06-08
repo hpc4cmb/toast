@@ -607,6 +607,14 @@ class OpSimAtmosphere(Operator):
                 )
             )
 
+        # DEBUG begin
+        if comm.rank == 0:
+            print(
+                "SCAN RANGE: {}".format(np.degrees([azmin, azmax, elmin, elmax])),
+                flush=True,
+            )
+        # DEBUG end
+
         return azmin, azmax, elmin, elmax
 
     @function_timer

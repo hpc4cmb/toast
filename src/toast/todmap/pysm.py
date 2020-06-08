@@ -11,9 +11,11 @@ pysm = None
 try:
     import pysm
     import pysm.units as u
+
     # Disable PySM warnings generated when accessing local
     # data, since these fill the logs.
     import warnings
+
     warnings.filterwarnings("ignore", category=UserWarning, module="pysm")
 except ImportError:
     pysm = None

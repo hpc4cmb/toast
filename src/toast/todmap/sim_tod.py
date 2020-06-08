@@ -722,14 +722,23 @@ class TODGround(TOD):
             or a pyEphem string.
         site_alt (float/str): Observing site Earth altitude in meters.
         azmin (float):  Starting azimuth of the constant elevation scan
-        azmax (float): Ending azimuth of the constant elevation scan
-        az (float): Fixed azimuth used for a preceding el-nod
-        el (float): Fixed elevation for the constant elevation scan
-        elmin (float): Lower extreme of the el-nod
-        elmax (float): Higher extreme of the el-nod
+            or el-nod
+        azmax (float): Ending azimuth of the constant elevation scan.
+            If `None`, no CES is performed.
+        el (float):  Elevation of the scan.
+        el_nod (string or list of float): List of elevations to acquire relative
+            to `el`.  First and last elevation will always be `el`.
+            Beginning el-nod is always performed at `azmin`.  Ending
+            el-nod is always performed wherever 
+        start_with_elnod (bool) : Perform el-nod before the scan
+        end_with_elnod (bool) : Perform el-nod after the scan
         scanrate (float): Sky scanning rate in degrees / second.
+        scanrate_el (float): Sky elevation scanning rate in
+            degrees / second.  If None, will default to `scanrate`.
         scan_accel (float): Mount scanning rate acceleration in
             degrees / second^2 for the turnarounds.
+        scan_accel_el (float): Mount elevation rate acceleration in
+            degrees / second^2.  If None, will default to `scan_accel`.
         cosecant_modulation (bool): Modulate the scan rate according to
              1/sin(az) to achieve uniform integration depth.
         CES_start (float): Start time of the constant elevation scan
@@ -778,11 +787,13 @@ class TODGround(TOD):
         el=None,
         azmin=None,
         azmax=None,
-        az=None,
-        elmin=None,
-        elmax=None,
+        el_nod=None,
+        start_with_elnod=True,
+        end_with_elnod=False,
         scanrate=1,
+        scanrate_el=None,
         scan_accel=0.1,
+        scan_accel_el=None,
         CES_start=None,
         CES_stop=None,
         el_min=0,
@@ -812,22 +823,26 @@ class TODGround(TOD):
             )
 
         testvec = np.array([el, azmin, azmax])
-        if np.any(testvec):
+        if azmax:
             if not np.all(testvec):
                 raise RuntimeError(
-                    "Simulating a CES requires `el`, `azmin` and `azmax`")
+                    "Simulating a CES requires `el`, `azmin` and `azmax`"
+                )
             do_ces = True
         else:
             do_ces = False
 
-        testvec = np.array([az, elmin, elmax])
-        if np.any(testvec):
-            if not np.all(testvec):
-                raise RuntimeError(
-                    "Simulating an el-nod requires `az`, `elmin` and `elmax`")
+        if el_nod is not None:
+            if azmin is None:
+                raise RuntimeError("Simulating an el-nod requires `azmin`")
             do_elnod = True
         else:
             do_elnod = False
+
+        if scanrate_el is None:
+            scanrate_el = scanrate
+        if scan_accel_el is None:
+            scan_accel_el = scan_accel
 
         if not do_ces and not do_elnod:
             raise RuntimeError("You must provide parameters for a CES and/or el-nod")
@@ -845,7 +860,7 @@ class TODGround(TOD):
         self._site_lon = site_lon
         self._site_lat = site_lat
         self._site_alt = site_alt
-        if el is not None:
+        if azmax is not None and samples > 0:
             if el < 1 or el > 89:
                 raise RuntimeError("Impossible CES at {:.2f} degrees".format(el))
             if azmin == azmax:
@@ -855,19 +870,34 @@ class TODGround(TOD):
             self._el_ces = el * degree
         else:
             self._el_ces = None
-        if az is not None:
-            if elmin < 1 or elmax > 89 or elmin > elmax:
-                raise RuntimeError(
-                    "Impossible el-nod at {:.2f} - {:.2f} degrees".format(elmin, elmax))
-            if elmin == elmax:
-                raise RuntimeError("TODGround el-nod requires non-empty elevation range")
-            self._elmin_elnod = elmin * degree
-            self._elmax_elnod = elmax * degree
-            self._az_elnod = az * degree
+        if do_elnod:
+            if not start_with_elnod and not end_with_elnod:
+                raise RuntimeError("El-not requested without start or end")
+            try:
+                # Try parsing as a comma-separated string
+                el_nod_list = [float(x) for x in el_nod.split(",")]
+            except:
+                # Must already be an iterable
+                el_nod_list = list(el_nod)
+            el_nod = np.array(el_nod_list) + el
+            if np.any(el_nod < 1) or np.any(el_nod > 90):
+                raise RuntimeError("Impossible el-nod at {} degrees".format(el_nod))
+            el_nod = list(el_nod)
+            if el is not None:
+                if abs(el_nod[0] - el) > 1e-3:
+                    el_nod.insert(0, el)
+                if abs(el_nod[-1] - el) > 1e-3:
+                    el_nod.append(el)
+                el_nod = np.array(el_nod)
+            self._elnod_el = el_nod * degree
+            self._elnod_az = np.zeros_like(el_nod) + azmin * degree
         else:
-            self._az_elnod = None
+            self._elnod_el = None
+            self._elnod_az = None
         self._scanrate = scanrate * degree
         self._scan_accel = scan_accel * degree
+        self._scanrate_el = scanrate_el * degree
+        self._scan_accel_el = scan_accel_el * degree
         self._CES_start = CES_start
         self._CES_stop = CES_stop
         self._sun_angle_min = sun_angle_min
@@ -890,10 +920,6 @@ class TODGround(TOD):
         self._min_el = None
         self._min_el = None
 
-        self._times = None
-        self._az = None
-        self._el = None
-        self._commonflags = None
         self._boresight_azel = None
         self._boresight = None
 
@@ -905,11 +931,32 @@ class TODGround(TOD):
                 mpicomm.Barrier()
             timer.start()
 
-        nsample_elnod = self.simulate_elnod()
-        nsample_ces = self.simulate_scan(samples - nsample_elnod)
-        samples = nsample_elnod + nsample_ces
-        self._lasttime = self._firsttime + (samples / rate)
-        self.CES_stop = self._lasttime
+        self._times = np.array([])
+        self._commonflags = np.array([], dtype=np.uint8)
+        self._az = np.array([])
+        self._el = np.array([])
+
+        if start_with_elnod:
+            # Begin with an el-nod
+            nsample_elnod = self.simulate_elnod(
+                self._firsttime, azmin * degree, el * degree
+            )
+            if nsample_elnod > 0:
+                t_elnod = self._times[-1] - self._times[0]
+                # Shift the time stamps so that the CES starts at the prescribed time
+                self._times -= t_elnod
+                self._firsttime -= t_elnod
+
+        nsample_ces = self.simulate_scan(samples)
+
+        if end_with_elnod and self._elnod_az is not None:
+            # Append en el-nod after the CES
+            self._elnod_az[:] = self._az[-1]
+            nsample_elnod = self.simulate_elnod(
+                self._times[-1], self._az[-1], self._el[-1]
+            )
+        self._lasttime = self._times[-1]
+        samples = self._times.size
 
         if self._report_timing:
             if mpicomm is not None:
@@ -933,7 +980,7 @@ class TODGround(TOD):
             )
 
         if len(self._stable_stops) > 0:
-            self._commonflags[self._stable_stops[-1]:] |= self.TURNAROUND
+            self._commonflags[self._stable_stops[-1] :] |= self.TURNAROUND
 
         if np.sum((self._commonflags & self.TURNAROUND) == 0) == 0 and do_ces:
             raise RuntimeError(
@@ -1004,6 +1051,97 @@ class TODGround(TOD):
         return
 
     @function_timer
+    def scan_time(self, coord_in, coord_out, scanrate, scan_accel):
+        """ Given a coordinate range and scan parameters, determine
+        the time taken to scan between them, assuming that the scan
+        begins and ends at rest.
+        """
+        d = np.abs(coord_in - coord_out)
+        t_accel = scanrate / scan_accel
+        d_accel = 0.5 * scan_accel * t_accel ** 2
+        if 2 * d_accel > d:
+            # No time to reach scan speed
+            d_accel = d / 2
+            t_accel = np.sqrt(2 * d_accel / scan_accel)
+            t_coast = 0
+        else:
+            d_coast = d - 2 * d_accel
+            t_coast = d_coast / scanrate
+        return 2 * t_accel + t_coast
+
+    @function_timer
+    def scan_profile(
+        self, coord_in, coord_out, scanrate, scan_accel, times, nstep=10000
+    ):
+        """ scan between the coordinates assuming that the scan begins
+        and ends at rest.  If there is more time than is needed, wait at the end.
+        """
+        if np.abs(coord_in - coord_out) < 1e-6:
+            return np.zeros(times.size) + coord_out
+
+        d = np.abs(coord_in - coord_out)
+        t_accel = scanrate / scan_accel
+        d_accel = 0.5 * scan_accel * t_accel ** 2
+        if 2 * d_accel > d:
+            # No time to reach scan speed
+            d_accel = d / 2
+            t_accel = np.sqrt(2 * d_accel / scan_accel)
+            t_coast = 0
+            # Scan rate at the end of acceleration
+            scanrate = t_accel * scan_accel
+        else:
+            d_coast = d - 2 * d_accel
+            t_coast = d_coast / scanrate
+        if coord_in > coord_out:
+            scanrate *= -1
+            scan_accel *= -1
+        #
+        t = []
+        coord = []
+        # Acceleration
+        t.append(np.linspace(times[0], times[0] + t_accel, nstep))
+        coord.append(coord_in + 0.5 * scan_accel * (t[-1] - t[-1][0]) ** 2)
+        # Coasting
+        if t_coast > 0:
+            t.append(np.linspace(t[-1][-1], t[-1][-1] + t_coast, 3))
+            coord.append(coord[-1][-1] + scanrate * (t[-1] - t[-1][0]))
+        # Deceleration
+        t.append(np.linspace(t[-1][-1], t[-1][-1] + t_accel, nstep))
+        coord.append(
+            coord[-1][-1]
+            + scanrate * (t[-1] - t[-1][0])
+            - 0.5 * scan_accel * (t[-1] - t[-1][0]) ** 2
+        )
+        # Wait
+        if t[-1][-1] < times[-1]:
+            t.append(np.linspace(t[-1][-1], times[-1], 3))
+            coord.append(np.zeros(3) + coord_out)
+
+        # Interpolate to the given time stamps
+        t = np.hstack(t)
+        coord = np.hstack(coord)
+
+        return np.interp(times, t, coord)
+
+    @function_timer
+    def scan_between(self, time_start, azel_in, azel_out, nstep=10000):
+        """ Using self._scanrate, self._scan_accel, self._scanrate_el
+        and self._scan_accel_el, simulate motion between the two
+        coordinates
+        """
+
+        az1, el1 = azel_in
+        az2, el2 = azel_out
+        az_time = self.scan_time(az1, az2, self._scanrate, self._scan_accel)
+        el_time = self.scan_time(el1, el2, self._scanrate_el, self._scan_accel_el)
+        time_tot = max(az_time, el_time)
+        times = np.linspace(0, time_tot, nstep)
+        az = self.scan_profile(az1, az2, self._scanrate, self._scan_accel, times)
+        el = self.scan_profile(el1, el2, self._scanrate_el, self._scan_accel_el, times)
+
+        return times + time_start, az, el
+
+    @function_timer
     def __del__(self):
         try:
             del self._boresight_azel
@@ -1048,88 +1186,67 @@ class TODGround(TOD):
         return self._min_az, self._max_az, self._min_el, self._max_el
 
     @function_timer
-    def simulate_elnod(self):
+    def simulate_elnod(self, t_start, az_start, el_start):
         """ Simulate an el-nod, if one was requested
         """
 
-        if self._az_elnod is not None:
-            t = self._firsttime
-
-            delta_el = self._elmax_elnod - self._elmin_elnod
-
-            # Start from el_max, accelerate to scan rate
-            t_accel = self._scanrate / self._scan_accel
-            # change in elevation during acceleration / deceleration
-            delta_el_accel = 0.5 * self._scan_accel * t_accel ** 2
-            if 2 * delta_el_accel > delta_el:
-                raise RuntimeError("El-nod is too small to reach scan rate")
-            # Time spent scanning at constant rate
-            t_nod = (delta_el - 2 * delta_el_accel) / self._scanrate
-            # Total time performing el-nod
-            t_nod_tot = 2 * t_nod + 4 * t_accel
-
-            # Supersample the elevation vector, then interpolate to sampling rate
-            nstep = 10000
+        if self._elnod_el is not None:
+            time_last = t_start
+            az_last = az_start
+            el_last = el_start
             t = []
+            az = []
             el = []
-            # acceleration
-            t.append(np.linspace(0, t_accel, nstep, endpoint=False))
-            el.append(self._elmax_elnod - 0.5 * self._scan_accel * t[-1] ** 2)
-            # constant scan downwards
-            t.append(np.linspace(t_accel, t_nod + t_accel, nstep, endpoint=False))
-            el.append(el[-1][-1] - self._scanrate * (t[-1] - t[-1][0]))
-            # deceleration
-            t.append(np.linspace(t_accel + t_nod, t_nod + 2 * t_accel, nstep, endpoint=False))
-            el.append(
-                el[-1][-1]
-                - self._scanrate * (t[-1] - t[-1][0])
-                + 0.5 * self._scan_accel * (t[-1] - t[-1][0]) ** 2
-            )
-            # Mirror the scan to return
-            t = np.hstack(t)
-            el = np.hstack(el)
-            t = np.hstack([t, t + t_nod_tot / 2])
-            el = np.hstack([el, el[::-1]])
-            az = np.zeros_like(el) + self._az_elnod
+            for az_new, el_new in zip(self._elnod_az, self._elnod_el):
+                if np.abs(az_last - az_new) > 1e-3 or np.abs(el_last - el_new) > 1e-3:
+                    tvec, azvec, elvec = self.scan_between(
+                        time_last, (az_last, el_last), (az_new, el_new)
+                    )
+                    t.append(tvec)
+                    az.append(azvec)
+                    el.append(elvec)
+                    time_last = tvec[-1]
+                az_last = az_new
+                el_last = el_new
 
-            if self._el_ces is not None:
-                # Slew to the start of the CES.
-                # No acceleration/deceleration, just constant scan rate
-                delta_el_slew = self._el_ces - self._elmax_elnod
-                delta_az_slew = self._azmin_ces - self._az_elnod
-                t_slew = max(np.abs(delta_el_slew), np.abs(delta_az_slew)) / self._scanrate
-                t_slew = np.linspace(0, t_slew, nstep)[1:]
-                frac = t_slew / t_slew[-1]
-                az = np.hstack([az, az[-1] + delta_az_slew * frac])
-                el = np.hstack([el, el[-1] + delta_el_slew * frac])
-                t = np.hstack([t, t[-1] + t_slew])
+            t = np.hstack(t)
+            az = np.hstack(az)
+            el = np.hstack(el)
+
+            # Store the scan range.  We use the high resolution elevation
+            # so actual sampling rate will not change the range.
+            self.update_scan_range(az, el)
 
             # Sample t/az/el down to the sampling rate
-            nsample_elnod = int(t[-1] * self._rate)
-            t_sample = np.arange(nsample_elnod) / self._rate
+            nsample_elnod = int((t[-1] - t[0]) * self._rate)
+            t_sample = np.arange(nsample_elnod) / self._rate + t_start
             az_sample = np.interp(t_sample, t, az)
             el_sample = np.interp(t_sample, t, el)
-            self._times = self._firsttime + t_sample
-            self._commonflags = np.zeros(nsample_elnod, dtype=np.uint8)
-            self._commonflags[: int(t_nod_tot * self._rate)] |= self.ELNOD
-            self._commonflags |= self.TURNAROUND
-            self._az = az_sample
-            self._el = el_sample
-            self._CES_start = self._times[-1] + 1 / self._rate
+            commonflags_sample = np.zeros(nsample_elnod, dtype=np.uint8) + (
+                self.ELNOD | self.TURNAROUND
+            )
+            self._times = np.hstack([self._times, t_sample])
+            self._commonflags = np.hstack([self._commonflags, commonflags_sample])
+            self._az = np.hstack([self._az, az_sample])
+            self._el = np.hstack([self._el, el_sample])
+        else:
+            nsample_elnod = 0
+
+        return nsample_elnod
+
+    @function_timer
+    def update_scan_range(self, az, el):
+        if self._min_az is None:
             self._min_az = np.amin(az)
             self._max_az = np.amax(az)
             self._min_el = np.amin(el)
             self._max_el = np.amax(el)
-
         else:
-            self._times = np.array([])
-            self._commonflags = np.array([], dtype=np.uint8)
-            self._az = np.array([])
-            self._el = np.array([])
-            self._CES_start = self._firsttime
-            nsample_elnod = 0
-
-        return nsample_elnod
+            self._min_az = min(self._min_az, np.amin(az))
+            self._max_az = max(self._max_az, np.amax(az))
+            self._min_el = min(self._min_el, np.amin(el))
+            self._max_el = max(self._max_el, np.amax(el))
+        return
 
     @function_timer
     def simulate_scan(self, samples):
@@ -1144,8 +1261,13 @@ class TODGround(TOD):
             self._stable_stops = []
             return 0
 
-        if samples < 0:
-            raise RuntimeError("El-nod leaves no time to perform CES")
+        if samples <= 0:
+            raise RuntimeError("CES requires a positive number of samples")
+
+        if len(self._times) == 0:
+            self._CES_start = self._firsttime
+        else:
+            self._CES_start = self._times[-1] + 1 / self._rate
 
         # Begin by simulating one full scan with turnarounds.
         # It will be used to interpolate the full CES.
@@ -1263,16 +1385,7 @@ class TODGround(TOD):
         # Store the scan range.  We use the high resolution azimuth so the
         # actual sampling rate will not change the range.
 
-        if self._az_elnod is None:
-            self._min_az = np.amin(azvec)
-            self._max_az = np.amax(azvec)
-            self._min_el = self._el_ces
-            self._max_el = self._el_ces
-        else:
-            self._min_az = min(self._min_az, np.amin(azvec))
-            self._max_az = max(self._max_az, np.amax(azvec))
-            self._min_el = min(self._min_el, self._el_ces)
-            self._max_el = max(self._max_el, self._el_ces)
+        self.update_scan_range(azvec, self._el_ces)
 
         # Now interpolate the simulated scan to timestamps
 
@@ -1310,6 +1423,8 @@ class TODGround(TOD):
             self._stable_stops = np.hstack([self._stable_stops, [samples]])
         self._stable_starts += offset
         self._stable_stops += offset
+
+        self._CES_stop = self._times[-1]
 
         return samples
 
