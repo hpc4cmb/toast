@@ -57,10 +57,8 @@ from . import tod_satellite as testtodsat
 
 from ..todmap import pysm
 
-# These tests segfault locally.  Re-enable once we are doing bandpass integration on
-# on the fly.
-# if pysm is not None:
-#     from . import ops_sim_pysm as testopspysm
+if pysm is not None:
+    from . import ops_sim_pysm as testopspysm
 
 from . import ops_sim_atm as testopsatm
 
@@ -142,8 +140,10 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
         suite.addTest(loader.loadTestsFromModule(testopsatm))
-        if pysm is not None:
-            suite.addTest(loader.loadTestsFromModule(testopspysm))
+        # These tests segfault locally.  Re-enable once we are doing bandpass
+        # integration on on the fly.
+        # if pysm is not None:
+        #     suite.addTest(loader.loadTestsFromModule(testopspysm))
 
         if tidas_available:
             suite.addTest(loader.loadTestsFromModule(testtidas))
