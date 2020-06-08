@@ -1,10 +1,14 @@
 include README.md
 include AUTHORS
 include LICENSE
-include src
 include CMakeLists.txt
-include tutorial
-include example
-include platforms
-include cmake
-include docs
+recursive-include src *
+recursive-include pipelines *
+recursive-include tutorial *
+recursive-include examples *
+prune examples/job*
+prune examples/data
+recursive-include platforms *
+recursive-include cmake *
+recursive-include docs *
+prune docs/_build

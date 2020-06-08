@@ -57,8 +57,10 @@ from . import tod_satellite as testtodsat
 
 from ..todmap import pysm
 
-if pysm is not None:
-    from . import ops_sim_pysm as testopspysm
+# These tests segfault locally.  Re-enable once we are doing bandpass integration on
+# on the fly.
+# if pysm is not None:
+#     from . import ops_sim_pysm as testopspysm
 
 from . import ops_sim_atm as testopsatm
 

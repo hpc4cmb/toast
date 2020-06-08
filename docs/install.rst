@@ -32,9 +32,9 @@ Now activate this environment::
 
     source ${HOME}/cmb/bin/activate
 
-Next, use pip to install toast and its requirements::
+Next, use pip to install toast and its requirements (note that the name of the package is "toast-cmb" on PyPI)::
 
-    pip install toast
+    pip install toast-cmb
 
 If you want to enable effective parallelism with toast, then you need to install the
 mpi4py package.  This package requires MPI compilers (usually MPICH or OpenMPI).  Your
