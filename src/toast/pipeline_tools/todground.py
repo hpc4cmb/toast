@@ -128,7 +128,7 @@ def add_todground_args(parser):
         "--no-el-nod-every-scan",
         required=False,
         action="store_false",
-        help="Only apped el-nod to the first sub scan",
+        help="Only append el-nod to the first sub scan",
         dest="el_nod_every_scan",
     )
     parser.set_defaults(el_nod_every_scan=True)
