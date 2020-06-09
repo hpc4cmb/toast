@@ -62,6 +62,7 @@ def set_numba_threading():
     env = Environment.get()
     log = Logger.get()
     toastthreads = env.max_threads()
+    print("max toast threads = ", toastthreads, flush=True)
 
     rank = 0
     if env.use_mpi4py():
@@ -70,26 +71,49 @@ def set_numba_threading():
         rank = MPI.COMM_WORLD.rank
 
     threading = "default"
+    have_numba_omp = False
     try:
-        from numba.npyufunc import omppool
-
-        threading = "omp"
+        # New style package layout
+        from numba.np.ufunc import omppool
+        have_numba_omp = True
         if rank == 0:
             log.debug("Numba has OpenMP threading support")
     except ImportError:
-        # no OpenMP support
-        if rank == 0:
-            log.debug("Numba does not support OpenMP")
         try:
+            # Old style
+            from numba.npyufunc import omppool
+            have_numba_omp = True
+            if rank == 0:
+                log.debug("Numba has OpenMP threading support")
+        except ImportError:
+            # no OpenMP support
+            if rank == 0:
+                log.debug("Numba does not support OpenMP")
+    have_numba_tbb = False
+    try:
+        # New style package layout
+        from numba.np.ufunc import tbbpool
+        have_numba_tbb = True
+        if rank == 0:
+            log.debug("Numba has TBB threading support")
+    except ImportError:
+        try:
+            # Old style
             from numba.npyufunc import tbbpool
-
-            threading = "tbb"
+            have_numba_tbb = True
             if rank == 0:
                 log.debug("Numba has TBB threading support")
         except ImportError:
             # no TBB
             if rank == 0:
                 log.debug("Numba does not support TBB")
+
+    # Prefer OMP backend
+    if have_numba_omp:
+        threading = "omp"
+    elif have_numba_tbb:
+        threading = "tbb"
+
     try:
         from numba import vectorize, config, threading_layer
 
