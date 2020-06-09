@@ -459,7 +459,7 @@ def scale_atmosphere_by_frequency(
                 azelquat = tod.read_pntg(detector=det, azel=True)
                 theta, phi = qa.to_position(azelquat)
                 el = np.pi / 2 - theta
-            ref += loading_det / np.cos(np.pi / 2 - el)
+            ref += loading_det / np.sin(el)
             del ref
 
     if comm.comm_world is not None:
