@@ -7,7 +7,7 @@ import itertools
 
 import numpy as np
 
-from .utils import Environment, Logger, set_numba_threading
+from .utils import Environment, Logger
 
 from .pshmem import MPIShared, MPILock
 
@@ -27,21 +27,6 @@ if use_mpi4py and (MPI is None):
             "not found at run time.  Is mpi4py currently in "
             "your python search path?"
         )
-
-# We set the numba threading here, **after** importing MPI.  The reasons are:
-#
-#  1. The import of MPI is time critical.  MPI_Init must be called quickly
-#     before the scheduling system thinks that the job is hung and kills it.
-#
-#  2. This source file is loaded by the top level module import, so placing
-#     code here will ensure that it is run once and only once when toast itself
-#     is imported and before any other dependencies are imported which might
-#     use numba internally.
-
-_have_set_numba_threading = False
-if not _have_set_numba_threading:
-    set_numba_threading()
-    _have_set_numba_threading = True
 
 
 def get_world():

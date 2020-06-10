@@ -36,7 +36,14 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
-numba_threading_layer = "NA"
+
+# This function sets the numba threading layer to (hopefully) be compatible with TOAST.
+# The TOAST threading concurrency is used to attempt to set the numba threading.  We
+# try to use the OpenMP backend for numba and then TBB.  The "workqueue" backend (which
+# is process based).  May not be compatible with all systems, so we use that as a
+# last resort.  This function should be called by any operators that use numba.
+
+numba_threading_layer = None
 
 
 def set_numba_threading():
@@ -58,6 +65,10 @@ def set_numba_threading():
 
     """
     global numba_threading_layer
+    if numba_threading_layer is not None:
+        # Already set.
+        return
+
     # Get the number of threads used by TOAST at runtime.
     env = Environment.get()
     log = Logger.get()
@@ -75,6 +86,7 @@ def set_numba_threading():
     try:
         # New style package layout
         from numba.np.ufunc import omppool
+
         have_numba_omp = True
         if rank == 0:
             log.debug("Numba has OpenMP threading support")
@@ -82,6 +94,7 @@ def set_numba_threading():
         try:
             # Old style
             from numba.npyufunc import omppool
+
             have_numba_omp = True
             if rank == 0:
                 log.debug("Numba has OpenMP threading support")
@@ -93,6 +106,7 @@ def set_numba_threading():
     try:
         # New style package layout
         from numba.np.ufunc import tbbpool
+
         have_numba_tbb = True
         if rank == 0:
             log.debug("Numba has TBB threading support")
@@ -100,6 +114,7 @@ def set_numba_threading():
         try:
             # Old style
             from numba.npyufunc import tbbpool
+
             have_numba_tbb = True
             if rank == 0:
                 log.debug("Numba has TBB threading support")
