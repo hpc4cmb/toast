@@ -1128,6 +1128,7 @@ class AtmSim(object):
         )
 
         if self._comm is not None:
+            self._comm.Allreduce(MPI.IN_PLACE, [self._kolmo_x, MPI.DOUBLE], MPI.SUM)
             self._comm.Allreduce(MPI.IN_PLACE, [self._kolmo_y, MPI.DOUBLE], MPI.SUM)
 
         # Normalize
@@ -1137,7 +1138,7 @@ class AtmSim(object):
 
         if (self._rank == 0) and self._write_debug:
             with open("kolmogorov.txt", "w") as f:
-                for ir in range(nr):
+                for ir in range(self._nr):
                     f.write(
                         "{:.15e} {:.15e}\n".format(self._kolmo_x[ir], self._kolmo_y[ir])
                     )

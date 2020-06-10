@@ -104,13 +104,15 @@ void toast::atm_sim_kolmogorov_init_rank(
             * exp(-kkl * kkl) * pow(k * k + kappa0sq, slope2);
     }
 
-    if ((rank == 0) && atm_verbose()) {
+    if (atm_verbose()) {
         std::ofstream f;
         std::ostringstream fname;
-        fname << "kolmogorov_f.txt";
+        fname << "kolmogorov_f_" << rank << ".txt";
         f.open(fname.str(), std::ios::out);
-        for (int ikappa = 0; ikappa < nkappa; ++ikappa) {
-            f << kappa[ikappa] << " " << phi[ikappa] << std::endl;
+        for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
+            f << ikappa << " " << kappa[ikappa - first_kappa] << " " <<
+            phi[ikappa - first_kappa] <<
+                std::endl;
         }
         f.close();
     }
