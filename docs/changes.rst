@@ -12,6 +12,7 @@ Change Log
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Documentation updates and deployment of pip wheels on tags (PR `#XXX`_).
+* Fix a bug in parallel writing of Healpix FITS files (PR `#354`_).
 * Remove dependence on MPI compilers.  Only mpi4py is needed (PR `#350`_).
 * Use the native mapmaker by default in the example pipelines (PR `#352`_).
 * Updates to build system for pip wheel compatibility (PR `#348`_, `#351`_).
@@ -26,6 +27,7 @@ Change Log
 * Implement helper tools for parsing mapmaker options (PR `#321`_).
 
 .. _`#XXX`: https://github.com/hpc4cmb/toast/pull/XXX
+.. _`#354`: https://github.com/hpc4cmb/toast/pull/354
 .. _`#350`: https://github.com/hpc4cmb/toast/pull/350
 .. _`#352`: https://github.com/hpc4cmb/toast/pull/352
 .. _`#351`: https://github.com/hpc4cmb/toast/pull/351
