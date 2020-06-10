@@ -1128,7 +1128,6 @@ class AtmSim(object):
         )
 
         if self._comm is not None:
-            self._comm.Allreduce(MPI.IN_PLACE, [self._kolmo_x, MPI.DOUBLE], MPI.SUM)
             self._comm.Allreduce(MPI.IN_PLACE, [self._kolmo_y, MPI.DOUBLE], MPI.SUM)
 
         # Normalize
