@@ -931,6 +931,10 @@ void toast::atm_sim_compute_slice(
     ) {
     auto & chol = toast::CholmodCommon::get();
 
+    auto & gt = toast::GlobalTimers::get();
+
+    gt.start("atm_sim_build_sparse_covariance");
+
     cholmod_sparse * cov = toast::atm_sim_build_sparse_covariance(
         ind_start,
         ind_stop,
@@ -959,6 +963,10 @@ void toast::atm_sim_compute_slice(
         rank
         );
 
+    gt.stop("atm_sim_build_sparse_covariance");
+
+    gt.start("atm_sim_sqrt_sparse_covariance");
+
     cholmod_sparse * sqrt_cov = toast::atm_sim_sqrt_sparse_covariance(
         cov,
         ind_start,
@@ -966,7 +974,11 @@ void toast::atm_sim_compute_slice(
         rank
         );
 
+    gt.stop("atm_sim_sqrt_sparse_covariance");
+
     cholmod_free_sparse(&cov, chol.chcommon);
+
+    gt.start("atm_sim_apply_sparse_covariance");
 
     toast::atm_sim_apply_sparse_covariance(
         sqrt_cov,
@@ -979,6 +991,8 @@ void toast::atm_sim_compute_slice(
         realization,
         rank
         );
+
+    gt.stop("atm_sim_apply_sparse_covariance");
 
     cholmod_free_sparse(&sqrt_cov, chol.chcommon);
 
