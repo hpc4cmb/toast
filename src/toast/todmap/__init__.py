@@ -40,7 +40,7 @@ from .groundfilter import OpGroundFilter
 
 from .pointing_math import aberrate
 
-from .conviqt import OpSimConviqt
+from .conviqt import OpSimConviqt, OpSimWeightedConviqt
 
 from .atm import available_utils as atm_available_utils
 from .mapsampler import MapSampler
