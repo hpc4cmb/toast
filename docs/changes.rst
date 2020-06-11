@@ -6,12 +6,14 @@ Change Log
 2.3.8 (Unreleased)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* Nothing yet
 
-
-2.3.7 (2020-06-XX)
+2.3.7 (2020-06-12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Documentation updates and deployment of pip wheels on tags (PR `#XXX`_).
+* Documentation updates and deployment of pip wheels on tags (PR `#356`_).
+* Cleanups of conviqt polarization support (PR `#347`_).
+* Support elevation nods in ground simulations (PR `#355`_).
 * Fix a bug in parallel writing of Healpix FITS files (PR `#354`_).
 * Remove dependence on MPI compilers.  Only mpi4py is needed (PR `#350`_).
 * Use the native mapmaker by default in the example pipelines (PR `#352`_).
@@ -26,7 +28,9 @@ Change Log
 * Add optional boresight offset to the scheduler (PR `#329`_).
 * Implement helper tools for parsing mapmaker options (PR `#321`_).
 
-.. _`#XXX`: https://github.com/hpc4cmb/toast/pull/XXX
+.. _`#356`: https://github.com/hpc4cmb/toast/pull/356
+.. _`#347`: https://github.com/hpc4cmb/toast/pull/347
+.. _`#355`: https://github.com/hpc4cmb/toast/pull/355
 .. _`#354`: https://github.com/hpc4cmb/toast/pull/354
 .. _`#350`: https://github.com/hpc4cmb/toast/pull/350
 .. _`#352`: https://github.com/hpc4cmb/toast/pull/352
