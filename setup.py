@@ -239,7 +239,15 @@ conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
 conf["python_requires"] = ">=3.6.0"
-conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib", "ephem"]
+conf["install_requires"] = [
+    "cmake",
+    "numpy",
+    "scipy",
+    "healpy",
+    "matplotlib",
+    "ephem",
+    "h5py",
+]
 conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}

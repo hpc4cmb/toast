@@ -20,16 +20,12 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.7
-    - name: Install Dependencies
-      run: pip install numpy
-    - name: Install Package
-      run: pip install .
+    - name: Pull Dependency Image
+      run: docker pull hpc4cmb/toast-deps-py37:latest
+    - name: Create dist directory
+      run: mkdir -p dist && rm -f dist/*
     - name: Build source package
-      run: rm -rf dist && python setup.py sdist
+      run: docker run -v "$(pwd)":/home/toast hpc4cmb/toast-deps-py37:latest cp -a /home/toast . && cd toast && pip install . && python setup.py sdist && chown $(id -u):$(id -g) dist/* && cp -a dist/* /home/toast/dist/
     - uses: actions/upload-artifact@v2
       with:
         name: sdist
