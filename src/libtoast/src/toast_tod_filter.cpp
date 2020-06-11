@@ -226,14 +226,13 @@ void toast::bin_templates(double * signal, double * templates,
 
 void toast::chebyshev(double * x, double * templates, size_t start_order,
                       size_t stop_order, size_t nsample) {
-
     // order == 0
-    if (start_order == 0 && stop_order > 0) {
+    if ((start_order == 0) && (stop_order > 0)) {
         for (size_t i = 0; i < nsample; ++i) templates[i] = 1;
     }
 
     // order == 1
-    if (start_order <= 1 && stop_order > 1) {
+    if ((start_order <= 1) && (stop_order > 1)) {
         memcpy(templates + (1 - start_order) * nsample, x, nsample * sizeof(double));
     }
 

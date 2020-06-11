@@ -2,25 +2,20 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
-from scipy.constants import degree
-
-import healpy as hp
+import warnings
 
 try:
     import ephem
 except:
     ephem = None
+import healpy as hp
+import numpy as np
+from scipy.constants import degree
 
 from .. import qarray as qa
-
 from ..timing import function_timer, Timer
-
 from ..tod import Interval, TOD
-
 from ..healpix import ang2vec
-
 from .pointing_math import quat_equ2ecl, quat_equ2gal, quat_ecl2gal
 
 
@@ -607,7 +602,7 @@ class TODSatellite(TOD):
     def _get_boresight(self, start, n):
         if self._boresight is None:
             raise RuntimeError(
-                "you must set the precession axis before " "reading pointing"
+                "you must set the precession axis before reading pointing"
             )
         return self._boresight[start : start + n]
 
@@ -726,9 +721,24 @@ class TODGround(TOD):
         site_lat (float/str): Observing site Earth latitude in radians
             or a pyEphem string.
         site_alt (float/str): Observing site Earth altitude in meters.
+        azmin (float):  Starting azimuth of the constant elevation scan
+            or el-nod
+        azmax (float): Ending azimuth of the constant elevation scan.
+            If `None`, no CES is performed.
+        el (float):  Elevation of the scan.
+        el_nod (string or list of float): List of elevations to acquire relative
+            to `el`.  First and last elevation will always be `el`.
+            Beginning el-nod is always performed at `azmin`.  Ending
+            el-nod is always performed wherever 
+        start_with_elnod (bool) : Perform el-nod before the scan
+        end_with_elnod (bool) : Perform el-nod after the scan
         scanrate (float): Sky scanning rate in degrees / second.
+        scanrate_el (float): Sky elevation scanning rate in
+            degrees / second.  If None, will default to `scanrate`.
         scan_accel (float): Mount scanning rate acceleration in
             degrees / second^2 for the turnarounds.
+        scan_accel_el (float): Mount elevation rate acceleration in
+            degrees / second^2.  If None, will default to `scan_accel`.
         cosecant_modulation (bool): Modulate the scan rate according to
              1/sin(az) to achieve uniform integration depth.
         CES_start (float): Start time of the constant elevation scan
@@ -760,6 +770,7 @@ class TODGround(TOD):
     RIGHTLEFT_TURNAROUND = RIGHTLEFT_SCAN + TURNAROUND
     SUN_UP = 8
     SUN_CLOSE = 16
+    ELNOD = 32
 
     @function_timer
     def __init__(
@@ -773,11 +784,16 @@ class TODGround(TOD):
         site_lon=0,
         site_lat=0,
         site_alt=0,
-        azmin=0,
-        azmax=0,
-        el=0,
+        el=None,
+        azmin=None,
+        azmax=None,
+        el_nod=None,
+        start_with_elnod=True,
+        end_with_elnod=False,
         scanrate=1,
+        scanrate_el=None,
         scan_accel=0.1,
+        scan_accel_el=None,
         CES_start=None,
         CES_stop=None,
         el_min=0,
@@ -806,40 +822,84 @@ class TODGround(TOD):
                 "TODGround will synthesize the sizes to match the subscans."
             )
 
-        if CES_start is None:
-            CES_start = firsttime
-        elif firsttime < CES_start:
-            raise RuntimeError(
-                "TODGround: firsttime < CES_start: {} < {}"
-                "".format(firsttime, CES_start)
-            )
-        lasttime = firsttime + samples / rate
-        if CES_stop is None:
-            CES_stop = lasttime
-        elif lasttime > CES_stop:
-            raise RuntimeError(
-                "TODGround: lasttime > CES_stop: {} > {}" "".format(lasttime, CES_stop)
-            )
+        testvec = np.array([el, azmin, azmax])
+        if azmax:
+            if not np.all(testvec):
+                raise RuntimeError(
+                    "Simulating a CES requires `el`, `azmin` and `azmax`"
+                )
+            do_ces = True
+        else:
+            do_ces = False
+
+        if el_nod is not None:
+            if azmin is None:
+                raise RuntimeError("Simulating an el-nod requires `azmin`")
+            do_elnod = True
+        else:
+            do_elnod = False
+
+        if scanrate_el is None:
+            scanrate_el = scanrate
+        if scan_accel_el is None:
+            scan_accel_el = scan_accel
+
+        if not do_ces and not do_elnod:
+            raise RuntimeError("You must provide parameters for a CES and/or el-nod")
+
+        if CES_start is not None:
+            warnings.warn("User should not set CES_start", DeprecationWarning)
+            CES_start = None
+        if CES_stop is not None:
+            warnings.warn("User should not set CES_stop", DeprecationWarning)
+            CES_stop = None
 
         self._boresight_angle = boresight_angle * degree
         self._firsttime = firsttime
-        self._lasttime = lasttime
         self._rate = rate
         self._site_lon = site_lon
         self._site_lat = site_lat
         self._site_alt = site_alt
-        if azmin == azmax:
-            raise RuntimeError("TODGround requires non-empty azimuth range")
-        self._azmin = azmin * degree
-        self._azmax = azmax * degree
-        if el < 1 or el > 89:
-            raise RuntimeError("Impossible CES at {:.2f} degrees".format(el))
-        self._el = el * degree
+        if azmax is not None and samples > 0:
+            if el < 1 or el > 89:
+                raise RuntimeError("Impossible CES at {:.2f} degrees".format(el))
+            if azmin == azmax:
+                raise RuntimeError("TODGround CES requires non-empty azimuth range")
+            self._azmin_ces = azmin * degree
+            self._azmax_ces = azmax * degree
+            self._el_ces = el * degree
+        else:
+            self._el_ces = None
+        if do_elnod:
+            if not start_with_elnod and not end_with_elnod:
+                raise RuntimeError("El-not requested without start or end")
+            try:
+                # Try parsing as a comma-separated string
+                el_nod_list = [float(x) for x in el_nod.split(",")]
+            except:
+                # Must already be an iterable
+                el_nod_list = list(el_nod)
+            el_nod = np.array(el_nod_list) + el
+            if np.any(el_nod < 1) or np.any(el_nod > 90):
+                raise RuntimeError("Impossible el-nod at {} degrees".format(el_nod))
+            el_nod = list(el_nod)
+            if el is not None:
+                if abs(el_nod[0] - el) > 1e-3:
+                    el_nod.insert(0, el)
+                if abs(el_nod[-1] - el) > 1e-3:
+                    el_nod.append(el)
+                el_nod = np.array(el_nod)
+            self._elnod_el = el_nod * degree
+            self._elnod_az = np.zeros_like(el_nod) + azmin * degree
+        else:
+            self._elnod_el = None
+            self._elnod_az = None
         self._scanrate = scanrate * degree
         self._scan_accel = scan_accel * degree
+        self._scanrate_el = scanrate_el * degree
+        self._scan_accel_el = scan_accel_el * degree
         self._CES_start = CES_start
         self._CES_stop = CES_stop
-        self._el_min = el_min
         self._sun_angle_min = sun_angle_min
         if coord not in "CEG":
             raise RuntimeError("Unknown coordinate system: {}".format(coord))
@@ -860,29 +920,49 @@ class TODGround(TOD):
         self._min_el = None
         self._min_el = None
 
-        self._az = None
-        self._commonflags = None
         self._boresight_azel = None
         self._boresight = None
 
         # Set the boresight pointing based on the given scan parameters
 
-        tm = Timer()
+        timer = Timer()
         if self._report_timing:
             if mpicomm is not None:
                 mpicomm.Barrier()
-            tm.start()
+            timer.start()
 
-        sizes, starts = self.simulate_scan(samples)
+        self._times = np.array([])
+        self._commonflags = np.array([], dtype=np.uint8)
+        self._az = np.array([])
+        self._el = np.array([])
+
+        if start_with_elnod:
+            # Begin with an el-nod
+            nsample_elnod = self.simulate_elnod(
+                self._firsttime, azmin * degree, el * degree
+            )
+            if nsample_elnod > 0:
+                t_elnod = self._times[-1] - self._times[0]
+                # Shift the time stamps so that the CES starts at the prescribed time
+                self._times -= t_elnod
+                self._firsttime -= t_elnod
+
+        nsample_ces = self.simulate_scan(samples)
+
+        if end_with_elnod and self._elnod_az is not None:
+            # Append en el-nod after the CES
+            self._elnod_az[:] = self._az[-1]
+            nsample_elnod = self.simulate_elnod(
+                self._times[-1], self._az[-1], self._el[-1]
+            )
+        self._lasttime = self._times[-1]
+        samples = self._times.size
 
         if self._report_timing:
             if mpicomm is not None:
                 mpicomm.Barrier()
-            tm.stop()
-            if (mpicomm is None) or (mpicomm.rank == 0):
-                tm.report("TODGround: simulate scan")
-            tm.clear()
-            tm.start()
+            if mpicomm is None or mpicomm.rank == 0:
+                timer.report_clear("TODGround: simulate scan")
 
         # Create a list of subscans that excludes the turnarounds.
         # All processes in the group still have all samples.
@@ -890,7 +970,7 @@ class TODGround(TOD):
         self.subscans = []
         self._subscan_min_length = 10  # in samples
         for istart, istop in zip(self._stable_starts, self._stable_stops):
-            if istop - istart < self._subscan_min_length:
+            if istop - istart < self._subscan_min_length or istart < nsample_elnod:
                 self._commonflags[istart:istop] |= self.TURNAROUND
                 continue
             start = self._firsttime + istart / self._rate
@@ -899,9 +979,10 @@ class TODGround(TOD):
                 Interval(start=start, stop=stop, first=istart, last=istop - 1)
             )
 
-        self._commonflags[istop:] |= self.TURNAROUND
+        if len(self._stable_stops) > 0:
+            self._commonflags[self._stable_stops[-1] :] |= self.TURNAROUND
 
-        if np.sum((self._commonflags & self.TURNAROUND) == 0) == 0:
+        if np.sum((self._commonflags & self.TURNAROUND) == 0) == 0 and do_ces:
             raise RuntimeError(
                 "The entire TOD is flagged as turnaround. Samplerate too low "
                 "({} Hz) or scanrate too high ({} deg/s)?"
@@ -911,11 +992,8 @@ class TODGround(TOD):
         if self._report_timing:
             if mpicomm is not None:
                 mpicomm.Barrier()
-            tm.stop()
-            if (mpicomm is None) or (mpicomm.rank == 0):
-                tm.report("TODGround: list valid intervals")
-            tm.clear()
-            tm.start()
+            if mpicomm is None or mpicomm.rank == 0:
+                timer.report_clear("TODGround: list valid intervals")
 
         self._fp = detectors
         self._detlist = sorted(list(self._fp.keys()))
@@ -953,11 +1031,8 @@ class TODGround(TOD):
         if self._report_timing:
             if mpicomm is not None:
                 mpicomm.Barrier()
-            tm.stop()
-            if (mpicomm is None) or (mpicomm.rank == 0):
-                tm.report("TODGround: call base class constructor")
-            tm.clear()
-            tm.start()
+            if mpicomm is None or mpicomm.rank == 0:
+                timer.report_clear("TODGround: call base class constructor")
 
         self.translate_pointing()
 
@@ -966,15 +1041,105 @@ class TODGround(TOD):
         if self._report_timing:
             if mpicomm is not None:
                 mpicomm.Barrier()
-            tm.stop()
-            if (mpicomm is None) or (mpicomm.rank == 0):
-                tm.report("TODGround: translate scan pointing")
+            if mpicomm is None or mpicomm.rank == 0:
+                timer.report_clear("TODGround: translate scan pointing")
 
         # If HWP parameters are specified, simulate and cache HWP angle
 
         simulate_hwp(self, hwprpm, hwpstep, hwpsteptime)
 
         return
+
+    @function_timer
+    def scan_time(self, coord_in, coord_out, scanrate, scan_accel):
+        """ Given a coordinate range and scan parameters, determine
+        the time taken to scan between them, assuming that the scan
+        begins and ends at rest.
+        """
+        d = np.abs(coord_in - coord_out)
+        t_accel = scanrate / scan_accel
+        d_accel = 0.5 * scan_accel * t_accel ** 2
+        if 2 * d_accel > d:
+            # No time to reach scan speed
+            d_accel = d / 2
+            t_accel = np.sqrt(2 * d_accel / scan_accel)
+            t_coast = 0
+        else:
+            d_coast = d - 2 * d_accel
+            t_coast = d_coast / scanrate
+        return 2 * t_accel + t_coast
+
+    @function_timer
+    def scan_profile(
+        self, coord_in, coord_out, scanrate, scan_accel, times, nstep=10000
+    ):
+        """ scan between the coordinates assuming that the scan begins
+        and ends at rest.  If there is more time than is needed, wait at the end.
+        """
+        if np.abs(coord_in - coord_out) < 1e-6:
+            return np.zeros(times.size) + coord_out
+
+        d = np.abs(coord_in - coord_out)
+        t_accel = scanrate / scan_accel
+        d_accel = 0.5 * scan_accel * t_accel ** 2
+        if 2 * d_accel > d:
+            # No time to reach scan speed
+            d_accel = d / 2
+            t_accel = np.sqrt(2 * d_accel / scan_accel)
+            t_coast = 0
+            # Scan rate at the end of acceleration
+            scanrate = t_accel * scan_accel
+        else:
+            d_coast = d - 2 * d_accel
+            t_coast = d_coast / scanrate
+        if coord_in > coord_out:
+            scanrate *= -1
+            scan_accel *= -1
+        #
+        t = []
+        coord = []
+        # Acceleration
+        t.append(np.linspace(times[0], times[0] + t_accel, nstep))
+        coord.append(coord_in + 0.5 * scan_accel * (t[-1] - t[-1][0]) ** 2)
+        # Coasting
+        if t_coast > 0:
+            t.append(np.linspace(t[-1][-1], t[-1][-1] + t_coast, 3))
+            coord.append(coord[-1][-1] + scanrate * (t[-1] - t[-1][0]))
+        # Deceleration
+        t.append(np.linspace(t[-1][-1], t[-1][-1] + t_accel, nstep))
+        coord.append(
+            coord[-1][-1]
+            + scanrate * (t[-1] - t[-1][0])
+            - 0.5 * scan_accel * (t[-1] - t[-1][0]) ** 2
+        )
+        # Wait
+        if t[-1][-1] < times[-1]:
+            t.append(np.linspace(t[-1][-1], times[-1], 3))
+            coord.append(np.zeros(3) + coord_out)
+
+        # Interpolate to the given time stamps
+        t = np.hstack(t)
+        coord = np.hstack(coord)
+
+        return np.interp(times, t, coord)
+
+    @function_timer
+    def scan_between(self, time_start, azel_in, azel_out, nstep=10000):
+        """ Using self._scanrate, self._scan_accel, self._scanrate_el
+        and self._scan_accel_el, simulate motion between the two
+        coordinates
+        """
+
+        az1, el1 = azel_in
+        az2, el2 = azel_out
+        az_time = self.scan_time(az1, az2, self._scanrate, self._scan_accel)
+        el_time = self.scan_time(el1, el2, self._scanrate_el, self._scan_accel_el)
+        time_tot = max(az_time, el_time)
+        times = np.linspace(0, time_tot, nstep)
+        az = self.scan_profile(az1, az2, self._scanrate, self._scan_accel, times)
+        el = self.scan_profile(el1, el2, self._scanrate_el, self._scan_accel_el, times)
+
+        return times + time_start, az, el
 
     @function_timer
     def __del__(self):
@@ -1021,11 +1186,88 @@ class TODGround(TOD):
         return self._min_az, self._max_az, self._min_el, self._max_el
 
     @function_timer
+    def simulate_elnod(self, t_start, az_start, el_start):
+        """ Simulate an el-nod, if one was requested
+        """
+
+        if self._elnod_el is not None:
+            time_last = t_start
+            az_last = az_start
+            el_last = el_start
+            t = []
+            az = []
+            el = []
+            for az_new, el_new in zip(self._elnod_az, self._elnod_el):
+                if np.abs(az_last - az_new) > 1e-3 or np.abs(el_last - el_new) > 1e-3:
+                    tvec, azvec, elvec = self.scan_between(
+                        time_last, (az_last, el_last), (az_new, el_new)
+                    )
+                    t.append(tvec)
+                    az.append(azvec)
+                    el.append(elvec)
+                    time_last = tvec[-1]
+                az_last = az_new
+                el_last = el_new
+
+            t = np.hstack(t)
+            az = np.hstack(az)
+            el = np.hstack(el)
+
+            # Store the scan range.  We use the high resolution elevation
+            # so actual sampling rate will not change the range.
+            self.update_scan_range(az, el)
+
+            # Sample t/az/el down to the sampling rate
+            nsample_elnod = int((t[-1] - t[0]) * self._rate)
+            t_sample = np.arange(nsample_elnod) / self._rate + t_start
+            az_sample = np.interp(t_sample, t, az)
+            el_sample = np.interp(t_sample, t, el)
+            commonflags_sample = np.zeros(nsample_elnod, dtype=np.uint8) + (
+                self.ELNOD | self.TURNAROUND
+            )
+            self._times = np.hstack([self._times, t_sample])
+            self._commonflags = np.hstack([self._commonflags, commonflags_sample])
+            self._az = np.hstack([self._az, az_sample])
+            self._el = np.hstack([self._el, el_sample])
+        else:
+            nsample_elnod = 0
+
+        return nsample_elnod
+
+    @function_timer
+    def update_scan_range(self, az, el):
+        if self._min_az is None:
+            self._min_az = np.amin(az)
+            self._max_az = np.amax(az)
+            self._min_el = np.amin(el)
+            self._max_el = np.amax(el)
+        else:
+            self._min_az = min(self._min_az, np.amin(az))
+            self._max_az = max(self._max_az, np.amax(az))
+            self._min_el = min(self._min_el, np.amin(el))
+            self._max_el = max(self._max_el, np.amax(el))
+        return
+
+    @function_timer
     def simulate_scan(self, samples):
-        """ Simulate a constant elevation scan, either constant rate or
+        """ Simulate el-nod and/or a constant elevation scan, either constant rate or
         1/sin(az)-modulated.
 
         """
+
+        if self._el_ces is None:
+            # User only wanted an el-nod
+            self._stable_starts = []
+            self._stable_stops = []
+            return 0
+
+        if samples <= 0:
+            raise RuntimeError("CES requires a positive number of samples")
+
+        if len(self._times) == 0:
+            self._CES_start = self._firsttime
+        else:
+            self._CES_start = self._times[-1] + 1 / self._rate
 
         # Begin by simulating one full scan with turnarounds.
         # It will be used to interpolate the full CES.
@@ -1034,7 +1276,7 @@ class TODGround(TOD):
 
         nstep = 10000
 
-        azmin, azmax = [self._azmin, self._azmax]
+        azmin, azmax = [self._azmin_ces, self._azmax_ces]
         if self._cosecant_modulation:
             # We always simulate a rising cosecant scan and then
             # mirror it if necessary
@@ -1051,7 +1293,7 @@ class TODGround(TOD):
         all_az = []
         all_flags = []
         # translate scan rate from sky to mount coordinates
-        base_rate = self._scanrate / np.cos(self._el)
+        base_rate = self._scanrate / np.cos(self._el_ces)
         # scan acceleration is already in the mount coordinates
         scan_accel = self._scan_accel
 
@@ -1143,36 +1385,30 @@ class TODGround(TOD):
         # Store the scan range.  We use the high resolution azimuth so the
         # actual sampling rate will not change the range.
 
-        self._min_az = np.amin(azvec)
-        self._max_az = np.amax(azvec)
-        self._min_el = self._el
-        self._max_el = self._el
+        self.update_scan_range(azvec, self._el_ces)
 
         # Now interpolate the simulated scan to timestamps
 
         times = self._CES_start + np.arange(samples) / self._rate
         tmin, tmax = tvec[0], tvec[-1]
         tdelta = tmax - tmin
-        self._az = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
-        if self._cosecant_modulation and self._azmin > np.pi:
+        az_sample = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
+        if self._cosecant_modulation and self._azmin_ces > np.pi:
             # We always simulate a rising cosecant scan and then
             # mirror it if necessary
-            self._az += np.pi
+            az_sample += np.pi
+
+        offset = self._times.size
+        self._times = np.hstack([self._times, times])
+        self._az = np.hstack([self._az, az_sample])
+        self._el = np.hstack([self._el, np.zeros_like(az_sample) + self._el_ces])
         ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
         ind[ind == tvec.size] = tvec.size - 1
-        self._commonflags = flags[ind]
+        self._commonflags = np.hstack([self._commonflags, flags[ind]]).astype(np.uint8)
 
         # Subscan start indices
 
-        daz = np.diff(self._az)
-        starts = np.hstack(
-            [
-                [0],
-                np.argwhere(np.logical_and(daz[:-1] < 0, daz[1:] > 0)).ravel() + 2,
-                [samples],
-            ]
-        )
-        turnflags = self._commonflags & self.TURNAROUND
+        turnflags = flags[ind] & self.TURNAROUND
         self._stable_starts = (
             np.argwhere(np.logical_and(turnflags[:-1] != 0, turnflags[1:] == 0)).ravel()
             + 1
@@ -1185,12 +1421,12 @@ class TODGround(TOD):
         )
         if turnflags[-1] == 0:
             self._stable_stops = np.hstack([self._stable_stops, [samples]])
+        self._stable_starts += offset
+        self._stable_stops += offset
 
-        sizes = np.diff(starts)
-        if np.sum(sizes) != samples:
-            raise RuntimeError("Subscans do not match samples")
+        self._CES_stop = self._times[-1]
 
-        return sizes, starts[:-1]
+        return samples
 
     @function_timer
     def translate_pointing(self):
@@ -1215,7 +1451,7 @@ class TODGround(TOD):
         # Remember that the azimuth is measured clockwise and the
         # longitude counter-clockwise
         my_azelquats = qa.from_angles(
-            np.pi / 2 - np.ones(my_nsamp) * self._el,
+            np.pi / 2 - self._el[my_ind],
             -(self._az[my_ind]),
             np.zeros(my_nsamp),
             IAU=False,
@@ -1259,7 +1495,9 @@ class TODGround(TOD):
         offset, n = self.local_samples
         ind = slice(offset, offset + n)
 
+        self._times = self.cache.put("times", self._times[ind], replace=True)
         self._az = self.cache.put("az", self._az[ind])
+        self._el = self.cache.put("el", self._el[ind])
         self._commonflags = self.cache.put(
             "common_flags", self._commonflags[ind], replace=True
         )
@@ -1409,9 +1647,7 @@ class TODGround(TOD):
         return
 
     def _get_times(self, start, n):
-        start_abs = self.local_samples[0] + start
-        start_time = self._firsttime + float(start_abs) / self._rate
-        return start_time + np.arange(n) / self._rate
+        return self._times[start : start + n]
 
     def _put_times(self, start, stamps):
         raise RuntimeError("cannot write timestamps to simulated data streams")
@@ -1464,6 +1700,33 @@ class TODGround(TOD):
                 )
             )
         return self._az[local_start : local_start + n]
+
+    @function_timer
+    def read_boresight_el(self, local_start=0, n=0):
+        """Read the boresight elevation.
+
+        Args:
+            local_start (int): the sample offset relative to the first locally
+                assigned sample.
+            n (int): the number of samples to read.  If zero, read to end.
+
+        Returns:
+            (array): a numpy array containing the timestamps.
+        """
+        if n == 0:
+            n = self.local_samples[1] - local_start
+        if self.local_samples[1] <= 0:
+            raise RuntimeError(
+                "cannot read boresight elevation - process "
+                "has no assigned local samples"
+            )
+        if (local_start < 0) or (local_start + n > self.local_samples[1]):
+            raise ValueError(
+                "local sample range {} - {} is invalid".format(
+                    local_start, local_start + n - 1
+                )
+            )
+        return self._el[local_start : local_start + n]
 
     @function_timer
     def _get_pntg(self, detector, start, n, azel=False):
