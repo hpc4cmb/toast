@@ -192,13 +192,13 @@ bool toast::atm_sim_in_cone(
 }
 
 void toast::atm_sim_compress_flag_hits_rank(
-    long nn,
+    int64_t nn,
     uint8_t * hit,
     int ntask,
     int rank,
-    long nx,
-    long ny,
-    long nz,
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
     double xstart,
     double ystart,
     double zstart,
@@ -212,25 +212,25 @@ void toast::atm_sim_compress_flag_hits_rank(
     double xstep,
     double ystep,
     double zstep,
-    long xstride,
-    long ystride,
-    long zstride,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
     double maxdist,
     double cosel0,
     double sinel0
     ) {
     double t_fake = -1.0;
-    for (long ix = 0; ix < nx - 1; ++ix) {
+    for (int64_t ix = 0; ix < nx - 1; ++ix) {
         if (ix % ntask != rank) {
             continue;
         }
         double x = xstart + ix * xstep;
 
         # pragma omp parallel for schedule(static, 10)
-        for (long iy = 0; iy < ny - 1; ++iy) {
+        for (int64_t iy = 0; iy < ny - 1; ++iy) {
             double y = ystart + iy * ystep;
 
-            for (long iz = 0; iz < nz - 1; ++iz) {
+            for (int64_t iz = 0; iz < nz - 1; ++iz) {
                 double z = zstart + iz * zstep;
                 if (toast::atm_sim_in_cone(
                         x, y, z, t_fake, delta_t, delta_az, elmin, elmax, wx, wy, wz,
@@ -248,35 +248,35 @@ void toast::atm_sim_compress_flag_extend_rank(
     uint8_t * hit2,
     int ntask,
     int rank,
-    long nx,
-    long ny,
-    long nz,
-    long xstride,
-    long ystride,
-    long zstride
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride
     ) {
-    for (long ix = 1; ix < nx - 1; ++ix) {
+    for (int64_t ix = 1; ix < nx - 1; ++ix) {
         if (ix % ntask != rank) {
             continue;
         }
 
         # pragma omp parallel for schedule(static, 10)
-        for (long iy = 1; iy < ny - 1; ++iy) {
-            for (long iz = 1; iz < nz - 1; ++iz) {
-                long offset = ix * xstride + iy * ystride + iz * zstride;
+        for (int64_t iy = 1; iy < ny - 1; ++iy) {
+            for (int64_t iz = 1; iz < nz - 1; ++iz) {
+                int64_t offset = ix * xstride + iy * ystride + iz * zstride;
 
                 if (hit2[offset]) {
                     // Flag this element but also its neighbours to facilitate
                     // interpolation
 
-                    for (long xmul = -2; xmul < 4; ++xmul) {
+                    for (int64_t xmul = -2; xmul < 4; ++xmul) {
                         if ((ix + xmul < 0) || (ix + xmul > nx - 1)) continue;
 
-                        for (long ymul = -2; ymul < 4; ++ymul) {
+                        for (int64_t ymul = -2; ymul < 4; ++ymul) {
                             if ((iy + ymul < 0) ||
                                 (iy + ymul > ny - 1)) continue;
 
-                            for (long zmul = -2; zmul < 4; ++zmul) {
+                            for (int64_t zmul = -2; zmul < 4; ++zmul) {
                                 if ((iz + zmul < 0) ||
                                     (iz + zmul > nz - 1)) continue;
                                 hit[offset + xmul * xstride

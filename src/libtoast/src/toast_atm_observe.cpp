@@ -29,18 +29,18 @@ double toast::atm_sim_interp(
     double const & x,
     double const & y,
     double const & z,
-    std::vector <long> & last_ind,
+    std::vector <int64_t> & last_ind,
     std::vector <double> & last_nodes,
     double const & xstart,
     double const & ystart,
     double const & zstart,
-    long const & nn,
-    long const & nx,
-    long const & ny,
-    long const & nz,
-    long const & xstride,
-    long const & ystride,
-    long const & zstride,
+    int64_t const & nn,
+    int64_t const & nx,
+    int64_t const & ny,
+    int64_t const & nz,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
     double const & xstep,
     double const & ystep,
     double const & zstep,
@@ -58,17 +58,17 @@ double toast::atm_sim_interp(
     double const & maxdist,
     double const & cosel0,
     double const & sinel0,
-    long const & nelem,
-    long const * compressed_index,
-    long const * full_index,
+    int64_t const & nelem,
+    int64_t const * compressed_index,
+    int64_t const * full_index,
     double const * realization
     ) {
     // Trilinear interpolation.  This function is called for every sample, so we
     // pass all arguments by reference / pointer.
 
-    long ix = (x - xstart) * xstepinv;
-    long iy = (y - ystart) * ystepinv;
-    long iz = (z - zstart) * zstepinv;
+    int64_t ix = (x - xstart) * xstepinv;
+    int64_t iy = (y - ystart) * ystepinv;
+    int64_t iz = (z - zstart) * zstepinv;
 
     double dx = (x - (xstart + (double)ix * xstep)) * xstepinv;
     double dy = (y - (ystart + (double)iy * ystep)) * ystepinv;
@@ -111,19 +111,19 @@ double toast::atm_sim_interp(
         }
 # endif // ifndef NO_ATM_CHECKS
 
-        long offset = ix * xstride + iy * ystride + iz * zstride;
+        int64_t offset = ix * xstride + iy * ystride + iz * zstride;
 
-        long ifull000 = offset;
-        long ifull001 = offset + zstride;
-        long ifull010 = offset + ystride;
-        long ifull011 = ifull010 + zstride;
-        long ifull100 = offset + xstride;
-        long ifull101 = ifull100 + zstride;
-        long ifull110 = ifull100 + ystride;
-        long ifull111 = ifull110 + zstride;
+        int64_t ifull000 = offset;
+        int64_t ifull001 = offset + zstride;
+        int64_t ifull010 = offset + ystride;
+        int64_t ifull011 = ifull010 + zstride;
+        int64_t ifull100 = offset + xstride;
+        int64_t ifull101 = ifull100 + zstride;
+        int64_t ifull110 = ifull100 + ystride;
+        int64_t ifull111 = ifull110 + zstride;
 
 # ifndef NO_ATM_CHECKS
-        long ifullmax = nn - 1;
+        int64_t ifullmax = nn - 1;
         if (
             (ifull000 < 0) || (ifull000 > ifullmax) ||
             (ifull001 < 0) || (ifull001 > ifullmax) ||
@@ -151,17 +151,17 @@ double toast::atm_sim_interp(
         }
 # endif // ifndef NO_ATM_CHECKS
 
-        long i000 = compressed_index[ifull000];
-        long i001 = compressed_index[ifull001];
-        long i010 = compressed_index[ifull010];
-        long i011 = compressed_index[ifull011];
-        long i100 = compressed_index[ifull100];
-        long i101 = compressed_index[ifull101];
-        long i110 = compressed_index[ifull110];
-        long i111 = compressed_index[ifull111];
+        int64_t i000 = compressed_index[ifull000];
+        int64_t i001 = compressed_index[ifull001];
+        int64_t i010 = compressed_index[ifull010];
+        int64_t i011 = compressed_index[ifull011];
+        int64_t i100 = compressed_index[ifull100];
+        int64_t i101 = compressed_index[ifull101];
+        int64_t i110 = compressed_index[ifull110];
+        int64_t i111 = compressed_index[ifull111];
 
 # ifndef NO_ATM_CHECKS
-        long imax = nelem - 1;
+        int64_t imax = nelem - 1;
         if (
             (i000 < 0) || (i000 > imax) ||
             (i001 < 0) || (i001 > imax) ||
@@ -274,16 +274,16 @@ int toast::atm_sim_observe(
     double zstart,
     double delta_z,
     double maxdist,
-    long nn,
-    long nx,
-    long ny,
-    long nz,
-    long xstride,
-    long ystride,
-    long zstride,
-    long nelem,
-    long * compressed_index,
-    long * full_index,
+    int64_t nn,
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
+    int64_t nelem,
+    int64_t * compressed_index,
+    int64_t * full_index,
     double * realization
     ) {
     // For each sample, integrate along the line of sight by summing
@@ -312,7 +312,7 @@ int toast::atm_sim_observe(
 
     # pragma omp parallel
     {
-        std::vector <long> last_ind(3);
+        std::vector <int64_t> last_ind(3);
         std::vector <double> last_nodes(8);
 
         # pragma omp for schedule(static, 100)

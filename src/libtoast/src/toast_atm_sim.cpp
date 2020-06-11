@@ -26,7 +26,7 @@
 
 
 void toast::atm_sim_kolmogorov_init_rank(
-    long nr,
+    int64_t nr,
     double * kolmo_x,
     double * kolmo_y,
     double rmin_kolmo,
@@ -56,7 +56,7 @@ void toast::atm_sim_kolmogorov_init_rank(
     double invkappal = 1 / kappal;     // Optimize
     double kappa0 = 0.75 * kappamin;
     double kappa0sq = kappa0 * kappa0; // Optimize
-    long nkappa = 10000;               // Number of integration steps
+    int64_t nkappa = 10000;            // Number of integration steps
     double kappastart = 1e-4;
     double kappastop = 10 * kappamax;
 
@@ -80,9 +80,9 @@ void toast::atm_sim_kolmogorov_init_rank(
 
     // Use Newton's method to integrate the correlation function
 
-    long nkappa_task = nkappa / ntask + 1;
-    long first_kappa = nkappa_task * rank;
-    long last_kappa = first_kappa + nkappa_task;
+    int64_t nkappa_task = nkappa / ntask + 1;
+    int64_t first_kappa = nkappa_task * rank;
+    int64_t last_kappa = first_kappa + nkappa_task;
     if (last_kappa > nkappa) last_kappa = nkappa;
 
     // Precalculate the power spectrum function
@@ -91,12 +91,12 @@ void toast::atm_sim_kolmogorov_init_rank(
     std::vector <double> kappa(last_kappa - first_kappa);
 
     # pragma omp parallel for schedule(static, 10)
-    for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
+    for (int64_t ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
         kappa[ikappa - first_kappa] = exp(ikappa * kappascale) * kappastart;
     }
 
     # pragma omp parallel for schedule(static, 10)
-    for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
+    for (int64_t ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
         double k = kappa[ikappa - first_kappa];
         double kkl = k * invkappal;
         phi[ikappa - first_kappa] =
@@ -109,7 +109,7 @@ void toast::atm_sim_kolmogorov_init_rank(
         std::ostringstream fname;
         fname << "kolmogorov_f_" << rank << ".txt";
         f.open(fname.str(), std::ios::out);
-        for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
+        for (int64_t ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
             f << ikappa << " " << kappa[ikappa - first_kappa] << " " <<
                 phi[ikappa - first_kappa] <<
                 std::endl;
@@ -131,7 +131,7 @@ void toast::atm_sim_kolmogorov_init_rank(
     double ifac3 = 1. / (2. * 3.);
 
     # pragma omp parallel for schedule(static, 10)
-    for (long ir = 0; ir < nr; ++ir) {
+    for (int64_t ir = 0; ir < nr; ++ir) {
         double r = rmin_kolmo
                    + (exp(ir * nri * tau) - 1) * enorm *
                    (rmax_kolmo - rmin_kolmo);
@@ -141,7 +141,7 @@ void toast::atm_sim_kolmogorov_init_rank(
             // special limit r -> 0,
             // sin(kappa.r)/r -> kappa - kappa^3*r^2/3!
             double r2 = r * r;
-            for (long ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
+            for (int64_t ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
                 double k = kappa[ikappa - first_kappa];
                 double kstep = kappa[ikappa + 1 - first_kappa] - k;
                 double kappa2 = k * k;
@@ -151,7 +151,7 @@ void toast::atm_sim_kolmogorov_init_rank(
                        kstep;
             }
         } else {
-            for (long ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
+            for (int64_t ikappa = first_kappa; ikappa < last_kappa - 1; ++ikappa) {
                 double k1 = kappa[ikappa - first_kappa];
                 double k2 = kappa[ikappa + 1 - first_kappa];
                 double phi1 = phi[ikappa - first_kappa];
@@ -172,7 +172,7 @@ void toast::atm_sim_kolmogorov_init_rank(
 
 double toast::atm_sim_kolmogorov(
     double const & r,
-    long const & nr,
+    int64_t const & nr,
     double const & rmin_kolmo,
     double const & rmax_kolmo,
     double const * kolmo_x,
@@ -198,9 +198,9 @@ double toast::atm_sim_kolmogorov(
     // Simple linear interpolation for now.  Use a bisection method
     // to find the right elements.
 
-    long low = 0;
-    long high = nr - 1;
-    long ir;
+    int64_t low = 0;
+    int64_t high = nr - 1;
+    int64_t ir;
 
     while (true) {
         ir = low + 0.5 * (high - low);
@@ -221,7 +221,7 @@ double toast::atm_sim_kolmogorov(
 }
 
 double toast::atm_sim_cov_eval(
-    long const & nr,
+    int64_t const & nr,
     double const & rmin_kolmo,
     double const & rmax_kolmo,
     double const * kolmo_x,
@@ -239,7 +239,7 @@ double toast::atm_sim_cov_eval(
     // Coordinates are in the horizontal frame
 
     // TK: does this make sense?
-    const long nn = 1;
+    const int64_t nn = 1;
     const double ninv = 1.; // / (nn * nn)
 
     double val = 0;
@@ -343,28 +343,27 @@ void toast::atm_sim_ind2coord(
     double const & xstep,
     double const & ystep,
     double const & zstep,
-    long const & xstride,
-    long const & ystride,
-    long const & zstride,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
     double const & xstrideinv,
     double const & ystrideinv,
     double const & zstrideinv,
     double const & cosel0,
     double const & sinel0,
-    long const * full_index,
-    long const & i,
+    int64_t const * full_index,
+    int64_t const & i,
     double * coord
     ) {
     // Translate a compressed index into xyz-coordinates
     // in the horizontal frame
 
-    long ifull = full_index[i];
+    int64_t ifull = full_index[i];
 
-    // TK: these are mixed long and double types being implicitly cast back to long.
-    // Is that the intended behavior?
-    long ix = ifull * xstrideinv;
-    long iy = (ifull - ix * xstride) * ystrideinv;
-    long iz = ifull - ix * xstride - iy * ystride;
+    // TK: these are mixed types being implicitly cast back to int64.
+    int64_t ix = ifull * xstrideinv;
+    int64_t iy = (ifull - ix * xstride) * ystrideinv;
+    int64_t iz = ifull - ix * xstride - iy * ystride;
 
     // coordinates in the scan frame
 
@@ -379,31 +378,30 @@ void toast::atm_sim_ind2coord(
     coord[2] = x * sinel0 + z * cosel0;
 }
 
-long toast::atm_sim_coord2ind(
+int64_t toast::atm_sim_coord2ind(
     double const & xstart,
     double const & ystart,
     double const & zstart,
-    long const & xstride,
-    long const & ystride,
-    long const & zstride,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
     double const & xstepinv,
     double const & ystepinv,
     double const & zstepinv,
-    long const & nx,
-    long const & ny,
-    long const & nz,
-    long const * compressed_index,
+    int64_t const & nx,
+    int64_t const & ny,
+    int64_t const & nz,
+    int64_t const * compressed_index,
     double const & x,
     double const & y,
     double const & z
     ) {
     // Translate scan frame xyz-coordinates into a compressed index
 
-    // TK: these are mixed long and double types being implicitly cast back to long.
-    // Is that the intended behavior?
-    long ix = (x - xstart) * xstepinv;
-    long iy = (y - ystart) * ystepinv;
-    long iz = (z - zstart) * zstepinv;
+    // TK: these are mixed types being implicitly cast back to int64.
+    int64_t ix = (x - xstart) * xstepinv;
+    int64_t iy = (y - ystart) * ystepinv;
+    int64_t iz = (z - zstart) * zstepinv;
 
 # ifndef NO_ATM_CHECKS
     if ((ix < 0) || (ix > nx - 1) || (iy < 0) || (iy > ny - 1) || (iz < 0) ||
@@ -426,9 +424,9 @@ long toast::atm_sim_coord2ind(
 }
 
 cholmod_sparse * toast::atm_sim_build_sparse_covariance(
-    long ind_start,
-    long ind_stop,
-    long nr,
+    int64_t ind_start,
+    int64_t ind_stop,
+    int64_t nr,
     double rmin_kolmo,
     double rmax_kolmo,
     double const * kolmo_x,
@@ -440,13 +438,13 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
     double xstep,
     double ystep,
     double zstep,
-    long xstride,
-    long ystride,
-    long zstride,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
     double z0,
     double cosel0,
     double sinel0,
-    long const * full_index,
+    int64_t const * full_index,
     bool smooth,
     double xxstep,
     double zzstep,
@@ -475,7 +473,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
     std::vector <int> rows;
     std::vector <int> cols;
     std::vector <double> vals;
-    size_t nelem = ind_stop - ind_start; // Number of elements in the slice
+    int64_t nelem = ind_stop - ind_start; // Number of elements in the slice
     std::vector <double> diagonal(nelem);
 
     // Fill the elements of the covariance matrix.
@@ -486,7 +484,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
         std::vector <double> myvals;
 
         # pragma omp for schedule(static, 10)
-        for (int i = 0; i < nelem; ++i) {
+        for (int64_t i = 0; i < nelem; ++i) {
             double coord[3];
             toast::atm_sim_ind2coord(
                 xstart,
@@ -524,7 +522,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
         }
 
         # pragma omp for schedule(static, 10)
-        for (int icol = 0; icol < nelem; ++icol) {
+        for (int64_t icol = 0; icol < nelem; ++icol) {
             // Translate indices into coordinates
             double colcoord[3];
             toast::atm_sim_ind2coord(
@@ -546,7 +544,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                 icol + ind_start,
                 colcoord
                 );
-            for (int irow = icol; irow < nelem; ++irow) {
+            for (int64_t irow = icol; irow < nelem; ++irow) {
                 // Evaluate the covariance between the two coordinates
                 double rowcoord[3];
                 toast::atm_sim_ind2coord(
@@ -676,8 +674,8 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
 
 cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     cholmod_sparse * cov,
-    long ind_start,
-    long ind_stop,
+    int64_t ind_start,
+    int64_t ind_stop,
     int rank
     ) {
     // Cholesky-factorize the provided sparse matrix and return the
@@ -687,7 +685,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     auto & logger = Logger::get();
     std::ostringstream o;
 
-    size_t nelem = ind_stop - ind_start; // Number of elements in the slice
+    int64_t nelem = ind_stop - ind_start; // Number of elements in the slice
 
     toast::Timer timer;
     timer.start();
@@ -814,8 +812,8 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
 
 void toast::atm_sim_apply_sparse_covariance(
     cholmod_sparse * sqrt_cov,
-    long ind_start,
-    long ind_stop,
+    int64_t ind_start,
+    int64_t ind_stop,
     uint64_t key1,
     uint64_t key2,
     uint64_t counter1,
@@ -834,7 +832,7 @@ void toast::atm_sim_apply_sparse_covariance(
     toast::Timer timer;
     timer.start();
 
-    size_t nelem = ind_stop - ind_start; // Number of elements in the slice
+    int64_t nelem = ind_stop - ind_start; // Number of elements in the slice
 
     // Draw the Gaussian variates in a single call
 
@@ -867,13 +865,13 @@ void toast::atm_sim_apply_sparse_covariance(
     double * p = (double *)noise_out->x;
     double mean = 0;
     double var = 0;
-    for (long i = 0; i < nelem; ++i) {
+    for (int64_t i = 0; i < nelem; ++i) {
         mean += p[i];
         var += p[i] * p[i];
     }
     mean /= nelem;
     var = var / nelem - mean * mean;
-    for (long i = 0; i < nelem; ++i) p[i] -= mean;
+    for (int64_t i = 0; i < nelem; ++i) p[i] -= mean;
 
     timer.stop();
 
@@ -890,7 +888,7 @@ void toast::atm_sim_apply_sparse_covariance(
     // the full realization
     // FIXME: This is where we would blend slices
 
-    for (long i = ind_start; i < ind_stop; ++i) {
+    for (int64_t i = ind_start; i < ind_stop; ++i) {
         realization[i] = p[i - ind_start];
     }
 
@@ -900,9 +898,9 @@ void toast::atm_sim_apply_sparse_covariance(
 }
 
 void toast::atm_sim_compute_slice(
-    long ind_start,
-    long ind_stop,
-    long nr,
+    int64_t ind_start,
+    int64_t ind_stop,
+    int64_t nr,
     double rmin_kolmo,
     double rmax_kolmo,
     double const * kolmo_x,
@@ -914,13 +912,13 @@ void toast::atm_sim_compute_slice(
     double xstep,
     double ystep,
     double zstep,
-    long xstride,
-    long ystride,
-    long zstride,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
     double z0,
     double cosel0,
     double sinel0,
-    long const * full_index,
+    int64_t const * full_index,
     bool smooth,
     double xxstep,
     double zzstep,

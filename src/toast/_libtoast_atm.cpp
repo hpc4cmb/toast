@@ -49,7 +49,7 @@ void init_atm(py::module & m) {
                                                double freqmin, double freqmax,
                                                size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({ nfreq });
+              ret.resize({nfreq});
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_absorption_coefficient_vec(
@@ -78,7 +78,7 @@ void init_atm(py::module & m) {
                                             double pressure, double pwv, double freqmin,
                                             double freqmax, size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({ nfreq });
+              ret.resize({nfreq});
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_atmospheric_loading_vec(
@@ -107,8 +107,8 @@ void init_atm(py::module & m) {
 #ifdef HAVE_CHOLMOD
 
     m.def("atm_sim_compute_slice",
-          [](long ind_start,
-             long ind_stop,
+          [](int64_t ind_start,
+             int64_t ind_stop,
              double rmin_kolmo,
              double rmax_kolmo,
              py::buffer kolmo_x,
@@ -120,9 +120,9 @@ void init_atm(py::module & m) {
              double xstep,
              double ystep,
              double zstep,
-             long xstride,
-             long ystride,
-             long zstride,
+             int64_t xstride,
+             int64_t ystride,
+             int64_t zstride,
              double z0,
              double cosel0,
              double sinel0,
@@ -138,7 +138,7 @@ void init_atm(py::module & m) {
              py::buffer realization) {
               pybuffer_check_1D <double> (kolmo_x);
               pybuffer_check_1D <double> (kolmo_y);
-              pybuffer_check_1D <long> (full_index);
+              pybuffer_check_1D <int64_t> (full_index);
               pybuffer_check_1D <double> (realization);
               py::buffer_info info_kolmo_x = kolmo_x.request();
               py::buffer_info info_kolmo_y = kolmo_y.request();
@@ -163,7 +163,7 @@ void init_atm(py::module & m) {
               double * raw_kolmo_x = reinterpret_cast <double *> (info_kolmo_x.ptr);
               double * raw_kolmo_y = reinterpret_cast <double *> (info_kolmo_y.ptr);
               double * raw_realiz = reinterpret_cast <double *> (info_realization.ptr);
-              long * raw_full = reinterpret_cast <long *> (info_full_index.ptr);
+              int64_t * raw_full = reinterpret_cast <int64_t *> (info_full_index.ptr);
               toast::atm_sim_compute_slice(
                   ind_start,
                   ind_stop,
@@ -232,12 +232,12 @@ void init_atm(py::module & m) {
               double zstart,
               double delta_z,
               double maxdist,
-              long nx,
-              long ny,
-              long nz,
-              long xstride,
-              long ystride,
-              long zstride,
+              int64_t nx,
+              int64_t ny,
+              int64_t nz,
+              int64_t xstride,
+              int64_t ystride,
+              int64_t zstride,
               py::buffer compressed_index,
               py::buffer full_index,
               py::buffer realization
@@ -246,8 +246,8 @@ void init_atm(py::module & m) {
               pybuffer_check_1D <double> (az);
               pybuffer_check_1D <double> (el);
               pybuffer_check_1D <double> (tod);
-              pybuffer_check_1D <long> (compressed_index);
-              pybuffer_check_1D <long> (full_index);
+              pybuffer_check_1D <int64_t> (compressed_index);
+              pybuffer_check_1D <int64_t> (full_index);
               pybuffer_check_1D <double> (realization);
               py::buffer_info info_times = times.request();
               py::buffer_info info_az = az.request();
@@ -279,8 +279,8 @@ void init_atm(py::module & m) {
               double * raw_el = reinterpret_cast <double *> (info_el.ptr);
               double * raw_tod = reinterpret_cast <double *> (info_tod.ptr);
               double * raw_realiz = reinterpret_cast <double *> (info_realiz.ptr);
-              long * raw_full = reinterpret_cast <long *> (info_full_index.ptr);
-              long * raw_comp = reinterpret_cast <long *> (info_comp_index.ptr);
+              int64_t * raw_full = reinterpret_cast <int64_t *> (info_full_index.ptr);
+              int64_t * raw_comp = reinterpret_cast <int64_t *> (info_comp_index.ptr);
               int status = toast::atm_sim_observe(
                   nsamp,
                   raw_times,
@@ -334,9 +334,9 @@ void init_atm(py::module & m) {
               py::buffer hit,
               int ntask,
               int rank,
-              long nx,
-              long ny,
-              long nz,
+              int64_t nx,
+              int64_t ny,
+              int64_t nz,
               double xstart,
               double ystart,
               double zstart,
@@ -350,9 +350,9 @@ void init_atm(py::module & m) {
               double xstep,
               double ystep,
               double zstep,
-              long xstride,
-              long ystride,
-              long zstride,
+              int64_t xstride,
+              int64_t ystride,
+              int64_t zstride,
               double maxdist,
               double cosel0,
               double sinel0
@@ -400,12 +400,12 @@ void init_atm(py::module & m) {
               py::buffer hit2,
               int ntask,
               int rank,
-              long nx,
-              long ny,
-              long nz,
-              long xstride,
-              long ystride,
-              long zstride
+              int64_t nx,
+              int64_t ny,
+              int64_t nz,
+              int64_t xstride,
+              int64_t ystride,
+              int64_t zstride
               ) {
               pybuffer_check_1D <uint8_t> (hit);
               pybuffer_check_1D <uint8_t> (hit2);
@@ -440,7 +440,7 @@ void init_atm(py::module & m) {
 
     m.def("atm_sim_kolmogorov_init_rank",
           [](
-              long nr,
+              int64_t nr,
               double rmin_kolmo,
               double rmax_kolmo,
               double rstep,
@@ -450,9 +450,9 @@ void init_atm(py::module & m) {
               int rank
               ) {
               py::array_t <double> kolmo_x;
-              kolmo_x.resize({ nr });
+              kolmo_x.resize({nr});
               py::array_t <double> kolmo_y;
-              kolmo_y.resize({ nr });
+              kolmo_y.resize({nr});
               py::buffer_info info_kolmo_x = kolmo_x.request();
               double * raw_kolmo_x = static_cast <double *> (info_kolmo_x.ptr);
               py::buffer_info info_kolmo_y = kolmo_y.request();
