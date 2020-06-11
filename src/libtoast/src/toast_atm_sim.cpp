@@ -111,7 +111,7 @@ void toast::atm_sim_kolmogorov_init_rank(
         f.open(fname.str(), std::ios::out);
         for (long ikappa = first_kappa; ikappa < last_kappa; ++ikappa) {
             f << ikappa << " " << kappa[ikappa - first_kappa] << " " <<
-            phi[ikappa - first_kappa] <<
+                phi[ikappa - first_kappa] <<
                 std::endl;
         }
         f.close();
@@ -504,7 +504,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                 cosel0,
                 sinel0,
                 full_index,
-                i,
+                i + ind_start,
                 coord
                 );
             diagonal[i] = toast::atm_sim_cov_eval(
