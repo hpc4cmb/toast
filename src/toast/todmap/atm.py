@@ -531,8 +531,7 @@ class AtmSim(object):
                 ind_stop += 1
                 if ind_stop == self._nelem:
                     break
-                ix2 = self._full_index[ind_stop] * xstrideinv
-
+                ix2 = int(self._full_index[ind_stop] * xstrideinv)
             # Check if there are no more elements
             if ind_stop == self._nelem:
                 break
