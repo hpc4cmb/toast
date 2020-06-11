@@ -69,7 +69,6 @@ class Patch(object):
     dec_period = 10
     corners = []
     preferred_el = None
-    el_count = None #How many times have we scanned this patch at each elevation/drift?
 
     def __init__(
         self,
@@ -86,6 +85,7 @@ class Patch(object):
         ra_amplitude=None,
         dec_period=10,
         dec_amplitude=None,
+        elevations=None,
     ):
         self.name = name
         self.weight = weight
@@ -110,6 +110,20 @@ class Patch(object):
         self.ra_amplitude = np.radians(ra_amplitude)
         self.dec_period = dec_period
         self.dec_amplitude = np.radians(dec_amplitude)
+        if elevations is None:
+            self.elevations = None
+        else:
+            # Parse the allowed elevations
+            try:
+                # Try parsing as a string
+                self.elevations = [
+                    np.radians(float(el)) for el in elevations.split(",")
+                ]
+            except AttributeError:
+                # Try parsing as an iterable
+                self.elevations = [np.radians(el) for el in elevations]
+            self.elevations = np.sort(np.array(self.elevations))
+        return
 
     def oscillate(self):
         if self.ra_amplitude:
@@ -883,46 +897,40 @@ def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible
     log = Logger.get()
 
     azs, els = patch.corner_coordinates(observer)
-    el = None
-    
-    #Handle fixed elevation mode
-    if args.elevations is not None:
-        #Initialize, if necessary
-        if patch.el_count == None:
-            patch.el_count = [[0, 0] for x in range(len(args.elevations))]; #(rising count, setting count)
 
-        #Prioritize the elevations
-        #Don't assume the user entered the elevations in any particular order.
-        #Try to observe at whichever elevation has been observed the least.
-        #In the event of a tie, try to observe at the elevation that maximizes scan time on the patch.
-        obs_els = [degree*float(x) for x in args.elevations.split(',')];
-        if rising:
-            obs_els = [ (x, y[0]) for x, y in zip(obs_els, patch.el_count) ];
-            obs_els.sort(key=lambda x: x[0]);
-            obs_els.sort(key=lambda x: x[1]);
-        else:
-            obs_els = [ (x, y[1]) for x, y in zip(obs_els, patch.el_count) ];
-            obs_els.sort(key=lambda x: x[0], reverse=True);
-            obs_els.sort(key=lambda x: x[1]);
-        
-        for el in obs_els:
-            has_extent = current_extent([],[],[],patch.corners,fp_radius,el[0],azs,els,rising, 0)
-            if has_extent:
-                return el[0];
-        return None;
-    
+    ind_rising = azs < np.pi
+    ind_setting = azs > np.pi
+
+    el = None
     if rising:
-        ind = azs <= np.pi
-        if np.sum(ind) == 0:
+        if np.sum(ind_rising) == 0:
             not_visible.append((patch.name, "No rising corners"))
         else:
-            el = np.amax(els[ind]) + fp_radius
+            el = np.amax(els[ind_rising]) + fp_radius
     else:
-        ind = azs >= np.pi
-        if np.sum(ind) == 0:
+        if np.sum(ind_setting) == 0:
             not_visible.append((patch.name, "No setting corners"))
         else:
-            el = np.amin(els[ind]) - fp_radius
+            el = np.amin(els[ind_setting]) - fp_radius
+
+    if el is not None and patch.elevations is not None:
+        # Fixed elevation mode.  Find the first allowed observing elevation.
+        if rising:
+            ind = patch.elevations >= el
+            if np.any(ind):
+                el = np.amin(patch.elevations[ind])
+            else:
+                # None of the elevations allow a full rising scan,
+                # Observe at the highest allowed elevation
+                el = np.amax(patch.elevations)
+        else:
+            ind = patch.elevations <= el
+            if np.any(ind):
+                el = np.amax(patch.elevations[ind])
+            else:
+                # None of the elevations allow a full setting scan,
+                # Observe at the lowest allowed elevation
+                el = np.amin(patch.elevations)
 
     if el is not None:
         if el < patch.el_min:
@@ -1383,20 +1391,21 @@ def add_scan(
         moon_too_close, moon_time = check_sso(
             observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
         )
-        
-        #The new code. We'll just replicate what horizontal patches used to do, but for all patches. JRS
-        if args.elevations!=None:
-            if (sun_time > tstart + 1 and moon_time > tstart + 1):
+
+        # We'll just replicate what horizontal patches used to do,
+        # but for all patches.
+        if args.elevations is not None:
+            if sun_time > tstart + 1 and moon_time > tstart + 1:
                 t2 = min(sun_time, moon_time)
                 if sun_too_close or moon_too_close:
                     tstop = t2
-                    if t1==t2:
+                    if t1 == t2:
                         break
-        else: #The original code, use this if elevations is not specified.
+        else:
             if (
-                    isinstance(patch, HorizontalPatch)
-                    and sun_time > tstart + 1
-                    and moon_time > tstart + 1
+                isinstance(patch, HorizontalPatch)
+                and sun_time > tstart + 1
+                and moon_time > tstart + 1
             ):
                 # Simply terminate the scan when the Sun or the Moon is too close
                 t2 = min(sun_time, moon_time)
@@ -1412,7 +1421,7 @@ def add_scan(
                 if moon_too_close:
                     log.debug("Moon too close")
                     raise MoonTooClose
-        
+
         observer.date = to_DJD(t2)
         sun.compute(observer)
         moon.compute(observer)
@@ -1444,13 +1453,6 @@ def add_scan(
             subscan,
         )
         entries.append(entry)
-        #Accumulate the count for the number of scans of this elevation and drift.
-        #The += 1 could be changed if desired; for example, to amount of time spent, or something, instead of 1.
-        if args.elevations is not None:
-            if rising:
-                patch.el_count[[float(x) for x in args.elevations.split(',')].index(el/degree)][0] += 1;
-            else:
-                patch.el_count[[float(x) for x in args.elevations.split(',')].index(el/degree)][1] += 1;
         t1 = t2 + args.gap_small
 
     # Write the entries
@@ -2183,7 +2185,11 @@ def parse_args():
         default=0,
         type=np.float,
         help="Optional offset added to every observing azimuth",
-        "--elevations", required=False, default=None, help="Set fixed elevations and enable that mode."
+    )
+    parser.add_argument(
+        "--elevations",
+        required=False,
+        help="Fixed observing elevations in a comma-separated list.",
     )
 
     try:
@@ -2228,7 +2234,7 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    patch = SSOPatch(name, weight, radius)
+    patch = SSOPatch(name, weight, radius, elevations=args.elevations)
     return patch
 
 
@@ -2488,6 +2494,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 ra_amplitude=args.ra_amplitude,
                 dec_period=args.dec_period,
                 dec_amplitude=args.dec_amplitude,
+                elevations=args.elevations,
             )
         if args.equalize_area or args.debug:
             area = patch.get_area(observer, nside=32, equalize=args.equalize_area)
