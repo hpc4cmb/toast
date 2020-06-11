@@ -10,7 +10,7 @@ from scipy.constants import arcmin
 
 import healpy as hp
 
-from ..mpi import use_mpi, MPIShared
+from ..mpi import MPIShared
 
 from ..timing import function_timer
 

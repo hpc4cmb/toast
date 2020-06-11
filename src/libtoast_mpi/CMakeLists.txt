@@ -9,7 +9,6 @@ string(STRIP "${MPI_CXX_LINK_FLAGS}" mpi_link_flags)
 set(toast_mpi_SOURCES
     toast_mpi.cpp
     src/toast_mpi.cpp
-    src/toast_mpi_atm.cpp
     tests/toast_mpi_test_runner.cpp
     tests/toast_mpi_test_shmem.cpp
 )
@@ -43,24 +42,6 @@ if(OpenMP_CXX_FOUND)
     set_target_properties(toast_mpi PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
     target_link_libraries(toast_mpi "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
-
-if(AATM_FOUND)
-    target_compile_definitions(toast_mpi PRIVATE HAVE_AATM=1)
-    target_include_directories(toast_mpi PUBLIC "${AATM_INCLUDE_DIRS}")
-endif(AATM_FOUND)
-
-if(CHOLMOD_FOUND)
-    target_compile_definitions(toast_mpi PRIVATE HAVE_CHOLMOD=1)
-    target_include_directories(toast_mpi PUBLIC "${CHOLMOD_INCLUDE_DIR}")
-    target_link_libraries(toast_mpi
-        "${CHOLMOD_LIBRARY}"
-        "${CCOLAMD_LIBRARY}"
-        "${COLAMD_LIBRARY}"
-        "${AMD_LIBRARY}"
-        "${SUITESPARSE_CONFIG_LIBRARY}"
-    )
-endif(CHOLMOD_FOUND)
-
 
 # Public headers
 install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")

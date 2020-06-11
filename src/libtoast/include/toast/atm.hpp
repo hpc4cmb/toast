@@ -13,159 +13,326 @@ extern "C" {
 }
 
 namespace toast {
-using mem_long = std::unique_ptr <AlignedVector <long> >;
-using mem_double = std::unique_ptr <AlignedVector <double> >;
+// This small singleton class is used to initialize and finalize the cholmod package.
 
-class atm_sim {
+class CholmodCommon {
     public:
 
-        typedef std::shared_ptr <atm_sim> pshr;
-        typedef std::unique_ptr <atm_sim> puniq;
+        // Singleton access
+        static CholmodCommon & get();
+        ~CholmodCommon();
 
-        // The sim object is constructed for one CES (constant elevation scan)
-
-        atm_sim(
-            double azmin, double azmax, // CES azimuth range
-            double elmin, double elmax, // CES elevation range
-            double tmin, double tmax,   // CES time range
-            // dissipation scale of the Kolmogorov turbulence
-            double lmin_center = .01, double lmin_sigma = .001,
-
-            // injection scale of the Kolmogorov turbulence
-            double lmax_center = 10, double lmax_sigma = 10,
-            double w_center = 25, double w_sigma = 10, // wind speed [m/s]
-            // wind direction [radians]
-            double wdir_center = 0, double wdir_sigma = 100,
-
-            // Water vapor distribution [m]
-            double z0_center = 2000, double z0_sigma = 0,
-
-            // Ground temperature
-            double T0_center = 280, double T0_sigma = 10,
-
-            // Atmosphere extent for temperature profile
-            double zatm = 40000,
-
-            // Water vapor extent for integration
-            double zmax = 2000,
-
-            // Size of the volume elements
-            double xstep = 100, double ystep = 100, double zstep = 100,
-
-            // Size of the simulation slices
-            long nelem_sim_max = 1000,
-
-            int verbosity = 0,
-
-            // RNG keys
-            uint64_t key1 = 0, uint64_t key2 = 0,
-
-            // RNG counters
-            uint64_t counterval1 = 0, uint64_t counterval2 = 0,
-            std::string cachedir = std::string(),
-
-            // Line-of-sight observing limits
-            double rmin = 0, double rmax = 10000
-            );
-
-        ~atm_sim();
-
-        // we can simulate a number of realizations for the same CES
-        // and distribution of parameters
-        int simulate(bool use_cache);
-
-        // ::observe can only be called after ::simulate and only with
-        // compatible arguments.
-        int observe(double * t, double * az, double * el, double * tod,
-                    long nsamp, double fixed_r = -1);
-
-        void print(std::ostream & out = std::cout) const;
+        cholmod_common cholcommon;
+        cholmod_common * chcommon;
 
     private:
 
-        std::string cachedir;
-        int rank, ntask, nthread;
-        int verbosity;
-        uint64_t key1, key2, counter1, counter2, counter1start, counter2start;
-        double azmin, azmax, elmin, elmax, tmin, tmax, sinel0, cosel0;
-        double tanmin, tanmax; // In-cone calculation helpers
-        double lmin_center, lmin_sigma, lmax_center, lmax_sigma,
-               w_center, w_sigma, wdir_center, wdir_sigma,
-               z0_center, z0_sigma, T0_center, T0_sigma, z0inv;
-        double az0, el0, delta_az, delta_el, delta_t;
-        double zatm, zmax;
-        double xstep, ystep, zstep, delta_x, delta_y, delta_z;
-        double xstart, ystart, zstart, xxstep, yystep, zzstep;
-        double delta_y_cone, delta_z_cone, maxdist;
-        double xstepinv, ystepinv, zstepinv;
-        long nx, ny, nz, nn, xstride, ystride, zstride;
-        double xstrideinv, ystrideinv, zstrideinv;
-        size_t nelem;
-        bool cached = false;
-        double lmin, lmax, w, wdir, z0, T0, wx, wy, wz;
-
-        // Number of steps in the Kolmogorov grid
-        long nr;
-
-        // Size of the independent X-direction slices.
-        long nelem_sim_max;
-
-        // Kolmogorov correlation grid
-        double rmin_kolmo, rmax_kolmo, rstep, rstep_inv;
-        double rcorr, rcorrsq, corrlim; // Correlation length
-        double rmin, rmax;              // line-of-sight integration limits
-        // Mapping between full volume and observation cone
-        mem_long compressed_index;
-
-        // Inverse mapping between full volume and observation cone
-        mem_long full_index;
-        cholmod_common cholcommon;
-        cholmod_common * chcommon;
-        void draw();            // Draw values of lmin, lmax, w, wdir, T0 (and
-                                // optionally z0)
-        void get_volume();      // Determine the rectangular volume needed
-        // determine of the given coordinates are within observed volume
-        bool in_cone(double x, double y, double z, double t_in = -1);
-        void compress_volume(); // Find the volume elements really needed
-        mem_double realization;
-
-        // Find the next range of compressed indices to simulate
-        void get_slice(long & ind_start, long & ind_stop);
-
-        // Use the atmospheric parameters for volume element covariance
-        // Cholesky decompose (square root) the covariance matrix
-        cholmod_sparse * sqrt_sparse_covariance(cholmod_sparse * cov,
-                                                long ind_start, long ind_stop);
-        cholmod_sparse * build_sparse_covariance(long ind_start, long ind_stop);
-
-        // Create a realization out of the square root covariance matrix
-        void apply_sparse_covariance(cholmod_sparse * cov,
-                                     long ind_start, long ind_stop);
-
-        // Compressed index to xyz-coordinates
-        void ind2coord(long i, double * coord);
-
-        // xyz-coordinates to Compressed index
-        long coord2ind(double x, double y, double z);
-
-        // Interpolate the realization value to given coordinates
-        double interp(double x, double y, double z, std::vector <long> & last_ind,
-                      std::vector <double> & last_nodes);
-
-        // Evaluate the covariance matrix
-        double cov_eval(double * coord1, double * coord2);
-
-        // Integrate the correlation from the Kolmorov spectrum
-        void initialize_kolmogorov();
-
-        // Interpolate the correlation from precomputed grid
-        double kolmogorov(double r);
-        void smooth(); // Smooth the realization
-        std::vector <double> kolmo_x;
-        std::vector <double> kolmo_y;
-        void load_realization();
-        void save_realization();
+        // This class is a singleton- constructor is private.
+        CholmodCommon();
 };
+
+bool atm_verbose();
+
+bool atm_sim_in_cone(
+    double const & x,
+    double const & y,
+    double const & z,
+    double const & t_in,
+    double const & delta_t,
+    double const & delta_az,
+    double const & elmin,
+    double const & elmax,
+    double const & wx,
+    double const & wy,
+    double const & wz,
+    double const & xstep,
+    double const & ystep,
+    double const & zstep,
+    double const & maxdist,
+    double const & cosel0,
+    double const & sinel0
+    );
+
+void atm_sim_compress_flag_hits_rank(
+    int64_t nn,
+    uint8_t * hit,
+    int ntask,
+    int rank,
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
+    double xstart,
+    double ystart,
+    double zstart,
+    double delta_t,
+    double delta_az,
+    double elmin,
+    double elmax,
+    double wx,
+    double wy,
+    double wz,
+    double xstep,
+    double ystep,
+    double zstep,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
+    double maxdist,
+    double cosel0,
+    double sinel0
+    );
+
+void atm_sim_compress_flag_extend_rank(
+    uint8_t * hit,
+    uint8_t * hit2,
+    int ntask,
+    int rank,
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride
+    );
+
+double atm_sim_interp(
+    double const & x,
+    double const & y,
+    double const & z,
+    std::vector <int64_t> & last_ind,
+    std::vector <double> & last_nodes,
+    double const & xstart,
+    double const & ystart,
+    double const & zstart,
+    int64_t const & nn,
+    int64_t const & nx,
+    int64_t const & ny,
+    int64_t const & nz,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
+    double const & xstep,
+    double const & ystep,
+    double const & zstep,
+    double const & xstepinv,
+    double const & ystepinv,
+    double const & zstepinv,
+    double const & t_in,
+    double const & delta_t,
+    double const & delta_az,
+    double const & elmin,
+    double const & elmax,
+    double const & wx,
+    double const & wy,
+    double const & wz,
+    double const & maxdist,
+    double const & cosel0,
+    double const & sinel0,
+    int64_t const & nelem,
+    int64_t const * compressed_index,
+    int64_t const * full_index,
+    double const * realization
+    );
+
+int atm_sim_observe(
+    size_t nsamp,
+    double * times,
+    double * az,
+    double * el,
+    double * tod,
+    double T0,
+    double azmin,
+    double azmax,
+    double elmin,
+    double elmax,
+    double tmin,
+    double tmax,
+    double rmin,
+    double rmax,
+    double fixed_r,
+    double zatm,
+    double zmax,
+    double wx,
+    double wy,
+    double wz,
+    double xstep,
+    double ystep,
+    double zstep,
+    double xstart,
+    double delta_x,
+    double ystart,
+    double delta_y,
+    double zstart,
+    double delta_z,
+    double maxdist,
+    int64_t nn,
+    int64_t nx,
+    int64_t ny,
+    int64_t nz,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
+    int64_t nelem,
+    int64_t * compressed_index,
+    int64_t * full_index,
+    double * realization
+    );
+
+void atm_sim_kolmogorov_init_rank(
+    int64_t nr,
+    double * kolmo_x,
+    double * kolmo_y,
+    double rmin_kolmo,
+    double rmax_kolmo,
+    double rstep,
+    double lmin,
+    double lmax,
+    int ntask,
+    int rank
+    );
+
+double atm_sim_kolmogorov(
+    double const & r,
+    int64_t const & nr,
+    double const & rmin_kolmo,
+    double const & rmax_kolmo,
+    double const * kolmo_x,
+    double const * kolmo_y
+    );
+
+double atm_sim_cov_eval(
+    int64_t const & nr,
+    double const & rmin_kolmo,
+    double const & rmax_kolmo,
+    double const * kolmo_x,
+    double const * kolmo_y,
+    double const & rcorrsq,
+    double const & z0inv,
+    double * coord1,
+    double * coord2,
+    bool smooth,
+    double xxstep,
+    double zzstep
+    );
+
+void atm_sim_ind2coord(
+    double const & xstart,
+    double const & ystart,
+    double const & zstart,
+    double const & xstep,
+    double const & ystep,
+    double const & zstep,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
+    double const & xstrideinv,
+    double const & ystrideinv,
+    double const & zstrideinv,
+    double const & cosel0,
+    double const & sinel0,
+    int64_t const * full_index,
+    int64_t const & i,
+    double * coord
+    );
+
+int64_t atm_sim_coord2ind(
+    double const & xstart,
+    double const & ystart,
+    double const & zstart,
+    int64_t const & xstride,
+    int64_t const & ystride,
+    int64_t const & zstride,
+    double const & xstepinv,
+    double const & ystepinv,
+    double const & zstepinv,
+    int64_t const & nx,
+    int64_t const & ny,
+    int64_t const & nz,
+    int64_t const * compressed_index,
+    double const & x,
+    double const & y,
+    double const & z
+    );
+
+cholmod_sparse * atm_sim_build_sparse_covariance(
+    int64_t ind_start,
+    int64_t ind_stop,
+    int64_t nr,
+    double rmin_kolmo,
+    double rmax_kolmo,
+    double const * kolmo_x,
+    double const * kolmo_y,
+    double rcorr,
+    double xstart,
+    double ystart,
+    double zstart,
+    double xstep,
+    double ystep,
+    double zstep,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
+    double z0,
+    double cosel0,
+    double sinel0,
+    int64_t const * full_index,
+    bool smooth,
+    double xxstep,
+    double zzstep,
+    int rank
+    );
+
+cholmod_sparse * atm_sim_sqrt_sparse_covariance(
+    cholmod_sparse * cov,
+    int64_t ind_start,
+    int64_t ind_stop,
+    int rank
+    );
+
+void atm_sim_apply_sparse_covariance(
+    cholmod_sparse * sqrt_cov,
+    int64_t ind_start,
+    int64_t ind_stop,
+    uint64_t key1,
+    uint64_t key2,
+    uint64_t counter1,
+    uint64_t counter2,
+    double * realization,
+    int rank
+    );
+
+void atm_sim_compute_slice(
+    int64_t ind_start,
+    int64_t ind_stop,
+    int64_t nr,
+    double rmin_kolmo,
+    double rmax_kolmo,
+    double const * kolmo_x,
+    double const * kolmo_y,
+    double rcorr,
+    double xstart,
+    double ystart,
+    double zstart,
+    double xstep,
+    double ystep,
+    double zstep,
+    int64_t xstride,
+    int64_t ystride,
+    int64_t zstride,
+    double z0,
+    double cosel0,
+    double sinel0,
+    int64_t const * full_index,
+    bool smooth,
+    double xxstep,
+    double zzstep,
+    int rank,
+    uint64_t key1,
+    uint64_t key2,
+    uint64_t counter1,
+    uint64_t counter2,
+    double * realization
+    );
 }
 
 #endif // ifdef HAVE_CHOLMOD

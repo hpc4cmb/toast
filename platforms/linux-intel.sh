@@ -8,8 +8,6 @@ opts="$@"
 cmake \
     -DCMAKE_C_COMPILER="icc" \
     -DCMAKE_CXX_COMPILER="icpc" \
-    -DMPI_C_COMPILER="mpiicc" \
-    -DMPI_CXX_COMPILER="mpiicpc" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
     -DBLAS_LIBRARIES=${MKLROOT}/lib/intel64/libmkl_rt.so \

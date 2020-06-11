@@ -42,9 +42,7 @@ from .pointing_math import aberrate
 
 from .conviqt import OpSimConviqt
 
-from .atm import available as atm_available
 from .atm import available_utils as atm_available_utils
-from .atm import available_mpi as atm_available_mpi
 from .mapsampler import MapSampler
 
 from .madam import OpMadam

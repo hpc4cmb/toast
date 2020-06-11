@@ -55,6 +55,11 @@ void init_sys(py::module & m) {
             Return True if TOAST was compiled with MPI support **and** MPI
             is supported in the current runtime environment.
         )")
+    .def("use_mpi4py", &toast::Environment::use_mpi4py,
+         R"(
+            Return True if mpi4py was detected at install time **and** mpi4py
+            is supported in the current runtime environment.
+        )")
     .def("function_timers", &toast::Environment::function_timers,
          R"(
             Return True if function timing has been enabled.
@@ -374,6 +379,19 @@ void init_sys(py::module & m) {
                  (&toast::Logger::get());
          }, R"(
             Get a handle to the global logger.
+        )")
+    .def("verbose",
+         (void (toast::Logger::*)(char const *)) & toast::Logger::verbose,
+         py::arg(
+             "msg"), R"(
+            Print a VERBOSE level message.
+
+            Args:
+                msg (str): The message to print.
+
+            Returns:
+                None
+
         )")
     .def("debug",
          (void (toast::Logger::*)(char const *)) & toast::Logger::debug,

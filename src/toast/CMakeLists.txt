@@ -91,6 +91,7 @@ install(FILES
     fft.py
     healpix.py
     weather.py
+    "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )
 
@@ -148,3 +149,4 @@ add_subdirectory(map)
 add_subdirectory(todmap)
 add_subdirectory(fod)
 add_subdirectory(pipeline_tools)
+add_subdirectory(pshmem)

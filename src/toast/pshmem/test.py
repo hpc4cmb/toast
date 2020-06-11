@@ -1,46 +1,49 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
-# All rights reserved.  Use of this source code is governed by
-# a BSD-style license that can be found in the LICENSE file.
+##
+# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
+# is governed by a BSD license that can be found in the top-level
+# LICENSE file.
+##
 
+import os
+import sys
 import time
+
+import unittest
 
 import numpy as np
 import numpy.testing as nt
 
-from .mpi import MPITestCase
+from .shmem import MPIShared
+from .locking import MPILock
 
-from ..utils import Environment
+MPI = None
+use_mpi = True
 
-from ..mpi import MPIShared, MPILock
+if "PSHMEM_MPI_DISABLE" in os.environ:
+    use_mpi = False
 
-from ._helpers import create_comm
+if use_mpi and (MPI is None):
+    try:
+        import mpi4py.MPI as MPI
+    except ImportError:
+        raise ImportError("Cannot import mpi4py, will only test serial functionality.")
 
 
-class EnvTest(MPITestCase):
+class ShmemTest(unittest.TestCase):
     def setUp(self):
+        self.comm = None
+        if MPI is not None:
+            self.comm = MPI.COMM_WORLD
         self.rank = 0
-        self.nproc = 1
+        self.procs = 1
         if self.comm is not None:
             self.rank = self.comm.rank
-            self.nproc = self.comm.size
+            self.procs = self.comm.size
 
-    def test_env(self):
-        env = Environment.get()
-        if self.rank == 0:
-            print(env, flush=True)
+    def tearDown(self):
+        pass
 
-    def test_comm(self):
-        comm = create_comm(self.comm)
-        for p in range(self.nproc):
-            if p == self.rank:
-                print(comm, flush=True)
-            if self.comm is not None:
-                self.comm.barrier()
-
-    def test_mpi_shared(self):
-        """This is based on the simple tests from the upstream repo:
-            https://github.com/tskisner/mpi_shmem/blob/master/test.py
-        """
+    def test_allocate(self):
         # Dimensions of our shared memory array
         datadims = (2, 5, 10)
 
@@ -54,14 +57,19 @@ class EnvTest(MPITestCase):
         for d in range(len(datadims)):
             nupdate *= datadims[d] // updatedims[d]
 
-        for datatype in [np.float64, np.float32, np.int64, np.int32]:
+        for datatype in [np.int32, np.int64, np.float32, np.float64]:
+
             # For testing the "set()" method, every process is going to
             # create a full-sized data buffer and fill it with its process rank.
             local = np.ones(datadims, dtype=datatype)
             local *= self.rank
 
+            # A context manager is the pythonic way to make sure that the
+            # object has no dangling reference counts after leaving the context,
+            # and will ensure that the shared memory is freed properly.
+
             with MPIShared(local.shape, local.dtype, self.comm) as shm:
-                for p in range(self.nproc):
+                for p in range(self.procs):
                     # Every process takes turns writing to the buffer.
                     setdata = None
                     setoffset = (0, 0, 0)
@@ -80,12 +88,13 @@ class EnvTest(MPITestCase):
                             shm.set(setdata, setoffset, fromrank=p)
                         except:
                             print(
-                                "proc {} threw exception during set()".format(
-                                    self.rank
-                                ),
+                                "proc {} threw exception during set()".format(rank),
                                 flush=True,
                             )
-                            raise RuntimeError("shared memory set failed")
+                            if self.comm is not None:
+                                self.comm.Abort()
+                            else:
+                                sys.exit(1)
 
                         # Increment the write offset within the array
 
@@ -119,7 +128,7 @@ class EnvTest(MPITestCase):
                 # buffer should appear as a C-contiguous ndarray whenever we slice
                 # along the last dimension.
 
-                for p in range(self.nproc):
+                for p in range(self.procs):
                     if p == self.rank:
                         slc = shm[1, 2]
                         print(
@@ -131,19 +140,77 @@ class EnvTest(MPITestCase):
                     if self.comm is not None:
                         self.comm.barrier()
 
-    def test_mpi_lock(self):
-        """This is based on the simple tests from the upstream repo:
-            https://github.com/tskisner/mpi_shmem/blob/master/test.py
-        """
-        sleepsec = 0.1
-        lock = MPILock(self.comm, root=0, debug=True)
+    def test_shape(self):
+        good_dims = [
+            (2, 5, 10),
+            np.array([10, 2], dtype=np.int32),
+            np.array([5, 2], dtype=np.int64),
+            np.array([10, 2], dtype=np.int),
+        ]
+        bad_dims = [
+            (2, 5.5, 10),
+            np.array([10, 2], dtype=np.float32),
+            np.array([5, 2], dtype=np.float64),
+            np.array([10, 2.5], dtype=np.float32),
+        ]
 
-        msg = "test lock:  process {} got the lock".format(self.rank)
+        dt = np.float64
 
-        lock.lock()
-        print(msg, flush=True)
-        time.sleep(sleepsec)
-        lock.unlock()
+        for dims in good_dims:
+            try:
+                shm = MPIShared(dims, dt, self.comm)
+                if self.rank == 0:
+                    print("successful creation with shape {}".format(dims), flush=True)
+                del shm
+            except ValueError:
+                if self.rank == 0:
+                    print(
+                        "unsuccessful creation with shape {}".format(dims), flush=True
+                    )
+        for dims in bad_dims:
+            try:
+                shm = MPIShared(dims, dt, self.comm)
+                if self.rank == 0:
+                    print("unsuccessful rejection of shape {}".format(dims), flush=True)
+                del shm
+            except ValueError:
+                if self.rank == 0:
+                    print("successful rejection of shape {}".format(dims), flush=True)
 
+
+class LockTest(unittest.TestCase):
+    def setUp(self):
+        self.comm = None
+        if MPI is not None:
+            self.comm = MPI.COMM_WORLD
+        self.rank = 0
+        self.procs = 1
+        if self.comm is not None:
+            self.rank = self.comm.rank
+            self.procs = self.comm.size
+        self.sleepsec = 0.2
+
+    def tearDown(self):
+        pass
+
+    def test_lock(self):
+        with MPILock(self.comm, root=0, debug=True) as lock:
+            for lk in range(5):
+                msg = "test_lock:  process {} got lock {}".format(
+                    self.rank, lk
+                )
+                lock.lock()
+                print(msg, flush=True)
+                #time.sleep(self.sleepsec)
+                lock.unlock()
         if self.comm is not None:
             self.comm.barrier()
+
+
+def run():
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(LockTest))
+    suite.addTest(unittest.makeSuite(ShmemTest))
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+    return

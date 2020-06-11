@@ -36,7 +36,14 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
-numba_threading_layer = "NA"
+
+# This function sets the numba threading layer to (hopefully) be compatible with TOAST.
+# The TOAST threading concurrency is used to attempt to set the numba threading.  We
+# try to use the OpenMP backend for numba and then TBB.  The "workqueue" backend (which
+# is process based).  May not be compatible with all systems, so we use that as a
+# last resort.  This function should be called by any operators that use numba.
+
+numba_threading_layer = None
 
 
 def set_numba_threading():
@@ -58,38 +65,70 @@ def set_numba_threading():
 
     """
     global numba_threading_layer
+    if numba_threading_layer is not None:
+        # Already set.
+        return
+
     # Get the number of threads used by TOAST at runtime.
     env = Environment.get()
     log = Logger.get()
     toastthreads = env.max_threads()
+    print("max toast threads = ", toastthreads, flush=True)
 
     rank = 0
-    if env.use_mpi():
+    if env.use_mpi4py():
         from .mpi import MPI
 
         rank = MPI.COMM_WORLD.rank
 
     threading = "default"
+    have_numba_omp = False
     try:
-        from numba.npyufunc import omppool
+        # New style package layout
+        from numba.np.ufunc import omppool
 
-        threading = "omp"
+        have_numba_omp = True
         if rank == 0:
             log.debug("Numba has OpenMP threading support")
     except ImportError:
-        # no OpenMP support
-        if rank == 0:
-            log.debug("Numba does not support OpenMP")
         try:
+            # Old style
+            from numba.npyufunc import omppool
+
+            have_numba_omp = True
+            if rank == 0:
+                log.debug("Numba has OpenMP threading support")
+        except ImportError:
+            # no OpenMP support
+            if rank == 0:
+                log.debug("Numba does not support OpenMP")
+    have_numba_tbb = False
+    try:
+        # New style package layout
+        from numba.np.ufunc import tbbpool
+
+        have_numba_tbb = True
+        if rank == 0:
+            log.debug("Numba has TBB threading support")
+    except ImportError:
+        try:
+            # Old style
             from numba.npyufunc import tbbpool
 
-            threading = "tbb"
+            have_numba_tbb = True
             if rank == 0:
                 log.debug("Numba has TBB threading support")
         except ImportError:
             # no TBB
             if rank == 0:
                 log.debug("Numba does not support TBB")
+
+    # Prefer OMP backend
+    if have_numba_omp:
+        threading = "omp"
+    elif have_numba_tbb:
+        threading = "tbb"
+
     try:
         from numba import vectorize, config, threading_layer
 

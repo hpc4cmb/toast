@@ -43,12 +43,13 @@ class OpMapMakerTest(MPITestCase):
                     os.remove(fname)
                 except OSError:
                     pass
+        if self.comm is not None:
+            self.comm.barrier()
 
-        # One observation per group
-        self.nobs = 3
+        self.nobs = 1
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
-        self.ndet = 4  # self.data.comm.group_size
+        self.ndet = self.data.comm.group_size
         self.sigma = 1
         self.rate = 50.0
         self.net = self.sigma / np.sqrt(self.rate)
@@ -357,6 +358,7 @@ class OpMapMakerTest(MPITestCase):
         # Scan the signal from a map
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
         distmap.read_healpix_fits(self.inmapfile)
+
         scansim = OpSimScan(distmap=distmap, out=name)
         scansim.exec(self.data)
 

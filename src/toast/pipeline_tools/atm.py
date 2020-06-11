@@ -261,6 +261,12 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
             except FileExistsError:
                 pass
 
+    # TK:  is this right?  Or do we want to break out options for different types of
+    # verbosity?
+    write_debug = False
+    if args.atm_verbosity > 1:
+        write_debug = True
+
     # Simulate the atmosphere signal
 
     atm = OpSimAtmosphere(
@@ -277,14 +283,13 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
         ystep=args.atm_ystep,
         zstep=args.atm_zstep,
         nelem_sim_max=args.atm_nelem_sim_max,
-        verbosity=args.atm_verbosity,
         z0_center=args.atm_z0_center,
         z0_sigma=args.atm_z0_sigma,
         apply_flags=args.atm_apply_flags,
         common_flag_mask=args.common_flag_mask,
         cachedir=args.atm_cache,
-        flush=args.flush,
         wind_dist=args.atm_wind_dist,
+        write_debug=write_debug,
     )
     atm.exec(data)
 
@@ -309,8 +314,8 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
             apply_flags=args.atm_apply_flags,
             common_flag_mask=args.common_flag_mask,
             cachedir=args.atm_cache,
-            flush=args.flush,
             wind_dist=10000,
+            write_debug=write_debug,
         )
         atm.exec(data)
 
