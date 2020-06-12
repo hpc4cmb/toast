@@ -15,8 +15,6 @@ from setuptools.command.build_ext import build_ext
 def find_compilers():
     cc = None
     cxx = None
-    mpicc = None
-    mpicxx = None
     # If we have mpi4py, then get the MPI compilers that were used to build that.
     # Then get the serial compilers used by the MPI wrappers.  Otherwise, just the
     # normal distutils compilers.
@@ -50,7 +48,7 @@ def find_compilers():
     except ImportError:
         pass
 
-    return (cc, cxx, mpicc, mpicxx)
+    return (cc, cxx)
 
 
 def get_version():
@@ -118,7 +116,7 @@ class CMakeBuild(build_ext):
                 + ", ".join(e.name for e in self.extensions)
             )
 
-        (cc, cxx, mpicc, mpicxx) = find_compilers()
+        (cc, cxx) = find_compilers()
 
         # Make a copy of the environment so that we can modify it
         env = os.environ.copy()
@@ -167,14 +165,6 @@ class CMakeBuild(build_ext):
             # We just let cmake guess the compilers and hope for the best...
             pass
 
-        if mpicxx is not None:
-            # We have MPI
-            cmake_args += ["-DMPI_C_COMPILER={}".format(mpicc)]
-            cmake_args += ["-DMPI_CXX_COMPILER={}".format(mpicxx)]
-        else:
-            # Disable checking for MPI
-            cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
-
         # Append any other TOAST_BUILD_ options to the cmake args
         for k, v in cmake_opts.items():
             cmake_args += ["-D{}={}".format(k, v)]
@@ -215,12 +205,7 @@ class CMakeBuild(build_ext):
         self.copy_file(source_path, dest_path)
 
 
-(cc, cxx, mpicc, mpicxx) = find_compilers()
-
 ext_modules = [CMakeExtension("toast._libtoast")]
-
-if mpicxx is not None:
-    ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
 
 
 def readme():

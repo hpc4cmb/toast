@@ -16,9 +16,7 @@ cp -a /home/toast .
 pushd toast
 
 mkdir -p dist
-rm dist/*
-
-pip install .
+rm -f dist/*
 
 python setup.py sdist
 chown $(id -u):$(id -g) dist/*
