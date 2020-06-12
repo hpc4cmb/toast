@@ -13,6 +13,10 @@ string(STRIP "${GIT_DESC_RAW}" GIT_DESC)
 string(REGEX REPLACE "^([0-9]+\\.[0-9]+\\.[0-9a-z]+).*" "\\1" VERSION_TAG "${GIT_DESC}")
 string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.[0-9a-z]+-([0-9]+)-.*" "\\1" DEV_COUNT "${GIT_DESC}")
 
+if ("${DEV_COUNT}" STREQUAL "${GIT_DESC}")
+    set(DEV_COUNT "0")
+endif()
+
 # Check whether we got any revision (if this is a git checkout).  Form a
 # PEP compatible version string.
 
