@@ -21,12 +21,10 @@ MPI = None
 if use_mpi4py and (MPI is None):
     try:
         import mpi4py.MPI as MPI
-    except ImportError:
-        raise ImportError(
-            "TOAST built with MPI + mpi4py support, but mpi4py "
-            "not found at run time.  Is mpi4py currently in "
-            "your python search path?"
-        )
+    except:
+        # There could be many possible exceptions raised...
+        log = Logger.get()
+        log.info("mpi4py not found- using serial operations only")
 
 
 def get_world():
