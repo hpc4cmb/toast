@@ -18,16 +18,53 @@ to get started.  If you want to hack on the TOAST package itself, see the sectio
 
 If you want to use TOAST at NERSC, see :ref:`nersc`.
 
+Pip Binary Wheels
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you already have a newer Python3 (>= 3.6), then you can install pre-built TOAST
+packages from PyPI.  You should always use virtualenv or similar tools to manage your
+python environments rather than pip-installing packages as root.  First create a
+virtualenv (name it whatever you like)::
+
+    virtualenv -p python3 ${HOME}/cmb
+
+Now activate this environment::
+
+    source ${HOME}/cmb/bin/activate
+
+Next, use pip to install toast and its requirements (note that the name of the package is "toast-cmb" on PyPI)::
+
+    pip install toast-cmb
+
+If you want to enable effective parallelism with toast, then you need to install the
+mpi4py package.  This package requires MPI compilers (usually MPICH or OpenMPI).  Your
+system may already have some MPI compilers installed- try this::
+
+    which mpicc
+    mpicc -show
+
+If the mpicc command is not found, you should use your OS package manager to install the
+development packages for MPICH or OpenMPI.  Now you can install mpi4py::
+
+    pip install mpi4py
+
+For more details about custom installation options for mpi4py, read the `documentation
+for that package <https://mpi4py.readthedocs.io/en/stable/install.html>`_.  You can test your TOAST installation by running the unit test suite::
+
+    python -c 'import toast.tests; toast.tests.run()'
+
+
 Conda Packages
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The easiest way to install TOAST and all of its optional dependencies is to use the
-conda package manager.  The conda-forge ecosystem allows us to create packages that are
-built consistently with all their dependencies.  If you already have Anaconda installed
-**and** it is a recent version, then you may be able to skip ahead to "activating the
-root environment below".
+If you already use the conda python stack, then you can install TOAST and all of its
+optional dependencies with the conda package manager.  The conda-forge ecosystem allows
+us to create packages that are built consistently with all their dependencies.  If you
+already have Anaconda / miniconda installed **and** it is a recent version, then skip
+ahead to "activating the root environment below".
 
-We recommend following the `setup guidelines used by conda-forge
+If you are starting from scratch, we recommend following the `setup guidelines used by
+conda-forge
 <https://conda-forge.org/docs/user/introduction.html#how-can-i-install-packages-from-conda-forge>`_,
 specifically:
 
@@ -37,7 +74,9 @@ specifically:
 
     3.  Leave the base system (a.k.a. the "root" environment) with just the bare minimum of packages.
 
-    4.  Always create a new environment (i.e. not the base one) when setting up a python stack for a particular purpose.  This allows you to upgrade the conda base system in a reliable way, and to wipe and recreate whole conda environments whenever needed.
+    4.  Always create a new environment (i.e. not the base one) when setting up a python
+    stack for a particular purpose.  This allows you to upgrade the conda base system in
+    a reliable way, and to wipe and recreate whole conda environments whenever needed.
 
 Here are the detailed steps of how you could do this from the UNIX shell, installing the
 base conda system to ``${HOME}/conda``.  First download the installer.  For OS X you
@@ -78,20 +117,12 @@ Now we can activate our new (and mostly empty) toast environment::
 
     conda activate toast
 
-Finally, we can install the toast package.  I recommend installing the MPICH version of
-TOAST.  There is also a version of TOAST without MPI, but most of the parallelism in
-TOAST comes from using MPI::
+Finally, we can install the toast package::
 
-    conda install python=3 toast=*=*mpich*
+    conda install python=3 toast
 
-OR::
-
-    conda install python=3 toast=*=*nompi*
-
-There is also an OpenMPI version of the package, but that is mainly intended for
-installing toast into environments that also use / require OpenMPI.  Assuming this is
-the only conda installation on your system, you can add the line ``source
-${HOME}/conda/etc/profile.d/conda.sh`` to your shell resource file (usually
+Assuming this isthe only conda installation on your system, you can add the line
+``source ${HOME}/conda/etc/profile.d/conda.sh`` to your shell resource file (usually
 ``~/.bashrc`` on Linux or ``~/.profile`` on OS X).  You can read many articles on login
 shells versus non-login shells and decide where to put this line for your specific use
 case.
@@ -109,32 +140,9 @@ the toast environment and install them with conda.  See the conda documentation 
 details on managing environments, installing packages, etc.
 
 If you want to use PySM with TOAST for sky simulations, you should install the ``pysm3``
-and ``libsharp`` packages.  The libsharp package has the same variants as the toast
-package, so you should choose the same variant as you used when installing TOAST.  For
-example::
+and ``libsharp`` packages.  For example::
 
-    conda install pysm3 libsharp=*=*mpich*
-
-OR::
-
-    conda install pysm3 libsharp=*=*nompi*
-
-
-Minimal Install with PIP
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you cannot or do not want to use the conda package manager, then it is possible to
-install a "minimal" version of TOAST with pip.  If you install TOAST this way, it will
-be missing support for MPI and atmospheric simulations.  Additionally, you must first
-ensure that you have a serial compiler installed and that a BLAS/LAPACK library is
-available in the default compiler search paths.  You should also install the FFTW
-package, either through your OS package manager or manually.  After doing those steps,
-you can do::
-
-    pip install https://github.com/hpc4cmb/toast/archive/2.3.6.tar.gz
-
-Specify the URL to the version tarball you want to install (see the releases on the
-TOAST github page).
+    conda install pysm3 libsharp
 
 
 Something Else
@@ -197,7 +205,7 @@ You can also install it to the same prefix as TOAST or to a separate location fo
 the TOAST dependencies.  If you install it somewhere other than /usr/local then make
 sure it is in your environment search paths (see the "installing TOAST" section).
 
-You can also now install the optional dependencies:
+You can also now install the optional dependencies if you wish:
 
     * `libconviqt <https://github.com/hpc4cmb/libconviqt>`_ for 4PI beam convolution.
     * `libmadam <https://github.com/hpc4cmb/libmadam>`_ for optimized destriping mapmaking.
@@ -223,22 +231,15 @@ Then you can create a python3 virtualenv, activate it, and then use pip to insta
 packages::
 
     pip install \
+        numpy \
         scipy \
         matplotlib \
         healpy \
         astropy \
-        pyephem
+        pyephem \
+        mpi4py
 
 Then install libaatm as discussed in the previous section.
-
-
-Conda Isolated Environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This is still a work in progress.  Conda provides compilers as well as packages, but in
-order to use them we must isolate **everything** from the surrounding OS.  The obvious
-appeal is that we can then install all dependencies easily and just build TOAST using
-the conda compilers.  We will add more details here after more testing.
 
 OS X with MacPorts
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -261,8 +262,8 @@ the example configs in that package and the README.  For example, there is an
 optional dependencies like libconviqt and libmadam.
 
 
-Installing TOAST
-~~~~~~~~~~~~~~~~~~~~~~~~
+Installing TOAST with CMake
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Decide where you want to install your development copy of TOAST.  I recommend picking a
 standalone directory somewhere.  For this example, we will use
@@ -320,12 +321,6 @@ variables can be defined in the invocation to ``cmake`` using the
 ``CMAKE_CXX_FLAGS``
     Flags to be passed to the C++ compiler
 
-``MPI_C_COMPILER``
-    Path to the MPI wrapper for the C compiler
-
-``MPI_CXX_COMPILER``
-    Path to the MPI wrapper for the C++ compiler
-
 ``PYTHON_EXECUTABLE``
     Path to the Python interpreter
 
@@ -338,6 +333,9 @@ variables can be defined in the invocation to ``cmake`` using the
 ``FFTW_ROOT``
     The install prefix of the FFTW package
 
+``AATM_ROOT``
+    The install prefix of the libaatm package
+
 ``SUITESPARSE_INCLUDE_DIR_HINTS``
     The include directory for SuiteSparse headers
 
@@ -346,6 +344,15 @@ variables can be defined in the invocation to ``cmake`` using the
 
 See the top-level "platforms" directory for other examples of running CMake.
 
+Installing TOAST with Pip / setup.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The setup.py that comes with TOAST is just a wrapper around the cmake build system.  You
+can pass options to the underlying cmake call by setting environment variables prefixed
+with "TOAST_BUILD_".  For example, if you want to pass the location of the libaatm
+installation to cmake when using setup.py, you can set the "TOAST_BUILD_AATM_ROOT"
+environment variable.  This will get translated to "-DAATM_ROOT" when cmake is invoked
+by setup.py
 
 Testing the Installation
 -----------------------------

@@ -3,10 +3,47 @@
 Change Log
 -------------------------
 
-2.3.7 (Unreleased)
+2.3.8 (Unreleased)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Nothing yet.
+* Nothing yet
+
+2.3.7 (2020-06-12)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Documentation updates and deployment of pip wheels on tags (PR `#356`_).
+* Cleanups of conviqt polarization support (PR `#347`_).
+* Support elevation nods in ground simulations (PR `#355`_).
+* Fix a bug in parallel writing of Healpix FITS files (PR `#354`_).
+* Remove dependence on MPI compilers.  Only mpi4py is needed (PR `#350`_).
+* Use the native mapmaker by default in the example pipelines (PR `#352`_).
+* Updates to build system for pip wheel compatibility (PR `#348`_, `#351`_).
+* Switch to github actions instead of travis for continuous integration (PR `#349`_).
+* Updates to many parts of the simulation and filtering operators (PR `#341`_).
+* In the default Healpix pointing matrix, support None for HWP angle (PR `#345`_).
+* Add support for HWP in conviqt beam convolution (PR `#343`_).
+* Reimplementation of example jobs used for benchmarks (PR `#332`_).
+* Apply atmosphere scaling in temperature, not intensity (PR `#328`_).
+* Minor bugfix in binner when running in debug mode (PR `#325`_).
+* Add optional boresight offset to the scheduler (PR `#329`_).
+* Implement helper tools for parsing mapmaker options (PR `#321`_).
+
+.. _`#356`: https://github.com/hpc4cmb/toast/pull/356
+.. _`#347`: https://github.com/hpc4cmb/toast/pull/347
+.. _`#355`: https://github.com/hpc4cmb/toast/pull/355
+.. _`#354`: https://github.com/hpc4cmb/toast/pull/354
+.. _`#350`: https://github.com/hpc4cmb/toast/pull/350
+.. _`#352`: https://github.com/hpc4cmb/toast/pull/352
+.. _`#351`: https://github.com/hpc4cmb/toast/pull/351
+.. _`#349`: https://github.com/hpc4cmb/toast/pull/349
+.. _`#341`: https://github.com/hpc4cmb/toast/pull/341
+.. _`#345`: https://github.com/hpc4cmb/toast/pull/345
+.. _`#343`: https://github.com/hpc4cmb/toast/pull/343
+.. _`#332`: https://github.com/hpc4cmb/toast/pull/332
+.. _`#328`: https://github.com/hpc4cmb/toast/pull/328
+.. _`#325`: https://github.com/hpc4cmb/toast/pull/325
+.. _`#329`: https://github.com/hpc4cmb/toast/pull/329
+.. _`#321`: https://github.com/hpc4cmb/toast/pull/321
 
 2.3.6 (2020-01-19)
 ~~~~~~~~~~~~~~~~~~~~~~~~~

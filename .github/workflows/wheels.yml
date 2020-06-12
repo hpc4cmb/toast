@@ -2,20 +2,36 @@
 name:  Test Binary Wheels
 
 # Uncomment here for testing and comment out schedule below.
-# on:
-#   push:
-#     branches: [ master ]
-#   pull_request:
-#     branches: [ master ]
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 # Uncomment here for production and comment out push / PR above.
-on:
-  schedule:
-    - cron: '0 4 * * *'
+# on:
+#   schedule:
+#     - cron: '0 4 * * *'
 
 jobs:
-  py36:
-    name: Python 3.6 wheels on ${{ matrix.os }}
+  sdist:
+    name: Python source dist
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Pull Dependency Image
+      run: docker pull hpc4cmb/toast-deps-py37:latest
+    - name: Create dist directory
+      run: mkdir -p dist && rm -f dist/*
+    - name: Build source package
+      run: docker run -v "$(pwd)":/home/toast hpc4cmb/toast-deps-py37:latest /home/toast/wheels/build_sdist.sh
+    - uses: actions/upload-artifact@v2
+      with:
+        name: sdist
+        path: ./dist/toast*.gz
+  wheels-py36:
+    name: Python 3.6 wheels for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -25,11 +41,11 @@ jobs:
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
       CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: echo "" >/dev/null
+      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
       CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
     steps:
     - uses: actions/checkout@v2
@@ -46,9 +62,9 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: wheels
-        path: ./wheelhouse
-  py37:
-    name: Python 3.7 wheels on ${{ matrix.os }}
+        path: ./wheelhouse/toast*.whl
+  wheels-py37:
+    name: Python 3.7 wheels for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -58,11 +74,11 @@ jobs:
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
       CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: echo "" >/dev/null
+      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
       CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
     steps:
     - uses: actions/checkout@v2
@@ -79,9 +95,9 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: wheels
-        path: ./wheelhouse
-  py38:
-    name: Python 3.8 wheels on ${{ matrix.os }}
+        path: ./wheelhouse/toast*.whl
+  wheels-py38:
+    name: Python 3.8 wheels for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -91,11 +107,11 @@ jobs:
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
       CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: echo "" >/dev/null
+      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
       CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
     steps:
     - uses: actions/checkout@v2
@@ -112,4 +128,4 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: wheels
-        path: ./wheelhouse
+        path: ./wheelhouse/toast*.whl

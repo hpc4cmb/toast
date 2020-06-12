@@ -15,8 +15,6 @@ from setuptools.command.build_ext import build_ext
 def find_compilers():
     cc = None
     cxx = None
-    mpicc = None
-    mpicxx = None
     # If we have mpi4py, then get the MPI compilers that were used to build that.
     # Then get the serial compilers used by the MPI wrappers.  Otherwise, just the
     # normal distutils compilers.
@@ -50,7 +48,7 @@ def find_compilers():
     except ImportError:
         pass
 
-    return (cc, cxx, mpicc, mpicxx)
+    return (cc, cxx)
 
 
 def get_version():
@@ -63,7 +61,7 @@ def get_version():
         version_dir = os.path.join(topdir, "src", "libtoast")
         # version_dir = os.path.join("src", "libtoast")
         subprocess.check_call("cmake -P version.cmake", shell=True, cwd=version_dir)
-        version_cpp = os.path.join(version_dir, "src", "version.cpp")
+        version_cpp = os.path.join(version_dir, "version.cpp")
         git_ver = None
         rel_ver = None
         with open(version_cpp, "r") as f:
@@ -118,7 +116,7 @@ class CMakeBuild(build_ext):
                 + ", ".join(e.name for e in self.extensions)
             )
 
-        (cc, cxx, mpicc, mpicxx) = find_compilers()
+        (cc, cxx) = find_compilers()
 
         # Make a copy of the environment so that we can modify it
         env = os.environ.copy()
@@ -167,14 +165,6 @@ class CMakeBuild(build_ext):
             # We just let cmake guess the compilers and hope for the best...
             pass
 
-        if mpicxx is not None:
-            # We have MPI
-            cmake_args += ["-DMPI_C_COMPILER={}".format(mpicc)]
-            cmake_args += ["-DMPI_CXX_COMPILER={}".format(mpicxx)]
-        else:
-            # Disable checking for MPI
-            cmake_args += ["-DCMAKE_DISABLE_FIND_PACKAGE_MPI=TRUE"]
-
         # Append any other TOAST_BUILD_ options to the cmake args
         for k, v in cmake_opts.items():
             cmake_args += ["-D{}={}".format(k, v)]
@@ -215,12 +205,7 @@ class CMakeBuild(build_ext):
         self.copy_file(source_path, dest_path)
 
 
-(cc, cxx, mpicc, mpicxx) = find_compilers()
-
 ext_modules = [CMakeExtension("toast._libtoast")]
-
-if mpicxx is not None:
-    ext_modules.append(CMakeExtension("toast._libtoast_mpi"))
 
 
 def readme():
@@ -229,7 +214,7 @@ def readme():
 
 
 conf = dict()
-conf["name"] = "toast"
+conf["name"] = "toast-cmb"
 conf["description"] = "Time Ordered Astrophysics Scalable Tools"
 conf["long_description"] = readme()
 conf["long_description_content_type"] = "text/markdown"
@@ -238,9 +223,16 @@ conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
-conf["provides"] = "toast"
 conf["python_requires"] = ">=3.6.0"
-conf["install_requires"] = ["cmake", "numpy", "scipy", "healpy", "matplotlib", "ephem"]
+conf["install_requires"] = [
+    "cmake",
+    "numpy",
+    "scipy",
+    "healpy",
+    "matplotlib",
+    "ephem",
+    "h5py",
+]
 conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
