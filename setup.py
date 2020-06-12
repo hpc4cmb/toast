@@ -6,6 +6,7 @@ import os
 import sys
 import re
 import subprocess
+import glob
 from pathlib import Path
 
 from setuptools import setup, Extension, find_packages
@@ -207,6 +208,8 @@ class CMakeBuild(build_ext):
 
 ext_modules = [CMakeExtension("toast._libtoast")]
 
+scripts = glob.glob("pipelines/*.py")
+
 
 def readme():
     with open("README.md") as f:
@@ -237,6 +240,7 @@ conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
+conf["scripts"] = scripts
 conf["cmdclass"] = {"build_ext": CMakeBuild}
 conf["zip_safe"] = False
 conf["classifiers"] = [

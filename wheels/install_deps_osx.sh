@@ -12,8 +12,9 @@ pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
 popd >/dev/null 2>&1
 
-# Install mpich
+# Install mpich and mpi4py
 brew install mpich
+pip install mpi4py
 
 # Get newer cmake with pip
 pip install cmake
