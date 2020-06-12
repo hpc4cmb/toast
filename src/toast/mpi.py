@@ -13,8 +13,13 @@ from .pshmem import MPIShared, MPILock
 
 env = Environment.get()
 
-use_mpi = env.use_mpi()
-use_mpi4py = env.use_mpi4py()
+use_mpi = None
+if use_mpi is None:
+    use_mpi = env.use_mpi()
+
+use_mpi4py = None
+if use_mpi4py is None:
+    use_mpi4py = env.use_mpi4py()
 
 MPI = None
 
@@ -25,6 +30,7 @@ if use_mpi4py and (MPI is None):
         # There could be many possible exceptions raised...
         log = Logger.get()
         log.info("mpi4py not found- using serial operations only")
+        use_mpi4py = False
 
 
 def get_world():
