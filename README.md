@@ -1,6 +1,6 @@
 # Time Ordered Astrophysics Scalable Tools
 
-TOAST is a `software framework <https://en.wikipedia.org/wiki/Software_framework>`_ for
+TOAST is a [software framework](https://en.wikipedia.org/wiki/Software_framework) for
 simulating and processing timestream data collected by telescopes. Telescopes which
 collect data as timestreams rather than images give us a unique set of analysis
 challenges. Detector data usually contains noise which is correlated in time as well as
