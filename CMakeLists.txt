@@ -42,7 +42,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # extensions.  We check a variable here, and if set, we look for static versions of
 # our dependencies.
 #
-if(NOT TOAST_STATIC_DEPS AND ENV{TOAST_STATIC_DEPS})
+if(NOT TOAST_STATIC_DEPS AND $ENV{TOAST_STATIC_DEPS})
   set(TOAST_STATIC_DEPS $ENV{TOAST_STATIC_DEPS})
 endif()
 
