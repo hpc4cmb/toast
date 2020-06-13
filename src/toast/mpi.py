@@ -2,31 +2,39 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import sys
 import itertools
 
 import numpy as np
 
-from .utils import Environment, Logger
+from ._libtoast import Logger
 
 from .pshmem import MPIShared, MPILock
 
-env = Environment.get()
-
-use_mpi = env.use_mpi()
-use_mpi4py = env.use_mpi4py()
-
+use_mpi = None
 MPI = None
 
-if use_mpi4py and (MPI is None):
-    try:
-        import mpi4py.MPI as MPI
-    except ImportError:
-        raise ImportError(
-            "TOAST built with MPI + mpi4py support, but mpi4py "
-            "not found at run time.  Is mpi4py currently in "
-            "your python search path?"
-        )
+if use_mpi is None:
+    # Special handling for running on a NERSC login node.  This is for convenience.
+    # The same behavior could be implemented with environment variables set in a
+    # shell resource file.
+    at_nersc = False
+    if "NERSC_HOST" in os.environ:
+        at_nersc = True
+    in_slurm = False
+    if "SLURM_JOB_NAME" in os.environ:
+        in_slurm = True
+    if not at_nersc or in_slurm:
+        try:
+            import mpi4py.MPI as MPI
+
+            use_mpi = True
+        except:
+            # There could be many possible exceptions raised...
+            log = Logger.get()
+            log.info("mpi4py not found- using serial operations only")
+            use_mpi = False
 
 
 def get_world():
@@ -43,7 +51,7 @@ def get_world():
     rank = 0
     procs = 1
     world = None
-    if use_mpi4py:
+    if use_mpi:
         world = MPI.COMM_WORLD
         rank = world.rank
         procs = world.size
@@ -73,14 +81,14 @@ class Comm(object):
     def __init__(self, world=None, groupsize=0):
         log = Logger.get()
         if world is None:
-            if use_mpi4py:
+            if use_mpi:
                 # Default is COMM_WORLD
                 world = MPI.COMM_WORLD
             else:
                 # MPI is disabled, leave world as None.
                 pass
         else:
-            if use_mpi4py:
+            if use_mpi:
                 # We were passed a communicator to use. Check that it is
                 # actually a communicator, otherwise fall back to COMM_WORLD.
                 if not isinstance(world, MPI.Comm):
@@ -138,7 +146,7 @@ class Comm(object):
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
-            if use_mpi4py:
+            if use_mpi:
                 self._rcomm = MPI.COMM_SELF
             else:
                 self._rcomm = None

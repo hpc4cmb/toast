@@ -15,7 +15,10 @@ foreach(policy
   endif()
 endforeach()
 
-project(toast VERSION 2.3.0 LANGUAGES C CXX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/toast/RELEASE REL_VERSION)
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+)\\..*" "\\1" MAJMIN_VERSION "${REL_VERSION}")
+
+project(toast VERSION ${MAJMIN_VERSION} LANGUAGES C CXX)
 
 # Force C++11
 set(CMAKE_CXX_STANDARD 11)
@@ -42,7 +45,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # extensions.  We check a variable here, and if set, we look for static versions of
 # our dependencies.
 #
-if(NOT TOAST_STATIC_DEPS AND ENV{TOAST_STATIC_DEPS})
+if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
   set(TOAST_STATIC_DEPS $ENV{TOAST_STATIC_DEPS})
 endif()
 
@@ -61,12 +64,16 @@ if(BLAS_FOUND)
     find_package(LAPACK)
     if(LAPACK_FOUND)
         find_package(LAPACKnames)
-    else(LAPACK_FOUND)
-        message(FATAL_ERROR "Could not find a working LAPACK installation")
-    endif(LAPACK_FOUND)
-else(BLAS_FOUND)
-    message(FATAL_ERROR "Could not find a working BLAS installation")
-endif(BLAS_FOUND)
+    else()
+        if($ENV{READTHEDOCS} STREQUAL "")
+            message(FATAL_ERROR "Could not find a working LAPACK installation")
+        endif()
+    endif()
+else()
+    if($ENV{READTHEDOCS} STREQUAL "")
+        message(FATAL_ERROR "Could not find a working BLAS installation")
+    endif()
+endif()
 
 find_package(FFTW)
 
@@ -74,12 +81,7 @@ find_package(AATM)
 
 find_package(SuiteSparse)
 
-# Re-enable if we ever add MPI compiled extensions.
-# find_package(MPI)
-
 find_package(PythonInterp REQUIRED)
-
-find_package(MPI4PY)
 
 # Internal products
 

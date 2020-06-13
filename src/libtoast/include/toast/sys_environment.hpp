@@ -28,8 +28,6 @@ class Environment {
         std::vector <std::string> signals() const;
         std::vector <std::string> info() const;
         void print() const;
-        bool use_mpi() const;
-        bool use_mpi4py() const;
         bool function_timers() const;
         int max_threads() const;
         int current_threads() const;
@@ -46,13 +44,7 @@ class Environment {
         std::vector <std::string> signals_avail_;
         std::map <std::string, int> signals_value_;
         std::map <std::string, bool> signals_enabled_;
-        bool have_mpi_;
-        bool have_mpi4py_;
-        bool use_mpi_;
-        bool use_mpi4py_;
         bool func_timers_;
-        bool at_nersc_;
-        bool in_slurm_;
         int max_threads_;
         int cur_threads_;
         std::string git_version_;

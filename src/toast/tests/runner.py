@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi4py
+from ..mpi import MPI, use_mpi
 
 import os
 import sys
@@ -80,7 +80,7 @@ def test(name=None, verbosity=2):
     # We run tests with COMM_WORLD if available
     comm = None
     rank = 0
-    if use_mpi4py:
+    if use_mpi:
         comm = MPI.COMM_WORLD
         rank = comm.rank
 

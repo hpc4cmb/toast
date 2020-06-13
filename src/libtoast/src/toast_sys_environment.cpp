@@ -153,82 +153,6 @@ toast::Environment::Environment() {
     max_threads_ = omp_get_max_threads();
     #endif // ifdef _OPENMP
 
-    // Was toast configured to use MPI?  We put this setting here in the
-    // non-MPI library so that we can always access it before trying load
-    // the MPI library.
-    use_mpi_ = true;
-    use_mpi4py_ = true;
-
-    have_mpi_ = false;
-    have_mpi4py_ = false;
-
-    #ifdef HAVE_MPI
-
-    // Build system found MPI
-    have_mpi_ = true;
-    #endif // ifdef HAVE_MPI
-
-    #ifdef HAVE_MPI4PY
-
-    // Build system found mpi4py
-    have_mpi4py_ = true;
-    #endif // ifdef HAVE_MPI4PY
-
-    // Handle special case of running on a NERSC login node, where MPI is
-    // used for compilation, but cannot be used at runtime.
-    envval = ::getenv("NERSC_HOST");
-    if (envval == NULL) {
-        at_nersc_ = false;
-    } else {
-        at_nersc_ = true;
-    }
-    envval = ::getenv("SLURM_JOB_NAME");
-    if (envval == NULL) {
-        in_slurm_ = false;
-    } else {
-        in_slurm_ = true;
-    }
-
-    // See if the user explicitly disabled MPI in the runtime environment.
-    bool disabled_mpi_ = false;
-    envval = ::getenv("TOAST_MPI_DISABLE");
-    if (envval != NULL) {
-        disabled_mpi_ = true;
-    }
-    bool disabled_mpi4py_ = false;
-    envval = ::getenv("TOAST_MPI4PY_DISABLE");
-    if (envval != NULL) {
-        disabled_mpi4py_ = true;
-    }
-
-    // First determine if we are using mpi4py.
-    if (!have_mpi4py_) {
-        // we don't have mpi4py
-        use_mpi4py_ = false;
-    }
-    if (disabled_mpi4py_) {
-        // the user disabled mpi4py
-        use_mpi4py_ = false;
-    }
-    if (at_nersc_ && !in_slurm_) {
-        // we are on a login node...
-        use_mpi4py_ = false;
-    }
-
-    // Now see if we have MPI compiled extensions.  This requires mpi4py as well.
-    if (!use_mpi4py_) {
-        // No mpi4py
-        use_mpi_ = false;
-    }
-    if (!have_mpi_) {
-        // we don't have MPI compilers
-        use_mpi_ = false;
-    }
-    if (disabled_mpi_) {
-        // the user disabled compiled MPI extensions
-        use_mpi_ = false;
-    }
-
     git_version_ = GIT_VERSION;
     release_version_ = RELEASE_VERSION;
 
@@ -269,14 +193,6 @@ std::string toast::Environment::version() const {
 
 void toast::Environment::set_log_level(char const * level) {
     loglvl_ = std::string(level);
-}
-
-bool toast::Environment::use_mpi() const {
-    return use_mpi_;
-}
-
-bool toast::Environment::use_mpi4py() const {
-    return use_mpi4py_;
 }
 
 bool toast::Environment::function_timers() const {
@@ -349,37 +265,6 @@ std::vector <std::string> toast::Environment::info() const {
 
     o.str("");
     o << "Max threads = " << max_threads_;
-    ret.push_back(o.str());
-
-    o.str("");
-    if (have_mpi_) {
-        o << "MPI build enabled";
-    } else {
-        o << "MPI build disabled";
-    }
-    ret.push_back(o.str());
-
-    o.str("");
-    if (have_mpi4py_) {
-        o << "mpi4py found at install time";
-    } else {
-        o << "mpi4py disabled at install time";
-    }
-    ret.push_back(o.str());
-
-    o.str("");
-    if (use_mpi_) {
-        o << "MPI compiled extensions and mpi4py enabled";
-    } else if (use_mpi4py_) {
-        o << "MPI compiled extensions disabled, but mpi4py enabled";
-    } else {
-        o << "MPI compiled extensions and mpi4py disabled";
-        if (at_nersc_ && !in_slurm_) {
-            ret.push_back(o.str());
-            o.str("");
-            o << "Cannot use MPI on NERSC login nodes";
-        }
-    }
     ret.push_back(o.str());
 
     return ret;

@@ -95,53 +95,6 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast
 )
 
-# Optionally create a module for the MPI library
-
-if(MPI_FOUND AND MPI4PY_FOUND)
-    pybind11_add_module(_libtoast_mpi MODULE
-        _libtoast_common.cpp
-        _libtoast_mpi.cpp
-    )
-
-    string(STRIP "${MPI_CXX_COMPILE_FLAGS}" mpi_comp_flags)
-    target_compile_options(_libtoast_mpi PRIVATE "${mpi_comp_flags}")
-
-    string(STRIP "${MPI_CXX_LINK_FLAGS}" mpi_link_flags)
-    set_target_properties(_libtoast_mpi
-        PROPERTIES LINK_FLAGS "${mpi_link_flags}"
-    )
-
-    target_include_directories(_libtoast_mpi BEFORE PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast_mpi/include"
-        ${MPI_CXX_INCLUDE_PATH}
-        ${MPI4PY_INCLUDE_DIR}
-    )
-
-    if(OpenMP_CXX_FOUND)
-        target_compile_options(_libtoast_mpi PRIVATE "${OpenMP_CXX_FLAGS}")
-        set_target_properties(_libtoast_mpi PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
-    endif(OpenMP_CXX_FOUND)
-
-    if(AATM_FOUND)
-        target_compile_definitions(_libtoast_mpi PRIVATE HAVE_AATM=1)
-        target_include_directories(_libtoast_mpi PUBLIC "${AATM_INCLUDE_DIRS}")
-    endif(AATM_FOUND)
-
-    if(CHOLMOD_FOUND)
-        target_compile_definitions(_libtoast_mpi PRIVATE HAVE_CHOLMOD=1)
-        target_include_directories(_libtoast_mpi PUBLIC "${CHOLMOD_INCLUDE_DIR}")
-    endif(CHOLMOD_FOUND)
-
-    target_link_libraries(_libtoast_mpi
-        PRIVATE toast_mpi "${MPI_CXX_LIBRARIES}" "${OMP_LIBS}"
-    )
-
-    install(TARGETS _libtoast_mpi DESTINATION ${PYTHON_SITE}/toast)
-
-endif(MPI_FOUND AND MPI4PY_FOUND)
-
 # Process the sub directories
 add_subdirectory(tests)
 add_subdirectory(tod)
