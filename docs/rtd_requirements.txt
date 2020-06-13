@@ -3,3 +3,5 @@ numpy
 scipy
 healpy
 astropy
+h5py
+ephem

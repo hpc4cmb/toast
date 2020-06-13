@@ -8,7 +8,7 @@ Change Log
 
 * Nothing yet
 
-2.3.7 (2020-06-12)
+2.3.7 (2020-06-13)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Documentation updates and deployment of pip wheels on tags (PR `#356`_).
@@ -35,6 +35,7 @@ Change Log
 .. _`#350`: https://github.com/hpc4cmb/toast/pull/350
 .. _`#352`: https://github.com/hpc4cmb/toast/pull/352
 .. _`#351`: https://github.com/hpc4cmb/toast/pull/351
+.. _`#348`: https://github.com/hpc4cmb/toast/pull/348
 .. _`#349`: https://github.com/hpc4cmb/toast/pull/349
 .. _`#341`: https://github.com/hpc4cmb/toast/pull/341
 .. _`#345`: https://github.com/hpc4cmb/toast/pull/345

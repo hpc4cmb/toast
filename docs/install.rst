@@ -53,6 +53,10 @@ for that package <https://mpi4py.readthedocs.io/en/stable/install.html>`_.  You 
 
     python -c 'import toast.tests; toast.tests.run()'
 
+And test running in parallel with::
+
+    mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+
 
 Conda Packages
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -143,6 +147,20 @@ If you want to use PySM with TOAST for sky simulations, you should install the `
 and ``libsharp`` packages.  For example::
 
     conda install pysm3 libsharp
+
+If you want to enable effective parallelism with toast, then you need to install the
+mpi4py package::
+
+    conda install mpi4py
+
+As mentioned previously, you can test your TOAST installation by running the unit test
+suite::
+
+    python -c 'import toast.tests; toast.tests.run()'
+
+And test running in parallel with::
+
+    mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
 
 
 Something Else
