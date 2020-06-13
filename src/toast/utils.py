@@ -36,6 +36,8 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
+from .mpi import MPI, use_mpi
+
 
 # This function sets the numba threading layer to (hopefully) be compatible with TOAST.
 # The TOAST threading concurrency is used to attempt to set the numba threading.  We
@@ -76,9 +78,7 @@ def set_numba_threading():
     print("max toast threads = ", toastthreads, flush=True)
 
     rank = 0
-    if env.use_mpi4py():
-        from .mpi import MPI
-
+    if use_mpi:
         rank = MPI.COMM_WORLD.rank
 
     threading = "default"

@@ -50,16 +50,6 @@ void init_sys(py::module & m) {
          R"(
             Return a list of the currently available signals.
         )")
-    .def("use_mpi", &toast::Environment::use_mpi,
-         R"(
-            Return True if TOAST was compiled with MPI support **and** MPI
-            is supported in the current runtime environment.
-        )")
-    .def("use_mpi4py", &toast::Environment::use_mpi4py,
-         R"(
-            Return True if mpi4py was detected at install time **and** mpi4py
-            is supported in the current runtime environment.
-        )")
     .def("function_timers", &toast::Environment::function_timers,
          R"(
             Return True if function timing has been enabled.

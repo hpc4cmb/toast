@@ -2,7 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import use_mpi4py
+from ..mpi import use_mpi
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from ..timing import function_timer, Timer
 
 conviqt = None
 
-if use_mpi4py:
+if use_mpi:
     try:
         import libconviqt_wrapper as conviqt
     except ImportError:

@@ -15,7 +15,10 @@ foreach(policy
   endif()
 endforeach()
 
-project(toast VERSION 2.3.0 LANGUAGES C CXX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/toast/RELEASE REL_VERSION)
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+)\\..*" "\\1" MAJMIN_VERSION "${REL_VERSION}")
+
+project(toast VERSION ${MAJMIN_VERSION} LANGUAGES C CXX)
 
 # Force C++11
 set(CMAKE_CXX_STANDARD 11)
@@ -78,12 +81,7 @@ find_package(AATM)
 
 find_package(SuiteSparse)
 
-# Re-enable if we ever add MPI compiled extensions.
-# find_package(MPI)
-
 find_package(PythonInterp REQUIRED)
-
-find_package(MPI4PY)
 
 # Internal products
 
