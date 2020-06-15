@@ -867,7 +867,7 @@ class ProjectionMatrix(TOASTMatrix):
 
     @function_timer
     def scan_map(self, name):
-        scansim = OpSimScan(distmap=self.dist_map, out=name)
+        scansim = OpSimScan(input_map=self.dist_map, out=name)
         scansim.exec(self.data)
         return
 

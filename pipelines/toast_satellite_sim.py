@@ -345,9 +345,12 @@ def main():
         tmr.report_clear("Expand pointing")
 
     signalname = None
-    skyname = pipeline_tools.simulate_sky_signal(
-        args, comm, data, [focalplane], "signal"
-    )
+    if args.pysm_model:
+        skyname = pipeline_tools.simulate_sky_signal(
+            args, comm, data, [focalplane], "signal"
+        )
+    else:
+        skyname = pipeline_tools.scan_sky_signal(args, comm, data, "signal")
     if skyname is not None:
         signalname = skyname
     if comm.world_rank == 0:

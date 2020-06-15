@@ -55,7 +55,14 @@ def add_sky_map_args(parser):
     """ Add the sky arguments
     """
 
-    parser.add_argument("--input-map", required=False, help="Input map for signal")
+    parser.add_argument(
+        "--input-map",
+        required=False,
+        help="Input map for signal.  You can use Python formatting for Monte "
+        "Carlo realization, e.g.: {:04i}.  If tag DETECTOR is encountered, it "
+        "will be replaced with the detector name and different map is loaded "
+        "for every detector.",
+    )
 
     # The nside may already be added
     try:
@@ -363,7 +370,7 @@ def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True
 
 @function_timer
 def scan_sky_signal(
-    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", mc=0
+    args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", nnz=3, mc=0
 ):
     """ Scan sky signal from a map.
 
@@ -378,14 +385,8 @@ def scan_sky_signal(
     # Scan the sky signal
 
     input_map = args.input_map.format(mc)
-    if not os.path.isfile(input_map):
-        raise RuntimeError("Input map does not exist: {}".format(input_map))
-    if comm.world_rank == 0 and verbose:
-        log.info("Scanning {}".format(input_map))
 
-    distmap = DistPixels(data, nnz=3, dtype=np.float32, pixels=pixels)
-    distmap.read_healpix_fits(input_map)
-    scansim = OpSimScan(distmap=distmap, out=cache_prefix)
+    scansim = OpSimScan(input_map=input_map, out=cache_prefix, nnz=nnz)
     scansim.exec(data)
 
     if comm.comm_world is not None:

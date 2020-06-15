@@ -386,7 +386,7 @@ class MapSatelliteTest(MPITestCase):
         distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
-        scansim = OpSimScan(distmap=distsig)
+        scansim = OpSimScan(input_map=distsig)
         scansim.exec(self.data)
 
         handle = None
@@ -474,7 +474,7 @@ class MapSatelliteTest(MPITestCase):
         distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
-        scansim = OpSimScan(distmap=distsig)
+        scansim = OpSimScan(input_map=distsig)
         scansim.exec(data)
 
         handle = None
@@ -564,7 +564,7 @@ class MapSatelliteTest(MPITestCase):
         distsig.broadcast_healpix_map(sig)
 
         # create TOD from map
-        scansim = OpSimScan(distmap=distsig)
+        scansim = OpSimScan(input_map=distsig)
         scansim.exec(data)
 
         handle = None
