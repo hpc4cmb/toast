@@ -254,7 +254,7 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
     log = Logger.get()
     timer = Timer()
     timer.start()
-    if comm.world_rank == 0 and verbose:
+    if comm.world_rank == 0:
         log.info("Simulating atmosphere")
         if args.atm_cache and not os.path.isdir(args.atm_cache):
             try:
@@ -262,8 +262,6 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
             except FileExistsError:
                 pass
 
-    # TK:  is this right?  Or do we want to break out options for different types of
-    # verbosity?
     write_debug = False
     if args.atm_verbosity > 1:
         write_debug = True
@@ -309,7 +307,6 @@ def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
             ystep=50,
             zstep=50,
             nelem_sim_max=30000,
-            verbosity=args.atm_verbosity,
             z0_center=args.atm_z0_center,
             z0_sigma=args.atm_z0_sigma,
             apply_flags=args.atm_apply_flags,
