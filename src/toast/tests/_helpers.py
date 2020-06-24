@@ -10,9 +10,15 @@ import numpy as np
 
 from ..mpi import Comm
 
-from ..dist import Data
+from ..data import Data
 
 from .. import qarray as qa
+
+from ..instrument import Focalplane, Telescope
+
+from ..instrument_sim import fake_hexagon_focalplane
+
+from ..observation import DetectorData, Observation
 
 
 ZAXIS = np.array([0, 0, 1.0])
@@ -72,7 +78,7 @@ def create_comm(mpicomm):
     return toastcomm
 
 
-def create_distdata(mpicomm, obs_per_group=1):
+def create_distdata(mpicomm, obs_per_group=1, samples=10):
     """Create a toast communicator and distributed data object.
 
     Use the specified MPI communicator to attempt to create 2 process groups,
@@ -81,17 +87,29 @@ def create_distdata(mpicomm, obs_per_group=1):
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
         obs_per_group (int): the number of observations assigned to each group.
+        samples (int): number of samples per observation.
 
     Returns:
-        toast.Data: the distributed data with named observations (but no TOD).
+        toast.Data: the distributed data with named observations.
 
     """
     toastcomm = create_comm(mpicomm)
     data = Data(toastcomm)
     for obs in range(obs_per_group):
-        ob = {}
-        ob["name"] = "test-{}-{}".format(toastcomm.group, obs)
-        ob["id"] = obs_per_group * toastcomm.group + obs
+        oname = "test-{}-{}".format(toastcomm.group, obs)
+        oid = obs_per_group * toastcomm.group + obs
+        npix = 1
+        ring = 1
+        while 2 * npix < toastcomm.group_size:
+            npix += 6 * ring
+            ring += 1
+        fp = fake_hexagon_focalplane(n_pix=npix)
+        tele = Telescope("test", focalplane=fp)
+        # FIXME: for full testing we should set detranks as approximately the sqrt
+        # of the grid size so that we test the row / col communicators.
+        ob = Observation(
+            tele, samples=samples, name=oname, UID=oid, comm=toastcomm.comm_group
+        )
         data.obs.append(ob)
     return data
 
@@ -118,86 +136,6 @@ def uniform_chunks(samples, nchunk=100):
     for r in range(remain):
         chunks[r] += 1
     return chunks
-
-
-def boresight_focalplane(
-    ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0, alpha=1.0, fknee=0.05
-):
-    """Create a set of detectors at the boresight.
-
-    This creates multiple detectors at the boresight, oriented in evenly
-    spaced increments from zero to PI.
-
-    Args:
-        ndet (int): the number of detectors.
-
-
-    Returns:
-        (tuple): names(list), quat(dict), fmin(dict), rate(dict), fknee(dict),
-            alpha(dict), netd(dict)
-
-    """
-    names = ["d{:02d}".format(x) for x in range(ndet)]
-    pol = {"d{:02d}".format(x): (x * np.pi / ndet) for x in range(ndet)}
-
-    quat = {
-        "d{:02d}".format(x): qa.rotation(ZAXIS, pol["d{:02d}".format(x)])
-        for x in range(ndet)
-    }
-
-    det_eps = {"d{:02d}".format(x): epsilon for x in range(ndet)}
-
-    det_fmin = {"d{:02d}".format(x): fmin for x in range(ndet)}
-    det_rate = {"d{:02d}".format(x): samplerate for x in range(ndet)}
-    det_alpha = {"d{:02d}".format(x): alpha for x in range(ndet)}
-    det_net = {"d{:02d}".format(x): net for x in range(ndet)}
-
-    det_fknee = None
-    if np.isscalar(fknee):
-        det_fknee = {"d{:02d}".format(x): fknee for x in range(ndet)}
-    else:
-        # This must be an array or list of correct length
-        if len(fknee) != ndet:
-            raise RuntimeError("length of knee frequencies must equal ndet")
-        det_fknee = {"d{:02d}".format(x): y for x, y in zip(range(ndet), fknee)}
-
-    return names, quat, det_eps, det_rate, det_net, det_fmin, det_fknee, det_alpha
-
-
-def create_weather(outfile):
-    from astropy.table import Table
-    import astropy.io.fits as af
-
-    nstep = 101
-    TQI = [np.linspace(0, 0.5, nstep) for x in range(24)]
-    TQL = [np.linspace(0, 0.1, nstep) for x in range(24)]
-    TQV = [np.linspace(1, 12, nstep) for x in range(24)]
-    QV10M = [np.linspace(0.001, 0.007, nstep) for x in range(24)]
-    PS = [np.linspace(58600, 59000, nstep) for x in range(24)]
-    TS = [np.linspace(270, 280, nstep) for x in range(24)]
-    T10M = [np.linspace(270, 280, nstep) for x in range(24)]
-    U10M = [np.linspace(-2, 8, nstep) for x in range(24)]
-    V10M = [np.linspace(-1, 3, nstep) for x in range(24)]
-
-    hdus = af.HDUList([af.PrimaryHDU()])
-
-    for mon in range(12):
-        tab = Table(
-            [TQI, TQL, TQV, QV10M, PS, TS, T10M, U10M, V10M],
-            names=("TQI", "TQL", "TQV", "QV10M", "PS", "TS", "T10M", "U10M", "V10M"),
-            meta={
-                "PROBSTRT": 0.0,
-                "PROBSTOP": 1.0,
-                "PROBSTEP": 0.01,
-                "NSTEP": nstep,
-                "MONTH": mon,
-            },
-        )
-        hdus.append(af.table_to_hdu(tab))
-
-    hdus.writeto(outfile, overwrite=True)
-
-    return
 
 
 #

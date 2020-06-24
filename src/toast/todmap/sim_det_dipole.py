@@ -10,7 +10,7 @@ from ..timing import function_timer
 
 from .todmap_math import dipole
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..utils import Environment
 

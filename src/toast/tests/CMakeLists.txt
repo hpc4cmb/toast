@@ -8,15 +8,16 @@ install(FILES
     mpi.py
     env.py
     dist.py
-    timing.py
-    cache.py
+    intervals.py
     rng.py
     qarray.py
     fft.py
     healpix.py
-    tod.py
-    intervals.py
-    tod_satellite.py
+    config.py
+    observation.py
+    timing.py
+    pixels.py
+    ops_sim_satellite.py
     ops_applygain.py
     ops_simnoise.py
     cov.py

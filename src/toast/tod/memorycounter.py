@@ -4,7 +4,7 @@
 
 from ..mpi import MPI
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..utils import Logger
 

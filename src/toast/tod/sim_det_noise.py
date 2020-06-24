@@ -10,7 +10,7 @@ from ..fft import FFTPlanReal1DStore
 
 from .tod_math import sim_noise_timestream
 
-from ..op import Operator
+from ..operator import Operator
 
 
 class OpSimNoise(Operator):

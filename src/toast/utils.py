@@ -4,6 +4,7 @@
 
 import os
 import gc
+import hashlib
 
 import numpy as np
 
@@ -37,7 +38,6 @@ from ._libtoast import (
 )
 
 from .mpi import MPI, use_mpi
-
 
 # This function sets the numba threading layer to (hopefully) be compatible with TOAST.
 # The TOAST threading concurrency is used to attempt to set the numba threading.  We
@@ -352,3 +352,57 @@ def ensure_buffer_f64(data):
     #     # Does not support buffer protocol
     #     print("ensure: converting non-buffer object ", data, flush=True)
     #     return np.ascontiguousarray(data, dtype=np.float64)
+
+
+def name_UID(name):
+    """Return a unique integer for a specified name string.
+    """
+    bdet = name.encode("utf-8")
+    dhash = hashlib.md5()
+    dhash.update(bdet)
+    bdet = dhash.digest()
+    uid = None
+    try:
+        ind = int.from_bytes(bdet, byteorder="little")
+        uid = int(ind & 0xFFFFFFFF)
+    except:
+        raise RuntimeError(
+            "Cannot convert detector name {} to a unique integer-\
+            maybe it is too long?".format(
+                name
+            )
+        )
+    return uid
+
+
+def rate_from_times(timestamps, mean=False):
+    """Compute effective sample rate in Hz from timestamps.
+
+    There are many cases when we want to apply algorithms that require a fixed
+    sample rate.  We want to compute that from timestamps while also checking for
+    any outliers that could compromise the results.
+
+    By default this function uses the median delta_t, under the assumption that
+    variations in the timing is due to small numerical / bit noise effects.  For larger
+    variations using the mean may be more appropriate (set mean=True).
+
+    This returns the sample rate and also the statistics of the time deltas between
+    samples.
+
+    Args:
+        timestamps (array):  The array of timestamps.
+
+    Returns:
+        (tuple):  The (rate, dt, dt_min, dt_max, dt_std) values.
+
+    """
+    tdiff = np.diff(timestamps)
+    dt_min = np.min(tdiff)
+    dt_max = np.max(tdiff)
+    dt_std = np.std(tdiff)
+    dt = None
+    if mean:
+        dt = np.mean(np.diff(timestamps))
+    else:
+        dt = np.median(np.diff(timestamps))
+    return (1.0 / dt, dt, dt_min, dt_max, dt_std)

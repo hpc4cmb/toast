@@ -10,7 +10,7 @@ from numpy.polynomial.chebyshev import chebval
 
 from .._libtoast import bin_templates, add_templates, chebyshev
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..utils import Logger
 

@@ -6,18 +6,18 @@ import os
 
 import numpy as np
 
+import healpy as hp
+
 from ..utils import Logger
 
 from ..timing import function_timer, Timer
 from ..rng import random
 
-from ..op import Operator
+from ..operator import Operator
 
-from toast.mpi import MPI
+from ..mpi import MPI
 
-import toast.qarray as qa
-
-import healpy as hp
+from .. import qarray as qa
 
 
 class OpSimScanSynchronousSignal(Operator):

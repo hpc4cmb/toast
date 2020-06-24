@@ -10,7 +10,7 @@ import numpy as np
 
 from .._libtoast import filter_polynomial
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer
 

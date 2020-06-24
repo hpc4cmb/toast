@@ -5,7 +5,6 @@ install(FILES
   __init__.py
   atm.py
   binning.py
-  classes.py
   debug.py
   dipole.py
   dist.py

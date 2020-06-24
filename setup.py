@@ -229,8 +229,11 @@ conf["version"] = get_version()
 conf["python_requires"] = ">=3.6.0"
 conf["install_requires"] = [
     "cmake",
+    "tomlkit",
+    "traitlets>=5.0",
     "numpy",
     "scipy",
+    "pshmem",
     "healpy",
     "matplotlib",
     "ephem",

@@ -4,7 +4,7 @@
 
 import re
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..rng import random
 

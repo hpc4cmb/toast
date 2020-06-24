@@ -16,7 +16,7 @@ from .. import qarray as qa
 
 from .._libtoast import scan_map_float64, scan_map_float32
 
-from ..op import Operator
+from ..operator import Operator
 
 
 class OpSimGradient(Operator):

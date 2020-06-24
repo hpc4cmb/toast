@@ -10,7 +10,7 @@ import numpy as np
 
 from .. import qarray as qa
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer, Timer
 

@@ -9,7 +9,6 @@
     python: {}
   editor:
     autoIndentOnPaste: false
-    fontSize: 18
     preferredLineLength: 88
     scrollPastEnd: true
     showInvisibles: true

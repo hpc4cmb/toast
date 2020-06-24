@@ -14,7 +14,6 @@ from .atm import (
     update_atmospheric_noise_weights,
 )
 from .binning import add_binner_args, init_binner, apply_binner
-from .classes import Telescope, Focalplane
 from .debug import add_debug_args
 from .dipole import add_dipole_args, simulate_dipole
 from .dist import add_dist_args, get_comm, get_time_communicators

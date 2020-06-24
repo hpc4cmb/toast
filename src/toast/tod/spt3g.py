@@ -25,7 +25,7 @@
 # from .. import qarray as qa
 #
 # from ..dist import Data, distribute_discrete
-# from ..op import Operator
+# from ..operator import Operator
 #
 # from .tod import TOD
 # from .interval import Interval, intervals_to_chunklist

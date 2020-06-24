@@ -12,7 +12,7 @@ from ..timing import function_timer
 
 from ..utils import Logger, Timer
 
-from ..op import Operator
+from ..operator import Operator
 
 from .pysm import pysm
 
@@ -144,11 +144,7 @@ class OpSimPySM(Operator):
 
         self.focalplanes = focalplanes
         self.distmap = DistPixels(
-            data,
-            comm=comm,
-            nnz=3,
-            dtype=np.float32,
-            pixels=self.pixels,
+            data, comm=comm, nnz=3, dtype=np.float32, pixels=self.pixels
         )
         self.apply_beam = apply_beam
 

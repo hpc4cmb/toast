@@ -7,7 +7,7 @@ import numpy as np
 import scipy.interpolate as si
 from scipy.signal import fftconvolve
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer
 

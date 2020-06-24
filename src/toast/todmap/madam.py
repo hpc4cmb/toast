@@ -10,7 +10,7 @@ import healpy as hp
 import numpy as np
 
 from ..cache import Cache
-from ..op import Operator
+from ..operator import Operator
 from ..timing import function_timer, Timer
 from ..utils import Logger, memreport
 

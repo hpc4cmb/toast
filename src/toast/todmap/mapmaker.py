@@ -6,12 +6,11 @@ import numpy as np
 import scipy.linalg
 import scipy.signal
 
-from toast import Operator
-from toast.mpi import MPI
+from ..operator import Operator
+from ..mpi import MPI
 
-from ..timing import gather_timers, GlobalTimers
-from toast.timing import function_timer, Timer
-from toast.utils import Logger, Environment
+from ..timing import gather_timers, GlobalTimers, function_timer, Timer
+from ..utils import Logger, Environment
 from .sim_det_map import OpSimScan
 from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
 from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGaps

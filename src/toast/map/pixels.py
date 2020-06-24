@@ -12,7 +12,7 @@ from ..mpi import MPI
 
 import healpy as hp
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..cache import Cache
 

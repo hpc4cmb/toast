@@ -6,7 +6,7 @@ import numpy as np
 
 from ..timing import function_timer
 
-from ..op import Operator
+from ..operator import Operator
 
 from .._libtoast import cov_mult_diag, cov_apply_diag, cov_eigendecompose_diag
 

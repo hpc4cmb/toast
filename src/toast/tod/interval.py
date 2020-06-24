@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer
 

@@ -72,6 +72,8 @@ void register_aligned(py::module & m, char const * name) {
     .def("__iter__", [](C & self) {
              return py::make_iterator(self.begin(), self.end());
          }, py::keep_alive <0, 1>())
+
+    // Set and get individual elements
     .def("__setitem__",
          [](C & self, typename C::size_type i,
             const typename C::value_type & t) {
@@ -87,6 +89,8 @@ void register_aligned(py::module & m, char const * name) {
              }
              return self[i];
          })
+
+    // Set and get a slice
     .def("__setitem__",
          [](C & self, py::slice slice, py::buffer other) {
              size_t start, stop, step, slicelength;
@@ -109,6 +113,18 @@ void register_aligned(py::module & m, char const * name) {
                  start += step;
              }
          })
+    .def("__setitem__",
+         [](C & self, py::slice slice, const typename C::value_type & t) {
+             size_t start, stop, step, slicelength;
+             if (!slice.compute(self.size(), &start, &stop, &step,
+                                &slicelength)) {
+                 throw py::error_already_set();
+             }
+             for (size_t i = 0; i < slicelength; ++i) {
+                 self[start] = t;
+                 start += step;
+             }
+         })
     .def("__getitem__",
          [](C & self, py::slice slice) {
              size_t start, stop, step, slicelength;
@@ -120,6 +136,42 @@ void register_aligned(py::module & m, char const * name) {
              for (size_t i = 0; i < slicelength; ++i) {
                  (*ret)[i] = self[start];
                  start += step;
+             }
+             return ret;
+         })
+
+    // Set and get explicit indices
+    .def("__setitem__",
+         [](C & self, py::array_t <int64_t> indices, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+
+             if (indices.size() != info.size) {
+                 throw std::runtime_error(
+                     "Left and right hand indexed assignment have different sizes!");
+             }
+
+             auto * dat = indices.data();
+
+             for (size_t i = 0; i < info.size; ++i) {
+                 self[dat[i]] = raw[i];
+             }
+         })
+    .def("__setitem__",
+         [](C & self, py::array_t <int64_t> indices, const typename C::value_type & t) {
+             auto * dat = indices.data();
+             for (size_t i = 0; i < indices.size(); ++i) {
+                 self[dat[i]] = t;
+             }
+         })
+    .def("__getitem__",
+         [](C & self, py::array_t <int64_t> indices) {
+             auto * dat = indices.data();
+             std::unique_ptr <C> ret(new C(indices.size()));
+             for (size_t i = 0; i < indices.size(); ++i) {
+                 (*ret)[i] = self[dat[i]];
              }
              return ret;
          })
@@ -171,6 +223,148 @@ void register_aligned(py::module & m, char const * name) {
              }
              return ret;
          })
+
+    // Arithmetic
+    .def("__iadd__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+
+             for (size_t i = 0; i < info.size; ++i) {
+                 self[i] += raw[i];
+             }
+         })
+    .def("__iadd__",
+         [](C & self, typename C::value_type val) {
+             for (size_t i = 0; i < self.size(); ++i) {
+                 self[i] += val;
+             }
+         })
+    .def("__isub__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+
+             for (size_t i = 0; i < info.size; ++i) {
+                 self[i] -= raw[i];
+             }
+         })
+    .def("__isub__",
+         [](C & self, typename C::value_type val) {
+             for (size_t i = 0; i < self.size(); ++i) {
+                 self[i] -= val;
+             }
+         })
+    .def("__imul__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+
+             for (size_t i = 0; i < info.size; ++i) {
+                 self[i] *= raw[i];
+             }
+         })
+    .def("__imul__",
+         [](C & self, typename C::value_type val) {
+             for (size_t i = 0; i < self.size(); ++i) {
+                 self[i] *= val;
+             }
+         })
+    .def("__add__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < info.size; ++i) {
+                 (*ret)[i] += raw[i];
+             }
+             return ret;
+         })
+    .def("__add__",
+         [](C & self, typename C::value_type val) {
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < self.size(); ++i) {
+                 (*ret)[i] += val;
+             }
+             return ret;
+         })
+    .def("__sub__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < info.size; ++i) {
+                 (*ret)[i] -= raw[i];
+             }
+             return ret;
+         })
+    .def("__sub__",
+         [](C & self, typename C::value_type val) {
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < self.size(); ++i) {
+                 (*ret)[i] -= val;
+             }
+             return ret;
+         })
+    .def("__mul__",
+         [](C & self, py::buffer other) {
+             pybuffer_check_1D <typename C::value_type> (other);
+             py::buffer_info info = other.request();
+             typename C::value_type * raw =
+                 reinterpret_cast <typename C::value_type *> (info.ptr);
+             if (self.size() != info.size) {
+                 throw std::runtime_error(
+                     "Object and operand have different sizes!");
+             }
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < info.size; ++i) {
+                 (*ret)[i] *= raw[i];
+             }
+             return ret;
+         })
+    .def("__mul__",
+         [](C & self, typename C::value_type val) {
+             std::unique_ptr <C> ret(new C(self));
+             for (size_t i = 0; i < self.size(); ++i) {
+                 (*ret)[i] *= val;
+             }
+             return ret;
+         })
+
+    // string representation
     .def("__repr__",
          [name](C const & self) {
              size_t npre = 1;

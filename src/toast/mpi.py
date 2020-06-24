@@ -3,14 +3,6 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import sys
-import itertools
-
-import numpy as np
-
-from ._libtoast import Logger
-
-from .pshmem import MPIShared, MPILock
 
 use_mpi = None
 MPI = None
@@ -41,6 +33,21 @@ if use_mpi is None:
                 log = Logger.get()
                 log.info("mpi4py not found- using serial operations only")
                 use_mpi = False
+
+# We put other imports and checks for accelerators *after* the MPI check, since
+# usually the MPI initialization is time sensitive and may timeout the job if it does
+# not happen quickly enough.
+
+import sys
+import itertools
+
+import numpy as np
+
+from pshmem import MPIShared, MPILock
+
+from .cuda import use_pycuda, cuda_devices, AcceleratorCuda
+
+from ._libtoast import Logger
 
 
 def get_world():
@@ -162,6 +169,24 @@ class Comm(object):
             self._gcomm = self._wcomm.Split(self._group, self._grank)
             self._rcomm = self._wcomm.Split(self._grank, self._group)
 
+        # See if we are using CUDA and if so, determine which device each process will
+        # be using.
+        self._cuda = None
+        if use_pycuda:
+            if self._wcomm is None:
+                # We are not using MPI, so we will just use the first device
+                self._cuda = AcceleratorCuda(0)
+            else:
+                # How many processes are on this node?
+                nodecomm = self._wcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                nodeprocs = nodecomm.size
+                noderank = nodecomm.rank
+                # Assign this process to one of the GPUs.
+                # FIXME:  Is it better for ranks to be spread across the devices
+                # or for contiguous ranks to be assigned to same device?
+                rank_dev = noderank % cuda_devices
+                self._cuda = AcceleratorCuda(rank_dev)
+
     @property
     def world_size(self):
         """The size of the world communicator."""
@@ -207,6 +232,11 @@ class Comm(object):
         """The communicator shared by processes with the same group_rank."""
         return self._rcomm
 
+    @property
+    def cuda(self):
+        """The CUDA device properties for this process."""
+        return self._cuda
+
     def __repr__(self):
         lines = [
             "  World MPI communicator = {}".format(self._wcomm),
@@ -217,4 +247,8 @@ class Comm(object):
             "  Group MPI rank = {}".format(self._grank),
             "  Rank MPI communicator = {}".format(self._rcomm),
         ]
+        if self._cuda is None:
+            lines.append("  CUDA disabled")
+        else:
+            lines.append("  Using CUDA device {}".format(self._cuda.device_index))
         return "<toast.Comm\n{}\n>".format("\n".join(lines))

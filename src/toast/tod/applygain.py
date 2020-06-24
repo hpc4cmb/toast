@@ -6,7 +6,7 @@ import numpy as np
 
 from astropy.io import fits
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer
 

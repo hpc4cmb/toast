@@ -12,5 +12,7 @@ install(PROGRAMS
     toast_ground_sim.py
     toast_ground_sim_simple.py
     toast_benchmark.py
+    toast_future.py
+    toast_pixel_comm.py
     DESTINATION bin
 )

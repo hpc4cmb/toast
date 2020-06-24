@@ -82,9 +82,19 @@ install(FILES
     utils.py
     mpi.py
     timing.py
+    traits.py
     cache.py
+    config.py
+    pixels.py
+    pixels_io.py
+    cuda.py
     dist.py
-    op.py
+    data.py
+    intervals.py
+    instrument.py
+    instrument_sim.py
+    observation.py
+    operator.py
     vis.py
     rng.py
     qarray.py
@@ -103,4 +113,4 @@ add_subdirectory(map)
 add_subdirectory(todmap)
 add_subdirectory(fod)
 add_subdirectory(pipeline_tools)
-add_subdirectory(pshmem)
+add_subdirectory(future_ops)

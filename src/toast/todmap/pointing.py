@@ -12,7 +12,7 @@ from ..utils import Environment
 
 from ..healpix import HealpixPixels
 
-from ..op import Operator
+from ..operator import Operator
 
 from ..timing import function_timer
 

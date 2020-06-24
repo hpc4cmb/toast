@@ -10,13 +10,11 @@ void init_tod_pointing(py::module & m) {
     m.def("pointing_matrix_healpix",
           [](toast::HealpixPixels const & hpix, bool nest, double eps, double cal,
              std::string const & mode, py::buffer pdata, py::object hwpang,
-             py::buffer flags, py::buffer pixels, py::buffer weights) {
+             py::object flags, py::buffer pixels, py::buffer weights) {
               pybuffer_check_1D <double> (pdata);
-              pybuffer_check_1D <uint8_t> (flags);
               pybuffer_check_1D <double> (weights);
               pybuffer_check_1D <int64_t> (pixels);
               py::buffer_info info_pdata = pdata.request();
-              py::buffer_info info_flags = flags.request();
               py::buffer_info info_pixels = pixels.request();
               py::buffer_info info_weights = weights.request();
               size_t n = (size_t)(info_pdata.size / 4);
@@ -24,8 +22,7 @@ void init_tod_pointing(py::module & m) {
               if (mode.compare("IQU") == 0) {
                   nw = (size_t)(info_weights.size / 3);
               }
-              if ((info_flags.size != n) ||
-                  (info_pixels.size != n) || (nw != n)) {
+              if ((info_pixels.size != n) || (nw != n)) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
                   o << "Buffer sizes are not consistent.";
@@ -33,9 +30,22 @@ void init_tod_pointing(py::module & m) {
                   throw std::runtime_error(o.str().c_str());
               }
               double * rawpdata = reinterpret_cast <double *> (info_pdata.ptr);
-              uint8_t * rawflags = reinterpret_cast <uint8_t *> (info_flags.ptr);
               double * rawweights = reinterpret_cast <double *> (info_weights.ptr);
               int64_t * rawpixels = reinterpret_cast <int64_t *> (info_pixels.ptr);
+              uint8_t * rawflags = NULL;
+              if (!flags.is_none()) {
+                  auto flagbuf = py::cast <py::buffer> (flags);
+                  pybuffer_check_1D <uint8_t> (flagbuf);
+                  py::buffer_info info_flags = flagbuf.request();
+                  if (info_flags.size != n) {
+                      auto log = toast::Logger::get();
+                      std::ostringstream o;
+                      o << "Flag buffer size is not consistent.";
+                      log.error(o.str().c_str());
+                      throw std::runtime_error(o.str().c_str());
+                  }
+                  rawflags = reinterpret_cast <uint8_t *> (info_flags.ptr);
+              }
               double * rawhwpang = NULL;
               if (!hwpang.is_none()) {
                   auto hwpbuf = py::cast <py::buffer> (hwpang);

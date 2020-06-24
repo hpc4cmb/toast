@@ -14,8 +14,9 @@ from .. import qarray as qa
 from ..utils import Logger
 from ..timing import function_timer, Timer
 
-from ..dist import Data, distribute_discrete
-from ..op import Operator
+from ..dist import distribute_discrete
+from ..data import Data
+from ..operator import Operator
 
 from .tod import TOD
 from .interval import Interval, intervals_to_chunklist

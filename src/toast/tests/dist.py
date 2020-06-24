@@ -9,7 +9,8 @@ import os
 import numpy as np
 import numpy.testing as nt
 
-from ..dist import distribute_uniform, distribute_discrete, Data
+from ..dist import distribute_uniform, distribute_discrete
+from ..data import Data
 from ..mpi import Comm, MPI
 
 from ._helpers import create_outdir, create_distdata
