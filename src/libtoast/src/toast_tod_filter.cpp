@@ -245,7 +245,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
     size_t nbuf = nsample / buflen + 1;
 
 #pragma omp parallel for schedule(static) default(none) \
-    shared(x, templates, start_order, stop_order, nsample, nbuf)
+    shared(x, templates, start_order, stop_order, nsample, buflen, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
         size_t istop = istart + buflen;
@@ -256,7 +256,8 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
         // Initialize to order = 1
         std::vector <double> val(n);
         std::copy(x + istart, x + istart + n, val.data());
-        std::vector <double> prev(n, 1);
+        std::vector <double> prev(n);
+        std::fill(prev.begin(), prev.end(), 1.0);
         std::vector <double> next(n);
 
         for (size_t order = 2; order < stop_order; ++order) {
