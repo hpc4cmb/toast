@@ -8,6 +8,7 @@
 This script runs a ground simulation and makes a map.
 """
 
+
 import os
 
 if "TOAST_STARTUP_DELAY" in os.environ:
@@ -20,6 +21,7 @@ if "TOAST_STARTUP_DELAY" in os.environ:
     #      flush=True)
     time.sleep(wait)
 
+import copy
 import sys
 import argparse
 import traceback
@@ -288,7 +290,7 @@ def create_observation(args, comm, telescope, ces, verbose=True):
     )
     obs["tod"] = tod
     obs["baselines"] = None
-    obs["noise"] = noise
+    obs["noise"] = copy.deepcopy(noise)
     obs["id"] = int(ces.mjdstart * 10000)
     obs["intervals"] = tod.subscans
     obs["site"] = site
