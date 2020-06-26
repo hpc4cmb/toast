@@ -42,7 +42,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_MACOS:
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
@@ -76,7 +76,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_MACOS:
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
@@ -110,7 +110,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_MACOS: 
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py

@@ -6,7 +6,7 @@ cmake \
     -DCMAKE_C_COMPILER="${CRAYPE_DIR}/bin/cc" \
     -DCMAKE_CXX_COMPILER="${CRAYPE_DIR}/bin/CC" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
-    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DBLAS_LIBRARIES=$CMBENV_AUX_ROOT/lib/libopenblas.a \

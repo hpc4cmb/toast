@@ -9,7 +9,7 @@ cmake \
     -DCMAKE_C_COMPILER="icc" \
     -DCMAKE_CXX_COMPILER="icpc" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
-    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread" \
     -DBLAS_LIBRARIES=${MKLROOT}/lib/intel64/libmkl_rt.so \
     -DLAPACK_LIBRARIES=${MKLROOT}/lib/intel64/libmkl_rt.so \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \

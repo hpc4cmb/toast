@@ -6,7 +6,7 @@ cmake \
     -DCMAKE_C_COMPILER="${CRAYPE_DIR}/bin/cc" \
     -DCMAKE_CXX_COMPILER="${CRAYPE_DIR}/bin/CC" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread" \
-    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread -std=c++11" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -xcore-avx2 -axmic-avx512 -pthread" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DBLAS_LIBRARIES=$MKLROOT/lib/intel64/libmkl_rt.so \
     -DLAPACK_LIBRARIES=$MKLROOT/lib/intel64/libmkl_rt.so \
