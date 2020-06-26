@@ -12,11 +12,6 @@ pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
 popd >/dev/null 2>&1
 
-# Install mpich and mpi4py
-yum -y update
-yum -y install mpich-3.2-devel.x86_64 mpich-3.2-autoload.x86_64
-pip install mpi4py
-
 # Get newer cmake with pip
 pip install cmake
 
@@ -33,6 +28,34 @@ CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
 MAKEJ=2
 
 PREFIX=/usr
+
+# Install MPICH
+
+mpich_version=3.2
+mpich_dir=mpich-${mpich_version}
+mpich_pkg=${mpich_dir}.tar.gz
+
+echo "Fetching MPICH..."
+
+if [ ! -e ${mpich_pkg} ]; then
+    curl -SL http://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
+fi
+
+echo "Building MPICH..."
+
+rm -rf ${mpich_dir}
+tar xzf ${mpich_pkg} \
+    && pushd ${mpich_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CXX="${CXX}" \
+    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+    ./configure --disable-fortran --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
+# Install mpi4py
+
+pip install mpi4py
 
 # Install Openblas
 
