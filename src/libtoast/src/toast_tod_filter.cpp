@@ -4,9 +4,12 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <string.h>
+#include <algorithm>
+
 #ifdef _OPENMP
 # include <omp.h>
 #endif // ifdef _OPENMP
+
 #include <toast/sys_utils.hpp>
 #include <toast/math_lapack.hpp>
 #include <toast/tod_filter.hpp>
@@ -233,7 +236,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
 
     // order == 1
     if ((start_order <= 1) && (stop_order > 1)) {
-        memcpy(templates + (1 - start_order) * nsample, x, nsample * sizeof(double));
+        std::copy(x, x + nsample, templates + (1 - start_order) * nsample);
     }
 
     // Calculate the hierarchy of polynomials, one buffer length
@@ -249,11 +252,10 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
         if (istop > nsample) istop = nsample;
         if (istop <= istart) continue;
         size_t n = istop - istart;
-        size_t nbyte = n * sizeof(double);
 
         // Initialize to order = 1
         std::vector <double> val(n);
-        memcpy(val.data(), x + istart, nbyte);
+        std::copy(x + istart, x + istart + n, val.data());
         std::vector <double> prev(n, 1);
         std::vector <double> next(n);
 
@@ -262,11 +264,14 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
             for (size_t i = 0; i < n; ++i) {
                 next[i] = 2 * x[istart + i] * val[i] - prev[i];
             }
-            memcpy(prev.data(), val.data(), nbyte);
-            memcpy(val.data(), next.data(), nbyte);
+            std::copy(val.data(), val.data() + n, prev.data());
+            std::copy(next.data(), next.data() + n, val.data());
             if (order >= start_order) {
-                memcpy(templates + istart + (order - start_order) * nsample,
-                       val.data(), nbyte);
+                std::copy(
+                    val.data(),
+                    val.data() + n,
+                    templates + istart + (order - start_order) * nsample
+                );
             }
         }
     }
