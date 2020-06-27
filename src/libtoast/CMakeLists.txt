@@ -49,7 +49,7 @@ set(toast_SOURCES
     tests/toast_test_polyfilter.cpp
 )
 
-add_library(toast ${versioncpp} ${toast_SOURCES})
+add_library(toast OBJECT ${versioncpp} ${toast_SOURCES})
 
 target_include_directories(toast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -130,12 +130,12 @@ endif(LAPACK_FOUND)
 
 # Installation
 
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+#install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Hardcode this to "lib" for now, since lib32/lib64 is a pain
 # to use on many systems.
 #install(TARGETS toast DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(TARGETS toast DESTINATION lib)
+#install(TARGETS toast DESTINATION lib)
 
 # Add the serial unit test executable
 

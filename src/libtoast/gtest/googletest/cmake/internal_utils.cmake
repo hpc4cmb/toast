@@ -12,6 +12,14 @@
 #   Test and Google Mock's option() definitions, and thus must be
 #   called *after* the options have been defined.
 
+if (POLICY CMP0011)
+  cmake_policy(SET CMP0011 NEW)
+endif (POLICY CMP0011)
+
+if (POLICY CMP0063)
+  cmake_policy(SET CMP0063 NEW)
+endif (POLICY CMP0063)
+
 # Tweaks CMake's default compiler/linker settings to suit Google Test's needs.
 #
 # This must be a macro(), as inside a function string() can only

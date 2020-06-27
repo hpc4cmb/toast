@@ -9,6 +9,7 @@ foreach(policy
     CMP0048
     CMP0074
     CMP0077
+    CMP0063
   )
   if(POLICY ${policy})
     cmake_policy(SET ${policy} NEW)
@@ -23,6 +24,9 @@ project(toast VERSION ${MAJMIN_VERSION} LANGUAGES C CXX)
 # Force C++11
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Set symbol visibility to hidden to be consistent with pybind11
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")

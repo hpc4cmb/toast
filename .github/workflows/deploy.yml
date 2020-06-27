@@ -41,11 +41,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     env:
       CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2014
+      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
+      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
+      CIBW_ENVIRONMENT_MACOS:
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
@@ -59,7 +59,7 @@ jobs:
           python-version: '3.7'
       - name: Install cibuildwheel
         run: |
-          python -m pip install twine cibuildwheel==1.4.2
+          python -m pip install twine cibuildwheel==1.5.0
       - name: Build wheel
         run: |
           python -m cibuildwheel --output-dir wheelhouse
@@ -74,11 +74,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     env:
       CIBW_BUILD: cp37-macosx_x86_64 cp37-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2014
+      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
+      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
+      CIBW_ENVIRONMENT_MACOS:
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
@@ -92,7 +92,7 @@ jobs:
           python-version: '3.7'
       - name: Install cibuildwheel
         run: |
-          python -m pip install twine cibuildwheel==1.4.2
+          python -m pip install twine cibuildwheel==1.5.0
       - name: Build wheel
         run: |
           python -m cibuildwheel --output-dir wheelhouse
@@ -107,11 +107,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     env:
       CIBW_BUILD: cp38-macosx_x86_64 cp38-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2014
+      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
+      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_STATIC_DEPS=1 TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran'"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_STATIC_DEPS=1"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
+      CIBW_ENVIRONMENT_MACOS: 
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
@@ -125,7 +125,7 @@ jobs:
           python-version: '3.7'
       - name: Install cibuildwheel
         run: |
-          python -m pip install twine cibuildwheel==1.4.2
+          python -m pip install twine cibuildwheel==1.5.0
       - name: Build wheel
         run: |
           python -m cibuildwheel --output-dir wheelhouse
