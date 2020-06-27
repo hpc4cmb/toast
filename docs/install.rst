@@ -23,22 +23,48 @@ Pip Binary Wheels
 
 If you already have a newer Python3 (>= 3.6), then you can install pre-built TOAST
 packages from PyPI.  You should always use virtualenv or similar tools to manage your
-python environments rather than pip-installing packages as root.  First create a
-virtualenv (name it whatever you like)::
+python environments rather than pip-installing packages as root.
 
-    virtualenv -p python3 ${HOME}/cmb
+On Ubuntu Linux, you should install these minimal packages::
+
+    apt update
+    apt install python3 python3-pip python3-venv
+
+On Redhat / Centos we need to take extra steps to install a recent python3::
+
+    yum update
+    yum install centos-release-scl
+    yum install rh-python36
+    scl enable rh-python36 bash
+
+On MacOS, you can use homebrew or macports to install a recent python3.  Now verify that
+your python is at least 3.6::
+
+    python3 --version
+
+Next create a virtualenv (name it whatever you like)::
+
+    python3 -m venv ${HOME}/cmb
 
 Now activate this environment::
 
     source ${HOME}/cmb/bin/activate
 
-Next, use pip to install toast and its requirements (note that the name of the package is "toast-cmb" on PyPI)::
+Within this virtualenv, update pip to the latest version.  This is needed in order to
+install more recent wheels from PyPI::
+
+    python3 -m pip install --upgrade pip
+
+Next, use pip to install toast and its requirements (note that the name of the package
+is "toast-cmb" on PyPI)::
 
     pip install toast-cmb
 
-If you want to enable effective parallelism with toast, then you need to install the
-mpi4py package.  This package requires MPI compilers (usually MPICH or OpenMPI).  Your
-system may already have some MPI compilers installed- try this::
+At this point you have toast installed and you can use it from serial scripts and
+notebooks.  If you want to enable effective parallelism with toast (useful if you
+computer has many cores), then you need to install the mpi4py package.  This package
+requires MPI compilers (usually MPICH or OpenMPI).  Your system may already have some
+MPI compilers installed- try this::
 
     which mpicc
     mpicc -show
@@ -56,6 +82,10 @@ for that package <https://mpi4py.readthedocs.io/en/stable/install.html>`_.  You 
 And test running in parallel with::
 
     mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+
+The runtime configuration of toast can also be checked with an included script::
+
+    toast_env_test.py
 
 
 Conda Packages
