@@ -3,10 +3,13 @@
 Change Log
 -------------------------
 
-2.3.8 (Unreleased)
+2.3.8 (2020-06-27)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Nothing yet
+* Minor release focusing on build system changes to support packaging
+* Update bundled pybind11 and other fixes for wheels and conda packages (PR `#359`_).
+
+.. _`#359`: https://github.com/hpc4cmb/toast/pull/359
 
 2.3.7 (2020-06-13)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
