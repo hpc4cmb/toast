@@ -47,6 +47,7 @@ class MoonTooClose(TooClose):
 class Patch(object):
 
     hits = 0
+    partial_hits = 0
     rising_hits = 0
     setting_hits = 0
     time = 0
@@ -695,7 +696,7 @@ def attempt_scan(
                     rising,
                     fp_radius,
                     not_visible,
-                    allow_partial_scans,
+                    partial_scan=allow_partial_scans,
                 )
                 if el is None:
                     continue
@@ -732,7 +733,7 @@ def attempt_scan(
                             el,
                             ods,
                             boresight_angle,
-                            allow_partial_scans,
+                            partial_scan=allow_partial_scans,
                         )
                         patch.step_azel()
                         break
@@ -907,7 +908,7 @@ def attempt_scan_pole(
 
 @function_timer
 def get_constant_elevation(
-    args, observer, patch, rising, fp_radius, not_visible, allow_partial_scans
+    args, observer, patch, rising, fp_radius, not_visible, partial_scan=False,
 ):
     """ Determine the elevation at which to scan.
     """
@@ -936,7 +937,7 @@ def get_constant_elevation(
             ind = patch.elevations >= el
             if np.any(ind):
                 el = np.amin(patch.elevations[ind])
-            elif allow_partial_scans:
+            elif partial_scan:
                 # None of the elevations allow a full rising scan,
                 # Observe at the highest allowed elevation
                 el = np.amax(patch.elevations)
@@ -952,7 +953,7 @@ def get_constant_elevation(
             ind = patch.elevations <= el
             if np.any(ind):
                 el = np.amax(patch.elevations[ind])
-            elif allow_partial_scans:
+            elif partial_scan:
                 # None of the elevations allow a full setting scan,
                 # Observe at the lowest allowed elevation
                 el = np.amin(patch.elevations)
@@ -966,37 +967,41 @@ def get_constant_elevation(
                 el = None
     elif el is not None:
         if el < patch.el_min:
-            if allow_partial_scans and np.any(
-                patch.el_min < els[ind_setting] - fp_radius
-            ):
+            if partial_scan and np.any(patch.el_min < els[ind_setting] - fp_radius):
+                # Partial setting scan
                 el = patch.el_min
             else:
                 not_visible.append(
                     (
                         patch.name,
-                        "el < el_min ({:.2f} < {:.2f}) rising = {}".format(
-                            el / degree, patch.el_min / degree, rising
+                        "el < el_min ({:.2f} < {:.2f}) rising = {}, partial = {}".format(
+                            el / degree, patch.el_min / degree, rising, partial_scan
                         ),
                     )
                 )
                 el = None
         elif el > patch.el_max:
-            if allow_partial_scans and np.any(
-                patch.el_max > els[ind_rising] + fp_radius
-            ):
+            if partial_scan and np.any(patch.el_max > els[ind_rising] + fp_radius):
+                # Partial rising scan
                 el = patch.el_max
             else:
                 not_visible.append(
                     (
                         patch.name,
-                        "el > el_max ({:.2f} > {:.2f}) rising = {}".format(
-                            el / degree, patch.el_max / degree, rising
+                        "el > el_max ({:.2f} > {:.2f}) rising = {}, partial = {}".format(
+                            el / degree, patch.el_max / degree, rising, partial_scan
                         ),
                     )
                 )
                 el = None
     if el is None:
-        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+        log.debug("NO ELEVATION: {}".format(not_visible[-1]))
+    else:
+        log.debug(
+            "{} : ELEVATION = {}, rising = {}, partial = {}".format(
+                patch.name, el / degree, rising, partial_scan
+            )
+        )
     return el
 
 
@@ -1349,7 +1354,7 @@ def add_scan(
     ods,
     boresight_angle,
     subscan=-1,
-    allow_partial_scan=False,
+    partial_scan=False,
 ):
     """ Make an entry for a CES in the schedule file.
     """
@@ -1436,7 +1441,7 @@ def add_scan(
         )
 
         if (
-            (isinstance(patch, HorizontalPatch) or allow_partial_scan)
+            (isinstance(patch, HorizontalPatch) or partial_scan)
             and sun_time > tstart + 1
             and moon_time > tstart + 1
         ):
@@ -1482,10 +1487,15 @@ def add_scan(
             moon_el2,
             moon_az2,
             0.005 * (moon_phase1 + moon_phase2),
-            patch.hits,
+            -1 - patch.partial_hits if partial_scan else patch.hits,
             subscan,
         )
         entries.append(entry)
+        if partial_scan:
+            # Never append more than one partial scan before
+            # checking if full scans are again available
+            tstop = t2
+            break
         t1 = t2 + args.gap_small
 
     # Write the entries
@@ -1494,20 +1504,26 @@ def add_scan(
         fout.write(entry)
     fout.flush()
 
-    patch.hits += 1
-    patch.time += ces_time
-    if rising or args.pole_mode:
-        patch.rising_hits += 1
-        patch.rising_time += ces_time
-    if not rising or args.pole_mode:
-        patch.setting_hits += 1
-        patch.setting_time += ces_time
-    # The oscillate method will slightly shift the patch to
-    # blur the boundaries
-    patch.oscillate()
+    if not partial_scan:
+        # Only update the patch counters when performing full scans
+        patch.hits += 1
+        patch.time += ces_time
+        if rising or args.pole_mode:
+            patch.rising_hits += 1
+            patch.rising_time += ces_time
+        if not rising or args.pole_mode:
+            patch.setting_hits += 1
+            patch.setting_time += ces_time
+        # The oscillate method will slightly shift the patch to
+        # blur the boundaries
+        patch.oscillate()
+        # Advance the time
+        tstop += args.gap
+    else:
+        patch.partial_hits += 1
+        # Advance the time
+        tstop += args.gap_small
 
-    # Advance the time
-    tstop += args.gap
     return tstop, subscan
 
 
@@ -1596,13 +1612,13 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             moon,
             args.sun_avoidance_angle,
             args.moon_avoidance_angle,
-            (args.elevations is None) and not args.delay_sso_check,
+            not (args.allow_partial_scans or args.delay_sso_check),
         )
         if not in_view:
             not_visible.append((patch.name, msg))
 
         if in_view:
-            if (args.elevations is None) and not args.delay_sso_check:
+            if not (args.allow_partial_scans or args.delay_sso_check):
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
                 if args.moon_avoidance_angle >= 0 and patch.in_patch(moon):
@@ -2038,21 +2054,21 @@ def parse_args():
         help="Sky patch coordinate system [C,E,G]",
     )
     parser.add_argument(
-        "--el-min",
+        "--el-min-deg",
         required=False,
         default=30,
         type=np.float,
         help="Minimum elevation for a CES",
     )
     parser.add_argument(
-        "--el-max",
+        "--el-max-deg",
         required=False,
         default=80,
         type=np.float,
         help="Maximum elevation for a CES",
     )
     parser.add_argument(
-        "--el-step",
+        "--el-step-deg",
         required=False,
         default=0,
         type=np.float,
@@ -2066,42 +2082,42 @@ def parse_args():
         help="Alternate between rising and setting scans",
     )
     parser.add_argument(
-        "--fp-radius",
+        "--fp-radius-deg",
         required=False,
         default=0,
         type=np.float,
         help="Focal plane radius [deg]",
     )
     parser.add_argument(
-        "--sun-avoidance-angle",
+        "--sun-avoidance-angle-deg",
         required=False,
         default=30,
         type=np.float,
         help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
-        "--moon-avoidance-angle",
+        "--moon-avoidance-angle-deg",
         required=False,
         default=20,
         type=np.float,
         help="Minimum distance between the Moon and the bore sight [deg]",
     )
     parser.add_argument(
-        "--sun-el-max",
+        "--sun-el-max-deg",
         required=False,
         default=90,
         type=np.float,
         help="Maximum allowed sun elevation [deg]",
     )
     parser.add_argument(
-        "--boresight-angle-step",
+        "--boresight-angle-step-deg",
         required=False,
         default=0,
         type=np.float,
         help="Boresight rotation step size [deg]",
     )
     parser.add_argument(
-        "--boresight-angle-time",
+        "--boresight-angle-time-min",
         required=False,
         default=0,
         type=np.float,
@@ -2137,21 +2153,21 @@ def parse_args():
         help="Offset to apply to MJD to separate operational days [hours]",
     )
     parser.add_argument(
-        "--gap",
+        "--gap-s",
         required=False,
         default=100,
         type=np.float,
         help="Gap between CES:es [seconds]",
     )
     parser.add_argument(
-        "--gap-small",
+        "--gap-small-s",
         required=False,
         default=10,
         type=np.float,
         help="Gap between split CES:es [seconds]",
     )
     parser.add_argument(
-        "--time-step",
+        "--time-step-s",
         required=False,
         default=600,
         type=np.float,
@@ -2165,7 +2181,7 @@ def parse_args():
         help="Pad each operational day to have only one CES",
     )
     parser.add_argument(
-        "--ces-max-time",
+        "--ces-max-time-s",
         required=False,
         default=900,
         type=np.float,
@@ -2241,7 +2257,7 @@ def parse_args():
         help="Optional offset added to every observing azimuth",
     )
     parser.add_argument(
-        "--elevations",
+        "--elevations-deg",
         required=False,
         help="Fixed observing elevations in a comma-separated list.",
     )
