@@ -154,7 +154,7 @@ class Logger {
 
         void verbose(char const * msg);
         void verbose(char const * msg,
-                   std::pair <std::string, int> const & here);
+                     std::pair <std::string, int> const & here);
         void debug(char const * msg);
         void debug(char const * msg,
                    std::pair <std::string, int> const & here);
