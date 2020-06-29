@@ -661,71 +661,86 @@ def attempt_scan(
 ):
     """ Attempt scanning the visible patches in order until success.
     """
+    log = Logger.get()
     success = False
-    for patch in visible:
-        if isinstance(patch, CoolerCyclePatch):
-            # Cycle the cooler
-            t = add_cooler_cycle(
-                args,
-                t,
-                stop_timestamp,
-                observer,
-                sun,
-                moon,
-                fout,
-                fout_fmt,
-                patch,
-                boresight_angle,
-            )
-            success = True
+    # Always begin by attempting full scans.  If none can be completed
+    # and user allowed partials scans, try them next.
+    for allow_partial_scans in False, True:
+        if allow_partial_scans and not args.allow_partial_scans:
             break
-        # All on-sky targets
-        for rising in [True, False]:
-            observer.date = to_DJD(t)
-            el = get_constant_elevation(
-                args, observer, patch, rising, fp_radius, not_visible
-            )
-            if el is None:
-                continue
-            success, azmins, azmaxs, aztimes, tstop = scan_patch(
-                args,
-                el,
-                patch,
-                t,
-                fp_radius,
-                observer,
-                sun,
-                not_visible,
-                tstop_cooler,
-                sun_el_max,
-                rising,
-            )
+        for patch in visible:
+            if isinstance(patch, CoolerCyclePatch):
+                # Cycle the cooler
+                t = add_cooler_cycle(
+                    args,
+                    t,
+                    stop_timestamp,
+                    observer,
+                    sun,
+                    moon,
+                    fout,
+                    fout_fmt,
+                    patch,
+                    boresight_angle,
+                )
+                success = True
+                break
+            # All on-sky targets
+            for rising in [True, False]:
+                observer.date = to_DJD(t)
+                el = get_constant_elevation(
+                    args,
+                    observer,
+                    patch,
+                    rising,
+                    fp_radius,
+                    not_visible,
+                    allow_partial_scans,
+                )
+                if el is None:
+                    continue
+                success, azmins, azmaxs, aztimes, tstop = scan_patch(
+                    args,
+                    el,
+                    patch,
+                    t,
+                    fp_radius,
+                    observer,
+                    sun,
+                    not_visible,
+                    tstop_cooler,
+                    sun_el_max,
+                    rising,
+                )
+                if success:
+                    try:
+                        t, _ = add_scan(
+                            args,
+                            t,
+                            tstop,
+                            aztimes,
+                            azmins,
+                            azmaxs,
+                            rising,
+                            fp_radius,
+                            observer,
+                            sun,
+                            moon,
+                            fout,
+                            fout_fmt,
+                            patch,
+                            el,
+                            ods,
+                            boresight_angle,
+                            allow_partial_scans,
+                        )
+                        patch.step_azel()
+                        break
+                    except TooClose:
+                        success = False
+                        break
             if success:
-                try:
-                    t, _ = add_scan(
-                        args,
-                        t,
-                        tstop,
-                        aztimes,
-                        azmins,
-                        azmaxs,
-                        rising,
-                        fp_radius,
-                        observer,
-                        sun,
-                        moon,
-                        fout,
-                        fout_fmt,
-                        patch,
-                        el,
-                        ods,
-                        boresight_angle,
-                    )
-                    patch.step_azel()
-                    break
-                except TooClose:
-                    success = False
-                    break
+                break
         if success:
             break
     return success, t
@@ -891,7 +906,9 @@ def attempt_scan_pole(
 
 
 @function_timer
-def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible):
+def get_constant_elevation(
+    args, observer, patch, rising, fp_radius, not_visible, allow_partial_scans
+):
     """ Determine the elevation at which to scan.
     """
     log = Logger.get()
@@ -919,40 +936,65 @@ def get_constant_elevation(args, observer, patch, rising, fp_radius, not_visible
             ind = patch.elevations >= el
             if np.any(ind):
                 el = np.amin(patch.elevations[ind])
-            else:
+            elif allow_partial_scans:
                 # None of the elevations allow a full rising scan,
                 # Observe at the highest allowed elevation
                 el = np.amax(patch.elevations)
+                if el < np.amin(els[ind_rising]) + fp_radius:
+                    not_visible.append(
+                        (patch.name, "Rising patch above maximum elevation")
+                    )
+                    el = None
+            else:
+                not_visible.append((patch.name, "Only partial rising scans available"))
+                el = None
         else:
             ind = patch.elevations <= el
             if np.any(ind):
                 el = np.amax(patch.elevations[ind])
-            else:
+            elif allow_partial_scans:
                 # None of the elevations allow a full setting scan,
                 # Observe at the lowest allowed elevation
                 el = np.amin(patch.elevations)
-
-    if el is not None:
+                if el > np.amax(els[ind_setting]) + fp_radius:
+                    not_visible.append(
+                        (patch.name, "Setting patch above below elevation")
+                    )
+                    el = None
+            else:
+                not_visible.append((patch.name, "Only partial setting scans available"))
+                el = None
+    elif el is not None:
         if el < patch.el_min:
-            not_visible.append(
-                (
-                    patch.name,
-                    "el < el_min ({:.2f} < {:.2f}) rising = {}".format(
-                        el / degree, patch.el_min / degree, rising
-                    ),
+            if allow_partial_scans and np.any(
+                patch.el_min < els[ind_setting] - fp_radius
+            ):
+                el = patch.el_min
+            else:
+                not_visible.append(
+                    (
+                        patch.name,
+                        "el < el_min ({:.2f} < {:.2f}) rising = {}".format(
+                            el / degree, patch.el_min / degree, rising
+                        ),
+                    )
                 )
-            )
-            el = None
+                el = None
         elif el > patch.el_max:
-            not_visible.append(
-                (
-                    patch.name,
-                    "el > el_max ({:.2f} > {:.2f}) rising = {}".format(
-                        el / degree, patch.el_max / degree, rising
-                    ),
+            if allow_partial_scans and np.any(
+                patch.el_max > els[ind_rising] + fp_radius
+            ):
+                el = patch.el_max
+            else:
+                not_visible.append(
+                    (
+                        patch.name,
+                        "el > el_max ({:.2f} > {:.2f}) rising = {}".format(
+                            el / degree, patch.el_max / degree, rising
+                        ),
+                    )
                 )
-            )
-            el = None
+                el = None
     if el is None:
         log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
     return el
@@ -1080,7 +1122,7 @@ def scan_patch(
             success = False
             break
 
-        if not np.any(to_cross):
+        if len(aztimes) > 0 and not np.any(to_cross):
             # All corners made it across the CES line.
             success = True
             # Begin the scan before the patch is at the CES line
@@ -1307,6 +1349,7 @@ def add_scan(
     ods,
     boresight_angle,
     subscan=-1,
+    allow_partial_scan=False,
 ):
     """ Make an entry for a CES in the schedule file.
     """
@@ -1392,35 +1435,25 @@ def add_scan(
             observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
         )
 
-        # We'll just replicate what horizontal patches used to do,
-        # but for all patches.
-        if args.elevations is not None:
-            if sun_time > tstart + 1 and moon_time > tstart + 1:
-                t2 = min(sun_time, moon_time)
-                if sun_too_close or moon_too_close:
-                    tstop = t2
-                    if t1 == t2:
-                        break
+        if (
+            (isinstance(patch, HorizontalPatch) or allow_partial_scan)
+            and sun_time > tstart + 1
+            and moon_time > tstart + 1
+        ):
+            # Simply terminate the scan when the Sun or the Moon is too close
+            t2 = min(sun_time, moon_time)
+            if sun_too_close or moon_too_close:
+                tstop = t2
+                if t1 == t2:
+                    break
         else:
-            if (
-                isinstance(patch, HorizontalPatch)
-                and sun_time > tstart + 1
-                and moon_time > tstart + 1
-            ):
-                # Simply terminate the scan when the Sun or the Moon is too close
-                t2 = min(sun_time, moon_time)
-                if sun_too_close or moon_too_close:
-                    tstop = t2
-                    if t1 == t2:
-                        break
-            else:
-                # For regular patches, this is a failure condition
-                if sun_too_close:
-                    log.debug("Sun too close")
-                    raise SunTooClose
-                if moon_too_close:
-                    log.debug("Moon too close")
-                    raise MoonTooClose
+            # For regular patches, this is a failure condition
+            if sun_too_close:
+                log.debug("Sun too close")
+                raise SunTooClose
+            if moon_too_close:
+                log.debug("Moon too close")
+                raise MoonTooClose
 
         observer.date = to_DJD(t2)
         sun.compute(observer)
@@ -1670,13 +1703,34 @@ def apply_blockouts(args, t_in):
     return t, blocked
 
 
+def advance_time(t, time_step, offset=0):
+    """ Advance the time ensuring that the sampling falls
+    over same discrete times (multiples of time_step)
+    regardless of the current value of t.
+    """
+    return offset + ((t - offset) // time_step + 1) * time_step
+
+
 @function_timer
 def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun, moon):
     log = Logger.get()
 
     sun_el_max = args.sun_el_max * degree
-    el_min = args.el_min * degree
-    el_max = args.el_max * degree
+    el_min = args.el_min
+    el_max = args.el_max
+    if args.elevations is None:
+        el_min = args.el_min
+        el_max = args.el_max
+    else:
+        # Override the elevation limits
+        el_min = 90
+        el_max = 0
+        for el in args.elevations.split(","):
+            el = np.float(el)
+            el_min = min(el * 0.9, el_min)
+            el_max = max(el * 1.1, el_max)
+    el_min *= degree
+    el_max *= degree
     fp_radius = args.fp_radius * degree
 
     fname_out = args.out
@@ -1783,7 +1837,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                     sun.alt / degree, sun_el_max / degree
                 )
             )
-            t += args.time_step
+            t = advance_time(t, args.time_step)
             continue
         moon.compute(observer)
 
@@ -1791,7 +1845,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
         if len(visible) == 0:
             log.debug("No patches visible at {}: {}".format(to_UTC(t), not_visible))
-            t += args.time_step
+            t = advance_time(t, args.time_step)
             continue
 
         # Determine if a cooler cycle sets a limit for observing
@@ -1856,7 +1910,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             log.debug(
                 "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
             )
-            t += args.time_step
+            t = advance_time(t, args.time_step)
         else:
             last_successful = t
 
@@ -2191,6 +2245,21 @@ def parse_args():
         required=False,
         help="Fixed observing elevations in a comma-separated list.",
     )
+    parser.add_argument(
+        "--partial-scans",
+        required=False,
+        action="store_true",
+        dest="allow_partial_scans",
+        help="Allow partials scans when full scans are not available.",
+    )
+    parser.add_argument(
+        "--no-partial-scans",
+        required=False,
+        action="store_false",
+        dest="allow_partial_scans",
+        help="Allow partials scans when full scans are not available.",
+    )
+    parser.set_defaults(allow_partial_scans=False)
 
     try:
         args = parser.parse_args()
