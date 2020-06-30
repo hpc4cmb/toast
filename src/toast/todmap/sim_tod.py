@@ -1382,6 +1382,11 @@ class TODGround(TOD):
         if np.amax(azvec) > 2 * np.pi:
             azvec -= 2 * np.pi
 
+        if self._cosecant_modulation and self._azmin > np.pi:
+            # We always simulate a rising cosecant scan and then
+            # mirror it if necessary
+            azvec += np.pi
+
         # Store the scan range.  We use the high resolution azimuth so the
         # actual sampling rate will not change the range.
 
