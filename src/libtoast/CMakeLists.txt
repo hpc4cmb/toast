@@ -105,15 +105,6 @@ if(CHOLMOD_FOUND)
     endif (METIS_FOUND)
 endif(CHOLMOD_FOUND)
 
-if(FFTW_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
-    target_include_directories(toast PUBLIC "${FFTW_INCLUDE_DIRS}")
-    target_link_libraries(toast "${FFTW_LIBRARIES}")
-    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
-        target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
-    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
-endif(FFTW_FOUND)
-
 if(LAPACK_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
     target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
@@ -124,9 +115,17 @@ if(LAPACK_FOUND)
     target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
 
-# FIXME: restore MKL linking here after testing on a machine with Intel
-# compilers.
+# Link to FFTW *after* BLAS / LAPACK.  This should override any FFTW symbols contained
+# in MKL if MKL used for BLAS / LAPACK.
 
+if(FFTW_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
+    target_include_directories(toast PUBLIC "${FFTW_INCLUDE_DIRS}")
+    target_link_libraries(toast "${FFTW_LIBRARIES}")
+    if(FFTW_DOUBLE_THREADS_LIB_FOUND)
+        target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
+    endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
+endif(FFTW_FOUND)
 
 # Installation
 

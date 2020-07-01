@@ -58,6 +58,10 @@ if(TOAST_STATIC_DEPS)
     set(SUITESPARSE_USE_STATIC_LIBS TRUE)
 endif()
 
+# Look for FFTW first, in case we are using MKL for BLAS/LAPACK.  MKL sometimes
+# includes an FFTW interface that we want to avoid using.
+find_package(FFTW)
+
 find_package(BLAS)
 
 if(BLAS_FOUND)
@@ -74,8 +78,6 @@ else()
         message(FATAL_ERROR "Could not find a working BLAS installation")
     endif()
 endif()
-
-find_package(FFTW)
 
 find_package(AATM)
 
