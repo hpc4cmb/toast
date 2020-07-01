@@ -86,7 +86,11 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
                                ilength, &kind, flags);
     if (plan_ == NULL) {
         // This can occur, for example, if MKL is masquerading as FFTW.
-        std::string msg = "fftw_plan_many_r2r returned plan=NULL unexpectedly; MKL linking issue?";
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg =
+            "fftw_plan_many_r2r returned plan=NULL unexpectedly; MKL linking issue?";
+        log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
 }
