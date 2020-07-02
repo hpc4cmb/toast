@@ -318,7 +318,7 @@ void toast::Logger::verbose(char const * msg) {
 }
 
 void toast::Logger::verbose(char const * msg,
-                          std::pair <std::string, int> const & here) {
+                            std::pair <std::string, int> const & here) {
     if (level_ <= log_level::verbose) {
         std::string hstr = toast::format_here(here);
         fprintf(stdout, "%sVERBOSE: %s (%s)\n", prefix_.c_str(), msg,

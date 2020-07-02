@@ -272,7 +272,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
                     val.data(),
                     val.data() + n,
                     templates + istart + (order - start_order) * nsample
-                );
+                    );
             }
         }
     }

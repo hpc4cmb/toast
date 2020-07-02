@@ -16,4 +16,5 @@ __version__ = "0.1.0"
 
 from .shmem import MPIShared
 from .locking import MPILock
-#from .test import run as test
+
+# from .test import run as test

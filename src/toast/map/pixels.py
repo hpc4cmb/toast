@@ -592,7 +592,9 @@ class DistPixels(object):
                         if allowners[submap_off + c] == NO_OWNER:
                             dview[c, :, :] = 0
                         else:
-                            dview[c, :, :] = self.data[self._glob2loc[submap_off + c], :, :]
+                            dview[c, :, :] = self.data[
+                                self._glob2loc[submap_off + c], :, :
+                            ]
                     # copy into FITS buffers
                     for c in range(ncomm):
                         sampoff = (submap_off + c) * self._npix_submap
