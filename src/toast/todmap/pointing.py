@@ -325,6 +325,21 @@ class OpMuellerPointingHpix(Operator):
         single_precision (bool):  Return the pixel numbers and pointing
              weights in single precision.  Default=False.
         nside_submap (int):  Size of a submap is 12 * nside_submap ** 2
+        hwp_parameters_set (tuple) : tuple of  parameters describing
+        the Mueller Matrix [T, c,rho,s ] as defined in Bryan et al. 2010 :
+
+        .. math::
+            M_{HWP}=
+            \begin{pmatrix}
+                T & \rho  & 0 & 0 \\
+                \rho & T & 0 &  0 \\
+                  0  & 0  & c & -s  \\
+                  0  & 0  & s & c  \\
+            \end{pmatrix}
+
+        default assumes an ideal HWP i.e. T=1,c=-1,rho=0,s=0.
+
+
     """
 
     def __init__(
@@ -339,9 +354,10 @@ class OpMuellerPointingHpix(Operator):
         common_flag_name=None,
         common_flag_mask=255,
         apply_flags=False,
-        keep_quats=False , # this should be set to True to work in L480 
+        keep_quats=False,  # this should be set to True to work in L480
         single_precision=False,
         nside_submap=16,
+        hwp_parameters_set=[1, -1, 0, 0],
     ):
         self._pixels = pixels
         self._weights = weights
@@ -359,7 +375,7 @@ class OpMuellerPointingHpix(Operator):
         self._npix_submap = 12 * self._nside_submap ** 2
         self._nsubmap = (self._nside // self._nside_submap) ** 2
         self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
-
+        self._hwp_parameters_set = hwp_parameters_set
         # initialize the healpix pixels object
         self.hpix = HealpixPixels(self._nside)
 
@@ -433,6 +449,7 @@ class OpMuellerPointingHpix(Operator):
                 hwpang = tod.local_hwp_angle()
             except:
                 hwpang = None
+                raise RuntimeError("Can't run this operator if hwpang is None ")
 
             # read the common flags and apply bitmask
 
@@ -493,8 +510,15 @@ class OpMuellerPointingHpix(Operator):
                 pixelsref[common] = -1
                 # import pdb
                 # pdb.set_trace()
+
+                T = self._hwp_parameters_set[0]
+                c = self._hwp_parameters_set[1]
+                rho = self._hwp_parameters_set[2]
+                s = self._hwp_parameters_set[3]
+                cos2hwp = np.cos(2 * hwpang)
+
                 if self._mode == "I":
-                    weightsref = cal  # this needs to be changed with HWP non idealities
+                    weightsref = cal * (T + eta * rho * cos2hwp)
                 elif self._mode == "IQU":
                     orient = rotate(pdata, xaxis)
 
@@ -506,17 +530,29 @@ class OpMuellerPointingHpix(Operator):
                     )
 
                     detang = np.arctan2(by, bx)
-                    if hwpang is None:
-                        detang *= 2.0
-                    else:
-                        detang += 2.0 * hwpang
-                        detang *= 2.0
-                    sinout = np.sin(detang)
-                    cosout = np.cos(detang)
-                    # this needs to be changed with HWP non idealities
-                    weightsref[:, 0] = cal
-                    weightsref[:, 1] = cosout * eta * cal
-                    weightsref[:, 2] = sinout * eta * cal
+
+                    sindetang = np.sin(2 * detang)
+                    cosdetang = np.cos(2 * detang)
+
+                    ang4 = 2 * detang + 4 * hwpang
+                    ang2 = 2 * detang + 2 * hwpang
+
+                    sin4 = np.sin(ang4)
+                    sin2 = np.sin(ang2)
+                    cos4 = np.cos(ang4)
+                    cos2 = np.cos(ang2)
+
+                    weightsref[:, 0] = cal * (T + (eta * rho * cos2hwp))
+                    weightsref[:, 1] = cal * (
+                        (rho * cos2)
+                        + eta * (T + c) / 2.0 * cosdetang
+                        + eta * (T - c) / 2.0 * cos4
+                    )
+                    weightsref[:, 2] = cal * (
+                        (rho * sin2)
+                        + eta * (T + c) / 2.0 * sindetang
+                        + eta * (T - c) / 2.0 * sin4
+                    )
                 else:
                     raise RuntimeError("Unknown healpix pointing matrix mode")
 
