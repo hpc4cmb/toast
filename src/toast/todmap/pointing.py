@@ -4,6 +4,10 @@
 
 import numpy as np
 
+import healpy as hp
+
+from ..qarray import rotate
+
 from ..utils import Environment
 
 from ..healpix import HealpixPixels
@@ -279,10 +283,6 @@ class OpPointingHpix(Operator):
         return
 
 
-
-
-
-
 class OpMuellerPointingHpix(Operator):
     """
     Operator which generates I/Q/U healpix pointing weights.
@@ -339,7 +339,7 @@ class OpMuellerPointingHpix(Operator):
         common_flag_name=None,
         common_flag_mask=255,
         apply_flags=False,
-        keep_quats=False,
+        keep_quats=False , # this should be set to True to work in L480 
         single_precision=False,
         nside_submap=16,
     ):
@@ -478,48 +478,47 @@ class OpMuellerPointingHpix(Operator):
                     # them now for the full sample range.
                     pdata = tod.local_pointing(det)
 
-                xaxis =  np.array( [1.0, 0.0, 0.0])
-                zaxis  = np.array( [0.0, 0.0, 1.0])
-                nullquat = np.array( [0.0, 0.0, 0.0, 1.0])
-                eta = ( 1. -eps)/(1.+eps )
-                pdata [common] =nullquat
-                import pdb
-                pdb.set_trace()
-                from ..qarray  import rotate
-                dir = rotate(pdata, zaxis )
-                import healpy as hp
-                pixelsref= hp.vec2pix (nside=self._nside,vec= dir ,
-                                        nest=self._nest )
+                xaxis = np.array([1.0, 0.0, 0.0])
+                zaxis = np.array([0.0, 0.0, 1.0])
+                nullquat = np.array([0.0, 0.0, 0.0, 1.0])
+                eta = (1.0 - eps) / (1.0 + eps)
 
-                pixelsref [common]=-1
+                pdata[common] = nullquat
 
-                if self._mode =='I':
-                    weightsref =cal # this needs to be changed with HWP non idealities
-                elif self._mode=='IQU':
-                    orient = rotate(pdata, xaxis )
+                dir = rotate(pdata, zaxis)
+                pixelsref = hp.vec2pix(
+                    nside=self._nside, x=dir[:, 0], y=dir[:, 1], z=dir[:, 2], nest=True
+                )
 
-                    by = orient[::3] * dir[1::3] -
-                         orient[1::3]* dir[::3]
-                    bx = orient [::3] *(-dir[2::3]*dir[::3] ) +
-                         orient [1::3]*(-dir[2::3]*dir[1::3] ) +
-                         orient [2::3]*(dir[::3]* dir[::3] +
-                                        dir[1::3*dir[1::3] )
+                pixelsref[common] = -1
+                # import pdb
+                # pdb.set_trace()
+                if self._mode == "I":
+                    weightsref = cal  # this needs to be changed with HWP non idealities
+                elif self._mode == "IQU":
+                    orient = rotate(pdata, xaxis)
 
-                    detang = np.arctan2(by,bx)
+                    by = orient[:, 0] * dir[:, 1] - orient[:, 1] * dir[:, 0]
+                    bx = (
+                        orient[:, 0] * (-dir[:, 2] * dir[:, 0])
+                        + orient[:, 1] * (-dir[:, 2] * dir[:, 1])
+                        + orient[:, 2] * (dir[:, 0] * dir[:, 0] + dir[:, 1] * dir[:, 1])
+                    )
+
+                    detang = np.arctan2(by, bx)
                     if hwpang is None:
-                        detang*=2.
-                    else :
-                        detang+= 2.*hwpang
-                        detang*=2.
-                    sinout =np.sin(detang)
+                        detang *= 2.0
+                    else:
+                        detang += 2.0 * hwpang
+                        detang *= 2.0
+                    sinout = np.sin(detang)
                     cosout = np.cos(detang)
                     # this needs to be changed with HWP non idealities
-                    weightsref[::3] = cal
-                    weightsref[1::3] = cosout *eta*cal
-                    weightsref[2::3] = sinout *eta*cal
-                else :
+                    weightsref[:, 0] = cal
+                    weightsref[:, 1] = cosout * eta * cal
+                    weightsref[:, 2] = sinout * eta * cal
+                else:
                     raise RuntimeError("Unknown healpix pointing matrix mode")
-
 
                 if self._single_precision:
                     pixels = pixelsref.astype(np.int32)
