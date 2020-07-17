@@ -52,7 +52,7 @@ class Cache(object):
         return self.exists(key)
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.keys())
 
     def __iter__(self):
         class CacheIterator:
