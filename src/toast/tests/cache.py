@@ -39,6 +39,21 @@ class CacheTest(MPITestCase):
         del self.cache
         del self.pycache
 
+    def test_dict_interface(self):
+        cache = Cache()
+        cache["aaa"] = np.arange(10)
+        cache["ccc"] = np.arange(10) + 10
+        self.assertTrue("aaa" in cache)
+        self.assertFalse("bbb" in cache)
+        self.assertEqual(len(cache), 2)
+        n = 0
+        for x in cache:
+            n += 1
+        self.assertEqual(len(cache), n)
+        del cache["aaa"]
+        self.assertEqual(len(cache), n - 1)
+        return
+
     def test_refcount(self):
         buf = AlignedF64.zeros(self.nsamp)
         # print("REFCNT: ", sys.getrefcount(buf), flush=True)

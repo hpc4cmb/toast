@@ -39,6 +39,38 @@ class Cache(object):
         self._shapes = dict()
         self._aliases = dict()
 
+    def __getitem__(self, key):
+        return self.reference(key)
+
+    def __setitem__(self, key, value):
+        self.put(key, value, replace=True)
+
+    def __delitem__(self, key):
+        self.destroy(key)
+
+    def __contains__(self, key):
+        return self.exists(key)
+
+    def __len__(self):
+        return len(self.keys())
+
+    def __iter__(self):
+        class CacheIterator:
+            def __init__(self, cache):
+                self.cache = cache
+                self.keys = cache.keys()
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if len(self.keys) == 0:
+                    raise StopIteration
+                key = self.keys.pop()
+                return self.cache[key]
+
+        return CacheIterator(self)
+
     def clear(self, pattern=None):
         """Clear one or more buffers.
 
@@ -237,7 +269,7 @@ class Cache(object):
             return
         names = list(self._buffers.keys())
         if name not in names:
-            raise RuntimeError("Data buffer {} does not exist".format(name))
+            raise KeyError("Data buffer {} does not exist".format(name))
 
         # Remove aliases to the buffer
         aliases_to_remove = []
@@ -292,7 +324,7 @@ class Cache(object):
         """
         # First check that it exists
         if not self.exists(name):
-            raise RuntimeError("Data buffer (nor alias) {} does not exist".format(name))
+            raise KeyError("Data buffer (nor alias) {} does not exist".format(name))
         realname = name
         if name in self._aliases:
             # This is an alias
