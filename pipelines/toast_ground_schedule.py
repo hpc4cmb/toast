@@ -1360,8 +1360,8 @@ def add_scan(
     """
     log = Logger.get()
     ces_time = tstop - tstart
-    if ces_time > args.ces_max_time:  # and not args.pole_mode:
-        nsub = np.int(np.ceil(ces_time / args.ces_max_time))
+    if ces_time > args.ces_max_time_s:  # and not args.pole_mode:
+        nsub = np.int(np.ceil(ces_time / args.ces_max_time_s))
         ces_time /= nsub
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
@@ -1434,10 +1434,24 @@ def add_scan(
         # It is possible that the Sun or the Moon gets too close to the
         # scan, even if they are far enough from the actual patch.
         sun_too_close, sun_time = check_sso(
-            observer, azmin, azmax, el / degree, sun, args.sun_avoidance_angle, t1, t2
+            observer,
+            azmin,
+            azmax,
+            el / degree,
+            sun,
+            args.sun_avoidance_angle_deg,
+            t1,
+            t2,
         )
         moon_too_close, moon_time = check_sso(
-            observer, azmin, azmax, el / degree, moon, args.moon_avoidance_angle, t1, t2
+            observer,
+            azmin,
+            azmax,
+            el / degree,
+            moon,
+            args.moon_avoidance_angle_deg,
+            t1,
+            t2,
         )
 
         if (
@@ -1496,7 +1510,7 @@ def add_scan(
             # checking if full scans are again available
             tstop = t2
             break
-        t1 = t2 + args.gap_small
+        t1 = t2 + args.gap_small_s
 
     # Write the entries
     for entry in entries:
@@ -1518,11 +1532,11 @@ def add_scan(
         # blur the boundaries
         patch.oscillate()
         # Advance the time
-        tstop += args.gap
+        tstop += args.gap_s
     else:
         patch.partial_hits += 1
         # Advance the time
-        tstop += args.gap_small
+        tstop += args.gap_small_s
 
     return tstop, subscan
 
@@ -1610,8 +1624,8 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             observer,
             sun,
             moon,
-            args.sun_avoidance_angle,
-            args.moon_avoidance_angle,
+            args.sun_avoidance_angle_deg,
+            args.moon_avoidance_angle_deg,
             not (args.allow_partial_scans or args.delay_sso_check),
         )
         if not in_view:
@@ -1621,10 +1635,10 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             if not (args.allow_partial_scans or args.delay_sso_check):
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
-                if args.moon_avoidance_angle >= 0 and patch.in_patch(moon):
+                if args.moon_avoidance_angle_deg >= 0 and patch.in_patch(moon):
                     not_visible.append((patch.name, "Moon in patch"))
                     in_view = False
-                if args.sun_avoidance_angle >= 0 and patch.in_patch(sun):
+                if args.sun_avoidance_angle_deg >= 0 and patch.in_patch(sun):
                     not_visible.append((patch.name, "Sun in patch"))
                     in_view = False
         if in_view:
@@ -1643,11 +1657,11 @@ def get_visible(args, observer, sun, moon, patches, el_min):
 def get_boresight_angle(args, t, t0=0):
     """ Return the scheduled boresight angle at time t.
     """
-    if args.boresight_angle_step == 0 or args.boresight_angle_time == 0:
+    if args.boresight_angle_step_deg == 0 or args.boresight_angle_time_min == 0:
         return 0
 
-    istep = int((t - t0) / 60 / args.boresight_angle_time)
-    return (args.boresight_angle_step * istep) % 360
+    istep = int((t - t0) / 60 / args.boresight_angle_time_min)
+    return (args.boresight_angle_step_deg * istep) % 360
 
 
 @function_timer
@@ -1731,23 +1745,23 @@ def advance_time(t, time_step, offset=0):
 def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun, moon):
     log = Logger.get()
 
-    sun_el_max = args.sun_el_max * degree
-    el_min = args.el_min
-    el_max = args.el_max
-    if args.elevations is None:
-        el_min = args.el_min
-        el_max = args.el_max
+    sun_el_max = args.sun_el_max_deg * degree
+    el_min = args.el_min_deg
+    el_max = args.el_max_deg
+    if args.elevations_deg is None:
+        el_min = args.el_min_deg
+        el_max = args.el_max_deg
     else:
         # Override the elevation limits
         el_min = 90
         el_max = 0
-        for el in args.elevations.split(","):
+        for el in args.elevations_deg.split(","):
             el = np.float(el)
             el_min = min(el * 0.9, el_min)
             el_max = max(el * 1.1, el_max)
     el_min *= degree
     el_max *= degree
-    fp_radius = args.fp_radius * degree
+    fp_radius = args.fp_radius_deg * degree
 
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
@@ -1853,7 +1867,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                     sun.alt / degree, sun_el_max / degree
                 )
             )
-            t = advance_time(t, args.time_step)
+            t = advance_time(t, args.time_step_s)
             continue
         moon.compute(observer)
 
@@ -1861,7 +1875,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
         if len(visible) == 0:
             log.debug("No patches visible at {}: {}".format(to_UTC(t), not_visible))
-            t = advance_time(t, args.time_step)
+            t = advance_time(t, args.time_step_s)
             continue
 
         # Determine if a cooler cycle sets a limit for observing
@@ -1926,7 +1940,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             log.debug(
                 "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
             )
-            t = advance_time(t, args.time_step)
+            t = advance_time(t, args.time_step_s)
         else:
             last_successful = t
 
@@ -1983,7 +1997,7 @@ def parse_args():
         help="Period of patch position oscillations in RA [visits]",
     )
     parser.add_argument(
-        "--ra-amplitude",
+        "--ra-amplitude-deg",
         required=False,
         default=0,
         type=np.float,
@@ -1997,7 +2011,7 @@ def parse_args():
         help="Period of patch position oscillations in DEC [visits]",
     )
     parser.add_argument(
-        "--dec-amplitude",
+        "--dec-amplitude-deg",
         required=False,
         default=0,
         type=np.float,
@@ -2319,7 +2333,7 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    patch = SSOPatch(name, weight, radius, elevations=args.elevations)
+    patch = SSOPatch(name, weight, radius, elevations=args.elevations_deg)
     return patch
 
 
@@ -2569,17 +2583,17 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 name,
                 weight,
                 corners,
-                el_min=args.el_min * degree,
-                el_max=args.el_max * degree,
-                el_step=args.el_step * degree,
+                el_min=args.el_min_deg * degree,
+                el_max=args.el_max_deg * degree,
+                el_step=args.el_step_deg * degree,
                 alternate=args.alternate,
                 site_lat=observer.lat,
                 area=area,
                 ra_period=args.ra_period,
-                ra_amplitude=args.ra_amplitude,
+                ra_amplitude=args.ra_amplitude_deg,
                 dec_period=args.dec_period,
-                dec_amplitude=args.dec_amplitude,
-                elevations=args.elevations,
+                dec_amplitude=args.dec_amplitude_deg,
+                elevations=args.elevations_deg,
             )
         if args.equalize_area or args.debug:
             area = patch.get_area(observer, nside=32, equalize=args.equalize_area)
@@ -2643,8 +2657,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             # Plot sun and moon avoidance circle
             sunlon, sunlat = [], []
             moonlon, moonlat = [], []
-            sun_avoidance_angle = args.sun_avoidance_angle * degree
-            moon_avoidance_angle = args.moon_avoidance_angle * degree
+            sun_avoidance_angle = args.sun_avoidance_angle_deg * degree
+            moon_avoidance_angle = args.moon_avoidance_angle_deg * degree
             for lon, lat, sso, angle_min, color, step, lw in [
                 (
                     sunlon,
