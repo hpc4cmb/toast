@@ -726,12 +726,22 @@ class TODGround(TOD):
         azmax (float): Ending azimuth of the constant elevation scan.
             If `None`, no CES is performed.
         el (float):  Elevation of the scan.
-        el_nod (string or list of float): List of elevations to acquire relative
-            to `el`.  First and last elevation will always be `el`.
-            Beginning el-nod is always performed at `azmin`.  Ending
-            el-nod is always performed wherever 
+        el_nod (string or list of float): List of elevations to acquire
+            relative to `el`.  First and last elevation will always be
+            `el`.  Beginning el-nod is always performed at `azmin`.
+            Ending el-nod is always performed wherever the science scan
+            ends.  [degrees]
         start_with_elnod (bool) : Perform el-nod before the scan
         end_with_elnod (bool) : Perform el-nod after the scan
+        el_mod_step (float) : If non-zero, scanning elevation will be
+            stepped after each scan pair (upon returning to starting
+            azimuth). [degrees]
+        el_mod_rate (float) : If non-zero, observing elevation will be
+            continuously modulated during the science scan. [Hz]
+        el_mod_amplitude (float) : Range of elevation modulation when
+            `el_mod_rate` is non-zero. [degrees]
+        el_mod_sine (bool) : Elevation modulation should assume a
+            sine-wave shape.  If False, use a triangular wave.
         scanrate (float): Sky scanning rate in degrees / second.
         scanrate_el (float): Sky elevation scanning rate in
             degrees / second.  If None, will default to `scanrate`.
@@ -790,6 +800,10 @@ class TODGround(TOD):
         el_nod=None,
         start_with_elnod=True,
         end_with_elnod=False,
+        el_mod_step=0,
+        el_mod_rate=0,
+        el_mod_amplitude=1,
+        el_mod_sine=False,
         scanrate=1,
         scanrate_el=None,
         scan_accel=0.1,
@@ -894,6 +908,10 @@ class TODGround(TOD):
         else:
             self._elnod_el = None
             self._elnod_az = None
+        self._el_mod_step = el_mod_step * degree
+        self._el_mod_rate = el_mod_rate
+        self._el_mod_amplitude = el_mod_amplitude * degree
+        self._el_mod_sine = el_mod_sine
         self._scanrate = scanrate * degree
         self._scan_accel = scan_accel * degree
         self._scanrate_el = scanrate_el * degree
@@ -1249,6 +1267,169 @@ class TODGround(TOD):
         return
 
     @function_timer
+    def oscillate_el(self, times, az, el):
+        """ Simulate oscillating elevation """
+
+        tt = times - times[0]
+        if self._el_mod_sine:
+            # elevation is modulated along a sine wave
+            angular_rate = 2 * np.pi * self._el_mod_rate
+            el += self._el_mod_amplitude * np.sin(tt * angular_rate)
+
+            # Check that we did not breach tolerances
+            el_rate_max = np.amax(np.abs(np.diff(el)) / np.diff(tt))
+            if np.any(el_rate_max > self._scanrate_el):
+                raise RuntimeError(
+                    "Elevation oscillation requires {:.2f} deg/s but "
+                    "mount only allows {:.2f} deg/s".format(
+                        np.degrees(el_rate_max), np.degrees(self._scanrate_el)
+                    )
+                )
+        else:
+            # elevation is modulated using a constant rate.  We need to
+            # calculate the appropriate scan rate to achive the desired
+            # amplitude and period
+            t_mod = 1 / self._el_mod_rate
+            # determine scan rate needed to reach given amplitude in given time
+            a = self._scan_accel_el
+            b = -0.5 * self._scan_accel_el * t_mod
+            c = 2 * self._el_mod_amplitude
+            if b ** 2 - 4 * a * c < 0:
+                raise RuntimeError(
+                    "Cannot perform {:.2f} deg elevation oscillation in {:.2f} s "
+                    "with {:.2f} deg/s^2 acceleration".format(
+                        np.degrees(self._el_mod_amplitude * 2),
+                        np.degrees(self._scan_accel_el),
+                    )
+                )
+            root1 = (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            root2 = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            if root1 > 0:
+                t_accel = root1
+            else:
+                t_accel = root2
+            t_scan = 0.5 * t_mod - 2 * t_accel
+            scanrate = t_accel * self._scan_accel_el
+            if scanrate > self._scanrate_el:
+                raise RuntimeError(
+                    "Elevation oscillation requires {:.2f} > {:.2f} deg/s "
+                    "scan rate".format(
+                        np.degrees(scanrate), np.degrees(self._scanrate_el),
+                    )
+                )
+
+            # simulate a high resolution scan to interpolate
+
+            t_interp = []
+            el_interp = []
+            n = 1000
+            # accelerate
+            t = np.linspace(0, t_accel, n)
+            t_interp.append(t)
+            el_interp.append(0.5 * self._scan_accel_el * t ** 2)
+            # scan
+            t_last = t_interp[-1][-1]
+            el_last = el_interp[-1][-1]
+            t = np.linspace(0, t_scan, 2)
+            t_interp.append(t_last + t)
+            el_interp.append(el_last + t * scanrate)
+            # decelerate
+            t_last = t_interp[-1][-1]
+            el_last = el_interp[-1][-1]
+            t = np.linspace(0, 2 * t_accel, n)
+            t_interp.append(t_last + t)
+            el_interp.append(
+                el_last + scanrate * t - 0.5 * self._scan_accel_el * t ** 2
+            )
+            # scan
+            t_last = t_interp[-1][-1]
+            el_last = el_interp[-1][-1]
+            t = np.linspace(0, t_scan, 2)
+            t_interp.append(t_last + t)
+            el_interp.append(el_last - t * scanrate)
+            # decelerate
+            t_last = t_interp[-1][-1]
+            el_last = el_interp[-1][-1]
+            t = np.linspace(0, t_accel, n)
+            t_interp.append(t_last + t)
+            el_interp.append(
+                el_last - scanrate * t + 0.5 * self._scan_accel_el * t ** 2
+            )
+
+            t_interp = np.hstack(t_interp)
+            el_interp = np.hstack(el_interp)
+
+            # finally, modulate the elevation around the input vector
+            # start time is set to middle of the first stable scan
+            # *** without a proper accelerating phase ***
+            tt += t_accel + 0.5 * t_scan
+            el += np.interp(tt % t_mod, t_interp, el_interp) - self._el_mod_amplitude
+
+        return
+
+    @function_timer
+    def step_el(self, times, az, el):
+        """ Simulate elevation steps after each scan pair """
+
+        sign = np.sign(self._el_mod_step)
+        el_step = np.abs(self._el_mod_step)
+
+        # simulate a single elevation step at high resolution
+
+        t_accel = self._scanrate_el / self._scan_accel_el
+        el_accel = 0.5 * self._scan_accel_el * t_accel ** 2
+        if el_step > 2 * el_accel:
+            # Step is large enough to reach elevation scan rate
+            t_scan = (el_step - 2 * el_accel) / self._scanrate_el
+        else:
+            # Only partial acceleration and deceleration
+            el_accel = np.abs(self._el_mod_step) / 2
+            t_accel = np.sqrt(2 * el_accel / self._scan_accel_el)
+            t_scan = 0
+
+        t_interp = []
+        el_interp = []
+        n = 1000
+        # accelerate
+        t = np.linspace(0, t_accel, n)
+        t_interp.append(t)
+        el_interp.append(0.5 * self._scan_accel_el * t ** 2)
+        # scan
+        if t_scan > 0:
+            t_last = t_interp[-1][-1]
+            el_last = el_interp[-1][-1]
+            t = np.linspace(0, t_scan, n)
+            t_interp.append(t_last + t)
+            el_interp.append(el_last + t * self._scanrate_el)
+        # decelerate
+        t_last = t_interp[-1][-1]
+        el_last = el_interp[-1][-1]
+        el_rate_last = self._scan_accel_el * t_accel
+        t = np.linspace(0, t_accel, n)
+        t_interp.append(t_last + t)
+        el_interp.append(
+            el_last + el_rate_last * t - 0.5 * self._scan_accel_el * t ** 2
+        )
+
+        t_interp = np.hstack(t_interp)
+        t_interp -= t_interp[t_interp.size // 2]
+        el_interp = sign * np.hstack(el_interp)
+
+        # isolate steps
+
+        daz = np.diff(az)
+        ind = np.where(daz[1:] * daz[:-1] < 0)[0] + 1
+        ind = ind[1::2]
+
+        # Modulate the elevation at each step
+
+        for istep in ind:
+            tstep = times[istep]
+            el += np.interp(times - tstep, t_interp, el_interp)
+
+        return
+
+    @function_timer
     def simulate_scan(self, samples):
         """ Simulate el-nod and/or a constant elevation scan, either constant rate or
         1/sin(az)-modulated.
@@ -1403,10 +1584,16 @@ class TODGround(TOD):
             # mirror it if necessary
             az_sample += np.pi
 
+        el_sample = np.zeros_like(az_sample) + self._el_ces
+        if self._el_mod_rate != 0:
+            self.oscillate_el(times, az_sample, el_sample)
+        if self._el_mod_step != 0:
+            self.step_el(times, az_sample, el_sample)
+
         offset = self._times.size
         self._times = np.hstack([self._times, times])
         self._az = np.hstack([self._az, az_sample])
-        self._el = np.hstack([self._el, np.zeros_like(az_sample) + self._el_ces])
+        self._el = np.hstack([self._el, el_sample])
         ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
         ind[ind == tvec.size] = tvec.size - 1
         self._commonflags = np.hstack([self._commonflags, flags[ind]]).astype(np.uint8)

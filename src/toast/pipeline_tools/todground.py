@@ -113,6 +113,46 @@ def add_todground_args(parser):
     """ Add TODGround arguments
     """
     parser.add_argument(
+        "--el-mod-step-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="If non-zero, scanning elevation will be stepped "
+        "after each scan pair (upon returning to starting "
+        "azimuth). [degrees]",
+    )
+    parser.add_argument(
+        "--el-mod-rate-hz",
+        required=False,
+        default=0,
+        type=np.float,
+        help="If non-zero, observing elevation will be "
+        "continuously modulated during the science scan. [Hz]",
+    )
+    parser.add_argument(
+        "--el-mod-amplitude-deg",
+        required=False,
+        default=1,
+        type=np.float,
+        help="Range of elevation modulation when "
+        "`el_mod_rate` is non-zero. [degrees]",
+    )
+    parser.add_argument(
+        "--el-mod-sine",
+        required=False,
+        action="store_true",
+        help="Elevation modulation should produce a sine pattern",
+        dest="el_mod_sine",
+    )
+    parser.add_argument(
+        "--no-el-mod-sine",
+        required=False,
+        action="store_false",
+        help="Elevation modulation should produce a triangle wave",
+        dest="el_mod_sine",
+    )
+    parser.set_defaults(el_mod_sine=False)
+    parser.add_argument(
         "--el-nod-deg",
         required=False,
         help="Comma-separated list of elevation changes to perform in degrees",
