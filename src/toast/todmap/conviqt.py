@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import warnings
+
 from ..mpi import use_mpi
 
 import numpy as np
