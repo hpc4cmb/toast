@@ -55,6 +55,7 @@ class Patch(object):
     setting_time = 0
     step = -1
     az_min = 0
+    az_max = 2 * np.pi
     _area = None
     current_el_min = 0
     current_el_max = 0
@@ -94,24 +95,24 @@ class Patch(object):
         self.el_min0 = el_min
         self.el_min = el_min
         self.el_max0 = el_max
-        self.el_step = el_step
+        self.el_step = np.abs(el_step)
         self.alternate = alternate
         self._area = area
-        # Use the site latitude to infer the lowest elevation that all
-        # corners cross.
         self.site_lat = site_lat
-        for corner in corners:
-            el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
-            if el_max < self.el_max0:
-                self.el_max0 = el_max
-        self.el_max = self.el_max0
-        self.el_lim = self.el_min0
-        self.step_azel()
         self.ra_period = ra_period
         self.ra_amplitude = np.radians(ra_amplitude)
         self.dec_period = dec_period
         self.dec_amplitude = np.radians(dec_amplitude)
+        # Use the site latitude to infer the lowest elevation that all
+        # corners cross.
+        site_el_max = np.pi / 2
+        for corner in corners:
+            el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
+            if el_max < site_el_max:
+                site_el_max = el_max
         if elevations is None:
+            if site_el_max < self.el_max0:
+                self.el_max0 = site_el_max
             self.elevations = None
         else:
             # Parse the allowed elevations
@@ -124,6 +125,40 @@ class Patch(object):
                 # Try parsing as an iterable
                 self.elevations = [np.radians(el) for el in elevations]
             self.elevations = np.sort(np.array(self.elevations))
+            # Check if any of the allowed elevations is above the highest
+            # observable elevation
+            bad = self.elevations > site_el_max
+            if np.any(bad):
+                good = np.logical_not(bad)
+                if np.any(good):
+                    print(
+                        "WARNING: {} of the observing elevations are too high "
+                        "for '{}': {} > {:.2f} deg".format(
+                            np.sum(bad),
+                            self.name,
+                            np.degrees(self.elevations[bad]),
+                            np.degrees(site_el_max),
+                        ),
+                        flush=True,
+                    )
+                    self.elevations = self.elevations[good]
+                else:
+                    print(
+                        "ERROR: all of the observing elevations are too high for {}.  "
+                        "Maximum observing elevation is {} deg".format(
+                            self.name, np.degrees(site_el_max)
+                        ),
+                        flush=True,
+                    )
+                    sys.exit()
+            self.el_min0 = np.amin(self.elevations)
+            self.el_max0 = np.amax(self.elevations)
+        if el_step != 0:
+            self.nstep_el = int((self.el_max0 - self.el_min0 + 1e-3) // el_step) + 1
+        self.elevations0 = self.elevations
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.step_azel()
         return
 
     def oscillate(self):
@@ -254,39 +289,52 @@ class Patch(object):
     @function_timer
     def step_azel(self):
         self.step += 1
-        if self.el_step > 0 and self.alternate:
+        if self.el_step != 0 and self.alternate:
             # alternate between rising and setting scans
-            if self.step % 2 == 0:
+            if self.rising_hits < self.setting_hits:
                 # Schedule a rising scan
-                self.el_min = self.el_lim
+                istep = self.rising_hits % self.nstep_el
+                self.el_min = min(self.el_max0, self.el_min0 + istep * self.el_step)
                 self.el_max = self.el_max0
-                if self.el_min >= self.el_max:
-                    self.el_min = self.el_min0
                 self.az_min = 0
+                self.az_max = np.pi
             else:
-                # Update the boundaries
-                self.el_lim += self.el_step
-                if self.el_lim > self.el_max0:
-                    self.el_lim = self.el_min0
                 # Schedule a setting scan
+                istep = self.setting_hits % self.nstep_el
                 self.el_min = self.el_min0
-                self.el_max = self.el_lim
-                if self.el_max <= self.el_min:
-                    self.el_max = self.el_max0
+                self.el_max = max(self.el_min0, self.el_max0 - istep * self.el_step)
                 self.az_min = np.pi
+                self.az_max = 2 * np.pi
         else:
             if self.alternate:
                 self.az_min = (self.az_min + np.pi) % (2 * np.pi)
+                self.az_max = self.az_min + np.pi
             else:
                 self.el_min += self.el_step
                 if self.el_min > self.el_max0:
                     self.el_min = self.el_min0
+        if self.el_step != 0 and self.elevations is not None:
+            tol = np.radians(0.1)
+            self.elevations = np.array(
+                [
+                    el
+                    for el in self.elevations0
+                    if (el + tol >= self.el_min and el - tol <= self.el_max)
+                ]
+            )
         return
 
     def reset(self):
         self.step += 1
         self.el_min = self.el_min0
+        self.el_max = self.el_max0
+        self.elevations = self.elevations0
         self.az_min = 0
+        if self.alternate:
+            self.az_max = np.pi
+        else:
+            self.az_max = 2 * np.pi
+        return
 
     def visible(
         self,
@@ -891,7 +939,7 @@ def attempt_scan_pole(
                         boresight_angle,
                         subscan=subscan,
                     )
-                    el += np.radians(args.pole_el_step)
+                    el += np.radians(args.pole_el_step_deg)
                     success = True
                 except TooClose:
                     success = False
@@ -1123,7 +1171,9 @@ def scan_patch(
 
         # If we are alternating rising and setting scans, reject patches
         # that appear on the wrong side of the sky.
-        if patch.az_min > 0 and np.any((np.array(azmins) % (2 * np.pi)) < patch.az_min):
+        if np.any((np.array(azmins) % (2 * np.pi)) < patch.az_min) or np.any(
+            (np.array(azmaxs) % (2 * np.pi)) > patch.az_max
+        ):
             success = False
             break
 
@@ -1182,7 +1232,7 @@ def scan_patch_pole(
     tstep = 60
     azmins, azmaxs, aztimes = [], [], []
     while True:
-        if tstop - t > args.pole_ces_time - 1:
+        if tstop - t > args.pole_ces_time_s - 1:
             # Succesfully scanned the maximum time
             if len(azmins) > 0:
                 success = True
@@ -2240,14 +2290,14 @@ def parse_args():
         help="Pole scheduling mode (no drift scan)",
     )
     parser.add_argument(
-        "--pole-el-step",
+        "--pole-el-step-deg",
         required=False,
         default=0.25,
         type=np.float,
         help="Elevation step in pole scheduling mode [deg]",
     )
     parser.add_argument(
-        "--pole-ces-time",
+        "--pole-ces-time-s",
         required=False,
         default=3000,
         type=np.float,
