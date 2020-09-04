@@ -21,7 +21,9 @@ from .dist import add_dist_args, get_comm, get_time_communicators
 from .export import add_tidas_args, output_tidas, add_spt3g_args, output_spt3g
 from .filters import (
     add_polyfilter_args,
+    add_polyfilter2D_args,
     apply_polyfilter,
+    apply_polyfilter2D,
     add_groundfilter_args,
     apply_groundfilter,
 )

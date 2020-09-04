@@ -1381,7 +1381,7 @@ class OpMapMaker(Operator):
         timer.start()
         log = Logger.get()
         templatelist = []
-        if self.baseline_length is not None:
+        if self.baseline_length:
             log.info(
                 "Initializing offset template, step_length = {}".format(
                     self.baseline_length

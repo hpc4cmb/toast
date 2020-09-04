@@ -9,12 +9,53 @@ import numpy as np
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 
-from ..tod import OpPolyFilter
+from ..tod import OpPolyFilter, OpPolyFilter2D
 from ..todmap import OpGroundFilter
 
 #
 # Polynomial filter
 #
+
+
+def add_polyfilter2D_args(parser):
+    """ Add the polynomial filter arguments to argparser
+    """
+    parser.add_argument(
+        "--polyfilter2D",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Apply 2D polynomial filter",
+        dest="apply_polyfilter2D",
+    )
+    parser.add_argument(
+        "--no-polyfilter2D",
+        required=False,
+        action="store_false",
+        help="Do not apply 2D polynomial filter",
+        dest="apply_polyfilter2D",
+    )
+    parser.set_defaults(apply_polyfilter2D=False)
+
+    parser.add_argument(
+        "--poly-order2D",
+        required=False,
+        default=0,
+        type=np.int,
+        help="Polynomial order for the 2D polyfilter",
+    )
+    # Common flag mask may already be added
+    try:
+        parser.add_argument(
+            "--common-flag-mask",
+            required=False,
+            default=1,
+            type=np.uint8,
+            help="Common flag mask",
+        )
+    except argparse.ArgumentError:
+        pass
+    return
 
 
 def add_polyfilter_args(parser):
@@ -59,6 +100,33 @@ def add_polyfilter_args(parser):
 
 
 @function_timer
+def apply_polyfilter2D(args, comm, data, cache_name=None, verbose=True):
+    """ Apply the 2D polynomial filter to data under `cache_name`.
+    """
+    if not args.apply_polyfilter2D:
+        return
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+    if comm.world_rank == 0 and verbose:
+        log.info("2D Polyfiltering signal")
+    polyfilter = OpPolyFilter2D(
+        order=args.poly_order2D, name=cache_name, common_flag_mask=args.common_flag_mask
+    )
+    polyfilter.exec(data)
+    if comm.comm_world is not None:
+        comm.comm_world.barrier()
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("2D Polynomial filtering")
+    return
+
+
+#
+# Ground filter
+#
+
+
+@function_timer
 def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
     """ Apply the polynomial filter to data under `cache_name`.
     """
@@ -75,9 +143,8 @@ def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
     polyfilter.exec(data)
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Polynomial filtering")
+        timer.report_clear("Polynomial filtering")
     return
 
 
@@ -144,7 +211,6 @@ def apply_groundfilter(args, comm, data, cache_name=None, verbose=True):
     groundfilter.exec(data)
     if comm.comm_world is not None:
         comm.comm_world.barrier()
-    timer.stop()
     if comm.world_rank == 0 and verbose:
-        timer.report("Ground filtering")
+        timer.report_clear("Ground filtering")
     return
