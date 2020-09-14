@@ -16,8 +16,12 @@ from .sim_det_map import OpSimScan
 from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
 from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGaps
 from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
+from .. import qarray as qa
 
 from .._libtoast import add_offsets_to_signal, project_signal_offsets
+
+
+XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 temporary_names = set()
 
@@ -245,6 +249,212 @@ class SubharmonicTemplate(TODTemplate):
                     subharmonic_amplitudes_out[ind] = np.dot(
                         preconditioner, subharmonic_amplitudes_in[ind]
                     )
+        return
+
+
+class Poly2DTemplate(TODTemplate):
+    """ This class represents atmospheric fluctuations in front of the
+    focalplane as 2D polynomials
+    """
+
+    name = "poly2D"
+
+    def __init__(
+        self,
+        data,
+        detweights,
+        order=1,
+        intervals=None,
+        common_flags=None,
+        common_flag_mask=1,
+        flags=None,
+        flag_mask=1,
+        correlation_length=10,
+        correlation_amplitude=1.0,
+    ):
+        self.data = data
+        self.comm = data.comm.comm_group
+        self.detweights = detweights
+        self.order = order
+        self.norder = order + 1
+        self.nmode = (order + 1) * (order + 2) // 2
+        self.intervals = intervals
+        self.common_flags = common_flags
+        self.common_flag_mask = common_flag_mask
+        self.flags = flags
+        self.flag_mask = flag_mask
+        self._get_templates()
+        self.correlation_length = correlation_length
+        self.correlation_amplitude = correlation_amplitude
+        if correlation_length:
+            self._get_prior()
+        return
+
+    @function_timer
+    def _get_prior(self):
+        """ Evaluate C_a^{-1} for the 2D polynomial coefficients based
+        on the correlation length.
+        """
+        if self.correlation_length:
+            # Correlation length is given in seconds and we cannot assume
+            # that each observation has the same sampling rate.  Therefore,
+            # we will build the filter for each observation
+            self.filters = []  # all observations
+            self.preconditioners = []  # all observations
+            for iobs, obs in enumerate(self.data.obs):
+                tod = obs["tod"]
+                times = tod.local_times()
+                corr = np.exp((times[0] - times) / self.correlation_length) * self.correlation_amplitude
+                ihalf = times.size // 2
+                corr[ihalf + 1:] = corr[ihalf - 1:0:-1]
+                fcorr = np.fft.rfft(corr)
+                invcorr = np.fft.irfft(1 / fcorr)
+                self.filters.append(invcorr)
+        return
+
+    @function_timer
+    def _get_templates(self):
+        """ Evaluate and normalize the polynomial templates.
+
+        Each template corresponds to a fixed value for each detector
+        and depends on the position of the detector.
+        """
+        self.templates = []
+
+        mode = 0
+        xorders = np.zeros(self.nmode)
+        yorders = np.zeros(self.nmode)
+        self.orders = np.zeros(self.nmode)
+        for order in range(self.norder):
+            for yorder in range(order + 1):
+                self.orders[mode] = order
+                xorder = order - yorder
+                xorders[mode] = xorder
+                yorders[mode] = yorder
+                mode += 1
+                if mode == self.nmode:
+                    break
+            if mode == self.nmode:
+                break
+
+        self.norms = []
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            common_flags = tod.local_common_flags(self.common_flags)
+            common_flags = (common_flags & self.common_flag_mask) != 0
+            nsample = tod.total_samples
+            obs_templates = {}
+            focalplane = obs["focalplane"]
+            norms = np.zeros([nsample, self.nmode])
+            local_offset, local_nsample = tod.local_samples
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for det in tod.local_dets:
+                flags = tod.local_flags(det, self.flags)
+                good = ((flags & self.flag_mask) | common_flags) == 0
+                detweight = self.detweights[iobs][det]
+                det_quat = focalplane[det]["quat"]
+                x, y, z = qa.rotate(det_quat, ZAXIS)
+                obs_templates[det] = x ** xorders * y ** yorders
+                norms[todslice] += np.outer(
+                    good, obs_templates[det] ** 2 * detweight
+                )
+            self.comm.allreduce(norms)
+            good = norms != 0
+            norms[good] = 1 / norms[good]
+            self.norms.append(norms.ravel())
+            self.templates.append(obs_templates)
+            self.namplitude += nsample * self.nmode
+
+        self.norms = np.hstack(self.norms)
+
+        return
+
+    @function_timer
+    def add_to_signal(self, signal, amplitudes):
+        """ signal += F.a
+        """
+        poly_amplitudes = amplitudes[self.name]
+        amplitude_offset = 0
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            todslice = slice(local_offset, local_offset + local_nsample)
+            obs_amplitudes = poly_amplitudes[
+                amplitude_offset : amplitude_offset + nsample * self.nmode
+            ].reshape([nsample, self.nmode])[todslice]
+            for det in tod.local_dets:
+                templates = self.templates[iobs][det]
+                signal[iobs, det, todslice] += np.sum(obs_amplitudes * templates, 1)
+            amplitude_offset += nsample * self.nmode
+        return
+
+    @function_timer
+    def project_signal(self, signal, amplitudes):
+        """ a += F^T.signal
+        """
+        poly_amplitudes = amplitudes[self.name]
+        amplitude_offset = 0
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            todslice = slice(local_offset, local_offset + local_nsample)
+            obs_amplitudes = poly_amplitudes[
+                amplitude_offset : amplitude_offset + nsample * self.nmode
+            ].reshape([nsample, self.nmode])
+            if self.comm is not None:
+                my_amplitudes = np.zeros_like(obs_amplitudes)
+            else:
+                my_amplitudes = obs_amplitudes
+            for det in tod.local_dets:
+                templates = self.templates[iobs][det]
+                my_amplitudes[todslice] += np.outer(signal[iobs, det, todslice], templates)
+            if self.comm is not None:
+                self.comm.allreduce(my_amplitudes)
+                obs_amplitudes += my_amplitudes
+            amplitude_offset += nsample * self.nmode
+        return
+
+    def add_prior(self, amplitudes_in, amplitudes_out):
+        """ a' += C_a^{-1}.a
+        """
+        if self.correlation_length:
+            poly_amplitudes_in = amplitudes_in[self.name]
+            poly_amplitudes_out = amplitudes_out[self.name]
+            amplitude_offset = 0
+            for obs, noisefilter in zip(self.data.obs, self.filters):
+                tod = obs["tod"]
+                nsample = tod.total_samples
+                obs_amplitudes_in = poly_amplitudes_in[
+                    amplitude_offset : amplitude_offset + nsample * self.nmode
+                ].reshape([nsample, self.nmode])
+                obs_amplitudes_out = poly_amplitudes_out[
+                    amplitude_offset : amplitude_offset + nsample * self.nmode
+                ].reshape([nsample, self.nmode])
+                #import pdb
+                #import matplotlib.pyplot as plt
+                #pdb.set_trace()
+                for mode in range(self.nmode):
+                    # Scale the filter by the number of modes at each
+                    # order = xorder + yorder to keep the total fluctuation
+                    # at each order constant
+                    order = self.orders[mode]
+                    nmode = order + 1
+                    obs_amplitudes_out[:, mode] += scipy.signal.convolve(
+                        obs_amplitudes_in[:, mode], noisefilter * nmode, mode="same",
+                    )
+                amplitude_offset += nsample * self.nmode
+        return
+
+    def apply_precond(self, amplitudes_in, amplitudes_out):
+        """ a' = M^{-1}.a
+        """
+        poly_amplitudes_in = amplitudes_in[self.name]
+        poly_amplitudes_out = amplitudes_out[self.name]
+        poly_amplitudes_out[:] = poly_amplitudes_in * self.norms
         return
 
 
@@ -735,13 +945,9 @@ class TemplateAmplitudes(TOASTVector):
         """
         total = 0
         for name, values in self.amplitudes.items():
-            dp = np.dot(values, other.amplitudes[name])
             comm = self.comms[name]
-            if comm is not None:
-                dp = comm.reduce(dp, op=MPI.SUM)
-                if comm.rank != 0:
-                    dp = 0
-            total += dp
+            if comm is None or comm.rank == 0:
+                total += np.dot(values, other.amplitudes[name])
         if self.comm is not None:
             total = self.comm.allreduce(total, op=MPI.SUM)
         return total
@@ -1174,6 +1380,7 @@ class OpMapMaker(Operator):
         flag_mask=1,
         intervals="intervals",
         subharmonic_order=None,
+        poly2D_order=None,
         iter_min=3,
         iter_max=100,
         use_noise_prior=True,
@@ -1203,6 +1410,7 @@ class OpMapMaker(Operator):
         self.flag_mask = flag_mask
         self.intervals = intervals
         self.subharmonic_order = subharmonic_order
+        self.poly2D_order = poly2D_order
         self.iter_min = iter_min
         self.iter_max = iter_max
         self.use_noise_prior = use_noise_prior
@@ -1248,6 +1456,7 @@ class OpMapMaker(Operator):
                         [
                             ("OffsetTemplate.project_signal", None),
                             ("SubharmonicTemplate.project_signal", None),
+                            ("Poly2DTemplate.project_signal", None),
                         ]
                     ),
                 ),
@@ -1308,6 +1517,7 @@ class OpMapMaker(Operator):
                         [
                             ("OffsetTemplate.add_to_signal", None),
                             ("SubharmonicTemplate.add_to_signal", None),
+                            ("Poly2DTemplate.add_to_signal", None),
                         ]
                     ),
                 ),
@@ -1410,6 +1620,22 @@ class OpMapMaker(Operator):
                     data,
                     self.detweights,
                     order=self.subharmonic_order,
+                    intervals=self.intervals,
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
+                )
+            )
+        if self.poly2D_order is not None:
+            log.info(
+                "Initializing poly2D template, order = {}".format(
+                    self.poly2D_order
+                )
+            )
+            templatelist.append(
+                Poly2DTemplate(
+                    data,
+                    self.detweights,
+                    order=self.poly2D_order,
                     intervals=self.intervals,
                     common_flag_mask=(self.common_flag_mask | self.gap_bit),
                     flag_mask=(self.flag_mask | self.mask_bit),

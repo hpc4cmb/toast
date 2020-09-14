@@ -13,6 +13,7 @@ from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
 from ..todmap import OpMapMaker
+from ..tod import OpPolyFilter
 
 
 def add_mapmaker_args(parser):
@@ -57,6 +58,20 @@ def add_mapmaker_args(parser):
         type=np.float,
         help="Destriping baseline length (seconds)",
         dest="mapmaker_baseline_length",
+    )
+    parser.add_argument(
+        "--mapmaker-prefilter-order",
+        required=False,
+        type=np.int,
+        help="Polynomial prefiltering for mapmaker",
+        dest="mapmaker_prefilter_order",
+    )
+    parser.add_argument(
+        "--mapmaker-poly2D-order",
+        required=False,
+        type=np.int,
+        help="Per sample 2D polynomial template order",
+        dest="mapmaker_poly2D_order",
     )
     parser.add_argument(
         "--mapmaker-noisefilter",
@@ -215,6 +230,16 @@ def apply_mapmaker(
     if telescope_data is None:
         telescope_data = [("all", data)]
 
+    if not bin_only and args.mapmaker_prefilter_order is not None:
+        timer.start()
+        polyfilter = OpPolyFilter(
+            order=args.mapmaker_prefilter_order, name=cache_name, common_flag_mask=args.common_flag_mask,
+        )
+        polyfilter.exec(data)
+        timer.stop()
+        if comm.world_rank == 0 and verbose:
+            timer.report("Polynomial prefilter")
+
     for time_name, time_comm in time_comms:
         for tele_name, tele_data in telescope_data:
 
@@ -225,10 +250,12 @@ def apply_mapmaker(
                 baseline_length = None
                 write_binned = True
                 write_destriped = False
+                poly2D_order = None
             else:
                 baseline_length = args.mapmaker_baseline_length
                 write_binned = args.write_binmap
                 write_destriped = True
+                poly2D_order = args.mapmaker_poly2D_order
 
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
@@ -242,6 +269,7 @@ def apply_mapmaker(
                 write_binned = True
                 write_destriped = False
 
+            timer.clear()
             timer.start()
 
             if len(file_root) > 0 and not file_root.endswith("_"):
@@ -269,6 +297,7 @@ def apply_mapmaker(
                 flag_mask=1,
                 intervals="intervals",
                 subharmonic_order=None,
+                poly2D_order=poly2D_order,
                 iter_min=3,
                 iter_max=args.mapmaker_iter_max,
                 use_noise_prior=args.mapmaker_noisefilter,

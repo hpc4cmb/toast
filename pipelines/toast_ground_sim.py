@@ -539,6 +539,10 @@ def main():
 
             # Bin and destripe maps
 
+            # DEBUG begin
+            from toast.tod import OpCacheCopy
+            OpCacheCopy(totalname_freq, "copy").exec(data)
+
             if args.use_madam:
                 pipeline_tools.apply_madam(
                     args,
@@ -564,6 +568,27 @@ def main():
                     telescope_data=telescope_data,
                     first_call=(mc == firstmc),
                 )
+
+            # DEBUG begin
+            """
+            import pdb
+            import matplotlib.pyplot as plt
+            nobs = len(data.obs)
+            nrow = 5
+            ncol = nobs // nrow
+            if ncol * nrow < nobs: ncol += 1
+            fig = plt.figure(figsize=[18, 12])
+            for iobs, obs in enumerate(data.obs):
+                tod = obs["tod"]
+                ax = fig.add_subplot(nrow, ncol, iobs + 1)
+                for det in tod.local_dets:
+                    sig0 = tod.local_signal(det, "copy")
+                    sig1 = tod.local_signal(det, totalname_freq)
+                    ax.plot(sig0[::10], 'b.', zorder=10)
+                    ax.plot(sig1[::10], 'r.', zorder=100)
+            pdb.set_trace()
+            """
+            # DEBUG end
 
             if (
                 args.apply_polyfilter
