@@ -67,12 +67,27 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefilter_order",
     )
     parser.add_argument(
-        "--mapmaker-poly2D-order",
+        "--mapmaker-fourier2D-order",
         required=False,
         type=np.int,
-        help="Per sample 2D polynomial template order",
-        dest="mapmaker_poly2D_order",
+        help="Per sample 2D Fourier template order",
+        dest="mapmaker_fourier2D_order",
     )
+    parser.add_argument(
+        "--mapmaker-fourier2D-subharmonics",
+        required=False,
+        action="store_true",
+        help="Fit linear modes along with Fourier templates",
+        dest="mapmaker_fourier2D_subharmonics",
+    )
+    parser.add_argument(
+        "--no-mapmaker-fourier2D-subharmonics",
+        required=False,
+        action="store_false",
+        help="Do not fit linear modes along with Fourier templates",
+        dest="mapmaker_fourier2D_subharmonics",
+    )
+    parser.set_defaults(mapmaker_fourier2D_subharmonics=False)
     parser.add_argument(
         "--mapmaker-noisefilter",
         required=False,
@@ -232,6 +247,8 @@ def apply_mapmaker(
 
     if not bin_only and args.mapmaker_prefilter_order is not None:
         timer.start()
+        if comm.world_rank == 0 and verbose:
+            print("Applying polynomial prefilter, order = {}".format(args.mapmaker_prefilter_order), flush=True)
         polyfilter = OpPolyFilter(
             order=args.mapmaker_prefilter_order, name=cache_name, common_flag_mask=args.common_flag_mask,
         )
@@ -250,12 +267,12 @@ def apply_mapmaker(
                 baseline_length = None
                 write_binned = True
                 write_destriped = False
-                poly2D_order = None
+                fourier2D_order = None
             else:
                 baseline_length = args.mapmaker_baseline_length
                 write_binned = args.write_binmap
                 write_destriped = True
-                poly2D_order = args.mapmaker_poly2D_order
+                fourier2D_order = args.mapmaker_fourier2D_order
 
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
@@ -297,7 +314,8 @@ def apply_mapmaker(
                 flag_mask=1,
                 intervals="intervals",
                 subharmonic_order=None,
-                poly2D_order=poly2D_order,
+                fourier2D_order=fourier2D_order,
+                fourier2D_subharmonics=args.mapmaker_fourier2D_subharmonics,
                 iter_min=3,
                 iter_max=args.mapmaker_iter_max,
                 use_noise_prior=args.mapmaker_noisefilter,

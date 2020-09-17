@@ -252,32 +252,38 @@ class SubharmonicTemplate(TODTemplate):
         return
 
 
-class Poly2DTemplate(TODTemplate):
+class Fourier2DTemplate(TODTemplate):
     """ This class represents atmospheric fluctuations in front of the
-    focalplane as 2D polynomials
+    focalplane as 2D Fourier modes
     """
 
-    name = "poly2D"
+    name = "Fourier2D"
 
     def __init__(
         self,
         data,
         detweights,
+        focalplane_radius=None,  # degrees
         order=1,
+        fit_subharmonics=True,
         intervals=None,
         common_flags=None,
         common_flag_mask=1,
         flags=None,
         flag_mask=1,
         correlation_length=10,
-        correlation_amplitude=1.0,
+        correlation_amplitude=10,
     ):
         self.data = data
         self.comm = data.comm.comm_group
         self.detweights = detweights
+        self.focalplane_radius = focalplane_radius
         self.order = order
+        self.fit_subharmonics = fit_subharmonics
         self.norder = order + 1
-        self.nmode = (order + 1) * (order + 2) // 2
+        self.nmode = (2 * order) ** 2 + 1
+        if self.fit_subharmonics:
+            self.nmode += 2
         self.intervals = intervals
         self.common_flags = common_flags
         self.common_flag_mask = common_flag_mask
@@ -304,12 +310,24 @@ class Poly2DTemplate(TODTemplate):
             for iobs, obs in enumerate(self.data.obs):
                 tod = obs["tod"]
                 times = tod.local_times()
-                corr = np.exp((times[0] - times) / self.correlation_length) * self.correlation_amplitude
+                corr = np.exp(
+                    (times[0] - times) / self.correlation_length
+                ) * self.correlation_amplitude
                 ihalf = times.size // 2
                 corr[ihalf + 1:] = corr[ihalf - 1:0:-1]
                 fcorr = np.fft.rfft(corr)
                 invcorr = np.fft.irfft(1 / fcorr)
                 self.filters.append(invcorr)
+            # Scale the filter by the prescribed correlation strength
+            # and the number of modes at each angular scale
+            self.filter_scale = np.zeros(self.nmode)
+            self.filter_scale[0] = 1
+            offset = 1
+            if self.fit_subharmonics:
+                self.filter_scale[1:3] = 2
+                offset += 2
+            self.filter_scale[offset:] = 4
+            self.filter_scale *= self.correlation_amplitude
         return
 
     @function_timer
@@ -321,21 +339,24 @@ class Poly2DTemplate(TODTemplate):
         """
         self.templates = []
 
-        mode = 0
-        xorders = np.zeros(self.nmode)
-        yorders = np.zeros(self.nmode)
-        self.orders = np.zeros(self.nmode)
-        for order in range(self.norder):
-            for yorder in range(order + 1):
-                self.orders[mode] = order
-                xorder = order - yorder
-                xorders[mode] = xorder
-                yorders[mode] = yorder
-                mode += 1
-                if mode == self.nmode:
-                    break
-            if mode == self.nmode:
-                break
+        def evaluate_template(theta, phi, radius):
+            values = np.zeros(self.nmode)
+            values[0] = 1
+            offset = 1
+            if self.fit_subharmonics:
+                values[1:3] = theta / radius, phi / radius
+                offset += 2
+            if self.order > 0:
+                rinv = np.pi / radius
+                orders = np.arange(self.order) + 1
+                thetavec = np.zeros(self.order * 2)
+                phivec = np.zeros(self.order * 2)
+                thetavec[::2] = np.cos(orders * theta * rinv)
+                thetavec[1::2] = np.sin(orders * theta * rinv)
+                phivec[::2] = np.cos(orders * phi * rinv)
+                phivec[1::2] = np.sin(orders * phi * rinv)
+                values[offset:] = np.outer(thetavec, phivec).ravel()
+            return values
 
         self.norms = []
         for iobs, obs in enumerate(self.data.obs):
@@ -345,6 +366,14 @@ class Poly2DTemplate(TODTemplate):
             nsample = tod.total_samples
             obs_templates = {}
             focalplane = obs["focalplane"]
+            if self.focalplane_radius:
+                radius = np.radians(self.focalplane_radius)
+            else:
+                try:
+                    radius = np.radians(focalplane.radius)
+                except AttributeError:
+                    # Focalplane is just a dictionary
+                    radius = np.radians(obs["fpradius"])
             norms = np.zeros([nsample, self.nmode])
             local_offset, local_nsample = tod.local_samples
             todslice = slice(local_offset, local_offset + local_nsample)
@@ -354,7 +383,8 @@ class Poly2DTemplate(TODTemplate):
                 detweight = self.detweights[iobs][det]
                 det_quat = focalplane[det]["quat"]
                 x, y, z = qa.rotate(det_quat, ZAXIS)
-                obs_templates[det] = x ** xorders * y ** yorders
+                theta, phi = np.arcsin([x, y])
+                obs_templates[det] = evaluate_template(theta, phi, radius)
                 norms[todslice] += np.outer(
                     good, obs_templates[det] ** 2 * detweight
                 )
@@ -438,13 +468,9 @@ class Poly2DTemplate(TODTemplate):
                 #import matplotlib.pyplot as plt
                 #pdb.set_trace()
                 for mode in range(self.nmode):
-                    # Scale the filter by the number of modes at each
-                    # order = xorder + yorder to keep the total fluctuation
-                    # at each order constant
-                    order = self.orders[mode]
-                    nmode = order + 1
+                    scale = self.filter_scale[mode]
                     obs_amplitudes_out[:, mode] += scipy.signal.convolve(
-                        obs_amplitudes_in[:, mode], noisefilter * nmode, mode="same",
+                        obs_amplitudes_in[:, mode], noisefilter * scale, mode="same",
                     )
                 amplitude_offset += nsample * self.nmode
         return
@@ -1380,7 +1406,8 @@ class OpMapMaker(Operator):
         flag_mask=1,
         intervals="intervals",
         subharmonic_order=None,
-        poly2D_order=None,
+        fourier2D_order=None,
+        fourier2D_subharmonics=False,
         iter_min=3,
         iter_max=100,
         use_noise_prior=True,
@@ -1410,7 +1437,8 @@ class OpMapMaker(Operator):
         self.flag_mask = flag_mask
         self.intervals = intervals
         self.subharmonic_order = subharmonic_order
-        self.poly2D_order = poly2D_order
+        self.fourier2D_order = fourier2D_order
+        self.fourier2D_subharmonics = fourier2D_subharmonics
         self.iter_min = iter_min
         self.iter_max = iter_max
         self.use_noise_prior = use_noise_prior
@@ -1456,7 +1484,7 @@ class OpMapMaker(Operator):
                         [
                             ("OffsetTemplate.project_signal", None),
                             ("SubharmonicTemplate.project_signal", None),
-                            ("Poly2DTemplate.project_signal", None),
+                            ("fourier2DTemplate.project_signal", None),
                         ]
                     ),
                 ),
@@ -1517,7 +1545,7 @@ class OpMapMaker(Operator):
                         [
                             ("OffsetTemplate.add_to_signal", None),
                             ("SubharmonicTemplate.add_to_signal", None),
-                            ("Poly2DTemplate.add_to_signal", None),
+                            ("fourier2DTemplate.add_to_signal", None),
                         ]
                     ),
                 ),
@@ -1625,17 +1653,18 @@ class OpMapMaker(Operator):
                     flag_mask=(self.flag_mask | self.mask_bit),
                 )
             )
-        if self.poly2D_order is not None:
+        if self.fourier2D_order is not None:
             log.info(
-                "Initializing poly2D template, order = {}".format(
-                    self.poly2D_order
+                "Initializing fourier2D template, order = {}, subharmonics = {}".format(
+                    self.fourier2D_order, self.fourier2D_subharmonics,
                 )
             )
             templatelist.append(
-                Poly2DTemplate(
+                Fourier2DTemplate(
                     data,
                     self.detweights,
-                    order=self.poly2D_order,
+                    order=self.fourier2D_order,
+                    fit_subharmonics=self.fourier2D_subharmonics,
                     intervals=self.intervals,
                     common_flag_mask=(self.common_flag_mask | self.gap_bit),
                     flag_mask=(self.flag_mask | self.mask_bit),

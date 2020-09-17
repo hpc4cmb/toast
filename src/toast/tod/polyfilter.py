@@ -109,7 +109,8 @@ class OpPolyFilter2D(Operator):
                 idet = detector_index[det]
                 det_quat = focalplane[det]["quat"]
                 x, y, z = qa.rotate(det_quat, ZAXIS)
-                detector_templates[idet] = x ** xorders * y ** yorders
+                theta, phi = np.arcsin([x, y])
+                detector_templates[idet] = theta ** xorders * phi ** yorders
 
             if self._intervals in obs:
                 intervals = obs[self._intervals]
@@ -137,8 +138,6 @@ class OpPolyFilter2D(Operator):
                     if det not in detector_index:
                         continue
                     idet = detector_index[det]
-                    det_quat = focalplane[det]["quat"]
-                    x, y, z = qa.rotate(det_quat, ZAXIS)
 
                     ref = tod.local_signal(det, self._name)[ind]
                     flag_ref = tod.local_flags(det, self._flag_name)[ind]
@@ -198,66 +197,6 @@ class OpPolyFilter2D(Operator):
                 comm.allreduce(coeff)
                 t_solve += time() - t1
 
-                # DEBUG begin
-                """
-                if comm.rank == 0:
-                    import pickle
-                    with open("coeff.pck", "wb") as fout:
-                        pickle.dump([times[ind], coeff], fout)
-                    import matplotlib.pyplot as plt
-                    xmin, xmax = 1, -1
-                    ymin, ymax = 1, -1
-                    x = np.zeros(ndet)
-                    y = np.zeros(ndet)
-                    amp = 0
-                    for det, idet in detector_index.items():
-                        x[idet], y[idet], _ = qa.rotate(focalplane[det]["quat"], ZAXIS)
-                        ref = tod.local_signal(det, self._name)[ind]
-                        amp = max(amp, np.amax(np.abs(ref)))
-                    tol = np.ptp(x) * .1
-                    xmin = np.amin(x) - tol
-                    xmax = np.amax(x) + tol
-                    tol = np.ptp(y) * .1
-                    ymin = np.amin(y) - tol
-                    ymax = np.amax(y) + tol
-                    n = 101
-                    xgrid = np.linspace(xmin, xmax, n)
-                    ygrid = np.linspace(ymin, ymax, n)
-                    X, Y = np.meshgrid(xgrid, ygrid)
-                    template_grid = []
-                    mode = 0
-                    for order in range(norder):
-                        for yorder in range(order + 1):
-                            xorder = order - yorder
-                            template_grid.append(X ** xorder * Y ** yorder)
-                            mode += 1
-                            if mode == nmode:
-                                break
-                        if mode == nmode:
-                            break
-                    for isample in range(nsample):
-                        template = np.zeros([n, n])
-                        for mode in range(nmode):
-                            template += coeff[isample, mode] * template_grid[mode] * norms[mode]
-                        fig = plt.figure(figsize=[12, 8])
-                        ax = fig.add_subplot(1, 1, 1)
-                        im = ax.imshow(
-                            template,
-                            cmap="coolwarm",
-                            extent=[xmin, xmax, ymin, ymax],
-                            origin="lower",
-                            vmin=-amp,
-                            vmax=amp,
-                        )
-                        ax.scatter(x, y, marker="o", color="k")
-                        fig.colorbar(im, ax=ax)
-                        plt.savefig("frame_{:06}.png".format(isample))
-                        plt.close()
-                import pdb
-                pdb.set_trace()
-                """
-                # DEBUG end
-
                 t1 = time()
 
                 """
@@ -294,6 +233,7 @@ class OpPolyFilter2D(Operator):
 
             del common_ref
 
+            """
             print(
                 "Time per observation: {:.1f} s\n"
                 "   templates : {:6.1f} s\n"
@@ -305,6 +245,7 @@ class OpPolyFilter2D(Operator):
                 ),
                 flush=True,
             )
+            """
 
         return
 
