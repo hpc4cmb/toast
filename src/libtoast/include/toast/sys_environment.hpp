@@ -29,6 +29,8 @@ class Environment {
         std::vector <std::string> info() const;
         void print() const;
         bool function_timers() const;
+        void enable_function_timers();
+        void disable_function_timers();
         int max_threads() const;
         int current_threads() const;
         void set_threads(int nthread);

@@ -713,16 +713,20 @@ def load_weather(args, comm, schedules, verbose=False):
     if comm.world_rank == 0:
         weathers = []
         weatherdict = {}
-        ftimer = Timer()
-        for fname in args.weather.split(","):
-            if fname not in weatherdict:
-                if not os.path.isfile(fname):
-                    raise RuntimeError("No such weather file: {}".format(fname))
-                ftimer.start()
-                weatherdict[fname] = Weather(fname)
-                ftimer.stop()
-                ftimer.report_clear("Load {}".format(fname))
-            weathers.append(weatherdict[fname])
+        if args.weather == "SIM":
+            weatherdict["SIM"] = Weather(None)
+            weathers.append(weatherdict["SIM"])
+        else:
+            ftimer = Timer()
+            for fname in args.weather.split(","):
+                if fname not in weatherdict:
+                    if not os.path.isfile(fname):
+                        raise RuntimeError("No such weather file: {}".format(fname))
+                    ftimer.start()
+                    weatherdict[fname] = Weather(fname)
+                    ftimer.stop()
+                    ftimer.report_clear("Load {}".format(fname))
+                weathers.append(weatherdict[fname])
     else:
         weathers = None
 

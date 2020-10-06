@@ -54,6 +54,14 @@ void init_sys(py::module & m) {
          R"(
             Return True if function timing has been enabled.
         )")
+    .def("enable_function_timers", &toast::Environment::enable_function_timers,
+         R"(
+            Explicitly enable function timers.
+        )")
+    .def("disable_function_timers", &toast::Environment::disable_function_timers,
+         R"(
+            Explicitly disable function timers.
+        )")
     .def("tod_buffer_length", &toast::Environment::tod_buffer_length,
          R"(
             Returns the number of samples to buffer for TOD operations.

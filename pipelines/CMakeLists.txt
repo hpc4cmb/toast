@@ -11,5 +11,6 @@ install(PROGRAMS
     toast_satellite_sim.py
     toast_ground_sim.py
     toast_ground_sim_simple.py
+    toast_benchmark.py
     DESTINATION bin
 )

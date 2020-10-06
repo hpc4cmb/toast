@@ -1339,7 +1339,7 @@ class PCGSolver:
             beta *= sqsum
             proposal *= beta
             proposal += precond_residual
-        log.info("{} : Solution: {}".format(self.rank, guess))  # DEBUG
+        # log.info("{} : Solution: {}".format(self.rank, guess))  # DEBUG
         return guess
 
 
@@ -1585,12 +1585,13 @@ class OpMapMaker(Operator):
         timer.start()
         log = Logger.get()
         templatelist = []
-        if self.baseline_length:
-            log.info(
-                "Initializing offset template, step_length = {}".format(
-                    self.baseline_length
+        if self.baseline_length is not None:
+            if self.rank == 0:
+                log.info(
+                    "Initializing offset template, step_length = {}".format(
+                        self.baseline_length
+                    )
                 )
-            )
             templatelist.append(
                 OffsetTemplate(
                     data,
@@ -1604,11 +1605,12 @@ class OpMapMaker(Operator):
                 )
             )
         if self.subharmonic_order is not None:
-            log.info(
-                "Initializing subharmonic template, order = {}".format(
-                    self.subharmonic_order
+            if self.rank == 0:
+                log.info(
+                    "Initializing subharmonic template, order = {}".format(
+                        self.subharmonic_order
+                    )
                 )
-            )
             templatelist.append(
                 SubharmonicTemplate(
                     data,

@@ -199,6 +199,14 @@ bool toast::Environment::function_timers() const {
     return func_timers_;
 }
 
+void toast::Environment::enable_function_timers() {
+    func_timers_ = true;
+}
+
+void toast::Environment::disable_function_timers() {
+    func_timers_ = false;
+}
+
 int64_t toast::Environment::tod_buffer_length() const {
     return tod_buffer_length_;
 }

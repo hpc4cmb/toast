@@ -9,8 +9,8 @@
 #   LAPACK_NAMES     ... equals "UPPER", "LOWER", "UBACK", or "UFRONT".
 
 set(MANGLING_OPTIONS
-  "UPPER"
   "LOWER"
+  "UPPER"
   "UBACK"
   "UFRONT")
 

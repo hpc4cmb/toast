@@ -43,44 +43,107 @@ class Weather(object):
             self.set_time(time)
         self._varindex = {}
 
-        hdulist = pf.open(self._fname, "readonly")
+        if self._fname is None:
+            # We will simulate fake weather information.
+            prob_start = 0.0
+            prob_stop = 1.0
+            nstep = 101
+            self._prob = np.linspace(prob_start, prob_stop, nstep)
 
-        # Build the probability axis of the cumulative distribution
-        # function.  The CDF:s stored for every month, hour and variable
-        # all assume the same probability axis.
-        prob_start = hdulist[1].header["probstrt"]
-        prob_stop = hdulist[1].header["probstop"]
-        nstep = hdulist[1].header["nstep"]
-        self._prob = np.linspace(prob_start, prob_stop, nstep)
-
-        # Load the CDF:s.  One entry per month.
-        self._monthly_cdf = []
-        ivar = 0
-        for month in range(12):
-            self._monthly_cdf.append([])
-            hdu = hdulist[1 + month]
-            # One entry for every hour
-            for hour in range(24):
-                self._monthly_cdf[month].append({})
-            # and one entry for every weather variable:
-            #  TQI   : ice water
-            #  TQL   : liquid water
-            #  TQV   : water vapor
-            #  QV10M : specific humidity
-            #  PS    : surface pressure
-            #  TS    : surface temperature
-            #  T10M  : air temperature at 10m
-            #  U10M  : eastward wind at 10m
-            #  V10M  : northward wind at 10m
-            for col in hdu.columns:
-                name = col.name
-                if name not in self._varindex:
-                    self._varindex[name] = ivar
-                    ivar += 1
+            self._monthly_cdf = []
+            ivar = 0
+            for month in range(12):
+                self._monthly_cdf.append([])
+                # One entry for every hour
                 for hour in range(24):
-                    self._monthly_cdf[month][hour][name] = hdu.data.field(name)[hour]
+                    self._monthly_cdf[month].append({})
+                # and one entry for every weather variable:
+                #  TQI   : ice water
+                #  TQL   : liquid water
+                #  TQV   : water vapor
+                #  QV10M : specific humidity
+                #  PS    : surface pressure
+                #  TS    : surface temperature
+                #  T10M  : air temperature at 10m
+                #  U10M  : eastward wind at 10m
+                #  V10M  : northward wind at 10m
+                name = "TQI"
+                self._varindex[name] = 0
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 0.0
+                name = "TQL"
+                self._varindex[name] = 1
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 0.0
+                name = "TQV"
+                self._varindex[name] = 2
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 0.2
+                name = "QV10M"
+                self._varindex[name] = 3
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 0.00015
+                name = "PS"
+                self._varindex[name] = 4
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 58200.0
+                name = "TS"
+                self._varindex[name] = 5
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 263.0
+                name = "T10M"
+                self._varindex[name] = 6
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = 263.0
+                name = "U10M"
+                self._varindex[name] = 7
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = -3.0
+                name = "V10M"
+                self._varindex[name] = 8
+                for hour in range(24):
+                    self._monthly_cdf[month][hour][name] = -7.0
+        else:
+            hdulist = pf.open(self._fname, "readonly")
 
-        hdulist.close()
+            # Build the probability axis of the cumulative distribution
+            # function.  The CDF:s stored for every month, hour and variable
+            # all assume the same probability axis.
+            prob_start = hdulist[1].header["probstrt"]
+            prob_stop = hdulist[1].header["probstop"]
+            nstep = hdulist[1].header["nstep"]
+            self._prob = np.linspace(prob_start, prob_stop, nstep)
+
+            # Load the CDF:s.  One entry per month.
+            self._monthly_cdf = []
+            ivar = 0
+            for month in range(12):
+                self._monthly_cdf.append([])
+                hdu = hdulist[1 + month]
+                # One entry for every hour
+                for hour in range(24):
+                    self._monthly_cdf[month].append({})
+                # and one entry for every weather variable:
+                #  TQI   : ice water
+                #  TQL   : liquid water
+                #  TQV   : water vapor
+                #  QV10M : specific humidity
+                #  PS    : surface pressure
+                #  TS    : surface temperature
+                #  T10M  : air temperature at 10m
+                #  U10M  : eastward wind at 10m
+                #  V10M  : northward wind at 10m
+                for col in hdu.columns:
+                    name = col.name
+                    if name not in self._varindex:
+                        self._varindex[name] = ivar
+                        ivar += 1
+                    for hour in range(24):
+                        self._monthly_cdf[month][hour][name] = hdu.data.field(name)[
+                            hour
+                        ]
+
+            hdulist.close()
 
         self._reset_vars()
 
