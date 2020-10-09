@@ -61,18 +61,8 @@ class OpAccumDiag(Operator):
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
             containing the pointing weights to use.
-        nside (int): NSIDE resolution for Healpix NEST ordered intensity map.
-        nest (bool): if True, use NESTED ordering.
-        mode (string): either "I" or "IQU"
-        cal (dict): dictionary of calibration values per detector. A None
-            value means a value of 1.0 for all detectors.
-        epsilon (dict): dictionary of cross-polar response per detector. A
-            None value means epsilon is zero for all detectors.
-        hwprpm: if None, a constantly rotating HWP is not included.  Otherwise
-            it is the rate (in RPM) of constant rotation.
-        hwpstep: if None, then a stepped HWP is not included.  Otherwise, this
-            is the step in degrees.
-        hwpsteptime: The time in minutes between HWP steps.
+        detectors (iterable):  List of detectors to process.  If None, use
+            all detectors.
     """
 
     def __init__(
@@ -89,6 +79,7 @@ class OpAccumDiag(Operator):
         pixels="pixels",
         weights="weights",
         apply_flags=True,
+        detectors=None,
     ):
 
         self._flag_name = flag_name
@@ -101,6 +92,7 @@ class OpAccumDiag(Operator):
         self._pixels = pixels
         self._weights = weights
         self._detweights = detweights
+        self._detectors = detectors
 
         # Ensure that the 3 different DistPixel objects have the same number
         # of pixels.
@@ -220,6 +212,8 @@ class OpAccumDiag(Operator):
                 commonflags = tod.local_common_flags(self._common_flag_name).copy()
 
             for det in tod.local_dets:
+                if self._detectors is not None and det not in self._detectors:
+                    continue
 
                 # get the pixels and weights from the cache
 
