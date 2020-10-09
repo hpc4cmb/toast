@@ -315,8 +315,8 @@ class OpAccumDiag(Operator):
                         self._nsub,
                         self._subsize,
                         self._nnz,
-                        sm,
-                        lpix,
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
                         weights.reshape(-1),
                         detweight,
                         signal,
@@ -328,7 +328,12 @@ class OpAccumDiag(Operator):
                     if hits is None:
                         hits = np.empty(shape=0, dtype=np.int64)
                     cov_accum_diag_hits(
-                        self._nsub, self._subsize, self._nnz, sm, lpix, hits
+                        self._nsub,
+                        self._subsize,
+                        self._nnz,
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
+                        hits,
                     )
 
                 # print("det {}:".format(det))
