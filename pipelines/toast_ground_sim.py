@@ -539,8 +539,6 @@ def main():
 
             # Bin and destripe maps
 
-            OpCacheCopy(totalname_freq, "copy").exec(data)
-
             if args.use_madam:
                 pipeline_tools.apply_madam(
                     args,
