@@ -149,13 +149,28 @@ class OpSimDipoleTest(MPITestCase):
         # construct distributed maps to store the covariance,
         # noise weighted map, and hits
 
-        invnpp = DistPixels(self.data, nnz=1, dtype=np.float64, nest=False,)
+        invnpp = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.float64,
+            nest=False,
+        )
         invnpp.data.fill(0.0)
 
-        zmap = DistPixels(self.data, nnz=1, dtype=np.float64, nest=False,)
+        zmap = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.float64,
+            nest=False,
+        )
         zmap.data.fill(0.0)
 
-        hits = DistPixels(self.data, nnz=1, dtype=np.int64, nest=False,)
+        hits = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.int64,
+            nest=False,
+        )
         hits.data.fill(0)
 
         # accumulate the inverse covariance and noise weighted map.

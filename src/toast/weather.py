@@ -12,7 +12,7 @@ from .timing import function_timer
 
 
 class Weather(object):
-    """ TOAST Weather objects allow sampling weather parameters.
+    """TOAST Weather objects allow sampling weather parameters.
 
     The weather parameter distributions are read from site-specific
     TOAST weather files.  The files contain parameter distributions
@@ -21,7 +21,7 @@ class Weather(object):
     """
 
     def __init__(self, fname, site=0, realization=0, time=None):
-        """ Initialize a weather object
+        """Initialize a weather object
 
         Args:
             fname(str) : FITS file containing the parameter
@@ -87,7 +87,7 @@ class Weather(object):
         return
 
     def set(self, site, realization, time=None):
-        """ Set the weather object state.
+        """Set the weather object state.
 
         Args:
             site(int) : Site index.
@@ -104,9 +104,7 @@ class Weather(object):
         return
 
     def _reset_vars(self):
-        """ Reset the cached random variables.
-
-        """
+        """Reset the cached random variables."""
         self._ice_water = None
         self._liquid_water = None
         self._pwv = None
@@ -118,7 +116,7 @@ class Weather(object):
         self._south_wind = None
 
     def set_time(self, time):
-        """ Set the observing time.
+        """Set the observing time.
 
         Args:
             time : POSIX timestamp.
@@ -136,7 +134,7 @@ class Weather(object):
 
     @function_timer
     def _draw(self, name):
-        """ Return a random parameter value.
+        """Return a random parameter value.
 
         Return a random value for preset variable and time.
 
@@ -165,7 +163,7 @@ class Weather(object):
 
     @property
     def ice_water(self):
-        """ Total precipitable ice water [kg/m^2] (also [mm]).
+        """Total precipitable ice water [kg/m^2] (also [mm]).
 
         Ice water column at the observing site at the preset time and
         for the preset realization.
@@ -177,7 +175,7 @@ class Weather(object):
 
     @property
     def liquid_water(self):
-        """ Total precipitable liquid water [kg/m^2] (also [mm]).
+        """Total precipitable liquid water [kg/m^2] (also [mm]).
 
         Liquid water column at the observing site at the preset time and
         for the preset realization.
@@ -189,7 +187,7 @@ class Weather(object):
 
     @property
     def pwv(self):
-        """ Total precipitable water vapor [kg/m^2] (also [mm]).
+        """Total precipitable water vapor [kg/m^2] (also [mm]).
 
         Water vapor column at the observing site at the preset time and
         for the preset realization.
@@ -201,7 +199,7 @@ class Weather(object):
 
     @property
     def humidity(self):
-        """ 10-meter specific humidity [kg/kg]
+        """10-meter specific humidity [kg/kg]
 
         Water vapor concentration at the observing site 10 meters above
         ground at the preset time and for the preset realization.
@@ -213,7 +211,7 @@ class Weather(object):
 
     @property
     def surface_pressure(self):
-        """ Surface pressure [Pa].
+        """Surface pressure [Pa].
 
         Surface at the observing site at the preset time and for the
         preset realization.
@@ -225,7 +223,7 @@ class Weather(object):
 
     @property
     def surface_temperature(self):
-        """ Surface skin temperature [K].
+        """Surface skin temperature [K].
 
         Surface temperature at the observing site at the preset time and
         for the preset realization.
@@ -237,7 +235,7 @@ class Weather(object):
 
     @property
     def air_temperature(self):
-        """ 10-meter air temperature [K].
+        """10-meter air temperature [K].
 
         Air temperature at the observing site 10 meters above ground
         at the preset time and for the preset realization.
@@ -249,7 +247,7 @@ class Weather(object):
 
     @property
     def west_wind(self):
-        """ 10-meter eastward wind [m/s].
+        """10-meter eastward wind [m/s].
 
         Eastward wind at the observing site 10 meters above ground
         at the preset time and for the preset realization.
@@ -261,7 +259,7 @@ class Weather(object):
 
     @property
     def south_wind(self):
-        """ 10-meter northward wind [m/s].
+        """10-meter northward wind [m/s].
 
         Northward wind at the observing site 10 meters above ground
         at the preset time and for the preset realization.

@@ -14,8 +14,7 @@ from ..tod import AnalyticNoise, OpSimNoise
 
 
 def add_noise_args(parser):
-    """ Add the noise simulation arguments
-    """
+    """Add the noise simulation arguments"""
     parser.add_argument(
         "--noise",
         required=False,
@@ -63,8 +62,7 @@ def add_noise_args(parser):
 def simulate_noise(
     args, comm, data, mc, cache_prefix=None, verbose=True, overwrite=False
 ):
-    """ Simulate electronic noise
-    """
+    """Simulate electronic noise"""
     if not args.simulate_noise:
         return
     log = Logger.get()

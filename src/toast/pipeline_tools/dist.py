@@ -85,9 +85,7 @@ def get_comm():
 
 @function_timer
 def get_time_communicators(args, comm, data):
-    """ Split the world communicator by time.
-
-    """
+    """Split the world communicator by time."""
     time_comms = [("all", comm.comm_world)]
     if comm.comm_world is None:
         return time_comms

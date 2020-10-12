@@ -377,9 +377,7 @@ class OpSimAtmosphere(Operator):
     def _plot_snapshots(
         self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
     ):
-        """ Create snapshots of the atmosphere
-
-        """
+        """Create snapshots of the atmosphere"""
         from ..vis import set_backend
 
         set_backend()
@@ -474,7 +472,7 @@ class OpSimAtmosphere(Operator):
         return
 
     def _get_from_obs(self, name, obs):
-        """ Extract value for name from observation.
+        """Extract value for name from observation.
 
         If name is not defined in observation, raise an exception.
 

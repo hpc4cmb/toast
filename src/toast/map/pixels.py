@@ -121,50 +121,42 @@ class DistPixels(object):
 
     @property
     def comm(self):
-        """(mpi4py.MPI.Comm): The MPI communicator used (or None)
-        """
+        """(mpi4py.MPI.Comm): The MPI communicator used (or None)"""
         return self._comm
 
     @property
     def npix(self):
-        """(int): The global number of pixels.
-        """
+        """(int): The global number of pixels."""
         return self._npix
 
     @property
     def nnz(self):
-        """(int): The number of non-zero values per pixel.
-        """
+        """(int): The number of non-zero values per pixel."""
         return self._nnz
 
     @property
     def dtype(self):
-        """(numpy.dtype): The data type of the values.
-        """
+        """(numpy.dtype): The data type of the values."""
         return self._dtype
 
     @property
     def local_submaps(self):
-        """(array): The list of local submaps or None if process has no data.
-        """
+        """(array): The list of local submaps or None if process has no data."""
         return self._local_submaps
 
     @property
     def npix_submap(self):
-        """(int): The number of pixels in each submap.
-        """
+        """(int): The number of pixels in each submap."""
         return self._npix_submap
 
     @property
     def nsubmap(self):
-        """(int): The number of submaps stored on this process.
-        """
+        """(int): The number of submaps stored on this process."""
         return self._nsub
 
     @property
     def nested(self):
-        """(bool): If True, data is HEALPix NESTED ordering.
-        """
+        """(bool): If True, data is HEALPix NESTED ordering."""
         return self._nest
 
     @function_timer

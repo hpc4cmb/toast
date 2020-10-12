@@ -16,8 +16,7 @@ from ..todmap import OpMapMaker
 
 
 def add_mapmaker_args(parser):
-    """ Add mapmaker arguments
-    """
+    """Add mapmaker arguments"""
     parser.add_argument(
         "--mapmaker-prefix",
         required=False,
@@ -26,7 +25,10 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefix",
     )
     parser.add_argument(
-        "--mapmaker-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
+        "--mapmaker-mask",
+        required=False,
+        help="Destriping mask",
+        dest="mapmaker_mask",
     )
     parser.add_argument(
         "--mapmaker-weightmap",

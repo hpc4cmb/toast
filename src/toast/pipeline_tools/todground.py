@@ -30,8 +30,7 @@ class Schedule:
         return
 
     def sort_ceslist(self):
-        """ Sort the list of CES by name
-        """
+        """Sort the list of CES by name"""
         nces = len(self.ceslist)
         for i in range(nces - 1):
             for j in range(i + 1, nces):
@@ -44,7 +43,7 @@ class Schedule:
 
 class Site:
     def __init__(self, name, lat, lon, alt, weather=None):
-        """ Instantiate a Site object
+        """Instantiate a Site object
 
         args:
             name (str)
@@ -110,8 +109,7 @@ class CES:
 
 
 def add_todground_args(parser):
-    """ Add TODGround arguments
-    """
+    """Add TODGround arguments"""
     parser.add_argument(
         "--el-mod-step-deg",
         required=False,
@@ -365,8 +363,7 @@ def add_todground_args(parser):
 
 @function_timer
 def get_elevation_noise(args, comm, data, key="noise"):
-    """ Insert elevation-dependent noise
-    """
+    """Insert elevation-dependent noise"""
     if args.elevation_noise_a == 0 and args.elevation_noise_b == 0:
         return
     timer = Timer()
@@ -411,9 +408,7 @@ def get_elevation_noise(args, comm, data, key="noise"):
 
 @function_timer
 def get_breaks(comm, all_ces, args, verbose=True):
-    """ List operational day limits in the list of CES:s.
-
-    """
+    """List operational day limits in the list of CES:s."""
     breaks = []
     if not args.do_daymaps:
         return breaks
@@ -465,8 +460,7 @@ def get_breaks(comm, all_ces, args, verbose=True):
 
 
 def _parse_line(line):
-    """ Parse one line of the schedule file
-    """
+    """Parse one line of the schedule file"""
     if line.startswith("#"):
         return None
 
@@ -574,7 +568,7 @@ def _parse_line(line):
 
 @function_timer
 def min_sso_dist(el, azmin, azmax, sso_el1, sso_az1, sso_el2, sso_az2):
-    """ Return a rough minimum angular distance between the bore sight
+    """Return a rough minimum angular distance between the bore sight
     and a solar system object"""
     sso_vec1 = hp.dir2vec(sso_az1, sso_el1, lonlat=True)
     sso_vec2 = hp.dir2vec(sso_az2, sso_el2, lonlat=True)
@@ -593,7 +587,7 @@ def min_sso_dist(el, azmin, azmax, sso_el1, sso_az1, sso_el2, sso_az2):
 
 @function_timer
 def load_schedule(args, comm):
-    """ Load the observing schedule(s).
+    """Load the observing schedule(s).
 
     Returns:
         schedules (list): List of tuples of the form
@@ -705,7 +699,7 @@ def load_schedule(args, comm):
 
 @function_timer
 def load_weather(args, comm, schedules, verbose=False):
-    """ Load TOAST weather file(s) and attach them to the sites in the
+    """Load TOAST weather file(s) and attach them to the sites in the
      schedules.
 
     Args:

@@ -107,26 +107,22 @@ class OpPointingHpix(Operator):
 
     @property
     def nside(self):
-        """(int): the HEALPix NSIDE value used.
-        """
+        """(int): the HEALPix NSIDE value used."""
         return self._nside
 
     @property
     def nest(self):
-        """(bool): if True, the pointing is NESTED ordering.
-        """
+        """(bool): if True, the pointing is NESTED ordering."""
         return self._nest
 
     @property
     def mode(self):
-        """(str): the pointing mode "I", "IQU", etc.
-        """
+        """(str): the pointing mode "I", "IQU", etc."""
         return self._mode
 
     @property
     def local_submaps(self):
-        """(list): Indices of locally hit submaps
-        """
+        """(list): Indices of locally hit submaps"""
         if self._single_precision:
             dtype = np.int32
         else:

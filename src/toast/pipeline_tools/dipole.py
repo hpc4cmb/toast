@@ -67,7 +67,7 @@ def add_dipole_args(parser):
 
 
 def simulate_dipole(args, comm, data, cache_prefix, freq=0, verbose=True):
-    """ Simulate CMB dipole and add it to `cache_prefix`
+    """Simulate CMB dipole and add it to `cache_prefix`
 
     Args:
         freq (float) :  Observing frequency in GHz.  If non-zero, the

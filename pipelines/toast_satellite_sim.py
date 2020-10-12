@@ -134,8 +134,7 @@ def parse_arguments(comm, procs):
 
 
 def load_focalplane(args, comm):
-    """Load focalplane information
-    """
+    """Load focalplane information"""
     timer = Timer()
     gain = None
     fp = None
@@ -356,7 +355,16 @@ def main():
     if comm.world_rank == 0:
         tmr.report_clear("Simulate sky signal")
 
-    skyname = pipeline_tools.apply_conviqt(args, comm, data, "signal")
+    # NOTE: Conviqt could use different input file names for different
+    # Monte Carlo indices, but the operator would need to be invoked within
+    # the Monte Carlo loop.
+    skyname = pipeline_tools.apply_conviqt(
+        args,
+        comm,
+        data,
+        "signal",
+        mc=args.MC_start,
+    )
     if skyname is not None:
         signalname = skyname
     if comm.world_rank == 0:

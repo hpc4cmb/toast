@@ -21,8 +21,7 @@ DTYPE = np.float32
 
 @function_timer
 def plug_holes(m, verbose=False, in_place=True, nest=False):
-    """Use simple downgrading to derive estimates of the missing pixel values
-    """
+    """Use simple downgrading to derive estimates of the missing pixel values"""
     nbad_start = np.sum(np.isclose(m, hp.UNSEEN))
 
     if nbad_start == m.size:
@@ -295,8 +294,7 @@ class MapSampler:
 
     @function_timer
     def smooth(self, fwhm, lmax=None, pol_only=False):
-        """Smooth the map with a Gaussian kernel.
-        """
+        """Smooth the map with a Gaussian kernel."""
         if self.rank == 0:
             if pol_only:
                 print(
@@ -370,8 +368,7 @@ class MapSampler:
 
     @function_timer
     def __iadd__(self, other):
-        """Accumulate provided Mapsampler object with this one.
-        """
+        """Accumulate provided Mapsampler object with this one."""
         if self.shmem:
             # One process does the manipulation on each node
             self._map._nodecomm.Barrier()
@@ -392,8 +389,7 @@ class MapSampler:
 
     @function_timer
     def __isub__(self, other):
-        """Subtract provided Mapsampler object from this one.
-        """
+        """Subtract provided Mapsampler object from this one."""
         if self.shmem:
             # One process does the manipulation on each node
             self._map._nodecomm.Barrier()
@@ -414,8 +410,7 @@ class MapSampler:
 
     @function_timer
     def __imul__(self, other):
-        """Scale the maps in this MapSampler object
-        """
+        """Scale the maps in this MapSampler object"""
         if self.shmem:
             # One process does the manipulation on each node
             self._map._nodecomm.Barrier()
@@ -436,8 +431,7 @@ class MapSampler:
 
     @function_timer
     def __itruediv__(self, other):
-        """ Divide the maps in this MapSampler object
-        """
+        """Divide the maps in this MapSampler object"""
         if self.shmem:
             self._map._nodecomm.Barrier()
             if self._map._noderank == 0:

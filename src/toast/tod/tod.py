@@ -271,7 +271,7 @@ class TOD(object):
         return self._dist_sizes[self._rank_samp]
 
     def local_times(self, name=None, **kwargs):
-        """ Timestamps covering locally stored data.
+        """Timestamps covering locally stored data.
 
         Args:
             name (str):  Optional cache key to use.
@@ -292,7 +292,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_signal(self, det, name=None, **kwargs):
-        """ Locally stored signal.
+        """Locally stored signal.
 
         Args:
             det (str):  Name of the detector.
@@ -314,7 +314,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_pointing(self, det, name=None, **kwargs):
-        """ Locally stored pointing.
+        """Locally stored pointing.
 
         Args:
             det (str):  Name of the detector.
@@ -336,7 +336,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_position(self, name=None, **kwargs):
-        """ Locally stored position.
+        """Locally stored position.
 
         Args:
             name (str):  Optional cache key to use.
@@ -357,7 +357,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_velocity(self, name=None, **kwargs):
-        """ Locally stored velocity.
+        """Locally stored velocity.
 
         Args:
             name (str):  Optional cache key to use.
@@ -378,7 +378,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_flags(self, det, name=None, **kwargs):
-        """ Locally stored flags.
+        """Locally stored flags.
 
         Args:
             det (str):  Name of the detector.
@@ -400,7 +400,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_common_flags(self, name=None, **kwargs):
-        """ Locally stored common flags.
+        """Locally stored common flags.
 
         Args:
             name (str):  Optional cache key to use.
@@ -421,7 +421,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_hwp_angle(self, name=None, **kwargs):
-        """ Locally stored half-wave plate angle.
+        """Locally stored half-wave plate angle.
 
         Args:
             name (str):  Optional cache key to use.
@@ -444,8 +444,7 @@ class TOD(object):
         return self.cache.reference(cachename)
 
     def local_intervals(self, intervals):
-        """ Translate observation-wide intervals into local sample indices.
-        """
+        """Translate observation-wide intervals into local sample indices."""
         if intervals is None:
             intervals = [
                 Interval(start=0, stop=0, first=0, last=self.total_samples - 1)

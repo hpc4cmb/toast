@@ -19,8 +19,7 @@ from .._libtoast import tod_sim_noise_timestream
 
 
 class OpCacheInit(Operator):
-    """ This operator initializes cache objects with the specified value
-    """
+    """This operator initializes cache objects with the specified value"""
 
     def __init__(self, init_val=0, name=None):
         """
@@ -32,8 +31,8 @@ class OpCacheInit(Operator):
         self.name = name
 
     def exec(self, data):
-        """ Create cache objects as <self.name>_<detector> and initialize
-            them to self.init_val
+        """Create cache objects as <self.name>_<detector> and initialize
+        them to self.init_val
         """
         for obs in data.obs:
             tod = obs["tod"]

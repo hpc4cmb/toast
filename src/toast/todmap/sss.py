@@ -22,7 +22,7 @@ import healpy as hp
 
 class OpSimScanSynchronousSignal(Operator):
     """Operator which generates scan-synchronous signal timestreams.
-    
+
     Args:
         out (str): accumulate data to the cache with name
             <out>_<detector>.  If the named cache objects do not exist,
@@ -144,7 +144,7 @@ class OpSimScanSynchronousSignal(Operator):
         return
 
     def _get_from_obs(self, name, obs):
-        """ Extract value for name from observation.
+        """Extract value for name from observation.
 
         If name is not defined in observation, raise an exception.
 
