@@ -14,6 +14,9 @@ from ..utils import Logger, Environment
 from .. import qarray
 
 
+XAXIS, YAXIS, ZAXIS = np.eye(3)
+
+
 def name2id(name, maxval=2 ** 16):
     """ Map a name into an index.
     """
@@ -61,10 +64,16 @@ class Focalplane:
         """ Get the detector polarization angles from the quaternions
         """
         for detname, detdata in self.detector_data.items():
-            if "pol_angle_deg" not in detdata and "pol_angle_rad" not in detdata:
-                quat = detdata["quat"]
-                psi = qarray.to_angles(quat)[2]
-                detdata["pol_angle_rad"] = psi
+            if "pol_angle_deg" in detdata or "pol_angle_rad" in detdata:
+                continue
+            quat = detdata["quat"]
+            theta, phi = qarray.to_position(quat)
+            yrot = qarray.rotation(YAXIS, -theta)
+            zrot = qarray.rotation(ZAXIS, -phi)
+            rot = qarray.norm(qarray.mult(yrot, zrot))
+            pol_rot = qarray.mult(rot, quat)
+            pol_angle = qarray.to_angles(pol_rot)[2]
+            detdata["pol_angle_rad"] = pol_angle
         return
 
     def _get_pol_efficiency(self):
