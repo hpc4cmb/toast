@@ -163,6 +163,14 @@ class OpGroundFilter(Operator):
             rank = comm.rank
         detranks, sampranks = tod.grid_size
 
+        if good is not None:
+            ngood = np.sum(good)
+        else:
+            ngood = 0
+        ngood_tot = comm.allreduce(ngood)
+        if ngood_tot == 0:
+            return None
+
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
@@ -243,7 +251,7 @@ class OpGroundFilter(Operator):
                     good = None
 
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                if ref is not None:
+                if coeff is not None:
                     self.subtract_templates(ref, good, coeff, cheby_trend, cheby_filter)
 
                 del ref

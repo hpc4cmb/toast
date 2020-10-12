@@ -415,23 +415,33 @@ def scale_atmosphere_by_frequency(
             absorption = np.hstack(todcomm.allgather(my_absorption))
             loading = np.hstack(todcomm.allgather(my_loading))
         for det in tod.local_dets:
-            try:
-                # Use detector bandpass from the focalplane
-                center = focalplane[det]["bandcenter_ghz"]
-                width = focalplane[det]["bandwidth_ghz"]
-            except Exception:
-                # Use default values for the entire focalplane
-                if freq is None:
-                    raise RuntimeError(
-                        "You must supply the nominal frequency if bandpasses "
-                        "are not available"
-                    )
-                center = freq
-                width = 0.2 * freq
-            nstep = 101
-            # Interpolate the absorption coefficient to do a top hat
-            # integral across the bandpass
-            det_freqs = np.linspace(center - width / 2, center + width / 2, nstep)
+            if "bandpass_transmission" in focalplane[det]:
+                # We have full bandpasses for the detector
+                bandpass_freqs = focalplane[det]["bandpass_freq_ghz"]
+                bandpass = focalplane[det]["bandpass_transmission"]
+            else:
+                if "bandcenter_ghz" in focalplane[det]:
+                    # Use detector bandpass from the focalplane
+                    center = focalplane[det]["bandcenter_ghz"]
+                    width = focalplane[det]["bandwidth_ghz"]
+                else:
+                    # Use default values for the entire focalplane
+                    if freq is None:
+                        raise RuntimeError(
+                            "You must supply the nominal frequency if bandpasses "
+                            "are not available"
+                        )
+                    center = freq
+                    width = 0.2 * freq
+                bandpass_freqs = np.array([center - width / 2, center + width / 2])
+                bandpass = np.ones(2)
+            # Normalize and interpolate the bandpass
+            nstep = 1001
+            fmin, fmax = bandpass_freqs[0], bandpass_freqs[-1]
+            det_freqs = np.linspace(fmin, fmax, nstep)
+            det_bandpass = np.interp(det_freqs, bandpass_freqs, bandpass)
+            det_bandpass /= np.sum(det_bandpass)
+            # Interpolate absorption and loading to bandpass frequencies
             absorption_det = np.interp(det_freqs, freqs, absorption)
             loading_det = np.interp(det_freqs, freqs, loading)
             # From brightness to thermodynamic units
@@ -441,8 +451,8 @@ def scale_atmosphere_by_frequency(
             rj2cmb *= 0.5763279042527544
             absorption_det *= rj2cmb
             # Average across the bandpass
-            absorption_det = np.mean(absorption_det)
-            loading_det = np.mean(loading_det)
+            absorption_det = np.sum(absorption_det * det_bandpass)
+            loading_det = np.sum(loading_det * det_bandpass)
             cachename = "{}_{}".format(cache_name, det)
             ref = tod.cache.reference(cachename)
             ref *= absorption_det

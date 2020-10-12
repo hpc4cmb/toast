@@ -591,11 +591,11 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
-                if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
-                    myrows.push_back(irow);
-                    mycols.push_back(icol);
-                    myvals.push_back(val);
-                }
+                //if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
+                myrows.push_back(irow);
+                mycols.push_back(icol);
+                myvals.push_back(val);
+                //}
             }
         }
         # pragma omp critical
@@ -698,7 +698,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
 
     cholmod_factor * factorization;
 
-    const int ntry = 4;
+    const int ntry = 2;
 
     for (int itry = 0; itry < ntry; ++itry) {
         factorization = cholmod_analyze(cov, chol.chcommon);
@@ -729,12 +729,11 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                     cholmod_print_sparse(cov, "Covariance matrix", chol.chcommon);
 
                     // DEBUG begin
-                    if (itry > 2) {
+                    if (itry == ntry - 2) {
                         FILE * covfile = fopen("failed_covmat.mtx", "w");
                         cholmod_write_sparse(covfile, cov, NULL, NULL,
                                              chol.chcommon);
                         fclose(covfile);
-                        exit(-1);
                     }
 
                     // DEBUG end

@@ -625,6 +625,9 @@ class AtmSim(object):
         # Wind is parallel to surface. Rotate to a frame where the scan
         # is across the X-axis.
 
+        #self._w *= 0.5  # DEBUG
+        #self._wdir += np.pi  # DEBUG
+
         eastward_wind = self._w * np.cos(self._wdir)
         northward_wind = self._w * np.sin(self._wdir)
 

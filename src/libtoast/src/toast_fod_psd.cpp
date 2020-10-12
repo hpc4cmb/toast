@@ -64,16 +64,19 @@ void toast::fod_crosssums(int64_t n, double const * x, double const * y,
     #pragma \
     omp parallel for default(none) shared(n, gd, lagmax, xgood, ygood, sums, hits) schedule(static, 100)
     for (int64_t lag = 0; lag < lagmax; ++lag) {
-        int64_t j = lag;
+        int64_t i, j;
         double lagsum = 0.0;
         int64_t hitsum = 0;
-        for (int64_t i = 0; i < (n - lag); ++i) {
+        for (i = 0, j = lag; i < (n - lag); ++i, ++j) {
             lagsum += xgood[i] * ygood[j];
             hitsum += gd[i] * gd[j];
-            j++;
+        }
+        // Use symmetry to double the statistics
+        for (i = 0, j = lag; i < (n - lag); ++i, ++j) {
+            lagsum += xgood[j] * ygood[i];
         }
         sums[lag] = lagsum;
-        hits[lag] = hitsum;
+        hits[lag] = 2 * hitsum;
     }
 
     return;
