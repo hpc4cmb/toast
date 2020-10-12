@@ -284,14 +284,13 @@ class OpPointingHpix(Operator):
 
 
 class OpMuellerPointingHpix(Operator):
-    """
-    Operator which generates I/Q/U healpix pointing weights.
+    """Operator which generates I/Q/U healpix pointing weights.
 
     Given the individual detector pointing, this computes the pointing weights
     assuming that the detector is a linear polarizer followed by a total
     power measurement.  An optional dictionary of calibration factors may
     be specified.  Additional options include specifying a constant cross-polar
-    response (eps) and a rotating, perfect half-wave plate.  The timestream
+    response (eps) and a set of HWP Mueller matrix parameters.  The timestream
     model is then (see Jones, et al, 2006):
 
     .. math::
@@ -323,22 +322,21 @@ class OpMuellerPointingHpix(Operator):
         apply_flags (bool): whether to read the TOD common flags, bitwise OR
             with the common_flag_mask, and then flag the pointing matrix.
         single_precision (bool):  Return the pixel numbers and pointing
-             weights in single precision.  Default=False.
+            weights in single precision.  Default=False.
         nside_submap (int):  Size of a submap is 12 * nside_submap ** 2
         hwp_parameters_set (tuple) : tuple of  parameters describing
-        the Mueller Matrix [T, c,rho,s ] as defined in Bryan et al. 2010 :
+            the Mueller Matrix [T, c,rho,s ] as defined in Bryan et al. 2010 :
 
-        .. math::
-            M_{HWP}=
-            \begin{pmatrix}
-                T & \rho  & 0 & 0 \\
-                \rho & T & 0 &  0 \\
-                  0  & 0  & c & -s  \\
-                  0  & 0  & s & c  \\
-            \end{pmatrix}
+            .. math::
+                M_{HWP}=
+                \begin{pmatrix}
+                    T & \rho  & 0 & 0 \\
+                    \rho & T & 0 &  0 \\
+                      0  & 0  & c & -s  \\
+                      0  & 0  & s & c  \\
+                \end{pmatrix}
 
-        default assumes an ideal HWP i.e. T=1,c=-1,rho=0,s=0.
-
+            default assumes an ideal HWP i.e. T=1,c=-1,rho=0,s=0.
 
     """
 
