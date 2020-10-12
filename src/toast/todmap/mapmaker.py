@@ -248,8 +248,7 @@ class SubharmonicTemplate(TODTemplate):
 
 class Fourier2DTemplate(TODTemplate):
     """This class represents atmospheric fluctuations in front of the
-    focalplane as 2D Fourier modes
-    """
+    focalplane as 2D Fourier modes."""
 
     name = "Fourier2D"
 
@@ -1076,7 +1075,7 @@ class ProjectionMatrix(TOASTMatrix):
 
     @function_timer
     def scan_map(self, name):
-        scansim = OpSimScan(distmap=self.dist_map, out=name)
+        scansim = OpSimScan(input_map=self.dist_map, out=name)
         scansim.exec(self.data)
         return
 

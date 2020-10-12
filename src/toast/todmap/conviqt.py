@@ -33,10 +33,10 @@ class OpSimConviqt(Operator):
         comm (MPI.Comm) : MPI communicator to use for the convolution.
             libConviqt does not work without MPI.
         sky_file (dict or str) : File containing the sky a_lm expansion.
-            Tag "DETECTOR" will be replaced with the detector name
+            Tag {detector} will be replaced with the detector name
             If sky_file is a dict, then each detector must have an entry.
         beam_file (dict or str) : File containing the beam a_lm expansion.
-            Tag "DETECTOR" will be replaced with the detector name.
+            Tag {detector} will be replaced with the detector name.
             If beam_file is a dict, then each detector must have an entry.
         lmax (int) : Maximum ell (and m).  Actual resolution in the
             Healpix FITS file may differ.  If not set, will use the
@@ -57,6 +57,7 @@ class OpSimConviqt(Operator):
             corrected for the polarization angle.
         out (str): the name of the cache object (<name>_<detector>) to
             use for output of the detector timestream.
+        mc (int): Monte Carlo index used in synthesizing the input file names.
 
     """
 
@@ -83,6 +84,7 @@ class OpSimConviqt(Operator):
         remove_dipole=False,
         normalize_beam=False,
         verbosity=0,
+        mc=None,
     ):
         # Call the parent class constructor
         super().__init__()
@@ -107,6 +109,7 @@ class OpSimConviqt(Operator):
         self._remove_dipole = remove_dipole
         self._normalize_beam = normalize_beam
         self._verbosity = verbosity
+        self._mc = mc
 
         self._out = out
 
@@ -159,13 +162,13 @@ class OpSimConviqt(Operator):
             try:
                 sky_file = self._sky_file[det]
             except TypeError:
-                sky_file = self._sky_file.replace("DETECTOR", det)
+                sky_file = self._sky_file.format(detector=det, mc=self._mc)
             sky = self.get_sky(sky_file, det, verbose)
 
             try:
                 beam_file = self._beam_file[det]
             except TypeError:
-                beam_file = self._beam_file.replace("DETECTOR", det)
+                beam_file = self._beam_file.format(detector=det, mc=self._mc)
 
             beam = self.get_beam(beam_file, det, verbose)
 
@@ -448,10 +451,10 @@ class OpSimWeightedConviqt(OpSimConviqt):
         comm (MPI.Comm) : MPI communicator to use for the convolution.
             libConviqt does not work without MPI.
         sky_file (dict or str) : File containing the sky a_lm expansion.
-            Tag "DETECTOR" will be replaced with the detector name
+            Tag {detector} will be replaced with the detector name
             If sky_file is a dict, then each detector must have an entry.
         beam_file (dict or str) : File containing the beam a_lm expansion.
-            Tag "DETECTOR" will be replaced with the detector name.
+            Tag {detector} will be replaced with the detector name.
             If beam_file is a dict, then each detector must have an entry.
         lmax (int) : Maximum ell (and m).  Actual resolution in the
             Healpix FITS file may differ.  If not set, will use the
@@ -472,6 +475,7 @@ class OpSimWeightedConviqt(OpSimConviqt):
             corrected for the polarization angle.
         out (str): the name of the cache object (<name>_<detector>) to
             use for output of the detector timestream.
+        mc (int): Monte Carlo index used in synthesizing the input file names.
 
     """
 
@@ -498,6 +502,7 @@ class OpSimWeightedConviqt(OpSimConviqt):
         remove_dipole=False,
         normalize_beam=False,
         verbosity=0,
+        mc=None,
     ):
         # Call the parent class constructor
         super(OpSimConviqt, self).__init__()
@@ -522,6 +527,7 @@ class OpSimWeightedConviqt(OpSimConviqt):
         self._remove_dipole = remove_dipole
         self._normalize_beam = normalize_beam
         self._verbosity = verbosity
+        self._mc = mc
 
         self._out = out
 
@@ -550,13 +556,13 @@ class OpSimWeightedConviqt(OpSimConviqt):
             try:
                 sky_file = self._sky_file[det]
             except TypeError:
-                sky_file = self._sky_file.replace("DETECTOR", det)
+                sky_file = self._sky_file.format(detector=det, mc=self._mc)
             sky = self.get_sky(sky_file, det, verbose)
 
             try:
                 beam_file = self._beam_file[det]
             except TypeError:
-                beam_file = self._beam_file.replace("DETECTOR", det)
+                beam_file = self._beam_file.format(detector=det, mc=self._mc)
                 beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
                 beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
                 beam_file_00i = beam_file.replace(".fits", "_00I0.fits")

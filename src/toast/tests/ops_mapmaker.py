@@ -234,7 +234,7 @@ class OpMapMakerTest(MPITestCase):
             local=localsm,
         )
         distmap.read_healpix_fits(self.inmapfile)
-        scansim = OpSimScan(distmap=distmap, out=name)
+        scansim = OpSimScan(input_map=distmap, out=name)
         scansim.exec(self.data)
 
         # add a sharp gradient to one of the detectors
@@ -359,7 +359,7 @@ class OpMapMakerTest(MPITestCase):
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
         distmap.read_healpix_fits(self.inmapfile)
 
-        scansim = OpSimScan(distmap=distmap, out=name)
+        scansim = OpSimScan(input_map=distmap, out=name)
         scansim.exec(self.data)
 
         # Add simulated noise
