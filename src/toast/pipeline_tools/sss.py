@@ -14,8 +14,7 @@ from ..todmap import OpSimScanSynchronousSignal
 
 
 def add_sss_args(parser):
-    """ Add the sky arguments
-    """
+    """Add the sky arguments"""
 
     parser.add_argument(
         "--ground-map", required=False, help="Fixed ground template map"

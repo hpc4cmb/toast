@@ -2,11 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
+import os
 
 import healpy as hp
+import numpy as np
 
+from ..map import DistPixels
+from ..mpi import MPI
 from ..timing import function_timer, GlobalTimers
+from ..utils import Logger, Environment
 
 from .. import qarray as qa
 
@@ -112,8 +116,7 @@ class OpSimGradient(Operator):
         return
 
     def sigmap(self):
-        """(array): Return the underlying signal map (full map on all processes).
-        """
+        """(array): Return the underlying signal map (full map on all processes)."""
         range = self._max - self._min
         pix = np.arange(0, 12 * self._nside * self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)
@@ -131,26 +134,48 @@ class OpSimScan(Operator):
     and local pointing should already exist.
 
     Args:
-        distmap (DistPixels): the distributed map domain data.
+        input_map (DistPixels or string):  Path to the map to load and
+            sample.  If tag {detector} is encountered, it will be replaced
+            with the actual detector name.
         pixels (str): the name of the cache object (<pixels>_<detector>)
             containing the pixel indices to use.
         weights (str): the name of the cache object (<weights>_<detector>)
             containing the pointing weights to use.
+        nnz (int):  Number of non-zero weights per sample
         out (str): accumulate data to the cache with name <out>_<detector>.
             If the named cache objects do not exist, then they are created.
+        mc (int):  Monte Carlo index used in synthezing file names
 
     """
 
     def __init__(
-        self, distmap=None, pixels="pixels", weights="weights", out="scan", dets=None
+        self,
+        distmap=None,
+        input_map=None,
+        pixels="pixels",
+        weights="weights",
+        nnz=3,
+        out="scan",
+        dets=None,
+        mc=None,
     ):
         # Call the parent class constructor
         super().__init__()
-        self._map = distmap
+        if input_map is None:
+            raise RuntimeError("OpSimScan requires an input map")
+        if distmap is not None:
+            warnings.warn(
+                "`distmap` is deprecated, please use `input_map`", DeprecationWarning
+            )
+            self._input_map = distmap
+        else:
+            self._input_map = input_map
         self._pixels = pixels
         self._weights = weights
+        self._nnz = nnz
         self._out = out
         self._dets = dets
+        self._mc = mc
 
     @function_timer
     def exec(self, data):
@@ -166,13 +191,50 @@ class OpSimScan(Operator):
             None
 
         """
+        log = Logger.get()
+
+        if isinstance(self._input_map, DistPixels):
+            input_map = self._input_map
+        elif "{detector}" not in self._input_map:
+            fname = self._input_map.format(mc=self._mc)
+            if data.comm is None or data.comm.world_rank == 0:
+                log.info("Scanning {}".format(fname))
+                if not os.path.isfile(fname):
+                    raise RuntimeError("Input map not found: {}".format(fname))
+            input_map = DistPixels(
+                data, nnz=self._nnz, dtype=np.float32, pixels=self._pixels
+            )
+            input_map.read_healpix_fits(fname)
+        else:
+            input_map = None
 
         for obs in data.obs:
             tod = obs["tod"]
 
-            dets = tod.local_dets if self._dets is None else self._dets
+            if self._dets is None:
+                dets = tod.local_dets
+            else:
+                dets = self._dets
 
             for det in dets:
+                if input_map is None:
+                    if MPI is None:
+                        comm = None
+                    else:
+                        comm = MPI.COMM_SELF
+                    filename = self._input_map.format(detector=det, mc=self._mc)
+                    if not os.path.isfile(filename):
+                        raise RuntimeError("Input map not found: {}".format(filename))
+                    detector_map = DistPixels(
+                        data,
+                        comm=comm,
+                        nnz=self._nnz,
+                        dtype=np.float32,
+                        pixels=self._pixels,
+                    )
+                    detector_map.read_healpix_fits(filename)
+                else:
+                    detector_map = input_map
 
                 # get the pixels and weights from the cache
 
@@ -185,33 +247,29 @@ class OpSimScan(Operator):
 
                 gt = GlobalTimers.get()
                 gt.start("OpSimScan.exec.global_to_local")
-                sm, lpix = self._map.global_to_local(pixels)
+                sm, lpix = detector_map.global_to_local(pixels)
                 gt.stop("OpSimScan.exec.global_to_local")
 
-                # f = (np.dot(weights[x], self._map.data[sm[x], lpix[x]])
-                #     if (lpix[x] >= 0) else 0
-                #     for x in range(tod.local_samples[1]))
-                # maptod = np.fromiter(f, np.float64, count=tod.local_samples[1])
                 maptod = np.zeros(nsamp)
-                maptype = np.dtype(self._map.dtype)
+                maptype = np.dtype(detector_map.dtype)
                 gt.start("OpSimScan.exec.scan_map")
                 if maptype.char == "d":
                     scan_map_float64(
-                        self._map.npix_submap,
+                        detector_map.npix_submap,
                         nnz,
                         sm.astype(np.int64),
                         lpix.astype(np.int64),
-                        self._map.flatdata,
+                        detector_map.flatdata,
                         weights.astype(np.float64).reshape(-1),
                         maptod,
                     )
                 elif maptype.char == "f":
                     scan_map_float32(
-                        self._map.npix_submap,
+                        detector_map.npix_submap,
                         nnz,
                         sm.astype(np.int64),
                         lpix.astype(np.int64),
-                        self._map.flatdata,
+                        detector_map.flatdata,
                         weights.astype(np.float64).reshape(-1),
                         maptod,
                     )

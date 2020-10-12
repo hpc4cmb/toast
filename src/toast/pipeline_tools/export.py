@@ -20,16 +20,14 @@ if tidas_available:
 
 
 def add_tidas_args(parser):
-    """ Add the noise simulation arguments
-    """
+    """Add the noise simulation arguments"""
     parser.add_argument(
         "--tidas", required=False, default=None, help="Output TIDAS export path"
     )
 
 
 def add_spt3g_args(parser):
-    """ Add the noise simulation arguments
-    """
+    """Add the noise simulation arguments"""
     parser.add_argument(
         "--spt3g", required=False, default=None, help="Output SPT3G export path"
     )

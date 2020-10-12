@@ -18,8 +18,7 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 def name2id(name, maxval=2 ** 16):
-    """ Map a name into an index.
-    """
+    """Map a name into an index."""
     value = 0
     for c in name:
         value += ord(c)
@@ -34,7 +33,7 @@ class Focalplane:
     def __init__(
         self, detector_data=None, fname_pickle=None, sample_rate=None, radius_deg=None
     ):
-        """ Instantiate a focalplane
+        """Instantiate a focalplane
 
         Args:
             detector_data (dict) :  Dictionary of detector attributes, such
@@ -61,8 +60,7 @@ class Focalplane:
         self._get_pol_efficiency()
 
     def _get_pol_angles(self):
-        """ Get the detector polarization angles from the quaternions
-        """
+        """Get the detector polarization angles from the quaternions"""
         for detname, detdata in self.detector_data.items():
             if "pol_angle_deg" in detdata or "pol_angle_rad" in detdata:
                 continue
@@ -77,7 +75,7 @@ class Focalplane:
         return
 
     def _get_pol_efficiency(self):
-        """ Get the polarization efficiency from polarization leakage
+        """Get the polarization efficiency from polarization leakage
         or vice versa
         """
         for detname, detdata in self.detector_data.items():
@@ -116,8 +114,7 @@ class Focalplane:
         self.detector_data[key] = value
 
     def reset_properties(self):
-        """ Clear automatic properties so they will be re-generated
-        """
+        """Clear automatic properties so they will be re-generated"""
         self._detweights = None
         self._radius = None
         self._detquats = None
@@ -125,8 +122,7 @@ class Focalplane:
 
     @property
     def detweights(self):
-        """ Return the inverse noise variance weights [K_CMB^-2]
-        """
+        """Return the inverse noise variance weights [K_CMB^-2]"""
         if self._detweights is None:
             self._detweights = {}
             for detname, detdata in self.detector_data.items():
@@ -141,8 +137,7 @@ class Focalplane:
 
     @property
     def radius(self):
-        """ The focal plane radius in degrees
-        """
+        """The focal plane radius in degrees"""
         if self._radius is None:
             # Find the largest distance from the bore sight
             ZAXIS = np.array([0, 0, 1])

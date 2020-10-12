@@ -23,8 +23,7 @@ if use_mpi:
 
 
 def count_caches(data, comm, nodecomm, madamcache, msg=""):
-    """ Count the amount of memory in the TOD caches
-    """
+    """Count the amount of memory in the TOD caches"""
     my_todsize = 0
     for obs in data.obs:
         tod = obs["tod"]
@@ -187,8 +186,7 @@ class OpMadam(Operator):
 
     @property
     def available(self):
-        """(bool): True if libmadam is found in the library search path.
-        """
+        """(bool): True if libmadam is found in the library search path."""
         return madam is not None and madam.available
 
     @function_timer
@@ -266,9 +264,7 @@ class OpMadam(Operator):
 
     @function_timer
     def _destripe(self, pars, dets, periods, psdinfo):
-        """ Destripe the buffered data
-
-        """
+        """Destripe the buffered data"""
         if self._verbose:
             memreport("just before calling libmadam.destripe", self._comm)
         if self._cached:
@@ -310,9 +306,7 @@ class OpMadam(Operator):
         return
 
     def _count_samples(self):
-        """ Loop over the observations and count the number of samples.
-
-        """
+        """Loop over the observations and count the number of samples."""
         if len(self._data.obs) != 1:
             nsamp = 0
             tod0 = self._data.obs[0]["tod"]
@@ -342,9 +336,7 @@ class OpMadam(Operator):
         return nsamp
 
     def _get_period_ranges(self, detectors, nsamp):
-        """ Collect the ranges of every observation.
-
-        """
+        """Collect the ranges of every observation."""
         log = Logger.get()
         timer = Timer()
         timer.start()
@@ -421,9 +413,7 @@ class OpMadam(Operator):
 
     @function_timer
     def _prepare(self):
-        """ Examine the data object.
-
-        """
+        """Examine the data object."""
         log = Logger.get()
         timer = Timer()
         timer.start()
@@ -504,9 +494,7 @@ class OpMadam(Operator):
 
     @function_timer
     def _stage_time(self, detectors, nsamp, obs_period_ranges):
-        """ Stage the timestamps and use them to build PSD inputs.
-
-        """
+        """Stage the timestamps and use them to build PSD inputs."""
         self._madam_timestamps = self._cache.create(
             "timestamps", madam.TIMESTAMP_TYPE, (nsamp,)
         )
@@ -552,9 +540,7 @@ class OpMadam(Operator):
 
     @function_timer
     def _stage_signal(self, detectors, nsamp, ndet, obs_period_ranges, nodecomm, nread):
-        """ Stage signal
-
-        """
+        """Stage signal"""
         log = Logger.get()
         timer = Timer()
         # Determine if we can purge the signal and avoid keeping two
@@ -609,9 +595,7 @@ class OpMadam(Operator):
 
     @function_timer
     def _stage_pixels(self, detectors, nsamp, ndet, obs_period_ranges, nside):
-        """ Stage pixels
-
-        """
+        """Stage pixels"""
         self._madam_pixels = self._cache.create(
             "pixels", madam.PIXEL_TYPE, (nsamp * ndet,)
         )
@@ -695,9 +679,7 @@ class OpMadam(Operator):
         nodecomm,
         nread,
     ):
-        """Now collect the pixel weights
-
-        """
+        """Now collect the pixel weights"""
         log = Logger.get()
         timer = Timer()
         # Determine if we can purge the pixel weights and avoid keeping two
@@ -767,7 +749,7 @@ class OpMadam(Operator):
         detectors,
         nside,
     ):
-        """ create madam-compatible buffers
+        """create madam-compatible buffers
 
         Collect the TOD into Madam buffers. Process pixel weights
         Separate from the rest to reduce the memory high water mark
@@ -1012,7 +994,7 @@ class OpMadam(Operator):
         nside,
         weight_dtype,
     ):
-        """ Clear Madam buffers, restore pointing into TOAST caches
+        """Clear Madam buffers, restore pointing into TOAST caches
         and cache the destriped signal.
 
         """

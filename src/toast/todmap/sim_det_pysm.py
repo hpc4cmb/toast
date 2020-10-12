@@ -144,7 +144,11 @@ class OpSimPySM(Operator):
 
         self.focalplanes = focalplanes
         self.distmap = DistPixels(
-            data, comm=comm, nnz=3, dtype=np.float32, pixels=self.pixels,
+            data,
+            comm=comm,
+            nnz=3,
+            dtype=np.float32,
+            pixels=self.pixels,
         )
         self.apply_beam = apply_beam
 
@@ -264,7 +268,7 @@ class OpSimPySM(Operator):
             self.distmap.broadcast_healpix_map(full_map_rank0)
             if rank == 0:
                 log.debug("Running OpSimScan")
-            scansim = OpSimScan(distmap=self.distmap, out=self._out, dets=[det])
+            scansim = OpSimScan(input_map=self.distmap, out=self._out, dets=[det])
             scansim.exec(data)
             if rank == 0:
                 tod = data.obs[0]["tod"]

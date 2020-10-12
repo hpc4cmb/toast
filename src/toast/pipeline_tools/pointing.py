@@ -15,8 +15,7 @@ from ..todmap import OpMadam, OpPointingHpix
 
 
 def add_pointing_args(parser):
-    """ Add the pointing arguments
-    """
+    """Add the pointing arguments"""
 
     # `nside` may already be added
     try:
@@ -83,9 +82,7 @@ def add_pointing_args(parser):
 
 @function_timer
 def expand_pointing(args, comm, data):
-    """ Expand boresight pointing to every detector.
-
-    """
+    """Expand boresight pointing to every detector."""
     log = Logger.get()
     timer = Timer()
     timer.start()

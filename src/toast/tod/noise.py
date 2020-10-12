@@ -72,14 +72,12 @@ class Noise(object):
 
     @property
     def detectors(self):
-        """(list): list of strings containing the detector names.
-        """
+        """(list): list of strings containing the detector names."""
         return self._dets
 
     @property
     def keys(self):
-        """(list): list of strings containing the PSD names.
-        """
+        """(list): list of strings containing the PSD names."""
         return self._keys
 
     def multiply_ntt(self, key, data):

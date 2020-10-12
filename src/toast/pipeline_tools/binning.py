@@ -216,7 +216,7 @@ def apply_binner(
     prefix="binned",
     verbose=True,
 ):
-    """ Bin the signal in `cache_prefix` onto `dist_map`
+    """Bin the signal in `cache_prefix` onto `dist_map`
     using the noise weights in `white_noise_cov_matrix`.
 
     Args :

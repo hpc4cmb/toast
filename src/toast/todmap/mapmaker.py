@@ -39,13 +39,13 @@ def free_temporary_name(name):
 
 class TOASTMatrix:
     def apply(self, vector, inplace=False):
-        """ Every TOASTMatrix can apply itself to a distributed vectors
+        """Every TOASTMatrix can apply itself to a distributed vectors
         of signal, map or template offsets as is appropriate.
         """
         raise NotImplementedError("Virtual apply not implemented in derived class")
 
     def apply_transpose(self, vector, inplace=False):
-        """ Every TOASTMatrix can apply itself to a distributed vectors
+        """Every TOASTMatrix can apply itself to a distributed vectors
         of signal, map or template offsets as is appropriate.
         """
         raise NotImplementedError(
@@ -68,7 +68,7 @@ class UnitMatrix(TOASTMatrix):
 
 
 class TODTemplate:
-    """ Parent class for all templates that can be registered with
+    """Parent class for all templates that can be registered with
     TemplateMatrix
     """
 
@@ -80,29 +80,25 @@ class TODTemplate:
         raise NotImplementedError("Derived class must implement __init__()")
 
     def add_to_signal(self, signal, amplitudes):
-        """ signal += F.a
-        """
+        """signal += F.a"""
         raise NotImplementedError("Derived class must implement add_to_signal()")
 
     def project_signal(self, signal, amplitudes):
-        """ a += F^T.signal
-        """
+        """a += F^T.signal"""
         raise NotImplementedError("Derived class must implement project_signal()")
 
     def add_prior(self, amplitudes_in, amplitudes_out):
-        """ a' += C_a^{-1}.a
-        """
+        """a' += C_a^{-1}.a"""
         # Not all TODTemplates implement the prior
         return
 
     def apply_precond(self, amplitudes_in, amplitudes_out):
-        """ a' = M^{-1}.a
-        """
+        """a' = M^{-1}.a"""
         raise NotImplementedError("Derived class must implement apply_precond()")
 
 
 class SubharmonicTemplate(TODTemplate):
-    """ This class represents sub-harmonic noise fluctuations.
+    """This class represents sub-harmonic noise fluctuations.
 
     Sub-harmonic means that the characteristic frequency of the noise
     modes is lower than 1/T where T is the length of the interval
@@ -135,8 +131,7 @@ class SubharmonicTemplate(TODTemplate):
         self.get_steps_and_preconditioner()
 
     def get_steps_and_preconditioner(self):
-        """ Assign each template an amplitude
-        """
+        """Assign each template an amplitude"""
         self.templates = []
         self.slices = []
         self.preconditioners = []
@@ -170,8 +165,7 @@ class SubharmonicTemplate(TODTemplate):
         return
 
     def _get_preconditioner(self, det, tod, todslice, common_flags, detweight):
-        """ Calculate the preconditioner for the given interval and detector
-        """
+        """Calculate the preconditioner for the given interval and detector"""
         flags = tod.local_flags(det, self.flags)[todslice]
         good = (flags & self.flag_mask) == 0
         good[common_flags[todslice]] = False
@@ -199,7 +193,7 @@ class SubharmonicTemplate(TODTemplate):
         return
 
     def _get_templates(self, todslice):
-        """ Develop hierarchy of subharmonic modes matching the given length
+        """Develop hierarchy of subharmonic modes matching the given length
 
         The basis functions are (orthogonal) Legendre polynomials
         """
@@ -231,7 +225,7 @@ class SubharmonicTemplate(TODTemplate):
         pass
 
     def apply_precond(self, amplitudes_in, amplitudes_out):
-        """ Standard diagonal preconditioner accounting for the fact that
+        """Standard diagonal preconditioner accounting for the fact that
         the templates are not orthogonal in the presence of flagging and masking
         """
         subharmonic_amplitudes_in = amplitudes_in[self.name]
@@ -249,8 +243,7 @@ class SubharmonicTemplate(TODTemplate):
 
 
 class OffsetTemplate(TODTemplate):
-    """ This class represents noise fluctuations as a step function
-    """
+    """This class represents noise fluctuations as a step function"""
 
     name = "offset"
 
@@ -284,7 +277,7 @@ class OffsetTemplate(TODTemplate):
 
     @function_timer
     def get_filters_and_preconditioners(self):
-        """ Compute and store the filter and associated preconditioner
+        """Compute and store the filter and associated preconditioner
         for every detector and every observation
         """
         log = Logger.get()
@@ -424,8 +417,7 @@ class OffsetTemplate(TODTemplate):
 
     @function_timer
     def get_steps(self):
-        """ Divide each interval into offset steps
-        """
+        """Divide each interval into offset steps"""
         self.offset_templates = []
         self.offset_slices = []  # slices in all observations
         for iobs, obs in enumerate(self.data.obs):
@@ -476,7 +468,7 @@ class OffsetTemplate(TODTemplate):
 
     @function_timer
     def _get_sigmasq(self, tod, det, todslice, common_flags, detweight):
-        """ calculate a rough estimate of the baseline variance
+        """calculate a rough estimate of the baseline variance
         for diagonal preconditioner
         """
         flags = tod.local_flags(det, self.flags)[todslice]
@@ -604,8 +596,7 @@ class OffsetTemplate(TODTemplate):
 
 class TemplateMatrix(TOASTMatrix):
     def __init__(self, data, comm, templates=None):
-        """ Initialize the template matrix with a given baseline length
-        """
+        """Initialize the template matrix with a given baseline length"""
         self.data = data
         self.comm = comm
         self.templates = []
@@ -615,14 +606,12 @@ class TemplateMatrix(TOASTMatrix):
 
     @function_timer
     def register_template(self, template):
-        """ Add template to the list of templates to fit
-        """
+        """Add template to the list of templates to fit"""
         self.templates.append(template)
 
     @function_timer
     def apply(self, amplitudes):
-        """ Compute and return y = F.a
-        """
+        """Compute and return y = F.a"""
         new_signal = self.zero_signal()
         for template in self.templates:
             template.add_to_signal(new_signal, amplitudes)
@@ -630,8 +619,7 @@ class TemplateMatrix(TOASTMatrix):
 
     @function_timer
     def apply_transpose(self, signal):
-        """ Compute and return a = F^T.y
-        """
+        """Compute and return a = F^T.y"""
         new_amplitudes = self.zero_amplitudes()
         for template in self.templates:
             template.project_signal(signal, new_amplitudes)
@@ -639,16 +627,14 @@ class TemplateMatrix(TOASTMatrix):
 
     @function_timer
     def add_prior(self, amplitudes, new_amplitudes):
-        """ Compute a' += C_a^{-1}.a
-        """
+        """Compute a' += C_a^{-1}.a"""
         for template in self.templates:
             template.add_prior(amplitudes, new_amplitudes)
         return
 
     @function_timer
     def apply_precond(self, amplitudes):
-        """ Compute a' = M^{-1}.a
-        """
+        """Compute a' = M^{-1}.a"""
         new_amplitudes = self.zero_amplitudes()
         for template in self.templates:
             template.apply_precond(amplitudes, new_amplitudes)
@@ -656,14 +642,13 @@ class TemplateMatrix(TOASTMatrix):
 
     @function_timer
     def zero_amplitudes(self):
-        """ Return a null amplitudes object
-        """
+        """Return a null amplitudes object"""
         new_amplitudes = TemplateAmplitudes(self.templates, self.comm)
         return new_amplitudes
 
     @function_timer
     def zero_signal(self):
-        """ Return a distributed vector of signal set to zero.
+        """Return a distributed vector of signal set to zero.
 
         The zero signal object will use the same TOD objects but different cache prefix
         """
@@ -672,7 +657,7 @@ class TemplateMatrix(TOASTMatrix):
 
     @function_timer
     def clean_signal(self, signal, amplitudes, in_place=True):
-        """ Clean the given distributed signal vector by subtracting
+        """Clean the given distributed signal vector by subtracting
         the templates multiplied by the given amplitudes.
         """
         # DEBUG begin
@@ -710,8 +695,7 @@ class TemplateMatrix(TOASTMatrix):
 
 
 class TemplateAmplitudes(TOASTVector):
-    """ TemplateAmplitudes objects hold local and shared template amplitudes
-    """
+    """TemplateAmplitudes objects hold local and shared template amplitudes"""
 
     def __init__(self, templates, comm):
         self.comm = comm
@@ -731,8 +715,7 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def dot(self, other):
-        """ Compute the dot product between the two amplitude vectors
-        """
+        """Compute the dot product between the two amplitude vectors"""
         total = 0
         for name, values in self.amplitudes.items():
             dp = np.dot(values, other.amplitudes[name])
@@ -765,8 +748,7 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def __iadd__(self, other):
-        """ Add the provided amplitudes to this one
-        """
+        """Add the provided amplitudes to this one"""
         if isinstance(other, TemplateAmplitudes):
             for name, values in self.amplitudes.items():
                 values += other.amplitudes[name]
@@ -777,8 +759,7 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def __isub__(self, other):
-        """ Subtract the provided amplitudes from this one
-        """
+        """Subtract the provided amplitudes from this one"""
         if isinstance(other, TemplateAmplitudes):
             for name, values in self.amplitudes.items():
                 values -= other.amplitudes[name]
@@ -789,16 +770,14 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def __imul__(self, other):
-        """ Scale the amplitudes
-        """
+        """Scale the amplitudes"""
         for name, values in self.amplitudes.items():
             values *= other
         return self
 
     @function_timer
     def __itruediv__(self, other):
-        """ Divide the amplitudes
-        """
+        """Divide the amplitudes"""
         for name, values in self.amplitudes.items():
             values /= other
         return self
@@ -810,13 +789,13 @@ class TemplateCovariance(TOASTMatrix):
 
 
 class ProjectionMatrix(TOASTMatrix):
-    """ Projection matrix:
-            Z = I - P (P^T N^{-1} P)^{-1} P^T N^{-1}
-              = I - P B,
-        where
-             `P` is the pointing matrix
-             `N` is the noise matrix and
-             `B` is the binning operator
+    """Projection matrix:
+        Z = I - P (P^T N^{-1} P)^{-1} P^T N^{-1}
+          = I - P B,
+    where
+         `P` is the pointing matrix
+         `N` is the noise matrix and
+         `B` is the binning operator
     """
 
     def __init__(
@@ -839,8 +818,7 @@ class ProjectionMatrix(TOASTMatrix):
 
     @function_timer
     def apply(self, signal):
-        """ Return Z.y
-        """
+        """Return Z.y"""
         self.bin_map(signal.name)
         new_signal = signal.copy()
         scanned_signal = Signal(self.data, temporary=True, init_val=0)
@@ -867,7 +845,7 @@ class ProjectionMatrix(TOASTMatrix):
 
     @function_timer
     def scan_map(self, name):
-        scansim = OpSimScan(distmap=self.dist_map, out=name)
+        scansim = OpSimScan(input_map=self.dist_map, out=name)
         scansim.exec(self.data)
         return
 
@@ -884,7 +862,7 @@ class NoiseMatrix(TOASTMatrix):
 
     @function_timer
     def apply(self, signal, in_place=False):
-        """ Multiplies the signal with N^{-1}.
+        """Multiplies the signal with N^{-1}.
 
         Note that the quality flags cause the corresponding diagonal
         elements of N^{-1} to be zero.
@@ -913,7 +891,7 @@ class PointingMatrix(TOASTMatrix):
 
 
 class Signal(TOASTVector):
-    """ Signal class wraps the TOAST data object but represents only
+    """Signal class wraps the TOAST data object but represents only
     one cached signal flavor.
     """
 
@@ -938,8 +916,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def apply_flags(self, common_flag_mask, flag_mask):
-        """ Set the signal at flagged samples to zero
-        """
+        """Set the signal at flagged samples to zero"""
         flags_apply = OpFlagsApply(
             name=self.name, common_flag_mask=common_flag_mask, flag_mask=flag_mask
         )
@@ -948,8 +925,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def apply_weightmap(self, weightmap):
-        """ Scale the signal with the provided weight map
-        """
+        """Scale the signal with the provided weight map"""
         if weightmap is None:
             return
         scanscale = OpScanScale(distmap=weightmap, name=self.name)
@@ -958,7 +934,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def copy(self):
-        """ Return a new Signal object with independent copies of the
+        """Return a new Signal object with independent copies of the
         signal vectors.
         """
         new_signal = Signal(self.data, temporary=True)
@@ -968,16 +944,14 @@ class Signal(TOASTVector):
 
     @function_timer
     def __getitem__(self, key):
-        """ Return a reference to a slice of TOD cache
-        """
+        """Return a reference to a slice of TOD cache"""
         iobs, det, todslice = key
         tod = self.data.obs[iobs]["tod"]
         return tod.local_signal(det, self.name)[todslice]
 
     @function_timer
     def __setitem__(self, key, value):
-        """ Set slice of TOD cache
-        """
+        """Set slice of TOD cache"""
         iobs, det, todslice = key
         tod = self.data.obs[iobs]["tod"]
         tod.local_signal(det, self.name)[todslice] = value
@@ -985,8 +959,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def __iadd__(self, other):
-        """ Add the provided Signal object to this one
-        """
+        """Add the provided Signal object to this one"""
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -998,8 +971,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def __isub__(self, other):
-        """ Subtract the provided Signal object from this one
-        """
+        """Subtract the provided Signal object from this one"""
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -1011,8 +983,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def __imul__(self, other):
-        """ Scale the signal
-        """
+        """Scale the signal"""
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -1021,8 +992,7 @@ class Signal(TOASTVector):
 
     @function_timer
     def __itruediv__(self, other):
-        """ Divide the signal
-        """
+        """Divide the signal"""
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             for det in tod.local_dets:
@@ -1031,8 +1001,7 @@ class Signal(TOASTVector):
 
 
 class PCGSolver:
-    """ Solves `x` in A.x = b
-    """
+    """Solves `x` in A.x = b"""
 
     def __init__(
         self,
@@ -1066,8 +1035,7 @@ class PCGSolver:
 
     @function_timer
     def apply_lhs(self, amplitudes):
-        """ Return A.x
-        """
+        """Return A.x"""
         new_amplitudes = self.templates.apply_transpose(
             self.noise.apply(self.projection.apply(self.templates.apply(amplitudes)))
         )
@@ -1076,7 +1044,7 @@ class PCGSolver:
 
     @function_timer
     def solve(self):
-        """ Standard issue PCG solution of A.x = b
+        """Standard issue PCG solution of A.x = b
 
         Returns:
             x : the least squares solution
@@ -1444,8 +1412,7 @@ class OpMapMaker(Operator):
 
     @function_timer
     def load_mask(self, data):
-        """ Load processing mask and generate appropriate flag bits
-        """
+        """Load processing mask and generate appropriate flag bits"""
         if self.maskfile is None:
             return
         log = Logger.get()
@@ -1470,8 +1437,7 @@ class OpMapMaker(Operator):
 
     @function_timer
     def load_weightmap(self, data):
-        """ Load weight map
-        """
+        """Load weight map"""
         if self.weightmapfile is None:
             return
         log = Logger.get()
@@ -1535,8 +1501,7 @@ class OpMapMaker(Operator):
 
     @function_timer
     def flag_gaps(self, data):
-        """ Add flag bits between the intervals
-        """
+        """Add flag bits between the intervals"""
         timer = Timer()
         timer.start()
         flag_gaps = OpFlagGaps(common_flag_value=self.gap_bit, intervals=self.intervals)
@@ -1581,8 +1546,7 @@ class OpMapMaker(Operator):
 
     @function_timer
     def get_detweights(self, data):
-        """ Each observation will have its own detweight dictionary
-        """
+        """Each observation will have its own detweight dictionary"""
         timer = Timer()
         timer.start()
         self.detweights = []

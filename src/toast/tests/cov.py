@@ -271,10 +271,18 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
+        invnpp = DistPixels(
+            self.data,
+            nnz=6,
+            dtype=np.float64,
+        )
         invnpp.data.fill(0.0)
 
-        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
+        hits = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.int64,
+        )
         hits.data.fill(0)
 
         # accumulate the inverse covariance.  Use detector weights
@@ -321,7 +329,11 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
+        invnpp = DistPixels(
+            self.data,
+            nnz=6,
+            dtype=np.float64,
+        )
 
         return
 
@@ -332,9 +344,17 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
+        invnpp = DistPixels(
+            self.data,
+            nnz=6,
+            dtype=np.float64,
+        )
 
-        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
+        hits = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.int64,
+        )
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.
@@ -387,11 +407,23 @@ class CovarianceTest(MPITestCase):
 
         # construct a distributed map to store the covariance and hits
 
-        invnpp = DistPixels(self.data, nnz=6, dtype=np.float64,)
+        invnpp = DistPixels(
+            self.data,
+            nnz=6,
+            dtype=np.float64,
+        )
 
-        rcond = DistPixels(self.data, nnz=1, dtype=np.float64,)
+        rcond = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.float64,
+        )
 
-        hits = DistPixels(self.data, nnz=1, dtype=np.int64,)
+        hits = DistPixels(
+            self.data,
+            nnz=1,
+            dtype=np.int64,
+        )
 
         # accumulate the inverse covariance.  Use detector weights
         # based on the analytic NET.

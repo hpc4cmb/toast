@@ -39,7 +39,7 @@ class EnvTest(MPITestCase):
 
     def test_mpi_shared(self):
         """This is based on the simple tests from the upstream repo:
-            https://github.com/tskisner/mpi_shmem/blob/master/test.py
+        https://github.com/tskisner/mpi_shmem/blob/master/test.py
         """
         # Dimensions of our shared memory array
         datadims = (2, 5, 10)
@@ -133,7 +133,7 @@ class EnvTest(MPITestCase):
 
     def test_mpi_lock(self):
         """This is based on the simple tests from the upstream repo:
-            https://github.com/tskisner/mpi_shmem/blob/master/test.py
+        https://github.com/tskisner/mpi_shmem/blob/master/test.py
         """
         sleepsec = 0.1
         lock = MPILock(self.comm, root=0, debug=True)
