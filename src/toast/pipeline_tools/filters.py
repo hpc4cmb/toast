@@ -18,8 +18,7 @@ from ..todmap import OpGroundFilter
 
 
 def add_polyfilter2D_args(parser):
-    """ Add the polynomial filter arguments to argparser
-    """
+    """Add the polynomial filter arguments to argparser"""
     parser.add_argument(
         "--polyfilter2D",
         required=False,
@@ -59,8 +58,7 @@ def add_polyfilter2D_args(parser):
 
 
 def add_polyfilter_args(parser):
-    """ Add the polynomial filter arguments to argparser
-    """
+    """Add the polynomial filter arguments to argparser"""
     parser.add_argument(
         "--polyfilter",
         required=False,
@@ -101,8 +99,7 @@ def add_polyfilter_args(parser):
 
 @function_timer
 def apply_polyfilter2D(args, comm, data, cache_name=None, verbose=True):
-    """ Apply the 2D polynomial filter to data under `cache_name`.
-    """
+    """Apply the 2D polynomial filter to data under `cache_name`."""
     if not args.apply_polyfilter2D:
         return
     log = Logger.get()
@@ -128,8 +125,7 @@ def apply_polyfilter2D(args, comm, data, cache_name=None, verbose=True):
 
 @function_timer
 def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
-    """ Apply the polynomial filter to data under `cache_name`.
-    """
+    """Apply the polynomial filter to data under `cache_name`."""
     if not args.apply_polyfilter:
         return
     log = Logger.get()
@@ -154,8 +150,7 @@ def apply_polyfilter(args, comm, data, cache_name=None, verbose=True):
 
 
 def add_groundfilter_args(parser):
-    """ Add the ground filter arguments to argparser
-    """
+    """Add the ground filter arguments to argparser"""
     parser.add_argument(
         "--groundfilter",
         required=False,

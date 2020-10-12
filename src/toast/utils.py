@@ -168,8 +168,7 @@ try:
     import psutil
 
     def memreport(msg="", comm=None):
-        """ Gather and report the amount of allocated, free and swapped system memory
-        """
+        """Gather and report the amount of allocated, free and swapped system memory"""
         if psutil is None:
             return
         vmem = psutil.virtual_memory()._asdict()

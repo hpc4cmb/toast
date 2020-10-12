@@ -56,8 +56,7 @@ from .todsatellite import add_todsatellite_args
 
 
 def add_mc_args(parser):
-    """ Add Monte Carlo arguments
-    """
+    """Add Monte Carlo arguments"""
     parser.add_argument(
         "--MC-start",
         required=False,
@@ -77,7 +76,7 @@ def add_mc_args(parser):
 
 @function_timer
 def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=True):
-    """ Add signal from cache prefix `prefix_in` to cache prefix
+    """Add signal from cache prefix `prefix_in` to cache prefix
     `prefix_out`.  If `prefix_out` does not exit, it is created.
 
     """
@@ -115,9 +114,7 @@ def add_signal(args, comm, data, prefix_out, prefix_in, purge=False, verbose=Tru
 
 @function_timer
 def copy_signal(args, comm, data, cache_prefix_in, cache_prefix_out, verbose=True):
-    """Copy the signal in `cache_prefix_in` to `cache_prefix_out`.
-
-    """
+    """Copy the signal in `cache_prefix_in` to `cache_prefix_out`."""
     if cache_prefix_in == cache_prefix_out:
         return
     log = Logger.get()

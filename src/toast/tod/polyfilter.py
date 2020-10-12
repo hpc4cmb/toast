@@ -21,8 +21,7 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 class OpPolyFilter2D(Operator):
-    """ Operator to regress out 2D polynomials across the focal plane.
-    """
+    """Operator to regress out 2D polynomials across the focal plane."""
 
     def __init__(
         self,

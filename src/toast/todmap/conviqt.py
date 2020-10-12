@@ -112,8 +112,7 @@ class OpSimConviqt(Operator):
 
     @property
     def available(self):
-        """Return True if libconviqt is found in the library search path.
-        """
+        """Return True if libconviqt is found in the library search path."""
         return conviqt is not None and conviqt.available
 
     def _check_for_hwp(self, data):
@@ -189,7 +188,7 @@ class OpSimConviqt(Operator):
         return
 
     def _get_detectors(self, data):
-        """ Assemble a list of detectors across all processes and
+        """Assemble a list of detectors across all processes and
         observations in `self._comm`.
         """
         dets = set()
@@ -206,7 +205,7 @@ class OpSimConviqt(Operator):
         return all_dets
 
     def _get_psi_pol(self, focalplane, det):
-        """ Parse polarization angle in radians from the focalplane
+        """Parse polarization angle in radians from the focalplane
         dictionary.  The angle is relative to the Pxx basis.
         """
         if det not in focalplane:
@@ -230,7 +229,7 @@ class OpSimConviqt(Operator):
         return psi_pol
 
     def _get_psi_uv(self, focalplane, det):
-        """ Parse Pxx basis angle in radians from the focalplane
+        """Parse Pxx basis angle in radians from the focalplane
         dictionary.  The angle is measured from Dxx to Pxx basis.
         """
         if det not in focalplane:
@@ -244,7 +243,7 @@ class OpSimConviqt(Operator):
         return psipol
 
     def _get_epsilon(self, focalplane, det):
-        """ Parse polarization leakage (epsilon) from the focalplane
+        """Parse polarization leakage (epsilon) from the focalplane
         object or dictionary.
         """
         if det not in focalplane:
@@ -279,14 +278,14 @@ class OpSimConviqt(Operator):
         return beam
 
     def get_detector(self, det):
-        """ We always create the detector with zero leakage and scale
+        """We always create the detector with zero leakage and scale
         the returned TOD ourselves
         """
         detector = conviqt.Detector(name=det, epsilon=0)
         return detector
 
     def get_pointing(self, data, det, verbose):
-        """ Return the detector pointing as ZYZ Euler angles without the
+        """Return the detector pointing as ZYZ Euler angles without the
         polarization sensitive angle.  These angles are to be compatible
         with Pxx or Dxx frame beam products
         """
@@ -345,8 +344,7 @@ class OpSimConviqt(Operator):
         return all_theta, all_phi, all_psi, all_psi_pol
 
     def get_buffer(self, theta, phi, psi, det, verbose):
-        """Pack the pointing into the conviqt pointing array
-        """
+        """Pack the pointing into the conviqt pointing array"""
         timer = Timer()
         timer.start()
         pnt = conviqt.Pointing(len(theta))
@@ -393,7 +391,7 @@ class OpSimConviqt(Operator):
         return convolved_data
 
     def calibrate(self, data, det, beam, convolved_data, verbose):
-        """ By default, libConviqt results returns a signal that conforms to
+        """By default, libConviqt results returns a signal that conforms to
         TOD = (1 + epsilon) / 2 * intensity + (1 - epsilon) / 2 * polarization.
 
         When calibrate = True, we rescale the TOD to
@@ -418,8 +416,7 @@ class OpSimConviqt(Operator):
         return
 
     def cache(self, data, det, convolved_data, verbose):
-        """ Inject the convolved data into the TOD cache.
-        """
+        """Inject the convolved data into the TOD cache."""
         timer = Timer()
         timer.start()
         offset = 0

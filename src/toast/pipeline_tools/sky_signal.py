@@ -52,8 +52,7 @@ def add_sky_signal_args(parser):
 
 
 def add_sky_map_args(parser):
-    """ Add the sky arguments
-    """
+    """Add the sky arguments"""
 
     parser.add_argument("--input-map", required=False, help="Input map for signal")
 
@@ -77,8 +76,7 @@ def add_sky_map_args(parser):
 
 
 def add_pysm_args(parser):
-    """ Add the sky arguments
-    """
+    """Add the sky arguments"""
 
     parser.add_argument(
         "--pysm-model",
@@ -139,9 +137,7 @@ def add_pysm_args(parser):
 
 
 def add_conviqt_args(parser):
-    """ Add arguments for synthesizing signal with libConviqt
-
-    """
+    """Add arguments for synthesizing signal with libConviqt"""
     parser.add_argument(
         "--conviqt-sky-file",
         required=False,
@@ -365,9 +361,7 @@ def apply_weighted_conviqt(args, comm, data, cache_prefix="signal", verbose=True
 def scan_sky_signal(
     args, comm, data, cache_prefix="signal", verbose=True, pixels="pixels", mc=0
 ):
-    """ Scan sky signal from a map.
-
-    """
+    """Scan sky signal from a map."""
     if not args.input_map or not args.simulate_sky:
         return None
 
@@ -400,9 +394,7 @@ def scan_sky_signal(
 def simulate_sky_signal(
     args, comm, data, focalplanes, cache_prefix, verbose=False, pixels="pixels", mc=0
 ):
-    """ Use PySM to simulate smoothed sky signal.
-
-    """
+    """Use PySM to simulate smoothed sky signal."""
     if not args.pysm_model or not args.simulate_sky:
         return None
     timer = Timer()

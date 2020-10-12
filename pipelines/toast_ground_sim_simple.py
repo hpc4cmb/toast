@@ -227,7 +227,7 @@ def load_focalplane(args, comm, schedule):
 
 
 def create_observations(args, comm, schedule):
-    """ Simulate constant elevation scans.
+    """Simulate constant elevation scans.
 
     Simulate constant elevation scans at "site" matching entries in
     "all_ces".  Each operational day is assigned to a different
@@ -326,9 +326,7 @@ def create_observations(args, comm, schedule):
 
 
 def setup_sigcopy(args, comm, signalname):
-    """ Setup for copying the signal so we can run filter+bin and Madam.
-
-    """
+    """Setup for copying the signal so we can run filter+bin and Madam."""
     if args.use_madam:
         signalname_madam = "signal_madam"
         sigcopy_madam = OpCacheCopy(signalname, signalname_madam)
@@ -353,9 +351,7 @@ def setup_output(args, comm):
 
 
 def copy_signal_madam(args, comm, data, sigcopy_madam):
-    """ Make a copy of the TOD for Madam.
-
-    """
+    """Make a copy of the TOD for Madam."""
     if sigcopy_madam is not None:
         if comm.world_rank == 0:
             print("Making a copy of the TOD for Madam", flush=args.flush)

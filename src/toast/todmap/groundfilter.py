@@ -81,9 +81,7 @@ class OpGroundFilter(Operator):
 
     @function_timer
     def build_templates(self, tod, obs):
-        """ Construct the local ground template hierarchy
-
-        """
+        """Construct the local ground template hierarchy"""
         if self._intervals in obs:
             intervals = obs[self._intervals]
         else:

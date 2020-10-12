@@ -112,8 +112,7 @@ class OpSimGradient(Operator):
         return
 
     def sigmap(self):
-        """(array): Return the underlying signal map (full map on all processes).
-        """
+        """(array): Return the underlying signal map (full map on all processes)."""
         range = self._max - self._min
         pix = np.arange(0, 12 * self._nside * self._nside, dtype=np.int64)
         x, y, z = hp.pix2vec(self._nside, pix, nest=self._nest)

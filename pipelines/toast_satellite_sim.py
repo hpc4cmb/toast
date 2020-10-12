@@ -134,8 +134,7 @@ def parse_arguments(comm, procs):
 
 
 def load_focalplane(args, comm):
-    """Load focalplane information
-    """
+    """Load focalplane information"""
     timer = Timer()
     gain = None
     fp = None

@@ -216,7 +216,7 @@ class OpNoiseEstim:
         return
 
     def highpass_signal(self, tod, comm, intervals):
-        """ Suppress the sub-harmonic modes in the TOD by high-pass
+        """Suppress the sub-harmonic modes in the TOD by high-pass
         filtering.
         """
         timer = Timer()
@@ -245,7 +245,7 @@ class OpNoiseEstim:
         return
 
     def subtract_signal(self, tod, comm, masksampler, mapsampler, intervals):
-        """ Subtract a signal estimate from the TOD and update the
+        """Subtract a signal estimate from the TOD and update the
         flags for noise estimation.
         """
         if mapsampler is None and masksampler is None:

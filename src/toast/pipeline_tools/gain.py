@@ -14,8 +14,7 @@ from ..tod import OpGainScrambler
 
 
 def add_gainscrambler_args(parser):
-    """ Add the noise simulation arguments
-    """
+    """Add the noise simulation arguments"""
     parser.add_argument(
         "--gainscrambler",
         required=False,

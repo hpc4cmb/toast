@@ -287,8 +287,7 @@ class TODTidas(TOD):
         return
 
     def _open(self):
-        """Open block and group handles.
-        """
+        """Open block and group handles."""
         if self._block is not None:
             raise RuntimeError("block is already open!")
         if self._dgrp is not None:
@@ -298,8 +297,7 @@ class TODTidas(TOD):
         return
 
     def _close(self):
-        """Close block and group handles.
-        """
+        """Close block and group handles."""
         try:
             del self._dgrp
             self._dgrp = None
@@ -490,26 +488,22 @@ class TODTidas(TOD):
 
     @property
     def volume(self):
-        """The open TIDAS volume in use by this TOD.
-        """
+        """The open TIDAS volume in use by this TOD."""
         return self._vol
 
     @property
     def block_path(self):
-        """The metadata path to this TOD's observation.
-        """
+        """The metadata path to this TOD's observation."""
         return self._blockpath
 
     @property
     def group_det_name(self):
-        """The TIDAS group name for the detector data in this TOD.
-        """
+        """The TIDAS group name for the detector data in this TOD."""
         return self._dgrpname
 
     @property
     def group_fp_name(self):
-        """The TIDAS group name for the focalplane data in this TOD.
-        """
+        """The TIDAS group name for the focalplane data in this TOD."""
         return self._fpgrpname
 
     def detoffset(self):

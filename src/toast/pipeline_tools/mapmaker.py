@@ -17,8 +17,7 @@ from ..tod import OpPolyFilter
 
 
 def add_mapmaker_args(parser):
-    """ Add mapmaker arguments
-    """
+    """Add mapmaker arguments"""
     parser.add_argument(
         "--mapmaker-prefix",
         required=False,
@@ -27,7 +26,10 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefix",
     )
     parser.add_argument(
-        "--mapmaker-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
+        "--mapmaker-mask",
+        required=False,
+        help="Destriping mask",
+        dest="mapmaker_mask",
     )
     parser.add_argument(
         "--mapmaker-weightmap",
@@ -248,9 +250,16 @@ def apply_mapmaker(
     if not bin_only and args.mapmaker_prefilter_order is not None:
         timer.start()
         if comm.world_rank == 0 and verbose:
-            print("Applying polynomial prefilter, order = {}".format(args.mapmaker_prefilter_order), flush=True)
+            print(
+                "Applying polynomial prefilter, order = {}".format(
+                    args.mapmaker_prefilter_order
+                ),
+                flush=True,
+            )
         polyfilter = OpPolyFilter(
-            order=args.mapmaker_prefilter_order, name=cache_name, common_flag_mask=args.common_flag_mask,
+            order=args.mapmaker_prefilter_order,
+            name=cache_name,
+            common_flag_mask=args.common_flag_mask,
         )
         polyfilter.exec(data)
         timer.stop()

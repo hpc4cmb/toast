@@ -33,8 +33,7 @@ class Interval(object):
 
     @property
     def start(self):
-        """(float): the start time of the interval.
-        """
+        """(float): the start time of the interval."""
         if self._start is None:
             raise RuntimeError("Start time is not yet assigned")
         return self._start
@@ -47,8 +46,7 @@ class Interval(object):
 
     @property
     def stop(self):
-        """(float): the start time of the interval.
-        """
+        """(float): the start time of the interval."""
         if self._stop is None:
             raise RuntimeError("Stop time is not yet assigned")
         return self._stop
@@ -61,8 +59,7 @@ class Interval(object):
 
     @property
     def first(self):
-        """(int): the first sample of the interval.
-        """
+        """(int): the first sample of the interval."""
         if self._first is None:
             raise RuntimeError("First sample is not yet assigned")
         return self._first
@@ -75,8 +72,7 @@ class Interval(object):
 
     @property
     def last(self):
-        """(int): the first sample of the interval.
-        """
+        """(int): the first sample of the interval."""
         if self._last is None:
             raise RuntimeError("Last sample is not yet assigned")
         return self._last
@@ -89,16 +85,14 @@ class Interval(object):
 
     @property
     def range(self):
-        """(float): the number seconds in the interval.
-        """
+        """(float): the number seconds in the interval."""
         b = self.start
         e = self.stop
         return e - b
 
     @property
     def samples(self):
-        """(int): the number samples in the interval.
-        """
+        """(int): the number samples in the interval."""
         b = self.first
         e = self.last
         return e - b + 1

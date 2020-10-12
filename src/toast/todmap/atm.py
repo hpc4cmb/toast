@@ -509,8 +509,7 @@ class AtmSim(object):
         return status
 
     def _get_slice(self, ind_start, ind_stop):
-        """Identify a manageable slice of compressed indices to simulate next.
-        """
+        """Identify a manageable slice of compressed indices to simulate next."""
         log = Logger.get()
 
         # Move element counter to the end of the most recent simulated slice
@@ -661,8 +660,7 @@ class AtmSim(object):
         return
 
     def get_volume(self):
-        """Compute the volume.
-        """
+        """Compute the volume."""
         log = Logger.get()
 
         # Trim zmax if rmax sets a more stringent limit
@@ -781,8 +779,7 @@ class AtmSim(object):
 
     @function_timer
     def compress_volume(self):
-        """Establish a mapping between full and observed volume indices.
-        """
+        """Establish a mapping between full and observed volume indices."""
         log = Logger.get()
 
         if self._rank == 0:
@@ -944,8 +941,7 @@ class AtmSim(object):
         pass
 
     def _meta_keys(self):
-        """Helper function to return the list of member variables to read / write.
-        """
+        """Helper function to return the list of member variables to read / write."""
         return list(
             [
                 ("nn", int),

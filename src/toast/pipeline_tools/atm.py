@@ -29,8 +29,7 @@ TCMB = 2.725
 
 
 def add_atmosphere_args(parser):
-    """ Add the atmospheric simulation arguments
-    """
+    """Add the atmospheric simulation arguments"""
     parser.add_argument(
         "--atmosphere",
         required=False,
@@ -247,8 +246,7 @@ def add_atmosphere_args(parser):
 
 @function_timer
 def simulate_atmosphere(args, comm, data, mc, cache_name=None, verbose=True):
-    """ Simulate atmospheric signal and add it to `cache_name`.
-    """
+    """Simulate atmospheric signal and add it to `cache_name`."""
     if not args.simulate_atmosphere:
         return
     log = Logger.get()

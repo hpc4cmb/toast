@@ -28,8 +28,7 @@ tod_buffer_length = 1048576
 
 @function_timer
 def simulate_hwp(tod, hwprpm, hwpstep, hwpsteptime):
-    """ Simulate and cache HWP angle in the TOD
-    """
+    """Simulate and cache HWP angle in the TOD"""
     if hwprpm is None and hwpsteptime is None and hwpstep is None:
         # No HWP
         return
@@ -1070,7 +1069,7 @@ class TODGround(TOD):
 
     @function_timer
     def scan_time(self, coord_in, coord_out, scanrate, scan_accel):
-        """ Given a coordinate range and scan parameters, determine
+        """Given a coordinate range and scan parameters, determine
         the time taken to scan between them, assuming that the scan
         begins and ends at rest.
         """
@@ -1091,7 +1090,7 @@ class TODGround(TOD):
     def scan_profile(
         self, coord_in, coord_out, scanrate, scan_accel, times, nstep=10000
     ):
-        """ scan between the coordinates assuming that the scan begins
+        """scan between the coordinates assuming that the scan begins
         and ends at rest.  If there is more time than is needed, wait at the end.
         """
         if np.abs(coord_in - coord_out) < 1e-6:
@@ -1143,7 +1142,7 @@ class TODGround(TOD):
 
     @function_timer
     def scan_between(self, time_start, azel_in, azel_out, nstep=10000):
-        """ Using self._scanrate, self._scan_accel, self._scanrate_el
+        """Using self._scanrate, self._scan_accel, self._scanrate_el
         and self._scan_accel_el, simulate motion between the two
         coordinates
         """
@@ -1205,8 +1204,7 @@ class TODGround(TOD):
 
     @function_timer
     def simulate_elnod(self, t_start, az_start, el_start):
-        """ Simulate an el-nod, if one was requested
-        """
+        """Simulate an el-nod, if one was requested"""
 
         if self._elnod_el is not None:
             time_last = t_start
@@ -1314,7 +1312,8 @@ class TODGround(TOD):
                 raise RuntimeError(
                     "Elevation oscillation requires {:.2f} > {:.2f} deg/s "
                     "scan rate".format(
-                        np.degrees(scanrate), np.degrees(self._scanrate_el),
+                        np.degrees(scanrate),
+                        np.degrees(self._scanrate_el),
                     )
                 )
 
@@ -1431,7 +1430,7 @@ class TODGround(TOD):
 
     @function_timer
     def simulate_scan(self, samples):
-        """ Simulate el-nod and/or a constant elevation scan, either constant rate or
+        """Simulate el-nod and/or a constant elevation scan, either constant rate or
         1/sin(az)-modulated.
 
         """

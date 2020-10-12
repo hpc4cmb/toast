@@ -16,8 +16,7 @@ from ..todmap import OpMadam
 
 
 def add_madam_args(parser):
-    """ Add libmadam arguments
-    """
+    """Add libmadam arguments"""
 
     parser.add_argument(
         "--madam-prefix",
@@ -81,7 +80,10 @@ def add_madam_args(parser):
         "--madam-parfile", required=False, default=None, help="Madam parameter file"
     )
     parser.add_argument(
-        "--madam-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
+        "--madam-mask",
+        required=False,
+        help="Destriping mask",
+        dest="mapmaker_mask",
     )
 
     parser.add_argument(
@@ -272,7 +274,7 @@ def add_madam_args(parser):
 
 @function_timer
 def setup_madam(args):
-    """ Create a Madam parameter dictionary.
+    """Create a Madam parameter dictionary.
 
     Initialize the Madam parameters from the command line arguments.
     """
@@ -392,7 +394,7 @@ def apply_madam(
     verbose=True,
     bin_only=False,
 ):
-    """ Use libmadam to bin and optionally destripe data.
+    """Use libmadam to bin and optionally destripe data.
 
     Bin and optionally destripe all conceivable subsets of the data.
 
