@@ -67,6 +67,7 @@ def parse_arguments(comm):
     pipeline_tools.add_todground_args(parser)
     pipeline_tools.add_pointing_args(parser)
     pipeline_tools.add_polyfilter_args(parser)
+    pipeline_tools.add_polyfilter2D_args(parser)
     pipeline_tools.add_groundfilter_args(parser)
     pipeline_tools.add_atmosphere_args(parser)
     pipeline_tools.add_noise_args(parser)
@@ -564,11 +565,17 @@ def main():
                     first_call=(mc == firstmc),
                 )
 
-            if args.apply_polyfilter or args.apply_groundfilter:
+            if (
+                args.apply_polyfilter
+                or args.apply_polyfilter2D
+                or args.apply_groundfilter
+            ):
 
                 # Filter signal
 
                 pipeline_tools.apply_polyfilter(args, comm, data, totalname_freq)
+
+                pipeline_tools.apply_polyfilter2D(args, comm, data, totalname_freq)
 
                 pipeline_tools.apply_groundfilter(args, comm, data, totalname_freq)
 

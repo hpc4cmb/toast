@@ -1312,7 +1312,8 @@ class TODGround(TOD):
                 raise RuntimeError(
                     "Elevation oscillation requires {:.2f} > {:.2f} deg/s "
                     "scan rate".format(
-                        np.degrees(scanrate), np.degrees(self._scanrate_el),
+                        np.degrees(scanrate),
+                        np.degrees(self._scanrate_el),
                     )
                 )
 
