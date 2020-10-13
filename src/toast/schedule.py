@@ -209,7 +209,7 @@ class Patch(object):
 
     @function_timer
     def corner_coordinates(self, observer=None, unwind=False):
-        """ Return the corner coordinates in horizontal frame.
+        """Return the corner coordinates in horizontal frame.
 
         PyEphem measures the azimuth East (clockwise) from North.
         """
@@ -631,8 +631,7 @@ def patch_is_rising(patch):
 
 @function_timer
 def prioritize(args, visible):
-    """ Order visible targets by priority and number of scans.
-    """
+    """Order visible targets by priority and number of scans."""
     log = Logger.get()
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
@@ -707,8 +706,7 @@ def attempt_scan(
     ods,
     boresight_angle,
 ):
-    """ Attempt scanning the visible patches in order until success.
-    """
+    """Attempt scanning the visible patches in order until success."""
     log = Logger.get()
     success = False
     # Always begin by attempting full scans.  If none can be completed
@@ -868,8 +866,7 @@ def attempt_scan_pole(
     ods,
     boresight_angle,
 ):
-    """ Attempt scanning the visible patches in order until success.
-    """
+    """Attempt scanning the visible patches in order until success."""
     if args.one_scan_per_day and stop_timestamp > tstop_cooler:
         raise RuntimeError("one_scan_per_day is incompatible with cooler cycles")
     success = False
@@ -957,8 +954,7 @@ def attempt_scan_pole(
 def get_constant_elevation(
     args, observer, patch, rising, fp_radius, not_visible, partial_scan=False
 ):
-    """ Determine the elevation at which to scan.
-    """
+    """Determine the elevation at which to scan."""
     log = Logger.get()
 
     azs, els = patch.corner_coordinates(observer)
@@ -1056,8 +1052,7 @@ def get_constant_elevation(
 def get_constant_elevation_pole(
     args, observer, patch, fp_radius, el_min, el_max, not_visible
 ):
-    """ Determine the elevation at which to scan.
-    """
+    """Determine the elevation at which to scan."""
     log = Logger.get()
     _, els = patch.corner_coordinates(observer)
     el = np.amin(els) - fp_radius
@@ -1115,8 +1110,7 @@ def scan_patch(
     sun_el_max,
     rising,
 ):
-    """ Attempt scanning the patch specified by corners at elevation el.
-    """
+    """Attempt scanning the patch specified by corners at elevation el."""
     log = Logger.get()
     azmins, azmaxs, aztimes = [], [], []
     if isinstance(patch, HorizontalPatch):
@@ -1195,7 +1189,7 @@ def scan_patch(
 
 
 def unwind_angle(alpha, beta, multiple=2 * np.pi):
-    """ Minimize absolute difference between alpha and beta.
+    """Minimize absolute difference between alpha and beta.
 
     Minimize the absolute difference by adding a multiple of
     2*pi to beta to match alpha.
@@ -1220,7 +1214,7 @@ def scan_patch_pole(
     stop_timestamp,
     sun_el_max,
 ):
-    """ Attempt scanning the patch specified by corners at elevation el.
+    """Attempt scanning the patch specified by corners at elevation el.
 
     The pole scheduling mode will not wait for the patch to drift across.
     It simply attempts to scan for the required time: args.pole_ces_time.
@@ -1270,7 +1264,7 @@ def scan_patch_pole(
 def current_extent_pole(
     azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, tstop
 ):
-    """ Get the azimuthal extent of the patch along elevation el.
+    """Get the azimuthal extent of the patch along elevation el.
 
     Pole scheduling does not care if the patch is "rising" or "setting".
     """
@@ -1324,7 +1318,7 @@ def current_extent_pole(
 def current_extent(
     azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, rising, t
 ):
-    """ Get the azimuthal extent of the patch along elevation el.
+    """Get the azimuthal extent of the patch along elevation el.
 
     Find the pairs of corners that are on opposite sides
     of the CES line.  Record the crossing azimuth of a
@@ -1405,8 +1399,7 @@ def add_scan(
     subscan=-1,
     partial_scan=False,
 ):
-    """ Make an entry for a CES in the schedule file.
-    """
+    """Make an entry for a CES in the schedule file."""
     log = Logger.get()
     ces_time = tstop - tstart
     if ces_time > args.ces_max_time_s:  # and not args.pole_mode:
@@ -1594,8 +1587,7 @@ def add_scan(
 def add_cooler_cycle(
     args, tstart, tstop, observer, sun, moon, fout, fout_fmt, patch, boresight_angle
 ):
-    """ Make an entry for a cooler cycle in the schedule file.
-    """
+    """Make an entry for a cooler cycle in the schedule file."""
     log = Logger.get()
     az = patch.az
     el = patch.el
@@ -1659,8 +1651,7 @@ def add_cooler_cycle(
 
 @function_timer
 def get_visible(args, observer, sun, moon, patches, el_min):
-    """ Determine which patches are visible.
-    """
+    """Determine which patches are visible."""
     log = Logger.get()
     visible = []
     not_visible = []
@@ -1704,8 +1695,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
 
 @function_timer
 def get_boresight_angle(args, t, t0=0):
-    """ Return the scheduled boresight angle at time t.
-    """
+    """Return the scheduled boresight angle at time t."""
     if args.boresight_angle_step_deg == 0 or args.boresight_angle_time_min == 0:
         return 0
 
@@ -1715,7 +1705,7 @@ def get_boresight_angle(args, t, t0=0):
 
 @function_timer
 def apply_blockouts(args, t_in):
-    """ Check if `t` is inside a blockout period.
+    """Check if `t` is inside a blockout period.
     If so, advance it to the next unblocked time.
 
     Returns:  The (new) time and a boolean flag indicating if
@@ -1783,7 +1773,7 @@ def apply_blockouts(args, t_in):
 
 
 def advance_time(t, time_step, offset=0):
-    """ Advance the time ensuring that the sampling falls
+    """Advance the time ensuring that the sampling falls
     over same discrete times (multiples of time_step)
     regardless of the current value of t.
     """
@@ -2412,8 +2402,7 @@ def parse_patch_cooler(args, parts, last_cycle_end):
 
 @function_timer
 def parse_patch_horizontal(args, parts):
-    """ Parse an explicit patch definition line
-    """
+    """Parse an explicit patch definition line"""
     log = Logger.get()
     corners = []
     log.info("Horizontal format")
@@ -2429,8 +2418,7 @@ def parse_patch_horizontal(args, parts):
 
 @function_timer
 def parse_patch_explicit(args, parts):
-    """ Parse an explicit patch definition line
-    """
+    """Parse an explicit patch definition line"""
     log = Logger.get()
     corners = []
     log.info("Explicit-corners format: ")
@@ -2472,8 +2460,7 @@ def parse_patch_explicit(args, parts):
 
 @function_timer
 def parse_patch_rectangular(args, parts):
-    """ Parse a rectangular patch definition line
-    """
+    """Parse a rectangular patch definition line"""
     log = Logger.get()
     corners = []
     log.info("Rectangular format")
@@ -2532,7 +2519,7 @@ def parse_patch_rectangular(args, parts):
 
 @function_timer
 def add_side(corner1, corner2, corners_temp, coordconv):
-    """ Add one side of a rectangle.
+    """Add one side of a rectangle.
 
     Add one side of a rectangle with enough interpolation points.
     """
@@ -2565,8 +2552,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
 
 @function_timer
 def parse_patch_center_and_width(args, parts):
-    """ Parse center-and-width patch definition
-    """
+    """Parse center-and-width patch definition"""
     log = Logger.get()
     corners = []
     log.info("Center-and-width format")
