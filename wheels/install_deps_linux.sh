@@ -61,7 +61,7 @@ pip install mpi4py
 
 gmp_version=6.2.0
 gmp_dir=gmp-${gmp_version}
-gmp_pkg=gmp-${gmp_dir}.tar.xz
+gmp_pkg=${gmp_dir}.tar.xz
 
 echo "Fetching libgmp"
 
@@ -77,6 +77,31 @@ tar xf ${gmp_pkg} \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
     ./configure \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
+# libmpfr
+
+mpfr_version=4.1.0
+mpfr_dir=mpfr-${mpfr_version}
+mpfr_pkg=${mpfr_dir}.tar.xz
+
+echo "Fetching libmpfr"
+
+if [ ! -e ${mpfr_pkg} ]; then
+    curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
+fi
+
+echo "Building libmpfr..."
+
+rm -rf ${mpfr_dir}
+tar xf ${mpfr_pkg} \
+    && pushd ${mpfr_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    ./configure \
+    --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
