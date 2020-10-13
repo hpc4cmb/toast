@@ -31,6 +31,31 @@ MAKEJ=2
 
 PREFIX=/usr/local
 
+# libgmp
+
+gmp_version=6.2.0
+gmp_dir=gmp-${gmp_version}
+gmp_pkg=gmp-${gmp_dir}.tar.xz
+
+echo "Fetching libgmp"
+
+if [ ! -e ${gmp_pkg} ]; then
+    curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
+fi
+
+echo "Building libgmp..."
+
+rm -rf ${gmp_dir}
+tar xf ${gmp_pkg} \
+    && pushd ${gmp_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
+    ./configure \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
 # Install FFTW
 
 fftw_version=3.3.8
