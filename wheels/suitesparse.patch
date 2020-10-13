@@ -1,7 +1,7 @@
-diff -urN SuiteSparse-5.7.2_orig/Makefile SuiteSparse-5.7.2/Makefile
---- SuiteSparse-5.7.2_orig/Makefile	2020-04-08 13:42:59.000000000 -0700
-+++ SuiteSparse-5.7.2/Makefile	2020-05-27 07:26:10.020688473 -0700
-@@ -266,6 +266,9 @@
+diff -urN SuiteSparse-5.8.1_orig/Makefile SuiteSparse-5.8.1/Makefile
+--- SuiteSparse-5.8.1_orig/Makefile	2020-07-14 16:04:44.000000000 -0700
++++ SuiteSparse-5.8.1/Makefile	2020-10-13 16:16:26.558744640 -0700
+@@ -281,6 +281,9 @@
  # hardcoded below.
  include/metis.h:
  ifeq (,$(MY_METIS_LIB))
