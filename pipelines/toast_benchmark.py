@@ -622,7 +622,7 @@ def create_input_maps(args):
 
 @function_timer
 def create_focalplanes(args, comm, schedules, n_detector):
-    """ Attach a focalplane to each of the schedules.
+    """Attach a focalplane to each of the schedules.
 
     Args:
         schedules (list) :  List of Schedule instances.
@@ -687,7 +687,7 @@ def create_focalplanes(args, comm, schedules, n_detector):
 
 @function_timer
 def create_observation(args, comm, telescope, ces, verbose=True):
-    """ Create a TOAST observation.
+    """Create a TOAST observation.
 
     Create an observation for the CES scan
 
@@ -792,7 +792,7 @@ def create_observation(args, comm, telescope, ces, verbose=True):
 
 @function_timer
 def create_observations(args, comm, schedules):
-    """ Create and distribute TOAST observations for every CES in
+    """Create and distribute TOAST observations for every CES in
     schedules.
 
     Args:
@@ -867,7 +867,7 @@ def create_observations(args, comm, schedules):
 
 
 def setup_sigcopy(args):
-    """ Determine if an extra copy of the atmospheric signal is needed.
+    """Determine if an extra copy of the atmospheric signal is needed.
 
     When we simulate multichroic focal planes, the frequency-independent
     part of the atmospheric noise is simulated first and then the

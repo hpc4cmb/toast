@@ -591,11 +591,12 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
 
                 // If the covariance exceeds the threshold, add it to the
                 // sparse matrix
-                //if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
+                // if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
                 myrows.push_back(irow);
                 mycols.push_back(icol);
                 myvals.push_back(val);
-                //}
+
+                // }
             }
         }
         # pragma omp critical
