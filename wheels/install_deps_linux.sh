@@ -59,7 +59,7 @@ pip install mpi4py
 
 # Install Openblas
 
-openblas_version=0.3.9
+openblas_version=0.3.10
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
@@ -142,7 +142,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.7.2
+ssparse_version=5.8.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
