@@ -337,8 +337,11 @@ def job_config(mpicomm, cases):
         mapmaker_weightmap = None
         mapmaker_iter_max = 20
         mapmaker_precond_width = 100
+        mapmaker_prefilter_order = None
         mapmaker_baseline_length = 200.0
         mapmaker_noisefilter = False
+        mapmaker_fourier2D_order = None
+        mapmaker_fourier2D_subharmonics = None
         write_hits = True
         write_binmap = True
         write_wcov = False
