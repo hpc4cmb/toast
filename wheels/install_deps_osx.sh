@@ -51,6 +51,8 @@ tar xf ${gmp_pkg} \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
     ./configure \
+    --enable-static \
+    --disable-shared \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -75,6 +77,8 @@ tar xf ${mpfr_pkg} \
     && pushd ${mpfr_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
+    --enable-static \
+    --disable-shared \
     --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
