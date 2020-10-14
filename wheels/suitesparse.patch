@@ -11,3 +11,39 @@ diff -urN SuiteSparse-5.8.1_orig/Makefile SuiteSparse-5.8.1/Makefile
  	- ( cd metis-5.1.0 && $(MAKE) config shared=1 prefix=$(SUITESPARSE) cc=$(CC) )
  	- ( cd metis-5.1.0 && $(MAKE) )
  	- ( cd metis-5.1.0 && $(MAKE) install )
+diff -urN SuiteSparse-5.8.1_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.8.1/SLIP_LU/Demo/Makefile
+--- SuiteSparse-5.8.1_orig/SLIP_LU/Demo/Makefile	2020-07-14 16:04:44.000000000 -0700
++++ SuiteSparse-5.8.1/SLIP_LU/Demo/Makefile	2020-10-14 12:07:18.326605012 -0700
+@@ -20,7 +20,7 @@
+ 
+ # LDFLAGS = -L../../lib
+ 
+-LDLIBS += -lm -lgmp -lmpfr -lcolamd -lamd -lsliplu
++LDLIBS += -lsliplu -lcolamd -lamd -lmpfr -lgmp -lm
+ CS = $(LDLIBS)
+ 
+ 
+diff -urN SuiteSparse-5.8.1_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.8.1/SLIP_LU/Lib/Makefile
+--- SuiteSparse-5.8.1_orig/SLIP_LU/Lib/Makefile	2020-07-14 16:04:44.000000000 -0700
++++ SuiteSparse-5.8.1/SLIP_LU/Lib/Makefile	2020-10-14 12:07:50.250795155 -0700
+@@ -20,7 +20,7 @@
+ # CFLAGS += -Wall -Wextra -Wpedantic -Werror
+ 
+ # SLIP_LU depends on SuiteSparse_config, AMD, COLAMD, M, GMP, and MPFR
+-LDLIBS += -lsuitesparseconfig -lamd -lcolamd -lm -lgmp -lmpfr
++LDLIBS += -lsuitesparseconfig -lamd -lcolamd -lmpfr -lgmp -lm
+ 
+ C = $(CC) $(CF) -I../Include -I../../COLAMD/Include -I../../AMD/Include -I../../SuiteSparse_config
+ 
+diff -urN SuiteSparse-5.8.1_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.8.1/SLIP_LU/Tcov/Makefile
+--- SuiteSparse-5.8.1_orig/SLIP_LU/Tcov/Makefile	2020-07-14 16:04:44.000000000 -0700
++++ SuiteSparse-5.8.1/SLIP_LU/Tcov/Makefile	2020-10-14 12:08:36.691080983 -0700
+@@ -21,7 +21,7 @@
+         -I../../SuiteSparse_config -I../../COLAMD/Include -I../../AMD/Include \
+         -DSLIP_GMP_LIST_INIT=2 -DSLIP_LU_TCOV
+ 
+-LDLIBS += -lm -lgmp -lmpfr -lcolamd -lamd -lsuitesparseconfig
++LDLIBS += -lsuitesparseconfig -lcolamd -lamd -lmpfr -lgmp -lm
+ 
+ # run all statement coverage tests, and then check for 100% coverage
+ run: runtests

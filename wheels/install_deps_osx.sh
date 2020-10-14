@@ -53,6 +53,7 @@ tar xf ${gmp_pkg} \
     ./configure \
     --enable-static \
     --disable-shared \
+    --with-pic \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -79,6 +80,7 @@ tar xf ${mpfr_pkg} \
     ./configure \
     --enable-static \
     --disable-shared \
+    --with-pic \
     --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \

@@ -79,10 +79,10 @@ rm -rf ${gmp_dir}
 tar xf ${gmp_pkg} \
     && pushd ${gmp_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
-    && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
     ./configure \
     --enable-static \
     --disable-shared \
+    --with-pic \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -109,6 +109,7 @@ tar xf ${mpfr_pkg} \
     ./configure \
     --enable-static \
     --disable-shared \
+    --with-pic \
     --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
