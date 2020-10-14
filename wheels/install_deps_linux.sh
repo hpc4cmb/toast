@@ -12,6 +12,10 @@ pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
 popd >/dev/null 2>&1
 
+# Install xz
+
+yum -y install xz
+
 # Get newer cmake with pip
 pip install cmake
 
@@ -57,9 +61,64 @@ tar xzf ${mpich_pkg} \
 
 pip install mpi4py
 
+# libgmp
+
+gmp_version=6.2.0
+gmp_dir=gmp-${gmp_version}
+gmp_pkg=${gmp_dir}.tar.xz
+
+echo "Fetching libgmp"
+
+if [ ! -e ${gmp_pkg} ]; then
+    curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
+fi
+
+echo "Building libgmp..."
+
+rm -rf ${gmp_dir}
+tar xf ${gmp_pkg} \
+    && pushd ${gmp_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    ./configure \
+    --enable-static \
+    --disable-shared \
+    --with-pic \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
+# libmpfr
+
+mpfr_version=4.1.0
+mpfr_dir=mpfr-${mpfr_version}
+mpfr_pkg=${mpfr_dir}.tar.xz
+
+echo "Fetching libmpfr"
+
+if [ ! -e ${mpfr_pkg} ]; then
+    curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
+fi
+
+echo "Building libmpfr..."
+
+rm -rf ${mpfr_dir}
+tar xf ${mpfr_pkg} \
+    && pushd ${mpfr_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    ./configure \
+    --enable-static \
+    --disable-shared \
+    --with-pic \
+    --with-gmp="${PREFIX}" \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
 # Install Openblas
 
-openblas_version=0.3.9
+openblas_version=0.3.10
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
@@ -142,7 +201,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.7.2
+ssparse_version=5.8.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 

@@ -31,6 +31,62 @@ MAKEJ=2
 
 PREFIX=/usr/local
 
+# libgmp
+
+gmp_version=6.2.0
+gmp_dir=gmp-${gmp_version}
+gmp_pkg=${gmp_dir}.tar.xz
+
+echo "Fetching libgmp"
+
+if [ ! -e ${gmp_pkg} ]; then
+    curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
+fi
+
+echo "Building libgmp..."
+
+rm -rf ${gmp_dir}
+tar xf ${gmp_pkg} \
+    && pushd ${gmp_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
+    ./configure \
+    --enable-static \
+    --disable-shared \
+    --with-pic \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
+# libmpfr
+
+mpfr_version=4.1.0
+mpfr_dir=mpfr-${mpfr_version}
+mpfr_pkg=${mpfr_dir}.tar.xz
+
+echo "Fetching libmpfr"
+
+if [ ! -e ${mpfr_pkg} ]; then
+    curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
+fi
+
+echo "Building libmpfr..."
+
+rm -rf ${mpfr_dir}
+tar xf ${mpfr_pkg} \
+    && pushd ${mpfr_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    ./configure \
+    --enable-static \
+    --disable-shared \
+    --with-pic \
+    --with-gmp="${PREFIX}" \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
 # Install FFTW
 
 fftw_version=3.3.8
@@ -91,7 +147,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.7.2
+ssparse_version=5.8.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
