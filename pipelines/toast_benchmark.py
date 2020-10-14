@@ -1029,14 +1029,14 @@ def main():
 
     data, telescope_data, total_samples = create_observations(args, comm, schedules)
 
-    handle = None
-    if comm.world_rank == 0:
-        handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
-    data.info(handle)
-    if comm.world_rank == 0:
-        handle.close()
-    if comm.comm_world is not None:
-        comm.comm_world.barrier()
+    # handle = None
+    # if comm.world_rank == 0:
+    #     handle = open(os.path.join(args.outdir, "distdata.txt"), "w")
+    # data.info(handle)
+    # if comm.world_rank == 0:
+    #     handle.close()
+    # if comm.comm_world is not None:
+    #     comm.comm_world.barrier()
 
     # Split the communicator for day and season mapmaking
 
