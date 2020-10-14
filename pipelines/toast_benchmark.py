@@ -108,28 +108,45 @@ def get_node_mem(mpicomm, node_rank):
     return int(avail)
 
 
-def sample_distribution(procs_per_node, bytes_per_node, total_samples, sample_rate):
-    # Max time span is 1 month of observing, to reduce the cost of generating
-    # the schedule (a serial operation) at the start of each job.
-    max_time_samples = int(30 * 24 * 3600 * sample_rate)
+def sample_distribution(
+    rank, procs_per_node, bytes_per_node, total_samples, sample_rate
+):
+    # For this benchmark, we start by ramping up to a realistic number of detectors for
+    # one day of data. Then we extend the timespan to achieve the desired number of
+    # samples.
 
-    # Increase the number of detectors to keep the sample count in the time direction
-    # below the max.  Ensure that we have sufficient numbers of detectors per process
-    # to remain realistic.
+    log = Logger.get()
 
-    group_nodes = 0
-    group_procs = None
-    n_detector = None
-    time_samples = max_time_samples + 1
+    # Hex-packed 127 pixels (6 rings) times two dets per pixel.
+    # max_detector = 254
 
-    while time_samples > max_time_samples:
-        group_nodes += 1
-        group_procs = group_nodes * procs_per_node
-        n_detector = 4 * group_procs
-        time_samples = 1 + total_samples // n_detector
+    # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+    max_detector = 2054
 
-    # Now that detectors and timespan are set, compute how many samples each group
-    # can fit into memory.
+    # Minimum time span (one day)
+    min_time_samples = int(24 * 3600 * sample_rate)
+
+    # For the minimum time span, scale up the number of detectors to reach the
+    # requested total sample size.
+
+    n_detector = 1
+    test_samples = n_detector * min_time_samples
+
+    while test_samples < total_samples and n_detector < max_detector:
+        n_detector += 1
+        test_samples = n_detector * min_time_samples
+
+    if rank == 0:
+        log.debug(
+            "  Dist total = {}, using {} detectors at min time samples = {}".format(
+                total_samples, n_detector, min_time_samples
+            )
+        )
+
+    # For this number of detectors, determine the group size needed to fit the
+    # minimum number of samples in memory.  In practice, one day will actually be
+    # split up into multiple observations.  However, sizing the groups this way ensures
+    # that each group will have multiple observations and improve the load balancing.
 
     det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
         8  # 64 bit float / ints used
@@ -142,18 +159,57 @@ def sample_distribution(procs_per_node, bytes_per_node, total_samples, sample_ra
         + 1  # one byte per sample for common flag
     )
 
-    # NOTE:  change this when moving to toast-3, since common data is in shared mem.
-    # So the prefactor should be nodes per group, not group_procs.
-    bytes_per_samp = (
-        n_detector * det_bytes_per_sample + group_procs * common_bytes_per_sample
-    )
-    # bytes_per_samp = (
-    #     n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
-    # )
+    group_nodes = 0
+    group_mem = 0.0
 
-    group_time_samples = int(group_nodes * bytes_per_node / bytes_per_samp)
+    # This just ensures we go through the loop once.
+    min_time_mem = 1.0
 
-    n_group = 1 + time_samples // group_time_samples
+    while group_mem < min_time_mem:
+        group_nodes += 1
+        group_procs = group_nodes * procs_per_node
+        group_mem = group_nodes * bytes_per_node
+
+        # NOTE:  change this when moving to toast-3, since common data is in shared mem.
+        # So the prefactor should be nodes per group, not group_procs.
+        bytes_per_samp = (
+            n_detector * det_bytes_per_sample + group_procs * common_bytes_per_sample
+        )
+        # bytes_per_samp = (
+        #     n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
+        # )
+        min_time_mem = min_time_samples * bytes_per_samp
+        if rank == 0:
+            log.verbose(
+                "  Dist testing {} group nodes, {} proc/node, group mem = {}, comparing to minimum = {} ({} samp * {} bytes/samp)".format(
+                    group_nodes,
+                    procs_per_node,
+                    group_mem,
+                    min_time_mem,
+                    min_time_samples,
+                    bytes_per_samp,
+                )
+            )
+
+    if rank == 0:
+        log.debug("  Dist selecting {} nodes per group".format(group_nodes))
+
+    # Now set the number of groups to get the target number of total samples.
+
+    group_time_samples = min_time_samples
+    group_samples = n_detector * group_time_samples
+
+    n_group = 1 + (total_samples // group_samples)
+
+    time_samples = n_group * group_time_samples
+
+    if rank == 0:
+        log.debug(
+            "  Dist using {} groups, each with {} / {} (time / total) samples".format(
+                n_group, group_time_samples, group_samples
+            )
+        )
+        log.debug("  Dist using {} total samples".format(n_detector * time_samples))
 
     return (
         n_detector,
@@ -397,7 +453,7 @@ def job_config(mpicomm, cases):
             case_n_group,
             case_group_time_samples,
         ) = sample_distribution(
-            procs_per_node, avail_node_bytes, case_samples, args.sample_rate
+            rank, procs_per_node, avail_node_bytes, case_samples, args.sample_rate
         )
 
         case_min_nodes = case_n_group * case_group_nodes
