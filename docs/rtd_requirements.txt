@@ -5,3 +5,6 @@ healpy
 astropy
 h5py
 ephem
+tomlkit
+traitlets>=5.0
+pshmem
