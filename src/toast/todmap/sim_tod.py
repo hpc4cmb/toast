@@ -953,6 +953,7 @@ class TODGround(TOD):
         self._az = np.array([])
         self._el = np.array([])
 
+        nsample_elnod = 0
         if start_with_elnod:
             # Begin with an el-nod
             nsample_elnod = self.simulate_elnod(

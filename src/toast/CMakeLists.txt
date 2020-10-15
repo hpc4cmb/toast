@@ -91,6 +91,7 @@ install(FILES
     fft.py
     healpix.py
     weather.py
+    schedule.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )

@@ -71,6 +71,7 @@ void toast::fod_crosssums(int64_t n, double const * x, double const * y,
             lagsum += xgood[i] * ygood[j];
             hitsum += gd[i] * gd[j];
         }
+
         // Use symmetry to double the statistics
         for (i = 0, j = lag; i < (n - lag); ++i, ++j) {
             lagsum += xgood[j] * ygood[i];

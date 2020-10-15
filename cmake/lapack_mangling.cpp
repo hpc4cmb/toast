@@ -3,21 +3,23 @@
 // in the LAPACK library without actually using the fortran compiler.
 
 #if defined LAPACK_UPPER
-# define func ILAVER
+# define func DPOTRF
 #elif defined LAPACK_LOWER
-# define func ilaver
+# define func dpotrf
 #elif defined LAPACK_UBACK
-# define func ilaver_
+# define func dpotrf_
 #elif defined LAPACK_UFRONT
-# define func _ilaver
-#endif // if defined LAPACK_UP
+# define func _dpotrf
+#endif // if defined LAPACK_UPPER
 extern "C" {
-void func(int * major, int * minor, int * patch);
+void func(char * UPLO, int * N, double * A, int * LDA, int * INFO);
 }
 int main(int argc, char ** argv) {
-    int major = 0;
-    int minor = 0;
-    int patch = 0;
-    func(&major, &minor, &patch);
+    char UPLO = 'L';
+    int N = 1;
+    double A[1];
+    int LDA = 1;
+    int INFO = 0;
+    func(&UPLO, &N, A, &LDA, &INFO);
     return 0;
 }

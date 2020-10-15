@@ -3,10 +3,28 @@
 Change Log
 -------------------------
 
-2.3.9 (Unreleased)
+2.3.9 (2020-10-15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* No changes yet
+* Add stand-alone benchmarking tool (PR `#365`_).
+* Update wheels to use latest OpenBLAS and SuiteSparse (PR `#368`_).
+* Tweaks to atmosphere simulation based on calibration campaign (PR `#367`_).
+* Add support for 2D polynomial filtering across focalplane (PR `#366`_).
+* Ground scheduler support for elevation modulated scans (PR `#364`_).
+* Add better dictionary interface to Cache class (PR `#363`_).
+* Support simulating basic non-ideal HWP response (PR `#362`_).
+* Ground scheduler support for fixed elevations and partial scans (PR `#361`_).
+* Additional check for NULL plan returned from FFTW (PR `#360`_).
+
+.. _`#360`: https://github.com/hpc4cmb/toast/pull/360
+.. _`#361`: https://github.com/hpc4cmb/toast/pull/361
+.. _`#362`: https://github.com/hpc4cmb/toast/pull/362
+.. _`#363`: https://github.com/hpc4cmb/toast/pull/363
+.. _`#364`: https://github.com/hpc4cmb/toast/pull/364
+.. _`#365`: https://github.com/hpc4cmb/toast/pull/365
+.. _`#366`: https://github.com/hpc4cmb/toast/pull/366
+.. _`#367`: https://github.com/hpc4cmb/toast/pull/367
+.. _`#368`: https://github.com/hpc4cmb/toast/pull/368
 
 2.3.8 (2020-06-27)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
