@@ -2,11 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import traitlets
+
 import numpy as np
 
 from scipy.constants import degree
-
-import traitlets
 
 import healpy as hp
 
@@ -267,7 +267,7 @@ class SimSatellite(Operator):
 
     # Class traits
 
-    API = traitlets.Int(0, help="Internal interface version for this operator")
+    API = Int(0, help="Internal interface version for this operator")
 
     telescope = Instance(
         klass=Telescope, allow_none=True, help="This must be an instance of a Telescope"

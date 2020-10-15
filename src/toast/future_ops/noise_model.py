@@ -81,10 +81,10 @@ class DefaultNoiseModel(Operator):
         return
 
     def _requires(self):
-        return list()
+        return dict()
 
     def _provides(self):
-        prov = [self.noisekey]
+        prov = {"meta": [self.noisekey]}
         return prov
 
     def _accelerators(self):

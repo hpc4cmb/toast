@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import traitlets
+
 from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, List
@@ -9,12 +11,18 @@ from ..traits import trait_docs, Int, Unicode, List
 from ..operator import Operator
 
 
+@trait_docs
 class Pipeline(Operator):
-    """Class representing a sequence of Operators."""
+    """Class representing a sequence of Operators.
+
+    This runs a list of other operators over sets of detectors (default is all
+    detectors in one shot).
+
+    """
 
     # Class traits
 
-    API = traitlets.Int(0, help="Internal interface version for this operator")
+    API = Int(0, help="Internal interface version for this operator")
 
     operators = List(allow_none=True, help="List of Operator instances to run.")
 

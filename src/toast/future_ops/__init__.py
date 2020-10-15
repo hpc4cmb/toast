@@ -4,7 +4,7 @@
 
 # import functions into our public API
 
-# from .pipeline import Pipeline
+from .pipeline import Pipeline
 
 from .sim_satellite import SimSatellite
 
