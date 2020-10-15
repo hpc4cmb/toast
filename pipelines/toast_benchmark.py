@@ -1160,12 +1160,26 @@ def main():
         mpiworld.barrier()
 
     runtime = gt.seconds("toast_benchmark (science work)")
+    prefactor = 1.0e-3
     kilo_samples = 1.0e-3 * total_samples
-    factor = 1.10
-    metric = (kilo_samples) ** factor / (runtime * n_nodes)
+    sample_factor = 1.2
+    det_factor = 2.0
+    metric = (
+        prefactor
+        * n_detector ** det_factor
+        * kilo_samples ** sample_factor
+        / (n_nodes * runtime)
+    )
     if rank == 0:
-        msg = "Science Metric: ({:0.3e})**({:0.3f}) / ({:0.1f} * {}) = {:0.2f}".format(
-            kilo_samples, factor, runtime, n_nodes, metric
+        msg = "Science Metric: {:0.1e} * ({:d}**{:0.2f}) * ({:0.3e}**{:0.3f}) / ({:0.1f} * {}) = {:0.2f}".format(
+            prefactor,
+            n_detector,
+            det_factor,
+            kilo_samples,
+            sample_factor,
+            runtime,
+            n_nodes,
+            metric,
         )
         log.info("")
         log.info(msg)
