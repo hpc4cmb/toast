@@ -8,6 +8,11 @@ Change Log
 
 * No changes yet.
 
+2.3.9.post1 (2020-10-15)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Run serial unit tests without MPI, even if MPI is installed.
+
 2.3.9 (2020-10-15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 

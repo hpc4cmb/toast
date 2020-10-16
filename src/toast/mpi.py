@@ -16,25 +16,31 @@ use_mpi = None
 MPI = None
 
 if use_mpi is None:
-    # Special handling for running on a NERSC login node.  This is for convenience.
-    # The same behavior could be implemented with environment variables set in a
-    # shell resource file.
-    at_nersc = False
-    if "NERSC_HOST" in os.environ:
-        at_nersc = True
-    in_slurm = False
-    if "SLURM_JOB_NAME" in os.environ:
-        in_slurm = True
-    if not at_nersc or in_slurm:
-        try:
-            import mpi4py.MPI as MPI
+    # See if the user has explicitly disabled MPI.
+    if "MPI_DISABLE" in os.environ:
+        use_mpi = False
+    else:
+        # Special handling for running on a NERSC login node.  This is for convenience.
+        # The same behavior could be implemented with environment variables set in a
+        # shell resource file.
+        at_nersc = False
+        if "NERSC_HOST" in os.environ:
+            at_nersc = True
+        in_slurm = False
+        if "SLURM_JOB_NAME" in os.environ:
+            in_slurm = True
+        if (not at_nersc) or in_slurm:
+            try:
+                import mpi4py.MPI as MPI
 
-            use_mpi = True
-        except:
-            # There could be many possible exceptions raised...
-            log = Logger.get()
-            log.info("mpi4py not found- using serial operations only")
-            use_mpi = False
+                use_mpi = True
+            except:
+                # There could be many possible exceptions raised...
+                from ._libtoast import Logger
+
+                log = Logger.get()
+                log.info("mpi4py not found- using serial operations only")
+                use_mpi = False
 
 
 def get_world():
