@@ -26,7 +26,7 @@ jobs:
       - name: Test Documentation Build
         run: docker run -v "$(pwd)":/home/toast test_runner:py36 /home/toast/docs/build_docs.sh
       - name: Run Serial Tests
-        run: docker run test_runner:py36 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run -e MPI_DISABLE=1 test_runner:py36 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
         run: docker run test_runner:py36 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
   py37:
@@ -46,7 +46,7 @@ jobs:
       - name: Test Documentation Build
         run: docker run -v "$(pwd)":/home/toast test_runner:py37 /home/toast/docs/build_docs.sh
       - name: Run Serial Tests
-        run: docker run test_runner:py37 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run -e MPI_DISABLE=1 test_runner:py37 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
         run: docker run test_runner:py37 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
   py38:
@@ -66,6 +66,6 @@ jobs:
       - name: Test Documentation Build
         run: docker run -v "$(pwd)":/home/toast test_runner:py38 /home/toast/docs/build_docs.sh
       - name: Run Serial Tests
-        run: docker run test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run -e MPI_DISABLE=1 test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
         run: docker run test_runner:py38 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
