@@ -268,14 +268,14 @@ class TraitConfig(HasTraits):
 
         """
         if input is None:
-            input = dict()
+            input = OrderedDict()
         name = cls.__qualname__
         parent = cls._check_parent(input, section, name)
-        parent[name] = dict()
+        parent[name] = OrderedDict()
         parent[name]["class"] = object_fullname(cls)
         for trait_name, trait in cls.class_traits().items():
             trname, trtype, trdefault, trhelp = trait_info(trait)
-            parent[name][trname] = dict()
+            parent[name][trname] = OrderedDict()
             valstr, unitstr, typestr = cls._format_conf_trait(trait, trdefault)
             parent[name][trname]["value"] = valstr
             parent[name][trname]["unit"] = unitstr
@@ -304,17 +304,20 @@ class TraitConfig(HasTraits):
 
         """
         if input is None:
-            input = dict()
+            input = OrderedDict()
         name = self.name
         parent = self._check_parent(input, section, name)
-        parent[name] = dict()
+        parent[name] = OrderedDict()
         parent[name]["class"] = object_fullname(self.__class__)
         for trait_name, trait in self.traits().items():
             trname, trtype, trdefault, trhelp = trait_info(trait)
             trval = None
             if trait.get(self) is not None:
-                trval = trtype(trait.get(self))
-            parent[name][trname] = dict()
+                try:
+                    trval = trtype(trait.get(self))
+                except Exception:
+                    trval = str(trait.get(self))
+            parent[name][trname] = OrderedDict()
             valstr, unitstr, typestr = self._format_conf_trait(trait, trval)
             parent[name][trname]["value"] = valstr
             parent[name][trname]["unit"] = unitstr
@@ -525,8 +528,10 @@ def args_update_config(args, conf, defaults, section, prefix="", separator=":"):
             name = obj_mat.group(1)
             optname = obj_mat.group(2)
             if name not in parent:
-                msg = "Parsing option '{}', config does not have object named {}".format(
-                    arg, name
+                msg = (
+                    "Parsing option '{}', config does not have object named {}".format(
+                        arg, name
+                    )
                 )
                 raise RuntimeError(msg)
             if name not in dparent:
