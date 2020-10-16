@@ -3,12 +3,7 @@
 Change Log
 -------------------------
 
-2.3.10 (Unreleased)
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-* No changes yet.
-
-2.3.9.post1 (2020-10-15)
+2.3.10 (2020-10-15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Run serial unit tests without MPI.  Fix bug in ground filter (PR `#370`_).
