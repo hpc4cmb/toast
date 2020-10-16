@@ -8,6 +8,13 @@ Change Log
 
 * No changes yet.
 
+2.3.9.post1 (2020-10-15)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Run serial unit tests without MPI.  Fix bug in ground filter (PR `#370`_).
+
+.. _`#370`: https://github.com/hpc4cmb/toast/pull/370
+
 2.3.9 (2020-10-15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 

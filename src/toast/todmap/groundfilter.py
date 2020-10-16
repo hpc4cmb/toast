@@ -167,7 +167,11 @@ class OpGroundFilter(Operator):
             ngood = np.sum(good)
         else:
             ngood = 0
-        ngood_tot = comm.allreduce(ngood)
+        ngood_tot = None
+        if comm is None:
+            ngood_tot = ngood
+        else:
+            ngood_tot = comm.allreduce(ngood)
         if ngood_tot == 0:
             return None
 
