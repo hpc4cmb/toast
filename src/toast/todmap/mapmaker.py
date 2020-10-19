@@ -246,6 +246,93 @@ class SubharmonicTemplate(TODTemplate):
         return
 
 
+class GainTemplate(TODTemplate):
+    """This class aims at estimating the amplitudes of gain fluctuations
+    by means of templates within the TOAST mapmaker.  """
+
+    name = "Gain"
+
+    def __init__(
+        self,
+        data,
+        order=1,
+        common_flags=None,
+        common_flag_mask=1,
+        flags=None,
+        flag_mask=1,
+        signalname =None,
+        templatename =None,
+
+    ):
+        self.data = data
+        self.comm = data.comm.comm_group
+        self.order = order
+        self.norder = order + 1
+        self.nmode = (2 * order) ** 2 + 1
+        self.common_flags = common_flags
+        self.common_flag_mask = common_flag_mask
+        self.flags = flags
+        self.flag_mask = flag_mask
+        self.signalname=signalname
+        self.templatename = templatename
+
+        return
+
+    @function_timer
+    def get_polynomials (self, N):
+        x = 2 * np.arange(N) / (N - 1)   -1
+        self.legendre_poly =np.array(
+                    [ scipy.special.legendre(i)(x) for i in range(self.norder  ) ]
+                    ).reshape((N, self.norder))
+
+
+    @function_timer
+    def Legendre_template(self, template , *args):
+        return self.legendre_poly.dot(args ) *template_signal
+
+    @function_timer
+    def add_to_signal(self, signal,  amplitudes):
+        """signal += F.a"""
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            self.get_polynomials(nsample)
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for det in tod.local_dets:
+                poly_amplitudes = amplitudes[self.name][iobs, det]
+
+                signal  = tod.local_signal(det, self.signalname)
+                signal[todslice ] += self.legendre_poly.dot(poly_amplitudes)
+
+                del signal
+
+        return
+
+
+    @function_timer
+    def project_signal(self, signal, amplitudes):
+        """a += F^T.signal"""
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            self.get_polynomials(nsample)
+
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for det in tod.local_dets:
+                signal  = tod.local_signal(det, self.signalname)
+                template  = tod.local_signal(det, self.templatename)
+                popt,_= scipy.optimize.curve_fit(self.Legendre_template,
+                                                 template   , signal  ,
+                                                p0=np.ones(self.norder   ))
+                amplitudes[self.name][iobs,det]  = popt
+        return
+
+
+
 class Fourier2DTemplate(TODTemplate):
     """This class represents atmospheric fluctuations in front of the
     focalplane as 2D Fourier modes."""
