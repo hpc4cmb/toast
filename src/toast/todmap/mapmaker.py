@@ -279,9 +279,9 @@ class GainTemplate(TODTemplate):
         return
 
     @function_timer
-    def get_polynomials (self, N):
+    def get_polynomials (self, N, local_offset, local_N):
         x = 2 * np.arange(N) / (N - 1)   -1
-        self.legendre_poly =np.array(
+        return np.array(
                     [ scipy.special.legendre(i)(x) for i in range(self.norder  ) ]
                     ).reshape((N, self.norder))
 
@@ -293,27 +293,50 @@ class GainTemplate(TODTemplate):
     @function_timer
     def add_to_signal(self, signal,  amplitudes):
         """signal += F.a"""
+        poly_amplitudes = amplitudes[self.name]
+
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             nsample = tod.total_samples
-            self.get_polynomials(nsample)
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
+            poly = self.get_polynomials(nsample, local_offset, local_sample)
             todslice = slice(local_offset, local_offset + local_nsample)
             for det in tod.local_dets:
-                poly_amplitudes = amplitudes[self.name][iobs, det]
-
-                signal  = tod.local_signal(det, self.signalname)
-                signal[todslice ] += self.legendre_poly.dot(poly_amplitudes)
-
-                del signal
+                poly_amps = poly_amplitudes[ind]
+                delta_gain = self.legendre_poly.dot(poly_amps)
+                signal_estimate = tod.local_signal(det, self.template_name)
+                gain_fluctuation = signal_estimate * delta_gain
+                signal[iobs, det, todslice] += gain_fluctuation
 
         return
 
+    def get_poly_offset(self, iobs, detector):
+        # FIXME
+        return ind
+    
 
     @function_timer
     def project_signal(self, signal, amplitudes):
         """a += F^T.signal"""
+        poly_amplitudes = amplitudes[self.name]
+        
+        ## FIXME: cast poly_amplitudes into an array of observation, detector and polynomial order
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            poly = self.get_polynomials(nsample, local_offset, local_sample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for det in tod.local_dets:
+                ind = self.get_poly_slice(iobs, detector)
+                delta_gain = self.legendre_poly.dot(np.ones(self.norder))
+                signal_estimate = tod.local_signal(det, self.template_name)
+                gain_fluctuation = signal_estimate * delta_gain
+                poly_amplitudes[ind] += np.dot(signal[iobs, det], gain_fluctuation_template)
+
+        """
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             nsample = tod.total_samples
@@ -329,6 +352,7 @@ class GainTemplate(TODTemplate):
                                                  template   , signal  ,
                                                 p0=np.ones(self.norder   ))
                 amplitudes[self.name][iobs,det]  = popt
+        """
         return
 
 
