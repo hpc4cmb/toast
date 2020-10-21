@@ -273,22 +273,33 @@ class GainTemplate(TODTemplate):
         self.common_flag_mask = common_flag_mask
         self.flags = flags
         self.flag_mask = flag_mask
-        self.signalname=signalname
-        self.templatename = templatename
+        self.template_name = templatename
+        self._estimate_offsets()
 
         return
+
+    def _estimate_offsets (self ):
+        """ Precompute the amplitude offsets """
+
+        offset =0
+        self.list_of_offsets =[]
+        for  obs in  (self.data.obs):
+            tod = obs["tod"]
+            tmplist =[]
+            for det in tod.local_dets :
+                offset +=self.norder
+                tmplist .append(offset)
+            self.list_of_offsets.append(tmplist )
+
 
     @function_timer
     def get_polynomials (self, N, local_offset, local_N):
         x = 2 * np.arange(N) / (N - 1)   -1
+        todslice = slice(local_offset, local_offset + local_nsample)
+
         return np.array(
-                    [ scipy.special.legendre(i)(x) for i in range(self.norder  ) ]
-                    ).reshape((N, self.norder))
-
-
-    @function_timer
-    def Legendre_template(self, template , *args):
-        return self.legendre_poly.dot(args ) *template_signal
+                    [ scipy.special.legendre(i)(x[todslice]) for i in range(self.norder  ) ]
+                    ).reshape((local_N, self.norder))
 
     @function_timer
     def add_to_signal(self, signal,  amplitudes):
@@ -302,8 +313,10 @@ class GainTemplate(TODTemplate):
             local_offset, local_nsample = tod.local_samples
             poly = self.get_polynomials(nsample, local_offset, local_sample)
             todslice = slice(local_offset, local_offset + local_nsample)
-            for det in tod.local_dets:
-                poly_amps = poly_amplitudes[ind]
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs ][idet ]
+                amplitude_slice= slice(ind ,ind+self.norder )
+                poly_amps = poly_amplitudes[amplitude_slice ]
                 delta_gain = self.legendre_poly.dot(poly_amps)
                 signal_estimate = tod.local_signal(det, self.template_name)
                 gain_fluctuation = signal_estimate * delta_gain
@@ -311,17 +324,11 @@ class GainTemplate(TODTemplate):
 
         return
 
-    def get_poly_offset(self, iobs, detector):
-        # FIXME
-        return ind
-    
 
     @function_timer
     def project_signal(self, signal, amplitudes):
         """a += F^T.signal"""
         poly_amplitudes = amplitudes[self.name]
-        
-        ## FIXME: cast poly_amplitudes into an array of observation, detector and polynomial order
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             nsample = tod.total_samples
@@ -329,30 +336,16 @@ class GainTemplate(TODTemplate):
             local_offset, local_nsample = tod.local_samples
             poly = self.get_polynomials(nsample, local_offset, local_sample)
             todslice = slice(local_offset, local_offset + local_nsample)
+
             for det in tod.local_dets:
-                ind = self.get_poly_slice(iobs, detector)
+                ind = self.list_of_offsets[iobs ][idet ]
+                amplitude_slice= slice(ind ,ind+self.norder )
                 delta_gain = self.legendre_poly.dot(np.ones(self.norder))
                 signal_estimate = tod.local_signal(det, self.template_name)
                 gain_fluctuation = signal_estimate * delta_gain
-                poly_amplitudes[ind] += np.dot(signal[iobs, det], gain_fluctuation_template)
+                poly_amplitudes[ind] += np.dot(signal[iobs, det, todslice], gain_fluctuation_template)
 
-        """
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            nsample = tod.total_samples
-            self.get_polynomials(nsample)
 
-            # For each observation, sample indices start from 0
-            local_offset, local_nsample = tod.local_samples
-            todslice = slice(local_offset, local_offset + local_nsample)
-            for det in tod.local_dets:
-                signal  = tod.local_signal(det, self.signalname)
-                template  = tod.local_signal(det, self.templatename)
-                popt,_= scipy.optimize.curve_fit(self.Legendre_template,
-                                                 template   , signal  ,
-                                                p0=np.ones(self.norder   ))
-                amplitudes[self.name][iobs,det]  = popt
-        """
         return
 
 
