@@ -20,7 +20,9 @@ from ..dist import distribute_uniform
 
 from ..timing import function_timer, Timer
 
-from ..tod import Interval, TOD, regular_intervals, AnalyticNoise
+from ..intervals import Interval, regular_intervals
+
+from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
@@ -317,7 +319,7 @@ class SimSatellite(Operator):
 
     flags = Unicode("flags", help="Observation shared key for common flags")
 
-    hwp = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
 
     boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
 
@@ -510,7 +512,7 @@ class SimSatellite(Operator):
                 hwp_step_time_m = self.hwp_step_time.to_value(u.minute)
             simulate_hwp_angle(
                 obs,
-                self.hwp,
+                self.hwp_angle,
                 obsrange[ob].start,
                 self.hwp_rpm,
                 hwp_step_deg,

@@ -2,15 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import traitlets
+
 import numpy as np
 
 from ..utils import Environment, Logger
 
+from ..traits import trait_docs, Int, Unicode, Bool
+
 from ..healpix import HealpixPixels
 
 from ..operator import Operator
-
-from ..config import ObjectConfig
 
 from ..timing import function_timer
 
@@ -21,6 +23,7 @@ from ..pixels import PixelDistribution
 from .._libtoast import pointing_matrix_healpix
 
 
+@trait_docs
 class PointingHealpix(Operator):
     """Operator which generates I/Q/U healpix pointing weights.
 
@@ -44,120 +47,111 @@ class PointingHealpix(Operator):
     .. math::
         d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a+4w} + U \\sin{2a+4w}\\right]\\right]
 
-    Args:
-        config (dict): Configuration parameters.
-
     """
 
-    def __init__(self, config):
-        super().__init__(config)
-        self._parse()
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    nside = Int(64, help="The NSIDE resolution")
+
+    nside_submap = Int(16, help="The NSIDE of the submap resolution")
+
+    nest = Bool(False, help="If True, used NESTED ordering instead of RING")
+
+    mode = Unicode("I", help="The Stokes weights to generate (I or IQU)")
+
+    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
+
+    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+
+    flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    flag_mask = Int(0, help="Bit mask value for optional flagging")
+
+    pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
+
+    weights = Unicode("weights", help="Observation detdata key for output weights")
+
+    quats = Unicode(
+        "quats",
+        allow_none=True,
+        help="Observation detdata key for output quaternions (for debugging)",
+    )
+
+    create_dist = Unicode(
+        None,
+        allow_none=True,
+        help="Create the submap distribution for all detectors and store in the Data key specified",
+    )
+
+    single_precision = Bool(False, help="If True, use 32bit int / float in output")
+
+    cal = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of pointing weight calibration for each det",
+    )
+
+    @traitlets.validate("nside")
+    def _check_nside(self, proposal):
+        check = proposal["value"]
+        if ~check & (check - 1) != check - 1:
+            raise traitlets.TraitError("Invalid NSIDE value")
+        return check
+
+    @traitlets.validate("nside_submap")
+    def _check_nside_submap(self, proposal):
+        check = proposal["value"]
+        if ~check & (check - 1) != check - 1:
+            raise traitlets.TraitError("Invalid NSIDE submap value")
+        if check > self.nside:
+            newval = 16
+            if newval > self.nside:
+                newval = self.nside
+            log = Logger.get()
+            log.warning(
+                "NSIDE submap greater than NSIDE.  Setting to {} instead".format(newval)
+            )
+            check = newval
+        return check
+
+    @traitlets.validate("mode")
+    def _check_mode(self, proposal):
+        check = proposal["value"]
+        if check not in ["I", "IQU"]:
+            raise traitlets.TraitError("Invalid mode (must be 'I' or 'IQU')")
+        return check
+
+    @traitlets.validate("flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Initialize the healpix pixels object
-        self.hpix = HealpixPixels(self.config["nside"])
+        self.hpix = HealpixPixels(self.nside)
 
         self._nnz = 1
-        if self.config["mode"] == "IQU":
+        if self.mode == "IQU":
             self._nnz = 3
 
-        self._n_pix = 12 * self.config["nside"] ** 2
-        self._n_pix_submap = 12 * self.config["nside_submap"] ** 2
-        self._n_submap = (self.config["nside"] // self.config["nside_submap"]) ** 2
+        self._n_pix = 12 * self.nside ** 2
+        self._n_pix_submap = 12 * self.nside_submap ** 2
+        self._n_submap = (self.nside // self.nside_submap) ** 2
 
         self._local_submaps = None
-        if self.config["create_dist"] is not None:
+        if self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
-    @classmethod
-    def defaults(cls):
-        """(Class method) Return options supported by the operator and their defaults.
-
-        This returns an ObjectConfig instance, and each entry should have a help
-        string.
-
-        Returns:
-            (ObjectConfig): The options.
-
-        """
-        opts = ObjectConfig()
-
-        opts.add("class", "toast.future_ops.PointingHealpix", "The class name")
-
-        opts.add("API", 0, "(Internal interface version for this operator)")
-
-        opts.add("pixels", "pixels", "The observation name of the output pixels")
-
-        opts.add("weights", "weights", "The observation name of the output weights")
-
-        opts.add(
-            "quats",
-            None,
-            "If not None, save detector quaternions to this name (for debugging)",
-        )
-
-        opts.add("nside", 64, "The NSIDE resolution")
-
-        opts.add("nside_submap", 16, "The submap resolution")
-
-        opts.add("nest", False, "If True, use NESTED ordering instead of RING")
-
-        opts.add("mode", "I", "The Stokes weights to generate (I or IQU)")
-
-        opts.add("flags", None, "Optional common timestream flags to apply")
-
-        opts.add("flag_mask", 0, "Bit mask value for optional flagging")
-
-        opts.add(
-            "create_dist",
-            None,
-            "Create the submap distribution for all detectors and store in the Data key specified",
-        )
-
-        opts.add("single_precision", False, "If True, use 32bit int / float in output")
-
-        opts.add(
-            "cal",
-            None,
-            "The observation key with a dictionary of pointing weight calibration for each det",
-        )
-
-        return opts
-
-    def _parse(self):
-        log = Logger.get()
-        if self.config["nside_submap"] >= self.config["nside"]:
-            newsub = self.config["nside"] // 4
-            if newsub == 0:
-                newsub = 1
-            log.warning("nside_submap >= nside, setting to {}".format(newsub))
-            self.config["nside_submap"] = newsub
-        if self.config["mode"] not in ["I", "IQU"]:
-            msg = "Invalide mode '{}', allowed values are 'I' and 'IQU'".format(
-                self.config["mode"]
-            )
-            log.error(msg)
-            raise RuntimeError(msg)
-
     @function_timer
-    def exec(self, data, detectors=None):
-        """Create pixels and weights.
-
-        This iterates over all observations and specified detectors, and creates
-        the pixel and weight arrays representing the pointing matrix.  Data is stored
-        in newly created DetectorData members of each observation.
-
-        The locally hit submaps are optionally computed.  This is typically only done
-        when initially computing the pointing for all detectors.
-
-        Args:
-            data (toast.Data):  The distributed data.
-            detectors (list):  A list of detector names or indices.  If None, this
-                indicates a list of all detectors.
-
-        Returns:
-            None
-
-        """
+    def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -172,41 +166,28 @@ class PointingHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # The number of samples on this process
-            n_samp = obs.local_samples[1]
-
-            # See if we have a HWP angle
-            hwpang = None
-            try:
-                hwpang = obs.hwp_angle
-            except KeyError:
-                if obs.mpicomm is None or obs.mpicomm.rank == 0:
-                    msg = "Observation {} has no HWP angle- not including in response".format(
-                        obs.name
-                    )
-                    log.verbose(msg)
-
             # Get the flags if needed
             flags = None
-            if self.config["flags"] is not None:
-                flags = obs.get_common_flags(keyname=self.config["flags"])
-                flags &= self.config["flag_mask"]
+            if self.flags is not None:
+                flags = obs.shared[self.flags]
+                flags &= self.flag_mask
 
             # Boresight pointing quaternions
-            boresight = obs.boresight_radec
+            boresight = obs.shared[self.boresight]
 
             # Focalplane for this observation
             focalplane = obs.telescope.focalplane
 
             # Optional calibration
             cal = None
-            if self.config["cal"] is not None:
-                cal = obs[self.config["cal"]]
+            if self.cal is not None:
+                cal = obs[self.cal]
 
             # Create output data for the pixels, weights and optionally the
             # detector quaternions.
 
-            if self.config["single_precision"]:
+            if self.single_precision:
+                obs.detdata.create(self.pixels, shape=(1,), dtype=np.int32)
                 obs.create_detector_data(
                     self.config["pixels"],
                     shape=(n_samp,),
@@ -344,8 +325,7 @@ class PointingHealpix(Operator):
         return
 
     def requires(self):
-        """List of Observation keys directly used by this Operator.
-        """
+        """List of Observation keys directly used by this Operator."""
         req = ["BORESIGHT_RADEC", "HWP_ANGLE"]
         if self.config["flags"] is not None:
             req.append(self.config["flags"])
@@ -354,14 +334,35 @@ class PointingHealpix(Operator):
         return req
 
     def provides(self):
-        """List of Observation keys generated by this Operator.
-        """
+        """List of Observation keys generated by this Operator."""
         prov = [self.config["pixels"], self.config["weights"]]
         if self.config["quats"] is not None:
             prov.append(self.config["quats"])
         return prov
 
     def accelerators(self):
-        """List of accelerators supported by this Operator.
-        """
+        """List of accelerators supported by this Operator."""
+        return list()
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        return {
+            "meta": [
+                self.noise_model,
+            ],
+            "shared": [
+                self.times,
+            ],
+        }
+
+    def _provides(self):
+        return {
+            "detdata": [
+                self.out,
+            ]
+        }
+
+    def _accelerators(self):
         return list()

@@ -6,9 +6,11 @@ import sys
 
 import numbers
 
-from collections.abc import MutableMapping, Sequence
+from collections.abc import MutableMapping, Sequence, Mapping
 
 import numpy as np
+
+from pshmem import MPIShared
 
 from .mpi import MPI
 
@@ -33,8 +35,6 @@ from .utils import (
     name_UID,
 )
 
-from pshmem import MPIShared
-
 from .cuda import use_pycuda
 
 
@@ -46,8 +46,8 @@ class DetectorData(object):
     data for a particular detector may itself be multi-dimensional, with the first
     dimension the number of samples.
 
-    The data in this container may be sliced by both detector indices and also by
-    detector name.
+    The data in this container may be sliced by both detector indices and names, as
+    well as by sample range.
 
     Example:
         Imagine we have 3 detectors and each has 10 samples.  We want to store a
@@ -63,8 +63,8 @@ class DetectorData(object):
 
         slicing by index and by a list of detectors is possible::
 
-            view = detdata[0:-1]
-            view = detdata[("d01", "d03")]
+            view = detdata[0:-1, 2:4]
+            view = detdata[["d01", "d03"], 3:8]
 
     Args:
         detectors (list):  A list of detector names in exactly the order you wish.
@@ -181,13 +181,13 @@ class DetectorData(object):
     def _det_axis_view(self, key):
         if isinstance(key, (int, np.integer)):
             # Just one detector by index
-            view = key
+            view = (key,)
         elif isinstance(key, str):
             # Just one detector by name
-            view = self._name2idx[key]
+            view = (self._name2idx[key],)
         elif isinstance(key, slice):
             # We are slicing detectors by index
-            view = key
+            view = (key,)
         else:
             # Assume that our key is at least iterable
             try:
@@ -195,6 +195,7 @@ class DetectorData(object):
                 view = list()
                 for k in key:
                     view.append(self._name2idx[k])
+                view = tuple(view)
             except TypeError:
                 log = Logger.get()
                 msg = "Detector indexing supports slice, int, string or iterable, not '{}'".format(
@@ -207,19 +208,23 @@ class DetectorData(object):
     def _get_view(self, key):
         if isinstance(key, tuple):
             # We are slicing in both detector and sample dimensions
-            if len(key) > 2:
-                msg = "DetectorData has only 2 dimensions"
+            if len(key) > len(self._shape):
+                msg = "DetectorData has only {} dimensions".format(len(self._shape))
                 log.error(msg)
                 raise TypeError(msg)
-            if len(key) == 1:
-                # Only detector slice
-                return self._det_axis_view(key[0])
-            else:
-                detview = self._det_axis_view(key[0])
-                return detview, key[1]
+            detview = self._det_axis_view(key[0])
+            view = detview
+            for k in key[1:]:
+                view += (k,)
+            # for s in range(len(self._shape) - len(key)):
+            #     view += (slice(None, None, None),)
+            return view
         else:
             # Only detector slice
-            return self._det_axis_view(key)
+            view = self._det_axis_view(key)
+            # for s in range(len(self._shape) - 1):
+            #     view += (slice(None, None, None),)
+            return view
 
     def __getitem__(self, key):
         view = self._get_view(key)
@@ -263,13 +268,40 @@ class DetectorData(object):
 class DetDataMgr(MutableMapping):
     """Class used to manage DetectorData objects in an Observation.
 
-    New objects can be created with the "create()" method:
+    New objects can be created several ways.  The "create()" method:
 
-        ob.detdata.create(name, original=None, shape=None, dtype=None, detectors=None)
+        ob.detdata.create(name, detshape=None, dtype=None, detectors=None)
 
-    Which supports copying data from an existing DetectorData object or a dictionary
-    of individual detector timestreams.  The list of detectors to store can also be
-    reduced from the full set in the observation by giving a list of detectors.
+    gives full control over creating the named object and specifying the shape of
+    each detector sample.  The detectors argument can be used to restrict the object
+    to include only a subset of detectors.
+
+    You can also create a new object by assignment from an existing DetectorData
+    object or a dictionary of detector arrays.  For example:
+
+        ob.detdata[name] = DetectorData(ob.local_detectors, ob.n_local_samples, dtype)
+
+        ob.detdata[name] = {
+            x: np.ones((ob.n_local_samples, 2), dtype=np.int16)
+                for x in ob.local_detectors
+        }
+
+    Where the right hand side object must have only detectors that are included in
+    the ob.local_detectors and the first dimension of shape must be the number of
+    local samples.
+
+    It is also possible to create a new object by assigning an array.  In that case
+    the array must either have the full size of the DetectorData object
+    (n_det x n_sample x detshape) or must have dimensions (n_sample x detshape), in
+    which case the array is copied to all detectors.  For example:
+
+        ob.detdata[name] = np.ones(
+            (len(ob.local_detectors), ob.n_local_samples, 4), dtype=np.float32
+        )
+
+        ob.detdata[name] = np.ones(
+            (ob.n_local_samples,), dtype=np.float32
+        )
 
     After creation, you can access a given DetectorData object by name with standard
     dictionary syntax:
@@ -280,19 +312,14 @@ class DetDataMgr(MutableMapping):
 
         del ob.detdata[name]
 
-    There are shortcut methods to create standard data products:
-
-        ob.detdata.create_signal()
-        ob.detdata.create_flags()
-
     """
 
-    def __init__(self, samples, detectors):
+    def __init__(self, detectors, samples):
         self.samples = samples
         self.detectors = detectors
         self._internal = dict()
 
-    def create(self, name, original=None, shape=None, dtype=None, detectors=None):
+    def create(self, name, detshape=None, dtype=np.float64, detectors=None):
         """Create a local DetectorData buffer on this process.
 
         This method can be used to create arrays of detector data for storing signal,
@@ -300,14 +327,9 @@ class DetDataMgr(MutableMapping):
 
         Args:
             name (str): The name of the detector data (signal, flags, etc)
-            original (DetectorData, dict): Copy an existing data object.  This can
-                either be another DetectorData object or a dictionary of arrays.  This
-                must have exactly the same detectors as the local detector list,
-                although the ordering may be different.
-            shape (tuple): If not constructing from an existing array, use this shape
-                for the data of each detector.
-            dtype (np.dtype): If not constructing from an existing array, use this
-                dtype for each element.
+            detshape (tuple): Use this shape for the data of each detector sample.
+                Use None or an empty tuple if you want one element per sample.
+            dtype (np.dtype): Use this dtype for each element.
             detectors (list):  Only construct a data object for this set of detectors.
                 This is useful if creating temporary data within a pipeline working
                 on a subset of detectors.
@@ -316,70 +338,32 @@ class DetDataMgr(MutableMapping):
             None
 
         """
-        if detectors is None:
-            detectors = self.detectors
-
         log = Logger.get()
         if name in self._internal:
             msg = "Detector data with name '{}' already exists.".format(name)
             log.error(msg)
             raise RuntimeError(msg)
 
-        data_shape = shape
-        data_dtype = dtype
-        if original is not None:
-            # We are copying input data.  Ensure that the detector lists are the same
-            # and that the shapes and types of every array are the same.
-            data_dets = original.keys()
-            if set(data_dets) != set(detectors):
-                msg = "Input data to copy has a different detector list"
-                log.error(msg)
-                raise RuntimeError(msg)
-            data_shape = None
-            data_dtype = None
-            for d in data_dets:
-                if data_shape is None:
-                    data_shape = original[d].shape
-                    data_dtype = original[d].dtype
-                if original[d].shape != data_shape:
-                    msg = "All input detector arrays must have the same shape"
-                    log.error(msg)
-                    raise RuntimeError(msg)
-                if original[d].dtype != data_dtype:
-                    msg = "All input detector arrays must have the same dtype"
-                    log.error(msg)
-                    raise RuntimeError(msg)
+        if detectors is None:
+            detectors = self.detectors
         else:
-            # If not specified, use defaults for shape and dtype.
-            if data_shape is None:
-                data_shape = (self.samples,)
-            if data_dtype is None:
-                data_dtype = np.float64
+            for d in detectors:
+                if d not in self.detectors:
+                    msg = "detector '{}' not in this observation".format(d)
+                    raise ValueError(msg)
 
-        if data_shape[0] != self.samples:
-            msg = "Detector data first dimension size ({}) does not match number of local samples ({})".format(
-                data_shape[0], self.samples
-            )
-            log.error(msg)
-            raise RuntimeError(msg)
+        data_shape = None
+        if detshape is None or len(detshape) == 0:
+            data_shape = (self.samples,)
+        elif len(detshape) == 1 and detshape[0] == 1:
+            data_shape = (self.samples,)
+        else:
+            data_shape = (self.samples,) + detshape
 
         # Create the data object
-        self._internal[name] = DetectorData(detectors, data_shape, data_dtype)
-
-        # Copy input data if given
-        if original is not None:
-            for d in self._internal[name].keys():
-                self._internal[name][d] = original[d]
+        self._internal[name] = DetectorData(detectors, data_shape, dtype)
 
         return
-
-    # Shortcuts for creating standard data objects
-
-    def create_signal(self, name="signal"):
-        self.create(name, shape=(self.samples,), dtype=np.float64)
-
-    def create_flags(self, name="flags"):
-        self.create(name, shape=(self.samples,), dtype=np.uint8)
 
     # Mapping methods
 
@@ -391,7 +375,118 @@ class DetDataMgr(MutableMapping):
         del self._internal[key]
 
     def __setitem__(self, key, value):
-        self._internal[key] = value
+        if isinstance(value, DetectorData):
+            # We have an input detector data object.  Verify dimensions
+            for d in value.detectors:
+                if d not in self.detectors:
+                    msg = "detector '{}' not in this observation".format(d)
+                    raise ValueError(msg)
+            if value.shape[1] != self.samples:
+                msg = "Assignment DetectorData object has {} samples instead of {} in the observation".format(
+                    value.shape[1], self.samples
+                )
+                raise ValueError(msg)
+            if key not in self._internal:
+                # Create it first
+                self.create(
+                    key,
+                    detshape=value.detector_shape,
+                    dtype=value.dtype,
+                    detectors=value.detectors,
+                )
+            else:
+                if value.detector_shape != self._internal[key].detector_shape:
+                    msg = "Assignment value has wrong detector shape"
+                    raise ValueError(msg)
+            for d in value.detectors:
+                self._internal[key][d] = value[d]
+        elif isinstance(value, Mapping):
+            # This is a dictionary of detector arrays
+            detshape = None
+            dtype = None
+            for d, ddata in value.items():
+                if d not in self.detectors:
+                    msg = "detector '{}' not in this observation".format(d)
+                    raise ValueError(msg)
+                if ddata.shape[0] != self.samples:
+                    msg = "Assigment dictionary detector {} has {} samples instead of {} in the observation".format(
+                        ddata.shape[0], self.samples
+                    )
+                    raise ValueError(msg)
+                if detshape is None:
+                    detshape = ddata.shape[1:]
+                    dtype = ddata.dtype
+                else:
+                    if detshape != ddata.shape[1:]:
+                        msg = "All detector arrays must have the same shape"
+                        raise ValueError(msg)
+                    if dtype != ddata.dtype:
+                        msg = "All detector arrays must have the same type"
+                        raise ValueError(msg)
+            if key not in self._internal:
+                self.create(
+                    key,
+                    detshape=detshape,
+                    dtype=dtype,
+                    detectors=sorted(value.keys()),
+                )
+            else:
+                if (self.samples,) + detshape != self._internal[key].detector_shape:
+                    msg = "Assignment value has wrong detector shape"
+                    raise ValueError(msg)
+            for d, ddata in value.items():
+                self._internal[key][d] = ddata
+        else:
+            # This must be just an array- verify the dimensions
+            shp = value.shape
+            if shp[0] == self.samples:
+                # This is a single detector array, being assigned to all detectors
+                detshape = None
+                if len(shp) > 1:
+                    detshape = shp[1:]
+                if key not in self._internal:
+                    self.create(
+                        key,
+                        detshape=detshape,
+                        dtype=value.dtype,
+                        detectors=self.detectors,
+                    )
+                else:
+                    fullshape = (self.samples,)
+                    if detshape is not None:
+                        fullshape += detshape
+                    if fullshape != self._internal[key].detector_shape:
+                        msg = "Assignment value has wrong detector shape"
+                        raise ValueError(msg)
+                for d in self.detectors:
+                    self._internal[key][d] = value
+            elif shp[0] == len(self.detectors):
+                # Full sized array
+                if shp[1] != self.samples:
+                    msg = "Assignment value has wrong number of samples"
+                    raise ValueError(msg)
+                detshape = None
+                if len(shp) > 2:
+                    detshape = shp[2:]
+                if key not in self._internal:
+                    self.create(
+                        key,
+                        detshape=detshape,
+                        dtype=value.dtype,
+                        detectors=self.detectors,
+                    )
+                else:
+                    fullshape = (self.samples,)
+                    if detshape is not None:
+                        fullshape += detshape
+                    if fullshape != self._internal[key].detector_shape:
+                        msg = "Assignment value has wrong detector shape"
+                        raise ValueError(msg)
+                self._internal[key][:] = value
+            else:
+                # Incompatible
+                msg = "Assignment of detector data from an array only supports full size or single detector"
+                raise ValueError(msg)
 
     def __iter__(self):
         return iter(self._internal)
@@ -418,20 +513,41 @@ class DetDataMgr(MutableMapping):
 class SharedDataMgr(MutableMapping):
     """Class used to manage shared data objects in an Observation.
 
-    New objects can be created with "create()" method:
+    New objects can be created with the "create()" method:
 
-        obs.shared.create(name, original=None, shape=None, dtype=None, comm=None)
+        obs.shared.create(name, shape=None, dtype=None, comm=None)
 
-    Which supports copying data from an existing MPIShared object.  The communicator
-    defaults to sharing the data across the observation communicator, but other options
-    would be to pass in the observation grid_comm_row or grid_comm_col communicators
-    in order to share detector information across the process grid row or to share
-    telescope data across the process grid column.
+    The communicator defaults to sharing the data across the observation comm, but
+    other options would be to pass in the observation comm_row or comm_col communicators
+    in order to share common detector information across the process grid row or to
+    share telescope data across the process grid column.
 
-    There are shortcut methods to create standard data products:
+    You can also create shared objects by assignment from an existing MPIShared object
+    or an array on one process.  In the case of creating from an array assignment, an
+    extra communication step is required to determine what process is sending the data
+    (all processes except for one should pass 'None' as the data).  For example:
 
-        ob.detdata.create_signal()
-        ob.detdata.create_flags()
+        timestamps = None
+        if obs.comm_col_rank == 0:
+            # Input data only exists on one process
+            timestamps = np.arange(obs.n_local_samples, dtype=np.float32)
+
+        # Explicitly create the shared data and assign:
+        obs.shared.create(
+            "times",
+            shape=(obs.n_local_samples,),
+            dtype=np.float32,
+            comm=obs.comm_col
+        )
+        obs.shared["times"].set(timestamps, offset=(0,), fromrank=0)
+
+        # Create from existing MPIShared object:
+        sharedtime = MPIShared((obs.n_local_samples,), np.float32, obs.comm_col)
+        sharedtime[:] = timestamps
+        obs.shared["times"] = sharedtime
+
+        # Create from array on one process, pre-communication needed:
+        obs.shared["times"] = timestamps
 
     After creation, you can access a given object by name with standard dictionary
     syntax:
@@ -442,55 +558,25 @@ class SharedDataMgr(MutableMapping):
 
         del obs.shared[name]
 
-    NOTE:  These shared memory objects can be read from all processes asynchronously,
-    but write access must be synchronized.  You must set the data collectively by
-    using the "set" method and passing in data on one process.  Here is an example
-    creating timestamps that are common to all processes in a column of the grid and
-    setting those on the column rank zero process.
-
-        n_time = obs.local_samples[1]
-        col_rank = obs.grid_ranks[0]
-
-        timestamps = None
-        if col_rank == 0:
-            # Input data only exists on one process
-            timestamps = np.arange(n_time, dtype=np.float32)
-
-        obs.shared.create(
-            name="times",
-            shape=(n_time,),
-            dtype=np.float32,
-            comm=obs.grid_comm_col
-        )
-        obs.shared["times"].set(timestamps, offset=(0,), fromrank=0)
-
     """
 
-    def __init__(self, samples, detectors, comm, comm_row, comm_col):
-        self.samples = samples
-        self.detectors = detectors
+    def __init__(self, comm, comm_row, comm_col):
         self.comm = comm
         self.comm_row = comm_row
         self.comm_col = comm_col
         self._internal = dict()
 
-    def create(self, name, original=None, shape=None, dtype=None, comm=None):
+    def create(self, name, shape, dtype=None, comm=None):
         """Create a shared memory buffer.
 
         This buffer will be replicated across all nodes used by the processes owning
         the observation.  This uses the MPIShared class, which falls back to a simple
-        numpy array if MPI is not being used.  After creating the buffer, you should
-        set the elements by using the MPIShared.set() method.
+        numpy array if MPI is not being used.
 
         Args:
             name (str): Name of the shared memory object (e.g. "boresight").
-            original (array): Construct the shared array copying this input local
-                memory. This argument is only meaningful on the rank zero process of the
-                specified communicator.
-            shape (tuple): If not constructing from an existing array, use this shape
-                for the new buffer.
-            dtype (np.dtype): If not constructing from an existing array, use this
-                dtype for each element.
+            shape (tuple): The shape of the new buffer.
+            dtype (np.dtype): Use this dtype for each element.
             comm (MPI.Comm): The communicator to use for the shared data.  If None
                 then the communicator for the observation is used.  Other options
                 would be to specify the grid_comm_row (for shared detector objects) or
@@ -511,70 +597,16 @@ class SharedDataMgr(MutableMapping):
             # Use the observation communicator.
             shared_comm = self.comm
 
-        copy_data = 0
-        shared_shape = shape
         shared_dtype = dtype
-        if original is not None:
-            copy_data = 1
-        if shared_comm is not None:
-            copy_data = shared_comm.allreduce(copy_data, op=MPI.SUM)
-        if copy_data > 1:
-            msg = "If passing in an existing data buffer, it should exist on "
-            "exactly one process (rank 0).  All other ranks should pass in None."
-            log.error(msg)
-            raise RuntimeError(msg)
 
-        if shared_comm is None or shared_comm.rank == 0:
-            if copy_data == 1:
-                shared_shape = original.shape
-                shared_dtype = original.dtype
-            shared_dtype = np.dtype(shared_dtype)
-
-        if shared_comm is not None:
-            shared_shape = shared_comm.bcast(shared_shape, root=0)
-            shared_dtype = shared_comm.bcast(shared_dtype, root=0)
-
-        # Use defaults for shape and dtype if not set
-        if shared_shape is None:
-            shared_shape = (self.samples,)
+        # Use defaults for dtype if not set
         if shared_dtype is None:
             shared_dtype = np.float64
 
         # Create the data object
-        self._internal[name] = MPIShared(shared_shape, shared_dtype, shared_comm)
+        self._internal[name] = MPIShared(shape, shared_dtype, shared_comm)
 
-        # Copy input data if given
-        if copy_data == 1:
-            self._internal[name].set(original, np.zeros_like(shared_shape), fromrank=0)
         return
-
-    # Shortcuts for creating standard data objects
-
-    def create_times(self, name="times"):
-        self.create(name, shape=(self.samples,), dtype=np.float64, comm=self.comm_col)
-
-    def create_flags(self, name="flags"):
-        self.create(name, shape=(self.samples,), dtype=np.uint8, comm=self.comm_col)
-
-    def create_velocity(self, name="velocity"):
-        self.create(name, shape=(self.samples, 3), dtype=np.float64, comm=self.comm_col)
-
-    def create_position(self, name="position"):
-        self.create(name, shape=(self.samples, 3), dtype=np.float64, comm=self.comm_col)
-
-    def create_hwp_angle(self, name="hwp_angle"):
-        self.create(name, shape=(self.samples,), dtype=np.float64, comm=self.comm_col)
-
-    def create_boresight_radec(self, name="boresight_radec"):
-        self.create(name, shape=(self.samples, 4), dtype=np.float64, comm=self.comm_col)
-
-    def create_boresight_azel(self, name="boresight_azel"):
-        self.create(name, shape=(self.samples, 4), dtype=np.float64, comm=self.comm_col)
-
-    def create_boresight_response(self, name="boresight_response"):
-        self.create(
-            name, shape=(self.samples, 16), dtype=np.float32, comm=self.comm_col
-        )
 
     # Mapping methods
 
@@ -586,7 +618,65 @@ class SharedDataMgr(MutableMapping):
         del self._internal[key]
 
     def __setitem__(self, key, value):
-        self._internal[key] = value
+        if isinstance(value, MPIShared):
+            # This is an existing shared object.
+            if key not in self._internal:
+                self.create(key, shape=value.shape, dtype=value.dtype, comm=value.comm)
+            else:
+                # Verify that communicators and dimensions match
+                pass
+            # Assign from just one process.
+            offset = None
+            dval = None
+            if value.comm is None or value.comm.rank == 0:
+                offset = tuple([0 for x in self._internal[key].shape])
+                dval = value.data
+            self._internal[key].set(dval, offset=offset, fromrank=0)
+        else:
+            # This must be an array on one process.
+            if key not in self._internal:
+                # We need to create it.  In that case we use the default communicator
+                # (the full observation comm).  We also need to get the array
+                # properties to all processes in order to create the object.
+                if self.comm is None:
+                    # No MPI
+                    self.create(key, shape=value.shape, dtype=value.dtype)
+                    offset = tuple([0 for x in self._internal[key].shape])
+                    self._internal[key].set(value, offset=offset, fromrank=0)
+                else:
+                    shp = None
+                    dt = None
+                    check_rank = np.zeros((self.comm.size,), dtype=np.int32)
+                    check_result = np.zeros((self.comm.size,), dtype=np.int32)
+                    if value is not None:
+                        shp = value.shape
+                        dt = value.dtype
+                        check_rank[self.comm.rank] = 1
+                    self.comm.Allreduce(check_rank, check_result, op=MPI.SUM)
+                    tot = np.sum(check_result)
+                    if tot > 1:
+                        if self.comm.rank == 0:
+                            msg = "When creating shared data with [] notation, only one process may have a non-None value for the data"
+                            print(msg, flush=True)
+                            self.comm.Abort()
+                    from_rank = np.where(check_result == 1)[0][0]
+                    shp = self.comm.bcast(shp, root=from_rank)
+                    dt = self.comm.bcast(dt, root=from_rank)
+                    self.create(key, shape=shp, dtype=dt)
+                    offset = None
+                    if self.comm.rank == from_rank:
+                        offset = tuple([0 for x in self._internal[key].shape])
+                    self._internal[key].set(value, offset=offset, fromrank=from_rank)
+            else:
+                # Already exists, just do the assignment
+                slc = None
+                if value is not None:
+                    if value.shape != self._internal[key].shape:
+                        raise ValueError(
+                            "When assigning directly to a shared object, the value must have the same dimensions"
+                        )
+                    slc = tuple([slice(0, x) for x in self._internal[key].shape])
+                self._internal[key][slc] = value
 
     def __iter__(self):
         return iter(self._internal)
@@ -866,7 +956,7 @@ class View(Sequence):
 
 
 class ViewMgr(MutableMapping):
-    """Class to manage views into observation data objects."""
+    """Internal class to manage views into observation data objects."""
 
     def __init__(self, obj):
         self.obj = obj
@@ -904,7 +994,21 @@ class ViewMgr(MutableMapping):
 
 
 class ViewInterface(object):
-    """Descriptor class for accessing the views in an observation."""
+    """Descriptor class for accessing the views in an observation.
+
+    You can get a view of the data for a particular interval list just by accessing
+    it with the name of the intervals object you want:
+
+    obs.view["name_of_intervals"]
+
+    Then you can use this to provide a view into either detdata or shared objects within
+    the observation.  For example:
+
+    print(obs.view["name_of_intervals"].detdata["signal"])
+
+    obs.view["bad_pointing"].shared["boresight"][:] = np.array([0., 0., 0., 1.])
+
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -915,7 +1019,6 @@ class ViewInterface(object):
         else:
             if not hasattr(obj, "_viewmgr"):
                 obj._viewmgr = ViewMgr(obj)
-                print("ViewInterface __get__ created ", obj._viewmgr)
             return obj._viewmgr
 
     def __set__(self, obj, value):
@@ -931,6 +1034,22 @@ class DistDetSamp(object):
     This is just a simple container for various properties of the distribution.
 
     Args:
+        samples (int):  The total number of samples.
+        detectors (list):  The list of detector names.
+        detector_sets (list):  (Optional) List of lists containing detector names.
+            These discrete detector sets are used to distribute detectors- a detector
+            set will always be within a single row of the process grid.  If None,
+            every detector is a set of one.
+        sample_sets (list):  (Optional) List of lists of chunk sizes (integer numbers of
+            samples).  These discrete sample sets are used to distribute sample data.
+            A sample set will always be within a single column of the process grid.  If
+            None, any distribution break in the sample direction will happen at an
+            arbitrary place.  The sum of all chunks must equal the total number of
+            samples.
+        comm (mpi4py.MPI.Comm):  (Optional) The MPI communicator to use.
+        process_rows (int):  (Optional) The size of the rectangular process grid
+            in the detector direction.  This number must evenly divide into the size of
+            comm.  If not specified, defaults to the size of the communicator.
 
     """
 
@@ -1056,18 +1175,21 @@ class Observation(MutableMapping):
     """Class representing the data for one observation.
 
     An Observation stores information about data distribution across one or more MPI
-    processes and is a container for three types of objects:
+    processes and is a container for four types of objects:
 
         * Local detector data (unique to each process).
         * Shared data that has one common copy for every node spanned by the
           observation.
+        * Intervals defining spans of data with some common characteristic.
         * Other arbitrary small metadata.
 
-    Small metadata can be store directly in the Observation using normal square
+    Small metadata can be stored directly in the Observation using normal square
     bracket "[]" access to elements (an Observation is a dictionary).  Groups of
     detector data (e.g. "signal", "flags", etc) can be accessed in the separate
-    detector data dictionary (the "d" attribute).  Shared data can be similarly stored
-    in the "shared" attribute.
+    detector data dictionary (the "detdata" attribute).  Shared data can be similarly
+    stored in the "shared" attribute.  Lists of intervals are accessed in the
+    "intervals" attribute and data views can use any interval list to access subsets
+    of detector and shared data.
 
     The detector data within an Observation is distributed among the processes in an
     MPI communicator.  The processes in the communicator are arranged in a rectangular
@@ -1112,7 +1234,7 @@ class Observation(MutableMapping):
             samples.
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
-            mpicomm.  If not specified, defaults to the size of the communicator.
+            comm.  If not specified, defaults to the size of the communicator.
 
     """
 
@@ -1167,11 +1289,9 @@ class Observation(MutableMapping):
         self._internal = dict()
 
         # Set up the data managers
-        self.detdata = DetDataMgr(self._samples, self.detectors)
+        self.detdata = DetDataMgr(self.local_detectors, self.n_local_samples)
 
         self.shared = SharedDataMgr(
-            self._samples,
-            self.detectors,
             self._comm,
             self.dist.comm_row,
             self.dist.comm_col,
@@ -1274,7 +1394,7 @@ class Observation(MutableMapping):
     # Detector distribution
 
     @property
-    def detectors(self):
+    def all_detectors(self):
         """
         (list): All detectors.  Convenience wrapper for telescope.focalplane.detectors
         """
@@ -1303,7 +1423,7 @@ class Observation(MutableMapping):
     # Detector set distribution
 
     @property
-    def detector_sets(self):
+    def all_detector_sets(self):
         """
         (list):  The total list of detector sets for this observation.
         """
@@ -1326,37 +1446,28 @@ class Observation(MutableMapping):
     # Sample distribution
 
     @property
-    def n_sample(self):
+    def n_all_samples(self):
         """(int): the total number of samples in this observation."""
         return self._samples
 
     @property
-    def local_samples(self):
-        """
-        (tuple): The first element of the tuple is the first observation sample
-            assigned to this process.  The second element of the tuple is the number of
-            samples assigned to this process.
-        """
-        return self.dist.samps[self.dist.comm_row_rank]
-
-    @property
-    def offset(self):
+    def local_index_offset(self):
         """
         The first sample on this process, relative to the observation start.
         """
-        return self.local_samples[0]
+        return self.dist.samps[self.dist.comm_row_rank][0]
 
     @property
-    def n_local(self):
+    def n_local_samples(self):
         """
         The number of local samples on this process.
         """
-        return self.local_samples[1]
+        return self.dist.samps[self.dist.comm_row_rank][1]
 
     # Sample set distribution
 
     @property
-    def sample_sets(self):
+    def all_sample_sets(self):
         """
         (list):  The input full list of sample sets used in data distribution
         """
@@ -1394,7 +1505,7 @@ class Observation(MutableMapping):
         return len(self._internal)
 
     def __del__(self):
-        if hasattr(self, "d"):
+        if hasattr(self, "detdata"):
             self.detdata.clear()
         if hasattr(self, "shared"):
             self.shared.clear()
@@ -1413,6 +1524,7 @@ class Observation(MutableMapping):
         val += "\n  {} samples".format(self._samples)
         val += "\n  shared:  {}".format(self.shared)
         val += "\n  detdata:  {}".format(self.detdata)
+        val += "\n  intervals:  {}".format(self.intervals)
         val += "\n>"
         return val
 

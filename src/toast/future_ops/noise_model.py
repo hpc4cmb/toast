@@ -10,7 +10,7 @@ from ..utils import Environment, Logger
 
 from ..timing import function_timer, Timer
 
-from ..tod import AnalyticNoise
+from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
@@ -31,8 +31,8 @@ class DefaultNoiseModel(Operator):
 
     API = traitlets.Int(0, help="Internal interface version for this operator")
 
-    noisekey = traitlets.Unicode(
-        "noise", help="The observation key to use when storing the noise model"
+    noise_model = traitlets.Unicode(
+        "noise_model", help="The observation key for storing the noise model"
     )
 
     def __init__(self, **kwargs):
@@ -73,7 +73,7 @@ class DefaultNoiseModel(Operator):
                 rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
             )
 
-            obs[self.noisekey] = noise
+            obs[self.noise_model] = noise
 
         return
 
@@ -84,7 +84,7 @@ class DefaultNoiseModel(Operator):
         return dict()
 
     def _provides(self):
-        prov = {"meta": [self.noisekey]}
+        prov = {"meta": [self.noise_model]}
         return prov
 
     def _accelerators(self):

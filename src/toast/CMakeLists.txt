@@ -93,6 +93,8 @@ install(FILES
     intervals.py
     instrument.py
     instrument_sim.py
+    noise.py
+    noise_sim.py
     observation.py
     operator.py
     vis.py

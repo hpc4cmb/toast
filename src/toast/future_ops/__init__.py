@@ -8,7 +8,7 @@ from .pipeline import Pipeline
 
 from .sim_satellite import SimSatellite
 
-# from .sim_tod_noise import SimNoise
+from .sim_tod_noise import SimNoise
 
 from .noise_model import DefaultNoiseModel
 

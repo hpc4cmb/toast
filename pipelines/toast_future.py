@@ -33,7 +33,7 @@ from toast.timing import GlobalTimers, gather_timers
 
 from toast.timing import dump as dump_timing
 
-from toast import dump_config, parse_config, create
+from toast import dump_toml, parse_config, create
 
 from toast import future_ops as ops
 
