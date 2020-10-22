@@ -104,6 +104,7 @@ install(FILES
     healpix.py
     weather.py
     schedule.py
+    spt3g.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )
