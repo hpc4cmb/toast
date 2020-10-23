@@ -273,10 +273,7 @@ class GainTemplate(TODTemplate):
         self.flag_mask = flag_mask
         self.template_name = templatename
         self._estimate_offsets()
-
-        import pdb
-        pdb.set_trace()
-
+        self.namplitude =  self.norder + self.list_of_offsets[-1][-1]
 
         return
 
@@ -307,7 +304,6 @@ class GainTemplate(TODTemplate):
     def add_to_signal(self, signal,  amplitudes):
         """signal += F.a"""
         poly_amplitudes = amplitudes[self.name]
-
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             nsample = tod.total_samples
@@ -345,12 +341,17 @@ class GainTemplate(TODTemplate):
                 amplitude_slice= slice(ind ,ind+self.norder )
                 delta_gain = legendre_poly.dot(np.ones(self.norder))
                 signal_estimate = tod.local_signal(det, self.template_name)
-                gain_fluctuation = signal_estimate * delta_gain
+                gain_fluctuation_template = signal_estimate * delta_gain
                 poly_amplitudes[ind] += np.dot(signal[iobs, det, todslice], gain_fluctuation_template)
 
 
         return
-
+    def apply_precond(self, amplitudes_in, amplitudes_out):
+        """a' = M^{-1}.a"""
+        poly_amplitudes_in = amplitudes_in[self.name]
+        poly_amplitudes_out = amplitudes_out[self.name]
+        poly_amplitudes_out[:] = poly_amplitudes_in
+        return
 
 
 class Fourier2DTemplate(TODTemplate):
