@@ -1879,8 +1879,8 @@ class OpMapMaker(Operator):
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
-        import pdb
-        pdb.set_trace()
+        #import pdb
+        #pdb.set_trace()
 
         # DEBUG begin
         if self.rank ==0 :
