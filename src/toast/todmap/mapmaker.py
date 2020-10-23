@@ -346,12 +346,16 @@ class GainTemplate(TODTemplate):
 
 
         return
+
     def apply_precond(self, amplitudes_in, amplitudes_out):
         """a' = M^{-1}.a"""
         poly_amplitudes_in = amplitudes_in[self.name]
         poly_amplitudes_out = amplitudes_out[self.name]
         poly_amplitudes_out[:] = poly_amplitudes_in
         return
+    
+    def write_gain_fluction(self, amplitudes, filename):
+        raise RuntimeError("Saving gain fluctuation not implemented")
 
 
 class Fourier2DTemplate(TODTemplate):
@@ -941,7 +945,7 @@ class TemplateMatrix(TOASTMatrix):
         """Initialize the template matrix with a given baseline length"""
         self.data = data
         self.comm = comm
-        self.templates = []
+        self.templates = OrderedDict()
         for template in templates:
             self.register_template(template)
         return
@@ -949,13 +953,13 @@ class TemplateMatrix(TOASTMatrix):
     @function_timer
     def register_template(self, template):
         """Add template to the list of templates to fit"""
-        self.templates.append(template)
+        self.templates[template.name] = template
 
     @function_timer
     def apply(self, amplitudes):
         """Compute and return y = F.a"""
         new_signal = self.zero_signal()
-        for template in self.templates:
+        for template in self.templates.values():
             template.add_to_signal(new_signal, amplitudes)
         return new_signal
 
@@ -963,14 +967,14 @@ class TemplateMatrix(TOASTMatrix):
     def apply_transpose(self, signal):
         """Compute and return a = F^T.y"""
         new_amplitudes = self.zero_amplitudes()
-        for template in self.templates:
+        for template in self.templates.values():
             template.project_signal(signal, new_amplitudes)
         return new_amplitudes
 
     @function_timer
     def add_prior(self, amplitudes, new_amplitudes):
         """Compute a' += C_a^{-1}.a"""
-        for template in self.templates:
+        for template in self.templates.values():
             template.add_prior(amplitudes, new_amplitudes)
         return
 
@@ -978,7 +982,7 @@ class TemplateMatrix(TOASTMatrix):
     def apply_precond(self, amplitudes):
         """Compute a' = M^{-1}.a"""
         new_amplitudes = self.zero_amplitudes()
-        for template in self.templates:
+        for template in self.templates.values():
             template.apply_precond(amplitudes, new_amplitudes)
         return new_amplitudes
 
@@ -1043,7 +1047,7 @@ class TemplateAmplitudes(TOASTVector):
         self.comm = comm
         self.amplitudes = OrderedDict()
         self.comms = OrderedDict()
-        for template in templates:
+        for template in templates.values():
             self.amplitudes[template.name] = np.zeros(template.namplitude)
             self.comms[template.name] = template.comm
         return
@@ -1871,6 +1875,10 @@ class OpMapMaker(Operator):
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
+            
+        # DEBUG begin
+        templates["Gain"].write_gain_fluctuation(amplitudes, "gains.pck")
+        # DEBUG end
 
         # Clean TOD
         templates.clean_signal(signal, amplitudes)
