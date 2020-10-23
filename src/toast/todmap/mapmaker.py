@@ -341,10 +341,15 @@ class GainTemplate(TODTemplate):
                 amplitude_slice= slice(ind ,ind+self.norder )
                 delta_gain = legendre_poly.dot(np.ones(self.norder))
                 signal_estimate = tod.local_signal(det, self.template_name)
-                gain_fluctuation_template = signal_estimate * delta_gain
-                poly_amplitudes[ind] += np.dot(signal[iobs, det, todslice], gain_fluctuation_template)
+                gain_fluctuation = signal_estimate * delta_gain
+                poly_amplitudes[ind] += np.dot(signal[iobs, det, todslice], gain_fluctuation)
 
 
+        return
+
+    def write_gain_fluctuation(self, amplitudes, filename):
+        np.savez( filename, amplitudes[self.name])
+        #raise RuntimeError("Saving gain fluctuation not implemented")
         return
 
     def apply_precond(self, amplitudes_in, amplitudes_out):
@@ -353,9 +358,8 @@ class GainTemplate(TODTemplate):
         poly_amplitudes_out = amplitudes_out[self.name]
         poly_amplitudes_out[:] = poly_amplitudes_in
         return
-    
-    def write_gain_fluction(self, amplitudes, filename):
-        raise RuntimeError("Saving gain fluctuation not implemented")
+
+
 
 
 class Fourier2DTemplate(TODTemplate):
@@ -1082,7 +1086,7 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def copy(self):
-        new_amplitudes = TemplateAmplitudes([], self.comm)
+        new_amplitudes = TemplateAmplitudes(OrderedDict()  , self.comm)
         for name, values in self.amplitudes.items():
             new_amplitudes.amplitudes[name] = self.amplitudes[name].copy()
             new_amplitudes.comms[name] = self.comms[name]
@@ -1875,9 +1879,12 @@ class OpMapMaker(Operator):
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
-            
+        import pdb
+        pdb.set_trace()
+
         # DEBUG begin
-        templates["Gain"].write_gain_fluctuation(amplitudes, "gains.pck")
+        if self.rank ==0 :
+            templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gains_amplitudes.npz")
         # DEBUG end
 
         # Clean TOD
