@@ -89,6 +89,13 @@ def add_mapmaker_args(parser):
         help="Do not fit linear modes along with Fourier templates",
         dest="mapmaker_fourier2D_subharmonics",
     )
+    parser.add_argument(
+        "--mapmaker-gain-poly-order",
+        required=False,
+        help="Fit gain template with Legendre Polynomials",
+        dest="mapmaker_gain_poly_order",
+        type=np.int
+    )
     parser.set_defaults(mapmaker_fourier2D_subharmonics=False)
     parser.add_argument(
         "--mapmaker-noisefilter",
@@ -228,6 +235,7 @@ def apply_mapmaker(
     extra_prefix=None,
     verbose=True,
     bin_only=False,
+    gain_templatename=None,
 ):
     log = Logger.get()
     timer = Timer()
@@ -325,6 +333,8 @@ def apply_mapmaker(
                 subharmonic_order=None,
                 fourier2D_order=fourier2D_order,
                 fourier2D_subharmonics=args.mapmaker_fourier2D_subharmonics,
+                gain_templatename=gain_templatename  ,
+                gain_poly_order= args.mapmaker_gain_poly_order,
                 iter_min=3,
                 iter_max=args.mapmaker_iter_max,
                 use_noise_prior=args.mapmaker_noisefilter,

@@ -260,7 +260,6 @@ class GainTemplate(TODTemplate):
         common_flag_mask=1,
         flags=None,
         flag_mask=1,
-        signalname =None,
         templatename =None,
 
     ):
@@ -268,13 +267,16 @@ class GainTemplate(TODTemplate):
         self.comm = data.comm.comm_group
         self.order = order
         self.norder = order + 1
-        self.nmode = (2 * order) ** 2 + 1
         self.common_flags = common_flags
         self.common_flag_mask = common_flag_mask
         self.flags = flags
         self.flag_mask = flag_mask
         self.template_name = templatename
         self._estimate_offsets()
+
+        import pdb
+        pdb.set_trace()
+
 
         return
 
@@ -287,15 +289,15 @@ class GainTemplate(TODTemplate):
             tod = obs["tod"]
             tmplist =[]
             for det in tod.local_dets :
-                offset +=self.norder
                 tmplist .append(offset)
+                offset +=self.norder
             self.list_of_offsets.append(tmplist )
 
 
     @function_timer
     def get_polynomials (self, N, local_offset, local_N):
         x = 2 * np.arange(N) / (N - 1)   -1
-        todslice = slice(local_offset, local_offset + local_nsample)
+        todslice = slice(local_offset, local_offset + local_N)
 
         return np.array(
                     [ scipy.special.legendre(i)(x[todslice]) for i in range(self.norder  ) ]
@@ -311,13 +313,13 @@ class GainTemplate(TODTemplate):
             nsample = tod.total_samples
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
-            poly = self.get_polynomials(nsample, local_offset, local_sample)
+            legendre_poly = self.get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
             for idet, det in enumerate(tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
                 poly_amps = poly_amplitudes[amplitude_slice ]
-                delta_gain = self.legendre_poly.dot(poly_amps)
+                delta_gain = legendre_poly.dot(poly_amps)
                 signal_estimate = tod.local_signal(det, self.template_name)
                 gain_fluctuation = signal_estimate * delta_gain
                 signal[iobs, det, todslice] += gain_fluctuation
@@ -328,19 +330,20 @@ class GainTemplate(TODTemplate):
     @function_timer
     def project_signal(self, signal, amplitudes):
         """a += F^T.signal"""
+
         poly_amplitudes = amplitudes[self.name]
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
             nsample = tod.total_samples
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
-            poly = self.get_polynomials(nsample, local_offset, local_sample)
+            legendre_poly = self.get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
 
-            for det in tod.local_dets:
+            for idet, det in enumerate( tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
-                delta_gain = self.legendre_poly.dot(np.ones(self.norder))
+                delta_gain = legendre_poly.dot(np.ones(self.norder))
                 signal_estimate = tod.local_signal(det, self.template_name)
                 gain_fluctuation = signal_estimate * delta_gain
                 poly_amplitudes[ind] += np.dot(signal[iobs, det, todslice], gain_fluctuation_template)
@@ -1478,6 +1481,8 @@ class OpMapMaker(Operator):
         subharmonic_order=None,
         fourier2D_order=None,
         fourier2D_subharmonics=False,
+        gain_templatename=None,
+        gain_poly_order= None,
         iter_min=3,
         iter_max=100,
         use_noise_prior=True,
@@ -1509,6 +1514,8 @@ class OpMapMaker(Operator):
         self.subharmonic_order = subharmonic_order
         self.fourier2D_order = fourier2D_order
         self.fourier2D_subharmonics = fourier2D_subharmonics
+        self.gain_poly_order = gain_poly_order
+        self.gain_templatename = gain_templatename
         self.iter_min = iter_min
         self.iter_max = iter_max
         self.use_noise_prior = use_noise_prior
@@ -1555,6 +1562,7 @@ class OpMapMaker(Operator):
                             ("OffsetTemplate.project_signal", None),
                             ("SubharmonicTemplate.project_signal", None),
                             ("fourier2DTemplate.project_signal", None),
+                            ("GainTemplate.project_signal", None),
                         ]
                     ),
                 ),
@@ -1616,6 +1624,7 @@ class OpMapMaker(Operator):
                             ("OffsetTemplate.add_to_signal", None),
                             ("SubharmonicTemplate.add_to_signal", None),
                             ("fourier2DTemplate.add_to_signal", None),
+                            ("GainTemplate.add_to_signal", None),
                         ]
                     ),
                 ),
@@ -1743,6 +1752,19 @@ class OpMapMaker(Operator):
                     flag_mask=(self.flag_mask | self.mask_bit),
                 )
             )
+        if self.gain_templatename is not None:
+                    log.info(
+                        f"Initializing Gain template, with Legendre polynomials,  order = {self.gain_poly_order} and {self.gain_templatename} as signal template."  )
+
+                    templatelist.append(
+                        GainTemplate(
+                            data,
+                            order=self.gain_poly_order,
+                            common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                            flag_mask=(self.flag_mask | self.mask_bit),
+                            templatename =self.gain_templatename
+                        )
+                    )
         if len(templatelist) == 0:
             if self.rank == 0:
                 log.info("No templates to fit, no destriping done.")
