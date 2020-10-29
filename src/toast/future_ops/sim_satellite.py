@@ -282,7 +282,7 @@ class SimSatellite(Operator):
 
     gap_time = Quantity(0.0 * u.hour, help="The gap between each observation")
 
-    n_observation = Int(1, help="The number of observations to simulate")
+    num_observations = Int(1, help="The number of observations to simulate")
 
     spin_period = Quantity(
         10.0 * u.minute, help="The period of the rotation about the spin axis"
@@ -373,12 +373,12 @@ class SimSatellite(Operator):
 
         # Distribute the observations uniformly among groups
 
-        groupdist = distribute_uniform(self.n_observation, comm.ngroups)
+        groupdist = distribute_uniform(self.num_observations, comm.ngroups)
 
         # Compute global time and sample ranges of all observations
 
         obsrange = regular_intervals(
-            self.n_observation,
+            self.num_observations,
             self.start_time.to_value(u.second),
             0,
             focalplane.sample_rate,

@@ -181,13 +181,13 @@ class DetectorData(object):
     def _det_axis_view(self, key):
         if isinstance(key, (int, np.integer)):
             # Just one detector by index
-            view = (key,)
+            view = key
         elif isinstance(key, str):
             # Just one detector by name
-            view = (self._name2idx[key],)
+            view = self._name2idx[key]
         elif isinstance(key, slice):
             # We are slicing detectors by index
-            view = (key,)
+            view = key
         else:
             # Assume that our key is at least iterable
             try:
@@ -206,19 +206,18 @@ class DetectorData(object):
         return view
 
     def _get_view(self, key):
-        if isinstance(key, tuple):
+        if isinstance(key, (tuple, Mapping)):
             # We are slicing in both detector and sample dimensions
             if len(key) > len(self._shape):
                 msg = "DetectorData has only {} dimensions".format(len(self._shape))
                 log.error(msg)
                 raise TypeError(msg)
-            detview = self._det_axis_view(key[0])
-            view = detview
+            view = [self._det_axis_view(key[0])]
             for k in key[1:]:
-                view += (k,)
+                view.append(k)
             # for s in range(len(self._shape) - len(key)):
             #     view += (slice(None, None, None),)
-            return view
+            return tuple(view)
         else:
             # Only detector slice
             view = self._det_axis_view(key)
