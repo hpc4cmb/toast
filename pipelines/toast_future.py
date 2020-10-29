@@ -80,8 +80,6 @@ def main():
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
     config, args = parse_config(parser, operators=operators)
-    print(config)
-    print(args)
 
     # The satellite simulation operator requires a Telescope object.  Make a fake
     # focalplane and telescope
@@ -99,7 +97,8 @@ def main():
 
     # Log the config that was actually used at runtime.
     out = "future_config_log.toml"
-    dump_toml(out, config)
+    if rank == 0:
+        dump_toml(out, config)
 
     # Instantiate our operators
     run = create(config)
@@ -129,9 +128,8 @@ def main():
     # Observations in the data).
     data = Data(comm=comm)
 
-    # Run the pipeline
-    pipe.exec(data)
-    pipe.finalize(data)
+    # Run the pipeline all at once
+    pipe.apply(data)
 
     # Print the resulting data
     for ob in data.obs:

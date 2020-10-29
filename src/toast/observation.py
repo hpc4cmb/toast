@@ -410,7 +410,7 @@ class DetDataMgr(MutableMapping):
                     raise ValueError(msg)
                 if ddata.shape[0] != self.samples:
                     msg = "Assigment dictionary detector {} has {} samples instead of {} in the observation".format(
-                        ddata.shape[0], self.samples
+                        d, ddata.shape[0], self.samples
                     )
                     raise ValueError(msg)
                 if detshape is None:
@@ -1217,7 +1217,7 @@ class Observation(MutableMapping):
 
     Args:
         telescope (Telescope):  An instance of a Telescope object.
-        samples (int):  The total number of samples for this observation.
+        n_samples (int):  The total number of samples for this observation.
         name (str):  (Optional) The observation name.
         UID (int):  (Optional) The Unique ID for this observation.  If not specified,
             the UID will be computed from a hash of the name.
@@ -1243,7 +1243,7 @@ class Observation(MutableMapping):
     def __init__(
         self,
         telescope,
-        samples,
+        n_samples,
         name=None,
         UID=None,
         comm=None,
@@ -1253,7 +1253,7 @@ class Observation(MutableMapping):
     ):
         log = Logger.get()
         self._telescope = telescope
-        self._samples = samples
+        self._samples = n_samples
         self._name = name
         self._UID = UID
         self._comm = comm
