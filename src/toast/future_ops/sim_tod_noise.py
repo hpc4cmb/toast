@@ -14,7 +14,7 @@ from ..fft import FFTPlanReal1DStore
 
 from ..operator import Operator
 
-from ..utils import rate_from_times, Logger
+from ..utils import rate_from_times, Logger, AlignedF64
 
 from .._libtoast import tod_sim_noise_timestream
 
@@ -276,9 +276,11 @@ class SimNoise(Operator):
 
             # Create output if it does not exist
             if self.out not in obs:
-                obs.detdata.create(self.out, shape=(1,), dtype=np.float64)
+                obs.detdata.create(self.out, detshape=(), dtype=np.float64)
 
-            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(obs.shared[self.times])
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
+                obs.shared[self.times].data
+            )
 
             for key in nse.keys:
                 # Check if noise matching this PSD key is needed
@@ -296,8 +298,8 @@ class SimNoise(Operator):
                     obsindx,
                     nse.index(key),
                     rate,
-                    obs.offset + global_offset,
-                    obs.n_local,
+                    obs.local_index_offset + global_offset,
+                    obs.n_local_samples,
                     self._oversample,
                     nse.freq(key),
                     nse.psd(key),

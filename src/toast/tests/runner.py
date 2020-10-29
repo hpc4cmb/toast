@@ -25,12 +25,14 @@ from . import pixels as testpixels
 
 from . import observation as testobs
 
+from . import config as testconfig
+
 from . import ops_sim_satellite as testsimsat
 
 
 #
 # from . import cache as testcache
-# from . import config as testconfig
+#
 #
 #
 # from . import dist as testdist
@@ -133,10 +135,12 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testpixels))
         suite.addTest(loader.loadTestsFromModule(testobs))
 
+        suite.addTest(loader.loadTestsFromModule(testconfig))
+
         suite.addTest(loader.loadTestsFromModule(testsimsat))
 
         # suite.addTest(loader.loadTestsFromModule(testcache))
-        # suite.addTest(loader.loadTestsFromModule(testconfig))
+        #
         #
         #
         # suite.addTest(loader.loadTestsFromModule(testdist))

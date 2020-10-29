@@ -25,7 +25,7 @@ from toast import Telescope
 
 from toast.mpi import get_world, Comm
 
-from toast.dist import Data
+from toast.data import Data
 
 from toast.utils import Logger, Environment
 
@@ -33,7 +33,7 @@ from toast.timing import GlobalTimers, gather_timers
 
 from toast.timing import dump as dump_timing
 
-from toast import dump_toml, parse_config, create
+from toast.config import dump_toml, parse_config, create
 
 from toast import future_ops as ops
 
@@ -49,11 +49,11 @@ def main():
     mpiworld, procs, rank = get_world()
 
     # The operators used in this script:
-    operators = {
-        "sim_satellite": ops.SimSatellite,
-        "noise_model": ops.DefaultNoiseModel,
-        "sim_noise": ops.SimNoise,
-    }
+    operators = [
+        ops.SimSatellite(name="sim_satellite"),
+        ops.DefaultNoiseModel(name="noise_model"),
+        ops.SimNoise(name="sim_noise"),
+    ]
 
     # Argument parsing
     parser = argparse.ArgumentParser(description="Demo of TOAST future features.")
@@ -79,12 +79,14 @@ def main():
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
-    config, argvars = parse_config(parser, operators=operators)
+    config, args = parse_config(parser, operators=operators)
+    print(config)
+    print(args)
 
     # The satellite simulation operator requires a Telescope object.  Make a fake
     # focalplane and telescope
     focalplane = fake_hexagon_focalplane(
-        argvars["focalplane_pixels"],
+        args.focalplane_pixels,
         10.0,
         samplerate=10.0,
         epsilon=0.0,
@@ -95,32 +97,33 @@ def main():
     )
     print(focalplane)
 
-    # Set the telecope option of the satellite simulation operator.  If we were using
-    # an experiment-specific operator, this would be done internally.
-
-    config["operators"]["sim_satellite"]["telescope"] = Telescope(
-        name="fake", focalplane=focalplane
-    )
-
     # Log the config that was actually used at runtime.
     out = "future_config_log.toml"
-    dump_config(out, config)
+    dump_toml(out, config)
 
     # Instantiate our operators
     run = create(config)
 
+    # Add the telescope class to the satellite simulation operator (For a real
+    # experiment, this kind of thing would be done automatically based on other
+    # options to the operator).
+
+    run["operators"]["sim_satellite"].telescope = Telescope(
+        name="fake", focalplane=focalplane
+    )
+
     # Put our operators into a pipeline in a specific order, running all detectors at
     # once.
-    pipe_opts = ops.Pipeline.defaults()
-    pipe_opts["detector_sets"] = "ALL"
-    pipe_opts["operators"] = [
-        run["operators"][x] for x in ["sim_satellite", "noise_model", "sim_noise"]
-    ]
 
-    pipe = ops.Pipeline(pipe_opts)
+    pipe = ops.Pipeline(
+        detector_sets="ALL",
+        operators=[
+            run["operators"][x] for x in ["sim_satellite", "noise_model", "sim_noise"]
+        ],
+    )
 
     # Set up the communicator
-    comm = Comm(world=mpiworld, groupsize=argvars["group_size"])
+    comm = Comm(world=mpiworld, groupsize=args.group_size)
 
     # Start with an empty data object (the first operator in our pipeline will create
     # Observations in the data).

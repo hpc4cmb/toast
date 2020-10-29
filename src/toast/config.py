@@ -25,9 +25,197 @@ from . import instrument
 
 from .operator import Operator
 
-from .traits import TraitConfig, build_config, add_config_args, args_update_config
+from .traits import TraitConfig
 
 from . import future_ops as ops
+
+
+def build_config(objects):
+    """Build a configuration of current values.
+
+    Args:
+        objects (list):  A list of class instances to add to the config.  These objects
+            must inherit from the TraitConfig base class.
+
+    Returns:
+        (dict):  The configuration.
+
+    """
+    conf = OrderedDict()
+    for o in objects:
+        if not isinstance(o, Operator):
+            raise RuntimeError("The object list should contain Operator instances")
+        if o.name is None:
+            raise RuntimeError("Cannot buid config from Operators without a name")
+        conf = o.get_config(input=conf)
+    return conf
+
+
+def add_config_args(parser, conf, section, ignore=list(), prefix="", separator=":"):
+    """Add arguments to an argparser for each parameter in a config dictionary.
+
+    Using a previously created config dictionary, add a commandline argument for each
+    object parameter in a section of the config.  The type, units, and help string for
+    the commandline argument come from the config, which is in turn built from the
+    class traits of the object.  Boolean parameters are converted to store_true or
+    store_false actions depending on their current value.
+
+    Args:
+        parser (ArgumentParser):  The parser to append to.
+        conf (dict):  The configuration dictionary.
+        section (str):  Process objects in this section of the config.
+        ignore (list):  List of object parameters to ignore when adding args.
+        prefix (str):  Prepend this to the beginning of all options.
+        separator (str):  Use this character between the class name and parameter.
+
+    Returns:
+        None
+
+    """
+    parent = conf
+    if section is not None:
+        path = section.split("/")
+        for p in path:
+            if p not in parent:
+                msg = "section {} does not exist in config".format(section)
+                raise RuntimeError(msg)
+            parent = parent[p]
+    for obj, props in parent.items():
+        for name, info in props.items():
+            # print("examine options for {} = {}".format(name, info))
+            if name in ignore:
+                # Skip this as requested
+                # print("  ignoring")
+                continue
+            if name == "class":
+                # This is not a user-configurable parameter.
+                # print("  skipping")
+                continue
+            if info["type"] not in ["bool", "int", "float", "str", "Quantity"]:
+                # This is not something that we can get from parsing commandline
+                # options.  Skip it.
+                # print("  no type- skipping")
+                continue
+            if info["type"] == "bool":
+                # special case for boolean
+                option = "--{}{}{}{}".format(prefix, obj, separator, name)
+                act = "store_true"
+                if info["value"] == "True":
+                    act = "store_false"
+                    option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
+                # print("  add bool argument {}".format(option))
+                parser.add_argument(
+                    option,
+                    required=False,
+                    default=info["value"],
+                    action=act,
+                    help=info["help"],
+                )
+            else:
+                option = "--{}{}{}{}".format(prefix, obj, separator, name)
+                default = None
+                typ = None
+                hlp = info["help"]
+                if info["type"] == "int":
+                    typ = int
+                    if info["value"] != "None":
+                        default = int(info["value"])
+                elif info["type"] == "float":
+                    typ = float
+                    if info["value"] != "None":
+                        default = float(info["value"])
+                elif info["type"] == "str":
+                    typ = str
+                    if info["value"] != "None":
+                        default = info["value"]
+                elif info["type"] == "Quantity":
+                    typ = u.Quantity
+                    if info["value"] != "None":
+                        default = u.Quantity(
+                            "{} {}".format(info["value"], info["unit"])
+                        )
+                # print("  add argument {}".format(option))
+                parser.add_argument(
+                    option,
+                    required=False,
+                    default=default,
+                    type=typ,
+                    help=hlp,
+                )
+    return
+
+
+def args_update_config(args, conf, defaults, section, prefix="", separator=":"):
+    """Override options in a config dictionary from args namespace.
+
+    Args:
+        args (namespace):  The args namespace returned by ArgumentParser.parse_args()
+        conf (dict):  The configuration to update.
+        defaults (dict):  The starting default config, used to detect which options from
+            argparse have been changed by the user.
+        section (str):  Process objects in this section of the config.
+        prefix (str):  Prepend this to the beginning of all options.
+        separator (str):  Use this character between the class name and parameter.
+
+    Returns:
+        (namespace):  The un-parsed remaining arg vars.
+
+    """
+    remain = copy.deepcopy(args)
+    parent = conf
+    dparent = defaults
+    if section is not None:
+        path = section.split("/")
+        for p in path:
+            if p not in parent:
+                msg = "section {} does not exist in config".format(section)
+                raise RuntimeError(msg)
+            parent = parent[p]
+        for p in path:
+            if p not in dparent:
+                msg = "section {} does not exist in defaults".format(section)
+                raise RuntimeError(msg)
+            dparent = dparent[p]
+    # Build the regex match of option names
+    obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
+    for arg in vars(args):
+        val = getattr(args, arg)
+        obj_mat = obj_pat.match(arg)
+        if obj_mat is not None:
+            name = obj_mat.group(1)
+            optname = obj_mat.group(2)
+            if name not in parent:
+                msg = (
+                    "Parsing option '{}', config does not have object named {}".format(
+                        arg, name
+                    )
+                )
+                raise RuntimeError(msg)
+            if name not in dparent:
+                msg = "Parsing option '{}', defaults does not have object named {}".format(
+                    arg, name
+                )
+                raise RuntimeError(msg)
+            # Only update config options which are different than the default.
+            # Otherwise we would be overwriting values from any config files with the
+            # defaults from argparse.
+            if val is None:
+                val = "None"
+            else:
+                if dparent[name][optname]["unit"] != "None":
+                    # This option is a quantity
+                    val = "{:0.14e}".format(
+                        val.to_value(u.Unit(dparent[name][optname]["unit"]))
+                    )
+                elif dparent[name][optname]["type"] == "float":
+                    val = "{:0.14e}".format(val)
+                else:
+                    val = str(val)
+            if val != dparent[name][optname]["value"]:
+                parent[name][optname]["value"] = val
+            # This arg was recognized, remove from the namespace.
+            delattr(remain, arg)
+    return remain
 
 
 def parse_config(parser, operators=list()):
@@ -47,13 +235,13 @@ def parse_config(parser, operators=list()):
 
     Args:
         parser (ArgumentParser):  The argparse parser.
-        operators (list):  The operator classes to add to the commandline.  Note that
-            if these are classes, then the commandline names will be the class names.
-            If you pass a list of instances with the name attribute set, then the
-            commandline names will use these.
+        operators (list):  The operator instances to add to the commandline.  These
+            instances should have their "name" attribute set to something meaningful,
+            since that name is used to construct the commandline options.
 
     Returns:
-        (dict):  The config dictionary.
+        (tuple):  The (config dictionary, args).  The args namespace contains all the
+            remaining parameters after extracting the operator options.
 
     """
 
@@ -108,11 +296,28 @@ def _merge_config(loaded, original):
             original[section] = objs
 
 
-def _load_toml_trait(tbl):
+def _load_toml_traits(tbl):
+    # print("LOAD TraitConfig object {}".format(tbl), flush=True)
     result = OrderedDict()
     for k in tbl.keys():
         if k == "class":
             result[k] = tbl[k]
+        elif isinstance(tbl[k], tomlkit.items.Table):
+            # This is a dictionary trait
+            result[k] = OrderedDict()
+            result[k]["value"] = OrderedDict()
+            result[k]["type"] = "dict"
+            result[k]["unit"] = "None"
+            for tk, tv in tbl[k].items():
+                result[k]["value"][str(tk)] = str(tv)
+        elif isinstance(tbl[k], tomlkit.items.Array):
+            # This is a list
+            result[k] = OrderedDict()
+            result[k]["value"] = list()
+            result[k]["type"] = "list"
+            result[k]["unit"] = "None"
+            for it in tbl[k]:
+                result[k]["value"].append(str(it))
         elif isinstance(tbl[k], str):
             if tbl[k] == "None":
                 # Copy None values.  There is no way to determine the type in this case.
@@ -160,6 +365,7 @@ def _load_toml_trait(tbl):
             result[k]["value"] = "{:0.14e}".format(tbl[k])
             result[k]["type"] = "float"
             result[k]["unit"] = "None"
+    # print("LOAD toml result = {}".format(result))
     return result
 
 
@@ -193,7 +399,8 @@ def load_toml(file, input=None):
                     subkeys = raw_root[k].keys()
                     # This element is table-like.
                     if "class" in subkeys:
-                        conf_root[k] = _load_toml_trait(raw_root[k])
+                        # print("LOAD found traitconfig {}".format(k), flush=True)
+                        conf_root[k] = _load_toml_traits(raw_root[k])
                     else:
                         # This is just a dictionary
                         conf_root[k] = OrderedDict()
@@ -291,9 +498,15 @@ def dump_toml(file, conf):
     def convert_node(conf_root, table_root, indent_size):
         """Helper function to recursively convert dictionaries to tables"""
         if isinstance(conf_root, (dict, OrderedDict)):
+            # print("{}found dict".format(" " * indent_size))
             for k in list(conf_root.keys()):
+                # print("{}  examine key {}".format(" " * indent_size, k))
                 if isinstance(conf_root[k], (dict, OrderedDict)):
+                    # print("{}  key is a dict".format(" " * indent_size))
                     if "value" in conf_root[k] and "type" in conf_root[k]:
+                        # print(
+                        #    "{}  found value and type subkeys".format(" " * indent_size)
+                        # )
                         # this is a trait
                         unit = None
                         if "unit" in conf_root[k]:
@@ -301,6 +514,14 @@ def dump_toml(file, conf):
                         help = None
                         if "help" in conf_root[k]:
                             help = conf_root[k]["help"]
+                        # print(
+                        #     "{}  dumping trait {}, {}, {}".format(
+                        #         " " * indent_size,
+                        #         k,
+                        #         conf_root[k]["value"],
+                        #         conf_root[k]["type"],
+                        #     )
+                        # )
                         _dump_toml_trait(
                             table_root,
                             indent_size,
@@ -311,10 +532,15 @@ def dump_toml(file, conf):
                             help,
                         )
                     else:
+                        # print("{}  not a trait- descending".format(" " * indent_size))
                         # descend tree
                         table_root[k] = table()
                         convert_node(conf_root[k], table_root[k], indent_size + 2)
                 else:
+                    # print("{}  value = {}".format(" " * indent_size, conf_root[k]))
+                    # print(
+                    #     "{}  key is not a dict, add to table".format(" " * indent_size)
+                    # )
                     table_root.add(k, conf_root[k])
                     table_root[k].indent(indent_size)
         else:
@@ -448,40 +674,52 @@ def create(conf):
             # See if the referenced object exists
             path = mat.group(1)
             path_keys = path.split("/")
+            # print("OBJREF checking {}".format(path_keys))
             found = get_node(top, path_keys)
+            if found is not None:
+                # It exists, but is this a TraitConfig object that has not yet been
+                # created?
+                if isinstance(found, (dict, OrderedDict)) and "class" in found:
+                    # Yes...
+                    found = None
+            # print("OBJREF found = {}".format(found))
         return found
 
-    def parse_tree(in_tree, out_tree, cursor):
+    def parse_tree(tree, cursor):
         unresolved = 0
         # print("PARSE ------------------------")
 
         # The node at this cursor location
         # print("PARSE fetching node at cursor {}".format(cursor))
-        in_node = get_node(in_tree, cursor)
+        node = get_node(tree, cursor)
 
-        # print("PARSE at input {} got node {}".format(cursor, in_node))
+        # print("PARSE at cursor {} got node {}".format(cursor, node))
 
         # The output parent node
         parent_cursor = list(cursor)
         node_name = parent_cursor.pop()
-        out_parent = get_node(out_tree, parent_cursor)
-        # print("PARSE at output parent {} got node {}".format(parent_cursor, out_parent))
-
-        # The output node
-        node_type = type(in_node)
-        out_parent[node_name] = node_type()
+        parent = get_node(tree, parent_cursor)
+        # print("PARSE at parent {} got node {}".format(parent_cursor, parent))
 
         # In terms of this function, "nodes" are always dictionary-like
-        for child_key, child_val in in_node.items():
-            if isinstance(child_val, str):
+        for child_key in list(node.keys()):
+            # We are modifying the tree in place, so we get a new reference to our
+            # node each time.
+            child_cursor = list(cursor)
+            child_cursor.append(child_key)
+            child_val = get_node(tree, child_cursor)
+
+            if isinstance(child_val, TraitConfig):
+                # This is an already-created object
+                continue
+            elif isinstance(child_val, str):
                 # print("PARSE child value {} is a string".format(child_val))
                 # See if this string is an object reference and try to resolve it.
-                check = find_object_ref(out_tree, child_val)
+                check = find_object_ref(tree, child_val)
                 if check is None:
                     unresolved += 1
-                    out_parent[node_name][child_key] = child_val
                 else:
-                    out_parent[node_name][child_key] = check
+                    parent[node_name][child_key] = check
             else:
                 is_dict = None
                 try:
@@ -491,57 +729,55 @@ def create(conf):
                 except:
                     is_dict = False
                 if is_dict:
-                    child_cursor = list(cursor)
-                    child_cursor.append(child_key)
                     # print(
                     #     "PARSE child value {} is a dict, descend with cursor {}".format(
                     #         child_val, child_cursor
                     #     )
                     # )
-                    unresolved += parse_tree(in_tree, out_tree, child_cursor)
+                    unresolved += parse_tree(tree, child_cursor)
                 else:
                     # Not a dictionary
+                    is_list = None
                     try:
                         _ = len(child_val)
-                        out_parent[node_name][child_key] = [
-                            None for x in range(len(child_val))
-                        ]
-
+                        # It is a list
+                        is_list = True
+                    except:
+                        is_list = False
+                    if is_list:
                         for elem in range(len(child_val)):
-                            found = find_object_ref(out_tree, child_val[elem])
+                            found = find_object_ref(tree, child_val[elem])
+                            # print(
+                            #     "find_object {} --> {}".format(child_val[elem], found)
+                            # )
                             if found is None:
                                 unresolved += 1
-                                out_parent[node_name][child_key][elem] = child_val[elem]
                             else:
-                                out_parent[node_name][child_key][elem] = found
+                                parent[node_name][child_key][elem] = found
                         # print("PARSE child value {} is a list".format(child_val))
-                    except:
-                        # Not a list / array, just leave it alone
-                        # print("PARSE child value {} is not modified".format(child_val))
-                        out_parent[node_name][child_key] = child_val
 
         # If this node is an object and all refs exist, then create it.  Otherwise
         # leave it alone.
         # print(
-        #     "PARSE unresolved = {}, out_parent[{}] has class?  {}".format(
-        #         unresolved, node_name, ("class" in out_parent[node_name])
+        #     "PARSE unresolved = {}, parent[{}] has class?  {}".format(
+        #         unresolved, node_name, ("class" in parent[node_name])
         #     )
         # )
-        if unresolved == 0 and "class" in out_parent[node_name]:
+        if unresolved == 0 and "class" in parent[node_name]:
             # We have a TraitConfig object with all references resolved.
             # Instantiate it.
             # print("PARSE creating TraitConfig {}".format(node_name))
-            obj = TraitConfig.from_config(node_name, out_parent[node_name])
+            obj = TraitConfig.from_config(node_name, parent[node_name])
             # print("PARSE instantiated {}".format(obj))
-            out_parent[node_name] = obj
+            parent[node_name] = obj
 
-        # print("PARSE VERIFY parent[{}] = {}".format(node_name, out_parent[node_name]))
-        # print("PARSE out_tree now:\n", out_tree, "\n--------------")
+        # print("PARSE VERIFY parent[{}] = {}".format(node_name, parent[node_name]))
+        # print("PARSE tree now:\n", tree, "\n--------------")
         return unresolved
 
     # Iteratively instantiate objects
 
-    out = OrderedDict()
+    out = copy.deepcopy(conf)
 
     done = False
     last_unresolved = None
@@ -551,13 +787,12 @@ def create(conf):
         # print("PARSE iter ", it)
         done = True
         unresolved = 0
-        for sect in list(conf.keys()):
-            # print("PARSE  examine ", sect, "-->", type(conf[sect]))
-            if not isinstance(conf[sect], (dict, OrderedDict)):
+        for sect in list(out.keys()):
+            # print("PARSE  examine ", sect, "-->", type(out[sect]))
+            if not isinstance(out[sect], (dict, OrderedDict)):
                 continue
-            out[sect] = OrderedDict()
             # print("PARSE   section ", sect)
-            unresolved += parse_tree(conf, out, [sect])
+            unresolved += parse_tree(out, [sect])
 
         if last_unresolved is not None:
             if unresolved == last_unresolved:

@@ -693,7 +693,7 @@ class SharedDataMgr(MutableMapping):
             self.clear()
 
     def __repr__(self):
-        val = "<SharedDataMgr {} samples".format(self.samples)
+        val = "<SharedDataMgr"
         for k in self._internal.keys():
             val += "\n    {}: shape = {}, dtype = {}".format(
                 k, self._internal[k].shape, self._internal[k].dtype

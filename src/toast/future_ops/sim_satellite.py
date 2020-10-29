@@ -141,7 +141,8 @@ def satellite_scanning(
     env = Environment.get()
     tod_buffer_length = env.tod_buffer_length()
 
-    first_samp, n_samp = obs.local_samples
+    first_samp = obs.local_index_offset
+    n_samp = obs.n_local_samples
     obs.shared.create(obs_key, shape=(n_samp, 4), dtype=np.float64, comm=obs.comm_col)
 
     # Temporary buffer
@@ -411,25 +412,25 @@ class SimSatellite(Operator):
             # and velocity.
             obs.shared.create(
                 self.times,
-                shape=(obs.n_local,),
+                shape=(obs.n_local_samples,),
                 dtype=np.float64,
                 comm=obs.comm_col,
             )
             obs.shared.create(
                 self.flags,
-                shape=(obs.n_local,),
+                shape=(obs.n_local_samples,),
                 dtype=np.uint8,
                 comm=obs.comm_col,
             )
             obs.shared.create(
                 self.position,
-                shape=(obs.n_local, 3),
+                shape=(obs.n_local_samples, 3),
                 dtype=np.float64,
                 comm=obs.comm_col,
             )
             obs.shared.create(
                 self.velocity,
-                shape=(obs.n_local, 3),
+                shape=(obs.n_local_samples, 3),
                 dtype=np.float64,
                 comm=obs.comm_col,
             )
@@ -439,15 +440,17 @@ class SimSatellite(Operator):
             position = None
             velocity = None
             if obs.comm_col_rank == 0:
-                start_abs = obs.offset + obsrange[ob].first
+                start_abs = obs.local_index_offset + obsrange[ob].first
                 start_time = (
                     obsrange[ob].start + float(start_abs) / focalplane.sample_rate
                 )
-                stop_time = start_time + float(obs.n_local) / focalplane.sample_rate
+                stop_time = (
+                    start_time + float(obs.n_local_samples) / focalplane.sample_rate
+                )
                 stamps = np.linspace(
                     start_time,
                     stop_time,
-                    num=obs.n_local,
+                    num=obs.n_local_samples,
                     endpoint=False,
                     dtype=np.float64,
                 )
@@ -459,14 +462,14 @@ class SimSatellite(Operator):
                     (start_time - self.start_time.to_value(u.second)) * self._radpersec,
                     2.0 * np.pi,
                 )
-                ang = radinc * np.arange(obs.n_local, dtype=np.float64) + rad
+                ang = radinc * np.arange(obs.n_local_samples, dtype=np.float64) + rad
                 x = self._AU * np.cos(ang)
                 y = self._AU * np.sin(ang)
                 z = np.zeros_like(x)
                 position = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
                 ang = (
-                    radinc * np.arange(obs.n_local, dtype=np.float64)
+                    radinc * np.arange(obs.n_local_samples, dtype=np.float64)
                     + rad
                     + (0.5 * np.pi)
                 )
@@ -480,14 +483,14 @@ class SimSatellite(Operator):
             obs.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
 
             # Create boresight pointing
-            start_abs = obs.offset + obsrange[ob].first
+            start_abs = obs.local_index_offset + obsrange[ob].first
             degday = 360.0 / 365.25
 
             q_prec = None
             if obs.comm_col_rank == 0:
                 q_prec = slew_precession_axis(
                     first_samp=start_abs,
-                    n_samp=obs.n_local,
+                    n_samp=obs.n_local_samples,
                     sample_rate=focalplane.sample_rate,
                     deg_day=degday,
                 )

@@ -78,6 +78,17 @@ def create_comm(mpicomm):
     return toastcomm
 
 
+def create_telescope(group_size):
+    """Create a fake telescope with at least one detector per process."""
+    npix = 1
+    ring = 1
+    while 2 * npix < group_size:
+        npix += 6 * ring
+        ring += 1
+    fp = fake_hexagon_focalplane(n_pix=npix)
+    return Telescope("test", focalplane=fp)
+
+
 def create_distdata(mpicomm, obs_per_group=1, samples=10):
     """Create a toast communicator and distributed data object.
 
@@ -98,13 +109,7 @@ def create_distdata(mpicomm, obs_per_group=1, samples=10):
     for obs in range(obs_per_group):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
-        npix = 1
-        ring = 1
-        while 2 * npix < toastcomm.group_size:
-            npix += 6 * ring
-            ring += 1
-        fp = fake_hexagon_focalplane(n_pix=npix)
-        tele = Telescope("test", focalplane=fp)
+        tele = create_telescope(toastcomm.group_size)
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
         ob = Observation(

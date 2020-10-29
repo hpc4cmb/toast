@@ -58,6 +58,29 @@ class Operator(TraitConfig):
         """
         self._finalize(data, **kwargs)
 
+    def apply(self, data, detectors=None, **kwargs):
+        """Run exec() and finalize().
+
+        This is a convenience wrapper that calls exec() exactly once with an optional
+        detector list and then immediately calls finalize().  This is really only
+        useful when working interactively to save a bit of typing.  When a `Pipeline`
+        is calling other operators it will always use exec() and finalize() explicitly.
+
+        After calling this, any future calls to exec() may produce unexpected results,
+        since finalize() has already been called.
+
+        Args:
+            data (toast.Data):  The distributed data.
+            detectors (list):  A list of detector names or indices.  If None, this
+                indicates a list of all detectors.
+
+        Returns:
+            None
+
+        """
+        self.exec(data, detectors, **kwargs)
+        self.finalize(data, **kwargs)
+
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")
         return dict()
@@ -112,7 +135,16 @@ class Operator(TraitConfig):
         return self._accelerators()
 
     @classmethod
-    def class_config(cls, input=None):
+    def get_class_config_path(cls):
+        return "/operators/{}".format(cls.__qualname__)
+
+    def get_config_path(self):
+        if self.name is None:
+            return None
+        return "/operators/{}".format(self.name)
+
+    @classmethod
+    def get_class_config(cls, input=None):
         """Return a dictionary of the default traits of an Operator class.
 
         This returns a new or appended dictionary.  The class instance properties are
@@ -128,9 +160,9 @@ class Operator(TraitConfig):
             (dict):  The created or updated dictionary.
 
         """
-        return super().class_config(section="operators", input=input)
+        return super().get_class_config(section="operators", input=input)
 
-    def config(self, input=None):
+    def get_config(self, input=None):
         """Return a dictionary of the current traits of an Operator *instance*.
 
         This returns a new or appended dictionary.  The operator instance properties are
@@ -146,7 +178,7 @@ class Operator(TraitConfig):
             (dict):  The created or updated dictionary.
 
         """
-        return super().config(section="operators", input=input)
+        return super().get_config(section="operators", input=input)
 
     @classmethod
     def translate(cls, props):

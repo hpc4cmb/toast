@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import copy
 
 import importlib
@@ -210,6 +211,15 @@ class TraitConfig(HasTraits):
         val += "\n>"
         return val
 
+    @classmethod
+    def get_class_config_path(cls):
+        return "/{}".format(cls.__qualname__)
+
+    def get_config_path(self):
+        if self.name is None:
+            return None
+        return "/{}".format(self.name)
+
     @staticmethod
     def _check_parent(conf, section, name):
         parent = conf
@@ -217,8 +227,8 @@ class TraitConfig(HasTraits):
             path = section.split("/")
             for p in path:
                 if p not in parent:
-                    parent[p] = dict()
-                    parent = parent[p]
+                    parent[p] = OrderedDict()
+                parent = parent[p]
         if name in parent:
             msg = None
             if section is None:
@@ -229,25 +239,47 @@ class TraitConfig(HasTraits):
         return parent
 
     @staticmethod
-    def _format_conf_trait(trt, tval):
-        valstr = "None"
+    def _format_conf_trait(conf, trt, tval):
+        retval = "None"
         unitstr = "None"
         typestr = None
-        if isinstance(trt, Quantity):
-            if tval is not None:
-                valstr = "{:0.14e}".format(tval.value)
-                unitstr = str(tval.unit)
+
+        def _format_item(c, tv):
+            val = "None"
+            unit = "None"
+            if tv is None:
+                return (val, unit)
+            if isinstance(tv, TraitConfig):
+                # We are dumping an instance which has handles to other TraitConfig
+                # classes.  Do this recursively.
+                c = tv.get_config(input=c)
+                val = "@config:{}".format(tv.get_config_path())
+            elif isinstance(tv, u.Quantity):
+                val = "{:0.14e}".format(tv.value)
+                unit = str(tv.unit)
+            elif isinstance(tv, float):
+                val = "{:0.14e}".format(tv)
+            else:
+                val = "{}".format(tv)
+            return (val, unit)
+
+        if isinstance(trt, Dict):
+            retval = dict()
+            for k, v in tval.items():
+                retval[k], _ = _format_item(conf, v)
+        if isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
+            retval = list()
+            for v in tval:
+                vstr, _ = _format_item(conf, v)
+                retval.append(vstr)
         else:
-            if tval is not None:
-                if isinstance(trt, Float):
-                    valstr = "{:0.14e}".format(tval)
-                else:
-                    valstr = "{}".format(tval)
+            # Single object
+            retval, unitstr = _format_item(conf, tval)
         typestr = trait_type_to_string(trt)
-        return valstr, unitstr, typestr
+        return retval, unitstr, typestr
 
     @classmethod
-    def class_config(cls, section=None, input=None):
+    def get_class_config(cls, section=None, input=None):
         """Return a dictionary of the default traits of a class.
 
         This returns a new or appended dictionary.  The class default properties are
@@ -276,14 +308,14 @@ class TraitConfig(HasTraits):
         for trait_name, trait in cls.class_traits().items():
             trname, trtype, trdefault, trhelp = trait_info(trait)
             parent[name][trname] = OrderedDict()
-            valstr, unitstr, typestr = cls._format_conf_trait(trait, trdefault)
+            valstr, unitstr, typestr = cls._format_conf_trait(input, trait, trdefault)
             parent[name][trname]["value"] = valstr
             parent[name][trname]["unit"] = unitstr
             parent[name][trname]["type"] = typestr
             parent[name][trname]["help"] = trhelp
         return input
 
-    def config(self, section=None, input=None):
+    def get_config(self, section=None, input=None):
         """Return a dictionary of the current traits of a class *instance*.
 
         This returns a new or appended dictionary.  The class instance properties are
@@ -318,7 +350,7 @@ class TraitConfig(HasTraits):
                 except Exception:
                     trval = str(trait.get(self))
             parent[name][trname] = OrderedDict()
-            valstr, unitstr, typestr = self._format_conf_trait(trait, trval)
+            valstr, unitstr, typestr = self._format_conf_trait(input, trait, trval)
             parent[name][trname]["value"] = valstr
             parent[name][trname]["unit"] = unitstr
             parent[name][trname]["type"] = typestr
@@ -378,8 +410,7 @@ class TraitConfig(HasTraits):
             )
             raise RuntimeError(msg)
         # We got this far, so we have the class!  Perform any translation
-        original = copy.deepcopy(props)
-        props = cls.translate(original)
+        props = cls.translate(props)
 
         # Parse all the parameter type information and create values we will pass to
         # the constructor.
@@ -396,154 +427,14 @@ class TraitConfig(HasTraits):
                         # This is some kind of more complicated class.  We will let the
                         # constructor choose the default value.
                         continue
-                    kw[k] = pyt(v["value"])
+                    cv = v["value"]
+                    if cv == "True":
+                        cv = True
+                    elif cv == "False":
+                        cv = False
+                    kw[k] = pyt(cv)
             else:
                 # We have a Quantity.
                 kw[k] = u.Quantity(float(v["value"]) * u.Unit(v["unit"]))
         # Instantiate class and return
         return cls(**kw)
-
-
-def build_config(objects):
-    """Build a configuration of current values.
-
-    Args:
-        objects (list):  A list of class instances to add to the config.  These objects
-            must inherit from the TraitConfig base class.
-
-    Returns:
-        (dict):  The configuration.
-
-    """
-    conf = OrderedDict()
-    for o in objects:
-        conf = o.config(input=conf)
-    return conf
-
-
-def add_config_args(parser, conf, section, ignore=list(), prefix="", separator=":"):
-    """Add arguments to an argparser for each parameter in a config dictionary.
-
-    Using a previously created config dictionary, add a commandline argument for each
-    object parameter in a section of the config.  The type, units, and help string for
-    the commandline argument come from the config, which is in turn built from the
-    class traits of the object.  Boolean parameters are converted to store_true or
-    store_false actions depending on their current value.
-
-    Args:
-        parser (ArgumentParser):  The parser to append to.
-        conf (dict):  The configuration dictionary.
-        section (str):  Process objects in this section of the config.
-        ignore (list):  List of object parameters to ignore when adding args.
-        prefix (str):  Prepend this to the beginning of all options.
-        separator (str):  Use this character between the class name and parameter.
-
-    Returns:
-        None
-
-    """
-    parent = conf
-    if section is not None:
-        path = section.split("/")
-        for p in path:
-            if p not in parent:
-                msg = "section {} does not exist in config".format(section)
-                raise RuntimeError(msg)
-            parent = parent[p]
-    for obj, props in parent.items():
-        for name, info in props.items():
-            if name in ignore:
-                # Skip this as requested
-                continue
-            if name == "class":
-                # This is not a user-configurable parameter.
-                continue
-            if info["type"] not in [bool, int, float, str, u.Quantity]:
-                # This is not something that we can get from parsing commandline
-                # options.  Skip it.
-                continue
-            if info["type"] is bool:
-                # special case for boolean
-                option = "--{}{}{}{}".format(prefix, obj, separator, name)
-                act = "store_true"
-                if info["value"]:
-                    act = "store_false"
-                    option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
-                parser.add_argument(
-                    option,
-                    required=False,
-                    default=info["value"],
-                    action=act,
-                    help=info["help"],
-                )
-            else:
-                option = "--{}{}{}{}".format(prefix, obj, separator, name)
-                parser.add_argument(
-                    option,
-                    required=False,
-                    default=info["value"],
-                    type=info["type"],
-                    help=info["help"],
-                )
-    return
-
-
-def args_update_config(args, conf, defaults, section, prefix="", separator=":"):
-    """Override options in a config dictionary from args namespace.
-
-    Args:
-        args (namespace):  The args namespace returned by ArgumentParser.parse_args()
-        conf (dict):  The configuration to update.
-        defaults (dict):  The starting default config, used to detect which options from
-            argparse have been changed by the user.
-        section (str):  Process objects in this section of the config.
-        prefix (str):  Prepend this to the beginning of all options.
-        separator (str):  Use this character between the class name and parameter.
-
-    Returns:
-        (namespace):  The un-parsed remaining arg vars.
-
-    """
-    remain = copy.deepcopy(args)
-    parent = conf
-    dparent = defaults
-    if section is not None:
-        path = section.split("/")
-        for p in path:
-            if p not in parent:
-                msg = "section {} does not exist in config".format(section)
-                raise RuntimeError(msg)
-            parent = parent[p]
-        for p in path:
-            if p not in dparent:
-                msg = "section {} does not exist in defaults".format(section)
-                raise RuntimeError(msg)
-            dparent = dparent[p]
-    # Build the regex match of option names
-    obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
-    for arg in vars(args):
-        val = getattr(args, arg)
-        obj_mat = obj_pat.match(arg)
-        if obj_mat is not None:
-            name = obj_mat.group(1)
-            optname = obj_mat.group(2)
-            if name not in parent:
-                msg = (
-                    "Parsing option '{}', config does not have object named {}".format(
-                        arg, name
-                    )
-                )
-                raise RuntimeError(msg)
-            if name not in dparent:
-                msg = "Parsing option '{}', defaults does not have object named {}".format(
-                    arg, name
-                )
-                raise RuntimeError(msg)
-            # Only update config options which are different than the default.
-            # Otherwise we would be overwriting values from any config files with the
-            # defaults from argparse.
-            if val != dparent[name][optname]:
-                parent[name][optname] = val
-            # This arg was recognized, remove from the namespace.
-            del remain.arg
-    return remain

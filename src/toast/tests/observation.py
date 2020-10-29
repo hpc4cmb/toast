@@ -13,8 +13,6 @@ import numpy.testing as nt
 
 from pshmem import MPIShared
 
-from ..instrument import Focalplane, Telescope
-
 from ..observation import DetectorData, Observation
 
 from ..mpi import Comm, MPI
