@@ -87,6 +87,7 @@ install(FILES
     config.py
     pixels.py
     pixels_io.py
+    covariance.py
     cuda.py
     dist.py
     data.py
