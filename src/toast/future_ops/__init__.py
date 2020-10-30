@@ -12,4 +12,4 @@ from .sim_tod_noise import SimNoise
 
 from .noise_model import DefaultNoiseModel
 
-# from .pointing_healpix import PointingHealpix
+from .pointing_healpix import PointingHealpix

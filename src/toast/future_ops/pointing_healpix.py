@@ -63,7 +63,9 @@ class PointingHealpix(Operator):
 
     boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
 
-    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
 
     flags = Unicode(
         None, allow_none=True, help="Observation shared key for telescope flags to use"
@@ -76,7 +78,7 @@ class PointingHealpix(Operator):
     weights = Unicode("weights", help="Observation detdata key for output weights")
 
     quats = Unicode(
-        "quats",
+        None,
         allow_none=True,
         help="Observation detdata key for output quaternions (for debugging)",
     )
@@ -147,13 +149,14 @@ class PointingHealpix(Operator):
         self._n_submap = (self.nside // self.nside_submap) ** 2
 
         self._local_submaps = None
-        if self.create_dist is not None:
-            self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
+
+        if self._local_submaps is None and self.create_dist is not None:
+            self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
         # We do the calculation over buffers of timestream samples to reduce memory
         # overhead from temporary arrays.
@@ -169,8 +172,13 @@ class PointingHealpix(Operator):
             # Get the flags if needed
             flags = None
             if self.flags is not None:
-                flags = obs.shared[self.flags]
+                flags = np.array(obs.shared[self.flags])
                 flags &= self.flag_mask
+
+            # HWP angle if needed
+            hwp_angle = None
+            if self.hwp_angle is not None:
+                hwp_angle = obs.shared[self.hwp_angle]
 
             # Boresight pointing quaternions
             boresight = obs.shared[self.boresight]
@@ -187,37 +195,30 @@ class PointingHealpix(Operator):
             # detector quaternions.
 
             if self.single_precision:
-                obs.detdata.create(self.pixels, shape=(1,), dtype=np.int32)
-                obs.create_detector_data(
-                    self.config["pixels"],
-                    shape=(n_samp,),
-                    dtype=np.int32,
-                    detectors=dets,
+                obs.detdata.create(
+                    self.pixels, detshape=(), dtype=np.int32, detectors=dets
                 )
-                obs.create_detector_data(
-                    self.config["weights"],
-                    shape=(n_samp, self._nnz),
+                obs.detdata.create(
+                    self.weights,
+                    detshape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
                 )
             else:
-                obs.create_detector_data(
-                    self.config["pixels"],
-                    shape=(n_samp,),
-                    dtype=np.int64,
-                    detectors=dets,
+                obs.detdata.create(
+                    self.pixels, detshape=(), dtype=np.int64, detectors=dets
                 )
-                obs.create_detector_data(
-                    self.config["weights"],
-                    shape=(n_samp, self._nnz),
+                obs.detdata.create(
+                    self.weights,
+                    detshape=(self._nnz,),
                     dtype=np.float64,
                     detectors=dets,
                 )
 
-            if self.config["quats"] is not None:
-                obs.create_detector_data(
-                    self.config["quats"],
-                    shape=(n_samp, 4),
+            if self.quats is not None:
+                obs.detdata.create(
+                    self.quats,
+                    detshape=(4,),
                     dtype=np.float64,
                     detectors=dets,
                 )
@@ -235,8 +236,8 @@ class PointingHealpix(Operator):
 
                 # Timestream of detector quaternions
                 quats = qa.mult(boresight, detquat)
-                if self.config["quats"] is not None:
-                    obs[self.config["quats"]][det][:] = quats
+                if self.quats is not None:
+                    obs.detdata[self.quats][det, :] = quats
 
                 # Cal for this detector
                 dcal = 1.0
@@ -246,9 +247,9 @@ class PointingHealpix(Operator):
                 # Buffered pointing calculation
                 buf_off = 0
                 buf_n = tod_buffer_length
-                while buf_off < n_samp:
-                    if buf_off + buf_n > n_samp:
-                        buf_n = n_samp - buf_off
+                while buf_off < obs.n_local_samples:
+                    if buf_off + buf_n > obs.n_local_samples:
+                        buf_n = obs.n_local_samples - buf_off
                     bslice = slice(buf_off, buf_off + buf_n)
 
                     # This buffer of detector quaternions
@@ -256,8 +257,8 @@ class PointingHealpix(Operator):
 
                     # Buffer of HWP angle
                     hslice = None
-                    if hwpang is not None:
-                        hslice = hwpang[bslice].reshape(-1)
+                    if hwp_angle is not None:
+                        hslice = hwp_angle[bslice].reshape(-1)
 
                     # Buffer of flags
                     fslice = None
@@ -265,21 +266,21 @@ class PointingHealpix(Operator):
                         fslice = flags[bslice].reshape(-1)
 
                     # Pixel and weight buffers
-                    pxslice = obs[self.config["pixels"]][det][bslice].reshape(-1)
-                    wtslice = obs[self.config["weights"]][det][bslice].reshape(-1)
+                    pxslice = obs.detdata[self.pixels][det, bslice].reshape(-1)
+                    wtslice = obs.detdata[self.weights][det, bslice].reshape(-1)
 
                     pbuf = pxslice
                     wbuf = wtslice
-                    if self.config["single_precision"]:
+                    if self.single_precision:
                         pbuf = np.zeros(len(pxslice), dtype=np.int64)
                         wbuf = np.zeros(len(wtslice), dtype=np.float64)
 
                     pointing_matrix_healpix(
                         self.hpix,
-                        self.config["nest"],
+                        self.nest,
                         epsilon,
                         dcal,
-                        self.config["mode"],
+                        self.mode,
                         detp,
                         hslice,
                         fslice,
@@ -287,36 +288,26 @@ class PointingHealpix(Operator):
                         wtslice,
                     )
 
-                    if self.config["single_precision"]:
+                    if self.single_precision:
                         pxslice[:] = pbuf.astype(np.int32)
                         wtslice[:] = wbuf.astype(np.float32)
 
                     buf_off += buf_n
 
-                if self.config["create_dist"] is not None:
+                if self.create_dist is not None:
                     self._local_submaps[
-                        obs[self.config["pixels"]][det] // self._n_pix_submap
+                        obs.detdata["pixels"][det] // self._n_pix_submap
                     ] = True
         return
 
-    def finalize(self, data):
-        """Perform any final operations / communication.
-
-        Args:
-            data (toast.Data):  The distributed data.
-
-        Returns:
-            (PixelDistribution):  Return the final submap distribution or None.
-
-        """
-        # Optionally return the submap distribution
-        if self.config["create_dist"] is not None:
+    def _finalize(self, data, **kwargs):
+        if self.create_dist is not None:
             submaps = None
-            if self.config["single_precision"]:
+            if self.single_precision:
                 submaps = np.arange(self._n_submap, dtype=np.int32)[self._local_submaps]
             else:
                 submaps = np.arange(self._n_submap, dtype=np.int64)[self._local_submaps]
-            data[self.config["create_dist"]] = PixelDistribution(
+            data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,
                 n_submap=self._n_submap,
                 local_submaps=submaps,
@@ -324,45 +315,36 @@ class PointingHealpix(Operator):
             )
         return
 
-    def requires(self):
-        """List of Observation keys directly used by this Operator."""
-        req = ["BORESIGHT_RADEC", "HWP_ANGLE"]
-        if self.config["flags"] is not None:
-            req.append(self.config["flags"])
-        if self.config["cal"] is not None:
-            req.append(self.config["cal"])
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [
+                self.boresight,
+            ],
+            "detdata": list(),
+        }
+        if self.cal is not None:
+            req["meta"].append(self.cal)
+        if self.flags is not None:
+            req["shared"].append(self.flags)
+        if self.hwp_angle is not None:
+            req["shared"].append(self.hwp_angle)
         return req
 
-    def provides(self):
-        """List of Observation keys generated by this Operator."""
-        prov = [self.config["pixels"], self.config["weights"]]
-        if self.config["quats"] is not None:
-            prov.append(self.config["quats"])
-        return prov
-
-    def accelerators(self):
-        """List of accelerators supported by this Operator."""
-        return list()
-
-    def _finalize(self, data, **kwargs):
-        return
-
-    def _requires(self):
-        return {
-            "meta": [
-                self.noise_model,
-            ],
-            "shared": [
-                self.times,
-            ],
-        }
-
     def _provides(self):
-        return {
+        prov = {
+            "meta": list(),
+            "shared": list(),
             "detdata": [
-                self.out,
-            ]
+                self.pixels,
+                self.weights,
+            ],
         }
+        if self.create_dist is not None:
+            prov["meta"].append(self.create_dist)
+        if self.quats is not None:
+            prov["detdata"].append(self.quats)
+        return prov
 
     def _accelerators(self):
         return list()

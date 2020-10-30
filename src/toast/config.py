@@ -755,6 +755,8 @@ def create(conf):
                             else:
                                 parent[node_name][child_key][elem] = found
                         # print("PARSE child value {} is a list".format(child_val))
+                    else:
+                        print("PARSE not modifying {}".format(child_val))
 
         # If this node is an object and all refs exist, then create it.  Otherwise
         # leave it alone.

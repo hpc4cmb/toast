@@ -97,6 +97,8 @@ install(FILES
     noise.py
     noise_sim.py
     observation.py
+    observation_data.py
+    observation_view.py
     operator.py
     vis.py
     rng.py

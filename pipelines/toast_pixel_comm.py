@@ -17,13 +17,15 @@ import traceback
 
 import numpy as np
 
+from astropy import units as u
+
 import healpy as hp
 
 import toast
 
 from toast.mpi import get_world, Comm
 
-from toast.dist import Data
+from toast.data import Data
 
 from toast.utils import Logger, Environment
 
@@ -31,7 +33,7 @@ from toast.timing import Timer, GlobalTimers, gather_timers
 
 from toast.timing import dump as dump_timing
 
-from toast import dump_config, parse_config, create
+from toast.config import dump_toml, parse_config, create
 
 from toast.pixels import PixelDistribution, PixelData
 
@@ -39,7 +41,7 @@ from toast.pixels_io import write_healpix_fits
 
 from toast import future_ops as ops
 
-from toast.future_ops.sim_focalplane import fake_hexagon_focalplane
+from toast.instrument_sim import fake_hexagon_focalplane
 
 from toast.instrument import Telescope
 
@@ -54,7 +56,10 @@ def main():
     mpiworld, procs, rank = get_world()
 
     # The operators used in this script:
-    operators = {"sim_satellite": ops.SimSatellite, "pointing": ops.PointingHealpix}
+    operators = [
+        ops.SimSatellite(name="sim_satellite"),
+        ops.PointingHealpix(name="pointing"),
+    ]
 
     # Argument parsing
     parser = argparse.ArgumentParser(
@@ -85,52 +90,49 @@ def main():
         help="Size in MB of allreduce buffer",
     )
 
-    config, argvars = parse_config(parser, operators=operators)
-
-    # Communicator
-    comm = Comm(world=mpiworld, groupsize=argvars["group_size"])
+    config, args = parse_config(parser, operators=operators)
 
     # Make a fake focalplane and telescope
     focalplane = fake_hexagon_focalplane(
-        argvars["focalplane_pixels"],
-        10.0,
-        samplerate=10.0,
+        args.focalplane_pixels,
+        width=10.0 * u.degree,
+        sample_rate=10.0 * u.Hz,
         epsilon=0.0,
         net=1.0,
-        fmin=1.0e-5,
+        f_min=1.0e-5 * u.Hz,
         alpha=1.0,
-        fknee=0.05,
+        f_knee=0.05 * u.Hz,
     )
-
-    config["operators"]["sim_satellite"]["telescope"] = Telescope(
-        name="fake", focalplane=focalplane
-    )
-
-    # Specify where to store the pixel distribution
-    config["operators"]["pointing"]["create_dist"] = "pixel_dist"
 
     # Log the config that was actually used at runtime.
     out = "pixel_comm_config_log.toml"
-    dump_config(out, config)
+    if rank == 0:
+        dump_toml(out, config)
 
     # Instantiate our operators
     run = create(config)
 
-    # Put our operators into a pipeline running all detectors at once.
-    pipe_opts = ops.Pipeline.defaults()
-    pipe_opts["detector_sets"] = "ALL"
-    pipe_opts["operators"] = [
-        run["operators"][x] for x in ["sim_satellite", "pointing"]
-    ]
+    run["operators"]["sim_satellite"].telescope = Telescope(
+        name="fake", focalplane=focalplane
+    )
 
-    pipe = ops.Pipeline(pipe_opts)
+    # Specify where to store the pixel distribution
+    run["operators"]["pointing"].create_dist = "pixel_dist"
+
+    # Put our operators into a pipeline running all detectors at once.
+    pipe = ops.Pipeline(
+        detector_sets=["ALL"],
+        operators=[run["operators"][x] for x in ["sim_satellite", "pointing"]],
+    )
+
+    # Communicator
+    comm = Comm(world=mpiworld, groupsize=args.group_size)
 
     # Start with empty data
     data = toast.Data(comm=comm)
 
     # Run the pipeline
-    pipe.exec(data)
-    pipe.finalize(data)
+    pipe.apply(data)
 
     # print(data)
 
@@ -142,11 +144,11 @@ def main():
     # Output file root
     outroot = "pixcomm_nproc-{:04d}_gsize-{:04d}_nobs-{:03d}_ndet-{:03d}_nside-{:04d}_nsub-{:03d}".format(
         procs,
-        argvars["group_size"],
-        config["operators"]["sim_satellite"]["n_observation"],
-        2 * argvars["focalplane_pixels"],
-        config["operators"]["pointing"]["nside"],
-        config["operators"]["pointing"]["nside_submap"],
+        args.group_size,
+        run["operators"]["sim_satellite"].num_observations,
+        2 * args.focalplane_pixels,
+        run["operators"]["pointing"].nside,
+        run["operators"]["pointing"].nside_submap,
     )
 
     # Print out the total hit map and also the hitmap on rank zero.
@@ -154,7 +156,7 @@ def main():
     hview = hits.raw.array()
     for obs in data.obs:
         for det in obs.local_detectors:
-            global_pixels = obs["pixels"][det]
+            global_pixels = obs.detdata["pixels"][det]
             # We can do this since n_value == 1
             local_pixels = pixdist.global_pixel_to_local(global_pixels)
             hview[local_pixels] += 1
@@ -176,7 +178,7 @@ def main():
             fview,
             dtype=np.int32,
             fits_IDL=False,
-            nest=config["operators"]["pointing"]["nest"],
+            nest=run["operators"]["pointing"].nest,
         )
         del fview
         fhits.clear()
@@ -185,7 +187,7 @@ def main():
     hits.sync_allreduce()
 
     outfile = "{}_hits.fits".format(outroot)
-    write_healpix_fits(hits, outfile, nest=config["operators"]["pointing"]["nest"])
+    write_healpix_fits(hits, outfile, nest=run["operators"]["pointing"].nest)
 
     # Create some IQU maps with fake local data
     pixdata = PixelData(pixdist, dtype=np.float64, n_value=3)
@@ -208,7 +210,7 @@ def main():
     tm.start()
     gt.start("SYNC_ALLREDUCE")
 
-    cbytes = argvars["comm_mb"]*1000000
+    cbytes = args.comm_mb * 1000000
     for i in range(niter):
         pixdata.sync_allreduce(comm_bytes=cbytes)
 

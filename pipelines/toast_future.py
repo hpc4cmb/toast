@@ -85,13 +85,13 @@ def main():
     # focalplane and telescope
     focalplane = fake_hexagon_focalplane(
         args.focalplane_pixels,
-        10.0,
-        samplerate=10.0,
+        width=10.0 * u.degree,
+        sample_rate=10.0 * u.Hz,
         epsilon=0.0,
         net=1.0,
-        fmin=1.0e-5,
+        f_min=1.0e-5 * u.Hz,
         alpha=1.0,
-        fknee=0.05,
+        f_knee=0.05 * u.Hz,
     )
     print(focalplane)
 
