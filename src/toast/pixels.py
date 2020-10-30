@@ -91,44 +91,37 @@ class PixelDistribution(object):
 
     @property
     def comm(self):
-        """(mpi4py.MPI.Comm): The MPI communicator used (or None)
-        """
+        """(mpi4py.MPI.Comm): The MPI communicator used (or None)"""
         return self._comm
 
     @property
     def n_pix(self):
-        """(int): The global number of pixels.
-        """
+        """(int): The global number of pixels."""
         return self._n_pix
 
     @property
     def n_pix_submap(self):
-        """(int): The number of pixels in each submap.
-        """
+        """(int): The number of pixels in each submap."""
         return self._n_pix_submap
 
     @property
     def n_submap(self):
-        """(int): The total number of submaps.
-        """
+        """(int): The total number of submaps."""
         return self._n_submap
 
     @property
     def n_local_submap(self):
-        """(int): The number of submaps stored on this process.
-        """
+        """(int): The number of submaps stored on this process."""
         return self._n_local
 
     @property
     def local_submaps(self):
-        """(array): The list of local submaps or None if process has no data.
-        """
+        """(array): The list of local submaps or None if process has no data."""
         return self._local_submaps
 
     @property
     def global_submap_to_local(self):
-        """(array): The mapping from global submap to local.
-        """
+        """(array): The mapping from global submap to local."""
         return self._glob2loc
 
     @function_timer
@@ -260,8 +253,7 @@ class PixelDistribution(object):
 
     @property
     def owned_submaps(self):
-        """The submaps owned by this process.
-        """
+        """The submaps owned by this process."""
         if self._owned_submaps is not None:
             # Already computed
             return self._owned_submaps
@@ -284,8 +276,6 @@ class PixelDistribution(object):
             - The locations in the receive buffer of each submap.
 
         """
-        if self._comm is None:
-            return (None, None, None, None, None)
         if self._alltoallv_info is not None:
             # Already computed
             return self._alltoallv_info
@@ -293,63 +283,64 @@ class PixelDistribution(object):
         owners = self.submap_owners
         our_submaps = self.owned_submaps
 
-        # Compute the other "contributing" processes that have submaps which we own.
-        # Also track the receive buffer offsets for each owned submap.
-        send = [list() for x in range(self._comm.size)]
-        for sm in self._local_submaps:
-            # Tell the owner of this submap that we are a contributor
-            send[owners[sm]].append(sm)
-        recv = self._comm.alltoall(send)
+        send_counts = None
+        send_displ = None
+        recv_counts = None
+        recv_displ = None
+        recv_locations = None
 
-        recv_counts = np.zeros(self._comm.size, dtype=np.int32)
-        recv_displ = np.zeros(self._comm.size, dtype=np.int32)
-        recv_locations = dict()
+        if self._comm is None:
+            recv_counts = len(self._local_submaps) * np.ones(1, dtype=np.int32)
+            recv_displ = np.zeros(1, dtype=np.int32)
+            recv_locations = dict()
+            for offset, sm in enumerate(self._local_submaps):
+                recv_locations[sm] = np.array([offset], dtype=np.int32)
+            send_counts = len(self._local_submaps) * np.ones(1, dtype=np.int32)
+            send_displ = np.zeros(1, dtype=np.int32)
+        else:
+            # Compute the other "contributing" processes that have submaps which we own.
+            # Also track the receive buffer offsets for each owned submap.
+            send = [list() for x in range(self._comm.size)]
+            for sm in self._local_submaps:
+                # Tell the owner of this submap that we are a contributor
+                send[owners[sm]].append(sm)
+            recv = self._comm.alltoall(send)
 
-        offset = 0
-        for proc, sms in enumerate(recv):
-            recv_displ[proc] = offset
-            for sm in sms:
-                if sm not in recv_locations:
-                    recv_locations[sm] = list()
-                recv_locations[sm].append(offset)
-                recv_counts[proc] += 1
+            recv_counts = np.zeros(self._comm.size, dtype=np.int32)
+            recv_displ = np.zeros(self._comm.size, dtype=np.int32)
+            recv_locations = dict()
+
+            offset = 0
+            for proc, sms in enumerate(recv):
+                recv_displ[proc] = offset
+                for sm in sms:
+                    if sm not in recv_locations:
+                        recv_locations[sm] = list()
+                    recv_locations[sm].append(offset)
+                    recv_counts[proc] += 1
+                    offset += 1
+
+            for sm in list(recv_locations.keys()):
+                recv_locations[sm] = np.array(recv_locations[sm], dtype=np.int32)
+
+            # Compute the Alltoallv send offsets in terms of submaps
+            send_counts = np.zeros(self._comm.size, dtype=np.int32)
+            send_displ = np.zeros(self._comm.size, dtype=np.int32)
+            offset = 0
+            last_offset = 0
+            last_own = -1
+            for sm in self._local_submaps:
+                if last_own != owners[sm]:
+                    # Moving on to next owning process...
+                    if last_own >= 0:
+                        send_displ[last_own] = last_offset
+                        last_offset = offset
+                send_counts[owners[sm]] += 1
                 offset += 1
-
-        for sm in list(recv_locations.keys()):
-            recv_locations[sm] = np.array(recv_locations[sm], dtype=np.int32)
-
-        # print("rank {} recv_displ = {}".format(self._comm.rank, recv_displ), flush=True)
-        # print(
-        #     "rank {} recv_counts = {}".format(self._comm.rank, recv_counts), flush=True
-        # )
-        # print(
-        #     "rank {} recv_locations = {}".format(self._comm.rank, recv_locations),
-        #     flush=True,
-        # )
-
-        # Compute the Alltoallv send offsets in terms of submaps
-        send_counts = np.zeros(self._comm.size, dtype=np.int32)
-        send_displ = np.zeros(self._comm.size, dtype=np.int32)
-        offset = 0
-        last_offset = 0
-        last_own = -1
-        for sm in self._local_submaps:
-            if last_own != owners[sm]:
-                # Moving on to next owning process...
-                if last_own >= 0:
-                    send_displ[last_own] = last_offset
-                    last_offset = offset
-            send_counts[owners[sm]] += 1
-            offset += 1
-            last_own = owners[sm]
-        if last_own >= 0:
-            # Finish up last process
-            send_displ[last_own] = last_offset
-
-        # print("rank {} send_displ = {}".format(self._comm.rank, send_displ), flush=True)
-        # print(
-        #     "rank {} send_counts = {}".format(self._comm.rank, send_counts), flush=True
-        # )
+                last_own = owners[sm]
+            if last_own >= 0:
+                # Finish up last process
+                send_displ[last_own] = last_offset
 
         self._alltoallv_info = (
             send_counts,
@@ -446,9 +437,9 @@ class PixelData(object):
         self._recv_counts = None
         self._recv_displ = None
         self._recv_locations = None
-        self._receive = None
+        self.receive = None
         self._receive_raw = None
-        self._reduce_buf = None
+        self.reduce_buf = None
         self._reduce_buf_raw = None
 
     def clear(self):
@@ -464,13 +455,13 @@ class PixelData(object):
         if hasattr(self, "raw"):
             self.raw.clear()
             del self.raw
-        if hasattr(self, "_receive"):
-            del self._receive
+        if hasattr(self, "receive"):
+            del self.receive
             if self._receive_raw is not None:
                 self._receive_raw.clear()
             del self._receive_raw
-        if hasattr(self, "_reduce_buf"):
-            del self._reduce_buf
+        if hasattr(self, "reduce_buf"):
+            del self.reduce_buf
             if self._reduce_buf_raw is not None:
                 self._reduce_buf_raw.clear()
             del self._reduce_buf_raw
@@ -480,20 +471,17 @@ class PixelData(object):
 
     @property
     def distribution(self):
-        """(PixelDistribution): The distribution information.
-        """
+        """(PixelDistribution): The distribution information."""
         return self._dist
 
     @property
     def dtype(self):
-        """(numpy.dtype): The data type of the values.
-        """
+        """(numpy.dtype): The data type of the values."""
         return self._dtype
 
     @property
     def n_value(self):
-        """(int): The number of non-zero values per pixel.
-        """
+        """(int): The number of non-zero values per pixel."""
         return self._n_value
 
     def __getitem__(self, key):
@@ -605,22 +593,19 @@ class PixelData(object):
 
         return
 
+    @staticmethod
+    def local_reduction(n_submap_value, receive_locations, receive, reduce_buf):
+        # Locally reduce owned submaps
+        for sm, locs in receive_locations.items():
+            reduce_buf[:] = 0
+            for lc in locs:
+                reduce_buf += receive[lc : lc + n_submap_value]
+            for lc in locs:
+                receive[lc : lc + n_submap_value] = reduce_buf
+
     @function_timer
-    def sync_alltoallv(self):
-        """Perform a reduction using Alltoallv operations.
-
-        On the first call, some initialization is done to compute send and receive
-        displacements and counts.  A persistent receive buffer is allocated.  Submap
-        data is sent to their owners simultaneously using alltoallv.  Each process does
-        a local reduction of their owned submaps before sending the result back with
-        another alltoallv call.
-
-        Returns:
-            None.
-
-        """
-        if self._dist.comm is None:
-            return
+    def setup_alltoallv(self):
+        """Check that alltoallv buffers exist and create them if needed."""
         if self._send_counts is None:
             # Get the parameters in terms of submaps.
             (
@@ -634,16 +619,6 @@ class PixelData(object):
             # Pixel values per submap
             scale = self._n_submap_value
 
-            # Check that our send and receive buffers do not exceed 32bit indices
-            # required by MPI
-            max_int = 2147483647
-            if scale * (recv_displ[-1] + recv_counts[-1]) > max_int:
-                msg = "Alltoallv receive buffer size exceeds max 32bit integer"
-                raise RuntimeError(msg)
-            if len(self.raw) > max_int:
-                msg = "Alltoallv send buffer size exceeds max 32bit integer"
-                raise RuntimeError(msg)
-
             # Scale these quantites by the submap size and the number of values per
             # pixel.
 
@@ -655,39 +630,107 @@ class PixelData(object):
             for sm, locs in recv_locations.items():
                 self._recv_locations[sm] = scale * np.array(locs, dtype=np.int32)
 
-            # Allocate a persistent receive buffer
-            self._receive_raw = self.storage_class.zeros(
-                self._recv_displ[-1] + self._recv_counts[-1]
-            )
-            self._receive = self._receive_raw.array()
+            # Allocate a persistent single-submap buffer
             self._reduce_buf_raw = self.storage_class.zeros(self._n_submap_value)
-            self._reduce_buf = self._reduce_buf_raw.array()
+            self.reduce_buf = self._reduce_buf_raw.array()
 
-        gt = GlobalTimers.get()
+            if self._dist.comm is None:
+                # For this case, point the receive member to the original data.  This
+                # will allow codes processing locally owned submaps to work
+                # transparently in the serial case.
+                self.receive = self.data
+            else:
+                # Check that our send and receive buffers do not exceed 32bit indices
+                # required by MPI
+                max_int = 2147483647
+                if scale * (self._recv_displ[-1] + self._recv_counts[-1]) > max_int:
+                    msg = "Alltoallv receive buffer size exceeds max 32bit integer"
+                    raise RuntimeError(msg)
+                if len(self.raw) > max_int:
+                    msg = "Alltoallv send buffer size exceeds max 32bit integer"
+                    raise RuntimeError(msg)
+
+                # Allocate a persistent receive buffer
+                self._receive_raw = self.storage_class.zeros(
+                    self._recv_displ[-1] + self._recv_counts[-1]
+                )
+                self.receive = self._receive_raw.array()
+
+    @function_timer
+    def forward_alltoallv(self):
+        """Communicate submaps into buffers on the owning process.
+
+        On the first call, some initialization is done to compute send and receive
+        displacements and counts.  A persistent receive buffer is allocated.  Submap
+        data is sent to their owners simultaneously using alltoallv.
+
+        Returns:
+            None.
+
+        """
+        self.setup_alltoallv()
+        if self._dist.comm is None:
+            # No communication needed
+            return
+
         # Gather owned submaps locally
-        gt.start("REAL Alltoallv forward")
         self._dist.comm.Alltoallv(
             [self.raw, self._send_counts, self._send_displ, self.mpitype],
-            [self._receive, self._recv_counts, self._recv_displ, self.mpitype],
+            [self.receive, self._recv_counts, self._recv_displ, self.mpitype],
         )
-        gt.stop("REAL Alltoallv forward")
+        return
 
-        # Locally reduce owned submaps
-        for sm, locs in self._recv_locations.items():
-            self._reduce_buf[:] = 0
-            for lc in locs:
-                self._reduce_buf += self._receive[lc : lc + self._n_submap_value]
-            for lc in locs:
-                self._receive[lc : lc + self._n_submap_value] = self._reduce_buf
+    @function_timer
+    def reverse_alltoallv(self):
+        """Communicate submaps from the owning process back to all processes.
+
+        Returns:
+            None.
+
+        """
+        if self._dist.comm is None:
+            # No communication needed
+            return
+        if self._send_counts is None:
+            raise RuntimeError(
+                "Cannot do reverse alltoallv before buffers have been setup"
+            )
 
         # Scatter result back
-        gt.start("REAL Alltoallv reverse")
         self._dist.comm.Alltoallv(
-            [self._receive, self._recv_counts, self._recv_displ, self.mpitype],
+            [self.receive, self._recv_counts, self._recv_displ, self.mpitype],
             [self.raw, self._send_counts, self._send_displ, self.mpitype],
         )
-        gt.stop("REAL Alltoallv reverse")
+        return
 
+    @function_timer
+    def sync_alltoallv(self, local_func=None):
+        """Perform operations on locally owned submaps using Alltoallv communication.
+
+        On the first call, some initialization is done to compute send and receive
+        displacements and counts.  A persistent receive buffer is allocated.  Submap
+        data is sent to their owners simultaneously using alltoallv.  Each process does
+        a local operation on their owned submaps before sending the result back with
+        another alltoallv call.
+
+        Args:
+            local_func (function):  A function for processing the local submap data.
+
+        Returns:
+            None.
+
+        """
+        self.forward_alltoallv()
+
+        if local_func is None:
+            local_func = self.local_reduction
+
+        # Run operation on locally owned submaps
+        local_func(
+            self._n_submap_value, self._recv_locations, self.receive, self.reduce_buf
+        )
+
+        self.reverse_alltoallv()
         return
 
     @function_timer

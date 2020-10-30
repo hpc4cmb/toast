@@ -18,8 +18,52 @@ from ._libtoast import (
 from .pixels import PixelData
 
 
+def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
+    """Generate a function for inverting locally owned submaps of a covariance.
+
+    Args:
+        n_pix_submap (int):  The number of pixels in a submap.
+        mapnnz (int):  The number of map elements per pixel.
+        threshold (float):  The condition number threshold to apply.
+        rcond (PixelData):  If not None, the inverse condition number PixelData object.
+
+    Returns:
+        (function):  A function suitable for the sync_alltoallv() method.
+
+    """
+
+    def local_invert(n_submap_value, receive_locations, receive, reduce_buf):
+        # Locally invert owned submaps
+        for sm, locs in receive_locations.items():
+            # We have multiple copies of submap data- we will invert just the first
+            # one and copy the result into the other buffer locations to be sent
+            # back to the processes with this submap.
+            reduce_buf[:] = receive[locs[0] : locs[0] + n_submap_value]
+            rdata = None
+            if rcond is None:
+                rdata = np.empty(shape=0, dtype=np.float64)
+            else:
+                rcond.reduce_buf[:] = 0.0
+                rdata = rcond.reduce_buf
+            cov_eigendecompose_diag(
+                1,
+                n_pix_submap,
+                mapnnz,
+                reduce_buf,
+                rdata,
+                threshold,
+                invert,
+            )
+            for lc in locs:
+                receive[lc : lc + n_submap_value] = reduce_buf
+                if rcond is not None:
+                    rcond.receive[lc : lc + (n_pix_submap * mapnnz)] = rcond.reduce_buf
+
+    return local_invert
+
+
 @function_timer
-def covariance_invert(npp, threshold, rcond=None):
+def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
     """Invert a diagonal noise covariance.
 
     This does an inversion of the covariance.  The threshold is
@@ -32,6 +76,9 @@ def covariance_invert(npp, threshold, rcond=None):
         threshold (float):  The condition number threshold to apply.
         rcond (PixelData):  (Optional) The distributed inverse condition number map
             to fill.
+        use_alltoallv (bool):  If True, communicate submaps and have every process work
+            on a portion of them.  This may be faster than processing all submaps
+            locally.
 
     Returns:
         None
@@ -54,30 +101,63 @@ def covariance_invert(npp, threshold, rcond=None):
         if rcond.n_value != 1:
             raise RuntimeError("condition number map should have n_value = 1")
 
-        rdata = rcond.raw
-        if rdata is None:
+    if use_alltoallv:
+        if rcond is not None:
+            # Stage data to receive buffer
+            rcond.forward_alltoallv()
+        linvert = create_local_invert(
+            npp.distribution.n_pix_submap, mapnnz, threshold, rcond, invert=True
+        )
+        npp.sync_alltoallv(local_func=linvert)
+    else:
+        rdata = None
+        if rcond is None:
             rdata = np.empty(shape=0, dtype=np.float64)
+        else:
+            rdata = rcond.raw
         cov_eigendecompose_diag(
-            npp.n_local_submap,
-            npp.n_pix_submap,
+            1,
+            n_pix_submap,
             mapnnz,
-            nppdata,
+            reduce_buf,
             rdata,
             threshold,
             True,
         )
-    else:
-        temp = AlignedF64(npp.n_local_submap * npp.n_pix_submap)
-        cov_eigendecompose_diag(
-            npp.n_local_submap, npp.n_pix_submap, mapnnz, nppdata, temp, threshold, True
-        )
-        temp.clear()
-        del temp
+
     return
 
 
+def create_local_multiply(n_pix_submap, mapnnz, other):
+    """Generate a function for multiplying locally owned submaps of covariances.
+
+    Args:
+        n_pix_submap (int):  The number of pixels in a submap.
+        mapnnz (int):  The number of map elements per pixel.
+        other (PixelData):  The other PixelData covariance object.
+
+    Returns:
+        (function):  A function suitable for the sync_alltoallv() method.
+
+    """
+
+    def local_multiply(n_submap_value, receive_locations, receive, reduce_buf):
+        for sm, locs in receive_locations.items():
+            # We have multiple copies of submap data- we will multiply just the first
+            # one and copy the result into the other buffer locations to be sent
+            # back to the processes with this submap.
+            reduce_buf[:] = receive[locs[0] : locs[0] + n_submap_value]
+            other_buf = other.reduce_buf
+            other_buf[:] = other.receive[locs[0] : locs[0] + n_submap_value]
+            cov_mult_diag(1, n_pix_submap, mapnnz, reduce_buf, other_buf)
+            for lc in locs:
+                receive[lc : lc + n_submap_value] = reduce_buf
+
+    return local_multiply
+
+
 @function_timer
-def covariance_multiply(npp1, npp2):
+def covariance_multiply(npp1, npp2, use_alltoallv=False):
     """Multiply two diagonal noise covariances.
 
     This does an in-place multiplication of the covariance.
@@ -87,6 +167,9 @@ def covariance_multiply(npp1, npp2):
     Args:
         npp1 (PixelData): The first distributed covariance.
         npp2 (PixelData): The second distributed covariance.
+        use_alltoallv (bool):  If True, communicate submaps and have every process work
+            on a portion of them.  This may be faster than processing all submaps
+            locally.
 
     Returns:
         None
@@ -101,18 +184,48 @@ def covariance_multiply(npp1, npp2):
     if npp1.n_value != npp2.n_value:
         raise RuntimeError("covariance matrices must have same n_values")
 
-    npp1data = npp1.raw
-    if npp1data is None:
-        npp1data = np.empty(shape=0, dtype=np.float64)
-    npp2data = npp2.raw
-    if npp2data is None:
-        npp2data = np.empty(shape=0, dtype=np.float64)
-    cov_mult_diag(npp1.n_submap, npp1.n_pix_submap, mapnnz, npp1data, npp2data)
+    if use_alltoallv:
+        npp2.forward_alltoallv()
+        lmultiply = create_local_multiply(npp1.distribution.n_pix_submap, mapnnz, npp2)
+        npp1.sync_alltoallv(local_func=lmultiply)
+    else:
+        cov_mult_diag(npp1.n_submap, npp1.n_pix_submap, mapnnz, npp1data, npp2data)
+
     return
 
 
+def create_local_apply(n_pix_submap, mapnnz, m):
+    """Generate a function for applying locally owned submaps of covariances.
+
+    Args:
+        n_pix_submap (int):  The number of pixels in a submap.
+        mapnnz (int):  The number of map elements per pixel.
+        m (PixelData):  The PixelData map object.
+
+    Returns:
+        (function):  A function suitable for the sync_alltoallv() method.
+
+    """
+
+    def local_apply(n_submap_value, receive_locations, receive, reduce_buf):
+        for sm, locs in receive_locations.items():
+            # We have multiple copies of submap data- we will multiply just the first
+            # one and copy the result into the other buffer locations to be sent
+            # back to the processes with this submap.
+            reduce_buf[:] = receive[locs[0] : locs[0] + n_submap_value]
+            m_buf = m.reduce_buf
+            m_buf[:] = m.receive[locs[0] : locs[0] + (n_pix_submap * mapnnz)]
+
+            cov_apply_diag(1, n_pix_submap, mapnnz, reduce_buf, m_buf)
+
+            for lc in locs:
+                m.receive[lc : lc + (n_pix_submap * mapnnz)] = m.reduce_buf
+
+    return local_apply
+
+
 @function_timer
-def covariance_apply(npp, m):
+def covariance_apply(npp, m, use_alltoallv=False):
     """Multiply a map by a diagonal noise covariance.
 
     This does an in-place multiplication of the covariance and a
@@ -121,6 +234,9 @@ def covariance_apply(npp, m):
     Args:
         npp (PixelData): The distributed covariance.
         m (PixelData): The distributed map.
+        use_alltoallv (bool):  If True, communicate submaps and have every process work
+            on a portion of them.  This may be faster than processing all submaps
+            locally.
 
     Returns:
         None
@@ -135,18 +251,19 @@ def covariance_apply(npp, m):
     if m.n_value != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
 
-    nppdata = npp.raw
-    if nppdata is None:
-        nppdata = np.empty(shape=0, dtype=np.float64)
-    mdata = m.raw
-    if mdata is None:
-        mdata = np.empty(shape=0, dtype=np.float64)
-    cov_apply_diag(npp.n_submap, npp.n_pix_submap, mapnnz, nppdata, mdata)
+    if use_alltoallv:
+        m.forward_alltoallv()
+        lapply = create_local_apply(npp.n_pix_submap, mapnnz, m)
+        npp.sync_alltoallv(local_func=lapply)
+    else:
+        nppdata = npp.raw
+        mdata = m.raw
+        cov_apply_diag(npp.n_submap, npp.n_pix_submap, mapnnz, nppdata, mdata)
     return
 
 
 @function_timer
-def covariance_rcond(npp):
+def covariance_rcond(npp, use_alltoallv=False):
     """Compute the inverse condition number map.
 
     This computes the inverse condition number map of the supplied
@@ -154,6 +271,9 @@ def covariance_rcond(npp):
 
     Args:
         npp (PixelData): The distributed covariance.
+        use_alltoallv (bool):  If True, communicate submaps and have every process work
+            on a portion of them.  This may be faster than processing all submaps
+            locally.
 
     Returns:
         rcond (PixelData): The distributed inverse condition number map.
@@ -164,16 +284,23 @@ def covariance_rcond(npp):
 
     threshold = np.finfo(np.float64).eps
 
-    nppdata = npp.raw
-    if nppdata is None:
-        nppdata = np.empty(shape=0, dtype=np.float64)
-
-    rdata = rcond.raw
-    if rdata is None:
-        rdata = np.empty(shape=0, dtype=np.float64)
-
-    cov_eigendecompose_diag(
-        npp.n_submap, npp.n_pix_submap, mapnnz, nppdata, rdata, threshold, False
-    )
+    if use_alltoallv:
+        rcond.setup_alltoallv()
+        linvert = create_local_invert(
+            npp.distribution.n_pix_submap, mapnnz, threshold, rcond, invert=False
+        )
+        npp.sync_alltoallv(local_func=linvert)
+    else:
+        nppdata = npp.raw
+        rdata = rcond.raw
+        cov_eigendecompose_diag(
+            1,
+            n_pix_submap,
+            mapnnz,
+            reduce_buf,
+            rdata,
+            threshold,
+            False,
+        )
 
     return rcond
