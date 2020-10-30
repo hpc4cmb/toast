@@ -113,7 +113,7 @@ def create_distdata(mpicomm, obs_per_group=1, samples=10):
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
         ob = Observation(
-            tele, samples=samples, name=oname, UID=oid, comm=toastcomm.comm_group
+            tele, n_samples=samples, name=oname, UID=oid, comm=toastcomm.comm_group
         )
         data.obs.append(ob)
     return data

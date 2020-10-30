@@ -4,9 +4,13 @@
 
 import numpy as np
 
+from astropy import units as u
+
 from . import qarray as qa
 
 from .instrument import Focalplane
+
+from .vis import set_matplotlib_backend
 
 
 def cartesian_to_quat(offsets):
@@ -478,14 +482,36 @@ def rhombus_layout(
 
 def fake_hexagon_focalplane(
     n_pix=7,
-    width_deg=5.0,
-    samplerate=1.0,
+    width=5.0 * u.degree,
+    sample_rate=1.0 * u.Hz,
     epsilon=0.0,
     net=1.0,
-    fmin=0.0,
+    f_min=0.0 * u.Hz,
     alpha=1.0,
-    fknee=0.05,
+    f_knee=0.05 * u.Hz,
 ):
+    """Create a simple focalplane model for testing.
+
+    This function creates a basic focalplane with hexagon-packed pixels, each with
+    two orthogonal detectors.  It is intended for unit tests, benchmarking, etc where
+    a Focalplane is needed but the details are less important.
+
+    Args:
+        n_pix (int):  The number of pixels with hexagonal packing
+            (e.g. 1, 7, 19, 37, 61, etc).
+        width (Quantity):  The angular width of the focalplane field of view on the sky.
+        sample_rate (Quantity):  The sample rate for all detectors.
+        epsilon (float):  The cross-polar response for all detectors.
+        net (float):  The Noise Equivalent Temperature of each detector.
+        f_min (Quantity):  The frequency below which to roll off the 1/f spectrum.
+        alpha (float):  The spectral slope.
+        f_knee (Quantity):  The 1/f knee frequency.
+
+    Returns:
+        (Focalplane):  The fake focalplane.
+
+    """
+    width_deg = width.to_value(u.degree)
     pol_A = hex_pol_angles_qu(n_pix, offset=0.0)
     pol_B = hex_pol_angles_qu(n_pix, offset=90.0)
     quat_A = hex_layout(n_pix, width_deg, "D", "A", pol_A)
@@ -499,63 +525,67 @@ def fake_hexagon_focalplane(
 
     for det in det_data.keys():
         det_data[det]["pol_leakage"] = epsilon
-        det_data[det]["fmin"] = fmin
-        det_data[det]["fknee"] = fknee
+        det_data[det]["fmin"] = f_min.to_value(u.Hz)
+        det_data[det]["fknee"] = f_knee.to_value(u.Hz)
         det_data[det]["alpha"] = alpha
         det_data[det]["NET"] = net
         det_data[det]["fwhm_arcmin"] = detfwhm
-        det_data[det]["fsample"] = samplerate
+        det_data[det]["fsample"] = sample_rate.to_value(u.Hz)
 
-    return Focalplane(detector_data=det_data, sample_rate=samplerate)
+    return Focalplane(detector_data=det_data, sample_rate=sample_rate.to_value(u.Hz))
 
 
 def plot_focalplane(
-    dets, width, height, outfile, fwhm=None, facecolor=None, polcolor=None, labels=None
+    focalplane=None,
+    width=None,
+    height=None,
+    outfile=None,
+    show_labels=False,
+    face_color=None,
+    pol_color=None,
 ):
-    """Visualize a dictionary of detectors.
+    """Visualize a projected Focalplane.
 
-    This makes a simple plot of the detector positions on the projected
-    focalplane.
+    This makes a simple plot of the detector positions on the projected focalplane.
 
-    To avoid python overhead in large MPI jobs, we place the matplotlib
-    import inside this function, so that it is only imported when the
-    function is actually called.
-
-    If the detector dictionary contains a key "fwhm", that will be assumed
-    to be in arcminutes.  Otherwise a nominal value is used.
-
-    If the detector dictionary contains a key "viscolor", then that color
-    will be used.
+    To avoid python overhead in large MPI jobs, we place the matplotlib import inside
+    this function, so that it is only imported when the function is actually called.
 
     Args:
-        dets (dict): dictionary of detector quaternions.
-        width (float): width of plot in degrees.
-        height (float): height of plot in degrees.
-        outfile (str): output PNG path.  If None, then matplotlib will be
+        focalplane (Focalplane):  The focalplane to plot
+        width (Quantity):  Width of plot.
+        height (Quantity):  Height of plot.
+        outfile (str):  Output PDF path.  If None, then matplotlib will be
             used for inline plotting.
-        fwhm (dict): dictionary of detector beam FWHM in arcminutes, used
-            to draw the circles to scale.
-        facecolor (dict): dictionary of color values for the face of each
+        show_labels (bool):  If True, plot detector names.
+        face_color (dict): dictionary of color values for the face of each
             detector circle.
-        polcolor (dict): dictionary of color values for the polarization
+        pol_color (dict): dictionary of color values for the polarization
             arrows.
-        labels (dict): plot this text in the center of each pixel.
 
     Returns:
         None
 
     """
-    if outfile is not None:
-        import matplotlib
-        import warnings
+    if focalplane is None:
+        raise RuntimeError("You must specify a Focalplane instance")
 
-        # Try to force matplotlib to not use any Xwindows backend.
-        warnings.filterwarnings("ignore")
-        matplotlib.use("Agg")
+    if outfile is not None:
+        set_matplotlib_backend(backend="pdf")
+
     import matplotlib.pyplot as plt
 
-    xfigsize = int(width)
-    yfigsize = int(height)
+    if width is None:
+        width = 10.0 * u.degree
+
+    if height is None:
+        height = 10.0 * u.degree
+
+    width_deg = width.to_value(u.degree)
+    height_deg = height.to_value(u.degree)
+
+    xfigsize = int(width_deg)
+    yfigsize = int(height_deg)
     figdpi = 100
 
     # Compute the font size to use for detector labels
@@ -565,8 +595,8 @@ def plot_focalplane(
     fig = plt.figure(figsize=(xfigsize, yfigsize), dpi=figdpi)
     ax = fig.add_subplot(1, 1, 1)
 
-    half_width = 0.5 * width
-    half_height = 0.5 * height
+    half_width = 0.5 * width_deg
+    half_height = 0.5 * height_deg
     ax.set_xlabel("Degrees", fontsize="large")
     ax.set_ylabel("Degrees", fontsize="large")
     ax.set_xlim([-half_width, half_width])
@@ -576,12 +606,14 @@ def plot_focalplane(
     yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
     zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
-    for d, quat in dets.items():
+    for d in focalplane.detectors:
+        quat = focalplane[d]["quat"]
+        fwhm = focalplane[d]["fwhm_arcmin"]
 
         # radius in degrees
         detradius = 0.5 * 5.0 / 60.0
         if fwhm is not None:
-            detradius = 0.5 * fwhm[d] / 60.0
+            detradius = 0.5 * fwhm / 60.0
 
         # rotation from boresight
         rdir = qa.rotate(quat, zaxis).flatten()
@@ -595,8 +627,8 @@ def plot_focalplane(
         ypos = mag * np.sin(ang)
 
         detface = "none"
-        if facecolor is not None:
-            detface = facecolor[d]
+        if face_color is not None:
+            detface = face_color[d]
 
         circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec="k")
         ax.add_artist(circ)
@@ -609,8 +641,8 @@ def plot_focalplane(
         dy = ascale * 2.0 * detradius * np.sin(polang)
 
         detcolor = "black"
-        if polcolor is not None:
-            detcolor = polcolor[d]
+        if pol_color is not None:
+            detcolor = pol_color[d]
 
         ax.arrow(
             xtail,
@@ -625,15 +657,15 @@ def plot_focalplane(
             length_includes_head=True,
         )
 
-        if labels is not None:
+        if show_labels:
             xsgn = 1.0
             if dx < 0.0:
                 xsgn = -1.0
-            labeloff = 0.05 * xsgn * fontpix * len(labels[d]) / figdpi
+            labeloff = 0.05 * xsgn * fontpix * len(d) / figdpi
             ax.text(
                 (xtail + 1.1 * dx + labeloff),
                 (ytail + 1.1 * dy),
-                labels[d],
+                d,
                 color="k",
                 fontsize=fontpt,
                 horizontalalignment="center",
@@ -644,6 +676,6 @@ def plot_focalplane(
     if outfile is None:
         plt.show()
     else:
-        plt.savefig(outfile)
+        plt.savefig(outfile, dpi=300, format="pdf")
         plt.close()
     return fig
