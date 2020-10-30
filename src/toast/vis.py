@@ -16,7 +16,7 @@ def set_matplotlib_backend(backend="pdf"):
         _matplotlib_backend = backend
         import matplotlib
 
-        matplotlib.use(_matplotlib_backend, warn=False)
+        matplotlib.use(_matplotlib_backend, force=False)
     except:
         msg = "Could not set the matplotlib backend to '{}'".format(_matplotlib_backend)
         warnings.warn(msg)

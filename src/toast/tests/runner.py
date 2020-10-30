@@ -10,7 +10,7 @@ import unittest
 
 from .mpi import MPITestRunner
 
-from ..vis import set_backend
+from ..vis import set_matplotlib_backend
 
 from .._libtoast import libtoast_tests
 
@@ -25,6 +25,8 @@ from . import pixels as testpixels
 
 from . import observation as testobs
 
+from . import dist as testdist
+
 from . import config as testconfig
 
 from . import ops_sim_satellite as testsimsat
@@ -32,10 +34,6 @@ from . import ops_sim_satellite as testsimsat
 
 #
 # from . import cache as testcache
-#
-#
-#
-# from . import dist as testdist
 #
 # from . import tod as testtod
 #
@@ -98,7 +96,7 @@ def test(name=None, verbosity=2):
         comm = MPI.COMM_WORLD
         rank = comm.rank
 
-    set_backend()
+    set_matplotlib_backend(backend="agg")
 
     outdir = "toast_test_output"
 
@@ -133,17 +131,14 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testqarray))
         suite.addTest(loader.loadTestsFromModule(testintervals))
         suite.addTest(loader.loadTestsFromModule(testpixels))
-        suite.addTest(loader.loadTestsFromModule(testobs))
 
+        suite.addTest(loader.loadTestsFromModule(testobs))
+        suite.addTest(loader.loadTestsFromModule(testdist))
         suite.addTest(loader.loadTestsFromModule(testconfig))
 
         suite.addTest(loader.loadTestsFromModule(testsimsat))
 
         # suite.addTest(loader.loadTestsFromModule(testcache))
-        #
-        #
-        #
-        # suite.addTest(loader.loadTestsFromModule(testdist))
         #
         # suite.addTest(loader.loadTestsFromModule(testtod))
         # suite.addTest(loader.loadTestsFromModule(testtodsat))
