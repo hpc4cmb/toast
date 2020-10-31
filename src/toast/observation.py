@@ -299,6 +299,15 @@ class Observation(MutableMapping):
 
         self.intervals = IntervalMgr(self._comm, self.dist.comm_row, self.dist.comm_col)
 
+    # Fully clear the observation
+
+    def clear(self):
+        self.view.clear()
+        self.intervals.clear()
+        self.detdata.clear()
+        self.shared.clear()
+        self._internal.clear()
+
     # General properties
 
     @property

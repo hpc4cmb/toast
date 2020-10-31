@@ -31,6 +31,8 @@ from . import config as test_config
 
 from . import ops_sim_satellite as test_ops_sim_satellite
 
+from . import ops_memory_counter as test_ops_memory_counter
+
 
 #
 # from . import cache as testcache
@@ -53,7 +55,7 @@ from . import ops_sim_satellite as test_ops_sim_satellite
 # from . import ops_gainscrambler as testopsgainscrambler
 # from . import ops_applygain as testopsapplygain
 #
-# from . import ops_memorycounter as testopsmemorycounter
+#
 #
 # from . import ops_madam as testopsmadam
 # from . import ops_mapmaker as testopsmapmaker
@@ -137,6 +139,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_config))
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
+        suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
 
         # suite.addTest(loader.loadTestsFromModule(testcache))
         #

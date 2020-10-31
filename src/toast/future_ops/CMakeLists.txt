@@ -4,6 +4,7 @@
 install(FILES
     __init__.py
     pipeline.py
+    memory_counter.py
     sim_hwp.py
     sim_tod_noise.py
     sim_satellite.py

@@ -162,9 +162,9 @@ class PointingHealpix(Operator):
         # overhead from temporary arrays.
         tod_buffer_length = env.tod_buffer_length()
 
-        for obs in data.obs:
+        for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -172,43 +172,43 @@ class PointingHealpix(Operator):
             # Get the flags if needed
             flags = None
             if self.flags is not None:
-                flags = np.array(obs.shared[self.flags])
+                flags = np.array(ob.shared[self.flags])
                 flags &= self.flag_mask
 
             # HWP angle if needed
             hwp_angle = None
             if self.hwp_angle is not None:
-                hwp_angle = obs.shared[self.hwp_angle]
+                hwp_angle = ob.shared[self.hwp_angle]
 
             # Boresight pointing quaternions
-            boresight = obs.shared[self.boresight]
+            boresight = ob.shared[self.boresight]
 
             # Focalplane for this observation
-            focalplane = obs.telescope.focalplane
+            focalplane = ob.telescope.focalplane
 
             # Optional calibration
             cal = None
             if self.cal is not None:
-                cal = obs[self.cal]
+                cal = ob[self.cal]
 
             # Create output data for the pixels, weights and optionally the
             # detector quaternions.
 
             if self.single_precision:
-                obs.detdata.create(
+                ob.detdata.create(
                     self.pixels, detshape=(), dtype=np.int32, detectors=dets
                 )
-                obs.detdata.create(
+                ob.detdata.create(
                     self.weights,
                     detshape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
                 )
             else:
-                obs.detdata.create(
+                ob.detdata.create(
                     self.pixels, detshape=(), dtype=np.int64, detectors=dets
                 )
-                obs.detdata.create(
+                ob.detdata.create(
                     self.weights,
                     detshape=(self._nnz,),
                     dtype=np.float64,
@@ -216,7 +216,7 @@ class PointingHealpix(Operator):
                 )
 
             if self.quats is not None:
-                obs.detdata.create(
+                ob.detdata.create(
                     self.quats,
                     detshape=(4,),
                     dtype=np.float64,
@@ -237,7 +237,7 @@ class PointingHealpix(Operator):
                 # Timestream of detector quaternions
                 quats = qa.mult(boresight, detquat)
                 if self.quats is not None:
-                    obs.detdata[self.quats][det, :] = quats
+                    ob.detdata[self.quats][det, :] = quats
 
                 # Cal for this detector
                 dcal = 1.0
@@ -247,9 +247,9 @@ class PointingHealpix(Operator):
                 # Buffered pointing calculation
                 buf_off = 0
                 buf_n = tod_buffer_length
-                while buf_off < obs.n_local_samples:
-                    if buf_off + buf_n > obs.n_local_samples:
-                        buf_n = obs.n_local_samples - buf_off
+                while buf_off < ob.n_local_samples:
+                    if buf_off + buf_n > ob.n_local_samples:
+                        buf_n = ob.n_local_samples - buf_off
                     bslice = slice(buf_off, buf_off + buf_n)
 
                     # This buffer of detector quaternions
@@ -266,8 +266,8 @@ class PointingHealpix(Operator):
                         fslice = flags[bslice].reshape(-1)
 
                     # Pixel and weight buffers
-                    pxslice = obs.detdata[self.pixels][det, bslice].reshape(-1)
-                    wtslice = obs.detdata[self.weights][det, bslice].reshape(-1)
+                    pxslice = ob.detdata[self.pixels][det, bslice].reshape(-1)
+                    wtslice = ob.detdata[self.weights][det, bslice].reshape(-1)
 
                     pbuf = pxslice
                     wbuf = wtslice
@@ -296,7 +296,7 @@ class PointingHealpix(Operator):
 
                 if self.create_dist is not None:
                     self._local_submaps[
-                        obs.detdata["pixels"][det] // self._n_pix_submap
+                        ob.detdata["pixels"][det] // self._n_pix_submap
                     ] = True
         return
 

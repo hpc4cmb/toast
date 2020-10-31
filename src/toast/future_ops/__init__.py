@@ -4,6 +4,8 @@
 
 # import functions into our public API
 
+from .memory_counter import MemoryCounter
+
 from .pipeline import Pipeline
 
 from .sim_satellite import SimSatellite

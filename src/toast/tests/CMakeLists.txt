@@ -19,14 +19,14 @@ install(FILES
     pixels.py
     ops_sim_satellite.py
     ops_applygain.py
-    ops_simnoise.py
-    cov.py
+    ops_sim_tod_noise.py
+    covariance.py
     ops_pmat.py
     ops_dipole.py
     ops_groundfilter.py
     sim_focalplane.py
     ops_polyfilter.py
-    ops_memorycounter.py
+    ops_memory_counter.py
     ops_gainscrambler.py
     psd_math.py
     ops_madam.py

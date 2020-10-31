@@ -235,38 +235,38 @@ class SimNoise(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        for obs in data.obs:
+        for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
 
             # Unique observation ID
-            obsindx = obs.UID
+            obsindx = ob.UID
 
             # FIXME: we should unify naming of UID / id.
-            telescope = obs.telescope.id
+            telescope = ob.telescope.id
 
             # FIXME:  Every observation has a set of timestamps.  This global
             # offset is specified separately so that opens the possibility for
             # inconsistency.  Perhaps the global_offset should be made a property
             # of the Observation class?
             global_offset = 0
-            if "global_offset" in obs:
-                global_offset = obs["global_offset"]
+            if "global_offset" in ob:
+                global_offset = ob["global_offset"]
 
-            if self.noise_model not in obs:
+            if self.noise_model not in ob:
                 msg = "Observation does not contain noise model key '{}'".format(
                     self.noise_model
                 )
                 log.error(msg)
                 raise KeyError(msg)
 
-            nse = obs[self.noise_model]
+            nse = ob[self.noise_model]
 
             # Eventually we'll redistribute, to allow long correlations...
-            if obs.comm_row_size != 1:
+            if ob.comm_row_size != 1:
                 msg = "Noise simulation for process grids with multiple ranks in the sample direction not implemented"
                 log.error(msg)
                 raise NotImplementedError(msg)
@@ -275,11 +275,11 @@ class SimNoise(Operator):
             # detectors within the observation.
 
             # Create output if it does not exist
-            if self.out not in obs:
-                obs.detdata.create(self.out, detshape=(), dtype=np.float64)
+            if self.out not in ob:
+                ob.detdata.create(self.out, detshape=(), dtype=np.float64)
 
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
-                obs.shared[self.times].data
+                ob.shared[self.times].data
             )
 
             for key in nse.keys:
@@ -298,8 +298,8 @@ class SimNoise(Operator):
                     obsindx,
                     nse.index(key),
                     rate,
-                    obs.local_index_offset + global_offset,
-                    obs.n_local_samples,
+                    ob.local_index_offset + global_offset,
+                    ob.n_local_samples,
                     self._oversample,
                     nse.freq(key),
                     nse.psd(key),
@@ -310,7 +310,7 @@ class SimNoise(Operator):
                     weight = nse.weight(det, key)
                     if weight == 0:
                         continue
-                    obs.detdata[self.out][det] += weight * nsedata
+                    ob.detdata[self.out][det] += weight * nsedata
 
             # Release the work space allocated in the FFT plan store.
             #

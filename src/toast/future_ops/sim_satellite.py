@@ -34,7 +34,7 @@ from ..instrument import Telescope
 
 from ..healpix import ang2vec
 
-from .sim_hwp import simulate_hwp_angle
+from .sim_hwp import simulate_hwp_response
 
 
 @function_timer
@@ -99,8 +99,8 @@ def slew_precession_axis(first_samp=0, n_samp=None, sample_rate=None, deg_day=No
 
 @function_timer
 def satellite_scanning(
-    obs,
-    obs_key,
+    ob,
+    ob_key,
     sample_offset=0,
     q_prec=None,
     spin_period_m=1.0,
@@ -116,8 +116,8 @@ def satellite_scanning(
     boresight.
 
     Args:
-        obs (Observation): The observation to populate.
-        obs_key (str): The observation shared key to create.
+        ob (Observation): The observation to populate.
+        ob_key (str): The observation shared key to create.
         sample_offset (int): The global offset in samples from the start
             of the mission.
         q_prec (ndarray): If None (the default), then the
@@ -141,20 +141,20 @@ def satellite_scanning(
     env = Environment.get()
     tod_buffer_length = env.tod_buffer_length()
 
-    first_samp = obs.local_index_offset
-    n_samp = obs.n_local_samples
-    obs.shared.create(obs_key, shape=(n_samp, 4), dtype=np.float64, comm=obs.comm_col)
+    first_samp = ob.local_index_offset
+    n_samp = ob.n_local_samples
+    ob.shared.create(ob_key, shape=(n_samp, 4), dtype=np.float64, comm=ob.comm_col)
 
     # Temporary buffer
     boresight = None
 
     # Only the first process in each grid column simulates the shared boresight data
 
-    if obs.comm_col_rank == 0:
+    if ob.comm_col_rank == 0:
         boresight = np.zeros((n_samp, 4), dtype=np.float64)
 
         # Compute effective sample rate
-        (sample_rate, dt, _, _, _) = rate_from_times(obs.shared["times"])
+        (sample_rate, dt, _, _, _) = rate_from_times(ob.shared["times"])
 
         spin_rate = None
         if spin_period_m > 0.0:
@@ -253,7 +253,7 @@ def satellite_scanning(
             )
             buf_off += buf_n
 
-    obs.shared[obs_key].set(boresight, offset=(0, 0), fromrank=0)
+    ob.shared[ob_key].set(boresight, offset=(0, 0), fromrank=0)
 
     return
 
@@ -397,11 +397,11 @@ class SimSatellite(Operator):
         group_firstobs = groupdist[comm.group][0]
         group_numobs = groupdist[comm.group][1]
 
-        for ob in range(group_firstobs, group_firstobs + group_numobs):
-            obname = "science_{:05d}".format(ob)
-            obs = Observation(
+        for obindx in range(group_firstobs, group_firstobs + group_numobs):
+            obname = "science_{:05d}".format(obindx)
+            ob = Observation(
                 self.telescope,
-                obsrange[ob].samples,
+                obsrange[obindx].samples,
                 name=obname,
                 UID=name_UID(obname),
                 comm=comm.comm_group,
@@ -410,47 +410,47 @@ class SimSatellite(Operator):
 
             # Create shared objects for timestamps, common flags, position,
             # and velocity.
-            obs.shared.create(
+            ob.shared.create(
                 self.times,
-                shape=(obs.n_local_samples,),
+                shape=(ob.n_local_samples,),
                 dtype=np.float64,
-                comm=obs.comm_col,
+                comm=ob.comm_col,
             )
-            obs.shared.create(
+            ob.shared.create(
                 self.flags,
-                shape=(obs.n_local_samples,),
+                shape=(ob.n_local_samples,),
                 dtype=np.uint8,
-                comm=obs.comm_col,
+                comm=ob.comm_col,
             )
-            obs.shared.create(
+            ob.shared.create(
                 self.position,
-                shape=(obs.n_local_samples, 3),
+                shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=obs.comm_col,
+                comm=ob.comm_col,
             )
-            obs.shared.create(
+            ob.shared.create(
                 self.velocity,
-                shape=(obs.n_local_samples, 3),
+                shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=obs.comm_col,
+                comm=ob.comm_col,
             )
 
             # Rank zero of each grid column creates the data
             stamps = None
             position = None
             velocity = None
-            if obs.comm_col_rank == 0:
-                start_abs = obs.local_index_offset + obsrange[ob].first
+            if ob.comm_col_rank == 0:
+                start_abs = ob.local_index_offset + obsrange[obindx].first
                 start_time = (
-                    obsrange[ob].start + float(start_abs) / focalplane.sample_rate
+                    obsrange[obindx].start + float(start_abs) / focalplane.sample_rate
                 )
                 stop_time = (
-                    start_time + float(obs.n_local_samples) / focalplane.sample_rate
+                    start_time + float(ob.n_local_samples) / focalplane.sample_rate
                 )
                 stamps = np.linspace(
                     start_time,
                     stop_time,
-                    num=obs.n_local_samples,
+                    num=ob.n_local_samples,
                     endpoint=False,
                     dtype=np.float64,
                 )
@@ -462,14 +462,14 @@ class SimSatellite(Operator):
                     (start_time - self.start_time.to_value(u.second)) * self._radpersec,
                     2.0 * np.pi,
                 )
-                ang = radinc * np.arange(obs.n_local_samples, dtype=np.float64) + rad
+                ang = radinc * np.arange(ob.n_local_samples, dtype=np.float64) + rad
                 x = self._AU * np.cos(ang)
                 y = self._AU * np.sin(ang)
                 z = np.zeros_like(x)
                 position = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
                 ang = (
-                    radinc * np.arange(obs.n_local_samples, dtype=np.float64)
+                    radinc * np.arange(ob.n_local_samples, dtype=np.float64)
                     + rad
                     + (0.5 * np.pi)
                 )
@@ -478,25 +478,25 @@ class SimSatellite(Operator):
                 z = np.zeros_like(x)
                 velocity = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
-            obs.shared[self.times].set(stamps, offset=(0,), fromrank=0)
-            obs.shared[self.position].set(position, offset=(0, 0), fromrank=0)
-            obs.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
+            ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
+            ob.shared[self.position].set(position, offset=(0, 0), fromrank=0)
+            ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
 
             # Create boresight pointing
-            start_abs = obs.local_index_offset + obsrange[ob].first
+            start_abs = ob.local_index_offset + obsrange[obindx].first
             degday = 360.0 / 365.25
 
             q_prec = None
-            if obs.comm_col_rank == 0:
+            if ob.comm_col_rank == 0:
                 q_prec = slew_precession_axis(
                     first_samp=start_abs,
-                    n_samp=obs.n_local_samples,
+                    n_samp=ob.n_local_samples,
                     sample_rate=focalplane.sample_rate,
                     deg_day=degday,
                 )
 
             satellite_scanning(
-                obs,
+                ob,
                 self.boresight,
                 sample_offset=start_abs,
                 q_prec=q_prec,
@@ -508,21 +508,17 @@ class SimSatellite(Operator):
 
             # Set HWP angle
 
-            hwp_step_deg = None
-            hwp_step_time_m = None
-            if self.hwp_step is not None:
-                hwp_step_deg = self.hwp_step.to_value(u.degree)
-                hwp_step_time_m = self.hwp_step_time.to_value(u.minute)
-            simulate_hwp_angle(
-                obs,
-                self.hwp_angle,
-                obsrange[ob].start,
-                self.hwp_rpm,
-                hwp_step_deg,
-                hwp_step_time_m,
+            simulate_hwp_response(
+                ob,
+                ob_angle_key=self.hwp_angle,
+                ob_mueller_key=None,
+                hwp_start=obsrange[obindx].start * u.second,
+                hwp_rpm=self.hwp_rpm,
+                hwp_step=self.hwp_step,
+                hwp_step_time=self.hwp_step_time,
             )
 
-            data.obs.append(obs)
+            data.obs.append(ob)
 
         return
 

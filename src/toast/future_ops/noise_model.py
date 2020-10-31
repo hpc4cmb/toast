@@ -43,15 +43,15 @@ class DefaultNoiseModel(Operator):
 
         comm = data.comm
 
-        for obs in data.obs:
+        for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
 
             # The focalplane for this observation
-            focalplane = obs.telescope.focalplane
+            focalplane = ob.telescope.focalplane
 
             # Every process has a copy of the focalplane, and every process may want
             # the noise model for all detectors (not just our local detectors).
@@ -73,7 +73,7 @@ class DefaultNoiseModel(Operator):
                 rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
             )
 
-            obs[self.noise_model] = noise
+            ob[self.noise_model] = noise
 
         return
 
