@@ -528,6 +528,29 @@ class Observation(MutableMapping):
         val += "\n>"
         return val
 
+    def memory_use(self):
+        """Estimate the memory used by shared and detector data.
+
+        This sums the memory used by the shared and detdata attributes and returns the
+        total on all processes.  This function is blocking on the observation
+        communicator.
+
+        Returns:
+            (int):  The number of bytes of memory used by timestream data.
+
+        """
+        local_mem = self.detdata.memory_use()
+        # Sum the aggregate local memory
+        total = None
+        if self.comm is None:
+            total = local_mem
+        else:
+            total = self.comm.allreduce(local_mem, op=MPI.SUM)
+        # The total shared memory use is already returned on every process by this
+        # next function.
+        total += self.shared.memory_use()
+        return total
+
     # Redistribution
 
     def redistribute(self, process_rows):

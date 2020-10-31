@@ -83,27 +83,39 @@ class DetectorData(object):
         # construct a new dtype in case the parameter given is shortcut string
         ttype = np.dtype(dtype)
 
+        self.itemsize = 0
+
         self._storage_class = None
         if ttype.char == "b":
             self._storage_class = AlignedI8
+            self.itemsize = 1
         elif ttype.char == "B":
             self._storage_class = AlignedU8
+            self.itemsize = 1
         elif ttype.char == "h":
             self._storage_class = AlignedI16
+            self.itemsize = 2
         elif ttype.char == "H":
             self._storage_class = AlignedU16
+            self.itemsize = 2
         elif ttype.char == "i":
             self._storage_class = AlignedI32
+            self.itemsize = 4
         elif ttype.char == "I":
             self._storage_class = AlignedU32
+            self.itemsize = 4
         elif (ttype.char == "q") or (ttype.char == "l"):
             self._storage_class = AlignedI64
+            self.itemsize = 8
         elif (ttype.char == "Q") or (ttype.char == "L"):
             self._storage_class = AlignedU64
+            self.itemsize = 8
         elif ttype.char == "f":
             self._storage_class = AlignedF32
+            self.itemsize = 4
         elif ttype.char == "d":
             self._storage_class = AlignedF64
+            self.itemsize = 8
         elif ttype.char == "F":
             raise NotImplementedError("No support yet for complex numbers")
         elif ttype.char == "D":
@@ -128,6 +140,7 @@ class DetectorData(object):
         self._shape = tuple(shp)
         self._raw = self._storage_class.zeros(self._flatshape)
         self._data = self._raw.array().reshape(self._shape)
+        self._memsize = self.itemsize * self._flatshape
 
     @property
     def detectors(self):
@@ -147,6 +160,9 @@ class DetectorData(object):
     @property
     def detector_shape(self):
         return tuple(self._shape[1:])
+
+    def memory_use(self):
+        return self._memsize
 
     @property
     def data(self):
@@ -478,6 +494,12 @@ class DetDataMgr(MutableMapping):
                 msg = "Assignment of detector data from an array only supports full size or single detector"
                 raise ValueError(msg)
 
+    def memory_use(self):
+        bytes = 0
+        for k in self._internal.keys():
+            bytes += self._internal[k].memory_use()
+        return bytes
+
     def __iter__(self):
         return iter(self._internal)
 
@@ -681,6 +703,26 @@ class SharedDataMgr(MutableMapping):
     def __del__(self):
         if hasattr(self, "_internal"):
             self.clear()
+
+    def memory_use(self):
+        bytes = 0
+        for k in self._internal.keys():
+            shared_bytes = 0
+            node_bytes = 0
+            node_rank = 0
+            if self._internal[k].nodecomm is not None:
+                node_rank = self._internal[k].nodecomm.rank
+            if node_rank == 0:
+                node_elems = 1
+                for d in self._internal[k].shape:
+                    node_elems *= d
+                node_bytes += node_elems * self._internal[k].data.itemsize
+            if self._internal[k].comm is None:
+                shared_bytes = node_bytes
+            else:
+                shared_bytes = self._internal[k].comm.allreduce(node_bytes, op=MPI.SUM)
+            bytes += shared_bytes
+        return bytes
 
     def __repr__(self):
         val = "<SharedDataMgr"

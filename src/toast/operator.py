@@ -53,10 +53,10 @@ class Operator(TraitConfig):
             data (toast.Data):  The distributed data.
 
         Returns:
-            None
+            (value):  None or an Operator-dependent result.
 
         """
-        self._finalize(data, **kwargs)
+        return self._finalize(data, **kwargs)
 
     def apply(self, data, detectors=None, **kwargs):
         """Run exec() and finalize().
@@ -75,11 +75,11 @@ class Operator(TraitConfig):
                 indicates a list of all detectors.
 
         Returns:
-            None
+            (value):  None or an Operator-dependent result.
 
         """
         self.exec(data, detectors, **kwargs)
-        self.finalize(data, **kwargs)
+        return self.finalize(data, **kwargs)
 
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")

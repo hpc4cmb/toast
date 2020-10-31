@@ -14,22 +14,22 @@ from ..vis import set_matplotlib_backend
 
 from .._libtoast import libtoast_tests
 
-from . import env as testenv
-from . import timing as testtiming
-from . import rng as testrng
-from . import fft as testfft
-from . import healpix as testhealpix
-from . import qarray as testqarray
-from . import intervals as testintervals
-from . import pixels as testpixels
+from . import env as test_env
+from . import timing as test_timing
+from . import rng as test_rng
+from . import fft as test_fft
+from . import healpix as test_healpix
+from . import qarray as test_qarray
+from . import intervals as test_intervals
+from . import pixels as test_pixels
 
-from . import observation as testobs
+from . import observation as test_observation
 
-from . import dist as testdist
+from . import dist as test_dist
 
-from . import config as testconfig
+from . import config as test_config
 
-from . import ops_sim_satellite as testsimsat
+from . import ops_sim_satellite as test_ops_sim_satellite
 
 
 #
@@ -119,24 +119,24 @@ def test(name=None, verbosity=2):
     suite = unittest.TestSuite()
 
     if name is None:
-        suite.addTest(loader.loadTestsFromModule(testenv))
+        suite.addTest(loader.loadTestsFromModule(test_env))
         if not (("CONDA_BUILD" in os.environ) or ("CIBUILDWHEEL" in os.environ)):
             # When doing a conda build on CI services in containers
             # the timing information is not accurate and these tests
             # fail.
-            suite.addTest(loader.loadTestsFromModule(testtiming))
-        suite.addTest(loader.loadTestsFromModule(testrng))
-        suite.addTest(loader.loadTestsFromModule(testfft))
-        suite.addTest(loader.loadTestsFromModule(testhealpix))
-        suite.addTest(loader.loadTestsFromModule(testqarray))
-        suite.addTest(loader.loadTestsFromModule(testintervals))
-        suite.addTest(loader.loadTestsFromModule(testpixels))
+            suite.addTest(loader.loadTestsFromModule(test_timing))
+        suite.addTest(loader.loadTestsFromModule(test_rng))
+        suite.addTest(loader.loadTestsFromModule(test_fft))
+        suite.addTest(loader.loadTestsFromModule(test_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_qarray))
+        suite.addTest(loader.loadTestsFromModule(test_intervals))
+        suite.addTest(loader.loadTestsFromModule(test_pixels))
 
-        suite.addTest(loader.loadTestsFromModule(testobs))
-        suite.addTest(loader.loadTestsFromModule(testdist))
-        suite.addTest(loader.loadTestsFromModule(testconfig))
+        suite.addTest(loader.loadTestsFromModule(test_observation))
+        suite.addTest(loader.loadTestsFromModule(test_dist))
+        suite.addTest(loader.loadTestsFromModule(test_config))
 
-        suite.addTest(loader.loadTestsFromModule(testsimsat))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
 
         # suite.addTest(loader.loadTestsFromModule(testcache))
         #
