@@ -510,6 +510,7 @@ class SimSatellite(Operator):
 
             simulate_hwp_response(
                 ob,
+                ob_time_key=self.times,
                 ob_angle_key=self.hwp_angle,
                 ob_mueller_key=None,
                 hwp_start=obsrange[obindx].start * u.second,

@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-# from contextlib import contextmanager
+from astropy import units as u
 
 from ..mpi import Comm
 
@@ -20,8 +20,10 @@ from ..instrument_sim import fake_hexagon_focalplane
 
 from ..observation import DetectorData, Observation
 
+from .. import future_ops as ops
 
-ZAXIS = np.array([0, 0, 1.0])
+
+ZAXIS = np.array([0.0, 0.0, 1.0])
 
 
 # These are helper routines for common operations used in the unit tests.
@@ -78,7 +80,7 @@ def create_comm(mpicomm):
     return toastcomm
 
 
-def create_telescope(group_size):
+def create_telescope(group_size, sample_rate=10.0 * u.Hz):
     """Create a fake telescope with at least one detector per process."""
     npix = 1
     ring = 1
@@ -90,10 +92,10 @@ def create_telescope(group_size):
 
 
 def create_distdata(mpicomm, obs_per_group=1, samples=10):
-    """Create a toast communicator and distributed data object.
+    """Create a toast communicator and (empty) distributed data object.
 
     Use the specified MPI communicator to attempt to create 2 process groups,
-    each with some observations.
+    each with some empty observations.
 
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
@@ -119,6 +121,42 @@ def create_distdata(mpicomm, obs_per_group=1, samples=10):
     return data
 
 
+def create_satellite_data(
+    mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=5.0 * u.minute
+):
+    """Create a data object with a simple satellite sim.
+
+    Use the specified MPI communicator to attempt to create 2 process groups.  Create
+    a fake telescope and run the satellite sim to make some observations for each
+    group.  This is useful for testing many operators that need some pre-existing
+    observations with boresight pointing.
+
+    Args:
+        mpicomm (MPI.Comm): the MPI communicator (or None).
+        obs_per_group (int): the number of observations assigned to each group.
+        samples (int): number of samples per observation.
+
+    Returns:
+        toast.Data: the distributed data with named observations.
+
+    """
+    toastcomm = create_comm(mpicomm)
+    data = Data(toastcomm)
+
+    tele = create_telescope(toastcomm.group_size, sample_rate=sample_rate)
+
+    sim_sat = ops.SimSatellite(
+        name="sim_sat",
+        n_observation=(toastcomm.ngroups * obs_per_group),
+        telescope=tele,
+        hwp_rpm=10.0,
+        observation_time=obs_time,
+    )
+    sim_sat.apply(data)
+
+    return data
+
+
 def uniform_chunks(samples, nchunk=100):
     """Divide some number of samples into chunks.
 
@@ -141,37 +179,3 @@ def uniform_chunks(samples, nchunk=100):
     for r in range(remain):
         chunks[r] += 1
     return chunks
-
-
-#
-# @contextmanager
-# def mpi_guard(comm=MPI.COMM_WORLD):
-#     """Ensure that if one MPI process raises an exception, all of them do.
-#
-#     Args:
-#         comm (mpi4py.MPI.Comm): The MPI communicator.
-#
-#     """
-#     failed = 0
-#     print(comm.rank, ": guard: enter", flush=True)
-#     try:
-#         print(comm.rank, ": guard: yield", flush=True)
-#         yield
-#     except:
-#         print(comm.rank, ": guard: except", flush=True)
-#         msg = "Exception on process {}:\n".format(comm.rank)
-#         exc_type, exc_value, exc_traceback = sys.exc_info()
-#         lines = traceback.format_exception(exc_type, exc_value,
-#             exc_traceback)
-#         msg += "\n".join(lines)
-#         print(msg, flush=True)
-#         failed = 1
-#         print(comm.rank, ": guard: except done", flush=True)
-#
-#     print(comm.rank, ": guard: failcount reduce", flush=True)
-#     failcount = comm.allreduce(failed, op=MPI.SUM)
-#     if failcount > 0:
-#         raise RuntimeError("One or more MPI processes raised an exception")
-#     print(comm.rank, ": guard: done", flush=True)
-#
-#     return

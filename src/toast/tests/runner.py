@@ -33,6 +33,8 @@ from . import ops_sim_satellite as test_ops_sim_satellite
 
 from . import ops_memory_counter as test_ops_memory_counter
 
+from . import ops_pointing_healpix as test_ops_pointing_healpix
+
 
 #
 # from . import cache as testcache
@@ -42,8 +44,6 @@ from . import ops_memory_counter as test_ops_memory_counter
 # from . import psd_math as testpsdmath
 #
 # from . import cov as testcov
-#
-# from . import ops_pmat as testopspmat
 #
 # from . import ops_dipole as testopsdipole
 # from . import ops_simnoise as testopssimnoise
@@ -140,6 +140,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
 
         # suite.addTest(loader.loadTestsFromModule(testcache))
         #
@@ -149,7 +150,6 @@ def test(name=None, verbosity=2):
         # suite.addTest(loader.loadTestsFromModule(testopssimnoise))
         # suite.addTest(loader.loadTestsFromModule(testopssimsss))
         # suite.addTest(loader.loadTestsFromModule(testopsapplygain))
-        # suite.addTest(loader.loadTestsFromModule(testopspmat))
         # suite.addTest(loader.loadTestsFromModule(testcov))
         # suite.addTest(loader.loadTestsFromModule(testopsdipole))
         # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))

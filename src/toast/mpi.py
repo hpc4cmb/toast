@@ -40,6 +40,7 @@ if use_mpi is None:
 
 import sys
 import itertools
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -252,3 +253,34 @@ class Comm(object):
         else:
             lines.append("  Using CUDA device {}".format(self._cuda.device_index))
         return "<toast.Comm\n{}\n>".format("\n".join(lines))
+
+
+@contextmanager
+def exception_guard(comm=None):
+    """Ensure that if one MPI process raises an un-caught exception, all of them do.
+
+    Args:
+        comm (mpi4py.MPI.Comm): The MPI communicator or None.
+
+    """
+    log = Logger.get()
+    failed = 0
+    try:
+        yield
+    except:
+        msg = "Exception on process {}:\n".format(comm.rank)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        msg += "\n".join(lines)
+        log.error(msg)
+        failed = 1
+
+    failcount = None
+    if comm is None:
+        failcount = failed
+    else:
+        failcount = comm.allreduce(failed, op=MPI.SUM)
+    if failcount > 0:
+        raise RuntimeError("One or more MPI processes raised an exception")
+
+    return

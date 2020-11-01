@@ -12,6 +12,7 @@ from ..timing import function_timer, Timer
 @function_timer
 def simulate_hwp_response(
     ob,
+    ob_time_key=None,
     ob_angle_key=None,
     ob_mueller_key=None,
     hwp_start=None,
@@ -64,9 +65,9 @@ def simulate_hwp_response(
         # convert to radians / second
         hwp_rate = hwp_rpm * 2.0 * np.pi / 60.0
 
-    if hwp_step_deg is not None:
+    if hwp_step is not None:
         # convert to radians and seconds
-        hwp_step_rad = hwp_set.to_value(u.radian)
+        hwp_step_rad = hwp_step.to_value(u.radian)
         hwp_step_time_s = hwp_step_time.to_value(u.second)
 
     # Only the first process in each grid column simulates the common HWP angle
@@ -78,7 +79,7 @@ def simulate_hwp_response(
     hwp_angle = None
     hwp_mueller = None
 
-    if ob.grid_comm_col is None or ob.grid_comm_col.rank == 0:
+    if ob.comm_col is None or ob.comm_col.rank == 0:
         if hwp_rate is not None:
             # continuous HWP
             # HWP increment per sample is:
@@ -111,7 +112,7 @@ def simulate_hwp_response(
     # Store the angle and / or the Mueller matrix
     if ob_angle_key is not None:
         ob.shared.create(
-            ob_angle_key, shape=(n_sample,), dtype=np.float64, comm=ob.grid_comm_col
+            ob_angle_key, shape=(n_sample,), dtype=np.float64, comm=ob.comm_col
         )
         ob.shared[ob_angle_key].set(hwp_angle, offset=(0,), fromrank=0)
 

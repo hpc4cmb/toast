@@ -11,9 +11,7 @@ import numpy as np
 
 from .. import future_ops as ops
 
-from .. import config as tc
-
-from ._helpers import create_outdir, create_distdata, create_telescope
+from ._helpers import create_outdir, create_satellite_data
 
 
 class MemoryCounterTest(MPITestCase):
@@ -21,37 +19,22 @@ class MemoryCounterTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-        # One observation per group
-        self.data = create_distdata(self.comm, obs_per_group=1)
-
-        # Make a fake telescope for every observation
-
-        tele = create_telescope(self.data.comm.group_size)
+    def test_counter(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
 
         # Set up a pipeline that generates some data
-
         pipe_ops = [
-            ops.SimSatellite(
-                name="sim_satellite",
-                telescope=tele,
-                n_observation=self.data.comm.ngroups,
-            ),
-            ops.DefaultNoiseModel(name="noise_model"),
-            ops.SimNoise(name="sim_noise"),
+            ops.DefaultNoiseModel(),
+            ops.SimNoise(),
         ]
 
-        self.pipe = ops.Pipeline(name="sim_pipe")
-        self.pipe.operators = pipe_ops
-
-    def test_counter(self):
-        # Start with empty data
-        self.data.clear()
-
-        # Run a standard pipeline to simulate some data
-        self.pipe.apply(self.data)
+        pipe = ops.Pipeline()
+        pipe.operators = pipe_ops
+        pipe.apply(data)
 
         # Get the memory used
         mcount = ops.MemoryCounter()
-        bytes = mcount.apply(self.data)
+        bytes = mcount.apply(data)
 
         return

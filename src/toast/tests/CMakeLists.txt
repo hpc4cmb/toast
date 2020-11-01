@@ -21,7 +21,7 @@ install(FILES
     ops_applygain.py
     ops_sim_tod_noise.py
     covariance.py
-    ops_pmat.py
+    ops_pointing_healpix.py
     ops_dipole.py
     ops_groundfilter.py
     sim_focalplane.py
