@@ -643,6 +643,7 @@ class AtmSim(object):
 
         self._wx *= -1
         self._wy *= -1
+        self._wz *= -1
 
         if self._rank == 0:
             msg = "\nAtmospheric realization parameters:\n"
