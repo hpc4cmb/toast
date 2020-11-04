@@ -313,12 +313,11 @@ class GainTemplate(TODTemplate):
             for idet, det in enumerate(tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
-                poly_amps = np.diag( poly_amplitudes[amplitude_slice ] )
+                poly_amps = poly_amplitudes[amplitude_slice ]
                 delta_gain = legendre_poly.dot(poly_amps)
                 signal_estimate = tod.local_signal(det, self.template_name)
-                gain_fluctuation = np.array ([delta_gain[:,i] *signal_estimate for i in range(self.norder)]
-                                                                ).reshape ((local_nsample,  self.norder ))
-                signal[iobs, det, todslice] += np.sum( gain_fluctuation, axis=1 )
+                gain_fluctuation = signal_estimate * delta_gain
+                signal[iobs, det, todslice] += gain_fluctuation
         return
 
 
