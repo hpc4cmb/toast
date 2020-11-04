@@ -295,11 +295,10 @@ class GainTemplate(TODTemplate):
     def get_polynomials (self, N, local_offset, local_N):
         x = 2 * np.arange(N) / (N - 1)   -1
         todslice = slice(local_offset, local_offset + local_N)
-
-        return np.array(
-                    [ scipy.special.legendre(i)(x[todslice]) for i in range(self.norder  ) ]
-                    ).reshape((local_N, self.norder))
-
+        L = np.zeros((local_N, self.norder))
+        for i in range(self. norder):
+             L[:,i]=  scipy.special.legendre(i)(x )
+        return  L
     @function_timer
     def add_to_signal(self, signal,  amplitudes):
         """signal += F.a"""
@@ -348,7 +347,7 @@ class GainTemplate(TODTemplate):
         return
 
     def write_gain_fluctuation(self, amplitudes, filename):
-        np.savez( filename, amplitudes[self.name])
+        np.savez( filename, amplitudes=amplitudes[self.name])
         #raise RuntimeError("Saving gain fluctuation not implemented")
         return
 
@@ -1879,12 +1878,9 @@ class OpMapMaker(Operator):
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
-        #import pdb
-        #pdb.set_trace()
-
         # DEBUG begin
         if self.rank ==0 :
-            templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gains_amplitudes.npz")
+            templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gain_amplitudes.npz")
         # DEBUG end
 
         # Clean TOD
