@@ -337,26 +337,45 @@ class GainTemplate(TODTemplate):
             for idet, det in enumerate( tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
-                poly_amps = np.diag( poly_amplitudes[amplitude_slice ] )
-                delta_gain = legendre_poly.dot(poly_amps)
+                #poly_amps = np.diag( poly_amplitudes[amplitude_slice ] )
+                #delta_gain = legendre_poly.dot(np.diag(np.ones(self.norder)))
+                #delta_gain = legendre_poly.dot(poly_amps)
                 signal_estimate = tod.local_signal(det, self.template_name)
-                gain_fluctuation = np.array ([delta_gain[:,i] *signal_estimate for i in range(self.norder)]
+                gain_fluctuation = np.array ([legendre_poly[:,i] *signal_estimate for i in range(self.norder)]
                                                                 ).reshape ((local_nsample,  self.norder ))
                 poly_amplitudes[amplitude_slice] += np.dot(signal[iobs, det, todslice], gain_fluctuation)
-                print(idet, iobs ,poly_amps, gain_fluctuation)
-
         return
 
     def write_gain_fluctuation(self, amplitudes, filename):
+        ### # WARNING: need to communicate the amplitudes across
+        ### the processors to save them into disc ,
+        # the way this is implemented so far  if nprocs>1  every processor writes to disc
+        # the amplitudes into the very same file...
+        print(amplitudes)
         np.savez( filename, amplitudes=amplitudes[self.name])
         #raise RuntimeError("Saving gain fluctuation not implemented")
         return
 
     def apply_precond(self, amplitudes_in, amplitudes_out):
-        """a' = M^{-1}.a"""
-        poly_amplitudes_in = amplitudes_in[self.name]
-        poly_amplitudes_out = amplitudes_out[self.name]
-        poly_amplitudes_out[:] = poly_amplitudes_in
+        """a' = M^{-1}.b """
+        b = amplitudes_in[self.name]
+        a = amplitudes_out[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            L = self.get_polynomials(nsample, local_offset, local_nsample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+
+            for idet, det in enumerate( tod.local_dets):
+                ind = self.list_of_offsets[iobs ][idet ]
+                amplitude_slice= slice(ind ,ind+self.norder )
+                T = tod.local_signal(det, self.template_name)
+                LT =np.array ([L[:,i] *T  for i in range(self.norder)]
+                                                                ).reshape ((local_nsample,  self.norder ))
+                M = LT.T.dot(LT)
+                a[amplitude_slice] = np.linalg.solve(M, b[amplitude_slice] )
         return
 
 
