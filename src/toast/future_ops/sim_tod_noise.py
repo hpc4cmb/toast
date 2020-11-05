@@ -6,6 +6,10 @@ import traitlets
 
 import numpy as np
 
+from scipy import interpolate
+
+from .. import rng
+
 from ..timing import function_timer
 
 from ..traits import trait_docs, Int, Unicode
@@ -21,17 +25,17 @@ from .._libtoast import tod_sim_noise_timestream
 
 @function_timer
 def sim_noise_timestream(
-    realization,
-    telescope,
-    component,
-    obsindx,
-    detindx,
-    rate,
-    firstsamp,
-    samples,
-    oversample,
-    freq,
-    psd,
+    realization=0,
+    telescope=0,
+    component=0,
+    obsindx=0,
+    detindx=0,
+    rate=1.0,
+    firstsamp=0,
+    samples=0,
+    oversample=2,
+    freq=None,
+    psd=None,
     py=False,
 ):
     """Generate a noise timestream, given a starting RNG state.
@@ -124,7 +128,9 @@ def sim_noise_timestream(
         logfreq = np.log10(freq + freqshift)
         logpsd = np.log10(psd + psdshift)
 
-        interp = si.interp1d(logfreq, logpsd, kind="linear", fill_value="extrapolate")
+        interp = interpolate.interp1d(
+            logfreq, logpsd, kind="linear", fill_value="extrapolate"
+        )
 
         loginterp_psd = interp(loginterp_freq)
         interp_psd = np.power(10.0, loginterp_psd) - psdshift
@@ -292,17 +298,18 @@ class SimNoise(Operator):
 
                 # Simulate the noise matching this key
                 nsedata = sim_noise_timestream(
-                    self.realization,
-                    telescope,
-                    self.component,
-                    obsindx,
-                    nse.index(key),
-                    rate,
-                    ob.local_index_offset + global_offset,
-                    ob.n_local_samples,
-                    self._oversample,
-                    nse.freq(key),
-                    nse.psd(key),
+                    realization=self.realization,
+                    telescope=telescope,
+                    component=self.component,
+                    obsindx=obsindx,
+                    detindx=nse.index(key),
+                    rate=rate,
+                    firstsamp=ob.local_index_offset + global_offset,
+                    samples=ob.n_local_samples,
+                    oversample=self._oversample,
+                    freq=nse.freq(key),
+                    psd=nse.psd(key),
+                    py=False,
                 )
 
                 # Add the noise to all detectors that have nonzero weights

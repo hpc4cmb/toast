@@ -6,130 +6,35 @@ import os
 
 import numpy as np
 
+from astropy import units as u
+
 from .mpi import MPITestCase
 
-from ..tod import Noise, sim_noise_timestream, AnalyticNoise, OpSimNoise
-from ..todmap import TODHpixSpiral
+from ..vis import set_matplotlib_backend
 
 from .. import rng as rng
 
-from ._helpers import (
-    create_outdir,
-    create_distdata,
-    boresight_focalplane,
-    uniform_chunks,
-)
+from ..noise import Noise
+
+from .. import future_ops as ops
+
+from ..future_ops.sim_tod_noise import sim_noise_timestream
+
+from ._helpers import create_outdir, create_satellite_data
 
 
-class OpSimNoiseTest(MPITestCase):
+class SimNoiseTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
-
-        # Create one observation per group, and each observation will have
-        # a fixed number of detectors and one chunk per process.
-
-        # We create two data sets- one for testing uncorrelated noise and
-        # one for testing correlated noise.
-
-        self.data = create_distdata(self.comm, obs_per_group=1)
-        self.data_corr = create_distdata(self.comm, obs_per_group=1)
-
-        self.ndet = 4
-        self.rate = 20.0
-
-        # Create detectors with a range of knee frequencies.
-        (
-            dnames,
-            dquat,
-            depsilon,
-            drate,
-            dnet,
-            dfmin,
-            dfknee,
-            dalpha,
-        ) = boresight_focalplane(
-            self.ndet,
-            samplerate=self.rate,
-            net=10.0,
-            fmin=1.0e-5,
-            fknee=np.linspace(0.0, 0.1, num=self.ndet),
-        )
-
-        # Total samples per observation
-        self.totsamp = 200000
-
-        # Chunks
-        chunks = uniform_chunks(self.totsamp, nchunk=self.data.comm.group_size)
-
-        # Noise sim oversampling
         self.oversample = 2
-
-        # MCs for testing statistics of simulated noise
         self.nmc = 100
-
-        # Populate the observations (one per group)
-
-        tod = TODHpixSpiral(
-            self.data.comm.comm_group,
-            dquat,
-            self.totsamp,
-            detranks=1,
-            firsttime=0.0,
-            rate=self.rate,
-            nside=512,
-            sampsizes=chunks,
-        )
-
-        # Construct an uncorrelated analytic noise model for the detectors
-
-        nse = AnalyticNoise(
-            rate=drate,
-            fmin=dfmin,
-            detectors=dnames,
-            fknee=dfknee,
-            alpha=dalpha,
-            NET=dnet,
-        )
-
-        self.data.obs[0]["tod"] = tod
-        self.data.obs[0]["noise"] = nse
-
-        # Construct a correlated analytic noise model for the detectors
-
-        corr_freqs = {
-            "noise_{}".format(x): nse.freq(dnames[x]) for x in range(self.ndet)
-        }
-
-        corr_psds = {"noise_{}".format(x): nse.psd(dnames[x]) for x in range(self.ndet)}
-
-        corr_indices = {"noise_{}".format(x): 100 + x for x in range(self.ndet)}
-
-        corr_mix = dict()
-        for x in range(self.ndet):
-            dmix = np.random.uniform(low=-1.0, high=1.0, size=self.ndet)
-            corr_mix[dnames[x]] = {
-                "noise_{}".format(y): dmix[y] for y in range(self.ndet)
-            }
-
-        nse_corr = Noise(
-            detectors=dnames,
-            freqs=corr_freqs,
-            psds=corr_psds,
-            mixmatrix=corr_mix,
-            indices=corr_indices,
-        )
-
-        self.data_corr.obs[0]["tod"] = tod
-        self.data_corr.obs[0]["noise"] = nse_corr
-
-        return
 
     def test_gauss(self):
         # Test that the same samples from different calls are reproducible.
         # All processes run this identical test.
 
-        detindx = self.ndet - 1
+        detindx = 99
         telescope = 5
         realization = 1000
         component = 3
@@ -170,42 +75,50 @@ class OpSimNoiseTest(MPITestCase):
         )
         return
 
-    def test_sim(self):
+    def test_sim_once(self):
         # Test the uncorrelated noise generation.
-
         # Verify that the white noise part of the spectrum is normalized
         # correctly.
 
-        # We have purposely distributed the TOD data so that every process has
-        # a single stationary interval for all detectors.
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
 
-        rank = 0
-        if self.comm is not None:
-            rank = self.comm.rank
+        # This is a simulation with the same focalplane for every obs...
+        sample_rate = data.obs[0].telescope.focalplane.sample_rate
 
-        for ob in self.data.obs:
-            tod = ob["tod"]
-            nse = ob["noise"]
+        # Create a noise model from focalplane detector properties
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
 
-            for det in tod.local_dets:
+        # Simulate noise using this model
+        sim_noise = ops.SimNoise()
+        sim_noise.apply(data)
+
+        wrank = data.comm.world_rank
+        grank = data.comm.group_rank
+
+        for ob in data.obs:
+            nse = ob[noise_model.noise_model]
+            for det in ob.local_detectors:
+                # Verify that the white noise level of the PSD is correctly normalized.
+                # Only check the high frequency part of the spectrum to avoid 1/f.
                 fsamp = nse.rate(det)
                 cutoff = 0.95 * (fsamp / 2.0)
                 indx = np.where(nse.freq(det) > cutoff)
-
                 net = nse.NET(det)
                 avg = np.mean(nse.psd(det)[indx])
                 netsq = net * net
-                # print("det {} NETsq = {}, average white noise level = {}"
-                #      "".format(det, netsq, avg))
                 self.assertTrue((np.absolute(avg - netsq) / netsq) < 0.02)
 
-            if rank == 0:
-                # One process dumps debugging info
+            if wrank == 0:
+                set_matplotlib_backend()
                 import matplotlib.pyplot as plt
 
-                for det in tod.local_dets:
+                # Just one process dumps out local noise model for debugging
+
+                for det in ob.local_detectors:
                     savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_rawpsd_{}.txt".format(det)
+                        self.outdir, "out_{}_rawpsd_{}.txt".format(ob.name, det)
                     )
                     np.savetxt(
                         savefile,
@@ -236,105 +149,50 @@ class OpSimNoiseTest(MPITestCase):
                     plt.title("Simulated PSD from toast.AnalyticNoise")
 
                     savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_rawpsd_{}.png".format(det)
+                        self.outdir, "out_{}_rawpsd_{}.pdf".format(ob.name, det)
                     )
+
                     plt.savefig(savefile)
                     plt.close()
 
-            ntod = tod.local_samples[1]
+            # Now generate noise timestreams in python and compare to the results of
+            # running the operator.
 
-            # this replicates the calculation in sim_noise_timestream()
+            freqs = dict()
+            psds = dict()
 
             fftlen = 2
-            while fftlen <= (self.oversample * ntod):
+            while fftlen <= (self.oversample * ob.n_local_samples):
                 fftlen *= 2
 
-            freqs = {}
-            psds = {}
-            psdnorm = {}
-            todvar = {}
-
-            cfftlen = 2
-            while cfftlen <= ntod:
-                cfftlen *= 2
-
-            # print("fftlen = ", fftlen)
-            # print("cfftlen = ", cfftlen)
-
-            checkpsd = {}
-            binsamps = cfftlen // 4096
-            nbins = binsamps - 1
-            bstart = (self.rate / 2) / nbins
-            bins = np.linspace(bstart, self.rate / 2, num=(nbins - 1), endpoint=True)
-            # print("nbins = ",nbins)
-            # print(bins)
-
-            checkfreq = np.fft.rfftfreq(cfftlen, d=1 / self.rate)
-            # print("checkfreq len = ",len(checkfreq))
-            # print(checkfreq[:10])
-            # print(checkfreq[-10:])
-            checkbinmap = np.searchsorted(bins, checkfreq, side="left")
-            # print("checkbinmap len = ",len(checkbinmap))
-            # print(checkbinmap[:10])
-            # print(checkbinmap[-10:])
-            bcount = np.bincount(checkbinmap)
-            # print("bcount len = ",len(bcount))
-            # print(bcount)
-
-            bintruth = {}
-
-            idet = 0
-            for det in tod.local_dets:
-
+            for idet, det in enumerate(ob.local_detectors):
                 dfreq = nse.rate(det) / float(fftlen)
-
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
-                    0,
-                    0,
-                    0,
-                    0,
-                    idet,
-                    nse.rate(det),
-                    0,
-                    ntod,
-                    self.oversample,
-                    nse.freq(det),
-                    nse.psd(det),
+                    realization=0,
+                    telescope=ob.telescope.id,
+                    component=0,
+                    obsindx=ob.UID,
+                    detindx=idet,
+                    rate=nse.rate(det),
+                    firstsamp=ob.local_index_offset,
+                    samples=ob.n_local_samples,
+                    oversample=self.oversample,
+                    freq=nse.freq(det),
+                    psd=nse.psd(det),
                     py=True,
                 )
 
-                libtod = sim_noise_timestream(
-                    0,
-                    0,
-                    0,
-                    0,
-                    idet,
-                    nse.rate(det),
-                    0,
-                    ntod,
-                    self.oversample,
-                    nse.freq(det),
-                    nse.psd(det),
-                    py=False,
+                np.testing.assert_array_almost_equal(
+                    pytod, ob.detdata[sim_noise.out][det], decimal=2
                 )
 
-                np.testing.assert_array_almost_equal(pytod, libtod, decimal=2)
-
-                # Factor of 2 comes from the negative frequency values.
-                psdnorm[det] = 2.0 * np.sum(psds[det] * dfreq)
-                # print("psd[{}] integral = {}".format(det, psdnorm[det]))
-
-                todvar[det] = np.zeros(self.nmc, dtype=np.float64)
-                checkpsd[det] = np.zeros((nbins - 1, self.nmc), dtype=np.float64)
-
-                idet += 1
-
-            if rank == 0:
+            if wrank == 0:
+                # One process dumps out interpolated PSD for debugging
                 import matplotlib.pyplot as plt
 
-                for det in tod.local_dets:
+                for det in ob.local_detectors:
                     savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_psd_{}.txt".format(det)
+                        self.outdir, "out_{}_interppsd_{}.txt".format(ob.name, det)
                     )
                     np.savetxt(
                         savefile, np.transpose([freqs[det], psds[det]]), delimiter=" "
@@ -362,69 +220,129 @@ class OpSimNoiseTest(MPITestCase):
                     ax.legend(loc=1)
                     plt.title(
                         "Interpolated PSD with High-pass from {:0.1f} "
-                        "second Simulation Interval".format((float(ntod) / self.rate))
+                        "second Simulation Interval".format(
+                            (float(ob.n_local_samples) / sample_rate)
+                        )
                     )
 
                     savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_psd_{}.png".format(det)
+                        self.outdir, "out_{}_interppsd_{}.pdf".format(ob.name, det)
                     )
                     plt.savefig(savefile)
                     plt.close()
 
-                    tmap = np.searchsorted(bins, freqs[det], side="left")
-                    tcount = np.bincount(tmap)
-                    tpsd = np.bincount(tmap, weights=psds[det])
-                    good = tcount > 0
-                    tpsd[good] /= tcount[good]
-                    bintruth[det] = tpsd
+            if ob.comm is not None:
+                ob.comm.barrier()
 
-            hpy = None
-            if rank == 0:
-                if "TOAST_TEST_BIGTOD" in os.environ.keys():
-                    try:
-                        import h5py as hpy
-                    except ImportError:
-                        # just write the first realization as usual
-                        hpy = None
+        # For some reason not deleting here (and relying on garbage collection) causes
+        # a hang in the case of multiple groups.  Removed after this is understood.
+        del data
 
-            # if we have the h5py module and a special environment variable is set,
-            # then process zero will dump out its full timestream data for more
-            # extensive sharing / tests.  Just dump a few detectors to keep the
-            # file size reasonable.
+    def test_sim_mc(self):
+        # Create a fake satellite data set for testing.  We explicitly generate
+        # only one observation per group.
+        data = create_satellite_data(
+            self.comm,
+            obs_per_group=1,
+            sample_rate=100.0 * u.Hz,
+            obs_time=10.0 * u.minute,
+        )
 
-            hfile = None
-            dset = {}
-            if hpy is not None:
-                hfile = hpy.File(
-                    os.path.join(self.outdir, "out_test_simnoise_tod.hdf5"), "w"
+        # This is a simulation with the same focalplane for every obs...
+        sample_rate = data.obs[0].telescope.focalplane.sample_rate
+
+        # Create a noise model from focalplane detector properties
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        wrank = data.comm.world_rank
+
+        # First we make one pass through the data and examine the noise model.
+        # We interpolate the PSD using pure python code and compute some normalization
+        # factors and also bin the true PSD to the final binning we will use for the
+        # PSDs made from the timestreams.
+
+        todvar = dict()
+        ntod_var = None
+        psd_norm = dict()
+        checkpsd = dict()
+        freqs = dict()
+        psds = dict()
+
+        cfftlen = 2
+        while cfftlen <= data.obs[0].n_local_samples:
+            cfftlen *= 2
+        binsamps = cfftlen // 2048
+        nbins = binsamps - 1
+        bstart = (sample_rate / 2) / nbins
+        bins = np.linspace(bstart, sample_rate / 2, num=(nbins - 1), endpoint=True)
+        checkfreq = np.fft.rfftfreq(cfftlen, d=(1 / sample_rate))
+        checkbinmap = np.searchsorted(bins, checkfreq, side="left")
+        bcount = np.bincount(checkbinmap)
+        bintruth = dict()
+        tpsd = None
+        good = None
+
+        for ob in data.obs[:1]:
+            ntod_var = ob.n_local_samples
+            nse = ob[noise_model.noise_model]
+            fftlen = 2
+            while fftlen <= (self.oversample * ob.n_local_samples):
+                fftlen *= 2
+            for idet, det in enumerate(ob.local_detectors):
+                dfreq = nse.rate(det) / float(fftlen)
+                (pytod, freqs[det], psds[det]) = sim_noise_timestream(
+                    realization=0,
+                    telescope=ob.telescope.id,
+                    component=0,
+                    obsindx=ob.UID,
+                    detindx=idet,
+                    rate=nse.rate(det),
+                    firstsamp=ob.local_index_offset,
+                    samples=ob.n_local_samples,
+                    oversample=self.oversample,
+                    freq=nse.freq(det),
+                    psd=nse.psd(det),
+                    py=True,
                 )
-                for det in tod.detectors:
-                    dset[det] = hfile.create_dataset(
-                        det, (self.nmc, ntod), dtype="float64"
-                    )
+                # Factor of 2 comes from the negative frequency values.
+                psd_norm[det] = 2.0 * np.sum(psds[det] * dfreq)
 
-            # Run both the numpy FFT case and the toast FFT case.
+                # Allocate buffers for MC loop
+                todvar[det] = np.zeros(self.nmc, dtype=np.float64)
+                checkpsd[det] = np.zeros((nbins - 1, self.nmc), dtype=np.float64)
 
-            for realization in range(self.nmc):
+                # Bin the true high-resolution PSD.
+                tmap = np.searchsorted(bins, freqs[det], side="left")
+                tcount = np.bincount(tmap)
+                tpsd = np.bincount(tmap, weights=psds[det])
+                good = tcount > 0
+                tpsd[good] /= tcount[good]
+                bintruth[det] = tpsd
 
-                # generate timestreams
+        # Perform noise realizations and accumulation statistics.
 
-                opnoise = OpSimNoise(realization=realization)
-                opnoise.exec(self.data)
+        for realization in range(self.nmc):
+            # Clear any previously generated data
+            for ob in data.obs:
+                del ob.detdata["noise"]
 
-                if realization == 0:
-                    # write timestreams to disk for debugging
+            # Simulate noise using the model, with a different realization each time
+            sim_noise = ops.SimNoise(realization=realization)
+            sim_noise.apply(data)
 
-                    if rank == 0:
-                        import matplotlib.pyplot as plt
+            if realization == 0:
+                # write timestreams to disk for debugging
+                if wrank == 0:
+                    import matplotlib.pyplot as plt
 
-                        for det in tod.local_dets:
-
-                            check = tod.cache.reference("noise_{}".format(det))
+                    for ob in data.obs:
+                        for det in ob.local_detectors:
+                            check = ob.detdata["noise"][det]
 
                             savefile = os.path.join(
                                 self.outdir,
-                                "out_test_simnoise_tod_mc0_{}.txt" "".format(det),
+                                "out_{}_tod-mc0_{}.txt" "".format(ob.name, det),
                             )
                             np.savetxt(savefile, np.transpose([check]), delimiter=" ")
 
@@ -438,165 +356,187 @@ class OpSimNoiseTest(MPITestCase):
                             )
                             ax.legend(loc=1)
                             plt.title(
-                                "First Realization of Simulated TOD "
-                                "from toast.sim_noise_timestream()"
+                                "Observation {}, First Realization of {}".format(
+                                    ob.name, det
+                                )
                             )
 
                             savefile = os.path.join(
                                 self.outdir,
-                                "out_test_simnoise_tod_mc0_{}.png" "".format(det),
+                                "out_{}_tod-mc0_{}.pdf" "".format(ob.name, det),
                             )
                             plt.savefig(savefile)
                             plt.close()
 
-                for det in tod.local_dets:
+            for ob in data.obs[:1]:
+                for det in ob.local_detectors:
                     # compute the TOD variance
-                    ref = tod.cache.reference("noise_{}".format(det))
-                    dclevel = np.mean(ref)
-                    variance = np.vdot(ref - dclevel, ref - dclevel) / ntod
+                    tod = ob.detdata[sim_noise.out][det]
+                    dclevel = np.mean(tod)
+                    variance = np.vdot(tod - dclevel, tod - dclevel) / len(tod)
                     todvar[det][realization] = variance
-
-                    if hfile is not None:
-                        if det in dset:
-                            dset[det][realization, :] = ref[:]
 
                     # compute the PSD
                     buffer = np.zeros(cfftlen, dtype=np.float64)
-                    offset = (cfftlen - len(ref)) // 2
-                    buffer[offset : offset + len(ref)] = ref
+                    offset = (cfftlen - len(tod)) // 2
+                    buffer[offset : offset + len(tod)] = tod
                     rawpsd = np.fft.rfft(buffer)
-                    norm = 1.0 / (self.rate * ntod)
+                    norm = 1.0 / (sample_rate * ob.n_local_samples)
                     rawpsd = norm * np.abs(rawpsd ** 2)
                     bpsd = np.bincount(checkbinmap, weights=rawpsd)
                     good = bcount > 0
                     bpsd[good] /= bcount[good]
                     checkpsd[det][:, realization] = bpsd[:]
 
-                tod.cache.clear()
+        lds = sorted(todvar.keys())
 
-            if hfile is not None:
-                hfile.close()
+        if wrank == 0:
+            import matplotlib.pyplot as plt
 
-            if rank == 0:
-                np.savetxt(
-                    os.path.join(self.outdir, "out_test_simnoise_tod_var.txt"),
-                    np.transpose([todvar[x] for x in tod.local_dets]),
-                    delimiter=" ",
+            np.savetxt(
+                os.path.join(self.outdir, "out_tod_variance.txt"),
+                np.transpose([todvar[x] for x in lds]),
+                delimiter=" ",
+            )
+
+            for det in lds:
+                sig = np.mean(todvar[det]) * np.sqrt(2.0 / (ntod_var - 1))
+                histrange = 5.0 * sig
+                histmin = psd_norm[det] - histrange
+                histmax = psd_norm[det] + histrange
+
+                fig = plt.figure(figsize=(12, 8), dpi=72)
+
+                ax = fig.add_subplot(1, 1, 1, aspect="auto")
+                plt.hist(
+                    todvar[det],
+                    10,
+                    range=(histmin, histmax),
+                    facecolor="magenta",
+                    alpha=0.75,
+                    label="{}:  PSD integral = {:0.1f} expected sigma = "
+                    "{:0.1f}".format(det, psd_norm[det], sig),
+                )
+                ax.legend(loc=1)
+                plt.title(
+                    "Detector {} Distribution of TOD Variance for {} "
+                    "Realizations".format(det, self.nmc)
                 )
 
-            if rank == 0:
-                import matplotlib.pyplot as plt
+                savefile = os.path.join(
+                    self.outdir, "out_tod-variance_{}.pdf".format(det)
+                )
+                plt.savefig(savefile)
+                plt.close()
 
-                for det in tod.local_dets:
-                    savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_tod_var_{}.txt".format(det)
-                    )
-                    np.savetxt(savefile, np.transpose([todvar[det]]), delimiter=" ")
+                meanpsd = np.asarray(
+                    [np.mean(checkpsd[det][x, :]) for x in range(nbins - 1)]
+                )
 
-                    sig = np.mean(todvar[det]) * np.sqrt(2.0 / (ntod - 1))
-                    histrange = 5.0 * sig
-                    histmin = psdnorm[det] - histrange
-                    histmax = psdnorm[det] + histrange
+                fig = plt.figure(figsize=(12, 8), dpi=72)
 
-                    fig = plt.figure(figsize=(12, 8), dpi=72)
+                ax = fig.add_subplot(1, 1, 1, aspect="auto")
+                ax.plot(bins, bintruth[det], c="k", label="Input Truth")
+                ax.plot(bins, meanpsd, c="b", marker="o", label="Mean Binned PSD")
+                ax.scatter(
+                    np.repeat(bins, self.nmc),
+                    checkpsd[det].flatten(),
+                    marker="x",
+                    color="r",
+                    label="Binned PSD",
+                )
+                # ax.set_xscale("log")
+                # ax.set_yscale("log")
+                ax.legend(loc=1)
+                plt.title(
+                    "Detector {} Binned PSDs for {} Realizations"
+                    "".format(det, self.nmc)
+                )
 
-                    ax = fig.add_subplot(1, 1, 1, aspect="auto")
-                    plt.hist(
-                        todvar[det],
-                        10,
-                        range=(histmin, histmax),
-                        facecolor="magenta",
-                        alpha=0.75,
-                        label="{}:  PSD integral = {:0.1f} expected sigma = "
-                        "{:0.1f}".format(det, psdnorm[det], sig),
-                    )
-                    ax.legend(loc=1)
-                    plt.title(
-                        "Distribution of TOD Variance for {} "
-                        "Realizations".format(self.nmc)
-                    )
+                savefile = os.path.join(
+                    self.outdir, "out_psd-histogram_{}.pdf".format(det)
+                )
+                plt.savefig(savefile)
+                plt.close()
 
-                    savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_tod_var_{}.png".format(det)
-                    )
-                    plt.savefig(savefile)
-                    plt.close()
+                # The data will likely not be gaussian distributed.
+                # Just check that the mean is "close enough" to the truth.
+                errest = np.absolute(np.mean((meanpsd - tpsd) / tpsd))
+                # print("Det {} avg rel error = {}".format(det, errest), flush=True)
+                if nse.fknee(det) < 0.1:
+                    self.assertTrue(errest < 0.1)
 
-                    meanpsd = np.asarray(
-                        [np.mean(checkpsd[det][x, :]) for x in range(nbins - 1)]
-                    )
+        # Verify that Parseval's theorem holds- that the variance of the TOD equals the
+        # integral of the PSD.  We do this for an ensemble of realizations and compare
+        # the TOD variance to the integral of the PSD accounting for the error on the
+        # variance due to finite numbers of samples.
 
-                    fig = plt.figure(figsize=(12, 8), dpi=72)
+        ntod = data.obs[0].n_local_samples
+        for det in lds:
+            sig = np.mean(todvar[det]) * np.sqrt(2.0 / (ntod - 1))
+            over3sig = np.where(np.absolute(todvar[det] - psd_norm[det]) > 3.0 * sig)[0]
+            overfrac = float(len(over3sig)) / self.nmc
+            # print(det, " : ", overfrac, flush=True)
+            if nse.fknee(det) < 0.1:
+                self.assertTrue(overfrac < 0.1)
 
-                    ax = fig.add_subplot(1, 1, 1, aspect="auto")
-                    ax.plot(bins, bintruth[det], c="k", label="Input Truth")
-                    ax.plot(bins, meanpsd, c="b", marker="o", label="Mean Binned PSD")
-                    ax.scatter(
-                        np.repeat(bins, self.nmc),
-                        checkpsd[det].flatten(),
-                        marker="x",
-                        color="r",
-                        label="Binned PSD",
-                    )
-                    # ax.set_xscale("log")
-                    # ax.set_yscale("log")
-                    ax.legend(loc=1)
-                    plt.title(
-                        "Detector {} Binned PSDs for {} Realizations"
-                        "".format(det, self.nmc)
-                    )
-
-                    savefile = os.path.join(
-                        self.outdir, "out_test_simnoise_binpsd_dist_{}.png".format(det)
-                    )
-                    plt.savefig(savefile)
-                    plt.close()
-
-                    # The data will likely not be gaussian distributed.
-                    # Just check that the mean is "close enough" to the truth.
-                    errest = np.absolute(np.mean((meanpsd - tpsd) / tpsd))
-                    # print("Det {} avg rel error = {}".format(det, errest), flush=True)
-                    if nse.fknee(det) < 0.1:
-                        self.assertTrue(errest < 0.1)
-
-            # Verify that Parseval's theorem holds- that the variance of
-            # the TOD equals the integral of the PSD.  We do this for an
-            # ensemble of realizations
-            #
-            # and compare the TOD variance to the integral of the PSD
-            # accounting for the error on the variance due to finite
-            # numbers of samples.
-            #
-
-            for det in tod.local_dets:
-                sig = np.mean(todvar[det]) * np.sqrt(2.0 / (ntod - 1))
-                over3sig = np.where(
-                    np.absolute(todvar[det] - psdnorm[det]) > 3.0 * sig
-                )[0]
-                overfrac = float(len(over3sig)) / self.nmc
-                # print(det, " : ", overfrac, flush=True)
-                if nse.fknee(det) < 0.01:
-                    self.assertTrue(overfrac < 0.1)
-        return
+        del data
 
     def test_sim_correlated(self):
-        # Test the correlated noise generation.
-        opnoise = OpSimNoise(realization=0)
-        opnoise.exec(self.data_corr)
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        # Construct a correlated analytic noise model for the detectors for each
+        # observation.
+        for ob in data.obs:
+            nse = ob[noise_model.noise_model]
+            corr_freqs = {
+                "noise_{}".format(i): nse.freq(x)
+                for i, x in enumerate(ob.local_detectors)
+            }
+            corr_psds = {
+                "noise_{}".format(i): nse.psd(x)
+                for i, x in enumerate(ob.local_detectors)
+            }
+            corr_indices = {
+                "noise_{}".format(i): 100 + i for i, x in enumerate(ob.local_detectors)
+            }
+            corr_mix = dict()
+            for i, x in enumerate(ob.local_detectors):
+                dmix = np.random.uniform(
+                    low=-1.0, high=1.0, size=len(ob.local_detectors)
+                )
+                corr_mix[x] = {
+                    "noise_{}".format(y): dmix[y]
+                    for y in range(len(ob.local_detectors))
+                }
+            ob["noise_model_corr"] = Noise(
+                detectors=ob.local_detectors,
+                freqs=corr_freqs,
+                psds=corr_psds,
+                mixmatrix=corr_mix,
+                indices=corr_indices,
+            )
+
+        # Simulate noise using this model
+        sim_noise = ops.SimNoise(noise_model="noise_model_corr")
+        sim_noise.apply(data)
 
         total = None
 
-        for ob in self.data.obs:
-            tod = ob["tod"]
-            for det in tod.local_dets:
+        for ob in data.obs:
+            for det in ob.local_detectors:
                 # compute the TOD variance
-                ref = tod.cache.reference("noise_{}".format(det))
-                self.assertTrue(np.std(ref) > 0)
+                tod = ob.detdata[sim_noise.out][det]
+                self.assertTrue(np.std(tod) > 0)
                 if total is None:
-                    total = ref.copy()
-                else:
-                    total[:] += ref
-                del ref
+                    total = np.zeros(ob.n_local_samples, dtype=np.float64)
+                total[:] += tod
 
         # np.testing.assert_almost_equal(np.std(total), 0)
+        del data
         return

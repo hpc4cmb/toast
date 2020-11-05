@@ -6,6 +6,7 @@ from ..mpi import MPI, use_mpi
 
 import os
 import sys
+
 import unittest
 
 from .mpi import MPITestRunner
@@ -30,10 +31,9 @@ from . import dist as test_dist
 from . import config as test_config
 
 from . import ops_sim_satellite as test_ops_sim_satellite
-
 from . import ops_memory_counter as test_ops_memory_counter
-
 from . import ops_pointing_healpix as test_ops_pointing_healpix
+from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 
 
 #
@@ -98,7 +98,7 @@ def test(name=None, verbosity=2):
         comm = MPI.COMM_WORLD
         rank = comm.rank
 
-    set_matplotlib_backend(backend="agg")
+    # set_matplotlib_backend(backend="agg")
 
     outdir = "toast_test_output"
 
@@ -117,7 +117,7 @@ def test(name=None, verbosity=2):
     # Run python tests.
 
     loader = unittest.TestLoader()
-    mpirunner = MPITestRunner(comm, verbosity=verbosity, warnings="ignore")
+    mpirunner = MPITestRunner(verbosity=verbosity, warnings="ignore")
     suite = unittest.TestSuite()
 
     if name is None:
@@ -141,13 +141,11 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
         suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_noise))
 
-        # suite.addTest(loader.loadTestsFromModule(testcache))
         #
         # suite.addTest(loader.loadTestsFromModule(testtod))
-        # suite.addTest(loader.loadTestsFromModule(testtodsat))
         #
-        # suite.addTest(loader.loadTestsFromModule(testopssimnoise))
         # suite.addTest(loader.loadTestsFromModule(testopssimsss))
         # suite.addTest(loader.loadTestsFromModule(testopsapplygain))
         # suite.addTest(loader.loadTestsFromModule(testcov))
@@ -155,7 +153,6 @@ def test(name=None, verbosity=2):
         # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
         # suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
         # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
-        # suite.addTest(loader.loadTestsFromModule(testopsmemorycounter))
         # suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
         # suite.addTest(loader.loadTestsFromModule(testpsdmath))
         # suite.addTest(loader.loadTestsFromModule(testopsmadam))

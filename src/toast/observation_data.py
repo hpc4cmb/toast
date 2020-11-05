@@ -377,8 +377,9 @@ class DetDataMgr(MutableMapping):
         return self._internal[key]
 
     def __delitem__(self, key):
-        self._internal[key].clear()
-        del self._internal[key]
+        if key in self._internal:
+            self._internal[key].clear()
+            del self._internal[key]
 
     def __setitem__(self, key, value):
         if isinstance(value, DetectorData):
@@ -626,8 +627,9 @@ class SharedDataMgr(MutableMapping):
         return self._internal[key]
 
     def __delitem__(self, key):
-        self._internal[key].close()
-        del self._internal[key]
+        if key in self._internal:
+            self._internal[key].close()
+            del self._internal[key]
 
     def __setitem__(self, key, value):
         if isinstance(value, MPIShared):

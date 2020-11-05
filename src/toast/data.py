@@ -51,6 +51,10 @@ class Data(MutableMapping):
         val += "\n>"
         return val
 
+    def __del__(self):
+        if hasattr(self, "obs"):
+            self.clear()
+
     @property
     def comm(self):
         """The toast.Comm over which the data is distributed."""

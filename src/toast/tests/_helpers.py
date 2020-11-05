@@ -87,7 +87,12 @@ def create_telescope(group_size, sample_rate=10.0 * u.Hz):
     while 2 * npix < group_size:
         npix += 6 * ring
         ring += 1
-    fp = fake_hexagon_focalplane(n_pix=npix)
+    fp = fake_hexagon_focalplane(
+        n_pix=npix,
+        sample_rate=sample_rate,
+        f_min=1.0e-5 * u.Hz,
+        f_knee=(sample_rate / 2000.0),
+    )
     return Telescope("test", focalplane=fp)
 
 
@@ -147,7 +152,7 @@ def create_satellite_data(
 
     sim_sat = ops.SimSatellite(
         name="sim_sat",
-        n_observation=(toastcomm.ngroups * obs_per_group),
+        num_observations=(toastcomm.ngroups * obs_per_group),
         telescope=tele,
         hwp_rpm=10.0,
         observation_time=obs_time,
