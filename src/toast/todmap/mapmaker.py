@@ -255,6 +255,7 @@ class GainTemplate(TODTemplate):
     def __init__(
         self,
         data,
+        detweights,
         order=1,
         common_flags=None,
         common_flag_mask=1,
@@ -267,6 +268,7 @@ class GainTemplate(TODTemplate):
         self.comm = data.comm.comm_group
         self.order = order
         self.norder = order + 1
+        self.detweights= detweights
         self.common_flags = common_flags
         self.common_flag_mask = common_flag_mask
         self.flags = flags
@@ -274,7 +276,7 @@ class GainTemplate(TODTemplate):
         self.template_name = templatename
         self._estimate_offsets()
         self.namplitude =  self.norder + self.list_of_offsets[-1][-1]
-
+        self._estimate_preconditioner()
         return
 
     def _estimate_offsets (self ):
@@ -299,6 +301,31 @@ class GainTemplate(TODTemplate):
         for i in range(self. norder):
              L[:,i]=  scipy.special.legendre(i)(x )
         return  L
+
+    @function_timer
+    def _estimate_preconditioner (self):
+        self.preconditioners =[]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            L = self.get_polynomials(nsample, local_offset, local_nsample)
+            LT =L.T.copy()
+
+            todslice = slice(local_offset, local_offset + local_nsample)
+            tmplist =[]
+            for idet, det in enumerate( tod.local_dets):
+                detweight = self.detweights[iobs][det]
+                T = tod.local_signal(det, self.template_name)
+
+                for row in LT: row *= (T*np.sqrt(detweight))
+                M = LT.dot(LT.T) 
+
+                tmplist.append(np.linalg.inv(M))
+            self.preconditioners.append(tmplist)
+
+
     @function_timer
     def add_to_signal(self, signal,  amplitudes):
         """signal += F.a"""
@@ -362,20 +389,12 @@ class GainTemplate(TODTemplate):
         a = amplitudes_out[self.name]
         for iobs, obs in enumerate(self.data.obs):
             tod = obs["tod"]
-            nsample = tod.total_samples
-            # For each observation, sample indices start from 0
-            local_offset, local_nsample = tod.local_samples
-            L = self.get_polynomials(nsample, local_offset, local_nsample)
-            todslice = slice(local_offset, local_offset + local_nsample)
 
             for idet, det in enumerate( tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
-                T = tod.local_signal(det, self.template_name)
-                LT =np.array ([L[:,i] *T  for i in range(self.norder)]
-                                                                ).reshape ((local_nsample,  self.norder ))
-                M = LT.T.dot(LT)
-                a[amplitude_slice] = np.linalg.solve(M, b[amplitude_slice] )
+                M = self.preconditioners[iobs ][idet ]
+                a[amplitude_slice] = M.dot(b[amplitude_slice])
         return
 
 
@@ -1787,6 +1806,7 @@ class OpMapMaker(Operator):
                     templatelist.append(
                         GainTemplate(
                             data,
+                            detweights=self.detweights,
                             order=self.gain_poly_order,
                             common_flag_mask=(self.common_flag_mask | self.gap_bit),
                             flag_mask=(self.flag_mask | self.mask_bit),
