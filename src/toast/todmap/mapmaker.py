@@ -320,9 +320,12 @@ class GainTemplate(TODTemplate):
                 T = tod.local_signal(det, self.template_name)
 
                 for row in LT: row *= (T*np.sqrt(detweight))
-                M = LT.dot(LT.T) 
-
+                M = LT.dot(LT.T)
+                #try:
                 tmplist.append(np.linalg.inv(M))
+                #except LinAlgError :
+                ## TODO: what if linalg.inv fails??
+
             self.preconditioners.append(tmplist)
 
 
@@ -360,17 +363,13 @@ class GainTemplate(TODTemplate):
             local_offset, local_nsample = tod.local_samples
             legendre_poly = self.get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
-
+            LT= legendre_poly.T.copy()
             for idet, det in enumerate( tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
-                #poly_amps = np.diag( poly_amplitudes[amplitude_slice ] )
-                #delta_gain = legendre_poly.dot(np.diag(np.ones(self.norder)))
-                #delta_gain = legendre_poly.dot(poly_amps)
                 signal_estimate = tod.local_signal(det, self.template_name)
-                gain_fluctuation = np.array ([legendre_poly[:,i] *signal_estimate for i in range(self.norder)]
-                                                                ).reshape ((local_nsample,  self.norder ))
-                poly_amplitudes[amplitude_slice] += np.dot(signal[iobs, det, todslice], gain_fluctuation)
+                for row in LT : row *= (signal_estimate )
+                poly_amplitudes[amplitude_slice] += np.dot(LT, signal[iobs, det, todslice] )
         return
 
     def write_gain_fluctuation(self, amplitudes, filename):
