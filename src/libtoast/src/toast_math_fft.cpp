@@ -9,6 +9,7 @@
 #include <toast/math_fft_fftw.hpp>
 #include <toast/math_fft_mkl.hpp>
 
+#include <cstring>
 #include <cmath>
 #include <vector>
 
