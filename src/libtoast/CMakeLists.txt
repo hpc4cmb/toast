@@ -105,18 +105,20 @@ if(CHOLMOD_FOUND)
     endif (METIS_FOUND)
 endif(CHOLMOD_FOUND)
 
-if(LAPACK_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
-    target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toast PROPERTIES LINK_FLAGS
-        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
-    )
-    target_link_libraries(toast "${LAPACK_LIBRARIES}")
-    target_link_libraries(toast "${BLAS_LIBRARIES}")
-endif(LAPACK_FOUND)
+# Link to our FFT libraries
 
-# Link to FFTW *after* BLAS / LAPACK.  This should override any FFTW symbols contained
-# in MKL if MKL used for BLAS / LAPACK.
+if(MKL_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_MKL=1)
+    target_include_directories(toast PUBLIC "${MKL_INCLUDE_DIRS}")
+    target_link_libraries(toast "${MKL_LIBRARIES}")
+    # If we are using GNU compilers, we will need to internally set the threading layer
+    # to use GNU.  Otherwise, assume we are using Intel threads.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_definitions(toast PRIVATE USE_MKL_GNU_THREADS=1)
+    else()
+        target_compile_definitions(toast PRIVATE USE_MKL_INTEL_THREADS=1)
+    endif()
+endif(MKL_FOUND)
 
 if(FFTW_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_FFTW=1)
@@ -126,6 +128,18 @@ if(FFTW_FOUND)
         target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
     endif(FFTW_DOUBLE_THREADS_LIB_FOUND)
 endif(FFTW_FOUND)
+
+# LAPACK / BLAS
+
+if(LAPACK_FOUND)
+    target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+    set_target_properties(toast PROPERTIES LINK_FLAGS
+        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
+    )
+    target_link_libraries(toast "${LAPACK_LIBRARIES}")
+    target_link_libraries(toast "${BLAS_LIBRARIES}")
+endif(LAPACK_FOUND)
 
 # Installation
 

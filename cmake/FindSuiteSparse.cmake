@@ -291,19 +291,23 @@ endmacro()
 unset(SUITESPARSE_FOUND_REQUIRED_VARS)
 
 # BLAS.
-find_package(BLAS QUIET)
 if (NOT BLAS_FOUND)
-  suitesparse_report_not_found(
-    "Did not find BLAS library (required for SuiteSparse).")
-endif (NOT BLAS_FOUND)
+  find_package(BLAS QUIET)
+  if (NOT BLAS_FOUND)
+    suitesparse_report_not_found(
+      "Did not find BLAS library (required for SuiteSparse).")
+  endif (NOT BLAS_FOUND)
+endif()
 list(APPEND SUITESPARSE_FOUND_REQUIRED_VARS BLAS_FOUND)
 
 # LAPACK.
-find_package(LAPACK QUIET)
 if (NOT LAPACK_FOUND)
-  suitesparse_report_not_found(
-    "Did not find LAPACK library (required for SuiteSparse).")
-endif (NOT LAPACK_FOUND)
+  find_package(LAPACK QUIET)
+  if (NOT LAPACK_FOUND)
+    suitesparse_report_not_found(
+      "Did not find LAPACK library (required for SuiteSparse).")
+  endif (NOT LAPACK_FOUND)
+endif()
 list(APPEND SUITESPARSE_FOUND_REQUIRED_VARS LAPACK_FOUND)
 
 suitesparse_find_component(AMD REQUIRED FILES amd.h LIBRARIES amd)

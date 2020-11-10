@@ -53,6 +53,7 @@ if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
   set(TOAST_STATIC_DEPS $ENV{TOAST_STATIC_DEPS})
 endif()
 
+# OpenMP
 find_package(OpenMP)
 
 if(TOAST_STATIC_DEPS)
@@ -62,14 +63,26 @@ if(TOAST_STATIC_DEPS)
     set(SUITESPARSE_USE_STATIC_LIBS TRUE)
 endif()
 
-# Look for FFTW first, in case we are using MKL for BLAS/LAPACK.  MKL sometimes
-# includes an FFTW interface that we want to avoid using.
-find_package(FFTW)
+# First look for MKL, since that will provide both FFT support and BLAS/LAPACK
+find_package(MKL)
 
-find_package(BLAS)
+if(MKL_FOUND)
+    # Use MKL for BLAS / LAPACK
+    set(BLAS_LIBRARIES "${MKL_LIBRARIES}")
+    set(LAPACK_LIBRARIES "${MKL_LIBRARIES}")
+    set(BLAS_FOUND TRUE)
+    set(LAPACK_FOUND TRUE)
+else()
+    # Search for FFTW instead
+    find_package(FFTW)
+    if(NOT FFTW_FOUND)
+        message(FATAL_ERROR "Could not find a supported FFT library (MKL or FFTW)")
+    endif()
+    find_package(BLAS)
+    find_package(LAPACK)
+endif()
 
 if(BLAS_FOUND)
-    find_package(LAPACK)
     if(LAPACK_FOUND)
         find_package(LAPACKnames)
     else()

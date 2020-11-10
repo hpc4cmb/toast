@@ -456,4 +456,6 @@ void init_sys(py::module & m) {
                 None
 
         )");
+
+    auto env = toast::Environment::get();
 }
