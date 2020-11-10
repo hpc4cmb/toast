@@ -12,9 +12,15 @@
 #   MKL_INCLUDE_DIRS           ... MKL include directory paths
 #
 # The following variables will be checked by the function
+#   MKL_DISABLED               ... if true, skip all checks for MKL.
 #   MKL_DIR                    ... if set, look for MKL in this directory.
 #   environment $MKLROOT       ... if set, look for MKL in this directory.
 #
+
+set(MKL_FOUND FALSE)
+if(MKL_DISABLED)
+    message(NOTICE "-- MKL disabled, skipping checks")
+else(MKL_DISABLED)
 
 # Set default value of MKL_DIR.
 
@@ -96,4 +102,6 @@ mark_as_advanced(
     MKL_INCLUDE_DIRS
     MKL_LIBRARIES
 )
+
+endif(MKL_DISABLED)
 
