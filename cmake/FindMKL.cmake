@@ -19,7 +19,7 @@
 
 set(MKL_FOUND FALSE)
 if(MKL_DISABLED)
-    message(NOTICE "-- MKL disabled, skipping checks")
+    message("-- MKL disabled, skipping checks")
 else(MKL_DISABLED)
 
 # Set default value of MKL_DIR.
