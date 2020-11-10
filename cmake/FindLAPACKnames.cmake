@@ -23,8 +23,8 @@ foreach(MANGLING IN LISTS MANGLING_OPTIONS)
               COMPILE_DEFINITIONS "-DLAPACK_${MANGLING}"
               LINK_LIBRARIES "${LAPACK_LIBRARIES}" "${BLAS_LIBRARIES}"
               OUTPUT_VARIABLE OUTPUT_MANGLING)
-  # message("Test output for LAPACK_${MANGLING}:")
-  # message(${OUTPUT_MANGLING})
+  #message("Test output for LAPACK_${MANGLING}:")
+  #message(${OUTPUT_MANGLING})
   if(TRY_MANGLING)
     set(LAPACK_NAMES "${MANGLING}")
     break()
