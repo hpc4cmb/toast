@@ -3,10 +3,11 @@
 Change Log
 -------------------------
 
-2.3.12 (Unreleased)
+2.3.12 (2020-11-12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Nothing yet
+* Fix typo in MKL cmake checks which broke OS X builds with MKL.
+* Fix typo in toast_ground_schedule.py pipeline.
 
 2.3.11 (2020-11-12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
