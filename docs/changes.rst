@@ -3,6 +3,15 @@
 Change Log
 -------------------------
 
+2.3.11 (2020-11-12)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Restore support for directly using Intel MKL for FFTs (PR `#371`_, `#372`_).
+* Fixed bug in wind velocity during atmosphere simulations.
+
+.. _`#371`: https://github.com/hpc4cmb/toast/pull/371
+.. _`#372`: https://github.com/hpc4cmb/toast/pull/372
+
 2.3.10 (2020-10-15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
