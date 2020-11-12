@@ -9,6 +9,10 @@ This script creates a CES schedule file that can be used as input
 to toast_ground_sim.py
 """
 
+import sys
+import traceback
+
+from toast.mpi import get_world
 from toast.timing import GlobalTimers
 from toast.schedule import run_scheduler
 
