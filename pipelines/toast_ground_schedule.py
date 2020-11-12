@@ -10,7 +10,7 @@ to toast_ground_sim.py
 """
 
 from toast.timing import GlobalTimers
-from toast.scheduler import run_scheduler
+from toast.schedule import run_scheduler
 
 
 def main():
