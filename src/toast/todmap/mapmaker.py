@@ -293,8 +293,7 @@ class GainTemplate(TODTemplate):
             self.list_of_offsets.append(tmplist )
 
 
-    @function_timer
-    def get_polynomials (self, N, local_offset, local_N):
+    def _get_polynomials (self, N, local_offset, local_N):
         x = 2 * np.arange(N) / (N - 1)   -1
         todslice = slice(local_offset, local_offset + local_N)
         L = np.zeros((local_N, self.norder))
@@ -310,10 +309,9 @@ class GainTemplate(TODTemplate):
             nsample = tod.total_samples
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
-            L = self.get_polynomials(nsample, local_offset, local_nsample)
+            L = self._get_polynomials(nsample, local_offset, local_nsample)
             LT =L.T.copy()
 
-            todslice = slice(local_offset, local_offset + local_nsample)
             tmplist =[]
             for idet, det in enumerate( tod.local_dets):
                 detweight = self.detweights[iobs][det]
@@ -338,7 +336,7 @@ class GainTemplate(TODTemplate):
             nsample = tod.total_samples
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
-            legendre_poly = self.get_polynomials(nsample, local_offset, local_nsample)
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
             for idet, det in enumerate(tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
@@ -361,7 +359,7 @@ class GainTemplate(TODTemplate):
             nsample = tod.total_samples
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
-            legendre_poly = self.get_polynomials(nsample, local_offset, local_nsample)
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
             LT= legendre_poly.T.copy()
             for idet, det in enumerate( tod.local_dets):
