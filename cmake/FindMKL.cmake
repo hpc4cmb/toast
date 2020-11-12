@@ -86,7 +86,7 @@ endif()
 
 if(MKL_FOUND)
     set(MKL_LIBRARIES
-	${MKL_RT_LIB} ${CMAKE_THREAD_LIBS_INIT} -lm -l${CMAKE_DL_LIBS}
+	${MKL_RT_LIB} ${CMAKE_THREAD_LIBS_INIT} m ${CMAKE_DL_LIBS}
 	CACHE STRING "MKL dynamic libraries"
     )
 endif()
