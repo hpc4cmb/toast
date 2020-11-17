@@ -375,7 +375,6 @@ class GainTemplate(TODTemplate):
         ### the processors to save them into disc ,
         # the way this is implemented so far  if nprocs>1  every processor writes to disc
         # the amplitudes into the very same file...
-        print(amplitudes)
         np.savez( filename, amplitudes=amplitudes[self.name])
         #raise RuntimeError("Saving gain fluctuation not implemented")
         return
@@ -1916,8 +1915,8 @@ class OpMapMaker(Operator):
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
         # DEBUG begin
-        if self.rank ==0 :
-            templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gain_amplitudes.npz")
+        #if self.rank ==0  and :
+        #    templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gain_amplitudes.npz")
         # DEBUG end
 
         # Clean TOD
