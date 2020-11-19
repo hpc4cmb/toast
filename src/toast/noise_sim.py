@@ -83,10 +83,6 @@ class AnalyticNoise(Noise):
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freqs=freqs, psds=psds, indices=indices)
 
-    def rate(self, det):
-        """(float): the sample rate in Hz."""
-        return self._rate[det]
-
     def fmin(self, det):
         """(float): the minimum frequency in Hz, used as a high pass."""
         return self._fmin[det]
