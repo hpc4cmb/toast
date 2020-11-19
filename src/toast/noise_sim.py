@@ -102,3 +102,6 @@ class AnalyticNoise(Noise):
     def NET(self, det):
         """(float): the NET."""
         return self._NET[det]
+
+    def _detector_weight(self, det):
+        return 1.0 / (self._NET[det] ** 2)

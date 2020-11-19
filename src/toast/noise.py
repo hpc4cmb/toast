@@ -8,40 +8,41 @@ import numpy as np
 class Noise(object):
     """Noise objects act as containers for noise PSDs.
 
-    Noise is a base class for an object that describes the noise
-    properties of all detectors for a single observation.
+    Noise is a base class for an object that describes the noise properties of all
+    detectors for a single observation.
 
     Args:
         detectors (list): Names of detectors.
         freqs (dict): Dictionary of arrays of frequencies for `psds`.
-        psds (dict): Dictionary of arrays which contain the PSD values
-            for each detector or `mixmatrix` key.
-        mixmatrix (dict): Mixing matrix describing how the PSDs should
-            be combined for detector noise.  If provided, must contain
-            entries for every detector, and every key specified for a
-            detector must be defined in `freqs` and `psds`.
-        indices (dict):  Integer index for every PSD, useful for
-            generating indepedendent and repeateable noise realizations.
-            If absent, running indices will be assigned and provided.
+        psds (dict): Dictionary of arrays which contain the PSD values for each
+            detector or `mixmatrix` key.
+        mixmatrix (dict): Mixing matrix describing how the PSDs should be combined for
+            each detector noise model.  If provided, must contain entries for every
+            detector, and every key specified for a detector must be defined in `freqs`
+            and `psds`.
+        indices (dict):  Integer index for every PSD, useful for generating
+            indepedendent and repeateable noise realizations. If absent, running
+            indices will be assigned and provided.
 
     Attributes:
         detectors (list): List of detector names
         keys (list): List of PSD names
 
     Raises:
-        KeyError: If `freqs`, `psds`, `mixmatrix` or `indices` do not
-            include all relevant entries.
+        KeyError: If `freqs`, `psds`, `mixmatrix` or `indices` do not include all
+            relevant entries.
         ValueError: If vector lengths in `freqs` and `psds` do not match.
 
     """
 
-    def __init__(self, *, detectors, freqs, psds, mixmatrix=None, indices=None):
-
+    def __init__(self, detectors, freqs, psds, mixmatrix=None, indices=None):
         self._dets = list(sorted(detectors))
         if mixmatrix is None:
             # Default diagonal mixing matrix
             self._keys = self._dets
-            self._mixmatrix = None
+            self._mixmatrix = dict()
+            for d in self._dets:
+                self._mixmatrix[d] = {d: 1.0}
         else:
             # Assemble the list of keys needed for the specified detectors
             keys = set()
@@ -69,6 +70,8 @@ class Noise(object):
             self._psds[key] = np.copy(psds[key])
             # last frequency point should be Nyquist
             self._rates[key] = 2.0 * self._freqs[key][-1]
+
+        self._detweights = None
 
     @property
     def detectors(self):
@@ -98,11 +101,8 @@ class Noise(object):
             weight (float): Mixing matrix weight
 
         """
-        weight = 0
-        if self._mixmatrix is None:
-            if det == key:
-                weight = 1
-        elif key in self._mixmatrix[det]:
+        weight = 0.0
+        if key in self._mixmatrix[det]:
             weight = self._mixmatrix[det][key]
         return weight
 
@@ -149,3 +149,34 @@ class Noise(object):
 
         """
         return self._psds[key]
+
+    def _detector_weight(self, det):
+        """Internal function which can be overridden by derived classes."""
+        if self._detweights is None:
+            # Compute an effective scalar "noise weight" for each detector based on the
+            # white noise level, accounting for the fact that the PSD may have a
+            # transfer function roll-off near Nyquist
+            self._detweights = {d: 0.0 for d in self.detectors}
+            for k in self.keys:
+                freq = self.freq(k)
+                psd = self.psd(k)
+                rate = self.rate(k)
+                ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
+                noisevar = np.median(psd[ind])
+                for det in self.detectors:
+                    wt = self.weight(det, k)
+                    if wt > 0.0:
+                        self._detweights[det] += wt * (1.0 / noisevar)
+        return self._detweights[det]
+
+    def detector_weight(self, det):
+        """Return the relative noise weight for a detector.
+
+        Args:
+            det (str):  The detector name.
+
+        Returns:
+            (float):  The noise weight for this detector.
+
+        """
+        return self._detector_weight(det)
