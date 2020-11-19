@@ -94,8 +94,52 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   int64_t const * indx_submap,
                                   int64_t const * indx_pix,
                                   double const * weights,
-                                  double scale, int64_t * hits,
+                                  double scale,
                                   double * invnpp) {
+    const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    #pragma omp parallel
+    {
+        #ifdef _OPENMP
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
+        #endif // ifdef _OPENMP
+
+        for (size_t i = 0; i < nsamp; ++i) {
+            const int64_t isubmap = indx_submap[i] * subsize;
+            const int64_t ipix = indx_pix[i];
+            if ((isubmap < 0) || (ipix < 0)) continue;
+
+            const int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            const int64_t ipx = hpx * block;
+
+            const double * wpointer = weights + i * nnz;
+            double * covpointer = invnpp + ipx;
+            for (size_t j = 0; j < nnz; ++j, ++wpointer) {
+                const double scaled_weight = *wpointer * scale;
+                const double * wpointer2 = wpointer;
+                for (size_t k = j; k < nnz; ++k, ++wpointer2, ++covpointer) {
+                    *covpointer += *wpointer2 * scaled_weight;
+                }
+            }
+        }
+    }
+
+    return;
+}
+
+void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nnz,
+                                       int64_t nsamp,
+                                       int64_t const * indx_submap,
+                                       int64_t const * indx_pix,
+                                       double const * weights,
+                                       double scale, int64_t * hits,
+                                       double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
     #pragma omp parallel
     {

@@ -133,19 +133,16 @@ void init_map_cov(py::module & m) {
 
     m.def("cov_accum_diag_invnpp",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
-             py::buffer subpix, py::buffer weights, double scale, py::buffer invnpp,
-             py::buffer hits) {
+             py::buffer subpix, py::buffer weights, double scale, py::buffer invnpp) {
               auto & gt = toast::GlobalTimers::get();
               gt.start("cov_accum_diag_invnpp");
               pybuffer_check_1D <int64_t> (submap);
               pybuffer_check_1D <int64_t> (subpix);
               pybuffer_check_1D <double> (invnpp);
-              pybuffer_check_1D <int64_t> (hits);
               pybuffer_check_1D <double> (weights);
               py::buffer_info info_submap = submap.request();
               py::buffer_info info_subpix = subpix.request();
               py::buffer_info info_invnpp = invnpp.request();
-              py::buffer_info info_hits = hits.request();
               py::buffer_info info_weights = weights.request();
               size_t nsamp = info_submap.size;
               size_t nw = (size_t)(info_weights.size / nnz);
@@ -159,18 +156,16 @@ void init_map_cov(py::module & m) {
               }
               int64_t * rawsubmap = reinterpret_cast <int64_t *> (info_submap.ptr);
               int64_t * rawsubpix = reinterpret_cast <int64_t *> (info_subpix.ptr);
-              int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
               double * rawinvnpp = reinterpret_cast <double *> (info_invnpp.ptr);
               double * rawweights = reinterpret_cast <double *> (info_weights.ptr);
               toast::cov_accum_diag_invnpp(
                   nsub, nsubpix, nnz, nsamp, rawsubmap, rawsubpix, rawweights, scale,
-                  rawhits, rawinvnpp);
+                  rawinvnpp);
               gt.stop("cov_accum_diag_invnpp");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
-          py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("invnpp"),
-          py::arg(
-              "hits"), R"(
+          py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg(
+              "invnpp"), R"(
         Accumulate block diagonal noise covariance and hits.
 
         This uses a pointing matrix to accumulate the local pieces
@@ -189,7 +184,6 @@ void init_map_cov(py::module & m) {
             scale (float):  Optional scaling factor.
             invnpp (array, float64):  The local buffer of diagonal inverse pixel
                 covariances, stored as the lower triangle for each pixel.
-            hits (array, int64):  The local hitmap buffer to accumulate.
 
         Returns:
             None.
