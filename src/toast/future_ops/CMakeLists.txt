@@ -10,5 +10,6 @@ install(FILES
     sim_satellite.py
     noise_model.py
     pointing_healpix.py
+    mapmaker_utils.py
     DESTINATION ${PYTHON_SITE}/toast/future_ops
 )

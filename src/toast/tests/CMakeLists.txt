@@ -20,6 +20,7 @@ install(FILES
     ops_sim_satellite.py
     ops_applygain.py
     ops_sim_tod_noise.py
+    ops_mapmaker_utils.py
     covariance.py
     ops_pointing_healpix.py
     ops_dipole.py

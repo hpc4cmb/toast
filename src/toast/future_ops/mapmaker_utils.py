@@ -101,7 +101,7 @@ class BuildHitMap(Operator):
 
         # On first call, get the pixel distribution and create our distributed hitmap
         if self._hits is None:
-            self._hits = PixelData(dist, np.int32, n_value=1)
+            self._hits = PixelData(dist, np.int64, n_value=1)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -276,11 +276,19 @@ class BuildInverseCovariance(Operator):
                 # detector we have worked with we create the PixelData object.
                 if self._invcov is None:
                     # We will store the lower triangle of the covariance.
-                    weight_nnz = len(wts.detector_shape)
+                    if len(wts.detector_shape) == 1:
+                        weight_nnz = 1
+                    else:
+                        weight_nnz = wts.detector_shape[1]
                     cov_nnz = weight_nnz * (weight_nnz + 1) // 2
                     self._invcov = PixelData(dist, np.float64, n_value=cov_nnz)
                 else:
-                    if len(wts.detector_shape) != weight_nnz:
+                    check_nnz = None
+                    if len(wts.detector_shape) == 1:
+                        check_nnz = 1
+                    else:
+                        check_nnz = wts.detector_shape[1]
+                    if check_nnz != weight_nnz:
                         msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
                             ob.name, det, self.weights
                         )
@@ -310,7 +318,7 @@ class BuildInverseCovariance(Operator):
                     weight_nnz,
                     local_sm.astype(np.int64),
                     local_pix.astype(np.int64),
-                    wts.reshape(-1),
+                    wts[det].reshape(-1),
                     detweight,
                     self._invcov.raw,
                 )
@@ -430,6 +438,8 @@ class BuildNoiseWeighted(Operator):
 
         dist = data[self.pixel_dist]
 
+        weight_nnz = None
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -457,11 +467,18 @@ class BuildNoiseWeighted(Operator):
                 # We check that here, and if this is the first observation and
                 # detector we have worked with we create the PixelData object.
                 if self._zmap is None:
-                    self._zmap = PixelData(
-                        dist, np.float64, n_value=len(wts.detector_shape)
-                    )
+                    if len(wts.detector_shape) == 1:
+                        weight_nnz = 1
+                    else:
+                        weight_nnz = wts.detector_shape[1]
+                    self._zmap = PixelData(dist, np.float64, n_value=weight_nnz)
                 else:
-                    if len(wts.detector_shape) != self._zmap.n_value:
+                    check_nnz = None
+                    if len(wts.detector_shape) == 1:
+                        check_nnz = 1
+                    else:
+                        check_nnz = wts.detector_shape[1]
+                    if check_nnz != weight_nnz:
                         msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
                             ob.name, det, self.weights
                         )
@@ -491,7 +508,7 @@ class BuildNoiseWeighted(Operator):
                     self._zmap.n_value,
                     local_sm.astype(np.int64),
                     local_pix.astype(np.int64),
-                    wts.reshape(-1),
+                    wts[det].reshape(-1),
                     detweight,
                     ddata,
                     self._zmap.raw,
