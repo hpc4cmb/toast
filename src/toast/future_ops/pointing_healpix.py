@@ -67,11 +67,11 @@ class PointingHealpix(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    flags = Unicode(
+    shared_flags = Unicode(
         None, allow_none=True, help="Observation shared key for telescope flags to use"
     )
 
-    flag_mask = Int(0, help="Bit mask value for optional flagging")
+    shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
 
@@ -96,6 +96,8 @@ class PointingHealpix(Operator):
         allow_none=True,
         help="The observation key with a dictionary of pointing weight calibration for each det",
     )
+
+    overwrite = Bool(False, help="If True, regenerate pointing even if it exists")
 
     @traitlets.validate("nside")
     def _check_nside(self, proposal):
@@ -127,7 +129,7 @@ class PointingHealpix(Operator):
             raise traitlets.TraitError("Invalid mode (must be 'I' or 'IQU')")
         return check
 
-    @traitlets.validate("flag_mask")
+    @traitlets.validate("shared_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
@@ -169,11 +171,16 @@ class PointingHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
+            if self.pixels in ob.detdata and self.weight in ob.detdata:
+                # The pointing already exists!
+                if not self.overwrite:
+                    continue
+
             # Get the flags if needed
             flags = None
-            if self.flags is not None:
-                flags = np.array(ob.shared[self.flags])
-                flags &= self.flag_mask
+            if self.shared_flags is not None:
+                flags = np.array(ob.shared[self.shared_flags])
+                flags &= self.shared_flag_mask
 
             # HWP angle if needed
             hwp_angle = None
@@ -325,8 +332,8 @@ class PointingHealpix(Operator):
         }
         if self.cal is not None:
             req["meta"].append(self.cal)
-        if self.flags is not None:
-            req["shared"].append(self.flags)
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.hwp_angle is not None:
             req["shared"].append(self.hwp_angle)
         return req

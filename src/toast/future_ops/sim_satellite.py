@@ -318,7 +318,9 @@ class SimSatellite(Operator):
 
     times = Unicode("times", help="Observation shared key for timestamps")
 
-    flags = Unicode("flags", help="Observation shared key for common flags")
+    shared_flags = Unicode(
+        "shared_flags", help="Observation shared key for common flags"
+    )
 
     hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
 
@@ -417,7 +419,7 @@ class SimSatellite(Operator):
                 comm=ob.comm_col,
             )
             ob.shared.create(
-                self.flags,
+                self.shared_flags,
                 shape=(ob.n_local_samples,),
                 dtype=np.uint8,
                 comm=ob.comm_col,
@@ -533,7 +535,7 @@ class SimSatellite(Operator):
         return {
             "shared": [
                 self.times,
-                self.flags,
+                self.shared_flags,
                 self.boresight,
                 self.hwp_angle,
                 self.position,
