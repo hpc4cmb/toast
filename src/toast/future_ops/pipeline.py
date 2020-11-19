@@ -99,9 +99,11 @@ class Pipeline(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        result = list()
         if self.operators is not None:
             for op in self.operators:
-                op.finalize(data)
+                result.append(op.finalize(data))
+        return result
 
     def _requires(self):
         # Work through the operator list in reverse order and prune intermediate
