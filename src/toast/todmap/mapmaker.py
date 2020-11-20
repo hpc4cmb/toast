@@ -1961,15 +1961,16 @@ class OpMapMaker(Operator):
         #    templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gain_amplitudes.npz")
         # DEBUG end
 
-        # if we mitigated calibration errors, we apply the estimated gains 
+        # if we mitigated calibration errors, we apply the estimated gains
         if self.gain_templatename is not None:
             templates.calibrate_signal(signal, amplitudes )
             if self.rank == 0:
                 timer.report_clear("Calibrate TOD")
-        # Clean TOD
-        templates.clean_signal(signal, amplitudes)
-        if self.rank == 0:
-            timer.report_clear("Clean TOD")
+        else :
+            # Clean TOD
+            templates.clean_signal(signal, amplitudes)
+            if self.rank == 0:
+                timer.report_clear("Clean TOD")
 
         if self.write_destriped:
             self.bin_map(data, "destriped")
