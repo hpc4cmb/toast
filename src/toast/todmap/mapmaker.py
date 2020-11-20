@@ -1112,9 +1112,9 @@ class TemplateMatrix(TOASTMatrix):
             outsignal = signal.copy()
         for  template in self.templates.values():
             delta_gain = template.calibrate(outsignal, amplitudes)
-            import pdb
-            pdb.set_trace()
-            print(delta_gain,template.name )
+            #import pdb
+            #pdb.set_trace()
+            #print(delta_gain,template.name )
             if delta_gain is not None :
                 outsignal /= delta_gain
 
