@@ -100,7 +100,11 @@ class TODTemplate:
         """a' = M^{-1}.a"""
         raise NotImplementedError("Derived class must implement apply_precond()")
 
+    def calibrate(self, signal, amplitudes ):
+        """ Empty method for derived classes """
+        # Not all TODTemplates implement  this method
 
+        return
 class SubharmonicTemplate(TODTemplate):
     """This class represents sub-harmonic noise fluctuations.
 
@@ -393,6 +397,25 @@ class GainTemplate(TODTemplate):
                 a[amplitude_slice] = M.dot(b[amplitude_slice])
         return
 
+    def calibrate(self, signal, amplitudes ):
+        """
+        Estimate the optimal gain fluctuations from the amplitudes estimated
+        at   PCG convergence .
+        """
+        poly_amplitudes = amplitudes[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs ][idet ]
+                amplitude_slice= slice(ind ,ind+self.norder )
+                poly_amps = poly_amplitudes[amplitude_slice ]
+                delta_gain = legendre_poly.dot(poly_amps)
+        return delta_gain
 
 
 
@@ -1077,6 +1100,25 @@ class TemplateMatrix(TOASTMatrix):
         # DEBUG end
         return outsignal
 
+    @function_timer
+    def calibrate_signal(self, signal, amplitudes, in_place=True):
+        """Apply the estimate gain fluctuation to the distributed signal  vector by dividing
+        the templates multiplied by the given amplitudes.
+        """
+
+        if in_place:
+            outsignal = signal
+        else:
+            outsignal = signal.copy()
+        for  template in self.templates.values():
+            delta_gain = template.calibrate(outsignal, amplitudes)
+            import pdb
+            pdb.set_trace()
+            print(delta_gain,template.name )
+            if delta_gain is not None :
+                outsignal /= delta_gain
+
+        return outsignal
 
 class TemplateAmplitudes(TOASTVector):
     """TemplateAmplitudes objects hold local and shared template amplitudes"""
@@ -1920,7 +1962,10 @@ class OpMapMaker(Operator):
         # DEBUG end
 
         # Clean TOD
-        templates.clean_signal(signal, amplitudes)
+        if self.gain_templatename is not None:
+            templates.calibrate_signal(signal, amplitudes )
+        else:
+            templates.clean_signal(signal, amplitudes)
         if self.rank == 0:
             timer.report_clear("Clean TOD")
 
