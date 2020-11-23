@@ -4,6 +4,9 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <_libtoast.hpp>
+#ifdef _OPENMP
+#include <omp.h>
+#endif // ifdef _OPENMP
 
 
 void apply_flags_to_pixels(py::array_t <unsigned char> common_flags,
@@ -85,6 +88,65 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     }
 }
 
+
+void accumulate_observation_matrix(py::array_t <double> c_obs_matrix,
+                                   py::array_t <int64_t> c_pixels,
+                                   py::array_t <double> weights,
+                                   py::array_t <double> templates,
+                                   py::array_t <double> template_covariance) {
+    auto fast_obs_matrix = c_obs_matrix.mutable_unchecked<2>();
+    auto fast_pixels = c_pixels.unchecked<1>();
+    auto fast_weights = weights.unchecked<2>();
+    auto fast_templates = templates.unchecked<2>();
+    auto fast_covariance = template_covariance.unchecked<2>();
+
+    size_t nsample = fast_pixels.shape(0);
+    size_t nnz = fast_weights.shape(1);
+    size_t ntemplate = fast_templates.shape(1);
+    size_t npix = fast_obs_matrix.shape(0) / nnz;
+
+# pragma omp parallel
+    {
+        int nthreads = 1;
+        int idthread = 0;
+#ifdef _OPENMP
+        nthreads = omp_get_num_threads();
+        idthread = omp_get_thread_num();
+#endif // ifdef _OPENMP
+
+        for (size_t isample = 0; isample < nsample; ++isample) {
+            size_t ipixel = fast_pixels(isample);
+            if (ipixel % nthreads != idthread) continue;
+
+            for (size_t jsample = 0; jsample < nsample; ++jsample) {
+                size_t jpixel = fast_pixels(jsample);
+                double filter_matrix = 0;
+                for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+                    for (size_t jtemplate = 0; jtemplate < ntemplate; ++jtemplate) {
+                        filter_matrix
+                            += fast_templates(isample, itemplate)
+                            * fast_templates(jsample, jtemplate)
+                            * fast_covariance(itemplate, jtemplate);
+                    }
+                }
+                if (isample == jsample) {
+                    filter_matrix = 1 - filter_matrix;
+                } else {
+                    filter_matrix = -filter_matrix;
+                }
+                for (size_t inz = 0; inz < nnz; ++inz) {
+                    double iweight = fast_weights(isample, inz) * filter_matrix;
+                    for (size_t jnz = 0; jnz < nnz; ++jnz) {
+                        fast_obs_matrix(ipixel + inz * npix, jpixel + jnz * npix)
+                            += iweight * fast_weights(jsample, jnz);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 void init_todmap_mapmaker(py::module & m)
 {
     m.doc() = "Compiled kernels to support TOAST mapmaker";
@@ -92,4 +154,5 @@ void init_todmap_mapmaker(py::module & m)
     m.def("project_signal_offsets", &project_signal_offsets);
     m.def("add_offsets_to_signal", &add_offsets_to_signal);
     m.def("apply_flags_to_pixels", &apply_flags_to_pixels);
+    m.def("accumulate_observation_matrix", &accumulate_observation_matrix);
 }
