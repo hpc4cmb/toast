@@ -5,6 +5,7 @@
 from ..mpi import MPI
 
 import os
+from time import time
 
 import numpy as np
 from numpy.polynomial.chebyshev import chebval
@@ -13,7 +14,10 @@ import scipy.sparse
 
 from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
 from .._libtoast import (
-    bin_templates, add_templates, chebyshev, accumulate_observation_matrix
+    chebyshev,
+    accumulate_observation_matrix,
+    expand_matrix,
+    build_template_covariance,
 )
 from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
 from ..op import Operator
@@ -73,6 +77,12 @@ class OpFilterBin(Operator):
         outdir=".",
         outprefix="filtered_",
         zip_maps=True,
+        verbose=True,
+        write_hits=True,
+        write_wcov_inv=False,
+        write_wcov=True,
+        write_binned=False,
+        maskfile=None,
     ):
         self._name = name
         self._common_flag_name = common_flag_name
@@ -80,9 +90,9 @@ class OpFilterBin(Operator):
         self._flag_name = flag_name
         self._flag_mask = flag_mask
         self._ground_filter_order = ground_filter_order
+        self._split_ground_template = split_ground_template
         self._poly_filter_order = poly_filter_order
         self._intervals = intervals
-        self._split_ground_template = split_ground_template
         self._pixels_name = pixels_name
         self._weights_name = weights_name
         self._write_obs_matrix = write_obs_matrix
@@ -95,70 +105,109 @@ class OpFilterBin(Operator):
         self._outdir = outdir
         self._outprefix = outprefix
         self._zip_maps = zip_maps
+        self.verbose = verbose
+        self._write_hits = write_hits,
+        self._write_wcov_inv = write_wcov_inv
+        self._write_wcov = write_wcov
+        self._write_binned = write_binned
+        if maskfile is not None:
+            raise RuntimeError("Filtering mask not yet implemented")
+        self._maskfile = maskfile
 
         # Call the parent class constructor.
         super().__init__()
 
-    def _build_templates(self, times, phase, intervals, good):
-        nsample = times.size
-        templates = []
+    @function_timer
+    def _add_ground_templates(self, templates, phase, common_flags):
+        if self._ground_filter_order is None:
+            return templates
+        # To avoid template degeneracies, ground filter only includes
+        # polynomial orders not present in the polynomial filter
+        min_order = 0
+        if self._poly_filter_order is not None:
+            min_order = self._poly_filter_order + 1
+        max_order = self._ground_filter_order
+        nfilter = max_order - min_order + 1
+        if nfilter < 1:
+            return
+        cheby_templates = np.zeros([nfilter, phase.size])
+        chebyshev(phase, cheby_templates, min_order, max_order + 1)
+        if not self._split_ground_template:
+            cheby_filter = cheby_templates
+        else:
+            # Separate ground filter by scan direction
+            cheby_filter = []
+            mask1 = common_flags & tod.LEFTRIGHT_SCAN == 0
+            mask2 = common_flags & tod.RIGHTLEFT_SCAN == 0
+            for template in cheby_templates:
+                for mask in mask1, mask2:
+                    temp = template.copy()
+                    temp[mask] = 0
+                    cheby_filter.append(temp)
+            del common_ref
+            cheby_filter = np.vstack(cheby_filter)
 
-        # Add templates
-        templates.append(np.ones(nsample, dtype=np.float))
-        templates.append(2 * np.arange(nsample) / (nsample - 1) - 1)
+        if templates is None:
+            templates = cheby_filter
+        else:
+            templates = np.vstack([templates, cheby_filter])
+
+        return templates
+
+    @function_timer
+    def _add_poly_templates(self, templates, local_intervals, nsample):
+        if self._poly_filter_order is None:
+            return templates
+        nfilter = self._poly_filter_order + 1
+        ninterval = len(local_intervals)
+        poly_templates = np.zeros([nfilter * ninterval, nsample])
+
+        offset = 0
+        for ival in local_intervals:
+            istart = ival.first
+            istop = ival.last + 1
+            phase = (np.arange(istart, istop) - istart) / (istop - istart - 1)
+            cheby_templates = np.zeros([nfilter, phase.size])
+            chebyshev(phase, cheby_templates, 0, nfilter)
+            poly_templates[offset : offset + nfilter, istart : istop] = cheby_templates
+            offset += nfilter
+
+        if templates is None:
+            templates = poly_templates
+        else:
+            templates = np.vstack([templates, poly_templates])
+
+        return templates
+
+    @function_timer
+    def _build_common_templates(self, times, phase, local_intervals, common_flags):
+        nsample = times.size
+        templates = None
+
+        templates = self._add_ground_templates(templates, phase, common_flags)
+        templates = self._add_poly_templates(templates, local_intervals, nsample)
+
+        return templates
+
+    @function_timer
+    def _build_templates(
+            self, times, phase, local_intervals, good, common_flags, common_templates
+    ):
+        nsample = times.size
+        templates = common_templates.copy()
+
+        # FIXME: add deprojection templates here
 
         # Get covariance
         templates = np.vstack(templates)
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
-        for row in range(ntemplate):
-            itemplate = templates[row] * good
-            for col in range(row, ntemplate):
-                jtemplate = templates[col]
-                invcov[row, col] = np.dot(itemplate, jtemplate)
-                invcov[col, row] = invcov[row, col]
+        build_template_covariance(templates, good.astype(np.float64), invcov)
         cov = np.linalg.inv(invcov)
 
         return templates, cov
 
-    def _build_templates_sparse(self, times, phase, intervals, good):
-        # Not currently used.
-        ntemplate = 2
-        nsample = times.size
-
-        data = []
-        row_ind = []
-        col_ind = []
-
-        # Add templates
-
-        row = 0
-        row_ind.append(np.zeros(nsample, dtype=np.int) + row)
-        col_ind.append(np.arange(nsample, dtype=np.int))
-        data.append(np.ones(nsample, dtype=np.float))
-
-        row += 1
-        row_ind.append(np.zeros(nsample, dtype=np.int) + row)
-        col_ind.append(np.arange(nsample, dtype=np.int))
-        data.append(2 * np.arange(nsample) / (nsample - 1) - 1)
-
-        # Compute covariance
-
-        data = np.hstack(data)
-        row_ind = np.hstack(row_ind)
-        col_ind = np.hstack(col_ind)
-
-        templates = scipy.sparse.csr_matrix(
-            (data, (row_ind, col_ind)),
-            shape=(ntemplate, nsample),
-            dtype=np.float64,
-        )
-        templatesT = templates.T.copy()
-        invcov = templates.dot(templatesT).toarray()
-        cov = np.linalg.inv(invcov)
-
-        return templates, templatesT, cov
-
+    @function_timer
     def _regress_templates(self, templates, template_covariance, signal, good):
         proj = np.dot(templates, signal * good)
         amplitudes = np.dot(template_covariance, proj)
@@ -166,11 +215,36 @@ class OpFilterBin(Operator):
             signal -= amplitude * template
         return
 
+    @function_timer
     def _compress_pixels(self, pixels):
         local_to_global = np.sort(list(set(pixels)))
         compressed_pixels = np.searchsorted(local_to_global, pixels)
         return compressed_pixels, local_to_global.size, local_to_global
 
+    @function_timer
+    def _expand_matrix(self, compressed_matrix, local_to_global):
+        """ Expands a dense, compressed matrix into a sparse matrix with
+        global indexing
+        """
+        n = compressed_matrix.size
+        indices = np.zeros(n, dtype=np.int64)
+        indptr = np.zeros(self._npixtot + 1, dtype=np.int64)
+        expand_matrix(
+            compressed_matrix,
+            local_to_global,
+            self._npix,
+            self._nnz,
+            indices,
+            indptr,
+        )
+
+        sparse_matrix = scipy.sparse.csr_matrix(
+            (compressed_matrix.ravel(), indices, indptr),
+            shape=(self._npixtot, self._npixtot),
+        )
+        return sparse_matrix
+
+    @function_timer
     def _accumulate_observation_matrix(
             self,
             obs_matrix,
@@ -189,9 +263,11 @@ class OpFilterBin(Operator):
         npixtot = self._npixtot
         cov = template_covariance
         templates = templates.T.copy()
-        from time import time
         # Temporarily compress pixels
+        t1 = time()
+        print("Compressing pixels", flush=True)
         c_pixels, c_npix, local_to_global = self._compress_pixels(pixels[good].copy())
+        print("Compressed in {:.3f}s".format(time() - t1), flush=True)
         c_npixtot = c_npix * self._nnz
         c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
         t0 = time()
@@ -208,77 +284,15 @@ class OpFilterBin(Operator):
         # add the compressed observation matrix onto the global one
         t1 = time()
         print("Expanding local to global", flush=True)
-        col_indices = []
-        for inz in range(nnz):
-            col_indices.append(local_to_global + inz * npix)
-        col_indices = np.hstack(col_indices)
-        nhit = col_indices.size
-        indices = []
-        indptr = [0]
-        irow = 0
-        offset = 0
-        for inz in range(nnz):
-            for ilocal, iglobal in enumerate(local_to_global):
-                while irow < iglobal:
-                    indptr.append(offset)
-                    irow += 1
-                offset += nhit
-                indices.append(col_indices)
-                indptr.append(offset)
-                irow += 1
-        while irow < npixtot:
-            indptr.append(offset)
-            irow += 1
-        indices = np.hstack(indices)
-        indptr = np.hstack(indptr)
-        local_obs_matrix = scipy.sparse.csr_matrix(
-            (c_obs_matrix.ravel(), indices, indptr), shape=(npixtot, npixtot),
-        )
-        print("Expanded in {:.1f}s".format(time() - t1), flush=True)
+        local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
+        print("Expanded in {:.3f}s".format(time() - t1), flush=True)
         t1 = time()
         print("Adding to global", flush=True)
         obs_matrix += local_obs_matrix
-        print("Added in {:.1f}s".format(time() - t1), flush=True)
+        print("Added in {:.3f}s".format(time() - t1), flush=True)
         return obs_matrix
 
-    def _accumulate_observation_matrix_sparse(
-            self, obs_matrix, pixels, weights, good, templates, template_covariance
-    ):
-        # Not currently used
-        if obs_matrix is None:
-            return
-        nsample = pixels.size
-        #cov = scipy.sparse.csr_matrix(template_covariance)
-        cov = template_covariance
-        from time import time
-        for isample in range(nsample):
-            t1 = time()
-            print("isample = {:6} / {:6}".format(isample, nsample), flush=True, end="")  # DEBUG
-            ipixel = pixels[isample]
-            iweights = weights[isample]
-            #itemplates = templates.getrow(isample)
-            itemplates = templates[isample].toarray().ravel()
-            for jsample in range(isample, nsample):
-                jpixel = pixels[jsample]
-                jweights = weights[jsample]
-                # Evaluate the filtering matrix at (isample, jsample)
-                #jtemplates = templates.getrow(jsample)
-                #jtemplates = templates[jsample].toarray().ravel()
-                #filter_matrix = (isample == jsample) - \
-                #    itemplates.dot(cov.dot(jtemplates.T))[0, 0]
-                filter_matrix = (isample == jsample) - \
-                    itemplates.dot(cov.dot(jtemplates))
-                #if filter_matrix == 0:
-                #    import pdb
-                #    pdb.set_trace()
-                #obs_matrix[ipixel::self._npix, jpixel::self._npix] \
-                #    += np.outer(iweights, jweights) * filter_matrix
-                #if ipixel == 3072 and jpixel == 3072:
-                #    import pdb
-                #    pdb.set_trace()
-            print(" {:.1f}s".format(time() - t1), flush=True)
-        return
-
+    @function_timer
     def _get_phase(self, tod):
         if self._ground_filter_order is None:
             return None
@@ -290,9 +304,12 @@ class OpFilterBin(Operator):
                 "Failed to get boresight azimuth from TOD.  Perhaps it is "
                 'not ground TOD? "{}"'.format(e)
             )
+        # The azimuth vector is assumed to be arranged so that the
+        # azimuth increases monotonously even across the zero meridian.
         phase = (az - azmin) / (azmax - azmin) * 2 - 1
         return phase
 
+    @function_timer
     def _initialize_obs_matrix(self):
         if self._write_obs_matrix:
             obs_matrix = scipy.sparse.csr_matrix(
@@ -302,7 +319,8 @@ class OpFilterBin(Operator):
             obs_matrix = None
         return obs_matrix
 
-    def _collect_obs_matrix(self, obs_matrix, white_noise_cov):
+    @function_timer
+    def _noiseweight_obs_matrix(self, obs_matrix, white_noise_cov):
         if obs_matrix is None:
             return
         # Apply the white noise covariance to the observation matrix
@@ -331,25 +349,68 @@ class OpFilterBin(Operator):
                                 = submap[pix_local, icov]
                         icov += 1
         cc = cc.tocsr()
-        #import pdb
-        #pdb.set_trace()
         obs_matrix = cc.dot(obs_matrix)
-        # FIXME: Combine the observation matrix across processes
-        # Write out the observation matrix
-        fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
-        scipy.sparse.save_npz(fname, obs_matrix)
         return obs_matrix
 
-    def _bin_map(self, data, detweights):
-        white_noise_cov = DistPixels(
-            data, comm=self.comm, nnz=self._ncov, dtype=np.float64
-        )
-        if white_noise_cov.data is not None:
-            white_noise_cov.data.fill(0)
+    @function_timer
+    def _collect_obs_matrix(self, obs_matrix):
+        if obs_matrix is None:
+            return
+        # Combine the observation matrix across processes
+        comm = self.comm
+        rank = comm.rank
+        ntask = comm.size
+        # Reduce the observation matrices.  We use the buffer protocol
+        # for better performance, even though it requires more MPI calls
+        # than sending the sparse matrix objects directly
+        factor = 1
+        while factor < ntask:
+            if rank % (factor * 2) == 0:
+                # this task receives
+                receive_from = rank + factor
+                if receive_from < ntask:
+                    size_recv = comm.recv(source=receive_from, tag=factor)
+                    data_recv = np.zeros(size_recv, dtype=np.float64)
+                    comm.Recv(data_recv, source=receive_from, tag=factor + ntask)
+                    indices_recv = np.zeros(size_recv, dtype=np.int32)
+                    comm.Recv(indices_recv, source=receive_from, tag=factor + 2 * ntask)
+                    indptr_recv = np.zeros(obs_matrix.indptr.size, dtype=np.int32)
+                    comm.Recv(indptr_recv, source=receive_from, tag=factor + 3 * ntask)
+                    obs_matrix += scipy.sparse.csr_matrix(
+                        (data_recv, indices_recv, indptr_recv), obs_matrix.shape,
+                    )
+            elif rank % (factor * 2) == factor:
+                # this task sends
+                send_to = rank - factor
+                comm.send(obs_matrix.data.size, dest=send_to, tag=factor)
+                comm.Send(obs_matrix.data, dest=send_to, tag=factor + ntask)
+                comm.Send(obs_matrix.indices, dest=send_to, tag=factor + 2 * ntask)
+                comm.Send(obs_matrix.indptr, dest=send_to, tag=factor + 3 * ntask)
+            factor *= 2
 
-        hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64)
-        if hits.data is not None:
-            hits.data.fill(0)
+        # Write out the observation matrix
+        if rank == 0:
+            fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
+            scipy.sparse.save_npz(fname, obs_matrix)
+        return obs_matrix
+
+    @function_timer
+    def _bin_map(self, data, detweights, suffix, white_noise_cov=None):
+        """ Bin the signal onto a map.  Optionally write out hits and
+        white noise covariance matrices.
+        """
+        if white_noise_cov is None:
+            invnpp = DistPixels(
+                data, comm=self.comm, nnz=self._ncov, dtype=np.float64
+            )
+            if invnpp.data is not None:
+                invnpp.data.fill(0)
+            hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64)
+            if hits.data is not None:
+                hits.data.fill(0)
+        else:
+            invnpp = None
+            hits = None
 
         dist_map = DistPixels(data, comm=self.comm, nnz=self._nnz, dtype=np.float64)
         if dist_map.data is not None:
@@ -357,7 +418,7 @@ class OpFilterBin(Operator):
 
         # FIXME: OpAccumDiag should support separate detweights for each observation
         OpAccumDiag(
-            invnpp=white_noise_cov,
+            invnpp=invnpp,
             hits=hits,
             zmap=dist_map,
             name=self._name,
@@ -366,35 +427,52 @@ class OpFilterBin(Operator):
             flag_mask=self._flag_mask,
         ).exec(data)
 
-        white_noise_cov.allreduce()
-        covariance_invert(white_noise_cov, self._rcond_limit)
+        if white_noise_cov is None:
+            if self._write_hits:
+                hits.allreduce()
+                fname = os.path.join(self._outdir, self._outprefix + "hits.fits")
+                if self._zip_maps:
+                    fname += ".gz"
+                hits.write_healpix_fits(fname)
+
+            invnpp.allreduce()
+            if self._write_wcov:
+                fname = os.path.join(self._outdir, self._outprefix + "wcov_inv.fits")
+                if self._zip_maps:
+                    fname += ".gz"
+                    invnpp.write_healpix_fits(fname)
+
+            covariance_invert(invnpp, self._rcond_limit)
+            white_noise_cov = invnpp
+            if self._write_wcov:
+                fname = os.path.join(self._outdir, self._outprefix + "wcov.fits")
+                if self._zip_maps:
+                    fname += ".gz"
+                    white_noise_cov.write_healpix_fits(fname)
 
         dist_map.allreduce()
         covariance_apply(white_noise_cov, dist_map)
-        
-        hits.allreduce()
 
-        fname = os.path.join(self._outdir, self._outprefix + "wcov.fits")
-        if self._zip_maps:
-            fname += ".gz"
-        white_noise_cov.write_healpix_fits(fname)
-
-        fname = os.path.join(self._outdir, self._outprefix + "hits.fits")
-        if self._zip_maps:
-            fname += ".gz"
-        hits.write_healpix_fits(fname)
-
-        fname = os.path.join(self._outdir, self._outprefix + "binned.fits")
+        fname = os.path.join(self._outdir, self._outprefix + suffix + ".fits")
         if self._zip_maps:
             fname += ".gz"
         dist_map.write_healpix_fits(fname)
 
         return white_noise_cov
 
+    @function_timer
+    def _get_detweights(self, data):
+        detweights = {}
+        for obs in data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                if det not in detweights:
+                    detweights[det] = 1e3
+        return detweights
 
     @function_timer
     def exec(self, data, comm=None):
-        
+
         if comm is None:
             self.comm = data.comm.comm_world
         else:
@@ -407,7 +485,16 @@ class OpFilterBin(Operator):
         # Filter data
 
         obs_matrix = self._initialize_obs_matrix()
-        detweights = {}
+        detweights = self._get_detweights(data)
+
+        white_noise_cov = None
+        if self._write_binned:
+            white_noise_cov = self._bin_map(data, detweights, "binned")
+
+        if self.verbose and self.rank == 0:
+            t0 = time()
+            t1 = time()
+            print("OpFilterBin: Filtering signal", flush=True)
 
         for obs in data.obs:
             tod = obs["tod"]
@@ -420,26 +507,35 @@ class OpFilterBin(Operator):
             common_flags = tod.local_common_flags(self._common_flag_name)
 
             phase = self._get_phase(tod)
+            t1 = time()
+            common_templates = self._build_common_templates(
+                times, phase, local_intervals, common_flags
+            )
+            print("Built common templates in {:.3f} s".format(time() - t1), flush=True)
 
             for det in tod.local_dets:
-                if det not in detweights:
-                    detweights[det] = 1e3
                 signal = tod.local_signal(det, self._name)
                 flags = tod.local_flags(det, self._flag_name)
                 good = np.logical_and(
                     (common_flags & self._common_flag_mask) == 0,
                     (flags & self._flag_mask) == 0,
                 )
+                if np.sum(good) == 0:
+                    continue
 
                 pixelsname = "{}_{}".format(self._pixels_name, det)
                 weightsname = "{}_{}".format(self._weights_name, det)
                 pixels = tod.cache.reference(pixelsname)
                 weights = tod.cache.reference(weightsname)
 
+                t1 = time()
                 templates, template_covariance = self._build_templates(
-                    times, phase, intervals, good
+                    times, phase, local_intervals, good, common_flags, common_templates
                 )
+                print("Built templates in {:.3f} s".format(time() - t1), flush=True)
+                t1 = time()
                 self._regress_templates(templates, template_covariance, signal, good)
+                print("Regressed templates in {:.3f} s".format(time() - t1), flush=True)
                 obs_matrix = self._accumulate_observation_matrix(
                     obs_matrix,
                     pixels,
@@ -452,8 +548,36 @@ class OpFilterBin(Operator):
 
         # Bin filtered signal
 
-        white_noise_cov = self._bin_map(data, detweights)
+        if self.verbose and self.rank == 0:
+            print("OpFilterBin: Filtered signal in {:.1f} s".format(time() - t1), flush=True)
+            print("OpFilterBin: Binning signal", flush=True)
+            t1 = time()
 
-        obs_matrix = self._collect_obs_matrix(obs_matrix, white_noise_cov)
+        white_noise_cov = self._bin_map(data, detweights, "filtered", white_noise_cov)
+
+        if self.verbose and self.rank == 0:
+            print("OpFilterBin: Binned signal in {:.1f} s".format(time() - t1), flush=True)
+
+        if obs_matrix is not None:
+            if self.verbose and self.rank == 0:
+                print("OpFilterBin: Noise-weighting observation matrix", flush=True)
+                t1 = time()
+
+            obs_matrix = self._noiseweight_obs_matrix(obs_matrix, white_noise_cov)
+
+            if self.verbose and self.rank == 0:
+                print("OpFilterBin: Noise-weighted observation matrix in {:.1f} s".format(
+                    time() - t1), flush=True)
+                print("OpFilterBin: Collecting observation matrix", flush=True)
+                t1 = time()
+
+            obs_matrix = self._collect_obs_matrix(obs_matrix)
+
+            if self.verbose and self.rank == 0:
+                print("OpFilterBin: Collected observation matrix in {:.1f} s".format(
+                    time() - t1), flush=True)
+
+        if self.verbose and self.rank == 0:
+            print("OpFilterBin: Completed in {:.1f} s".format(time() - t0), flush=True)
 
         return

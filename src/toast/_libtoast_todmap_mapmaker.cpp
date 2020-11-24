@@ -89,11 +89,111 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
 }
 
 
-void accumulate_observation_matrix(py::array_t <double> c_obs_matrix,
-                                   py::array_t <int64_t> c_pixels,
-                                   py::array_t <double> weights,
-                                   py::array_t <double> templates,
-                                   py::array_t <double> template_covariance) {
+void expand_matrix(py::array_t <double> compressed_matrix,
+                   py::array_t <int64_t> local_to_global,
+                   int64_t npix,
+                   int64_t nnz,
+                   py::array_t <int64_t> indices,
+                   py::array_t <int64_t> indptr
+                   ) {
+    auto fast_matrix = compressed_matrix.unchecked<2>();
+    auto fast_local_to_global = local_to_global.unchecked<1>();
+    auto fast_indices = indices.mutable_unchecked<1>();
+    auto fast_indptr = indptr.mutable_unchecked<1>();
+
+    size_t nlocal = fast_local_to_global.shape(0);
+    size_t nlocal_tot = fast_matrix.shape(0);
+    std::vector<int64_t> col_indices;
+
+    size_t offset = 0;
+    for (size_t inz = 0; inz < nnz; ++inz) {
+        for (size_t ilocal = 0; ilocal < nlocal; ++ilocal) {
+            size_t iglobal = fast_local_to_global[ilocal];
+            col_indices.push_back(iglobal + offset);
+        }
+        offset += npix;
+    }
+
+    size_t global_row = 0;
+    offset = 0;
+    for (size_t inz = 0; inz < nnz; ++inz) {
+        size_t global_pixel = 0;
+        for (size_t ilocal = 0; ilocal < nlocal; ++ilocal) {
+            size_t iglobal = fast_local_to_global[ilocal];
+            while (global_pixel < iglobal) {
+                fast_indptr[global_row + 1] = offset;
+                global_row++;
+                global_pixel++;
+            }
+            for (auto ind : col_indices) {
+                fast_indices[offset++] = ind;
+            }
+            fast_indptr[global_row + 1] = offset;
+            global_pixel++;
+            global_row++;
+        }
+        while (global_pixel < npix) {
+            fast_indptr[global_row + 1] = offset;
+            global_row++;
+            global_pixel++;
+        }
+    }
+}
+
+
+void build_template_covariance(py::array_t <double, py::array::c_style | py::array::forcecast> templates,
+                               py::array_t <double, py::array::c_style | py::array::forcecast> good,
+                               py::array_t <double, py::array::c_style | py::array::forcecast> template_covariance) {
+    auto fast_templates = templates.unchecked<2>();
+    auto fast_good = good.unchecked<1>();
+    auto fast_covariance = template_covariance.mutable_unchecked<2>();
+
+    size_t ntemplate = fast_templates.shape(0);
+    size_t nsample = fast_templates.shape(1);
+
+    std::vector<size_t> starts(ntemplate);
+    std::vector<size_t> stops(ntemplate);
+#pragma omp parallel for schedule(static, 1)
+    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+        size_t istart;
+        for (istart = 0; istart < nsample; ++istart) {
+            if (fast_templates(itemplate, istart) != 0 && fast_good[istart] != 0) break;
+        }
+        starts[itemplate] = istart;
+
+        size_t istop;
+        for (istop = nsample - 1; istop >= 0; --istop) {
+            if (fast_templates(itemplate, istop) != 0 && fast_good[istop] != 0) break;
+        }
+        stops[itemplate] = istop + 1;
+    }
+
+#pragma omp parallel for schedule(static, 1)
+    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+        for (size_t jtemplate = itemplate; jtemplate < ntemplate; ++jtemplate) {
+            double val = 0;
+            size_t istart = std::max(starts[itemplate], starts[jtemplate]);
+            size_t istop = std::min(stops[itemplate], stops[jtemplate]);
+            for (size_t isample = istart; isample < istop; ++isample) {
+                val += fast_templates(itemplate, isample)
+                    * fast_templates(jtemplate, isample)
+                    * fast_good(isample);
+            }
+            fast_covariance(itemplate, jtemplate) = val;
+            if (itemplate != jtemplate) {
+                fast_covariance(jtemplate, itemplate) = val;
+            }
+        }
+    }
+}
+
+
+
+void accumulate_observation_matrix(py::array_t <double, py::array::c_style | py::array::forcecast> c_obs_matrix,
+                                   py::array_t <int64_t, py::array::c_style | py::array::forcecast> c_pixels,
+                                   py::array_t <double, py::array::c_style | py::array::forcecast> weights,
+                                   py::array_t <double, py::array::c_style | py::array::forcecast> templates,
+                                   py::array_t <double, py::array::c_style | py::array::forcecast> template_covariance) {
     auto fast_obs_matrix = c_obs_matrix.mutable_unchecked<2>();
     auto fast_pixels = c_pixels.unchecked<1>();
     auto fast_weights = weights.unchecked<2>();
@@ -103,7 +203,19 @@ void accumulate_observation_matrix(py::array_t <double> c_obs_matrix,
     size_t nsample = fast_pixels.shape(0);
     size_t nnz = fast_weights.shape(1);
     size_t ntemplate = fast_templates.shape(1);
-    size_t npix = fast_obs_matrix.shape(0) / nnz;
+    size_t npixtot = fast_obs_matrix.shape(0);
+    size_t npix = npixtot / nnz;
+
+    // Build lists of non-zeros for each row of the template matrix
+    std::vector<std::vector<size_t>> nonzeros(nsample);
+# pragma omp parallel for schedule(static, 1)
+    for (size_t isample = 0; isample < nsample; ++isample) {
+        for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+            if (fast_templates(isample, itemplate) != 0) {
+                nonzeros[isample].push_back(itemplate);
+            }
+        }
+    }
 
 # pragma omp parallel
     {
@@ -117,12 +229,13 @@ void accumulate_observation_matrix(py::array_t <double> c_obs_matrix,
         for (size_t isample = 0; isample < nsample; ++isample) {
             size_t ipixel = fast_pixels(isample);
             if (ipixel % nthreads != idthread) continue;
-
-            for (size_t jsample = 0; jsample < nsample; ++jsample) {
+            // Only need to consider half of the sample-sample pairs
+            // due to symmetry
+            for (size_t jsample = isample; jsample < nsample; ++jsample) {
                 size_t jpixel = fast_pixels(jsample);
                 double filter_matrix = 0;
-                for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
-                    for (size_t jtemplate = 0; jtemplate < ntemplate; ++jtemplate) {
+                for (auto itemplate : nonzeros[isample]) {
+                    for (auto jtemplate : nonzeros[jsample]) {
                         filter_matrix
                             += fast_templates(isample, itemplate)
                             * fast_templates(jsample, jtemplate)
@@ -144,6 +257,16 @@ void accumulate_observation_matrix(py::array_t <double> c_obs_matrix,
             }
         }
     }
+
+    // Symmetrize
+# pragma omp parallel for schedule(static, 1)
+    for (size_t row = 0; row < npixtot; ++row) {
+        for (size_t col = row + 1; col < npixtot; ++col) {
+            fast_obs_matrix(row, col) += fast_obs_matrix(col, row);
+            fast_obs_matrix(col, row) = fast_obs_matrix(row, col);
+        }
+    }
+
 }
 
 
@@ -155,4 +278,6 @@ void init_todmap_mapmaker(py::module & m)
     m.def("add_offsets_to_signal", &add_offsets_to_signal);
     m.def("apply_flags_to_pixels", &apply_flags_to_pixels);
     m.def("accumulate_observation_matrix", &accumulate_observation_matrix);
+    m.def("expand_matrix", &expand_matrix);
+    m.def("build_template_covariance", &build_template_covariance);
 }
