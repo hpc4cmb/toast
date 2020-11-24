@@ -339,7 +339,7 @@ def apply_mapmaker(
                     write_destriped=False,
                     write_rcond=False,
                     rcond_limit=1e-3,
-                    baseline_length=args.obs_time_h, ## we calibrate for the whole observation length
+                    baseline_length=args.obs_time_h *3600, ## we calibrate for the whole observation length
                     maskfile=args.mapmaker_mask,
                     weightmapfile=args.mapmaker_weightmap,
                     common_flag_mask=args.common_flag_mask,

@@ -1838,10 +1838,10 @@ class OpMapMaker(Operator):
                 )
             )
         if self.gain_templatename is not None:
-                    log.info(
+            if self.rank==0:
+                log.info(
                         f"Initializing Gain template, with Legendre polynomials,  order = {self.gain_poly_order} and {self.gain_templatename} as signal template."  )
-
-                    templatelist.append(
+            templatelist.append(
                         GainTemplate(
                             data,
                             detweights=self.detweights,
