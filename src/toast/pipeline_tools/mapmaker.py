@@ -355,6 +355,7 @@ def apply_mapmaker(
 
                 calibrator.exec(tele_data, time_comm)
 
+
             mapmaker = OpMapMaker(
                 nside=args.nside,
                 nnz=3,

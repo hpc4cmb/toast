@@ -397,7 +397,7 @@ class GainTemplate(TODTemplate):
                 a[amplitude_slice] = M.dot(b[amplitude_slice])
         return
 
-    def calibrate(self, signal, amplitudes ):
+    def calibrate(self,  signal ,  amplitudes ):
         """
         Estimate the optimal gain fluctuations from the amplitudes estimated
         at   PCG convergence .
@@ -414,8 +414,9 @@ class GainTemplate(TODTemplate):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
                 poly_amps = poly_amplitudes[amplitude_slice ]
-                delta_gain = legendre_poly.dot(poly_amps)
-        return delta_gain
+                signal[iobs, det, todslice] /= legendre_poly.dot(poly_amps)
+
+        return signal
 
 
 
@@ -1111,13 +1112,9 @@ class TemplateMatrix(TOASTMatrix):
         else:
             outsignal = signal.copy()
         for  template in self.templates.values():
-            delta_gain = template.calibrate(outsignal, amplitudes)
-            #import pdb
-            #pdb.set_trace()
-            #print(delta_gain,template.name )
-            if delta_gain is not None :
-                outsignal /= delta_gain
-
+            tmp     = template.calibrate( outsignal  , amplitudes)
+            if tmp   is not None :
+                outsignal    =tmp
         return outsignal
 
 class TemplateAmplitudes(TOASTVector):
@@ -1956,16 +1953,14 @@ class OpMapMaker(Operator):
         amplitudes = solver.solve()
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
-        # DEBUG begin
-        #if self.rank ==0  and :
-        #    templates.templates["Gain"].write_gain_fluctuation(amplitudes, "gain_amplitudes.npz")
-        # DEBUG end
 
-        # if we mitigated calibration errors, we apply the estimated gains
+        # To  mitigate calibration errors, we apply the estimated gains
         if self.gain_templatename is not None:
             templates.calibrate_signal(signal, amplitudes )
             if self.rank == 0:
                 timer.report_clear("Calibrate TOD")
+                templates.templates["Gain"].write_gain_fluctuation(filename="gain_amplitudes.npz",
+                                                    amplitudes=amplitudes )
         else :
             # Clean TOD
             templates.clean_signal(signal, amplitudes)
