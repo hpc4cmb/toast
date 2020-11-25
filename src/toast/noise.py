@@ -165,7 +165,7 @@ class Noise(object):
                 noisevar = np.median(psd[ind])
                 for det in self.detectors:
                     wt = self.weight(det, k)
-                    if wt > 0.0:
+                    if wt != 0.0:
                         self._detweights[det] += wt * (1.0 / noisevar)
         return self._detweights[det]
 

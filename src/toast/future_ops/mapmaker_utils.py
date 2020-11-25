@@ -128,7 +128,7 @@ class BuildHitMap(Operator):
                     local_pix[flags != 0] = -1
 
                 cov_accum_diag_hits(
-                    dist.n_submap,
+                    dist.n_local_submap,
                     dist.n_pix_submap,
                     1,
                     local_sm.astype(np.int64),
@@ -313,7 +313,7 @@ class BuildInverseCovariance(Operator):
 
                 # Accumulate
                 cov_accum_diag_invnpp(
-                    dist.n_submap,
+                    dist.n_local_submap,
                     dist.n_pix_submap,
                     weight_nnz,
                     local_sm.astype(np.int64),
@@ -503,7 +503,7 @@ class BuildNoiseWeighted(Operator):
 
                 # Accumulate
                 cov_accum_zmap(
-                    dist.n_submap,
+                    dist.n_local_submap,
                     dist.n_pix_submap,
                     self._zmap.n_value,
                     local_sm.astype(np.int64),

@@ -73,6 +73,31 @@ class PixelDistribution(object):
         self._owned_submaps = None
         self._alltoallv_info = None
 
+    def __eq__(self, other):
+        local_eq = True
+        if self._n_pix != other._n_pix:
+            local_eq = False
+        if self._n_submap != other._n_submap:
+            local_eq = False
+        if self._n_pix_submap != other._n_pix_submap:
+            local_eq = False
+        if not np.array_equal(self._local_submaps, other._local_submaps):
+            local_eq = False
+        if self._comm is None and other._comm is not None:
+            local_eq = False
+        if self._comm is not None and other._comm is None:
+            local_eq = False
+        if self._comm is not None:
+            comp = MPI.Comm.Compare(self._comm, other._comm)
+            if comp not in (MPI.IDENT, MPI.CONGRUENT):
+                local_eq = False
+        if self._comm is not None:
+            local_eq = self._comm.allreduce(local_eq, op=MPI.LAND)
+        return local_eq
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -171,8 +196,8 @@ class PixelDistribution(object):
         local_sm, pixels = libtoast_global_to_local(
             gl, self._n_pix_submap, self._glob2loc
         )
-        local_sm[:] *= self._n_pix_submap
-        pixels[:] += local_sm
+        local_sm *= self._n_pix_submap
+        pixels += local_sm
         return pixels
 
     def __repr__(self):
@@ -204,16 +229,6 @@ class PixelDistribution(object):
             # Need to compute it.
             local_hit_submaps = np.zeros(self._n_submap, dtype=np.uint8)
             local_hit_submaps[self._local_submaps] = 1
-            # print(
-            #     "rank {} local_submaps = {}".format(
-            #         self._comm.rank, self._local_submaps[:]
-            #     )
-            # )
-            # print(
-            #     "rank {} local_hit_submaps = {}".format(
-            #         self._comm.rank, local_hit_submaps[:]
-            #     )
-            # )
 
             hit_submaps = None
             if self._comm.rank == 0:
@@ -223,9 +238,6 @@ class PixelDistribution(object):
             del local_hit_submaps
 
             if self._comm.rank == 0:
-                # print(
-                #     "rank {} hit_submaps = {}".format(self._comm.rank, hit_submaps[:])
-                # )
                 total_hit_submaps = np.sum(hit_submaps.astype(np.int32))
                 tdist = distribute_uniform(total_hit_submaps, self._comm.size)
 
@@ -247,8 +259,6 @@ class PixelDistribution(object):
                 del hit_submaps
 
             self._comm.Bcast(self._submap_owners, root=0)
-            # if self._comm.rank == 0:
-            #     print("submap owners = {}".format(self._submap_owners[:]))
         return self._submap_owners
 
     @property
@@ -261,7 +271,6 @@ class PixelDistribution(object):
         self._owned_submaps = np.array(
             [x for x, y in enumerate(owners) if y == self._comm.rank], dtype=np.int32
         )
-        # print("rank {} owns submaps {}".format(self._comm.rank, self._owned_submaps[:]))
         return self._owned_submaps
 
     @property
@@ -506,6 +515,18 @@ class PixelData(object):
         )
         return val
 
+    def duplicate(self):
+        """Create a copy of the data with the same distribution.
+
+        Returns:
+            (PixelData):  A duplicate of the instance with copied data but the same
+                distribution.
+
+        """
+        dup = PixelData(self.distribution, self.dtype, n_value=self.n_value)
+        dup.raw[:] = self.raw
+        return dup
+
     def comm_nsubmap(self, bytes):
         """Given a buffer size, compute the number of submaps to communicate.
 
@@ -607,6 +628,7 @@ class PixelData(object):
     def setup_alltoallv(self):
         """Check that alltoallv buffers exist and create them if needed."""
         if self._send_counts is None:
+            log = Logger.get()
             # Get the parameters in terms of submaps.
             (
                 send_counts,
@@ -634,27 +656,41 @@ class PixelData(object):
             self._reduce_buf_raw = self.storage_class.zeros(self._n_submap_value)
             self.reduce_buf = self._reduce_buf_raw.array()
 
-            if self._dist.comm is None:
-                # For this case, point the receive member to the original data.  This
-                # will allow codes processing locally owned submaps to work
-                # transparently in the serial case.
-                self.receive = self.data
-            else:
-                # Check that our send and receive buffers do not exceed 32bit indices
-                # required by MPI
-                max_int = 2147483647
-                if scale * (self._recv_displ[-1] + self._recv_counts[-1]) > max_int:
-                    msg = "Alltoallv receive buffer size exceeds max 32bit integer"
-                    raise RuntimeError(msg)
-                if len(self.raw) > max_int:
-                    msg = "Alltoallv send buffer size exceeds max 32bit integer"
-                    raise RuntimeError(msg)
+            buf_check_fail = False
+            try:
+                if self._dist.comm is None:
+                    # For this case, point the receive member to the original data.
+                    # This will allow codes processing locally owned submaps to work
+                    # transparently in the serial case.
+                    self.receive = self.data
+                else:
+                    # Check that our send and receive buffers do not exceed 32bit
+                    # indices required by MPI
+                    max_int = 2147483647
+                    recv_buf_size = self._recv_displ[-1] + self._recv_counts[-1]
+                    if recv_buf_size > max_int:
+                        msg = "Proc {} Alltoallv receive buffer size exceeds max 32bit integer".format(
+                            self._dist.comm.rank
+                        )
+                        log.error(msg)
+                        buf_check_fail = True
+                    if len(self.raw) > max_int:
+                        msg = "Proc {} Alltoallv send buffer size exceeds max 32bit integer".format(
+                            self._dist.comm.rank
+                        )
+                        log.error(msg)
+                        buf_check_fail = True
 
-                # Allocate a persistent receive buffer
-                self._receive_raw = self.storage_class.zeros(
-                    self._recv_displ[-1] + self._recv_counts[-1]
-                )
-                self.receive = self._receive_raw.array()
+                    # Allocate a persistent receive buffer
+                    self._receive_raw = self.storage_class.zeros(recv_buf_size)
+                    self.receive = self._receive_raw.array()
+            except:
+                buf_check_fail = True
+            if self._dist.comm is not None:
+                buf_check_fail = self._dist.comm.allreduce(buf_check_fail, op=MPI.LOR)
+            if buf_check_fail:
+                msg = "alltoallv buffer setup failed on one or more processes"
+                raise RuntimeError(msg)
 
     @function_timer
     def forward_alltoallv(self):
@@ -668,7 +704,10 @@ class PixelData(object):
             None.
 
         """
+        myp = self.distribution.comm.rank
+
         self.setup_alltoallv()
+
         if self._dist.comm is None:
             # No communication needed
             return
@@ -720,6 +759,7 @@ class PixelData(object):
             None.
 
         """
+        myp = self.distribution.comm.rank
         self.forward_alltoallv()
 
         if local_func is None:

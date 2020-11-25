@@ -127,6 +127,17 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                     *covpointer += *wpointer2 * scaled_weight;
                 }
             }
+
+            // std::cout << "Accum to local pixel " << hpx << " with scale " << scale <<
+            // ":" << std::endl;
+            // for (size_t j = 0; j < nnz; ++j) {
+            //     std::cout << " " << weights[i * nnz + j];
+            // }
+            // std::cout << std::endl;
+            // for (size_t j = 0; j < block; ++j) {
+            //     std::cout << " " << invnpp[ipx + j];
+            // }
+            // std::cout << std::endl;
         }
     }
 
@@ -225,18 +236,31 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // shortcut for NNZ == 1
         if (!invert) {
             // Not much point in calling this!
-            for (int64_t i = 0; i < nsub; ++i) {
-                for (int64_t j = 0; j < subsize; ++j) {
-                    cond[i * subsize + j] = 1.0;
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        cond[i * subsize + j] = 1.0;
+                    }
                 }
             }
         } else {
-            for (int64_t i = 0; i < nsub; ++i) {
-                for (int64_t j = 0; j < subsize; ++j) {
-                    int64_t dpx = (i * subsize) + j;
-                    cond[dpx] = 1.0;
-                    if (data[dpx] != 0) {
-                        data[dpx] = 1.0 / data[dpx];
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        cond[dpx] = 1.0;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
                     }
                 }
             }
@@ -368,7 +392,9 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                         }
                     }
                 }
-                cond[i] = rcond;
+                if (cond != NULL) {
+                    cond[i] = rcond;
+                }
             }
         }
     }

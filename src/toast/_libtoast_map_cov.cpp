@@ -166,10 +166,10 @@ void init_map_cov(py::module & m) {
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg(
               "invnpp"), R"(
-        Accumulate block diagonal noise covariance and hits.
+        Accumulate block diagonal noise covariance.
 
         This uses a pointing matrix to accumulate the local pieces
-        of the inverse diagonal pixel covariance and hits.
+        of the inverse diagonal pixel covariance.
 
         Args:
             nsub (int):  The number of locally stored submaps.
@@ -270,17 +270,24 @@ void init_map_cov(py::module & m) {
               py::buffer_info info_cond = cond.request();
               int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
               size_t nb = (size_t)(info_data.size / block);
-              if (info_cond.size != nb) {
-                  auto log = toast::Logger::get();
-                  std::ostringstream o;
-                  o << "Buffer sizes are not consistent.";
-                  log.error(o.str().c_str());
-                  throw std::runtime_error(o.str().c_str());
-              }
               double * rawdata = reinterpret_cast <double *> (info_data.ptr);
-              double * rawcond = reinterpret_cast <double *> (info_cond.ptr);
-              toast::cov_eigendecompose_diag(nsub, nsubpix, nnz, rawdata, rawcond,
-                                             threshold, invert);
+              double * rawcond;
+              if (info_cond.size > 0) {
+                  if (info_cond.size != nb) {
+                      auto log = toast::Logger::get();
+                      std::ostringstream o;
+                      o << "Buffer sizes are not consistent.";
+                      log.error(o.str().c_str());
+                      throw std::runtime_error(o.str().c_str());
+                  }
+                  rawcond = reinterpret_cast <double *> (info_cond.ptr);
+                  toast::cov_eigendecompose_diag(nsub, nsubpix, nnz, rawdata, rawcond,
+                                                 threshold, invert);
+              } else {
+                  rawcond = NULL;
+                  toast::cov_eigendecompose_diag(nsub, nsubpix, nnz, rawdata, rawcond,
+                                                 threshold, invert);
+              }
               gt.stop("cov_eigendecompose_diag");
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("data"),

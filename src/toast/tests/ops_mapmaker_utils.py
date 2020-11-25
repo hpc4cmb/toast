@@ -5,20 +5,17 @@
 import os
 
 import numpy as np
+import numpy.testing as nt
 
 from astropy import units as u
 
 from .mpi import MPITestCase
 
-from ..vis import set_matplotlib_backend
-
-from .. import rng as rng
-
 from ..noise import Noise
 
 from .. import future_ops as ops
 
-from ..future_ops.sim_tod_noise import sim_noise_timestream
+from ..pixels import PixelDistribution, PixelData
 
 from ._helpers import create_outdir, create_satellite_data
 
@@ -27,6 +24,24 @@ class MapmakerUtilsTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
+        np.random.seed(123456)
+        self.mix_coeff = np.random.uniform(low=-1.0, high=1.0, size=1000)
+
+    def create_corr_noise(self, dets, nse):
+        corr_freqs = {"noise_{}".format(i): nse.freq(x) for i, x in enumerate(dets)}
+        corr_psds = {"noise_{}".format(i): nse.psd(x) for i, x in enumerate(dets)}
+        corr_indices = {"noise_{}".format(i): 100 + i for i, x in enumerate(dets)}
+        corr_mix = dict()
+        for i, x in enumerate(dets):
+            dmix = self.mix_coeff[: len(dets)]
+            corr_mix[x] = {"noise_{}".format(y): dmix[y] for y in range(len(dets))}
+        return Noise(
+            detectors=dets,
+            freqs=corr_freqs,
+            psds=corr_psds,
+            mixmatrix=corr_mix,
+            indices=corr_indices,
+        )
 
     def test_hits(self):
         # Create a fake satellite data set for testing
@@ -40,6 +55,20 @@ class MapmakerUtilsTest(MPITestCase):
 
         build_hits = ops.BuildHitMap(pixel_dist="pixel_dist")
         hits = build_hits.apply(data)
+
+        # Manual check
+        check_hits = PixelData(data["pixel_dist"], np.int64, n_value=1)
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                    ob.detdata["pixels"][det]
+                )
+                for i in range(ob.n_local_samples):
+                    if local_pix[i] >= 0:
+                        check_hits.data[local_sm[i], local_pix[i], 0] += 1
+        check_hits.sync_allreduce()
+
+        nt.assert_equal(hits.data, check_hits.data)
 
         del data
         return
@@ -62,33 +91,7 @@ class MapmakerUtilsTest(MPITestCase):
         # observation.
         for ob in data.obs:
             nse = ob[default_model.noise_model]
-            corr_freqs = {
-                "noise_{}".format(i): nse.freq(x)
-                for i, x in enumerate(ob.local_detectors)
-            }
-            corr_psds = {
-                "noise_{}".format(i): nse.psd(x)
-                for i, x in enumerate(ob.local_detectors)
-            }
-            corr_indices = {
-                "noise_{}".format(i): 100 + i for i, x in enumerate(ob.local_detectors)
-            }
-            corr_mix = dict()
-            for i, x in enumerate(ob.local_detectors):
-                dmix = np.random.uniform(
-                    low=-1.0, high=1.0, size=len(ob.local_detectors)
-                )
-                corr_mix[x] = {
-                    "noise_{}".format(y): dmix[y]
-                    for y in range(len(ob.local_detectors))
-                }
-            ob["noise_model_corr"] = Noise(
-                detectors=ob.local_detectors,
-                freqs=corr_freqs,
-                psds=corr_psds,
-                mixmatrix=corr_mix,
-                indices=corr_indices,
-            )
+            ob["noise_model_corr"] = self.create_corr_noise(ob.local_detectors, nse)
 
         # Simulate noise using both models
 
@@ -110,6 +113,50 @@ class MapmakerUtilsTest(MPITestCase):
         )
         invnpp_corr = build_invnpp_corr.apply(data)
 
+        # Manual check
+
+        check_invnpp = PixelData(data["pixel_dist"], np.float64, n_value=6)
+        check_invnpp_corr = PixelData(data["pixel_dist"], np.float64, n_value=6)
+
+        for ob in data.obs:
+            noise = ob["noise_model"]
+            noise_corr = ob["noise_model_corr"]
+
+            for det in ob.local_detectors:
+                detweight = noise.detector_weight(det)
+                detweight_corr = noise_corr.detector_weight(det)
+
+                wt = ob.detdata["weights"][det]
+                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                    ob.detdata["pixels"][det]
+                )
+                for i in range(ob.n_local_samples):
+                    if local_pix[i] < 0:
+                        continue
+                    off = 0
+                    for j in range(3):
+                        for k in range(j, 3):
+                            check_invnpp.data[local_sm[i], local_pix[i], off] += (
+                                detweight * wt[i, j] * wt[i, k]
+                            )
+                            check_invnpp_corr.data[local_sm[i], local_pix[i], off] += (
+                                detweight_corr * wt[i, j] * wt[i, k]
+                            )
+                            off += 1
+
+        check_invnpp.sync_allreduce()
+        check_invnpp_corr.sync_allreduce()
+
+        for sm in range(invnpp.distribution.n_local_submap):
+            for px in range(invnpp.distribution.n_pix_submap):
+                if invnpp.data[sm, px, 0] != 0:
+                    nt.assert_almost_equal(
+                        invnpp.data[sm, px], check_invnpp.data[sm, px]
+                    )
+                if invnpp_corr.data[sm, px, 0] != 0:
+                    nt.assert_almost_equal(
+                        invnpp_corr.data[sm, px], check_invnpp_corr.data[sm, px]
+                    )
         del data
         return
 
@@ -131,33 +178,7 @@ class MapmakerUtilsTest(MPITestCase):
         # observation.
         for ob in data.obs:
             nse = ob[default_model.noise_model]
-            corr_freqs = {
-                "noise_{}".format(i): nse.freq(x)
-                for i, x in enumerate(ob.local_detectors)
-            }
-            corr_psds = {
-                "noise_{}".format(i): nse.psd(x)
-                for i, x in enumerate(ob.local_detectors)
-            }
-            corr_indices = {
-                "noise_{}".format(i): 100 + i for i, x in enumerate(ob.local_detectors)
-            }
-            corr_mix = dict()
-            for i, x in enumerate(ob.local_detectors):
-                dmix = np.random.uniform(
-                    low=-1.0, high=1.0, size=len(ob.local_detectors)
-                )
-                corr_mix[x] = {
-                    "noise_{}".format(y): dmix[y]
-                    for y in range(len(ob.local_detectors))
-                }
-            ob["noise_model_corr"] = Noise(
-                detectors=ob.local_detectors,
-                freqs=corr_freqs,
-                psds=corr_psds,
-                mixmatrix=corr_mix,
-                indices=corr_indices,
-            )
+            ob["noise_model_corr"] = self.create_corr_noise(ob.local_detectors, nse)
 
         # Simulate noise using both models
 
@@ -180,6 +201,41 @@ class MapmakerUtilsTest(MPITestCase):
             det_data="noise_corr",
         )
         zmap_corr = build_zmap_corr.apply(data)
+
+        # Manual check
+
+        check_zmap = PixelData(data["pixel_dist"], np.float64, n_value=3)
+        check_zmap_corr = PixelData(data["pixel_dist"], np.float64, n_value=3)
+
+        for ob in data.obs:
+            noise = ob["noise_model"]
+            noise_corr = ob["noise_model_corr"]
+            for det in ob.local_detectors:
+                wt = ob.detdata["weights"][det]
+                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                    ob.detdata["pixels"][det]
+                )
+
+                for i in range(ob.n_local_samples):
+                    if local_pix[i] < 0:
+                        continue
+                    for j in range(3):
+                        check_zmap.data[local_sm[i], local_pix[i], j] += (
+                            noise.detector_weight(det)
+                            * ob.detdata["noise"][det, i]
+                            * wt[i, j]
+                        )
+                        check_zmap_corr.data[local_sm[i], local_pix[i], j] += (
+                            noise_corr.detector_weight(det)
+                            * ob.detdata["noise_corr"][det, i]
+                            * wt[i, j]
+                        )
+
+        check_zmap.sync_allreduce()
+        check_zmap_corr.sync_allreduce()
+
+        np.testing.assert_almost_equal(zmap.data, check_zmap.data)
+        np.testing.assert_almost_equal(zmap_corr.data, check_zmap_corr.data)
 
         del data
         return

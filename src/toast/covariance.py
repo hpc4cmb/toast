@@ -56,8 +56,9 @@ def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
             )
             for lc in locs:
                 receive[lc : lc + n_submap_value] = reduce_buf
-                if rcond is not None:
-                    rcond.receive[lc : lc + (n_pix_submap * mapnnz)] = rcond.reduce_buf
+            if rcond is not None:
+                for lc in rcond._recv_locations[sm]:
+                    rcond.receive[lc : lc + n_pix_submap] = rcond.reduce_buf
 
     return local_invert
 
@@ -86,22 +87,16 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
     """
     mapnnz = int(((np.sqrt(8 * npp.n_value) - 1) / 2) + 0.5)
     nppdata = npp.raw
-    if nppdata is None:
-        nppdata = np.empty(shape=0, dtype=np.float64)
     if rcond is not None:
-        if rcond.distribution.n_pix != npp.distribution.n_pix:
+        if npp.distribution != rcond.distribution:
             raise RuntimeError(
-                "covariance matrix and condition number map must have same number "
-                "of pixels"
-            )
-        if rcond.distribution.n_pix_submap != npp.distribution.n_pix_submap:
-            raise RuntimeError(
-                "covariance matrix and condition number map must have same submap size"
+                "covariance matrix and rcond must have same pixel distribution"
             )
         if rcond.n_value != 1:
             raise RuntimeError("condition number map should have n_value = 1")
 
     if use_alltoallv:
+        myp = npp.distribution.comm.rank
         if rcond is not None:
             # Stage data to receive buffer
             rcond.forward_alltoallv()
@@ -116,10 +111,10 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
         else:
             rdata = rcond.raw
         cov_eigendecompose_diag(
-            1,
-            n_pix_submap,
+            npp.distribution.n_local_submap,
+            npp.distribution.n_pix_submap,
             mapnnz,
-            reduce_buf,
+            nppdata,
             rdata,
             threshold,
             True,
@@ -177,10 +172,8 @@ def covariance_multiply(npp1, npp2, use_alltoallv=False):
     """
     mapnnz = int(((np.sqrt(8 * npp1.n_value) - 1) / 2) + 0.5)
 
-    if npp1.n_pix != npp2.n_pix:
-        raise RuntimeError("covariance matrices must have same number of pixels")
-    if npp1.n_pix_submap != npp2.n_pix_submap:
-        raise RuntimeError("covariance matrices must have same submap size")
+    if npp1.distribution != npp2.distribution:
+        raise RuntimeError("covariance matrices must have same pixel distribution")
     if npp1.n_value != npp2.n_value:
         raise RuntimeError("covariance matrices must have same n_values")
 
@@ -189,7 +182,9 @@ def covariance_multiply(npp1, npp2, use_alltoallv=False):
         lmultiply = create_local_multiply(npp1.distribution.n_pix_submap, mapnnz, npp2)
         npp1.sync_alltoallv(local_func=lmultiply)
     else:
-        cov_mult_diag(npp1.n_submap, npp1.n_pix_submap, mapnnz, npp1data, npp2data)
+        cov_mult_diag(
+            npp1.n_local_submap, npp1.n_pix_submap, mapnnz, npp1data, npp2data
+        )
 
     return
 
@@ -218,7 +213,7 @@ def create_local_apply(n_pix_submap, mapnnz, m):
 
             cov_apply_diag(1, n_pix_submap, mapnnz, reduce_buf, m_buf)
 
-            for lc in locs:
+            for lc in m._recv_locations[sm]:
                 m.receive[lc : lc + (n_pix_submap * mapnnz)] = m.reduce_buf
 
     return local_apply
@@ -244,10 +239,10 @@ def covariance_apply(npp, m, use_alltoallv=False):
     """
     mapnnz = int(((np.sqrt(8 * npp.n_value) - 1) / 2) + 0.5)
 
-    if m.n_pix != npp.n_pix:
-        raise RuntimeError("covariance matrix and map must have same number of pixels")
-    if m.n_pix_submap != npp.n_pix_submap:
-        raise RuntimeError("covariance matrix and map must have same submap size")
+    if npp.distribution != m.distribution:
+        raise RuntimeError(
+            "covariance matrix and map must have same pixel distribution"
+        )
     if m.n_value != mapnnz:
         raise RuntimeError("covariance matrix and map have incompatible NNZ values")
 
@@ -258,7 +253,13 @@ def covariance_apply(npp, m, use_alltoallv=False):
     else:
         nppdata = npp.raw
         mdata = m.raw
-        cov_apply_diag(npp.n_submap, npp.n_pix_submap, mapnnz, nppdata, mdata)
+        cov_apply_diag(
+            npp.distribution.n_local_submap,
+            npp.distribution.n_pix_submap,
+            mapnnz,
+            nppdata,
+            mdata,
+        )
     return
 
 
@@ -294,10 +295,10 @@ def covariance_rcond(npp, use_alltoallv=False):
         nppdata = npp.raw
         rdata = rcond.raw
         cov_eigendecompose_diag(
-            1,
-            n_pix_submap,
+            npp.distribution.n_local_submap,
+            npp.distribution.n_pix_submap,
             mapnnz,
-            reduce_buf,
+            nppdata,
             rdata,
             threshold,
             False,

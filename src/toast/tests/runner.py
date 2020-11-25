@@ -37,14 +37,14 @@ from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 
 
+from . import covariance as test_covariance
+
 #
 # from . import cache as testcache
 #
 # from . import tod as testtod
 #
 # from . import psd_math as testpsdmath
-#
-# from . import cov as testcov
 #
 # from . import ops_dipole as testopsdipole
 # from . import ops_simnoise as testopssimnoise
@@ -144,6 +144,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_noise))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
+
+        suite.addTest(loader.loadTestsFromModule(test_covariance))
 
         #
         # suite.addTest(loader.loadTestsFromModule(testtod))
