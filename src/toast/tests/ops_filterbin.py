@@ -11,6 +11,7 @@ import shutil
 
 import healpy as hp
 import numpy as np
+import scipy.sparse
 
 from ..timing import gather_timers, GlobalTimers
 from ..timing import dump as dump_timing
@@ -45,10 +46,10 @@ class OpFilterBinTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        self.nobs = 4
+        self.nobs = 3
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
-        self.ndet = 4
+        self.ndet = 1
         self.sigma = 1
         self.rate = 50.0
         self.net = self.sigma / np.sqrt(self.rate)
@@ -76,12 +77,12 @@ class OpFilterBinTest(MPITestCase):
         # Pixelization
         self.sim_nside = 8
         self.map_nside = 8
-        self.pointingmode = "IQU"
         self.nnz = 3
+        self.pointingmode = "IQU"[:self.nnz]
 
         # Samples per observation
         self.npix = 12 * self.sim_nside ** 2
-        self.ninterval = 4
+        self.ninterval = 1
         self.totsamp = self.ninterval * self.npix
 
         # Define intervals
@@ -116,7 +117,7 @@ class OpFilterBinTest(MPITestCase):
         for iobs in range(self.nobs):
             if iobs % 3 == 1:
                 rot = qa.from_angles(np.pi / 2, 0, 0)
-            if iobs % 3 == 2:
+            elif iobs % 3 == 2:
                 rot = qa.from_angles(np.pi / 2, np.pi / 2, 0)
             else:
                 rot = None
@@ -171,6 +172,15 @@ class OpFilterBinTest(MPITestCase):
         )
         pointing.exec(self.data)
 
+        # Force some gaps in the observing
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                pix = tod.cache.reference("pixels_" + det)
+                n = 3 * self.map_nside ** 2
+                pix[0:n] = pix[2*n:n:-1]
+                pix[3*n:4*n] = pix[3*n:2*n:-1]
+
         # Scan the signal from a map
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
         distmap.read_healpix_fits(self.inmapfile)
@@ -178,30 +188,38 @@ class OpFilterBinTest(MPITestCase):
         scansim = OpSimScan(input_map=distmap, out=name)
         scansim.exec(self.data)
 
-        # Add simulated noise
-        opnoise = OpSimNoise(realization=0, out=name)
-        opnoise.exec(self.data)
-
-        # Copy the signal for comparison
-        name_madam = name + "_copy"
-        cachecopy = OpCacheCopy(name, name_madam)
-        cachecopy.exec(self.data)
-
         # Run FilterBin
 
         gt = GlobalTimers.get()
         gt.start("OpMapMaker test")
+
+        outprefix = "toast_test_"
 
         filterbin = OpFilterBin(
             nside=self.map_nside,
             nnz=self.nnz,
             name=name,
             outdir=self.outdir,
-            outprefix="toast_test_",
+            outprefix=outprefix,
             write_obs_matrix=True,
-            ground_filter_order=None,
-            poly_filter_order=3,
+            ground_filter_order=None,  # Not ground TOD
+            poly_filter_order=20,
+            zip_maps=True
         )
         filterbin.exec(self.data)
+
+        # Test that we can replicate the filtering by applying
+        # the observation matrix to the input map
+
+        fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
+        obs_matrix = scipy.sparse.load_npz(fname)
+
+        fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
+        outmap = hp.read_map(fname, None, nest=True)
+
+        inmap = hp.read_map(self.inmapfile, None, nest=True)
+        outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
+
+        np.testing.assert_array_almost_equal(outmap, outmap_test)
 
         return

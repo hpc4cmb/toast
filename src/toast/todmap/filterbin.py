@@ -8,13 +8,12 @@ import os
 from time import time
 
 import numpy as np
-from numpy.polynomial.chebyshev import chebval
 import scipy.io
 import scipy.sparse
 
 from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
 from .._libtoast import (
-    chebyshev,
+    legendre,
     accumulate_observation_matrix,
     expand_matrix,
     build_template_covariance,
@@ -50,7 +49,7 @@ class OpFilterBin(Operator):
             used.  Otherwise flags are read from the tod object.
         flag_mask (byte):  Bitmask to use when flagging data
            based on the detector flags.
-        ground_filter_order (int):  Order of a Chebyshev polynomial to
+        ground_filter_order (int):  Order of a Legendre polynomial to
             fit as a function of azimuth
         intervals (str):  Name of the valid intervals in observation
         split_ground_template (bool):  Apply a different template for
@@ -130,27 +129,27 @@ class OpFilterBin(Operator):
         nfilter = max_order - min_order + 1
         if nfilter < 1:
             return
-        cheby_templates = np.zeros([nfilter, phase.size])
-        chebyshev(phase, cheby_templates, min_order, max_order + 1)
+        legendre_templates = np.zeros([nfilter, phase.size])
+        legendre(phase, legendre_templates, min_order, max_order + 1)
         if not self._split_ground_template:
-            cheby_filter = cheby_templates
+            legendre_filter = legendre_templates
         else:
             # Separate ground filter by scan direction
-            cheby_filter = []
+            legendre_filter = []
             mask1 = common_flags & tod.LEFTRIGHT_SCAN == 0
             mask2 = common_flags & tod.RIGHTLEFT_SCAN == 0
-            for template in cheby_templates:
+            for template in legendre_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()
                     temp[mask] = 0
-                    cheby_filter.append(temp)
+                    legendre_filter.append(temp)
             del common_ref
-            cheby_filter = np.vstack(cheby_filter)
+            legendre_filter = np.vstack(legendre_filter)
 
         if templates is None:
-            templates = cheby_filter
+            templates = legendre_filter
         else:
-            templates = np.vstack([templates, cheby_filter])
+            templates = np.vstack([templates, legendre_filter])
 
         return templates
 
@@ -166,10 +165,11 @@ class OpFilterBin(Operator):
         for ival in local_intervals:
             istart = ival.first
             istop = ival.last + 1
-            phase = (np.arange(istart, istop) - istart) / (istop - istart - 1)
-            cheby_templates = np.zeros([nfilter, phase.size])
-            chebyshev(phase, cheby_templates, 0, nfilter)
-            poly_templates[offset : offset + nfilter, istart : istop] = cheby_templates
+            wbin = 2 / (istop - istart)
+            phase = (np.arange(istop - istart) + .5) * wbin - 1
+            legendre_templates = np.zeros([nfilter, phase.size])
+            legendre(phase, legendre_templates, 0, nfilter)
+            poly_templates[offset : offset + nfilter, istart : istop] = legendre_templates
             offset += nfilter
 
         if templates is None:

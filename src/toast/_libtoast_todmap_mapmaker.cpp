@@ -229,9 +229,7 @@ void accumulate_observation_matrix(py::array_t <double, py::array::c_style | py:
         for (size_t isample = 0; isample < nsample; ++isample) {
             size_t ipixel = fast_pixels(isample);
             if (ipixel % nthreads != idthread) continue;
-            // Only need to consider half of the sample-sample pairs
-            // due to symmetry
-            for (size_t jsample = isample; jsample < nsample; ++jsample) {
+            for (size_t jsample = 0; jsample < nsample; ++jsample) {
                 size_t jpixel = fast_pixels(jsample);
                 double filter_matrix = 0;
                 for (auto itemplate : nonzeros[isample]) {
@@ -244,6 +242,7 @@ void accumulate_observation_matrix(py::array_t <double, py::array::c_style | py:
                 }
                 if (isample == jsample) {
                     filter_matrix = 1 - filter_matrix;
+
                 } else {
                     filter_matrix = -filter_matrix;
                 }
@@ -257,16 +256,6 @@ void accumulate_observation_matrix(py::array_t <double, py::array::c_style | py:
             }
         }
     }
-
-    // Symmetrize
-# pragma omp parallel for schedule(static, 1)
-    for (size_t row = 0; row < npixtot; ++row) {
-        for (size_t col = row + 1; col < npixtot; ++col) {
-            fast_obs_matrix(row, col) += fast_obs_matrix(col, row);
-            fast_obs_matrix(col, row) = fast_obs_matrix(row, col);
-        }
-    }
-
 }
 
 

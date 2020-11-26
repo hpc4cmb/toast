@@ -280,6 +280,72 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
     return;
 }
 
+void toast::legendre(double * x, double * templates, size_t start_order,
+                      size_t stop_order, size_t nsample) {
+    // order == 0
+    double norm = 1. / sqrt(2);
+    if ((start_order == 0) && (stop_order > 0)) {
+        for (size_t i = 0; i < nsample; ++i) templates[i] = norm;
+    }
+
+    // order == 1
+    norm = 1. / sqrt(2. / 3.);
+    if ((start_order <= 1) && (stop_order > 1)) {
+        for (size_t i = 0; i < nsample; ++i) templates[nsample + i] = norm * x[i];
+    }
+
+    // Calculate the hierarchy of polynomials, one buffer length
+    // at a time to allow for parallelization
+    const size_t buflen = 1000;
+    size_t nbuf = nsample / buflen + 1;
+
+#pragma omp parallel for schedule(static) default(none) \
+    shared(x, templates, start_order, stop_order, nsample, nbuf)
+    for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
+        size_t istart = ibuf * buflen;
+        size_t istop = istart + buflen;
+        if (istop > nsample) istop = nsample;
+        if (istop <= istart) continue;
+        size_t n = istop - istart;
+
+        // Initialize to order = 1
+        std::vector <double> val(n);
+        std::copy(x + istart, x + istart + n, val.data());
+        std::vector <double> prev(n);
+        std::fill(prev.begin(), prev.end(), 1.0);
+        std::vector <double> next(n);
+
+        for (size_t order = 2; order < stop_order; ++order) {
+            // Evaluate current order and store in val
+            double orderinv = 1. / order;
+            for (size_t i = 0; i < n; ++i) {
+                next[i] =
+                    ((2 * order - 1) * x[istart + i] * val[i] - (order - 1) *
+                     prev[i]) * orderinv;
+                //2 * x[istart + i] * val[i] - prev[i];
+            }
+            std::copy(val.data(), val.data() + n, prev.data());
+            std::copy(next.data(), next.data() + n, val.data());
+            if (order >= start_order) {
+                std::copy(
+                    val.data(),
+                    val.data() + n,
+                    templates + istart + (order - start_order) * nsample
+                    );
+            }
+            // Normalize for better condition number
+            double norm = 1. / sqrt(2. / (2. * order + 1.));
+            double *ptemplates = templates + istart + (order - start_order) * nsample;
+            for (size_t i = 0; i < n; ++i) {
+                ptemplates[i] *= norm;
+            }
+
+        }
+    }
+
+    return;
+}
+
 void toast::add_templates(double * signal, double * templates, double * coeff,
                           size_t nsample, size_t ntemplate) {
     const size_t buflen = 1000;
