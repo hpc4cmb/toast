@@ -8,7 +8,7 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..operator import Operator
 
@@ -21,6 +21,8 @@ from .._libtoast import (
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
 )
+
+from .clear import Clear
 
 
 @trait_docs
@@ -57,8 +59,6 @@ class BuildHitMap(Operator):
     det_flag_mask = Int(0, help="Bit mask value for optional flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
-
-    weights = Unicode("weights", help="Observation detdata key for Stokes weights")
 
     sync_type = Unicode(
         "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
@@ -98,6 +98,10 @@ class BuildHitMap(Operator):
             raise RuntimeError(msg)
 
         dist = data[self.pixel_dist]
+        if data.comm.world_rank == 0:
+            log.debug(
+                "Building hit map with pixel_distribution {}".format(self.pixel_dist)
+            )
 
         # On first call, get the pixel distribution and create our distributed hitmap
         if self._hits is None:
@@ -245,6 +249,12 @@ class BuildInverseCovariance(Operator):
             raise RuntimeError(msg)
 
         dist = data[self.pixel_dist]
+        if data.comm.world_rank == 0:
+            log.debug(
+                "Building inverse covariance with pixel_distribution {}".format(
+                    self.pixel_dist
+                )
+            )
 
         weight_nnz = None
         cov_nnz = None
@@ -437,6 +447,12 @@ class BuildNoiseWeighted(Operator):
             raise RuntimeError(msg)
 
         dist = data[self.pixel_dist]
+        if data.comm.world_rank == 0:
+            log.debug(
+                "Building noise weighted map with pixel_distribution {}".format(
+                    self.pixel_dist
+                )
+            )
 
         weight_nnz = None
 
@@ -455,6 +471,12 @@ class BuildNoiseWeighted(Operator):
                 raise RuntimeError(msg)
 
             noise = ob[self.noise_model]
+
+            # Check that the detector data is set
+            if self.det_data is None:
+                raise RuntimeError(
+                    "You must set the det_data trait before calling exec()"
+                )
 
             for det in dets:
                 # The pixels and weights for this detector.
@@ -535,6 +557,262 @@ class BuildNoiseWeighted(Operator):
 
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
+        return prov
+
+    def _accelerators(self):
+        return list()
+
+
+@trait_docs
+class CovarianceAndHits(Operator):
+    """Operator which builds the pixel-space diagonal noise covariance and hit map.
+
+    Frequently the first step in map making is to determine what pixels on the sky
+    have been covered and build the diagonal noise covariance.  During the construction
+    of the covariance we can cut pixels that are poorly conditioned.
+
+    This operator runs the pointing operator and builds the PixelDist instance
+    describing how submaps are distributed among processes.  It builds the hit map
+    and the inverse covariance and then inverts this with a threshold on the condition
+    number in each pixel.
+
+    NOTE:  The pointing operator must have the "pixels", "weights", and "create_dist"
+    traits, which will be set by this operator during execution.
+
+    Output PixelData objects are stored in the Data dictionary.
+
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    pixel_dist = Unicode(
+        "pixel_dist",
+        help="The Data key where the PixelDist object should be stored",
+    )
+
+    covariance = Unicode(
+        "covariance",
+        help="The Data key where the covariance should be stored",
+    )
+
+    hits = Unicode(
+        "hits",
+        help="The Data key where the hit map should be stored",
+    )
+
+    rcond = Unicode(
+        "rcond",
+        help="The Data key where the inverse condition number should be stored",
+    )
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+
+    pointing = Instance(
+        klass=None,
+        allow_none=True,
+        help="This must be an instance of a pointing operator",
+    )
+
+    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
+
+    weights = Unicode("weights", help="Observation detdata key for Stokes weights")
+
+    noise_model = Unicode(
+        "noise_model", help="Observation key containing the noise model"
+    )
+
+    rcond_threshold = Float(
+        1.0e-8, help="Minimum value for inverse condition number cut."
+    )
+
+    sync_type = Unicode(
+        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+    )
+
+    save_pointing = Bool(
+        False, help="If True, do not clear detector pointing matrices after use"
+    )
+
+    @traitlets.validate("det_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("sync_type")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check != "allreduce" and check != "alltoallv":
+            raise traitlets.TraitError("Invalid communication algorithm")
+        return check
+
+    @traitlets.validate("pointing")
+    def _check_pointing(self, proposal):
+        pntg = proposal["value"]
+        if pntg is not None:
+            if not isinstance(pntg, Operator):
+                raise traitlets.TraitError("pointing should be an Operator instance")
+            if not pntg.has_trait("pixels"):
+                raise traitlets.TraitError(
+                    "pointing operator should have a 'pixels' trait"
+                )
+            if not pntg.has_trait("weights"):
+                raise traitlets.TraitError(
+                    "pointing operator should have a 'weights' trait"
+                )
+            if not pntg.has_trait("create_dist"):
+                raise traitlets.TraitError(
+                    "pointing operator should have a 'create_dist' trait"
+                )
+        return pntg
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._invcov = None
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        if self.pixel_dist is None:
+            raise RuntimeError(
+                "You must set the 'pixel_dist' trait before calling exec()"
+            )
+
+        # Set outputs of the pointing operator
+
+        self.pointing.pixels = self.pixels
+        self.pointing.weights = self.weights
+        self.pointing.create_dist = None
+
+        # Set up clearing of the pointing matrices
+
+        clear_pointing = Clear(detdata=[self.pixels, self.weights])
+
+        # If we do not have a pixel distribution yet, we must make one pass through
+        # the pointing to build this first.
+
+        if self.pixel_dist not in data:
+            if detectors is not None:
+                msg = "A subset of detectors is specified, but the pixel distribution\n"
+                msg += "does not yet exist- and creating this requires all detectors.\n"
+                msg += "Either pre-create the pixel distribution with all detectors\n"
+                msg += "or run this operator with all detectors."
+                raise RuntimeError(msg)
+
+            msg = "Creating pixel distribution '{}' in Data".format(self.pixel_dist)
+            if data.comm.world_rank == 0:
+                log.debug(msg)
+
+            # Turn on creation of the pixel distribution
+            self.pointing.create_dist = self.pixel_dist
+
+            # Compute the pointing matrix
+
+            pixel_dist_pipe = None
+            if self.save_pointing:
+                # We are keeping the pointing, which means we need to run all detectors
+                # at once so they all end up in the detdata for all observations.
+                pixel_dist_pipe = Pipeline(detector_sets=["ALL"])
+                pixel_dist_pipe.operators = [
+                    self.pointing,
+                ]
+            else:
+                # Run one detector at time and discard.
+                pixel_dist_pipe = Pipeline(detector_sets=["SINGLE"])
+                pixel_dist_pipe.operators = [
+                    self.pointing,
+                    clear_pointing,
+                ]
+            pipe_out = pixel_dist_pipe.apply(data, detectors=detectors)
+
+            # Turn pixel distribution creation off again
+            self.pointing.create_dist = None
+
+        # Hit map operator
+
+        build_hits = BuildHitMap(
+            pixel_dist=self.pixel_dist,
+            pixels=self.pixels,
+            det_flags=self.det_flags,
+            det_flag_mask=self.det_flag_mask,
+            sync_type=self.sync_type,
+        )
+
+        # Inverse covariance
+
+        build_invcov = BuildInverseCovariance(
+            pixel_dist=self.pixel_dist,
+            pixels=self.pixels,
+            weights=self.weights,
+            noise_model=self.noise_model,
+            det_flags=self.det_flags,
+            det_flag_mask=self.det_flag_mask,
+            sync_type=self.sync_type,
+        )
+
+        # Build a pipeline to expand pointing and accumulate
+
+        accum = None
+        if self.save_pointing:
+            # Process all detectors at once
+            accum = Pipeline(detector_sets=["ALL"])
+            accum.operators = [self.pointing, build_hits, build_invcov]
+        else:
+            # Process one detector at a time and clear pointing after each one.
+            accum = Pipeline(detector_sets=["SINGLE"])
+            accum.operators = [self.pointing, build_hits, build_invcov, clear_pointing]
+
+        pipe_out = accum.apply(data, detectors=detectors)
+
+        # Extract the results
+        hits = pipe_out[1]
+        cov = pipe_out[2]
+
+        # Invert the covariance
+        rcond = PixelData(cov.distribution, np.float64, n_value=1)
+        covariance_invert(
+            cov,
+            self.rcond_threshold,
+            rcond=rcond,
+            use_alltoallv=(self.sync_type == "alltoallv"),
+        )
+
+        # Store products
+        data[self.hits] = hits
+        data[self.covariance] = cov
+        data[self.rcond] = rcond
+
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": [self.noise_model],
+            "shared": list(),
+            "detdata": list(),
+        }
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": [self.pixel_dist, self.hits, self.covariance, self.rcond],
+            "shared": list(),
+            "detdata": list(),
+        }
+        if self.save_pointing:
+            prov["detdata"].extend([self.pixels, self.weights])
         return prov
 
     def _accelerators(self):

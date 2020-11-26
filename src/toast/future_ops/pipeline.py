@@ -16,7 +16,9 @@ class Pipeline(Operator):
     """Class representing a sequence of Operators.
 
     This runs a list of other operators over sets of detectors (default is all
-    detectors in one shot).
+    detectors in one shot).  By default all observations are passed to each operator,
+    but the `observation_key` and `observation_value` traits can be used to run the
+    operators on only observations which have a matching key / value pair.
 
     """
 
@@ -28,7 +30,19 @@ class Pipeline(Operator):
 
     detector_sets = List(
         ["ALL"],
-        help="List of detector sets.  'ALL' and 'SINGLE' are also valid values.",
+        help="List of detector sets.  ['ALL'] and ['SINGLE'] are also valid values.",
+    )
+
+    observation_key = Unicode(
+        None,
+        allow_none=True,
+        help="Only process observations which have this key defined",
+    )
+
+    observation_value = Unicode(
+        None,
+        allow_none=True,
+        help="Only process observations where the key has this value",
     )
 
     @traitlets.validate("detector_sets")
@@ -64,6 +78,17 @@ class Pipeline(Operator):
                 )
         return ops
 
+    @traitlets.validate("observation_value")
+    def _check_observation_value(self, proposal):
+        val = proposal["value"]
+        if val is None:
+            return val
+        if self.observation_key is None:
+            raise traitlets.TraitError(
+                "observation_key must be set before observation_value"
+            )
+        return val
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -76,23 +101,79 @@ class Pipeline(Operator):
             # All our operators support CUDA.  Stage any required data
             pass
 
-        if detectors is not None:
-            msg = "Use the 'detector_sets' option to control a Pipeline"
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        for dset in self.detector_sets:
-            if dset == "ALL":
-                for op in self.operators:
-                    op.exec(data)
-            elif dset == "SINGLE":
-                # We are running one detector at a time
-                raise NotImplementedError("SINGLE detectors not implemented yet")
+        # Select the observations we will use
+        data_sets = [data]
+        if self.observation_key is not None:
+            data_sets = list()
+            split_data = data.split(self.observation_key)
+            if self.observation_value is None:
+                # We are using all values of the key
+                for val, d in split_data.items():
+                    data_sets.append(d)
             else:
-                # We are running sets of detectors at once.  We first go through all
-                # observations and find the set of detectors used by each row of the
-                # process grid.
-                raise NotImplementedError("detector sets not implemented yet")
+                # We are using only one value of the key
+                if self.observation_value not in split_data:
+                    msg = "input data has no observations where '{}' == '{}'".format(
+                        self.observation_key, self.observation_value
+                    )
+                    if data.comm.world_rank == 0:
+                        log.warning(msg)
+                else:
+                    data_sets.append(split_data[self.observation_value])
+
+        for ds_indx, ds in enumerate(data_sets):
+            if len(ds.obs) == 0:
+                # No observations for this group
+                msg = "data set {}, group {} has no observations".format(
+                    ds_indx, ds.comm.group
+                )
+                if data.comm.group_rank == 0:
+                    log.warning(msg)
+            for det_set in self.detector_sets:
+                if det_set == "ALL":
+                    # If this is given, then there should be only one entry
+                    if len(self.detector_sets) != 1:
+                        raise RuntimeError(
+                            "If using 'ALL' for a detector set, there should only be one set"
+                        )
+                    for op in self.operators:
+                        op.exec(ds, detectors=detectors)
+                elif det_set == "SINGLE":
+                    # If this is given, then there should be only one entry
+                    if len(self.detector_sets) != 1:
+                        raise RuntimeError(
+                            "If using 'SINGLE' for a detector set, there should only be one set"
+                        )
+
+                    # We are running one detector at a time.  We will loop over all
+                    # detectors in the superset of detectors across all observations.
+                    all_local_dets = set()
+                    for ob in ds.obs:
+                        for det in ob.local_detectors:
+                            all_local_dets.add(det)
+
+                    # If we were given a more restrictive list, prune the global list
+                    selected_dets = list(all_local_dets)
+                    if detectors is not None:
+                        selected_dets = list()
+                        for det in all_local_dets:
+                            if det in detectors:
+                                selected_dets.append(det)
+
+                    for det in selected_dets:
+                        for op in self.operators:
+                            op.exec(ds, detectors=[det])
+                else:
+                    # We are running sets of detectors at once.  For this detector
+                    # set, we prune to just the restricted list passed to exec().
+                    selected_set = det_set
+                    if detectors is not None:
+                        selected_set = list()
+                        for det in det_set:
+                            if det in detectors:
+                                selected_set.append(det)
+                    for op in self.operators:
+                        op.exec(ds, detectors=selected_set)
 
         # Copy to / from accelerator...
 
@@ -116,8 +197,10 @@ class Pipeline(Operator):
             oreq = op.requires()
             oprov = op.provides()
             for k in keys:
-                req[k] |= oreq[k]
-                req[k] -= oprov[k]
+                if k in oreq:
+                    req[k] |= oreq[k]
+                if k in oprov:
+                    req[k] -= oprov[k]
         for k in keys:
             req[k] = list(req[k])
         return req
@@ -132,8 +215,10 @@ class Pipeline(Operator):
             oreq = op.requires()
             oprov = op.provides()
             for k in keys:
-                prov[k] |= oprov[k]
-                prov[k] -= oreq[k]
+                if k in oprov:
+                    prov[k] |= oprov[k]
+                if k in oreq:
+                    prov[k] -= oreq[k]
         for k in keys:
             prov[k] = list(prov[k])
         return prov

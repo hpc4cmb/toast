@@ -2,9 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-# import functions into our public API
+# Import Operators into our public API
 
 from .memory_counter import MemoryCounter
+
+from .clear import Clear
 
 from .pipeline import Pipeline
 
@@ -16,4 +18,11 @@ from .noise_model import DefaultNoiseModel
 
 from .pointing_healpix import PointingHealpix
 
-from .mapmaker_utils import BuildHitMap, BuildInverseCovariance, BuildNoiseWeighted
+from .mapmaker_utils import (
+    BuildHitMap,
+    BuildInverseCovariance,
+    BuildNoiseWeighted,
+    CovarianceAndHits,
+)
+
+from .mapmaker_binning import BinMap

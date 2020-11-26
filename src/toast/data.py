@@ -139,46 +139,85 @@ class Data(MutableMapping):
                 wcomm.barrier()
         return
 
-    def split(self, key):
-        """Split the Data object.
+    def select_observations(self, key, require=False):
+        """Given an observation key, return lists of observations with unique values.
 
-        Split the Data object based on the value of `key` in the
-        observation dictionary.
+        In the returned dictionary, the order of observations for a given value is
+        preserved relative to the original list.  For a given observation, the value
+        across all processes in the group must match.
 
         Args:
-            key(str) :  Observation key to use.
+            key (str):  The observation key
+            require (bool):  If True, the key must exist in every observation.
 
         Returns:
-            List of 2-tuples of the form (value, data)
+            (OrderedDict):  For each key value, the list of observations.
 
         """
-        # Build a superset of all values
-        values = set()
-        for obs in self.obs:
-            if key not in obs:
-                raise RuntimeError(
-                    'Cannot split data by "{}". Key is not '
-                    "defined for all observations.".format(key)
+        group_rank = self.comm.group_rank
+        group_comm = self.comm.comm_group
+
+        selected = OrderedDict()
+
+        for ob in self.obs:
+            # The value on this process
+            proc_val = None
+            if key in ob:
+                proc_val = ob[key]
+
+            # Get the values from all processes in the group
+            group_vals = None
+            if group_comm is None:
+                group_vals = [proc_val]
+            else:
+                group_vals = group_comm.allgather(proc_val)
+
+            # Check for consistency
+            if group_vals.count(group_vals[0]) == len(group_vals):
+                # All entries equal
+                if proc_val is None:
+                    if require:
+                        msg = "Observation '{}' does not have key '{}'".format(
+                            ob.name, key
+                        )
+                        if group_rank == 0:
+                            log.error(msg)
+                        raise RuntimeError(msg)
+                    continue
+                if proc_val not in selected:
+                    selected[proc_val] = list()
+                selected[proc_val].append(ob)
+            else:
+                # Mismatch
+                msg = "Observation '{}', key '{}' has different values across the group".format(
+                    ob.name, key
                 )
-            values.add(obs[key])
-        all_values = None
-        if self._comm.comm_world is None:
-            all_values = [values]
-        else:
-            all_values = self._comm.comm_world.allgather(values)
-        for vals in all_values:
-            values = values.union(vals)
+                if group_rank == 0:
+                    log.error(msg)
+                raise RuntimeError(msg)
+        return selected
 
-        # Order the values alphabetically.
-        values = sorted(list(values))
+    def split(self, key, require=False):
+        """Split the Data object.
 
-        # Split the data
-        datasplit = []
-        for value in values:
+        Split the Data object based on the value of `key` in the observation dictionary.
+
+        Args:
+            key (str):  Observation key to use.
+            require (bool):  If True, require that all observations have the key.
+
+        Returns:
+            (OrderedDict):  For each key value, a new Data object.
+
+        """
+        selected = self.select_observations(key, require=require)
+
+        datasplit = OrderedDict()
+
+        for value, obslist in selected.items():
             new_data = Data(comm=self._comm)
-            for obs in self.obs:
-                if obs[key] == value:
-                    new_data.obs.append(obs)
-            datasplit.append((value, new_data))
+            for ob in obslist:
+                new_data.obs.append(ob)
+            datasplit[value] = new_data
 
         return datasplit

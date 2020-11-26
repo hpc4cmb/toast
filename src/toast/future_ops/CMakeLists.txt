@@ -4,6 +4,7 @@
 install(FILES
     __init__.py
     pipeline.py
+    clear.py
     memory_counter.py
     sim_hwp.py
     sim_tod_noise.py
@@ -11,5 +12,6 @@ install(FILES
     noise_model.py
     pointing_healpix.py
     mapmaker_utils.py
+    mapmaker_binning.py
     DESTINATION ${PYTHON_SITE}/toast/future_ops
 )
