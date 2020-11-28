@@ -23,7 +23,7 @@ void apply_flags_to_pixels(py::array_t <unsigned char> common_flags,
     for (size_t i = 0; i < nsamp; ++i) {
         unsigned char common_flag = fast_common_flags(i);
         unsigned char detector_flag = fast_detector_flags(i);
-        if (common_flag & common_flag_mask || detector_flag & detector_flag_mask) {
+        if ((common_flag & common_flag_mask) || (detector_flag & detector_flag_mask)) {
             fast_pixels(i) = -1;
         }
     }

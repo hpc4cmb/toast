@@ -365,6 +365,12 @@ class OpFilterBin(Operator):
         # than sending the sparse matrix objects directly
         factor = 1
         while factor < ntask:
+            if rank == 0:
+                print(
+                    "OpFilterBin: Collecting {} / {}".format(2 * factor, ntask),
+                    flush=True,
+                )
+                t1 = time()
             if rank % (factor * 2) == 0:
                 # this task receives
                 receive_from = rank + factor
@@ -386,12 +392,21 @@ class OpFilterBin(Operator):
                 comm.Send(obs_matrix.data, dest=send_to, tag=factor + ntask)
                 comm.Send(obs_matrix.indices, dest=send_to, tag=factor + 2 * ntask)
                 comm.Send(obs_matrix.indptr, dest=send_to, tag=factor + 3 * ntask)
+            if rank == 0:
+                print(
+                    "OpFilterBin: Collected in {:.1f} s".format(time() - t1),
+                    flush=True,
+                )
             factor *= 2
 
         # Write out the observation matrix
         if rank == 0:
             fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
             scipy.sparse.save_npz(fname, obs_matrix)
+            print(
+                "OpFilterBin: Wrote observation matrix to {}".format(fname + ".npz"),
+                flush=True,
+            )
         return obs_matrix
 
     @function_timer
@@ -418,13 +433,18 @@ class OpFilterBin(Operator):
 
         # FIXME: OpAccumDiag should support separate detweights for each observation
         OpAccumDiag(
-            invnpp=invnpp,
-            hits=hits,
             zmap=dist_map,
-            name=self._name,
+            hits=hits,
+            invnpp=invnpp,
             detweights=detweights,
-            common_flag_mask=self._common_flag_mask,
+            name=self._name,
+            flag_name=self._flag_name,
             flag_mask=self._flag_mask,
+            common_flag_name=self._common_flag_name,
+            common_flag_mask=self._common_flag_mask,
+            pixels=self._pixels_name,
+            weights=self._weights_name,
+            apply_flags=True,
         ).exec(data)
 
         if white_noise_cov is None:
@@ -434,13 +454,18 @@ class OpFilterBin(Operator):
                 if self._zip_maps:
                     fname += ".gz"
                 hits.write_healpix_fits(fname)
+                if self.rank == 0:
+                    print("OpFilterBin: Wrote hits to {}".format(fname), flush=True)
 
             invnpp.allreduce()
             if self._write_wcov:
                 fname = os.path.join(self._outdir, self._outprefix + "wcov_inv.fits")
                 if self._zip_maps:
                     fname += ".gz"
-                    invnpp.write_healpix_fits(fname)
+                invnpp.write_healpix_fits(fname)
+                if self.rank == 0:
+                    print("OpFilterBin: Wrote inverse white noise covariance to {}"
+                          "".format(fname), flush=True)
 
             covariance_invert(invnpp, self._rcond_limit)
             white_noise_cov = invnpp
@@ -448,7 +473,10 @@ class OpFilterBin(Operator):
                 fname = os.path.join(self._outdir, self._outprefix + "wcov.fits")
                 if self._zip_maps:
                     fname += ".gz"
-                    white_noise_cov.write_healpix_fits(fname)
+                white_noise_cov.write_healpix_fits(fname)
+                if self.rank == 0:
+                    print("OpFilterBin: Wrote white noise covariance to {}"
+                          "".format(fname), flush=True)
 
         dist_map.allreduce()
         covariance_apply(white_noise_cov, dist_map)
@@ -457,6 +485,8 @@ class OpFilterBin(Operator):
         if self._zip_maps:
             fname += ".gz"
         dist_map.write_healpix_fits(fname)
+        if self.rank == 0:
+            print("OpFilterBin: Wrote map to {}".format(fname), flush=True)
 
         return white_noise_cov
 

@@ -82,21 +82,23 @@ class OpFilterBinTest(MPITestCase):
 
         # Samples per observation
         self.npix = 12 * self.sim_nside ** 2
-        self.ninterval = 1
+        self.ninterval = 4
         self.totsamp = self.ninterval * self.npix
 
-        # Define intervals
+        # Define intervals with gaps in between
         intervals = []
         interval_length = self.npix
         istart = 0
         while istart < self.totsamp:
             istop = istart + interval_length
+            interval_start = istart + 100
+            interval_stop = istop - 100
             intervals.append(
                 Interval(
-                    start=istart / self.rate,
-                    stop=istop / self.rate,
-                    first=istart,
-                    last=istop - 1,
+                    start=interval_start / self.rate,
+                    stop=interval_stop / self.rate,
+                    first=interval_start,
+                    last=interval_stop - 1,
                 )
             )
             istart = istop
@@ -135,6 +137,20 @@ class OpFilterBinTest(MPITestCase):
             self.data.obs[iobs]["tod"] = tod
             self.data.obs[iobs]["noise"] = noise
             self.data.obs[iobs]["intervals"] = intervals
+
+            cflags = tod.local_common_flags()
+            cflags[:] = 255
+            for ival in tod.local_intervals(intervals):
+                cflags[ival.first : ival.last + 1] = 0
+
+            tod._az = (tod.local_times() % 100) / 100
+            tod.scan_range = [0, 1, 0, 0]
+            def read_boresight_az(self, local_start=0, n=None):
+                if n is None:
+                    n = self.local_samples[1] - local_start
+                ind = slice(local_start, local_start + n)
+                return tod._az[ind]
+            tod.read_boresight_az = read_boresight_az.__get__(tod)
 
         self.npix = 12 * self.map_nside ** 2
         pix = np.arange(self.npix)
@@ -202,9 +218,14 @@ class OpFilterBinTest(MPITestCase):
             outdir=self.outdir,
             outprefix=outprefix,
             write_obs_matrix=True,
-            ground_filter_order=None,  # Not ground TOD
+            ground_filter_order=3,
             poly_filter_order=20,
-            zip_maps=True
+            zip_maps=True,
+            common_flag_mask=255,
+            write_binned=True,
+            write_hits=True,
+            write_wcov_inv=True,
+            write_wcov=True,
         )
         filterbin.exec(self.data)
 
