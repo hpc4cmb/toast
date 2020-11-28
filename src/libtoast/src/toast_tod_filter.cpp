@@ -291,7 +291,8 @@ void toast::legendre(double * x, double * templates, size_t start_order,
     // order == 1
     norm = 1. / sqrt(2. / 3.);
     if ((start_order <= 1) && (stop_order > 1)) {
-        for (size_t i = 0; i < nsample; ++i) templates[nsample + i] = norm * x[i];
+        double *ptemplates = templates + (1 - start_order) * nsample;
+        for (size_t i = 0; i < nsample; ++i) ptemplates[i] = norm * x[i];
     }
 
     // Calculate the hierarchy of polynomials, one buffer length
@@ -322,24 +323,18 @@ void toast::legendre(double * x, double * templates, size_t start_order,
                 next[i] =
                     ((2 * order - 1) * x[istart + i] * val[i] - (order - 1) *
                      prev[i]) * orderinv;
-                //2 * x[istart + i] * val[i] - prev[i];
             }
             std::copy(val.data(), val.data() + n, prev.data());
             std::copy(next.data(), next.data() + n, val.data());
             if (order >= start_order) {
-                std::copy(
-                    val.data(),
-                    val.data() + n,
-                    templates + istart + (order - start_order) * nsample
-                    );
+                double *ptemplates = templates + istart + (order - start_order) * nsample;
+                std::copy(val.data(), val.data() + n, ptemplates);
+                // Normalize for better condition number
+                double norm = 1. / sqrt(2. / (2. * order + 1.));
+                for (size_t i = 0; i < n; ++i) {
+                  ptemplates[i] *= norm;
+                }
             }
-            // Normalize for better condition number
-            double norm = 1. / sqrt(2. / (2. * order + 1.));
-            double *ptemplates = templates + istart + (order - start_order) * nsample;
-            for (size_t i = 0; i < n; ++i) {
-                ptemplates[i] *= norm;
-            }
-
         }
     }
 
