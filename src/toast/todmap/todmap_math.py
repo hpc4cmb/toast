@@ -233,13 +233,13 @@ class OpAccumDiag(Operator):
                 if self._apply_flags:
                     gt.start("OpAccumDiag.exec.apply_flags")
                     # Don't change the cached pixel numbers
-                    pixels = pixels.copy()
+                    pixels = pixels.astype(np.int64).copy()
                     detflags = tod.local_flags(det, self._flag_name)
                     apply_flags_to_pixels(
-                        commonflags,
-                        self._common_flag_mask,
-                        detflags,
-                        self._flag_mask,
+                        commonflags.astype(np.uint8),
+                        np.uint8(self._common_flag_mask),
+                        detflags.astype(np.uint8),
+                        np.uint8(self._flag_mask),
                         pixels,
                     )
                     gt.stop("OpAccumDiag.exec.apply_flags")

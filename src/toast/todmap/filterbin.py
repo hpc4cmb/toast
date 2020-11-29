@@ -357,42 +357,39 @@ class OpFilterBin(Operator):
         if obs_matrix is None:
             return
         # Combine the observation matrix across processes
-        comm = self.comm
-        rank = comm.rank
-        ntask = comm.size
         # Reduce the observation matrices.  We use the buffer protocol
         # for better performance, even though it requires more MPI calls
         # than sending the sparse matrix objects directly
         factor = 1
-        while factor < ntask:
-            if rank == 0:
+        while factor < self.ntask:
+            if self.rank == 0:
                 print(
-                    "OpFilterBin: Collecting {} / {}".format(2 * factor, ntask),
+                    "OpFilterBin: Collecting {} / {}".format(2 * factor, self.ntask),
                     flush=True,
                 )
                 t1 = time()
-            if rank % (factor * 2) == 0:
+            if self.rank % (factor * 2) == 0:
                 # this task receives
-                receive_from = rank + factor
-                if receive_from < ntask:
-                    size_recv = comm.recv(source=receive_from, tag=factor)
+                receive_from = self.rank + factor
+                if receive_from < self.ntask:
+                    size_recv = self.comm.recv(source=receive_from, tag=factor)
                     data_recv = np.zeros(size_recv, dtype=np.float64)
-                    comm.Recv(data_recv, source=receive_from, tag=factor + ntask)
+                    self.comm.Recv(data_recv, source=receive_from, tag=factor + self.ntask)
                     indices_recv = np.zeros(size_recv, dtype=np.int32)
-                    comm.Recv(indices_recv, source=receive_from, tag=factor + 2 * ntask)
+                    self.comm.Recv(indices_recv, source=receive_from, tag=factor + 2 * self.ntask)
                     indptr_recv = np.zeros(obs_matrix.indptr.size, dtype=np.int32)
-                    comm.Recv(indptr_recv, source=receive_from, tag=factor + 3 * ntask)
+                    self.comm.Recv(indptr_recv, source=receive_from, tag=factor + 3 * self.ntask)
                     obs_matrix += scipy.sparse.csr_matrix(
                         (data_recv, indices_recv, indptr_recv), obs_matrix.shape,
                     )
-            elif rank % (factor * 2) == factor:
+            elif self.rank % (factor * 2) == factor:
                 # this task sends
-                send_to = rank - factor
-                comm.send(obs_matrix.data.size, dest=send_to, tag=factor)
-                comm.Send(obs_matrix.data, dest=send_to, tag=factor + ntask)
-                comm.Send(obs_matrix.indices, dest=send_to, tag=factor + 2 * ntask)
-                comm.Send(obs_matrix.indptr, dest=send_to, tag=factor + 3 * ntask)
-            if rank == 0:
+                send_to = self.rank - factor
+                self.comm.send(obs_matrix.data.size, dest=send_to, tag=factor)
+                self.comm.Send(obs_matrix.data, dest=send_to, tag=factor + self.ntask)
+                self.comm.Send(obs_matrix.indices, dest=send_to, tag=factor + 2 * self.ntask)
+                self.comm.Send(obs_matrix.indptr, dest=send_to, tag=factor + 3 * self.ntask)
+            if self.rank == 0:
                 print(
                     "OpFilterBin: Collected in {:.1f} s".format(time() - t1),
                     flush=True,
@@ -400,7 +397,7 @@ class OpFilterBin(Operator):
             factor *= 2
 
         # Write out the observation matrix
-        if rank == 0:
+        if self.rank == 0:
             fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
             scipy.sparse.save_npz(fname, obs_matrix)
             print(
@@ -509,8 +506,10 @@ class OpFilterBin(Operator):
             self.comm = comm
         if self.comm is None:
             self.rank = 0
+            self.ntask = 1
         else:
             self.rank = self.comm.rank
+            self.ntask = self.comm.size
 
         # Filter data
 
