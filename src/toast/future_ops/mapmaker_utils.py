@@ -72,7 +72,7 @@ class BuildHitMap(Operator):
         return check
 
     @traitlets.validate("sync_type")
-    def _check_flag_mask(self, proposal):
+    def _check_sync_type(self, proposal):
         check = proposal["value"]
         if check != "allreduce" and check != "alltoallv":
             raise traitlets.TraitError("Invalid communication algorithm")
@@ -223,7 +223,7 @@ class BuildInverseCovariance(Operator):
         return check
 
     @traitlets.validate("sync_type")
-    def _check_flag_mask(self, proposal):
+    def _check_sync_type(self, proposal):
         check = proposal["value"]
         if check != "allreduce" and check != "alltoallv":
             raise traitlets.TraitError("Invalid communication algorithm")
@@ -421,7 +421,7 @@ class BuildNoiseWeighted(Operator):
         return check
 
     @traitlets.validate("sync_type")
-    def _check_flag_mask(self, proposal):
+    def _check_sync_type(self, proposal):
         check = proposal["value"]
         if check != "allreduce" and check != "alltoallv":
             raise traitlets.TraitError("Invalid communication algorithm")
@@ -445,6 +445,10 @@ class BuildNoiseWeighted(Operator):
                 self.pixel_dist
             )
             raise RuntimeError(msg)
+
+        # Check that the detector data is set
+        if self.det_data is None:
+            raise RuntimeError("You must set the det_data trait before calling exec()")
 
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
@@ -471,12 +475,6 @@ class BuildNoiseWeighted(Operator):
                 raise RuntimeError(msg)
 
             noise = ob[self.noise_model]
-
-            # Check that the detector data is set
-            if self.det_data is None:
-                raise RuntimeError(
-                    "You must set the det_data trait before calling exec()"
-                )
 
             for det in dets:
                 # The pixels and weights for this detector.
@@ -619,10 +617,6 @@ class CovarianceAndHits(Operator):
         help="This must be an instance of a pointing operator",
     )
 
-    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
-
-    weights = Unicode("weights", help="Observation detdata key for Stokes weights")
-
     noise_model = Unicode(
         "noise_model", help="Observation key containing the noise model"
     )
@@ -647,7 +641,7 @@ class CovarianceAndHits(Operator):
         return check
 
     @traitlets.validate("sync_type")
-    def _check_flag_mask(self, proposal):
+    def _check_sync_type(self, proposal):
         check = proposal["value"]
         if check != "allreduce" and check != "alltoallv":
             raise traitlets.TraitError("Invalid communication algorithm")
@@ -688,13 +682,11 @@ class CovarianceAndHits(Operator):
 
         # Set outputs of the pointing operator
 
-        self.pointing.pixels = self.pixels
-        self.pointing.weights = self.weights
         self.pointing.create_dist = None
 
         # Set up clearing of the pointing matrices
 
-        clear_pointing = Clear(detdata=[self.pixels, self.weights])
+        clear_pointing = Clear(detdata=[self.pointing.pixels, self.pointing.weights])
 
         # If we do not have a pixel distribution yet, we must make one pass through
         # the pointing to build this first.
@@ -725,7 +717,7 @@ class CovarianceAndHits(Operator):
                     self.pointing,
                 ]
             else:
-                # Run one detector at time and discard.
+                # Run one detector a at time and discard.
                 pixel_dist_pipe = Pipeline(detector_sets=["SINGLE"])
                 pixel_dist_pipe.operators = [
                     self.pointing,
@@ -740,7 +732,7 @@ class CovarianceAndHits(Operator):
 
         build_hits = BuildHitMap(
             pixel_dist=self.pixel_dist,
-            pixels=self.pixels,
+            pixels=self.pointing.pixels,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             sync_type=self.sync_type,
@@ -750,8 +742,8 @@ class CovarianceAndHits(Operator):
 
         build_invcov = BuildInverseCovariance(
             pixel_dist=self.pixel_dist,
-            pixels=self.pixels,
-            weights=self.weights,
+            pixels=self.pointing.pixels,
+            weights=self.pointing.weights,
             noise_model=self.noise_model,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
@@ -796,11 +788,8 @@ class CovarianceAndHits(Operator):
         return
 
     def _requires(self):
-        req = {
-            "meta": [self.noise_model],
-            "shared": list(),
-            "detdata": list(),
-        }
+        req = self.pointing.requires()
+        req["meta"].append(self.noise_model)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         return req

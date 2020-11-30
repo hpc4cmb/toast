@@ -8,6 +8,8 @@ from .memory_counter import MemoryCounter
 
 from .clear import Clear
 
+from .clear import Copy
+
 from .pipeline import Pipeline
 
 from .sim_satellite import SimSatellite
@@ -16,7 +18,11 @@ from .sim_tod_noise import SimNoise
 
 from .noise_model import DefaultNoiseModel
 
+from .noise_weight import NoiseWeight
+
 from .pointing_healpix import PointingHealpix
+
+from .scan_map import ScanMap
 
 from .mapmaker_utils import (
     BuildHitMap,

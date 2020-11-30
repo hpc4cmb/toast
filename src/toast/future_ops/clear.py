@@ -66,9 +66,12 @@ class Clear(Operator):
         # exist, providing these as requirements allows us to catch dependency issues
         # in pipelines.
         req = dict()
-        req["meta"] = list(self.meta)
-        req["detdata"] = list(self.detdata)
-        req["shared"] = list(self.shared)
+        if self.meta is not None:
+            req["meta"] = list(self.meta)
+        if self.detdata is not None:
+            req["detdata"] = list(self.detdata)
+        if self.shared is not None:
+            req["shared"] = list(self.shared)
         return req
 
     def _provides(self):

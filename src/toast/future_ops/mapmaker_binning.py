@@ -65,10 +65,6 @@ class BinMap(Operator):
         help="This must be an instance of a pointing operator",
     )
 
-    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
-
-    weights = Unicode("weights", help="Observation detdata key for Stokes weights")
-
     noise_model = Unicode(
         "noise_model", help="Observation key containing the noise model"
     )
@@ -89,7 +85,7 @@ class BinMap(Operator):
         return check
 
     @traitlets.validate("sync_type")
-    def _check_flag_mask(self, proposal):
+    def _check_sync_type(self, proposal):
         check = proposal["value"]
         if check != "allreduce" and check != "alltoallv":
             raise traitlets.TraitError("Invalid communication algorithm")
@@ -101,18 +97,11 @@ class BinMap(Operator):
         if pntg is not None:
             if not isinstance(pntg, Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
-            if not pntg.has_trait("pixels"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'pixels' trait"
-                )
-            if not pntg.has_trait("weights"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'weights' trait"
-                )
-            if not pntg.has_trait("create_dist"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'create_dist' trait"
-                )
+            # Check that this operator has the traits we expect
+            for trt in ["pixels", "weights", "create_dist"]:
+                if not pntg.has_trait(trt):
+                    msg = "pointing operator should have a '{}' trait".format(trt)
+                    raise traitlets.TraitError(msg)
         return pntg
 
     def __init__(self, **kwargs):
@@ -142,20 +131,18 @@ class BinMap(Operator):
 
         # Set outputs of the pointing operator
 
-        self.pointing.pixels = self.pixels
-        self.pointing.weights = self.weights
         self.pointing.create_dist = None
 
         # Set up clearing of the pointing matrices
 
-        clear_pointing = Clear(detdata=[self.pixels, self.weights])
+        clear_pointing = Clear(detdata=[self.pointing.pixels, self.pointing.weights])
 
         # Noise weighted map
 
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
-            pixels=self.pixels,
-            weights=self.weights,
+            pixels=self.pointing.pixels,
+            weights=self.pointing.weights,
             noise_model=self.noise_model,
             det_data=self.det_data,
             det_flags=self.det_flags,
@@ -184,7 +171,7 @@ class BinMap(Operator):
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
 
         # Store products
-        data[self.binned] = binned
+        data[self.binned] = binned_map
 
         return
 
@@ -192,11 +179,9 @@ class BinMap(Operator):
         return
 
     def _requires(self):
-        req = {
-            "meta": [self.noise_model, self.pixel_dist, self.covariance],
-            "shared": list(),
-            "detdata": [self.det_data],
-        }
+        req = self.pointing.requires()
+        req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
+        req["detdata"].extend([self.det_data])
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         return req
@@ -204,7 +189,7 @@ class BinMap(Operator):
     def _provides(self):
         prov = {"meta": [self.binned], "shared": list(), "detdata": list()}
         if self.save_pointing:
-            prov["detdata"].extend([self.pixels, self.weights])
+            prov["detdata"].extend([self.pointing.pixels, self.pointing.weights])
         return prov
 
     def _accelerators(self):
