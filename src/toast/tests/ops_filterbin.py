@@ -227,20 +227,25 @@ class OpFilterBinTest(MPITestCase):
             write_wcov_inv=True,
             write_wcov=True,
         )
-        filterbin.exec(self.data)
+        filterbin.exec(self.data, self.comm)
 
-        # Test that we can replicate the filtering by applying
-        # the observation matrix to the input map
+        if self.rank == 0:
 
-        fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
-        obs_matrix = scipy.sparse.load_npz(fname)
+            # Test that we can replicate the filtering by applying
+            # the observation matrix to the input map
 
-        fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
-        outmap = hp.read_map(fname, None, nest=True)
+            fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
+            obs_matrix = scipy.sparse.load_npz(fname)
 
-        inmap = hp.read_map(self.inmapfile, None, nest=True)
-        outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
+            fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
+            outmap = hp.read_map(fname, None, nest=True)
 
-        np.testing.assert_array_almost_equal(outmap, outmap_test)
+            inmap = hp.read_map(self.inmapfile, None, nest=True)
+            outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
+
+            np.testing.assert_array_almost_equal(outmap, outmap_test)
+
+        if self.comm is not None:
+            self.comm.Barrier()
 
         return
