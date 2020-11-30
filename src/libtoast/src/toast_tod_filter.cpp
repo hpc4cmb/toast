@@ -281,7 +281,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
 }
 
 void toast::legendre(double * x, double * templates, size_t start_order,
-                      size_t stop_order, size_t nsample) {
+                     size_t stop_order, size_t nsample) {
     // order == 0
     double norm = 1. / sqrt(2);
     if ((start_order == 0) && (stop_order > 0)) {
@@ -291,7 +291,7 @@ void toast::legendre(double * x, double * templates, size_t start_order,
     // order == 1
     norm = 1. / sqrt(2. / 3.);
     if ((start_order <= 1) && (stop_order > 1)) {
-        double *ptemplates = templates + (1 - start_order) * nsample;
+        double * ptemplates = templates + (1 - start_order) * nsample;
         for (size_t i = 0; i < nsample; ++i) ptemplates[i] = norm * x[i];
     }
 
@@ -327,12 +327,14 @@ void toast::legendre(double * x, double * templates, size_t start_order,
             std::copy(val.data(), val.data() + n, prev.data());
             std::copy(next.data(), next.data() + n, val.data());
             if (order >= start_order) {
-                double *ptemplates = templates + istart + (order - start_order) * nsample;
+                double * ptemplates = templates + istart + (order - start_order) *
+                                      nsample;
                 std::copy(val.data(), val.data() + n, ptemplates);
+
                 // Normalize for better condition number
                 double norm = 1. / sqrt(2. / (2. * order + 1.));
                 for (size_t i = 0; i < n; ++i) {
-                  ptemplates[i] *= norm;
+                    ptemplates[i] *= norm;
                 }
             }
         }

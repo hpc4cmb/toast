@@ -25,7 +25,7 @@ from ..timing import function_timer
 
 
 class OpFilterBin(Operator):
-    """ OpFilterBin buids a template matrix and projects out
+    """OpFilterBin buids a template matrix and projects out
     compromised modes.  It then bins the signal and optionally
     writes out the sparse observation matrix that matches the
     filtering operations.
@@ -105,7 +105,7 @@ class OpFilterBin(Operator):
         self._outprefix = outprefix
         self._zip_maps = zip_maps
         self.verbose = verbose
-        self._write_hits = write_hits,
+        self._write_hits = (write_hits,)
         self._write_wcov_inv = write_wcov_inv
         self._write_wcov = write_wcov
         self._write_binned = write_binned
@@ -166,10 +166,10 @@ class OpFilterBin(Operator):
             istart = ival.first
             istop = ival.last + 1
             wbin = 2 / (istop - istart)
-            phase = (np.arange(istop - istart) + .5) * wbin - 1
+            phase = (np.arange(istop - istart) + 0.5) * wbin - 1
             legendre_templates = np.zeros([nfilter, phase.size])
             legendre(phase, legendre_templates, 0, nfilter)
-            poly_templates[offset : offset + nfilter, istart : istop] = legendre_templates
+            poly_templates[offset : offset + nfilter, istart:istop] = legendre_templates
             offset += nfilter
 
         if templates is None:
@@ -191,7 +191,7 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _build_templates(
-            self, times, phase, local_intervals, good, common_flags, common_templates
+        self, times, phase, local_intervals, good, common_flags, common_templates
     ):
         nsample = times.size
         templates = common_templates.copy()
@@ -223,7 +223,7 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _expand_matrix(self, compressed_matrix, local_to_global):
-        """ Expands a dense, compressed matrix into a sparse matrix with
+        """Expands a dense, compressed matrix into a sparse matrix with
         global indexing
         """
         n = compressed_matrix.size
@@ -246,14 +246,14 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _accumulate_observation_matrix(
-            self,
-            obs_matrix,
-            pixels,
-            weights,
-            good,
-            templates,
-            template_covariance,
-            detweight,
+        self,
+        obs_matrix,
+        pixels,
+        weights,
+        good,
+        templates,
+        template_covariance,
+        detweight,
     ):
         if obs_matrix is None:
             return
@@ -330,9 +330,7 @@ class OpFilterBin(Operator):
         cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
         nsubmap = white_noise_cov.nsubmap
         npix_submap = white_noise_cov.npix_submap
-        for isubmap_local, isubmap_global in enumerate(
-                white_noise_cov.local_submaps
-        ):
+        for isubmap_local, isubmap_global in enumerate(white_noise_cov.local_submaps):
             submap = white_noise_cov.data[isubmap_local]
             offset = isubmap_global * npix_submap
             for pix_local in range(npix_submap):
@@ -342,11 +340,11 @@ class OpFilterBin(Operator):
                 icov = 0
                 for inz in range(nnz):
                     for jnz in range(inz, nnz):
-                        cc[pix + inz * npix, pix + jnz * npix] \
-                            = submap[pix_local, icov]
+                        cc[pix + inz * npix, pix + jnz * npix] = submap[pix_local, icov]
                         if inz != jnz:
-                            cc[pix + jnz * npix, pix + inz * npix] \
-                                = submap[pix_local, icov]
+                            cc[pix + jnz * npix, pix + inz * npix] = submap[
+                                pix_local, icov
+                            ]
                         icov += 1
         cc = cc.tocsr()
         obs_matrix = cc.dot(obs_matrix)
@@ -374,21 +372,32 @@ class OpFilterBin(Operator):
                 if receive_from < self.ntask:
                     size_recv = self.comm.recv(source=receive_from, tag=factor)
                     data_recv = np.zeros(size_recv, dtype=np.float64)
-                    self.comm.Recv(data_recv, source=receive_from, tag=factor + self.ntask)
+                    self.comm.Recv(
+                        data_recv, source=receive_from, tag=factor + self.ntask
+                    )
                     indices_recv = np.zeros(size_recv, dtype=np.int32)
-                    self.comm.Recv(indices_recv, source=receive_from, tag=factor + 2 * self.ntask)
+                    self.comm.Recv(
+                        indices_recv, source=receive_from, tag=factor + 2 * self.ntask
+                    )
                     indptr_recv = np.zeros(obs_matrix.indptr.size, dtype=np.int32)
-                    self.comm.Recv(indptr_recv, source=receive_from, tag=factor + 3 * self.ntask)
+                    self.comm.Recv(
+                        indptr_recv, source=receive_from, tag=factor + 3 * self.ntask
+                    )
                     obs_matrix += scipy.sparse.csr_matrix(
-                        (data_recv, indices_recv, indptr_recv), obs_matrix.shape,
+                        (data_recv, indices_recv, indptr_recv),
+                        obs_matrix.shape,
                     )
             elif self.rank % (factor * 2) == factor:
                 # this task sends
                 send_to = self.rank - factor
                 self.comm.send(obs_matrix.data.size, dest=send_to, tag=factor)
                 self.comm.Send(obs_matrix.data, dest=send_to, tag=factor + self.ntask)
-                self.comm.Send(obs_matrix.indices, dest=send_to, tag=factor + 2 * self.ntask)
-                self.comm.Send(obs_matrix.indptr, dest=send_to, tag=factor + 3 * self.ntask)
+                self.comm.Send(
+                    obs_matrix.indices, dest=send_to, tag=factor + 2 * self.ntask
+                )
+                self.comm.Send(
+                    obs_matrix.indptr, dest=send_to, tag=factor + 3 * self.ntask
+                )
             if self.rank == 0:
                 print(
                     "OpFilterBin: Collected in {:.1f} s".format(time() - t1),
@@ -408,13 +417,11 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _bin_map(self, data, detweights, suffix, white_noise_cov=None):
-        """ Bin the signal onto a map.  Optionally write out hits and
+        """Bin the signal onto a map.  Optionally write out hits and
         white noise covariance matrices.
         """
         if white_noise_cov is None:
-            invnpp = DistPixels(
-                data, comm=self.comm, nnz=self._ncov, dtype=np.float64
-            )
+            invnpp = DistPixels(data, comm=self.comm, nnz=self._ncov, dtype=np.float64)
             if invnpp.data is not None:
                 invnpp.data.fill(0)
             hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64)
@@ -461,8 +468,11 @@ class OpFilterBin(Operator):
                     fname += ".gz"
                 invnpp.write_healpix_fits(fname)
                 if self.rank == 0:
-                    print("OpFilterBin: Wrote inverse white noise covariance to {}"
-                          "".format(fname), flush=True)
+                    print(
+                        "OpFilterBin: Wrote inverse white noise covariance to {}"
+                        "".format(fname),
+                        flush=True,
+                    )
 
             covariance_invert(invnpp, self._rcond_limit)
             white_noise_cov = invnpp
@@ -472,8 +482,11 @@ class OpFilterBin(Operator):
                     fname += ".gz"
                 white_noise_cov.write_healpix_fits(fname)
                 if self.rank == 0:
-                    print("OpFilterBin: Wrote white noise covariance to {}"
-                          "".format(fname), flush=True)
+                    print(
+                        "OpFilterBin: Wrote white noise covariance to {}"
+                        "".format(fname),
+                        flush=True,
+                    )
 
         dist_map.allreduce()
         covariance_apply(white_noise_cov, dist_map)
@@ -578,14 +591,19 @@ class OpFilterBin(Operator):
         # Bin filtered signal
 
         if self.verbose and self.rank == 0:
-            print("OpFilterBin: Filtered signal in {:.1f} s".format(time() - t1), flush=True)
+            print(
+                "OpFilterBin: Filtered signal in {:.1f} s".format(time() - t1),
+                flush=True,
+            )
             print("OpFilterBin: Binning signal", flush=True)
             t1 = time()
 
         white_noise_cov = self._bin_map(data, detweights, "filtered", white_noise_cov)
 
         if self.verbose and self.rank == 0:
-            print("OpFilterBin: Binned signal in {:.1f} s".format(time() - t1), flush=True)
+            print(
+                "OpFilterBin: Binned signal in {:.1f} s".format(time() - t1), flush=True
+            )
 
         if obs_matrix is not None:
             if self.verbose and self.rank == 0:
@@ -595,16 +613,24 @@ class OpFilterBin(Operator):
             obs_matrix = self._noiseweight_obs_matrix(obs_matrix, white_noise_cov)
 
             if self.verbose and self.rank == 0:
-                print("OpFilterBin: Noise-weighted observation matrix in {:.1f} s".format(
-                    time() - t1), flush=True)
+                print(
+                    "OpFilterBin: Noise-weighted observation matrix in {:.1f} s".format(
+                        time() - t1
+                    ),
+                    flush=True,
+                )
                 print("OpFilterBin: Collecting observation matrix", flush=True)
                 t1 = time()
 
             obs_matrix = self._collect_obs_matrix(obs_matrix)
 
             if self.verbose and self.rank == 0:
-                print("OpFilterBin: Collected observation matrix in {:.1f} s".format(
-                    time() - t1), flush=True)
+                print(
+                    "OpFilterBin: Collected observation matrix in {:.1f} s".format(
+                        time() - t1
+                    ),
+                    flush=True,
+                )
 
         if self.verbose and self.rank == 0:
             print("OpFilterBin: Completed in {:.1f} s".format(time() - t0), flush=True)

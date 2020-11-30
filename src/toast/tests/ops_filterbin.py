@@ -78,7 +78,7 @@ class OpFilterBinTest(MPITestCase):
         self.sim_nside = 8
         self.map_nside = 8
         self.nnz = 3
-        self.pointingmode = "IQU"[:self.nnz]
+        self.pointingmode = "IQU"[: self.nnz]
 
         # Samples per observation
         self.npix = 12 * self.sim_nside ** 2
@@ -145,11 +145,13 @@ class OpFilterBinTest(MPITestCase):
 
             tod._az = (tod.local_times() % 100) / 100
             tod.scan_range = [0, 1, 0, 0]
+
             def read_boresight_az(self, local_start=0, n=None):
                 if n is None:
                     n = self.local_samples[1] - local_start
                 ind = slice(local_start, local_start + n)
                 return tod._az[ind]
+
             tod.read_boresight_az = read_boresight_az.__get__(tod)
 
         self.npix = 12 * self.map_nside ** 2
@@ -194,8 +196,8 @@ class OpFilterBinTest(MPITestCase):
             for det in tod.local_dets:
                 pix = tod.cache.reference("pixels_" + det)
                 n = 3 * self.map_nside ** 2
-                pix[0:n] = pix[2*n:n:-1]
-                pix[3*n:4*n] = pix[3*n:2*n:-1]
+                pix[0:n] = pix[2 * n : n : -1]
+                pix[3 * n : 4 * n] = pix[3 * n : 2 * n : -1]
 
         # Scan the signal from a map
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
