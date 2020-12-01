@@ -26,13 +26,13 @@ from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
-from ..operator import Operator
-
 from ..observation import Observation
 
 from ..instrument import Telescope
 
 from ..healpix import ang2vec
+
+from .operator import Operator
 
 from .sim_hwp import simulate_hwp_response
 

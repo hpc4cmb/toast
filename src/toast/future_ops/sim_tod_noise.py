@@ -16,11 +16,11 @@ from ..traits import trait_docs, Int, Unicode
 
 from ..fft import FFTPlanReal1DStore
 
-from ..operator import Operator
-
 from ..utils import rate_from_times, Logger, AlignedF64
 
 from .._libtoast import tod_sim_noise_timestream
+
+from .operator import Operator
 
 
 @function_timer

@@ -4,6 +4,8 @@
 
 # Import Operators into our public API
 
+from .operator import Operator
+
 from .memory_counter import MemoryCounter
 
 from .clear import Clear

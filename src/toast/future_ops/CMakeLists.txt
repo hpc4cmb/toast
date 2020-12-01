@@ -3,6 +3,7 @@
 
 install(FILES
     __init__.py
+    operator.py
     pipeline.py
     clear.py
     copy.py

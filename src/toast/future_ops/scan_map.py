@@ -10,13 +10,13 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool
 
-from ..operator import Operator
-
 from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
 from .._libtoast import scan_map_float64, scan_map_float32
+
+from .operator import Operator
 
 
 @trait_docs

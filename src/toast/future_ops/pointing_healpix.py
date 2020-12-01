@@ -12,8 +12,6 @@ from ..traits import trait_docs, Int, Unicode, Bool
 
 from ..healpix import HealpixPixels
 
-from ..operator import Operator
-
 from ..timing import function_timer
 
 from .. import qarray as qa
@@ -21,6 +19,8 @@ from .. import qarray as qa
 from ..pixels import PixelDistribution
 
 from .._libtoast import pointing_matrix_healpix
+
+from .operator import Operator
 
 
 @trait_docs

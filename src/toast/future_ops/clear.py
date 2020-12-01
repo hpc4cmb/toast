@@ -8,7 +8,7 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, List
 
-from ..operator import Operator
+from .operator import Operator
 
 
 @trait_docs

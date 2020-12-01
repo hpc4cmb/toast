@@ -3,7 +3,7 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <_libtoast.hpp>
+#include <module.hpp>
 
 
 void apply_flags_to_pixels(py::array_t <unsigned char> common_flags,

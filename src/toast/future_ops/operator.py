@@ -3,9 +3,9 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-from .utils import Logger
+from ..utils import Logger
 
-from .traits import TraitConfig
+from ..traits import TraitConfig
 
 
 class Operator(TraitConfig):

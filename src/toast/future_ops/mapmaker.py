@@ -10,11 +10,11 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool
 
-from ..operator import Operator
-
 from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
+
+from .operator import Operator
 
 from .pipeline import Pipeline
 

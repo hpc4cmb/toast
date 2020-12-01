@@ -14,7 +14,7 @@ from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Bool
 
-from ..operator import Operator
+from .operator import Operator
 
 
 @trait_docs

@@ -99,7 +99,6 @@ install(FILES
     observation.py
     observation_data.py
     observation_view.py
-    operator.py
     vis.py
     rng.py
     qarray.py

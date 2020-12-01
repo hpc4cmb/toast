@@ -10,8 +10,6 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
-from ..operator import Operator
-
 from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
@@ -21,6 +19,8 @@ from .._libtoast import (
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
 )
+
+from .operator import Operator
 
 from .clear import Clear
 

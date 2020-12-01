@@ -8,9 +8,9 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool, List
 
-from ..operator import Operator
-
 from ..timing import function_timer
+
+from .operator import Operator
 
 
 @trait_docs
