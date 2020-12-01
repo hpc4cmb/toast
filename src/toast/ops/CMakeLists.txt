@@ -17,5 +17,8 @@ install(FILES
     scan_map.py
     mapmaker_utils.py
     mapmaker_binning.py
+    mapmaker_projection.py
+    mapmaker_templates.py
+    madam.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
