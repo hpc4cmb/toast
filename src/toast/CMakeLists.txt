@@ -83,7 +83,6 @@ install(FILES
     mpi.py
     timing.py
     traits.py
-    cache.py
     config.py
     pixels.py
     pixels_io.py
@@ -106,7 +105,6 @@ install(FILES
     healpix.py
     weather.py
     schedule.py
-    spt3g.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )
