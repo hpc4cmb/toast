@@ -72,13 +72,13 @@ class MapMaker(Operator):
     )
 
     projection = Instance(
-        klass=None,
+        klass=Operator,
         allow_none=True,
         help="This must be an instance of a projection operator",
     )
 
     map_binning = Instance(
-        klass=None,
+        klass=Operator,
         allow_none=True,
         help="Binning operator for final map making.  Default uses same operator as projection.",
     )

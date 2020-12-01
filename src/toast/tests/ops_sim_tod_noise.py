@@ -16,9 +16,9 @@ from .. import rng as rng
 
 from ..noise import Noise
 
-from .. import future_ops as ops
+from .. import ops as ops
 
-from ..future_ops.sim_tod_noise import sim_noise_timestream
+from ..ops.sim_tod_noise import sim_noise_timestream
 
 from ._helpers import create_outdir, create_satellite_data
 

@@ -17,5 +17,5 @@ install(FILES
     scan_map.py
     mapmaker_utils.py
     mapmaker_binning.py
-    DESTINATION ${PYTHON_SITE}/toast/future_ops
+    DESTINATION ${PYTHON_SITE}/toast/ops
 )

@@ -10,7 +10,7 @@ from .memory_counter import MemoryCounter
 
 from .clear import Clear
 
-from .clear import Copy
+from .copy import Copy
 
 from .pipeline import Pipeline
 

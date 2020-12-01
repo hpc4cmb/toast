@@ -9,7 +9,7 @@ import copy
 
 import numpy as np
 
-from .. import future_ops as ops
+from .. import ops as ops
 
 from ._helpers import create_outdir, create_satellite_data
 

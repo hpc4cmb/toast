@@ -76,8 +76,6 @@ from .data import Data
 
 from .config import load_config
 
-from .operator import Operator
-
 from .instrument import Telescope, Focalplane, Site
 
 from .instrument_sim import fake_hexagon_focalplane

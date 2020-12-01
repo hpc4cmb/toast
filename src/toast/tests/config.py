@@ -19,7 +19,7 @@ from ..config import load_config, dump_toml, build_config, create
 
 from ..instrument import Telescope, Focalplane
 
-from ..future_ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
+from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
 
 from ..data import Data
 

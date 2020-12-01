@@ -57,13 +57,13 @@ class Projection(Operator):
     )
 
     binning = Instance(
-        klass=None,
+        klass=Operator,
         allow_none=True,
         help="This must be an instance of a binning operator",
     )
 
     template_matrix = Instance(
-        klass=None,
+        klass=Operator,
         allow_none=True,
         help="This must be an instance of a template matrix operator",
     )

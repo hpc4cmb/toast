@@ -13,7 +13,7 @@ from .mpi import MPITestCase
 
 from ..noise import Noise
 
-from .. import future_ops as ops
+from .. import ops as ops
 
 from ..pixels import PixelDistribution, PixelData
 

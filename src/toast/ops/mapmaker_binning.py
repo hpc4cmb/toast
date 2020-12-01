@@ -8,7 +8,7 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..timing import function_timer
 
@@ -60,7 +60,7 @@ class BinMap(Operator):
     det_flag_mask = Int(0, help="Bit mask value for optional flagging")
 
     pointing = Instance(
-        klass=None,
+        klass=Operator,
         allow_none=True,
         help="This must be an instance of a pointing operator",
     )

@@ -17,7 +17,7 @@ from ..instrument import Focalplane, Telescope
 
 from ..instrument_sim import fake_hexagon_focalplane
 
-from .. import future_ops as ops
+from .. import ops as ops
 
 from ._helpers import create_outdir, create_comm
 

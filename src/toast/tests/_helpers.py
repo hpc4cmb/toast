@@ -20,7 +20,7 @@ from ..instrument_sim import fake_hexagon_focalplane
 
 from ..observation import DetectorData, Observation
 
-from .. import future_ops as ops
+from .. import ops as ops
 
 
 ZAXIS = np.array([0.0, 0.0, 1.0])

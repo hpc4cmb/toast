@@ -11,8 +11,6 @@ import tomlkit
 
 from .timing import function_timer, Timer
 
-from .tod import AnalyticNoise
-
 from .utils import Logger, Environment, name_UID
 
 from . import qarray
@@ -187,34 +185,6 @@ class Focalplane(object):
             for detname, detdata in self.detector_data.items():
                 self._detquats[detname] = detdata["quat"]
         return self._detquats
-
-    @property
-    def noise(self):
-        if self._noise is None:
-            fmin = {}
-            fknee = {}
-            alpha = {}
-            NET = {}
-            rates = {}
-            for detname in self.detectors:
-                detdata = self.detector_data[detname]
-                if "fsample" in detdata:
-                    rates[detname] = detdata["fsample"]
-                else:
-                    rates[detname] = self.sample_rate
-                fmin[detname] = detdata["fmin"]
-                fknee[detname] = detdata["fknee"]
-                alpha[detname] = detdata["alpha"]
-                NET[detname] = detdata["NET"]
-            self._noise = AnalyticNoise(
-                rate=rates,
-                fmin=fmin,
-                detectors=self.detectors,
-                fknee=fknee,
-                alpha=alpha,
-                NET=NET,
-            )
-        return self._noise
 
     def __repr__(self):
         value = "<Focalplane: {} detectors, sample_rate = {} Hz, radius = {} deg, detectors = [".format(

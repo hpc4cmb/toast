@@ -23,11 +23,9 @@ from .utils import Environment, Logger
 from .instrument import Focalplane, Telescope
 from . import instrument
 
-from .operator import Operator
-
 from .traits import TraitConfig
 
-from . import future_ops as ops
+from . import ops as ops
 
 
 def build_config(objects):
@@ -43,10 +41,10 @@ def build_config(objects):
     """
     conf = OrderedDict()
     for o in objects:
-        if not isinstance(o, Operator):
-            raise RuntimeError("The object list should contain Operator instances")
+        if not isinstance(o, TraitConfig):
+            raise RuntimeError("The object list should contain TraitConfig instances")
         if o.name is None:
-            raise RuntimeError("Cannot buid config from Operators without a name")
+            raise RuntimeError("Cannot buid config from objects without a name")
         conf = o.get_config(input=conf)
     return conf
 
