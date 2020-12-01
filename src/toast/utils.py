@@ -355,8 +355,7 @@ def ensure_buffer_f64(data):
 
 
 def name_UID(name):
-    """Return a unique integer for a specified name string.
-    """
+    """Return a unique integer for a specified name string."""
     bdet = name.encode("utf-8")
     dhash = hashlib.md5()
     dhash.update(bdet)
@@ -406,3 +405,58 @@ def rate_from_times(timestamps, mean=False):
     else:
         dt = np.median(np.diff(timestamps))
     return (1.0 / dt, dt, dt_min, dt_max, dt_std)
+
+
+def dtype_to_aligned(dt):
+    """For a numpy dtype, return the equivalent internal Aligned storage class.
+
+    Args:
+        dt (dtype):  The numpy dtype.
+
+    Returns:
+        (tuple):  The (storage class, item size).
+
+    """
+    log = Logger.get()
+    itemsize = None
+    storage_class = None
+    ttype = np.dtype(dt)
+    if ttype.char == "b":
+        storage_class = AlignedI8
+        itemsize = 1
+    elif ttype.char == "B":
+        storage_class = AlignedU8
+        itemsize = 1
+    elif ttype.char == "h":
+        storage_class = AlignedI16
+        itemsize = 2
+    elif ttype.char == "H":
+        storage_class = AlignedU16
+        itemsize = 2
+    elif ttype.char == "i":
+        storage_class = AlignedI32
+        itemsize = 4
+    elif ttype.char == "I":
+        storage_class = AlignedU32
+        itemsize = 4
+    elif (ttype.char == "q") or (ttype.char == "l"):
+        storage_class = AlignedI64
+        itemsize = 8
+    elif (ttype.char == "Q") or (ttype.char == "L"):
+        storage_class = AlignedU64
+        itemsize = 8
+    elif ttype.char == "f":
+        storage_class = AlignedF32
+        itemsize = 4
+    elif ttype.char == "d":
+        storage_class = AlignedF64
+        itemsize = 8
+    elif ttype.char == "F":
+        raise NotImplementedError("No support yet for complex numbers")
+    elif ttype.char == "D":
+        raise NotImplementedError("No support yet for complex numbers")
+    else:
+        msg = "Unsupported data typecode '{}'".format(ttype.char)
+        log.error(msg)
+        raise ValueError(msg)
+    return (storage_class, itemsize)

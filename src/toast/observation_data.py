@@ -24,6 +24,7 @@ from .utils import (
     AlignedU64,
     AlignedF32,
     AlignedF64,
+    dtype_to_aligned,
 )
 
 from .intervals import IntervalList
@@ -81,50 +82,9 @@ class DetectorData(object):
         self._name2idx = {y: x for x, y in enumerate(self._detectors)}
 
         # construct a new dtype in case the parameter given is shortcut string
-        ttype = np.dtype(dtype)
-
+        self._dtype = np.dtype(dtype)
+        self._storage_class, self.itemsize = dtype_to_aligned(dtype)
         self.itemsize = 0
-
-        self._storage_class = None
-        if ttype.char == "b":
-            self._storage_class = AlignedI8
-            self.itemsize = 1
-        elif ttype.char == "B":
-            self._storage_class = AlignedU8
-            self.itemsize = 1
-        elif ttype.char == "h":
-            self._storage_class = AlignedI16
-            self.itemsize = 2
-        elif ttype.char == "H":
-            self._storage_class = AlignedU16
-            self.itemsize = 2
-        elif ttype.char == "i":
-            self._storage_class = AlignedI32
-            self.itemsize = 4
-        elif ttype.char == "I":
-            self._storage_class = AlignedU32
-            self.itemsize = 4
-        elif (ttype.char == "q") or (ttype.char == "l"):
-            self._storage_class = AlignedI64
-            self.itemsize = 8
-        elif (ttype.char == "Q") or (ttype.char == "L"):
-            self._storage_class = AlignedU64
-            self.itemsize = 8
-        elif ttype.char == "f":
-            self._storage_class = AlignedF32
-            self.itemsize = 4
-        elif ttype.char == "d":
-            self._storage_class = AlignedF64
-            self.itemsize = 8
-        elif ttype.char == "F":
-            raise NotImplementedError("No support yet for complex numbers")
-        elif ttype.char == "D":
-            raise NotImplementedError("No support yet for complex numbers")
-        else:
-            msg = "Unsupported data typecode '{}'".format(ttype.char)
-            log.error(msg)
-            raise ValueError(msg)
-        self._dtype = ttype
 
         # Verify that our shape contains only integral values
         self._flatshape = len(self._detectors)

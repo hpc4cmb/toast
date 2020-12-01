@@ -64,11 +64,11 @@ class Template(TraitConfig):
         """Initialize instance after the data trait has been set.
 
         Templates use traits to set their properties, which allows them to be
-        configured easily with the constructor overrides and enables them to be built
-        from config files.  However, the `data` trait may not be set at construction
-        time and this trait is likely used to compute the number of template amplitudes
-        that will be used and other parameters.  This explicit initialize method is
-        called whenever the `data` trait is set.
+        configured easily with the constructor or afterwards and enables them to be
+        built from config files.  However, the `data` trait may not be set at
+        construction time and this trait is likely used to compute the number of
+        template amplitudes that will be used and other parameters.  This explicit
+        initialize method is called whenever the `data` trait is set.
 
         """
         self._initialize(newdata)
@@ -253,72 +253,155 @@ class Amplitudes(object):
     all processes.  This object provides methods for describing the local distribution
     of amplitudes and for doing global reductions.
 
+    If n_global == n_local, then every process has a full copy of the amplitude
+    values.  The the two arguments are different, then each process has a subset of
+    values.  If local_indices is None, then each process has a unique set of values
+    and the total number across all processes must sum to n_global.  If local_indices
+    is given, then it is the explicit locations of the local values within the global
+    set.
+
     Args:
         comm (mpi4py.MPI.Comm):  The MPI communicator or None.
-        n_global (int):  The number of global values across all
+        n_global (int):  The number of global values across all processes.
+        n_local (int):  The number of values on this process.
+        local_indices (array):  If not None, the explicit indices of the local
+            amplitudes within the global array.
+        dtype (dtype):  The amplitude dtype.
 
     """
 
-    def __init__(self, comm, n_global, local_indices=None):
+    def __init__(self, comm, n_global, n_local, local_indices=None, dtype=np.float64):
         self._comm = comm
+        self._n_global = n_global
+        self._n_local = n_local
+        self._local_indices = local_indices
+        self._dtype = np.dtype(dtype)
+        self._storage_class, self._itemsize = dtype_to_aligned(dtype)
+        self._full = False
+        self._global_first = None
+        self._global_last = None
+        if self._n_global == self._n_local:
+            self._full = True
+            self._global_first = 0
+            self._global_last = self._n_local - 1
+        else:
+            if self._local_indices is None:
+                check = [self._n_local]
+                rank = 0
+                if self._comm is not None:
+                    check = self._comm.allgather(check)
+                    rank = self._comm.rank
+                if np.sum(check) != self._n_global:
+                    msg = "Total amplitudes on all processes does not equal n_global"
+                    raise RuntimeError(msg)
+                self._global_first = 0
+                for i in range(rank):
+                    self._global_first += check[i]
+                self._global_last = self._global_first + self._n_local - 1
+            else:
+                if len(self._local_indices) != self._n_local:
+                    msg = "Length of local_indices must match n_local"
+                    raise RuntimeError(msg)
+                self._global_first = self._local_indices[0]
+                self._global_last = self._local_indices[-1]
+        self._raw = self._storage_class.zeros(self._n_local)
+        self.local = self._raw.array()
+
+    def clear(self):
+        """Delete the underlying memory.
+
+        This will forcibly delete the C-allocated memory and invalidate all python
+        references to this object.  DO NOT CALL THIS unless you are sure all references
+        are no longer being used and you are about to delete the object.
+
+        """
+        if hasattr(self, "local"):
+            del self.local
+        if hasattr(self, "_raw"):
+            self._raw.clear()
+            del self._raw
+
+    def __del__(self):
+        self.clear()
 
     @property
     def comm(self):
         return _comm
 
-    def _n_vales(self):
-        raise NotImplementedError("Derived classes must implement _n_values()")
+    @property
+    def n_global(self):
+        """The total number of amplitudes."""
+        return self._n_global
 
-    def n_values(self):
-        """Returns the total number of amplitudes."""
-        return self._n_values()
-
-    def _n_local(self):
-        raise NotImplementedError("Derived classes must implement _n_local()")
-
+    @property
     def n_local(self):
-        """Returns the number of locally stored amplitudes."""
-        return self._n_local()
+        """The number of locally stored amplitudes."""
+        return self._n_local
 
-    def _get_global_values(self, offset, buffer):
-        raise NotImplementedError("Derived classes must implement _get_global_values()")
+    def _get_global_values(comm_offset, send_buffer):
+        n_buf = len(send_buffer)
+        if self._full:
+            # Shortcut if we have all global amplitudes locally
+            send_buffer[:] = self.local[comm_offset : comm_offset + n_buf]
+        else:
+            # Need to compute our overlap with the global range.
+            send_buffer[:] = 0
+            if (self._global_last < comm_offset) or (
+                self._global_first >= comm_offset + n_buf
+            ):
+                # No overlap with our local data
+                return
+            if self._local_indices is None:
+                local_off = 0
+                buf_off = 0
+                if comm_offset > self._global_first:
+                    local_off = comm_offset - self._global_first
+                else:
+                    buf_off = self._global_first - comm_offset
+                n_copy = None
+                if comm_offset + n_buf > self._global_last:
+                    n_copy = self._global_last + 1 - local_off
+                else:
+                    n_copy = n_buf - buf_off
+                send_buffer[buf_off : buf_off + n_copy] = self.local[
+                    local_off : local_off + n_copy
+                ]
+            else:
+                # Need to efficiently do the lookup.  Pull existing techniques from
+                # old code when we need this.
+                raise NotImplementedError("sync of explicitly indexed amplitudes")
 
-    def get_global_values(self, offset, buffer):
-        """For the given range of global values, populate the buffer.
-
-        This function takes the provided buffer for the global sample offset and fills
-        it with any local values that fall in that sample range.  Other values should be
-        set to zero.  This is used in synchronization / reduction.
-
-        Args:
-            offset (int):  The global sample offset.
-            buffer (array):  A pre-existing 1D array of amplitudes.
-
-        Returns:
-            None
-
-        """
-        return self._global_values(offset, buffer)
-
-    def _set_global_values(self, offset, buffer):
-        raise NotImplementedError("Derived classes must implement _set_global_values()")
-
-    def set_global_values(self, offset, buffer):
-        """For the given range of global values, set local values.
-
-        This function takes the provided buffer for the global sample offset and uses
-        it to set any local values that fall in that sample range.  This is used in
-        synchronization / reduction.
-
-        Args:
-            offset (int):  The global sample offset.
-            buffer (array):  A 1D array of amplitudes.
-
-        Returns:
-            None
-
-        """
-        return self._global_values(offset, buffer)
+    def _set_global_values(comm_offset, recv_buffer):
+        n_buf = len(recv_buffer)
+        if self._full:
+            # Shortcut if we have all global amplitudes locally
+            self.local[comm_offset : comm_offset + n_buf] = recv_buffer
+        else:
+            # Need to compute our overlap with the global range.
+            if (self._global_last < comm_offset) or (
+                self._global_first >= comm_offset + n_buf
+            ):
+                # No overlap with our local data
+                return
+            if self._local_indices is None:
+                local_off = 0
+                buf_off = 0
+                if comm_offset > self._global_first:
+                    local_off = comm_offset - self._global_first
+                else:
+                    buf_off = self._global_first - comm_offset
+                n_copy = None
+                if comm_offset + n_buf > self._global_last:
+                    n_copy = self._global_last + 1 - local_off
+                else:
+                    n_copy = n_buf - buf_off
+                self.local[local_off : local_off + n_copy] = recv_buffer[
+                    buf_off : buf_off + n_copy
+                ]
+            else:
+                # Need to efficiently do the lookup.  Pull existing techniques from
+                # old code when we need this.
+                raise NotImplementedError("sync of explicitly indexed amplitudes")
 
     def sync(self, comm_bytes=10000000):
         """Perform an Allreduce across all processes.
@@ -335,32 +418,18 @@ class Amplitudes(object):
             None
 
         """
+        if self._comm is None:
+            return
         log = Logger.get()
-        dt = np.dtype(self.local.dtype)
 
-        storage_class = None
-        if dt.char == "f":
-            storage_class = AlignedF32
-        elif dt.char == "d":
-            storage_class = AlignedF64
-        elif dt.char == "F":
-            raise NotImplementedError("No support yet for complex numbers")
-        elif dt.char == "D":
-            raise NotImplementedError("No support yet for complex numbers")
-        else:
-            msg = "Unsupported data typecode '{}'".format(dt.char)
-            log.error(msg)
-            raise ValueError(msg)
+        n_comm = int(comm_bytes / self._itemsize)
+        n_total = self._n_global
 
-        item_size = self.local.dtype.itemsize
-        n_comm = int(comm_bytes / item_size)
-        n_total = self.n_values()
+        # Create persistent buffers for the reduction
 
-        # Create a persistent buffer for the reduction
-
-        send_raw = storage_class.zeros(n_comm)
+        send_raw = self._storage_class.zeros(n_comm)
         send_buffer = send_raw.array()
-        recv_raw = storage_class.zeros(n_comm)
+        recv_raw = self._storage_class.zeros(n_comm)
         recv_buffer = recv_raw.array()
 
         # Buffered Allreduce
@@ -369,28 +438,18 @@ class Amplitudes(object):
         while comm_offset < n_total:
             if comm_offset + n_comm > n_total:
                 n_comm = n_total - comm_offset
-            self.get_global_values(comm_offset, send_buffer)
+            self._get_global_values(comm_offset, send_buffer)
             self._comm.Allreduce(send_buffer, recv_buffer, op=MPI.SUM)
-            self.set_global_values(comm_offset, recv_buffer)
+            self._set_global_values(comm_offset, recv_buffer)
             comm_offset += n_comm
 
         # Cleanup
-
         del send_buffer
         del recv_buffer
         send_raw.clear()
         recv_raw.clear()
         del send_raw
         del recv_raw
-
-    def _local_dot(self, other):
-        """Perform a dot product with the local values of another Amplitudes object.
-
-        It is safe to assume that the calling code has verified that the other
-        Amplitudes instance has a matching data distribution.
-
-        """
-        raise NotImplementedError("Derived classes must implement _local_dot()")
 
     def dot(self, other):
         """Perform a dot product with another Amplitudes object.
@@ -404,12 +463,25 @@ class Amplitudes(object):
             (float):  The dot product.
 
         """
-        if other.n_values() != self.n_values():
+        if other.n_global != self.n_global:
             raise RuntimeError("Amplitudes must have the same number of values")
-        if other.n_local() != self.n_local():
+        if other.n_local != self.n_local:
             raise RuntimeError("Amplitudes must have the same number of local values")
-        local_result = self._local_dot(other)
-        result = local_result
-        if self._comm is not None:
-            result = MPI.allreduce(result, op=MPI.SUM)
+        local_result = np.dot(self.local, other.local)
+        result = None
+        if self._full:
+            # Every process has a copy of all amplitudes, so we are done
+            result = local_result
+        else:
+            if self._comm is None:
+                # Only one process
+                result = local_result
+            else:
+                if self._local_indices is None:
+                    # Every process has a unique set of amplitudes.  Reduce.
+                    result = MPI.allreduce(local_result, op=MPI.SUM)
+                else:
+                    # More complicated, since we need to reduce each amplitude only
+                    # once.  Implement techniques from other existing code when needed.
+                    raise NotImplementedError("dot of explicitly indexed amplitudes")
         return result
