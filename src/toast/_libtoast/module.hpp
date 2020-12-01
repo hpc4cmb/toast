@@ -6,7 +6,7 @@
 #ifndef LIBTOAST_HPP
 #define LIBTOAST_HPP
 
-#include <_libtoast_common.hpp>
+#include <common.hpp>
 
 PYBIND11_MAKE_OPAQUE(toast::AlignedI8);
 PYBIND11_MAKE_OPAQUE(toast::AlignedU8);

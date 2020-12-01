@@ -28,23 +28,23 @@ set(PYTHON_SITE "lib/python${PYTHON_MAJORMINOR}/site-packages")
 # Create a module for the serial toast library
 
 pybind11_add_module(_libtoast MODULE
-    _libtoast_common.cpp
-    _libtoast.cpp
-    _libtoast_sys.cpp
-    _libtoast_math_sf.cpp
-    _libtoast_math_rng.cpp
-    _libtoast_math_qarray.cpp
-    _libtoast_math_fft.cpp
-    _libtoast_math_healpix.cpp
-    _libtoast_fod_psd.cpp
-    _libtoast_tod_filter.cpp
-    _libtoast_tod_pointing.cpp
-    _libtoast_tod_simnoise.cpp
-    _libtoast_todmap_scanning.cpp
-    _libtoast_map_cov.cpp
-    _libtoast_pixels.cpp
-    _libtoast_todmap_mapmaker.cpp
-    _libtoast_atm.cpp
+    _libtoast/common.cpp
+    _libtoast/module.cpp
+    _libtoast/sys.cpp
+    _libtoast/math_sf.cpp
+    _libtoast/math_rng.cpp
+    _libtoast/math_qarray.cpp
+    _libtoast/math_fft.cpp
+    _libtoast/math_healpix.cpp
+    _libtoast/fod_psd.cpp
+    _libtoast/tod_filter.cpp
+    _libtoast/tod_pointing.cpp
+    _libtoast/tod_simnoise.cpp
+    _libtoast/todmap_scanning.cpp
+    _libtoast/map_cov.cpp
+    _libtoast/pixels.cpp
+    _libtoast/todmap_mapmaker.cpp
+    _libtoast/atm.cpp
 )
 
 if(OpenMP_CXX_FOUND)
@@ -69,7 +69,7 @@ endif(CHOLMOD_FOUND)
 
 # Include path to the toast headers
 target_include_directories(_libtoast BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/_libtoast"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
 )
 
