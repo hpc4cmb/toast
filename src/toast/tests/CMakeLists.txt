@@ -18,26 +18,11 @@ install(FILES
     timing.py
     pixels.py
     ops_sim_satellite.py
-    ops_applygain.py
     ops_sim_tod_noise.py
     ops_mapmaker_utils.py
     covariance.py
     ops_pointing_healpix.py
-    ops_dipole.py
-    ops_groundfilter.py
     sim_focalplane.py
-    ops_polyfilter.py
     ops_memory_counter.py
-    ops_gainscrambler.py
-    psd_math.py
-    ops_madam.py
-    ops_mapmaker.py
-    map_satellite.py
-    map_ground.py
-    binned.py
-    ops_sim_pysm.py
-    tidas.py
-    ops_sim_atm.py
-    ops_sim_sss.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

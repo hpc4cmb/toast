@@ -111,10 +111,5 @@ install(FILES
 
 # Process the sub directories
 add_subdirectory(tests)
-add_subdirectory(tod)
-add_subdirectory(map)
-add_subdirectory(todmap)
-add_subdirectory(fod)
-add_subdirectory(pipeline_tools)
-add_subdirectory(future_ops)
+add_subdirectory(ops)
 add_subdirectory(templates)
