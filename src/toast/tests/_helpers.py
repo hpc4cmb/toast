@@ -121,7 +121,14 @@ def uniform_chunks(samples, nchunk=100):
 
 
 def boresight_focalplane(
-    ndet, samplerate=1.0, epsilon=0.0, net=1.0, fmin=0.0, alpha=1.0, fknee=0.05
+        ndet,
+        samplerate=1.0,
+        epsilon=0.0,
+        net=1.0,
+        fmin=0.0,
+        alpha=1.0,
+        fknee=0.05,
+        pairs=False,
 ):
     """Create a set of detectors at the boresight.
 
@@ -130,36 +137,49 @@ def boresight_focalplane(
 
     Args:
         ndet (int): the number of detectors.
-
+        pairs (bool):  add a polarization-orthogonal counterpart for every detector
 
     Returns:
         (tuple): names(list), quat(dict), fmin(dict), rate(dict), fknee(dict),
             alpha(dict), netd(dict)
 
     """
-    names = ["d{:02d}".format(x) for x in range(ndet)]
-    pol = {"d{:02d}".format(x): (x * np.pi / ndet) for x in range(ndet)}
 
-    quat = {
-        "d{:02d}".format(x): qa.rotation(ZAXIS, pol["d{:02d}".format(x)])
-        for x in range(ndet)
-    }
-
-    det_eps = {"d{:02d}".format(x): epsilon for x in range(ndet)}
-
-    det_fmin = {"d{:02d}".format(x): fmin for x in range(ndet)}
-    det_rate = {"d{:02d}".format(x): samplerate for x in range(ndet)}
-    det_alpha = {"d{:02d}".format(x): alpha for x in range(ndet)}
-    det_net = {"d{:02d}".format(x): net for x in range(ndet)}
-
-    det_fknee = None
-    if np.isscalar(fknee):
-        det_fknee = {"d{:02d}".format(x): fknee for x in range(ndet)}
+    if pairs:
+        if ndet % 2 != 0:
+            raise RuntimeError("Number of detectors must be even to make pairs")
+        names = []
+        pol = {}
+        npixel = ndet // 2
+        for pixel in range(npixel):
+            for arm in "AB":
+                det = "d{:02d}{}".format(pixel, arm)
+                names.append(det)
+                pol[det] = pixel * np.pi / npixel + (arm == "B") * np.pi / 2
     else:
-        # This must be an array or list of correct length
-        if len(fknee) != ndet:
-            raise RuntimeError("length of knee frequencies must equal ndet")
-        det_fknee = {"d{:02d}".format(x): y for x, y in zip(range(ndet), fknee)}
+        names = ["d{:02d}".format(x) for x in range(ndet)]
+        pol = {"d{:02d}".format(x): (x * np.pi / ndet) for x in range(ndet)}
+
+    quat = {}
+    det_eps = {}
+    det_fmin = {}
+    det_rate = {}
+    det_alpha = {}
+    det_net = {}
+    det_fknee = {}
+    for idet, det in enumerate(names):
+        quat[det] = qa.rotation(ZAXIS, pol[det])
+        det_eps[det] = epsilon
+        det_fmin[det] = fmin
+        det_rate[det] = samplerate
+        det_alpha[det] = alpha
+        det_net[det] = net
+        if np.isscalar(fknee):
+            det_fknee[det] = fknee
+        else:
+            if len(fknee) != ndet:
+                raise RuntimeError("length of knee frequencies must equal ndet")
+            det_fknee[det] = fknee[idet]
 
     return names, quat, det_eps, det_rate, det_net, det_fmin, det_fknee, det_alpha
 

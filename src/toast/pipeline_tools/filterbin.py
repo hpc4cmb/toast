@@ -74,6 +74,21 @@ def add_filterbin_args(parser):
         dest="filterbin_write_obs_matrix",
     )
     parser.set_defaults(filterbin_write_obs_matrix=False)
+    parser.add_argument(
+        "--filterbin-deproject-map",
+        required=False,
+        help="Deprojection template file",
+    )
+    parser.add_argument(
+        "--filterbin-deproject-map",
+        required=False,
+        help="Deprojection template file",
+    )
+    parser.add_argument(
+        "--filterbin-deproject-pattern",
+        default=".*",
+        help="Deprojection pattern (which detectors to filter)",
+    )
 
     try:
         parser.add_argument(
@@ -243,6 +258,16 @@ def apply_filterbin(
             timer.clear()
             timer.start()
 
+            deproject_nnz = None
+            if args.filterbin_deproject_map:
+                if comm is None or comm.comm_world.rank == 0:
+                    hdulist = pf.open(args.filterbin_deproject_map, "r")
+                    deproject_nnz = hdulist[1].header["tfields"]
+                else:
+                    deproject_nnz = None
+                if comm is not None:
+                    deproject_nnz = comm.comm_world.bcast(deproject_nnz)
+
             if len(file_root) > 0 and not file_root.endswith("_"):
                 file_root += "_"
             prefix = "{}telescope_{}_time_{}_".format(file_root, tele_name, time_name)
@@ -268,6 +293,9 @@ def apply_filterbin(
                 split_ground_template=args.filterbin_split_ground_template,
                 poly_filter_order=args.filterbin_poly_order,
                 write_obs_matrix=args.filterbin_write_obs_matrix,
+                deproject_map=args.filterbin_deproject_map,
+                deproject_pattern=args.filterbin_deproject_pattern,
+                deproject_nnz=deproject_nnz,
             )
 
             filterbin.exec(tele_data, time_comm)

@@ -5,6 +5,7 @@
 from ..mpi import MPI
 
 import os
+import re
 from time import time
 
 import numpy as np
@@ -54,6 +55,14 @@ class OpFilterBin(Operator):
         intervals (str):  Name of the valid intervals in observation
         split_ground_template (bool):  Apply a different template for
              left and right scans
+        deproject_map (str):  Healpix map containing the deprojection
+            templates: intensity map and its derivatives
+        deproject_nnz (int):  Number of deprojection templates to
+            regress.  Must be less than or equal to number of columns in
+            `deproject_map`.
+        deproject_pattern (str):  Regular expression to test detector
+            names with.  Only matching detectors will be deprojected.
+            Used to identify differenced TOD.
     """
 
     def __init__(
@@ -82,6 +91,9 @@ class OpFilterBin(Operator):
         write_wcov=True,
         write_binned=False,
         maskfile=None,
+        deproject_map=None,
+        deproject_nnz=1,
+        deproject_pattern=".*",
     ):
         self._name = name
         self._common_flag_name = common_flag_name
@@ -112,6 +124,9 @@ class OpFilterBin(Operator):
         if maskfile is not None:
             raise RuntimeError("Filtering mask not yet implemented")
         self._maskfile = maskfile
+        self._deproject_map = deproject_map
+        self._deproject_nnz = deproject_nnz
+        self._deproject_pattern = re.compile(deproject_pattern)
 
         # Call the parent class constructor.
         super().__init__()
@@ -191,12 +206,30 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _build_templates(
-        self, times, phase, local_intervals, good, common_flags, common_templates
+            self,
+            times,
+            phase,
+            local_intervals,
+            good,
+            common_flags,
+            common_templates,
+            deprojection_map,
+            det,
+            pixels,
     ):
         nsample = times.size
-        templates = common_templates.copy()
+        templates = list(common_templates)
 
-        # FIXME: add deprojection templates here
+        # add deprojection templates
+        if deprojection_map is not None and \
+           self._deproject_pattern.match(det) is not None:
+            # Normalize the deprojection templates for numerical stability
+            norm = np.dot(common_templates[0], common_templates[0])
+            submap, localpix = deprojection_map.global_to_local(pixels)
+            for inz in range(self._deproject_nnz):
+                dptemplate = deprojection_map.data[submap, localpix, inz]
+                dptemplate *= np.sqrt(norm / np.dot(dptemplate, dptemplate))
+                templates.append(dptemplate)
 
         # Get covariance
         templates = np.vstack(templates)
@@ -426,17 +459,35 @@ class OpFilterBin(Operator):
         white noise covariance matrices.
         """
         if white_noise_cov is None:
-            invnpp = DistPixels(data, comm=self.comm, nnz=self._ncov, dtype=np.float64)
+            invnpp = DistPixels(
+                data,
+                comm=self.comm,
+                nnz=self._ncov,
+                dtype=np.float64,
+                pixels=self._pixels_name,
+            )
             if invnpp.data is not None:
                 invnpp.data.fill(0)
-            hits = DistPixels(data, comm=self.comm, nnz=1, dtype=np.int64)
+            hits = DistPixels(
+                data,
+                comm=self.comm,
+                nnz=1,
+                dtype=np.int64,
+                pixels=self._pixels_name,
+            )
             if hits.data is not None:
                 hits.data.fill(0)
         else:
             invnpp = None
             hits = None
 
-        dist_map = DistPixels(data, comm=self.comm, nnz=self._nnz, dtype=np.float64)
+        dist_map = DistPixels(
+            data,
+            comm=self.comm,
+            nnz=self._nnz,
+            dtype=np.float64,
+            pixels=self._pixels_name,
+        )
         if dist_map.data is not None:
             dist_map.data.fill(0)
 
@@ -507,6 +558,8 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _get_detweights(self, data):
+        # FIXME : We need a generic way of building the detector weights
+        # FIXME : This can wait until TOAST3.
         detweights = {}
         for obs in data.obs:
             tod = obs["tod"]
@@ -514,6 +567,19 @@ class OpFilterBin(Operator):
                 if det not in detweights:
                     detweights[det] = 1e3
         return detweights
+
+    def _load_deprojection_map(self, data):
+        if self._deproject_map is None:
+            return None
+        deprojection_map = DistPixels(
+            data,
+            comm=self.comm,
+            nnz=self._deproject_nnz,
+            dtype=np.float32,
+            pixels=self._pixels_name,
+        )
+        deprojection_map.read_healpix_fits(self._deproject_map)
+        return deprojection_map
 
     @function_timer
     def exec(self, data, comm=None):
@@ -533,6 +599,7 @@ class OpFilterBin(Operator):
 
         obs_matrix = self._initialize_obs_matrix()
         detweights = self._get_detweights(data)
+        deprojection_map = self._load_deprojection_map(data)
 
         white_noise_cov = None
         if self._write_binned:
@@ -578,7 +645,15 @@ class OpFilterBin(Operator):
 
                 t1 = time()
                 templates, template_covariance = self._build_templates(
-                    times, phase, local_intervals, good, common_flags, common_templates
+                    times,
+                    phase,
+                    local_intervals,
+                    good,
+                    common_flags,
+                    common_templates,
+                    deprojection_map,
+                    det,
+                    pixels,
                 )
                 if self.verbose:
                     print("Built templates in {:.3f} s".format(time() - t1), flush=True)

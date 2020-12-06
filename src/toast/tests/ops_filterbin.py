@@ -15,7 +15,9 @@ import scipy.sparse
 
 from ..timing import gather_timers, GlobalTimers
 from ..timing import dump as dump_timing
-from ..tod import AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit
+from ..tod import (
+    AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit,
+)
 from ..map import DistPixels
 from ..todmap import (
     TODHpixSpiral,
@@ -35,8 +37,10 @@ class OpFilterBinTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         self.rank = 0
+        self.ntask = 1
         if self.comm is not None:
             self.rank = self.comm.rank
+            self.ntask = self.comm.size
         if self.rank == 0:
             for fname in glob.glob("{}/*".format(self.outdir)):
                 try:
@@ -46,10 +50,10 @@ class OpFilterBinTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        self.nobs = 3
+        self.nobs = 1
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
 
-        self.ndet = 1
+        self.ndet = 4 * self.ntask
         self.sigma = 1
         self.rate = 50.0
         self.net = self.sigma / np.sqrt(self.rate)
@@ -72,6 +76,7 @@ class OpFilterBinTest(MPITestCase):
             fknee=self.fknee,
             alpha=self.alpha,
             net=self.net,
+            pairs=True,
         )
 
         # Pixelization
@@ -162,6 +167,7 @@ class OpFilterBinTest(MPITestCase):
         self.lmax = 2 * self.sim_nside
         self.cl = np.ones([4, self.lmax + 1])
         self.cl[:, 0:2] = 0
+        #self.cl[1:] = 0  # DEBUG
         fwhm = np.radians(10)
         self.inmap = hp.synfast(
             self.cl,
@@ -244,6 +250,146 @@ class OpFilterBinTest(MPITestCase):
 
             inmap = hp.read_map(self.inmapfile, None, nest=True)
             outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
+
+            np.testing.assert_array_almost_equal(outmap, outmap_test)
+
+        if self.comm is not None:
+            self.comm.Barrier()
+
+        return
+
+    def test_filterbin_deproject(self):
+
+        name = "testtod2"
+        init = OpCacheInit(name=name, init_val=0)
+
+        # make a simple pointing matrix
+        pointing = OpPointingHpix(
+            nside=self.map_nside, nest=True, mode=self.pointingmode
+        )
+        pointing.exec(self.data)
+
+        # Force detector pairs to share pointing.
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                if det.endswith("A"):
+                    pairdet = det[:-1] + "B"
+                    pixels = tod.cache.reference("pixels_" + det)
+                    pairpixels = tod.cache.reference("pixels_" + pairdet)
+                    pairpixels[:] = pixels
+
+        # Scan the signal from a map
+        distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
+        distmap.read_healpix_fits(self.inmapfile)
+
+        scansim = OpSimScan(input_map=distmap, out=name)
+        scansim.exec(self.data)
+
+        # Scramble the gains
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                if det.endswith("A"):
+                    pairdet = det[:-1] + "B"
+                    signal = tod.local_signal(det, name)
+                    pairsignal = tod.local_signal(pairdet, name)
+                    gain = 1 + np.random.randn() * 1e-2
+                    signal *= gain
+                    pairsignal /= gain
+
+        # Sum/diff the signal
+        weights_in = "weights"
+        weights_out = "pairweights"
+        signal_in = name
+        signal_out = "pairtod"
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            for det in tod.local_dets:
+                if det.endswith("A"):
+                    pairdet = det[:-1] + "B"
+                    signal = tod.local_signal(det, signal_in)
+                    pairsignal = tod.local_signal(pairdet, signal_in)
+                    tod.cache.put(
+                        signal_out + "_" + det,
+                        0.5 * (signal + pairsignal),
+                        replace=True,
+                    )
+                    tod.cache.put(
+                        signal_out + "_" + pairdet,
+                        0.5 * (signal - pairsignal),
+                        replace=True,
+                    )
+                    weights = tod.cache.reference(weights_in + "_" + det)
+                    pairweights = tod.cache.reference(weights_in + "_" + pairdet)
+                    tod.cache.put(
+                        weights_out + "_" + det,
+                        0.5 * (weights + pairweights),
+                        replace=True,
+                    )
+                    tod.cache.put(
+                        weights_out + "_" + pairdet,
+                        0.5 * (weights - pairweights),
+                        replace=True,
+                    )
+                    pixels = tod.cache.reference("pixels_" + det)
+                    pairpixels = tod.cache.reference("pixels_" + pairdet)
+
+        # Make a deprojection template map
+        dpmap_file = os.path.join(self.outdir, "deprojection_map.fits")
+        if self.rank == 0:
+            tmap = hp.read_map(self.inmapfile, nest=True)
+            hp.write_map(dpmap_file, tmap, nest=True)
+        if self.comm is not None:
+            self.comm.Barrier()
+            
+        # Run FilterBin
+
+        gt = GlobalTimers.get()
+        gt.start("OpMapMaker test")
+
+        outprefix = "toast_test2_"
+
+        filterbin = OpFilterBin(
+            nside=self.map_nside,
+            nnz=self.nnz,
+            name=signal_out,
+            weights_name=weights_out,
+            outdir=self.outdir,
+            outprefix=outprefix,
+            write_obs_matrix=True,
+            ground_filter_order=3,
+            poly_filter_order=20,
+            zip_maps=True,
+            common_flag_mask=255,
+            write_binned=True,
+            write_hits=True,
+            write_wcov_inv=True,
+            write_wcov=True,
+            deproject_map=dpmap_file,
+            deproject_pattern=".*B",
+            deproject_nnz=1,
+        )
+        filterbin.exec(self.data, self.comm)
+
+        if self.rank == 0:
+
+            # Test that we can replicate the filtering by applying
+            # the observation matrix to the input map
+
+            fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
+            obs_matrix = scipy.sparse.load_npz(fname)
+
+            fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
+            outmap = hp.read_map(fname, None, nest=True)
+
+            inmap = hp.read_map(self.inmapfile, None, nest=True)
+            outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
+
+            # The gain fluctuations can change the overall calibration
+
+            ratio = np.std(outmap[1:]) / np.std(outmap_test[1:])
+            outmap_test *= ratio
 
             np.testing.assert_array_almost_equal(outmap, outmap_test)
 
