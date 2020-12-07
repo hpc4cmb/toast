@@ -7,6 +7,7 @@ import copy
 import os
 import re
 
+import astropy.io.fits as pf
 import numpy as np
 
 from ..timing import function_timer, Timer
@@ -74,11 +75,6 @@ def add_filterbin_args(parser):
         dest="filterbin_write_obs_matrix",
     )
     parser.set_defaults(filterbin_write_obs_matrix=False)
-    parser.add_argument(
-        "--filterbin-deproject-map",
-        required=False,
-        help="Deprojection template file",
-    )
     parser.add_argument(
         "--filterbin-deproject-map",
         required=False,
@@ -262,7 +258,7 @@ def apply_filterbin(
             if args.filterbin_deproject_map:
                 deproject_nnz = None
                 if comm is None or comm.comm_world.rank == 0:
-                    hdulist = pf.open(args.filterbin_deproject_map, "r")
+                    hdulist = pf.open(args.filterbin_deproject_map, "readonly")
                     deproject_nnz = hdulist[1].header["tfields"]
                     hdulist.close()
                 if comm is not None:
