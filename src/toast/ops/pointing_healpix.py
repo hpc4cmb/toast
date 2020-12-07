@@ -97,6 +97,18 @@ class PointingHealpix(Operator):
         help="The observation key with a dictionary of pointing weight calibration for each det",
     )
 
+    coord_in = Unicode(
+        None,
+        allow_none=True,
+        help="The input boresight coordinate system ('C', 'E', 'G')",
+    )
+
+    coord_out = Unicode(
+        None,
+        allow_none=True,
+        help="The output boresight coordinate system ('C', 'E', 'G')",
+    )
+
     overwrite = Bool(False, help="If True, regenerate pointing even if it exists")
 
     @traitlets.validate("nside")
@@ -136,20 +148,47 @@ class PointingHealpix(Operator):
             raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
 
+    @traitlets.validate("coord_in")
+    def _check_coord_in(self, proposal):
+        check = proposal["value"]
+        if check is not None:
+            if check not in ["E", "C", "G"]:
+                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
+        return check
+
+    @traitlets.validate("coord_out")
+    def _check_coord_out(self, proposal):
+        check = proposal["value"]
+        if check is not None:
+            if check not in ["E", "C", "G"]:
+                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
+        return check
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        # Initialize the healpix pixels object
-        self.hpix = HealpixPixels(self.nside)
+    @traitlets.observe("nside", "nside_submap", "mode")
+    def _reset_hpix(self, change):
+        # (Re-)initialize the healpix pixels object when one of these traits change.
+        # Current values:
+        nside = self.nside
+        nside_submap = self.nside_submap
+        nnz = self._nnz
 
-        self._nnz = 1
-        if self.mode == "IQU":
-            self._nnz = 3
-
-        self._n_pix = 12 * self.nside ** 2
-        self._n_pix_submap = 12 * self.nside_submap ** 2
-        self._n_submap = (self.nside // self.nside_submap) ** 2
-
+        # Update to the trait that changed
+        if change["name"] == "nside":
+            nside = change["new"]
+        if change["name"] == "nside_submap":
+            nside_submap = change["new"]
+        if change["name"] == "mode":
+            if change["new"] == "IQU":
+                nnz = 3
+            else:
+                nnz = 1
+        self.hpix = HealpixPixels(nside)
+        self._n_pix = 12 * nside ** 2
+        self._n_pix_submap = 12 * nside_submap ** 2
+        self._n_submap = (nside // nside_submap) ** 2
         self._local_submaps = None
 
     @function_timer
@@ -159,6 +198,31 @@ class PointingHealpix(Operator):
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
+
+        coord_rot = None
+        if self.coord_in is None:
+            if self.coord_out is not None:
+                msg = "Input and output coordinate systems should both be None or valid"
+                raise RuntimeError(msg)
+        else:
+            if self.coord_out is None:
+                msg = "Input and output coordinate systems should both be None or valid"
+                raise RuntimeError(msg)
+            if self.coord_in == "C":
+                if self.coord_out == "E":
+                    coord_rot = qa.equ2ecl
+                elif self.coord_out == "G":
+                    coord_rot = qa.equ2gal
+            elif self.coord_in == "E":
+                if self.coord_out == "G":
+                    coord_rot = qa.ecl2gal
+                elif self.coord_out == "C":
+                    coord_rot = qa.inv(qa.equ2ecl)
+            elif self.coord_in == "G":
+                if self.coord_out == "C":
+                    coord_rot = qa.inv(qa.equ2gal)
+                if self.coord_out == "E":
+                    coord_rot = qa.inv(qa.ecl2gal)
 
         # We do the calculation over buffers of timestream samples to reduce memory
         # overhead from temporary arrays.
@@ -188,7 +252,12 @@ class PointingHealpix(Operator):
                 hwp_angle = ob.shared[self.hwp_angle]
 
             # Boresight pointing quaternions
-            boresight = ob.shared[self.boresight]
+            in_boresight = ob.shared[self.boresight]
+
+            # Coordinate transform if needed
+            boresight = in_boresight
+            if coord_rot is not None:
+                boresight = qa.mult(coord_rot, in_boresight)
 
             # Focalplane for this observation
             focalplane = ob.telescope.focalplane

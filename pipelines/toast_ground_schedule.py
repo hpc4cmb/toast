@@ -14,7 +14,7 @@ import traceback
 
 from toast.mpi import get_world
 from toast.timing import GlobalTimers
-from toast.schedule import run_scheduler
+from toast.schedule_build import run_scheduler
 
 
 def main():

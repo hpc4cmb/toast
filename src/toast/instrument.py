@@ -230,7 +230,6 @@ class Site(object):
     """
 
     def __init__(self, name, lat, lon, alt_m, id=None, weather=None):
-
         self.name = name
         # Strings get interpreted correctly pyEphem.
         # Floats must be in radians

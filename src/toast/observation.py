@@ -582,7 +582,46 @@ class Observation(MutableMapping):
         if process_rows == self.dist.process_rows:
             # Nothing to do!
             return
-        pass
+        newdist = DistDetSamp(
+            self._samples,
+            self._telescope.focalplane.detectors,
+            self._sample_sets,
+            self._detector_sets,
+            self._comm,
+            process_rows,
+        )
+
+        if newdist.comm_rank == 0:
+            # check that all processes have some data, otherwise print warning
+            for d in range(newdist.process_rows):
+                if len(newdist.dets[d]) == 0:
+                    msg = "WARNING: process row rank {} has no detectors"
+                    " assigned in new distribution.".format(d)
+                    log.warning(msg)
+            for r in range(newdist.process_cols):
+                if newdist.samps[r][1] <= 0:
+                    msg = "WARNING: process column rank {} has no data assigned "
+                    "in new distribution.".format(r)
+                    log.warning(msg)
+
+        # Redistribute shared data
+
+        newshared = SharedDataMgr(
+            self._comm,
+            newdist.comm_row,
+            newdist.comm_col,
+        )
+
+        # Redistribute detector data
+
+        newdetdata = DetDataMgr(
+            newdist.dets[self.dist.comm_col_rank],
+            newdist.samps[self.dist.comm_row_rank][1],
+        )
+
+        # Redistribute intervals
+
+        newintervals = IntervalMgr(self._comm, newdist.comm_row, newdist.comm_col)
 
     # Accelerator use
 

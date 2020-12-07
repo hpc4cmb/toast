@@ -506,3 +506,93 @@ def to_position(q):
         else:
             return (float(theta[0]), float(phi[0]))
     return (theta.array(), phi.array())
+
+
+# J2000 coordinate transforms
+
+# RA, DEC to galactic coordinates
+
+_coordmat_J2000radec2gal = None
+_equ2gal = None
+
+
+def equ2gal():
+    """Return the equatorial to galactic coordinate transform quaternion."""
+    global _coordmat_J2000radec2gal
+    global _equ2gal
+    if _coordmat_J2000radec2gal is None:
+        _coordmat_J2000radec2gal = np.array(
+            [
+                -0.054875539726,
+                -0.873437108010,
+                -0.483834985808,
+                0.494109453312,
+                -0.444829589425,
+                0.746982251810,
+                -0.867666135858,
+                -0.198076386122,
+                0.455983795705,
+            ]
+        ).reshape([3, 3])
+    if _equ2gal is None:
+        _equ2gal = from_rotmat(_coordmat_J2000radec2gal)
+    return _equ2gal
+
+
+# RA, DEC to (geocentric) ecliptic coordinates
+
+_coordmat_J2000radec2ecl = None
+_equ2ecl = None
+
+
+def equ2ecl():
+    """Return the equatorial to ecliptic coordinate transform quaternion."""
+    global _coordmat_J2000radec2ecl
+    global _equ2ecl
+    if _coordmat_J2000radec2ecl is None:
+        _coordmat_J2000radec2ecl = np.array(
+            [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.917482062069182,
+                0.397777155931914,
+                0.0,
+                -0.397777155931914,
+                0.917482062069182,
+            ]
+        ).reshape([3, 3])
+    if _equ2ecl is None:
+        _equ2ecl = from_rotmat(coordmat_J2000radec2ecl)
+    return _equ2ecl
+
+
+# Ecliptic coordinates (geocentric) to galactic
+# (use the same rotation as HEALPix, to avoid confusion)
+
+_coordmat_J2000ecl2gal = None
+_ecl2gal = None
+
+
+def ecl2gal():
+    """Return the ecliptic to galactic coordinate transform quaternion."""
+    global _coordmat_J2000ecl2gal
+    global _ecl2gal
+    if _coordmat_J2000ecl2gal is None:
+        _coordmat_J2000ecl2gal = np.array(
+            [
+                -0.054882486,
+                -0.993821033,
+                -0.096476249,
+                0.494116468,
+                -0.110993846,
+                0.862281440,
+                -0.867661702,
+                -0.000346354,
+                0.497154957,
+            ]
+        ).reshape([3, 3])
+    if _ecl2gal is None:
+        _ecl2gal = from_rotmat(_coordmat_J2000ecl2gal)
+    return _ecl2gal
