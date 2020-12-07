@@ -25,5 +25,6 @@ install(FILES
     sim_focalplane.py
     ops_memory_counter.py
     ops_scan_map.py
+    ops_madam.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

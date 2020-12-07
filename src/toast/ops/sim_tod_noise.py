@@ -218,7 +218,9 @@ class SimNoise(Operator):
 
     times = Unicode("times", help="Observation shared key for timestamps")
 
-    out = Unicode("noise", help="Observation detdata key for output noise timestreams")
+    out = Unicode(
+        "noise", help="Observation detdata key for accumulating noise timestreams"
+    )
 
     @traitlets.validate("realization")
     def _check_realization(self, proposal):
@@ -281,8 +283,8 @@ class SimNoise(Operator):
             # detectors within the observation.
 
             # Create output if it does not exist
-            if self.out not in ob:
-                ob.detdata.create(self.out, detshape=(), dtype=np.float64)
+            if self.out not in ob.detdata:
+                ob.detdata.create(self.out, dtype=np.float64)
 
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
                 ob.shared[self.times].data

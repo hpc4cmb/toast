@@ -4,21 +4,19 @@
 
 from ..mpi import MPI, use_mpi
 
+import os
+
 import traitlets
 
 import numpy as np
 
-from ..utils import Logger
+from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned
 
 from ..traits import trait_docs, Int, Unicode, Bool, Dict
 
 from ..timing import function_timer
 
 from .operator import Operator
-
-from .clear import Clear
-
-from .copy import Copy
 
 from .memory_counter import MemoryCounter
 
@@ -169,7 +167,6 @@ class Madam(Operator):
         (
             all_dets,
             nsamp,
-            ndet,
             nnz,
             nnz_full,
             nnz_stride,
@@ -179,14 +176,14 @@ class Madam(Operator):
         ) = self._prepare(data, detectors)
 
         psdinfo, signal_type, pixels_dtype, weight_dtype = self._stage_data(
+            data,
+            all_dets,
             nsamp,
-            ndet,
             nnz,
             nnz_full,
             nnz_stride,
-            obs_period_ranges,
-            psdfreqs,
-            dets,
+            interval_starts,
+            psd_freqs,
             nside,
         )
 
@@ -244,8 +241,8 @@ class Madam(Operator):
     def _prepare(self, data, detectors):
         """Examine the data and determine quantities needed to set up Madam buffers"""
         log = Logger.get()
-        timer = Timer()
-        timer.start()
+        # timer = Timer()
+        # timer.start()
 
         if "nside_map" not in self.params:
             raise RuntimeError(
@@ -276,7 +273,7 @@ class Madam(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            all_dets.add(dets)
+            all_dets.update(dets)
 
             # Check that the timestamps exist.
             if self.times not in ob.shared:
@@ -397,9 +394,9 @@ class Madam(Operator):
         # determine the number of samples per detector
 
         data.comm.comm_world.Barrier()
-        if self._rank == 0:
-            log.debug()
-            timer.report_clear("Collect dataset dimensions")
+        # if self._rank == 0:
+        #     log.debug()
+        #     timer.report_clear("Collect dataset dimensions")
 
         return (
             all_dets,
@@ -455,7 +452,7 @@ class Madam(Operator):
 
         # Copy timestamps and PSDs all at once, since they are never purged.
 
-        timestamp_storage = dtype_to_aligned(madam.TIMESTAMP_TYPE)
+        timestamp_storage, _ = dtype_to_aligned(madam.TIMESTAMP_TYPE)
         self._madam_timestamps_raw = timestamp_storage.zeros(nsamp)
         self._madam_timestamps = self._madam_timestamps_raw.array()
         psds = dict()
@@ -504,7 +501,7 @@ class Madam(Operator):
 
         def copy_local(detdata_name, madam_dtype, dnnz, do_flags=False, do_purge=False):
             """Helper function to create a madam buffer from a local detdata key."""
-            storage = dtype_to_aligned(madam_dtype)
+            storage, _ = dtype_to_aligned(madam_dtype)
             n_all_det = len(all_dets)
             raw = storage.zeros(nsamp * n_all_det)
             wrapped = raw.array()

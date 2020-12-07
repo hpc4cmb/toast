@@ -37,4 +37,4 @@ from .mapmaker_binning import BinMap
 
 from .mapmaker import MapMaker
 
-# from .madam import Madam
+from .madam import Madam
