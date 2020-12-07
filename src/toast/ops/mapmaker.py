@@ -8,7 +8,7 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..timing import function_timer
 

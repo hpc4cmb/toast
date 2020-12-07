@@ -173,7 +173,10 @@ class PointingHealpix(Operator):
         # Current values:
         nside = self.nside
         nside_submap = self.nside_submap
-        nnz = self._nnz
+        mode = self.mode
+        self._nnz = 1
+        if mode == "IQU":
+            self._nnz = 3
 
         # Update to the trait that changed
         if change["name"] == "nside":
@@ -182,9 +185,9 @@ class PointingHealpix(Operator):
             nside_submap = change["new"]
         if change["name"] == "mode":
             if change["new"] == "IQU":
-                nnz = 3
+                self._nnz = 3
             else:
-                nnz = 1
+                self._nnz = 1
         self.hpix = HealpixPixels(nside)
         self._n_pix = 12 * nside ** 2
         self._n_pix_submap = 12 * nside_submap ** 2

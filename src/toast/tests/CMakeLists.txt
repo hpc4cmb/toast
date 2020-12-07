@@ -24,5 +24,6 @@ install(FILES
     ops_pointing_healpix.py
     sim_focalplane.py
     ops_memory_counter.py
+    ops_scan_map.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

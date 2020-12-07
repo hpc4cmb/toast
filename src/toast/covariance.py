@@ -6,8 +6,6 @@ import numpy as np
 
 from .timing import function_timer
 
-from .operator import Operator
-
 from ._libtoast import (
     AlignedF64,
     cov_mult_diag,

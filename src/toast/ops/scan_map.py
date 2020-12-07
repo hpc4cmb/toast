@@ -6,7 +6,7 @@ import traitlets
 
 import numpy as np
 
-from ..utils import Logger
+from ..utils import Logger, AlignedF64
 
 from ..traits import trait_docs, Int, Unicode, Bool
 
@@ -74,6 +74,7 @@ class ScanMap(Operator):
         map_data = data[self.map_key]
         if not isinstance(map_data, PixelData):
             raise RuntimeError("The map to scan must be a PixelData instance")
+        map_dist = map_data.distribution
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -82,9 +83,25 @@ class ScanMap(Operator):
                 # Nothing to do for this observation
                 continue
 
+            # Sanity check the number of non-zeros between the map and the
+            # pointing matrix
+            check_nnz = 1
+            if len(ob.detdata[self.weights].detector_shape) > 1:
+                check_nnz = ob.detdata[self.weights].detector_shape[-1]
+            if map_data.n_value != check_nnz:
+                msg = "Detector data '{}' in observation '{}' has {} nnz instead of {} in the map".format(
+                    self.weights, ob.name, check_nnz, map_data.n_value
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+
             # Temporary array, re-used for all detectors
             maptod_raw = AlignedF64.zeros(ob.n_local_samples)
             maptod = maptod_raw.array()
+
+            # If our output detector data does not yet exist, create it
+            if self.det_data not in ob:
+                ob.detdata.create(self.det_data, dtype=np.float64, detectors=dets)
 
             for det in dets:
                 # The pixels, weights, and data.
@@ -93,7 +110,7 @@ class ScanMap(Operator):
                 ddata = ob.detdata[self.det_data][det]
 
                 # Get local submap and pixels
-                local_sm, local_pix = dist.global_pixel_to_submap(pix)
+                local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
 
                 # We support projecting from either float64 or float32 maps.
 
