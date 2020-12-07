@@ -260,11 +260,11 @@ def apply_filterbin(
 
             deproject_nnz = None
             if args.filterbin_deproject_map:
+                deproject_nnz = None
                 if comm is None or comm.comm_world.rank == 0:
                     hdulist = pf.open(args.filterbin_deproject_map, "r")
                     deproject_nnz = hdulist[1].header["tfields"]
-                else:
-                    deproject_nnz = None
+                    hdulist.close()
                 if comm is not None:
                     deproject_nnz = comm.comm_world.bcast(deproject_nnz)
 
