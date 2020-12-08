@@ -57,6 +57,19 @@ class ObservationTest(MPITestCase):
                     np.testing.assert_equal(sidata, sndata)
                 sdata = tdata[1:-1]
                 sdata = tdata[[gdets[0], gdets[-1]]]
+
+                # Get a view
+                view = tdata.view((slice(0, 2, 1), slice(0, 2, 1)))
+
+                np.testing.assert_equal(view[1], tdata[1, 0:2])
+                vshp = [2]
+                for s in shp[1:]:
+                    vshp.append(s)
+                vshp = tuple(vshp)
+                view[1] = 5 * np.ones(vshp, dtype=tp)
+
+                np.testing.assert_equal(view[1], tdata[1, 0:2])
+
                 tdata.clear()
 
     def test_observation(self):
@@ -296,3 +309,122 @@ class ObservationTest(MPITestCase):
 
             # ... Or you can access it as one big array (first dimension is detector)
             print("\n", obs.detdata["signal"].data, "\n")
+
+    def test_view(self):
+        np.random.seed(12345)
+        rms = 1.0
+        for ob in self.data.obs:
+            n_samp = ob.n_local_samples
+            dets = ob.local_detectors
+            n_det = len(dets)
+
+            # Create some data
+
+            fake_bore = np.ravel(np.random.random((n_samp, 4))).reshape(-1, 4)
+            fake_flags = np.random.uniform(low=0, high=2, size=n_samp).astype(
+                np.uint8, copy=True
+            )
+            bore = None
+            common_flags = None
+            times = None
+            if ob.comm_col_rank == 0:
+                bore = fake_bore
+                common_flags = fake_flags
+                times = np.arange(
+                    ob.local_index_offset,
+                    ob.local_index_offset + n_samp,
+                    dtype=np.float64,
+                )
+
+            # Construct some default shared objects from local buffers
+            ob.shared.create("boresight_azel", shape=(n_samp, 4), comm=ob.comm_col)
+            ob.shared["boresight_azel"][:, :] = bore
+
+            ob.shared.create("boresight_radec", shape=(n_samp, 4), comm=ob.comm_col)
+            ob.shared["boresight_radec"][:, :] = bore
+
+            ob.shared.create("flags", shape=(n_samp,), dtype=np.uint8, comm=ob.comm_col)
+            ob.shared["flags"][:] = common_flags
+
+            ob.shared.create(
+                "timestamps", shape=(n_samp,), dtype=np.float64, comm=ob.comm_col
+            )
+            ob.shared["timestamps"][:] = times
+
+            # Allocate the default detector data and flags
+            ob.detdata.create("signal", dtype=np.float64)
+            ob.detdata.create("flags", dtype=np.uint16)
+
+            # Store some values for detector data
+            for det in dets:
+                ob.detdata["signal"][det] = np.random.normal(
+                    loc=0.0, scale=rms, size=n_samp
+                )
+                ob.detdata["flags"][det] = fake_flags
+
+            # Make some intervals
+
+            bad = None
+            if ob.comm_rank == 0:
+                all_time = np.arange(ob.n_all_samples, dtype=np.float64)
+                incr = ob.n_all_samples // 2
+                bad = [(float(x * incr), float(x * incr + 2)) for x in range(2)]
+            ob.intervals.create("bad", bad, ob.shared["timestamps"], fromrank=0)
+            ob.intervals["good"] = ~ob.intervals["bad"]
+
+            # Test global view
+            for dd in ["signal", "flags"]:
+                np.testing.assert_equal(
+                    ob.detdata[dd]._data, ob.view[None].detdata[dd][0]._data
+                )
+            for sh in ["boresight_azel", "boresight_radec", "flags", "timestamps"]:
+                np.testing.assert_equal(ob.shared[sh], ob.view[None].shared[sh][0])
+
+            # Test named views
+            good_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals["good"]]
+            bad_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals["bad"]]
+
+            for dd in ["signal", "flags"]:
+                for vw, slc in zip(ob.view["good"].detdata[dd], good_slices):
+                    np.testing.assert_equal(ob.detdata[dd][:, slc], vw[:])
+                for vw, slc in zip(ob.view["bad"].detdata[dd], bad_slices):
+                    np.testing.assert_equal(ob.detdata[dd][:, slc], vw[:])
+
+            for sh in ["boresight_azel", "boresight_radec", "flags", "timestamps"]:
+                for vw, slc in zip(ob.view["good"].shared[sh], good_slices):
+                    np.testing.assert_equal(ob.shared[sh][slc], vw)
+                for vw, slc in zip(ob.view["bad"].shared[sh], bad_slices):
+                    np.testing.assert_equal(ob.shared[sh][slc], vw)
+
+            # Modify the original data and verify
+
+            for dd in ["signal", "flags"]:
+                ob.detdata[dd][:, -1] = 200
+            for sh in ["boresight_azel", "boresight_radec"]:
+                dummy = None
+                if ob.comm_col_rank == 0:
+                    dummy = np.array(
+                        [
+                            [5.0, 5.0, 5.0, 5.0],
+                        ]
+                    )
+                ob.shared[sh][-1, :] = dummy
+
+            for dd in ["signal", "flags"]:
+                np.testing.assert_equal(
+                    ob.detdata[dd][:, -1], ob.view["good"].detdata[dd][-1][:, -1]
+                )
+            for sh in ["boresight_azel", "boresight_radec"]:
+                np.testing.assert_equal(
+                    ob.shared[sh][-1], ob.view["good"].shared[sh][-1][-1]
+                )
+
+            # Modify the view and verify
+
+            for dd in ["signal", "flags"]:
+                ob.view["good"].detdata[dd][-1][:, -1] = 100
+
+            for dd in ["signal", "flags"]:
+                np.testing.assert_equal(
+                    ob.detdata[dd][:, -1], ob.view["good"].detdata[dd][-1][:, -1]
+                )

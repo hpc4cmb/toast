@@ -299,6 +299,10 @@ class Observation(MutableMapping):
 
         self.intervals = IntervalMgr(self._comm, self.dist.comm_row, self.dist.comm_col)
 
+        # Create a default global IntervalList that includes a single interval with
+        # all the local data span.  This is useful for code that wants to access the
+        # whole observation in the same way as a particular view.
+
     # Fully clear the observation
 
     def clear(self):

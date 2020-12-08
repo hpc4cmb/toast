@@ -55,8 +55,8 @@ class DetectorData(object):
 
         slicing by index and by a list of detectors is possible::
 
-            view = detdata[0:-1, 2:4]
-            view = detdata[["d01", "d03"], 3:8]
+            array_view = detdata[0:-1, 2:4]
+            array_view = detdata[["d01", "d03"], 3:8]
 
     Args:
         detectors (list):  A list of detector names in exactly the order you wish.
@@ -67,10 +67,12 @@ class DetectorData(object):
             data.  The only supported types are 1, 2, 4, and 8 byte signed and unsigned
             integers, 4 and 8 byte floating point numbers, and 4 and 8 byte complex
             numbers.
+        view_data (array):  (Internal use only) This makes it possible to create
+            DetectorData instances that act as a view on an existing array.
 
     """
 
-    def __init__(self, detectors, shape, dtype):
+    def __init__(self, detectors, shape, dtype, view_data=None):
         log = Logger.get()
 
         self._detectors = detectors
@@ -84,7 +86,6 @@ class DetectorData(object):
         # construct a new dtype in case the parameter given is shortcut string
         self._dtype = np.dtype(dtype)
         self._storage_class, self.itemsize = dtype_to_aligned(dtype)
-        self.itemsize = 0
 
         # Verify that our shape contains only integral values
         self._flatshape = len(self._detectors)
@@ -94,13 +95,28 @@ class DetectorData(object):
                 log.error(msg)
                 raise ValueError(msg)
             self._flatshape *= d
+        self._memsize = self.itemsize * self._flatshape
 
         shp = [len(self._detectors)]
         shp.extend(shape)
         self._shape = tuple(shp)
-        self._raw = self._storage_class.zeros(self._flatshape)
-        self._data = self._raw.array().reshape(self._shape)
-        self._memsize = self.itemsize * self._flatshape
+        if view_data is None:
+            # Allocate the data
+            self._raw = self._storage_class.zeros(self._flatshape)
+            self._data = self._raw.array().reshape(self._shape)
+            self._is_view = False
+        else:
+            # We are provided the data
+            if self._shape != view_data.shape:
+                msg = (
+                    "view data shape ({}) does not match constructor shape ({})".format(
+                        view_data.shape, self._shape
+                    )
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            self._data = view_data
+            self._is_view = True
 
     @property
     def detectors(self):
@@ -138,9 +154,10 @@ class DetectorData(object):
         """
         if hasattr(self, "_data"):
             del self._data
-        if hasattr(self, "_raw"):
-            self._raw.clear()
-            del self._raw
+        if not self._is_view:
+            if hasattr(self, "_raw"):
+                self._raw.clear()
+                del self._raw
 
     def __del__(self):
         self.clear()
@@ -194,7 +211,7 @@ class DetectorData(object):
 
     def __getitem__(self, key):
         view = self._get_view(key)
-        return np.array(self._data[view], dtype=self._dtype, copy=False)
+        return self._data[view]
 
     def __delitem__(self, key):
         raise NotImplementedError("Cannot delete individual elements")
@@ -204,6 +221,26 @@ class DetectorData(object):
         view = self._get_view(key)
         self._data[view] = value
 
+    def view(self, key):
+        """Create a new DetectorData instance that acts as a view of the data.
+
+        Args:
+            key (tuple/slice):  This is an indexing on detector or both detector and
+                sample, the same as you would use to access data elements.
+
+        Returns:
+            (DetectorData):  A new instance whose data is a view of the current object.
+
+        """
+        full_view = self._get_view(key)
+        view_dets = self.detectors[full_view[0]]
+        return DetectorData(
+            view_dets,
+            self._data[full_view].shape[1:],
+            self._dtype,
+            view_data=self._data[full_view],
+        )
+
     def __iter__(self):
         return iter(self._data)
 
@@ -211,7 +248,12 @@ class DetectorData(object):
         return len(self._detectors)
 
     def __repr__(self):
-        val = "<DetectorData {} detectors each with shape {} and type {}:".format(
+        val = None
+        if self._is_view:
+            val = "<DetectorData (view)"
+        else:
+            val = "<DetectorData"
+        val += " {} detectors each with shape {} and type {}:".format(
             len(self._detectors), self._shape[1:], self._dtype
         )
         if self._shape[1] <= 4:
@@ -770,8 +812,9 @@ class IntervalMgr(MutableMapping):
             send_row_rank = self.comm.bcast(send_row_rank, root=0)
             # Broadcast data along the row
             if self.comm_col.rank == send_col_rank:
-                global_times = self.comm_row.bcast(global_times, root=send_row_rank)
-
+                global_timespans = self.comm_row.bcast(
+                    global_timespans, root=send_row_rank
+                )
         # Every process column creates their local intervals
         self.create_col(name, global_timespans, local_times, fromrank=send_col_rank)
 

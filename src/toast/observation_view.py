@@ -21,14 +21,7 @@ class DetDataView(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        vw = [
-            np.array(
-                self.obj.detdata[key][:, x],
-                dtype=self.obj.detdata[key].dtype,
-                copy=False,
-            )
-            for x in self.slices
-        ]
+        vw = [self.obj.detdata[key].view((slice(None), x)) for x in self.slices]
         return vw
 
     def __delitem__(self, key):
@@ -37,20 +30,16 @@ class DetDataView(MutableMapping):
         )
 
     def __setitem__(self, key, value):
-        vw = [
-            np.array(
-                self.obj.detdata[key][:, x],
-                dtype=self.obj.detdata[key].dtype,
-                copy=False,
-            )
-            for x in self.slices
-        ]
+        vw = [self.obj.detdata[key].view((slice(None), x)) for x in self.slices]
         if isinstance(value, numbers.Number) or len(value) == 1:
             # This is a numerical scalar or identical array for all slices
             for v in vw:
                 v[:] = value
         else:
             # One element of value for each slice
+            if len(value) != len(vw):
+                msg = "when assigning to a view, you must have one value or one value for each view interval"
+                raise RuntimeError(msg)
             vw[:] = value
 
     def __iter__(self):
@@ -75,12 +64,7 @@ class SharedView(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        vw = [
-            np.array(
-                self.obj.shared[key][x], dtype=self.obj.shared[key].dtype, copy=False
-            )
-            for x in self.slices
-        ]
+        vw = [self.obj.shared[key][x] for x in self.slices]
         return vw
 
     def __delitem__(self, key):
@@ -111,8 +95,14 @@ class View(Sequence):
     def __init__(self, obj, key):
         self.obj = obj
         self.key = key
-        # Compute a list of slices for these intervals
-        self.slices = [slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]]
+        if key is None:
+            # The whole observation
+            self.slices = [slice(None)]
+        else:
+            # Compute a list of slices for these intervals
+            self.slices = [
+                slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]
+            ]
         self.detdata = DetDataView(obj, self.slices)
         self.shared = SharedView(obj, self.slices)
 
@@ -154,16 +144,21 @@ class ViewMgr(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        if key not in self.obj._views:
+        view_name = key
+        if view_name is None:
+            # This could be anything, just has to be unique
+            view_name = "ALL_OBSERVATION_SAMPLES"
+        if view_name not in self.obj._views:
             # View does not yet exist, create it.
-            if key not in self.obj.intervals:
+            if key is not None and key not in self.obj.intervals:
                 raise KeyError(
                     "Observation does not have interval list named '{}'".format(key)
                 )
-            self.obj._views[key] = View(self.obj, key)
+            self.obj._views[view_name] = View(self.obj, key)
             # Register deleter callback
-            self.obj.intervals.register_delete_callback(key, self.__delitem__)
-        return self.obj._views[key]
+            if key is not None:
+                self.obj.intervals.register_delete_callback(key, self.__delitem__)
+        return self.obj._views[view_name]
 
     def __delitem__(self, key):
         del self.obj._views[key]
