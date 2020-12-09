@@ -14,6 +14,8 @@ from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
+from ..covariance import covariance_invert
+
 from .._libtoast import (
     cov_accum_zmap,
     cov_accum_diag_hits,
@@ -23,6 +25,8 @@ from .._libtoast import (
 from .operator import Operator
 
 from .clear import Clear
+
+from .pipeline import Pipeline
 
 
 @trait_docs
@@ -51,6 +55,8 @@ class BuildHitMap(Operator):
         allow_none=True,
         help="The Data key containing the submap distribution",
     )
+
+    hits = Unicode("hits", help="The Data key for the output hit map")
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
@@ -148,7 +154,8 @@ class BuildHitMap(Operator):
                 self._hits.sync_alltoallv()
             else:
                 self._hits.sync_allreduce()
-        return self._hits
+            data[self.hits] = self._hits
+        return
 
     def _requires(self):
         req = {
@@ -197,6 +204,10 @@ class BuildInverseCovariance(Operator):
         help="The Data key containing the submap distribution",
     )
 
+    inverse_covariance = Unicode(
+        "inv_covariance", help="The Data key for the output inverse covariance"
+    )
+
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
@@ -232,6 +243,8 @@ class BuildInverseCovariance(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._invcov = None
+        self._weight_nnz = None
+        self._cov_nnz = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -255,9 +268,6 @@ class BuildInverseCovariance(Operator):
                     self.pixel_dist
                 )
             )
-
-        weight_nnz = None
-        cov_nnz = None
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -287,20 +297,20 @@ class BuildInverseCovariance(Operator):
                 if self._invcov is None:
                     # We will store the lower triangle of the covariance.
                     if len(wts.detector_shape) == 1:
-                        weight_nnz = 1
+                        self._weight_nnz = 1
                     else:
-                        weight_nnz = wts.detector_shape[1]
-                    cov_nnz = weight_nnz * (weight_nnz + 1) // 2
-                    self._invcov = PixelData(dist, np.float64, n_value=cov_nnz)
+                        self._weight_nnz = wts.detector_shape[1]
+                    self._cov_nnz = self._weight_nnz * (self._weight_nnz + 1) // 2
+                    self._invcov = PixelData(dist, np.float64, n_value=self._cov_nnz)
                 else:
                     check_nnz = None
                     if len(wts.detector_shape) == 1:
                         check_nnz = 1
                     else:
                         check_nnz = wts.detector_shape[1]
-                    if check_nnz != weight_nnz:
-                        msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
-                            ob.name, det, self.weights
+                    if check_nnz != self._weight_nnz:
+                        msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
+                            ob.name, det, self.weights, check_nnz, self._weight_nnz
                         )
                         raise RuntimeError(msg)
 
@@ -325,7 +335,7 @@ class BuildInverseCovariance(Operator):
                 cov_accum_diag_invnpp(
                     dist.n_local_submap,
                     dist.n_pix_submap,
-                    weight_nnz,
+                    self._weight_nnz,
                     local_sm.astype(np.int64),
                     local_pix.astype(np.int64),
                     wts[det].reshape(-1),
@@ -340,7 +350,8 @@ class BuildInverseCovariance(Operator):
                 self._invcov.sync_alltoallv()
             else:
                 self._invcov.sync_allreduce()
-        return self._invcov
+            data[self.inverse_covariance] = self._invcov
+        return
 
     def _requires(self):
         req = {
@@ -391,6 +402,8 @@ class BuildNoiseWeighted(Operator):
         help="The Data key containing the submap distribution",
     )
 
+    zmap = Unicode("zmap", help="The Data key for the output noise weighted map")
+
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
@@ -430,6 +443,7 @@ class BuildNoiseWeighted(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._zmap = None
+        self._weight_nnz = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -457,8 +471,6 @@ class BuildNoiseWeighted(Operator):
                     self.pixel_dist
                 )
             )
-
-        weight_nnz = None
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -488,17 +500,17 @@ class BuildNoiseWeighted(Operator):
                 # detector we have worked with we create the PixelData object.
                 if self._zmap is None:
                     if len(wts.detector_shape) == 1:
-                        weight_nnz = 1
+                        self._weight_nnz = 1
                     else:
-                        weight_nnz = wts.detector_shape[1]
-                    self._zmap = PixelData(dist, np.float64, n_value=weight_nnz)
+                        self._weight_nnz = wts.detector_shape[1]
+                    self._zmap = PixelData(dist, np.float64, n_value=self._weight_nnz)
                 else:
                     check_nnz = None
                     if len(wts.detector_shape) == 1:
                         check_nnz = 1
                     else:
                         check_nnz = wts.detector_shape[1]
-                    if check_nnz != weight_nnz:
+                    if check_nnz != self._weight_nnz:
                         msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
                             ob.name, det, self.weights
                         )
@@ -541,7 +553,8 @@ class BuildNoiseWeighted(Operator):
                 self._zmap.sync_alltoallv()
             else:
                 self._zmap.sync_allreduce()
-        return self._zmap
+            data[self.zmap] = self._zmap
+        return
 
     def _requires(self):
         req = {
@@ -732,16 +745,19 @@ class CovarianceAndHits(Operator):
 
         build_hits = BuildHitMap(
             pixel_dist=self.pixel_dist,
+            hits=self.hits,
             pixels=self.pointing.pixels,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             sync_type=self.sync_type,
         )
 
-        # Inverse covariance
+        # Inverse covariance.  Note that we save the output to our specified
+        # "covariance" key, because we are going to invert it in-place.
 
         build_invcov = BuildInverseCovariance(
             pixel_dist=self.pixel_dist,
+            inverse_covariance=self.covariance,
             pixels=self.pointing.pixels,
             weights=self.pointing.weights,
             noise_model=self.noise_model,
@@ -765,10 +781,10 @@ class CovarianceAndHits(Operator):
         pipe_out = accum.apply(data, detectors=detectors)
 
         # Extract the results
-        hits = pipe_out[1]
-        cov = pipe_out[2]
+        hits = data[self.hits]
+        cov = data[self.covariance]
 
-        # Invert the covariance
+        # Invert the covariance in place
         rcond = PixelData(cov.distribution, np.float64, n_value=1)
         covariance_invert(
             cov,
@@ -777,9 +793,7 @@ class CovarianceAndHits(Operator):
             use_alltoallv=(self.sync_type == "alltoallv"),
         )
 
-        # Store products
-        data[self.hits] = hits
-        data[self.covariance] = cov
+        # Store rcond
         data[self.rcond] = rcond
 
         return

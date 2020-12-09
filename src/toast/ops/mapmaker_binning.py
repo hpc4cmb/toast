@@ -14,9 +14,13 @@ from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
+from ..covariance import covariance_apply
+
 from .operator import Operator
 
 from .pipeline import Pipeline
+
+from .clear import Clear
 
 from .mapmaker_utils import BuildHitMap, BuildNoiseWeighted, BuildInverseCovariance
 
@@ -137,10 +141,12 @@ class BinMap(Operator):
 
         clear_pointing = Clear(detdata=[self.pointing.pixels, self.pointing.weights])
 
-        # Noise weighted map
+        # Noise weighted map.  We output this to the final binned map location,
+        # since we will multiply by the covariance in-place.
 
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
+            zmap=self.binned,
             pixels=self.pointing.pixels,
             weights=self.pointing.weights,
             noise_model=self.noise_model,
@@ -165,13 +171,10 @@ class BinMap(Operator):
         pipe_out = accum.apply(data, detectors=detectors)
 
         # Extract the results
-        binned_map = pipe_out[1]
+        binned_map = data[self.binned]
 
         # Apply the covariance
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
-
-        # Store products
-        data[self.binned] = binned_map
 
         return
 

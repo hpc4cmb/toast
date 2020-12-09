@@ -54,7 +54,8 @@ class MapmakerUtilsTest(MPITestCase):
         pointing.apply(data)
 
         build_hits = ops.BuildHitMap(pixel_dist="pixel_dist")
-        hits = build_hits.apply(data)
+        build_hits.apply(data)
+        hits = data[build_hits.hits]
 
         # Manual check
         check_hits = PixelData(data["pixel_dist"], np.int64, n_value=1)
@@ -106,12 +107,14 @@ class MapmakerUtilsTest(MPITestCase):
         build_invnpp = ops.BuildInverseCovariance(
             pixel_dist="pixel_dist", noise_model="noise_model"
         )
-        invnpp = build_invnpp.apply(data)
+        build_invnpp.apply(data)
+        invnpp = data[build_invnpp.inverse_covariance]
 
         build_invnpp_corr = ops.BuildInverseCovariance(
             pixel_dist="pixel_dist", noise_model="noise_model_corr"
         )
-        invnpp_corr = build_invnpp_corr.apply(data)
+        build_invnpp_corr.apply(data)
+        invnpp_corr = data[build_invnpp_corr.inverse_covariance]
 
         # Manual check
 
@@ -193,14 +196,16 @@ class MapmakerUtilsTest(MPITestCase):
         build_zmap = ops.BuildNoiseWeighted(
             pixel_dist="pixel_dist", noise_model="noise_model", det_data="noise"
         )
-        zmap = build_zmap.apply(data)
+        build_zmap.apply(data)
+        zmap = data[build_zmap.zmap]
 
         build_zmap_corr = ops.BuildNoiseWeighted(
             pixel_dist="pixel_dist",
             noise_model="noise_model_corr",
             det_data="noise_corr",
         )
-        zmap_corr = build_zmap_corr.apply(data)
+        build_zmap_corr.apply(data)
+        zmap_corr = data[build_zmap_corr.zmap]
 
         # Manual check
 

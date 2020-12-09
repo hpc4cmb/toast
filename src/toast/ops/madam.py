@@ -461,20 +461,10 @@ class Madam(Operator):
         time_offset = 0.0
 
         for ob in data.obs:
-            if self.view is not None:
-                for vw in ob.view[self.view].shared[self.times]:
-                    offset = interval_starts[interval]
-                    slc = slice(offset, offset + len(vw), 1)
-                    self._madam_timestamps[slc] = vw
-                    if self.translate_timestamps:
-                        off = self._madam_timestamps[offset] - time_offset
-                        self._madam_timestamps[slc] -= off
-                        time_offset = self._madam_timestamps[slc][-1] + 1.0
-                    interval += 1
-            else:
+            for vw in ob.view[self.view].shared[self.times]:
                 offset = interval_starts[interval]
-                slc = slice(offset, offset + ob.n_local_samples, 1)
-                self._madam_timestamps[slc] = ob.shared[self.times]
+                slc = slice(offset, offset + len(vw), 1)
+                self._madam_timestamps[slc] = vw
                 if self.translate_timestamps:
                     off = self._madam_timestamps[offset] - time_offset
                     self._madam_timestamps[slc] -= off
@@ -507,82 +497,31 @@ class Madam(Operator):
             wrapped = raw.array()
             interval = 0
             for ob in data.obs:
-                if self.view is not None:
-                    for vw in ob.view[self.view].detdata[detdeta_name]:
-                        offset = interval_starts[interval]
-                        flags = None
-                        if do_flags:
-                            if (
-                                self.shared_flags is not None
-                                or self.det_flags is not None
-                            ):
-                                # Using flags
-                                flags = np.zeros(len(vw), dtype=np.uint8)
-                            if self.shared_flags is not None:
-                                flags |= (
-                                    ob.view[self.view].shared[self.shared_flags]
-                                    & self.shared_flag_mask
-                                )
-
-                        for idet, det in enumerate(all_dets):
-                            if det not in ob.local_detectors:
-                                continue
-                            slc = slice(
-                                (idet * nsamp + offset) * dnnz,
-                                (idet * nsamp + offset + len(vw)) * dnnz,
-                                1,
-                            )
-                            if dnnz > 1:
-                                wrapped[slc] = vw[idet].flatten()[::nnz_stride]
-                            else:
-                                wrapped[slc] = vw[idet].flatten()
-                            detflags = None
-                            if do_flags:
-                                if self.det_flags is None:
-                                    detflags = flags
-                                else:
-                                    detflags = np.copy(flags)
-                                    detflags |= (
-                                        ob.view[self.view].detdata[self.det_flags][idet]
-                                        & self.det_flag_mask
-                                    )
-                                # The do_flags option should only be true if we are
-                                # processing the pixel indices (which is how madam
-                                # effectively implements flagging).  So we will set
-                                # all flagged samples to "-1"
-                                if detflags is not None:
-                                    # sanity check
-                                    if nnz != 1:
-                                        raise RuntimeError(
-                                            "Internal error on madam copy.  Only pixel indices should be flagged."
-                                        )
-                                    wrapped[slc][detflags != 0] = -1
-                        interval += 1
-                else:
+                for vw in ob.view[self.view].detdata[detdeta_name]:
                     offset = interval_starts[interval]
                     flags = None
                     if do_flags:
                         if self.shared_flags is not None or self.det_flags is not None:
                             # Using flags
-                            flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
+                            flags = np.zeros(len(vw), dtype=np.uint8)
                         if self.shared_flags is not None:
                             flags |= (
-                                ob.shared[self.shared_flags] & self.shared_flag_mask
+                                ob.view[self.view].shared[self.shared_flags]
+                                & self.shared_flag_mask
                             )
+
                     for idet, det in enumerate(all_dets):
                         if det not in ob.local_detectors:
                             continue
                         slc = slice(
                             (idet * nsamp + offset) * dnnz,
-                            (idet * nsamp + offset + ob.n_local_samples) * dnnz,
+                            (idet * nsamp + offset + len(vw)) * dnnz,
                             1,
                         )
                         if dnnz > 1:
-                            wrapped[slc] = ob.detdata[detdata_name][idet].flatten()[
-                                ::nnz_stride
-                            ]
+                            wrapped[slc] = vw[idet].flatten()[::nnz_stride]
                         else:
-                            wrapped[slc] = ob.detdata[detdata_name][idet].flatten()
+                            wrapped[slc] = vw[idet].flatten()
                         detflags = None
                         if do_flags:
                             if self.det_flags is None:
@@ -590,7 +529,7 @@ class Madam(Operator):
                             else:
                                 detflags = np.copy(flags)
                                 detflags |= (
-                                    ob.detdata[self.det_flags][idet]
+                                    ob.view[self.view].detdata[self.det_flags][idet]
                                     & self.det_flag_mask
                                 )
                             # The do_flags option should only be true if we are
@@ -599,7 +538,7 @@ class Madam(Operator):
                             # all flagged samples to "-1"
                             if detflags is not None:
                                 # sanity check
-                                if dnnz != 1:
+                                if nnz != 1:
                                     raise RuntimeError(
                                         "Internal error on madam copy.  Only pixel indices should be flagged."
                                     )
