@@ -1551,7 +1551,7 @@ def add_scan(
             subscan,
         )
         entries.append(entry)
-        if partial_scan:
+        if sun_too_close or moon_too_close or partial_scan:
             # Never append more than one partial scan before
             # checking if full scans are again available
             tstop = t2
