@@ -98,6 +98,26 @@ def add_mapmaker_args(parser):
         help="Destripe with the noise filter enabled",
         dest="mapmaker_noisefilter",
     )
+
+    try:
+        parser.add_argument(
+            "--destripe",
+            required=False,
+            action="store_true",
+            help="Write destriped maps [default]",
+            dest="destripe",
+        )
+        parser.add_argument(
+            "--no-destripe",
+            required=False,
+            action="store_false",
+            help="Do not write destriped maps",
+            dest="destripe",
+        )
+        parser.set_defaults(destripe=True)
+    except argparse.ArgumentError:
+        pass
+
     try:
         parser.add_argument(
             "--binmap",
@@ -251,6 +271,9 @@ def apply_mapmaker(
 
     if outpath is None:
         outpath = args.out
+
+    if not args.destripe:
+        bin_only = True
 
     file_root = args.mapmaker_prefix
     if extra_prefix is not None:
