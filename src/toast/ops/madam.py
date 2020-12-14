@@ -20,6 +20,14 @@ from .operator import Operator
 
 from .memory_counter import MemoryCounter
 
+from .madam_utils import (
+    log_time_memory,
+    stage_local,
+    stage_in_turns,
+    restore_local,
+    restore_in_turns,
+)
+
 
 madam = None
 if use_mpi:
@@ -87,6 +95,16 @@ class Madam(Operator):
         help="If True, clear all observation detector pointing data after copying to madam buffers",
     )
 
+    restore_det_data = Bool(
+        False,
+        help="If True, restore detector data to observations on completion",
+    )
+
+    restore_pointing = Bool(
+        False,
+        help="If True, restore detector pointing to observations on completion",
+    )
+
     mcmode = Bool(
         False,
         help="If true, Madam will store auxiliary information such as pixel matrices and noise filter.",
@@ -106,9 +124,59 @@ class Madam(Operator):
         help="Observation key with optional scaling factor for noise PSDs",
     )
 
+    mem_report = Bool(
+        False, help="Print system memory use while staging / unstaging data."
+    )
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("restore_det_data")
+    def _check_restore_det_data(self, proposal):
+        check = proposal["value"]
+        if check and not self.purge_det_data:
+            raise traitlets.TraitError(
+                "Cannot set restore_det_data since purge_det_data is False"
+            )
+        if check and self.det_out is not None:
+            raise traitlets.TraitError(
+                "Cannot set restore_det_data since det_out is not None"
+            )
+        return check
+
+    @traitlets.validate("restore_pointing")
+    def _check_restore_pointing(self, proposal):
+        check = proposal["value"]
+        if check and not self.purge_pointing:
+            raise traitlets.TraitError(
+                "Cannot set restore_pointing since purge_pointing is False"
+            )
+        return check
+
+    @traitlets.validate("det_out")
+    def _check_det_out(self, proposal):
+        check = proposal["value"]
+        if check is not None and self.restore_det_data:
+            raise traitlets.TraitError(
+                "If det_out is not None, restore_det_data should be False"
+            )
+        return check
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._cached = False
+        self._logprefix = "Madam:"
 
     @classmethod
     def available(cls):
@@ -119,8 +187,7 @@ class Madam(Operator):
         """Delete the underlying memory.
 
         This will forcibly delete the C-allocated memory and invalidate all python
-        references to the buffers.  DO NOT CALL THIS unless you are sure all references
-        are no longer being used.
+        references to the buffers.
 
         """
         if self._cached:
@@ -163,7 +230,21 @@ class Madam(Operator):
                 "You must set the pixels and weights before calling exec()"
             )
 
+        # Set madam parameters that depend on our traits
+        if self.mcmode:
+            self.params["mcmode"] = True
+        else:
+            self.params["mcmode"] = False
+
+        if self.det_out is not None:
+            self.params["write_tod"] = True
+        else:
+            self.params["write_tod"] = False
+
         # Check input parameters and compute the sizes of Madam data objects
+        if data.comm.world_rank == 0:
+            msg = "{} Computing data sizes".format(self._logprefix)
+            log.info(msg)
         (
             all_dets,
             nsamp,
@@ -175,7 +256,10 @@ class Madam(Operator):
             nside,
         ) = self._prepare(data, detectors)
 
-        psdinfo, signal_type, pixels_dtype, weight_dtype = self._stage_data(
+        if data.comm.world_rank == 0:
+            msg = "{} Copying toast data to buffers".format(self._logprefix)
+            log.info(msg)
+        psdinfo, signal_dtype, pixels_dtype, weight_dtype = self._stage_data(
             data,
             all_dets,
             nsamp,
@@ -187,26 +271,28 @@ class Madam(Operator):
             nside,
         )
 
-        # self._destripe(pars, dets, periods, psdinfo)
-        #
-        # self._unstage_data(
-        #     nsamp,
-        #     nnz,
-        #     nnz_full,
-        #     obs_period_ranges,
-        #     dets,
-        #     signal_type,
-        #     pixels_dtype,
-        #     nside,
-        #     weight_dtype,
-        # )
+        if data.comm.world_rank == 0:
+            msg = "{} Destriping data".format(self._logprefix)
+            log.info(msg)
+        self._destripe(data, all_dets, interval_starts, psdinfo)
+
+        if data.comm.world_rank == 0:
+            msg = "{} Copying buffers back to toast data".format(self._logprefix)
+            log.info(msg)
+        self._unstage_data(
+            data,
+            all_dets,
+            nsamp,
+            nnz,
+            nnz_full,
+            interval_starts,
+            signal_dtype,
+            pixels_dtype,
+            nside,
+            weight_dtype,
+        )
 
         return
-
-    def __del__(self):
-        if self._cached:
-            madam.clear_caches()
-            self._cached = False
 
     def _finalize(self, data, **kwargs):
         return
@@ -241,8 +327,8 @@ class Madam(Operator):
     def _prepare(self, data, detectors):
         """Examine the data and determine quantities needed to set up Madam buffers"""
         log = Logger.get()
-        # timer = Timer()
-        # timer.start()
+        timer = Timer()
+        timer.start()
 
         if "nside_map" not in self.params:
             raise RuntimeError(
@@ -356,12 +442,14 @@ class Madam(Operator):
 
         if data.comm.world_rank == 0:
             log.info(
-                "Madam: {:.2f} % of samples are included in valid "
-                "intervals.".format(nsamp_valid * 100.0 / nsamp)
+                "{}{:.2f} % of samples are included in valid intervals.".format(
+                    self._logprefix, nsamp_valid * 100.0 / nsamp
+                )
             )
 
         nsamp = nsamp_valid
 
+        interval_starts = np.array(interval_starts, dtype=np.int64)
         all_dets = list(all_dets)
         ndet = len(all_dets)
 
@@ -393,10 +481,13 @@ class Madam(Operator):
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
 
-        data.comm.comm_world.Barrier()
-        # if self._rank == 0:
-        #     log.debug()
-        #     timer.report_clear("Collect dataset dimensions")
+        data.comm.comm_world.barrier()
+        timer.stop()
+        if data.comm.world_rank == 0:
+            msg = "{}  Compute data dimensions: {:0.1f} s".format(
+                self._logprefix, timer.seconds()
+            )
+            log.debug(msg)
 
         return (
             all_dets,
@@ -429,9 +520,7 @@ class Madam(Operator):
 
         """
         log = Logger.get()
-
-        # Memory counting operator
-        mem_count = MemoryCounter(silent=True)
+        timer = Timer()
 
         nodecomm = data.comm.comm_world.Split_type(
             MPI.COMM_TYPE_SHARED, data.comm.world_rank
@@ -446,242 +535,523 @@ class Madam(Operator):
             if self.copy_groups > 0:
                 n_copy_groups = min(self.copy_groups, nodecomm.size)
 
-        # self._comm.Barrier()
-        # timer_tot = Timer()
-        # timer_tot.start()
+        if not self._cached:
+            # Only do this if we have not cached the data yet.
+            log_time_memory(
+                data,
+                prefix=self._logprefix,
+                mem_msg="Before staging",
+                full_mem=self.mem_report,
+            )
 
         # Copy timestamps and PSDs all at once, since they are never purged.
 
-        timestamp_storage, _ = dtype_to_aligned(madam.TIMESTAMP_TYPE)
-        self._madam_timestamps_raw = timestamp_storage.zeros(nsamp)
-        self._madam_timestamps = self._madam_timestamps_raw.array()
         psds = dict()
 
-        interval = 0
-        time_offset = 0.0
+        timer.start()
 
-        for ob in data.obs:
-            for vw in ob.view[self.view].shared[self.times]:
-                offset = interval_starts[interval]
-                slc = slice(offset, offset + len(vw), 1)
-                self._madam_timestamps[slc] = vw
-                if self.translate_timestamps:
-                    off = self._madam_timestamps[offset] - time_offset
-                    self._madam_timestamps[slc] -= off
-                    time_offset = self._madam_timestamps[slc][-1] + 1.0
-                interval += 1
+        if not self._cached:
+            timestamp_storage, _ = dtype_to_aligned(madam.TIMESTAMP_TYPE)
+            self._madam_timestamps_raw = timestamp_storage.zeros(nsamp)
+            self._madam_timestamps = self._madam_timestamps_raw.array()
 
-            # Get the noise object for this observation and create new
-            # entries in the dictionary when the PSD actually changes
-            nse = ob[self.noise_model]
-            nse_scale = 1.0
-            if self.noise_scale is not None:
-                if self.noise_scale in ob:
-                    nse_scale = float(ob[self.noise_scale])
-
-            for det in all_dets:
-                if det not in ob.local_detectors:
-                    continue
-                psd = nse.psd(det) * nse_scale ** 2
-                if det not in psds:
-                    psds[det] = [(0.0, psd)]
-                else:
-                    if not np.allclose(psds[det][-1][1], psd):
-                        psds[det] += [(ob.shared[self.times][0], psd)]
-
-        def copy_local(detdata_name, madam_dtype, dnnz, do_flags=False, do_purge=False):
-            """Helper function to create a madam buffer from a local detdata key."""
-            storage, _ = dtype_to_aligned(madam_dtype)
-            n_all_det = len(all_dets)
-            raw = storage.zeros(nsamp * n_all_det)
-            wrapped = raw.array()
             interval = 0
+            time_offset = 0.0
+
             for ob in data.obs:
-                for vw in ob.view[self.view].detdata[detdeta_name]:
+                for vw in ob.view[self.view].shared[self.times]:
                     offset = interval_starts[interval]
-                    flags = None
-                    if do_flags:
-                        if self.shared_flags is not None or self.det_flags is not None:
-                            # Using flags
-                            flags = np.zeros(len(vw), dtype=np.uint8)
-                        if self.shared_flags is not None:
-                            flags |= (
-                                ob.view[self.view].shared[self.shared_flags]
-                                & self.shared_flag_mask
-                            )
-
-                    for idet, det in enumerate(all_dets):
-                        if det not in ob.local_detectors:
-                            continue
-                        slc = slice(
-                            (idet * nsamp + offset) * dnnz,
-                            (idet * nsamp + offset + len(vw)) * dnnz,
-                            1,
-                        )
-                        if dnnz > 1:
-                            wrapped[slc] = vw[idet].flatten()[::nnz_stride]
-                        else:
-                            wrapped[slc] = vw[idet].flatten()
-                        detflags = None
-                        if do_flags:
-                            if self.det_flags is None:
-                                detflags = flags
-                            else:
-                                detflags = np.copy(flags)
-                                detflags |= (
-                                    ob.view[self.view].detdata[self.det_flags][idet]
-                                    & self.det_flag_mask
-                                )
-                            # The do_flags option should only be true if we are
-                            # processing the pixel indices (which is how madam
-                            # effectively implements flagging).  So we will set
-                            # all flagged samples to "-1"
-                            if detflags is not None:
-                                # sanity check
-                                if nnz != 1:
-                                    raise RuntimeError(
-                                        "Internal error on madam copy.  Only pixel indices should be flagged."
-                                    )
-                                wrapped[slc][detflags != 0] = -1
+                    slc = slice(offset, offset + len(vw), 1)
+                    self._madam_timestamps[slc] = vw
+                    if self.translate_timestamps:
+                        off = self._madam_timestamps[offset] - time_offset
+                        self._madam_timestamps[slc] -= off
+                        time_offset = self._madam_timestamps[slc][-1] + 1.0
                     interval += 1
-                if do_purge:
-                    del ob.detdata[detdata_name]
-            return raw, wrapped
 
-        def copy_in_turns(detdata_name, madam_dtype, dnnz, do_flags):
-            """When purging data, take turns copying it."""
-            raw = None
-            wrapped = None
-            for copying in range(n_copy_groups):
-                if nodecomm.rank % n_copy_groups == copying:
-                    # Our turn to copy data
-                    raw, wrapped = copy_local(
-                        detdata_name,
-                        madam_dtype,
-                        dnnz,
-                        do_flags=do_flags,
-                        do_purge=True,
-                    )
-                nodecomm.barrier()
-            return raw, wrapped
+                # Get the noise object for this observation and create new
+                # entries in the dictionary when the PSD actually changes.  The detector
+                # weights are obtained from the noise model.
+
+                nse = ob[self.noise_model]
+                nse_scale = 1.0
+                if self.noise_scale is not None:
+                    if self.noise_scale in ob:
+                        nse_scale = float(ob[self.noise_scale])
+
+                for det in all_dets:
+                    if det not in ob.local_detectors:
+                        continue
+                    psd = nse.psd(det) * nse_scale ** 2
+                    detw = nse.detector_weight(det)
+                    if det not in psds:
+                        psds[det] = [(0.0, psd, detw)]
+                    else:
+                        if not np.allclose(psds[det][-1][1], psd):
+                            psds[det] += [(ob.shared[self.times][0], psd, detw)]
+
+            log_time_memory(
+                data,
+                timer=timer,
+                timer_msg="Copy timestamps and PSDs",
+                prefix=self._logprefix,
+                mem_msg="After timestamp staging",
+                full_mem=self.mem_report,
+            )
+
+        # Copy the signal.  We always need to do this, even if we are running MCs.
+
+        signal_dtype = data.obs[0].detdata[self.det_data].dtype
+
+        if self._cached:
+            # We have previously created the madam buffers.  We just need to fill
+            # them from the toast data.  Since both already exist we just copy the
+            # contents.
+            stage_local(
+                data,
+                nsamp,
+                self.view,
+                all_dets,
+                self.det_data,
+                self._madam_signal,
+                interval_starts,
+                1,
+                1,
+                None,
+                None,
+                None,
+                None,
+                do_purge=False,
+            )
+        else:
+            # Signal buffers do not yet exist
+            if self.purge_det_data:
+                # Allocate in a staggered way.
+                self._madam_signal_raw, self._madam_signal = stage_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.det_data,
+                    madam.SIGNAL_TYPE,
+                    interval_starts,
+                    1,
+                    1,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            else:
+                # Allocate and copy all at once.
+                storage, _ = dtype_to_aligned(madam.SIGNAL_TYPE)
+                self._madam_signal_raw = storage.zeros(nsamp * len(all_dets))
+                self._madam_signal = self._madam_signal_raw.array()
+
+                stage_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.det_data,
+                    self._madam_signal,
+                    interval_starts,
+                    1,
+                    1,
+                    None,
+                    None,
+                    None,
+                    None,
+                    do_purge=False,
+                )
+
+        log_time_memory(
+            data,
+            timer=timer,
+            timer_msg="Copy signal",
+            prefix=self._logprefix,
+            mem_msg="After signal staging",
+            full_mem=self.mem_report,
+        )
+
+        # Copy the pointing
+
+        pixels_dtype = data.obs[0].detdata[self.pixels].dtype
+        weight_dtype = data.obs[0].detdata[self.weights].dtype
+
+        if not self._cached:
+            # We do not have the pointing yet.
+            if self.purge_pointing:
+                # Allocate in a staggered way.
+                self._madam_pixels_raw, self._madam_pixels = stage_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.pixels,
+                    madam.PIXEL_TYPE,
+                    interval_starts,
+                    1,
+                    1,
+                    self.shared_flags,
+                    self.shared_flag_mask,
+                    self.det_flags,
+                    self.det_flag_mask,
+                )
+
+                self._madam_pixweights_raw, self._madam_pixweights = stage_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.weights,
+                    madam.WEIGHT_TYPE,
+                    interval_starts,
+                    nnz,
+                    nnz_stride,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            else:
+                # Allocate and copy all at once.
+                storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
+                self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
+                self._madam_pixels = self._madam_pixels_raw.array()
+
+                stage_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.pixels,
+                    self._madam_pixels,
+                    interval_starts,
+                    1,
+                    1,
+                    self.shared_flags,
+                    self.shared_flag_mask,
+                    self.det_flags,
+                    self.det_flag_mask,
+                    do_purge=False,
+                )
+
+                storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
+                self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
+                self._madam_pixweights = self._madam_pixweights_raw.array()
+
+                stage_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.weights,
+                    self._madam_pixweights,
+                    interval_starts,
+                    nnz,
+                    nnz_stride,
+                    None,
+                    None,
+                    None,
+                    None,
+                    do_purge=False,
+                )
+
+            log_time_memory(
+                data,
+                timer=timer,
+                timer_msg="Copy pointing",
+                prefix=self._logprefix,
+                mem_msg="After pointing staging",
+                full_mem=self.mem_report,
+            )
+
+        psdinfo = None
+
+        if not self._cached:
+            # Detectors weights.  Madam assumes a single noise weight for each detector
+            # that is constant.  We set this based on the first observation or else use
+            # uniform weighting.
+
+            ndet = len(all_dets)
+            detweights = np.ones(ndet, dtype=np.float64)
+
+            if len(psds) > 0:
+                npsdbin = len(psd_freqs)
+                npsd = np.zeros(ndet, dtype=np.int64)
+                psdstarts = []
+                psdvals = []
+                for idet, det in enumerate(all_dets):
+                    if det not in psds:
+                        raise RuntimeError(
+                            "Every detector must have at least " "one PSD"
+                        )
+                    psdlist = psds[det]
+                    npsd[idet] = len(psdlist)
+                    for psdstart, psd, detw in psdlist:
+                        psdstarts.append(psdstart)
+                        psdvals.append(psd)
+                    detweights[idet] = psdlist[0][2]
+                npsdtot = np.sum(npsd)
+                psdstarts = np.array(psdstarts, dtype=np.float64)
+                psdvals = np.hstack(psdvals).astype(madam.PSD_TYPE)
+                npsdval = psdvals.size
+            else:
+                # Uniform weighting
+                npsd = np.ones(ndet, dtype=np.int64)
+                npsdtot = np.sum(npsd)
+                psdstarts = np.zeros(npsdtot)
+                npsdbin = 10
+                fsample = 10.0
+                psd_freqs = np.arange(npsdbin) * fsample / npsdbin
+                npsdval = npsdbin * npsdtot
+                psdvals = np.ones(npsdval)
+
+            psdinfo = (detweights, npsd, psdstarts, psd_freqs, psdvals)
+
+            log_time_memory(
+                data,
+                timer=timer,
+                timer_msg="Collect PSD info",
+                prefix=self._logprefix,
+            )
+        timer.stop()
+        del nodecomm
+
+        return psdinfo, signal_dtype, pixels_dtype, weight_dtype
+
+    @function_timer
+    def _unstage_data(
+        self,
+        data,
+        all_dets,
+        nsamp,
+        nnz,
+        nnz_full,
+        interval_starts,
+        signal_dtype,
+        pixels_dtype,
+        nside,
+        weight_dtype,
+    ):
+        """
+        Restore data to TOAST observations.
+
+        Optionally copy the signal and pointing back to TOAST if we previously
+        purged it to save memory.  Also copy the destriped timestreams if desired.
+
+        """
+        log = Logger.get()
+        timer = Timer()
+
+        nodecomm = data.comm.comm_world.Split_type(
+            MPI.COMM_TYPE_SHARED, data.comm.world_rank
+        )
+
+        # Determine how many processes per node should copy at once.
+        n_copy_groups = 1
+        if self.purge_det_data or self.purge_pointing:
+            # We MAY be restoring some data- see if we should reduce the number of
+            # processes copying in parallel (if we are not purging data, there
+            # is no benefit to staggering the copy).
+            if self.copy_groups > 0:
+                n_copy_groups = min(self.copy_groups, nodecomm.size)
+
+        log_time_memory(
+            data,
+            prefix=self._logprefix,
+            mem_msg="Before un-staging",
+            full_mem=self.mem_report,
+        )
 
         # Copy the signal
 
-        if self.purge_det_data:
-            self._madam_signal_raw, self._madam_signal = copy_in_turns(
-                self.det_data, madam.SIGNAL_TYPE, 1, do_flags=False
-            )
-        else:
-            self._madam_signal_raw, self._madam_signal = copy_local(
-                self.det_data, madam.SIGNAL_TYPE, 1, do_flags=False, do_purge=False
+        timer.start()
+
+        out_name = self.det_data
+        if self.det_out is not None:
+            out_name = self.det_out
+
+        if self.det_out is not None or (self.purge_det_data and self.restore_det_data):
+            # We are copying some kind of signal back
+            if not self.mcmode:
+                # We are not running multiple realizations, so delete as we copy.
+                restore_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    out_name,
+                    signal_dtype,
+                    self._madam_signal,
+                    self._madam_signal_raw,
+                    interval_starts,
+                    1,
+                    0,
+                    True,
+                )
+                del self._madam_signal
+                del self._madam_signal_raw
+            else:
+                # We want to re-use the signal buffer, just copy.
+                restore_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    out_name,
+                    signal_dtype,
+                    self._madam_signal,
+                    interval_starts,
+                    1,
+                    0,
+                    True,
+                )
+
+            log_time_memory(
+                data,
+                timer=timer,
+                timer_msg="Copy signal",
+                prefix=self._logprefix,
+                mem_msg="After restoring signal",
+                full_mem=self.mem_report,
             )
 
         # Copy the pointing
 
-        if self.purge_pointing:
-            self._madam_pixels_raw, self._madam_pixels = copy_in_turns(
-                self.pixels, madam.PIXEL_TYPE, 1, do_flags=True
+        if self.purge_pointing and self.restore_pointing:
+            # We previously purged it AND we want it back.
+            if not self.mcmode:
+                # We are not running multiple realizations, so delete as we copy.
+                restore_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.pixels,
+                    pixels_dtype,
+                    self._madam_pixels,
+                    self._madam_pixels_raw,
+                    interval_starts,
+                    1,
+                    nside,
+                    self.pixels_nested,
+                )
+                del self._madam_pixels
+                del self._madam_pixels_raw
+                restore_in_turns(
+                    data,
+                    nodecomm,
+                    n_copy_groups,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.weights,
+                    weigths_dtype,
+                    self._madam_pixweights,
+                    self._madam_pixweights_raw,
+                    interval_starts,
+                    nnz,
+                    0,
+                    True,
+                )
+                del self._madam_pixweights
+                del self._madam_pixweights_raw
+            else:
+                # We want to re-use the pointing, just copy.
+                restore_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.pixels,
+                    pixels_dtype,
+                    self._madam_pixels,
+                    interval_starts,
+                    1,
+                    nside,
+                    self.pixels_nested,
+                )
+                restore_local(
+                    data,
+                    nsamp,
+                    self.view,
+                    all_dets,
+                    self.weights,
+                    weight_dtype,
+                    self._madam_pixweights,
+                    interval_starts,
+                    nnz,
+                    0,
+                    True,
+                )
+
+            log_time_memory(
+                data,
+                timer=timer,
+                timer_msg="Copy pointing",
+                prefix=self._logprefix,
+                mem_msg="After restoring pointing",
+                full_mem=self.mem_report,
             )
-            self._madam_weights_raw, self._madam_weights = copy_in_turns(
-                self.weights, madam.WEIGHT_TYPE, nnz, do_flags=False
+
+        del nodecomm
+        return
+
+    @function_timer
+    def _destripe(self, data, dets, interval_starts, psdinfo):
+        """Destripe the buffered data"""
+        log_time_memory(
+            data,
+            prefix=self._logprefix,
+            mem_msg="Just before libmadam.destripe",
+            full_mem=self.mem_report,
+        )
+
+        if self._cached:
+            # destripe
+            outpath = ""
+            if "path_output" in self.params:
+                outpath = self.params["path_output"]
+            outpath = outpath.encode("ascii")
+            madam.destripe_with_cache(
+                data.comm.comm_world,
+                self._madam_timestamps,
+                self._madam_pixels,
+                self._madam_pixweights,
+                self._madam_signal,
+                outpath,
             )
         else:
-            self._madam_pixels_raw, self._madam_pixels = copy_local(
-                self.pixels, madam.PIXEL_TYPE, 1, do_flags=True, do_purge=False
+            (detweights, npsd, psdstarts, psd_freqs, psdvals) = psdinfo
+
+            # destripe
+            madam.destripe(
+                data.comm.comm_world,
+                self.params,
+                dets,
+                detweights,
+                self._madam_timestamps,
+                self._madam_pixels,
+                self._madam_pixweights,
+                self._madam_signal,
+                interval_starts,
+                npsd,
+                psdstarts,
+                psd_freqs,
+                psdvals,
             )
-            self._madam_weights_raw, self._madam_weights = copy_local(
-                self.weights, madam.WEIGHT_TYPE, nnz, do_flags=False, do_purge=False
-            )
-
-        # Madam uses constant detector weights?
-
-        # # detweights is either a dictionary of weights specified at
-        # # construction time, or else we use uniform weighting.
-        # detw = {}
-        # if self._detw is None:
-        #     for idet, det in enumerate(detectors):
-        #         detw[det] = 1.0
-        # else:
-        #     detw = self._detw
-        #
-        # detweights = np.zeros(ndet, dtype=np.float64)
-        # for idet, det in enumerate(detectors):
-        #     detweights[idet] = detw[det]
-        #
-        # if len(psds) > 0:
-        #     npsdbin = len(psdfreqs)
-        #
-        #     npsd = np.zeros(ndet, dtype=np.int64)
-        #     psdstarts = []
-        #     psdvals = []
-        #     for idet, det in enumerate(detectors):
-        #         if det not in psds:
-        #             raise RuntimeError("Every detector must have at least " "one PSD")
-        #         psdlist = psds[det]
-        #         npsd[idet] = len(psdlist)
-        #         for psdstart, psd in psdlist:
-        #             psdstarts.append(psdstart)
-        #             psdvals.append(psd)
-        #     npsdtot = np.sum(npsd)
-        #     psdstarts = np.array(psdstarts, dtype=np.float64)
-        #     psdvals = np.hstack(psdvals).astype(madam.PSD_TYPE)
-        #     npsdval = psdvals.size
-        # else:
-        #     npsd = np.ones(ndet, dtype=np.int64)
-        #     npsdtot = np.sum(npsd)
-        #     psdstarts = np.zeros(npsdtot)
-        #     npsdbin = 10
-        #     fsample = 10.0
-        #     psdfreqs = np.arange(npsdbin) * fsample / npsdbin
-        #     npsdval = npsdbin * npsdtot
-        #     psdvals = np.ones(npsdval)
-        # psdinfo = (detweights, npsd, psdstarts, psdfreqs, psdvals)
-        # if self._rank == 0 and self._verbose:
-        #     timer_tot.report_clear("Collect PSD info")
-        # return psdinfo, signal_dtype, pixels_dtype, weight_dtype
-
-    # def _unstage_data(self):
-    #     pass
-    #
-    # @function_timer
-    # def _destripe(self, pars, dets, periods, psdinfo):
-    #     """Destripe the buffered data"""
-    #     if self._verbose:
-    #         memreport("just before calling libmadam.destripe", self._comm)
-    #     if self._cached:
-    #         # destripe
-    #         outpath = ""
-    #         if "path_output" in self.params:
-    #             outpath = self.params["path_output"]
-    #         outpath = outpath.encode("ascii")
-    #         madam.destripe_with_cache(
-    #             self._comm,
-    #             self._madam_timestamps,
-    #             self._madam_pixels,
-    #             self._madam_pixweights,
-    #             self._madam_signal,
-    #             outpath,
-    #         )
-    #     else:
-    #         (detweights, npsd, psdstarts, psdfreqs, psdvals) = psdinfo
-    #
-    #         # destripe
-    #         madam.destripe(
-    #             self._comm,
-    #             pars,
-    #             dets,
-    #             detweights,
-    #             self._madam_timestamps,
-    #             self._madam_pixels,
-    #             self._madam_pixweights,
-    #             self._madam_signal,
-    #             periods,
-    #             npsd,
-    #             psdstarts,
-    #             psdfreqs,
-    #             psdvals,
-    #         )
-    #
-    #         if self._mcmode:
-    #             self._cached = True
-    #     return
+            if self.mcmode:
+                self._cached = True
+        return

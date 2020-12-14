@@ -15,6 +15,8 @@ from ..noise import Noise
 
 from .. import ops as ops
 
+from ..vis import set_matplotlib_backend
+
 from ..pixels import PixelDistribution, PixelData
 
 from ._helpers import create_outdir, create_satellite_data
@@ -30,34 +32,12 @@ class MadamTest(MPITestCase):
         dist = data[dist_key]
         pix_data = PixelData(dist, np.float64, n_value=3)
         # Just replicate the fake data across all local submaps
-        pix_data.data[:, :, 0] = 100.0 * np.random.uniform(size=dist.n_pix_submap)
-        pix_data.data[:, :, 1] = np.random.uniform(size=dist.n_pix_submap)
-        pix_data.data[:, :, 2] = np.random.uniform(size=dist.n_pix_submap)
+        pix_data.data[:, :, 0] = 100.0
+        pix_data.data[:, :, 1] = 0.1
+        pix_data.data[:, :, 2] = 0.1
         data[map_key] = pix_data
 
-    def test_scan(self):
-        # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
-
-        # Create some detector pointing matrices
-        pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
-        )
-        pointing.apply(data)
-
-        # Create fake polarized sky pixel values locally
-        self.create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
-            det_data="signal",
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            map_key="fake_map",
-        )
-        scanner.apply(data)
-
-    def test_madam_output(self):
+    def test_madam_det_out(self):
         if not ops.Madam.available:
             print("libmadam not available, skipping tests")
             return
@@ -83,6 +63,34 @@ class MadamTest(MPITestCase):
         )
         scanner.apply(data)
 
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
+        #
+        #     ob = data.obs[0]
+        #     det = ob.local_detectors[0]
+        #     xdata = ob.shared["times"].data
+        #     ydata = ob.detdata["signal"][det]
+        #
+        #     fig = plt.figure(figsize=(12, 8), dpi=72)
+        #     ax = fig.add_subplot(1, 1, 1, aspect="auto")
+        #     ax.plot(
+        #         xdata,
+        #         ydata,
+        #         marker="o",
+        #         c="red",
+        #         label="{}, {}".format(ob.name, det),
+        #     )
+        #     # cur_ylim = ax.get_ylim()
+        #     # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+        #     ax.legend(loc=1)
+        #     plt.title("Sky Signal")
+        #     savefile = os.path.join(
+        #         self.outdir, "signal_sky_{}_{}.pdf".format(ob.name, det)
+        #     )
+        #     plt.savefig(savefile)
+        #     plt.close()
+
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
@@ -90,6 +98,72 @@ class MadamTest(MPITestCase):
         # Simulate noise from this model
         sim_noise = ops.SimNoise(noise_model="noise_model", out="signal")
         sim_noise.apply(data)
+
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
+        #
+        #     ob = data.obs[0]
+        #     det = ob.local_detectors[0]
+        #     xdata = ob.shared["times"].data
+        #     ydata = ob.detdata["signal"][det]
+        #
+        #     fig = plt.figure(figsize=(12, 8), dpi=72)
+        #     ax = fig.add_subplot(1, 1, 1, aspect="auto")
+        #     ax.plot(
+        #         xdata,
+        #         ydata,
+        #         marker="o",
+        #         c="red",
+        #         label="{}, {}".format(ob.name, det),
+        #     )
+        #     # cur_ylim = ax.get_ylim()
+        #     # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+        #     ax.legend(loc=1)
+        #     plt.title("Sky + Noise Signal")
+        #     savefile = os.path.join(
+        #         self.outdir, "signal_sky-noise_{}_{}.pdf".format(ob.name, det)
+        #     )
+        #     plt.savefig(savefile)
+        #     plt.close()
+
+        # Compute timestream rms
+
+        rms = dict()
+        for ob in data.obs:
+            rms[ob.name] = dict()
+            for det in ob.local_detectors:
+                # Add an offset to the data
+                ob.detdata["signal"][det] += 500.0
+                rms[ob.name][det] = np.std(ob.detdata["signal"][det])
+
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
+        #
+        #     ob = data.obs[0]
+        #     det = ob.local_detectors[0]
+        #     xdata = ob.shared["times"].data
+        #     ydata = ob.detdata["signal"][det]
+        #
+        #     fig = plt.figure(figsize=(12, 8), dpi=72)
+        #     ax = fig.add_subplot(1, 1, 1, aspect="auto")
+        #     ax.plot(
+        #         xdata,
+        #         ydata,
+        #         marker="o",
+        #         c="red",
+        #         label="{}, {}".format(ob.name, det),
+        #     )
+        #     # cur_ylim = ax.get_ylim()
+        #     # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+        #     ax.legend(loc=1)
+        #     plt.title("Sky + Noise + Offset Signal")
+        #     savefile = os.path.join(
+        #         self.outdir, "signal_sky-noise-offset_{}_{}.pdf".format(ob.name, det)
+        #     )
+        #     plt.savefig(savefile)
+        #     plt.close()
 
         # Run madam on this
 
@@ -100,19 +174,19 @@ class MadamTest(MPITestCase):
         pars = {}
         pars["kfirst"] = "T"
         pars["iter_max"] = 100
-        pars["base_first"] = 5.0
+        pars["base_first"] = 300.0
         pars["fsample"] = sample_rate
         pars["nside_map"] = pointing.nside
         pars["nside_cross"] = pointing.nside
         pars["nside_submap"] = min(8, pointing.nside)
-        pars["write_map"] = "F"
+        pars["write_map"] = "T"
         pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"
         pars["write_wcov"] = "F"
         pars["write_hits"] = "T"
         pars["kfilter"] = "F"
         pars["path_output"] = self.outdir
-        pars["info"] = 0
+        pars["info"] = 2
 
         # FIXME: add a view here once our test data includes it
 
@@ -130,10 +204,38 @@ class MadamTest(MPITestCase):
         )
         madam.apply(data)
 
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
+        #
+        #     ob = data.obs[0]
+        #     det = ob.local_detectors[0]
+        #     xdata = ob.shared["times"].data
+        #     ydata = ob.detdata["destriped"][det]
+        #
+        #     fig = plt.figure(figsize=(12, 8), dpi=72)
+        #     ax = fig.add_subplot(1, 1, 1, aspect="auto")
+        #     ax.plot(
+        #         xdata,
+        #         ydata,
+        #         marker="o",
+        #         c="red",
+        #         label="{}, {}".format(ob.name, det),
+        #     )
+        #     # cur_ylim = ax.get_ylim()
+        #     # ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+        #     ax.legend(loc=1)
+        #     plt.title("Destriped Signal")
+        #     savefile = os.path.join(
+        #         self.outdir, "signal_destriped_{}_{}.pdf".format(ob.name, det)
+        #     )
+        #     plt.savefig(savefile)
+        #     plt.close()
+
         for ob in data.obs:
             for det in ob.local_detectors:
-                # Do some check...
-                pass
+                check_rms = np.std(ob.detdata["destriped"][det])
+                self.assertTrue(0.9 * check_rms < rms[ob.name][det])
 
         del data
         return

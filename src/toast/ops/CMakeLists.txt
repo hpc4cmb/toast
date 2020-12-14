@@ -21,5 +21,6 @@ install(FILES
     mapmaker_templates.py
     mapmaker.py
     madam.py
+    madam_utils.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

@@ -215,7 +215,7 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             if global_offset + n_copy > dist.n_pix:
                 n_copy = dist.n_pix - global_offset
             for col in range(pix.n_value):
-                fdata[col][global_offset : global_offset + n_copy] = pix.data[
+                fview[col][global_offset : global_offset + n_copy] = pix.data[
                     lc, 0:n_copy, col
                 ]
     else:
@@ -253,7 +253,7 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
                         if global_offset + n_copy > dist.n_pix:
                             n_copy = dist.n_pix - global_offset
                         for col in range(pix.n_value):
-                            fdata[col][
+                            fview[col][
                                 global_offset : global_offset + n_copy
                             ] = recvview[c, 0:n_copy, col]
                 sendbuf.fill(0)

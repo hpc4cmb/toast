@@ -285,11 +285,11 @@ class BuildInverseCovariance(Operator):
 
             noise = ob[self.noise_model]
 
-            for det in dets:
-                # The pixels and weights for this detector.
-                pix = ob.detdata[self.pixels]
-                wts = ob.detdata[self.weights]
+            # The pixels and weights for this detector.
+            pix = ob.detdata[self.pixels]
+            wts = ob.detdata[self.weights]
 
+            for det in dets:
                 # We require that the pointing matrix has the same number of
                 # non-zero elements for every detector and every observation.
                 # We check that here, and if this is the first observation and
@@ -488,10 +488,12 @@ class BuildNoiseWeighted(Operator):
 
             noise = ob[self.noise_model]
 
+            # The pixels and weights.
+            pix = ob.detdata[self.pixels]
+            wts = ob.detdata[self.weights]
+
             for det in dets:
-                # The pixels and weights for this detector.
-                pix = ob.detdata[self.pixels]
-                wts = ob.detdata[self.weights]
+                # Data for this detector
                 ddata = ob.detdata[self.det_data][det]
 
                 # We require that the pointing matrix has the same number of

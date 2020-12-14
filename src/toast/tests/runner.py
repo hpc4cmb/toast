@@ -6,6 +6,7 @@ from ..mpi import MPI, use_mpi
 
 import os
 import sys
+import shutil
 
 import unittest
 
@@ -108,8 +109,9 @@ def test(name=None, verbosity=2):
 
     if rank == 0:
         outdir = os.path.abspath(outdir)
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
+        if os.path.isdir(outdir):
+            shutil.rmtree(outdir)
+        os.makedirs(outdir)
 
     if comm is not None:
         outdir = comm.bcast(outdir, root=0)

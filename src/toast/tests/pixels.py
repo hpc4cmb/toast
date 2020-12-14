@@ -10,6 +10,8 @@ import numpy as np
 
 import numpy.testing as nt
 
+import healpy as hp
+
 from ..pixels import PixelDistribution, PixelData
 
 from .. import pixels_io as io
@@ -152,14 +154,64 @@ class PixelTest(MPITestCase):
                 dist = self._make_pixdist(nside, nsb, self.comm)
                 for tp in self.fitstypes:
                     pdata = self._make_pixdata(dist, tp, 2)
-                    pdata = PixelData(dist, tp, n_value=2)
+                    pdata = PixelData(dist, tp, n_value=6)
                     fitsfile = os.path.join(
                         self.outdir,
                         "data_N{}_sub{}_type-{}.fits".format(
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    io.write_healpix_fits(pdata, fitsfile)
-                    check = PixelData(dist, tp, n_value=2)
-                    io.read_healpix_fits(check, fitsfile)
+                    io.write_healpix_fits(pdata, fitsfile, nest=True)
+                    check = PixelData(dist, tp, n_value=6)
+                    io.read_healpix_fits(check, fitsfile, nest=True)
                     nt.assert_equal(pdata.data, check.data)
+                    if self.comm is None or self.comm.size == 1:
+                        # Write out the data serially and compare
+                        fdata = list()
+                        for col in range(pdata.n_value):
+                            fdata.append(np.zeros(pdata.distribution.n_pix))
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_copy = pdata.distribution.n_pix_submap
+                            if global_offset + n_copy > pdata.distribution.n_pix:
+                                n_copy = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                fdata[col][
+                                    global_offset : global_offset + n_copy
+                                ] = pdata.data[lc, 0:n_copy, col]
+                        serialfile = os.path.join(
+                            self.outdir,
+                            "serial_N{}_sub{}_type-{}.fits".format(
+                                nside, nsb, np.dtype(tp).char
+                            ),
+                        )
+                        hp.write_map(
+                            serialfile, fdata, fits_IDL=False, nest=True, overwrite=True
+                        )
+                        loaded = hp.read_map(serialfile, nest=True, field=None)
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_check = pdata.distribution.n_pix_submap
+                            if global_offset + n_check > pdata.distribution.n_pix:
+                                n_check = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                nt.assert_equal(
+                                    loaded[col][
+                                        global_offset : global_offset + n_check
+                                    ],
+                                    pdata.data[lc, 0:n_check, col],
+                                )
+                        # Compare to file written with our own function
+                        loaded = hp.read_map(fitsfile, nest=True, field=None)
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_check = pdata.distribution.n_pix_submap
+                            if global_offset + n_check > pdata.distribution.n_pix:
+                                n_check = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                nt.assert_equal(
+                                    loaded[col][
+                                        global_offset : global_offset + n_check
+                                    ],
+                                    pdata.data[lc, 0:n_check, col],
+                                )
