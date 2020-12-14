@@ -445,10 +445,12 @@ class OpFilterBin(Operator):
 
         # Write out the observation matrix
         if self.rank == 0:
+            t1 = time()
             fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
             scipy.sparse.save_npz(fname, obs_matrix)
             print(
-                "OpFilterBin: Wrote observation matrix to {}".format(fname + ".npz"),
+                "OpFilterBin: Wrote observation matrix to {} in {:.1f} s"
+                "".format(fname + ".npz", time() - t1),
                 flush=True,
             )
         return obs_matrix
