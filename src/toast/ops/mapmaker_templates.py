@@ -21,10 +21,6 @@ class TemplateMatrix(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
-
     templates = List(
         None, allow_none=True, help="This should be a list of Template instances"
     )
@@ -32,6 +28,26 @@ class TemplateMatrix(Operator):
     amplitudes = Unicode(None, allow_none=True, help="Data key for template amplitudes")
 
     transpose = Bool(False, help="If True, apply the transpose.")
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
@@ -63,13 +79,21 @@ class TemplateMatrix(Operator):
                 "You must set the amplitudes trait before calling exec()"
             )
 
-        # On the first call, we initialize all templates using the Data instance.
+        # On the first call, we initialize all templates using the Data instance and
+        # the fixed options for view, flagging, etc.
         if not self._initialized:
             for tmpl in self.templates:
+                tmpl.view = self.view
+                tmpl.det_flags = self.det_flags
+                tmpl.det_flag_mask = self.det_flag_mask
+                tmpl.shared_flags = self.shared_flags
+                tmpl.shared_flag_mask = self.shared_flag_mask
+                # This next line will trigger calculation of the number
+                # of amplitudes within each template.
                 tmpl.data = data
             self._initialized = True
 
-        # Set the data we are using
+        # Set the data we are using for this execution
         for tmpl in self.templates:
             tmpl.det_data = self.det_data
 
@@ -111,9 +135,20 @@ class TemplateMatrix(Operator):
         return
 
     def _requires(self):
-        req = dict()
+        req = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": list(),
+            "intervals": list(),
+        }
+        if self.view is not None:
+            req["intervals"].append(self.view)
         if self.transpose:
-            req["detdata"] = [self.det_data]
+            req["detdata"].append(self.det_data)
+            if self.shared_flags is not None:
+                req["shared"].append(self.shared_flags)
+            if self.det_flags is not None:
+                req["detdata"].append(self.det_flags)
         return req
 
     def _provides(self):

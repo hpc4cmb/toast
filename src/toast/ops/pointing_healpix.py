@@ -61,6 +61,10 @@ class PointingHealpix(Operator):
 
     mode = Unicode("I", help="The Stokes weights to generate (I or IQU)")
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
 
     hwp_angle = Unicode(
@@ -401,6 +405,7 @@ class PointingHealpix(Operator):
                 self.boresight,
             ],
             "detdata": list(),
+            "intervals": list(),
         }
         if self.cal is not None:
             req["meta"].append(self.cal)
@@ -408,6 +413,8 @@ class PointingHealpix(Operator):
             req["shared"].append(self.shared_flags)
         if self.hwp_angle is not None:
             req["shared"].append(self.hwp_angle)
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):

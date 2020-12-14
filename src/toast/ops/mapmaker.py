@@ -90,7 +90,7 @@ class MapMaker(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["templated_matrix", "det_data", "binning"]:
+            for trt in ["template_matrix", "det_data", "binning"]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -128,6 +128,7 @@ class MapMaker(Operator):
 
         # Check map binning
         if self.map_binning is None:
+            # Use the same binning as the projection operator used in the solver.
             self.map_binning = self.projection.binning
 
         # Get the template matrix used in the projection

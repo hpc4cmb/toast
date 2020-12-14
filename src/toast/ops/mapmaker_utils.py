@@ -58,6 +58,10 @@ class BuildHitMap(Operator):
 
     hits = Unicode("hits", help="The Data key for the output hit map")
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
@@ -120,32 +124,35 @@ class BuildHitMap(Operator):
                 # Nothing to do for this observation
                 continue
 
-            for det in dets:
-                # Get local submap and pixels
-                local_sm, local_pix = dist.global_pixel_to_submap(
-                    ob.detdata[self.pixels][det]
-                )
+            # The pixels and weights view for this observation
+            pix = ob.view[self.view].detdata[self.pixels]
+            flgs = [None for x in pix]
+            if self.det_flags is not None:
+                flgs = ob.view[self.view].detdata[self.det_flags]
 
-                # Samples with telescope pointing problems are already flagged in the
-                # the pointing operators by setting the pixel numbers to a negative
-                # value.  Here we optionally apply detector flags to the local
-                # pixel numbers to flag more samples.
+            # Process every data view
+            for pview, fview in zip(pix, flgs):
+                for det in dets:
+                    # Get local submap and pixels
+                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
 
-                # Apply the flags if needed
-                if self.det_flags is not None:
-                    flags = np.array(ob.detdata[self.det_flags])
-                    flags &= self.det_flag_mask
-                    local_pix[flags != 0] = -1
+                    # Samples with telescope pointing problems are already flagged in
+                    # the pointing operators by setting the pixel numbers to a negative
+                    # value.  Here we optionally apply detector flags to the local
+                    # pixel numbers to flag more samples.
 
-                cov_accum_diag_hits(
-                    dist.n_local_submap,
-                    dist.n_pix_submap,
-                    1,
-                    local_sm.astype(np.int64),
-                    local_pix.astype(np.int64),
-                    self._hits.raw,
-                )
+                    # Apply the flags if needed
+                    if self.det_flags is not None:
+                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
 
+                    cov_accum_diag_hits(
+                        dist.n_local_submap,
+                        dist.n_pix_submap,
+                        1,
+                        local_sm.astype(np.int64),
+                        local_pix.astype(np.int64),
+                        self._hits.raw,
+                    )
         return
 
     def _finalize(self, data, **kwargs):
@@ -162,13 +169,16 @@ class BuildHitMap(Operator):
             "meta": [self.pixel_dist],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
+            "intervals": list(),
         }
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": [self.hits]}
         return prov
 
     def _accelerators(self):
@@ -206,6 +216,10 @@ class BuildInverseCovariance(Operator):
 
     inverse_covariance = Unicode(
         "inv_covariance", help="The Data key for the output inverse covariance"
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     det_flags = Unicode(
@@ -285,63 +299,68 @@ class BuildInverseCovariance(Operator):
 
             noise = ob[self.noise_model]
 
-            # The pixels and weights for this detector.
-            pix = ob.detdata[self.pixels]
-            wts = ob.detdata[self.weights]
+            # The pixels and weights view for this observation
+            pix = ob.view[self.view].detdata[self.pixels]
+            wts = ob.view[self.view].detdata[self.weights]
+            flgs = [None for x in wts]
+            if self.det_flags is not None:
+                flgs = ob.view[self.view].detdata[self.det_flags]
 
-            for det in dets:
-                # We require that the pointing matrix has the same number of
-                # non-zero elements for every detector and every observation.
-                # We check that here, and if this is the first observation and
-                # detector we have worked with we create the PixelData object.
-                if self._invcov is None:
-                    # We will store the lower triangle of the covariance.
-                    if len(wts.detector_shape) == 1:
-                        self._weight_nnz = 1
-                    else:
-                        self._weight_nnz = wts.detector_shape[1]
-                    self._cov_nnz = self._weight_nnz * (self._weight_nnz + 1) // 2
-                    self._invcov = PixelData(dist, np.float64, n_value=self._cov_nnz)
-                else:
-                    check_nnz = None
-                    if len(wts.detector_shape) == 1:
-                        check_nnz = 1
-                    else:
-                        check_nnz = wts.detector_shape[1]
-                    if check_nnz != self._weight_nnz:
-                        msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
-                            ob.name, det, self.weights, check_nnz, self._weight_nnz
+            # Process every data view
+            for pview, wview, fview in zip(pix, wts, flgs):
+                for det in dets:
+                    # We require that the pointing matrix has the same number of
+                    # non-zero elements for every detector and every observation.
+                    # We check that here, and if this is the first observation and
+                    # detector we have worked with we create the PixelData object.
+                    if self._invcov is None:
+                        # We will store the lower triangle of the covariance.
+                        if len(wview.detector_shape) == 1:
+                            self._weight_nnz = 1
+                        else:
+                            self._weight_nnz = wview.detector_shape[1]
+                        self._cov_nnz = self._weight_nnz * (self._weight_nnz + 1) // 2
+                        self._invcov = PixelData(
+                            dist, np.float64, n_value=self._cov_nnz
                         )
-                        raise RuntimeError(msg)
+                    else:
+                        check_nnz = None
+                        if len(wview.detector_shape) == 1:
+                            check_nnz = 1
+                        else:
+                            check_nnz = wview.detector_shape[1]
+                        if check_nnz != self._weight_nnz:
+                            msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
+                                ob.name, det, self.weights, check_nnz, self._weight_nnz
+                            )
+                            raise RuntimeError(msg)
 
-                # Get local submap and pixels
-                local_sm, local_pix = dist.global_pixel_to_submap(pix[det])
+                    # Get local submap and pixels
+                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
 
-                # Get the detector weight from the noise model.
-                detweight = noise.detector_weight(det)
+                    # Get the detector weight from the noise model.
+                    detweight = noise.detector_weight(det)
 
-                # Samples with telescope pointing problems are already flagged in the
-                # the pointing operators by setting the pixel numbers to a negative
-                # value.  Here we optionally apply detector flags to the local
-                # pixel numbers to flag more samples.
+                    # Samples with telescope pointing problems are already flagged in
+                    # the pointing operators by setting the pixel numbers to a negative
+                    # value.  Here we optionally apply detector flags to the local
+                    # pixel numbers to flag more samples.
 
-                # Apply the flags if needed
-                if self.det_flags is not None:
-                    flags = np.array(ob.detdata[self.det_flags])
-                    flags &= self.det_flag_mask
-                    local_pix[flags != 0] = -1
+                    # Apply the flags if needed
+                    if self.det_flags is not None:
+                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
 
-                # Accumulate
-                cov_accum_diag_invnpp(
-                    dist.n_local_submap,
-                    dist.n_pix_submap,
-                    self._weight_nnz,
-                    local_sm.astype(np.int64),
-                    local_pix.astype(np.int64),
-                    wts[det].reshape(-1),
-                    detweight,
-                    self._invcov.raw,
-                )
+                    # Accumulate
+                    cov_accum_diag_invnpp(
+                        dist.n_local_submap,
+                        dist.n_pix_submap,
+                        self._weight_nnz,
+                        local_sm.astype(np.int64),
+                        local_pix.astype(np.int64),
+                        wview[det].reshape(-1),
+                        detweight,
+                        self._invcov.raw,
+                    )
         return
 
     def _finalize(self, data, **kwargs):
@@ -358,13 +377,16 @@ class BuildInverseCovariance(Operator):
             "meta": [self.pixel_dist, self.noise_model],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
+            "intervals": list(),
         }
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": [self.inverse_covariance]}
         return prov
 
     def _accelerators(self):
@@ -403,6 +425,10 @@ class BuildNoiseWeighted(Operator):
     )
 
     zmap = Unicode("zmap", help="The Data key for the output noise weighted map")
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
 
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
@@ -488,65 +514,71 @@ class BuildNoiseWeighted(Operator):
 
             noise = ob[self.noise_model]
 
-            # The pixels and weights.
-            pix = ob.detdata[self.pixels]
-            wts = ob.detdata[self.weights]
+            # The pixels and weights view for this observation
+            pix = ob.view[self.view].detdata[self.pixels]
+            wts = ob.view[self.view].detdata[self.weights]
+            ddat = ob.view[self.view].detdata[self.det_data]
+            flgs = [None for x in wts]
+            if self.det_flags is not None:
+                flgs = ob.view[self.view].detdata[self.det_flags]
 
-            for det in dets:
-                # Data for this detector
-                ddata = ob.detdata[self.det_data][det]
+            # Process every data view
+            for pview, wview, dview, fview in zip(pix, wts, ddat, flgs):
+                for det in dets:
+                    # Data for this detector
+                    ddata = dview[det]
 
-                # We require that the pointing matrix has the same number of
-                # non-zero elements for every detector and every observation.
-                # We check that here, and if this is the first observation and
-                # detector we have worked with we create the PixelData object.
-                if self._zmap is None:
-                    if len(wts.detector_shape) == 1:
-                        self._weight_nnz = 1
-                    else:
-                        self._weight_nnz = wts.detector_shape[1]
-                    self._zmap = PixelData(dist, np.float64, n_value=self._weight_nnz)
-                else:
-                    check_nnz = None
-                    if len(wts.detector_shape) == 1:
-                        check_nnz = 1
-                    else:
-                        check_nnz = wts.detector_shape[1]
-                    if check_nnz != self._weight_nnz:
-                        msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
-                            ob.name, det, self.weights
+                    # We require that the pointing matrix has the same number of
+                    # non-zero elements for every detector and every observation.
+                    # We check that here, and if this is the first observation and
+                    # detector we have worked with we create the PixelData object.
+                    if self._zmap is None:
+                        if len(wview.detector_shape) == 1:
+                            self._weight_nnz = 1
+                        else:
+                            self._weight_nnz = wview.detector_shape[1]
+                        self._zmap = PixelData(
+                            dist, np.float64, n_value=self._weight_nnz
                         )
-                        raise RuntimeError(msg)
+                    else:
+                        check_nnz = None
+                        if len(wview.detector_shape) == 1:
+                            check_nnz = 1
+                        else:
+                            check_nnz = wview.detector_shape[1]
+                        if check_nnz != self._weight_nnz:
+                            msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
+                                ob.name, det, self.weights
+                            )
+                            raise RuntimeError(msg)
 
-                # Get local submap and pixels
-                local_sm, local_pix = dist.global_pixel_to_submap(pix[det])
+                    # Get local submap and pixels
+                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
 
-                # Get the detector weight from the noise model.
-                detweight = noise.detector_weight(det)
+                    # Get the detector weight from the noise model.
+                    detweight = noise.detector_weight(det)
 
-                # Samples with telescope pointing problems are already flagged in the
-                # the pointing operators by setting the pixel numbers to a negative
-                # value.  Here we optionally apply detector flags to the local
-                # pixel numbers to flag more samples.
+                    # Samples with telescope pointing problems are already flagged in the
+                    # the pointing operators by setting the pixel numbers to a negative
+                    # value.  Here we optionally apply detector flags to the local
+                    # pixel numbers to flag more samples.
 
-                # Apply the flags if needed
-                if self.det_flags is not None:
-                    flags = np.array(ob.detdata[self.det_flags])
-                    flags &= self.det_flag_mask
-                    local_pix[flags != 0] = -1
+                    # Apply the flags if needed
+                    if self.det_flags is not None:
+                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
 
-                # Accumulate
-                cov_accum_zmap(
-                    dist.n_local_submap,
-                    dist.n_pix_submap,
-                    self._zmap.n_value,
-                    local_sm.astype(np.int64),
-                    local_pix.astype(np.int64),
-                    wts[det].reshape(-1),
-                    detweight,
-                    ddata,
-                    self._zmap.raw,
-                )
+                    # Accumulate
+                    cov_accum_zmap(
+                        dist.n_local_submap,
+                        dist.n_pix_submap,
+                        self._zmap.n_value,
+                        local_sm.astype(np.int64),
+                        local_pix.astype(np.int64),
+                        wview[det].reshape(-1),
+                        detweight,
+                        ddata,
+                        self._zmap.raw,
+                    )
         return
 
     def _finalize(self, data, **kwargs):
@@ -563,13 +595,16 @@ class BuildNoiseWeighted(Operator):
             "meta": [self.pixel_dist, self.noise_model, self.det_data],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
+            "intervals": list(),
         }
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": [self.zmap]}
         return prov
 
     def _accelerators(self):
@@ -668,18 +703,11 @@ class CovarianceAndHits(Operator):
         if pntg is not None:
             if not isinstance(pntg, Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
-            if not pntg.has_trait("pixels"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'pixels' trait"
-                )
-            if not pntg.has_trait("weights"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'weights' trait"
-                )
-            if not pntg.has_trait("create_dist"):
-                raise traitlets.TraitError(
-                    "pointing operator should have a 'create_dist' trait"
-                )
+            # Check that this operator has the traits we expect
+            for trt in ["pixels", "weights", "create_dist", "view"]:
+                if not pntg.has_trait(trt):
+                    msg = "pointing operator should have a '{}' trait".format(trt)
+                    raise traitlets.TraitError(msg)
         return pntg
 
     def __init__(self, **kwargs):
@@ -748,6 +776,7 @@ class CovarianceAndHits(Operator):
         build_hits = BuildHitMap(
             pixel_dist=self.pixel_dist,
             hits=self.hits,
+            view=self.pointing.view,
             pixels=self.pointing.pixels,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
@@ -760,6 +789,7 @@ class CovarianceAndHits(Operator):
         build_invcov = BuildInverseCovariance(
             pixel_dist=self.pixel_dist,
             inverse_covariance=self.covariance,
+            view=self.pointing.view,
             pixels=self.pointing.pixels,
             weights=self.pointing.weights,
             noise_model=self.noise_model,

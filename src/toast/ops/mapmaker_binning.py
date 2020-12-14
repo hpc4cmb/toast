@@ -102,7 +102,7 @@ class BinMap(Operator):
             if not isinstance(pntg, Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist"]:
+            for trt in ["pixels", "weights", "create_dist", "view"]:
                 if not pntg.has_trait(trt):
                     msg = "pointing operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -147,6 +147,7 @@ class BinMap(Operator):
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
             zmap=self.binned,
+            view=self.pointing.view,
             pixels=self.pointing.pixels,
             weights=self.pointing.weights,
             noise_model=self.noise_model,

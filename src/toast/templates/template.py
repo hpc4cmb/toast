@@ -33,16 +33,32 @@ class Template(TraitConfig):
 
     # Note:  The TraitConfig base class defines a "name" attribute.
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
-
     data = Instance(
         None,
         klass=Data,
         allow_none=True,
         help="This must be an instance of a Data class (or None)",
     )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
     @traitlets.validate("data")
     def _check_data(self, proposal):
@@ -54,24 +70,15 @@ class Template(TraitConfig):
             self.initialize(dat)
         return dat
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def _initialize(self, newdata):
+    @traitlets.observe("data")
+    def _initialize(self, change):
+        # Derived classes should implement this method to do any set up (like
+        # computing the number of amplitudes) whenever the data changes.
+        newdata = change["data"]
         raise NotImplementedError("Derived class must implement _initialize()")
 
-    def initialize(self, newdata):
-        """Initialize instance after the data trait has been set.
-
-        Templates use traits to set their properties, which allows them to be
-        configured easily with the constructor or afterwards and enables them to be
-        built from config files.  However, the `data` trait may not be set at
-        construction time and this trait is likely used to compute the number of
-        template amplitudes that will be used and other parameters.  This explicit
-        initialize method is called whenever the `data` trait is set.
-
-        """
-        self._initialize(newdata)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def _zeros(self):
         raise NotImplementedError("Derived class must implement _zeros()")
