@@ -27,6 +27,16 @@ class Offset(Template):
     #    shared_flag_mask : Bit mask for detector flags
     #
 
+    step_length = Int(1000000, help="Number of samples per baseline step")
+
+    noise_model = Unicode(
+        None,
+        allow_none=True,
+        help="Observation key containing the optional noise model",
+    )
+
+    precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -35,6 +45,7 @@ class Offset(Template):
         # Derived classes should implement this method to do any set up (like
         # computing the number of amplitudes) whenever the data changes.
         newdata = change["data"]
+        self
         return
 
     def _zeros(self):

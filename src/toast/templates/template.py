@@ -261,7 +261,7 @@ class Amplitudes(object):
     of amplitudes and for doing global reductions.
 
     If n_global == n_local, then every process has a full copy of the amplitude
-    values.  The the two arguments are different, then each process has a subset of
+    values.  If the two arguments are different, then each process has a subset of
     values.  If local_indices is None, then each process has a unique set of values
     and the total number across all processes must sum to n_global.  If local_indices
     is given, then it is the explicit locations of the local values within the global
@@ -425,7 +425,9 @@ class Amplitudes(object):
             None
 
         """
-        if self._comm is None:
+        if self._comm is None or self._local_indices is None:
+            # We have either one process or every process has a disjoint set of
+            # amplitudes.  Nothing to sync.
             return
         log = Logger.get()
 
@@ -461,7 +463,9 @@ class Amplitudes(object):
     def dot(self, other):
         """Perform a dot product with another Amplitudes object.
 
-        The other instance must have the same data distribution.
+        The other instance must have the same data distribution.  The two objects are
+        assumed to have already been synchronized, so that any amplitudes that exist
+        on multiple processes have the same values.
 
         Args:
             other (Amplitudes):  The other instance.
@@ -476,19 +480,16 @@ class Amplitudes(object):
             raise RuntimeError("Amplitudes must have the same number of local values")
         local_result = np.dot(self.local, other.local)
         result = None
-        if self._full:
-            # Every process has a copy of all amplitudes, so we are done
+        if self._comm is None or self._full:
+            # Only one process, or every process has the full set of values.
             result = local_result
         else:
-            if self._comm is None:
-                # Only one process
-                result = local_result
+            if self._local_indices is None:
+                # Every process has a unique set of amplitudes.  Reduce the local
+                # dot products.
+                result = MPI.allreduce(local_result, op=MPI.SUM)
             else:
-                if self._local_indices is None:
-                    # Every process has a unique set of amplitudes.  Reduce.
-                    result = MPI.allreduce(local_result, op=MPI.SUM)
-                else:
-                    # More complicated, since we need to reduce each amplitude only
-                    # once.  Implement techniques from other existing code when needed.
-                    raise NotImplementedError("dot of explicitly indexed amplitudes")
+                # More complicated, since we need to reduce each amplitude only
+                # once.  Implement techniques from other existing code when needed.
+                raise NotImplementedError("dot of explicitly indexed amplitudes")
         return result
