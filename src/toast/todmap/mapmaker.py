@@ -314,14 +314,13 @@ class GainTemplate(TODTemplate):
             # For each observation, sample indices start from 0
             local_offset, local_nsample = tod.local_samples
             L = self._get_polynomials(nsample, local_offset, local_nsample)
-            LT =L.T.copy()
 
             tmplist =[]
             for idet, det in enumerate( tod.local_dets):
                 detweight = self.detweights[iobs][det]
                 T = tod.local_signal(det, self.template_name)
-
-                for row in LT: row *= (T*np.sqrt(detweight))
+                LT = L.T.copy()
+                for row in LT: row *= T * np.sqrt(detweight)
                 M = LT.dot(LT.T)
                 #try:
                 tmplist.append(np.linalg.inv(M))
