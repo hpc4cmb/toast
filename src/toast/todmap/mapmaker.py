@@ -270,6 +270,16 @@ class GainTemplate(TODTemplate):
     ):
         self.data = data
         self.comm = data.comm.comm_group
+        if self.comm is not None:
+            # For the time being, we do not support splitting the
+            # observation in the sample direction
+            for obs in data.obs:
+                tod = obs["tod"]
+                if tod.grid_ranks[1] > 1:
+                    raise RuntimeError(
+                        "GainTemplate does not support splitting in the time direction."
+                    )
+            self.comm = None
         self.order = order
         self.norder = order + 1
         self.detweights= detweights
@@ -364,11 +374,11 @@ class GainTemplate(TODTemplate):
             local_offset, local_nsample = tod.local_samples
             legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
             todslice = slice(local_offset, local_offset + local_nsample)
-            LT= legendre_poly.T.copy()
             for idet, det in enumerate( tod.local_dets):
                 ind = self.list_of_offsets[iobs ][idet ]
                 amplitude_slice= slice(ind ,ind+self.norder )
                 signal_estimate = tod.local_signal(det, self.template_name)
+                LT= legendre_poly.T.copy()
                 for row in LT : row *= (signal_estimate )
                 poly_amplitudes[amplitude_slice] += np.dot(LT, signal[iobs, det, todslice] )
         return
