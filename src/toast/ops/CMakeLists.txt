@@ -17,7 +17,7 @@ install(FILES
     scan_map.py
     mapmaker_utils.py
     mapmaker_binning.py
-    mapmaker_projection.py
+    mapmaker_solve.py
     mapmaker_templates.py
     mapmaker.py
     madam.py

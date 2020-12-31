@@ -5,6 +5,7 @@
 
 from ..utils import (
     Logger,
+    AlignedU8,
     AlignedF32,
     AlignedF64,
 )
@@ -71,14 +72,19 @@ class Template(TraitConfig):
         return dat
 
     @traitlets.observe("data")
-    def _initialize(self, change):
+    def initialize(self, change):
         # Derived classes should implement this method to do any set up (like
         # computing the number of amplitudes) whenever the data changes.
         newdata = change["data"]
-        raise NotImplementedError("Derived class must implement _initialize()")
+        self._initialize(newdata)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def _initialize(self, new_data):
+        # Derived classes should implement this method to do any set up (like
+        # computing the number of amplitudes) whenever the data changes.
+        raise NotImplementedError("Derived class must implement _initialize()")
 
     def _zeros(self):
         raise NotImplementedError("Derived class must implement _zeros()")
@@ -148,6 +154,35 @@ class Template(TraitConfig):
             raise RuntimeError("You must set the data trait before using a template")
         self._project_signal(detector, amplitudes)
 
+    def _project_flags(self, detector, amplitudes):
+        raise NotImplementedError("Derived class must implement _project_flags()")
+
+    def project_flags(self, detector, amplitudes):
+        """Project timestream flags into template amplitude flags.
+
+        For some types of templates, excessive timestream flagging can corrupt some of
+        the template amplitudes (for example using the offset template with short
+        step lengths).  It is up to each template class to determine the impact of the
+        timestream flags on template amplitudes.
+
+        The flags of the input amplitudes are updated in place.
+
+        Args:
+            detector (str):  The detector name.
+            amplitudes (Amplitudes):  The Amplitude values for this template.
+
+        Returns:
+            None
+
+        """
+        if self.data is None:
+            raise RuntimeError("You must set the data trait before using a template")
+        # Short circuit if there are no shared or detector flags specified.
+        if self.det_flags is None and self.shared_flags is None:
+            return
+        else:
+            self._project_flags(detector, amplitudes)
+
     def _add_prior(self, amplitudes_in, amplitudes_out):
         # Not all Templates implement the prior
         return
@@ -194,6 +229,22 @@ class Template(TraitConfig):
         if self.data is None:
             raise RuntimeError("You must set the data trait before using a template")
         self._apply_precond(amplitudes_in, amplitudes_out)
+
+    def _accelerators(self):
+        # Do not force descendent classes to implement this.  If it is not
+        # implemented, then it is clear that the class does not support any
+        # accelerators
+        return list()
+
+    def accelerators(self):
+        """List of accelerators supported by this Template.
+
+        Returns:
+            (list):  List of pre-defined accelerator names supported by this
+                operator (and by TOAST).
+
+        """
+        return self._accelerators()
 
     @classmethod
     def get_class_config_path(cls):
@@ -314,6 +365,15 @@ class Amplitudes(object):
         self._raw = self._storage_class.zeros(self._n_local)
         self.local = self._raw.array()
 
+        # Support flagging of template amplitudes.  This can be used to flag some
+        # amplitudes if too many timestream samples contributing to the amplitude value
+        # are bad.  It can also be used when iteratively masking template amplitudes
+        # and sky pixels.  We will be passing these flags to compiled code, and there
+        # is no way easy way to do this using numpy bool and C++ bool.  So we waste
+        # a bit of memory and use a whole byte per amplitude.
+        self._raw_flags = AlignedU8.zeros(self._n_local)
+        self.local_flags = self._raw_flags.array()
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -327,9 +387,89 @@ class Amplitudes(object):
         if hasattr(self, "_raw"):
             self._raw.clear()
             del self._raw
+        if hasattr(self, "local_flags"):
+            del self.local_flags
+        if hasattr(self, "_raw_flags"):
+            self._raw_flags.clear()
+            del self._raw_flags
 
     def __del__(self):
         self.clear()
+
+    def __eq__(self, value):
+        if isinstance(value, Amplitudes):
+            return self.local == value.local
+        else:
+            return self.local == value
+
+    # Arithmetic.  These assume that flagging is consistent between the pairs of
+    # Amplitudes (always true when used in the mapmaking) or that the flagged values
+    # have been zeroed out.
+
+    def __iadd__(self, other):
+        if isinstance(other, Amplitudes):
+            self.local += other.local
+        else:
+            self.local += other
+
+    def __isub__(self, other):
+        if isinstance(other, Amplitudes):
+            self.local -= other.local
+        else:
+            self.local -= other
+
+    def __imul__(self, other):
+        if isinstance(other, Amplitudes):
+            self.local *= other.local
+        else:
+            self.local *= other
+
+    def __itruediv__(self, other):
+        if isinstance(other, Amplitudes):
+            self.local /= other.local
+        else:
+            self.local /= other
+
+    def __add__(self, other):
+        result = self.duplicate()
+        result += other
+        return result
+
+    def __sub__(self, other):
+        result = self.duplicate()
+        result -= other
+        return result
+
+    def __mul__(self, other):
+        result = self.duplicate()
+        result *= other
+        return result
+
+    def __truediv__(self, other):
+        result = self.duplicate()
+        result /= other
+        return result
+
+    def reset(self):
+        """Set all amplitude values to zero."""
+        self.local[:] = 0
+
+    def reset_flags(self):
+        """Set all flag values to zero."""
+        self.local_flags[:] = 0
+
+    def duplicate(self):
+        """Return a copy of the data."""
+        ret = Amplitudes(
+            self._comm,
+            self._n_global,
+            self._n_local,
+            local_indices=self._local_indices,
+            dtype=self._dtype,
+        )
+        ret.local[:] = self.local
+        ret.local_flags[:] = self.local_flags
+        return ret
 
     @property
     def comm(self):
@@ -345,11 +485,17 @@ class Amplitudes(object):
         """The number of locally stored amplitudes."""
         return self._n_local
 
+    @property
+    def n_local_flagged(self):
+        """The number of locally amplitudes that are flagged."""
+        return np.count_nonzero(self.local_flags)
+
     def _get_global_values(comm_offset, send_buffer):
         n_buf = len(send_buffer)
         if self._full:
             # Shortcut if we have all global amplitudes locally
             send_buffer[:] = self.local[comm_offset : comm_offset + n_buf]
+            send_buffer[self.local_flags[comm_offset : comm_offset + n_buf] != 0] = 0
         else:
             # Need to compute our overlap with the global range.
             send_buffer[:] = 0
@@ -370,9 +516,9 @@ class Amplitudes(object):
                     n_copy = self._global_last + 1 - local_off
                 else:
                     n_copy = n_buf - buf_off
-                send_buffer[buf_off : buf_off + n_copy] = self.local[
-                    local_off : local_off + n_copy
-                ]
+                send_view = send_buffer[buf_off : buf_off + n_copy]
+                send_view[:] = self.local[local_off : local_off + n_copy]
+                send_view[self.local_flags[local_off : local_off + n_copy] != 0] = 0
             else:
                 # Need to efficiently do the lookup.  Pull existing techniques from
                 # old code when we need this.
@@ -412,10 +558,6 @@ class Amplitudes(object):
 
     def sync(self, comm_bytes=10000000):
         """Perform an Allreduce across all processes.
-
-        If a derived class has only locally unique amplitudes on each process (for
-        example, destriping baseline offsets), then they should override this method
-        and make it a no-op.
 
         Args:
             comm_bytes (int):  The maximum number of bytes to communicate in each
@@ -465,7 +607,8 @@ class Amplitudes(object):
 
         The other instance must have the same data distribution.  The two objects are
         assumed to have already been synchronized, so that any amplitudes that exist
-        on multiple processes have the same values.
+        on multiple processes have the same values.  This further assumes that any
+        flagged amplitudes have been set to zero.
 
         Args:
             other (Amplitudes):  The other instance.

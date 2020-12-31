@@ -74,3 +74,52 @@ class ScanMapTest(MPITestCase):
 
         del data
         return
+
+    def test_mask(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create some detector pointing matrices
+        pointing = ops.PointingHealpix(
+            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+        )
+        pointing.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        self.create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Generate a mask
+        data["fake_mask"] = PixelData(data["pixel_dist"], np.uint8, n_value=1)
+        small_vals = data["fake_map"].data[:, :, 0] < 10.0
+        # print("{} map vals masked".format(np.sum(small_vals)))
+        data["fake_mask"].data[small_vals] = 1
+
+        # Scan mask into flags
+        scanner = ops.ScanMask(
+            det_flags="mask_flags",
+            det_flags_value=1,
+            pixels=pointing.pixels,
+            mask_key="fake_mask",
+            mask_bits=1,
+        )
+        scanner.apply(data)
+
+        # Manual check of the values
+
+        mask_data = data["fake_mask"]
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                    ob.detdata[pointing.pixels][det]
+                )
+                for i in range(ob.n_local_samples):
+                    if local_pix[i] < 0:
+                        continue
+                    mask_val = mask_data.data[local_sm[i], local_pix[i], 0]
+                    if mask_val > 0:
+                        self.assertTrue(ob.detdata["mask_flags"][det, i] == 1)
+                    else:
+                        self.assertTrue(ob.detdata["mask_flags"][det, i] == 0)
+
+        del data
+        return

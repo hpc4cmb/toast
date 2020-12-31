@@ -177,3 +177,106 @@ class ScanMap(Operator):
 
     def _accelerators(self):
         return list()
+
+
+@trait_docs
+class ScanMask(Operator):
+    """Operator which uses the pointing matrix to set timestream flags from a mask.
+
+    The mask must be a PixelData instance with an integer data type.  The data for each
+    pixel is bitwise-and combined with the mask_bits to form a result.  for each
+    detector sample crossing a pixel with a non-zero result, the detector flag is
+    bitwise-or'd with the specified value.
+
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to set"
+    )
+
+    det_flags_value = Int(
+        1, help="The detector flag value to set where the mask result is non-zero"
+    )
+
+    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
+
+    mask_key = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the mask is located",
+    )
+
+    mask_bits = Int(
+        255, help="The number to bitwise-and with each mask value to form the result"
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        # Check that the detector data is set
+        if self.det_flags is None:
+            raise RuntimeError("You must set the det_flags trait before calling exec()")
+
+        # Check that the mask is set
+        if self.mask_key is None:
+            raise RuntimeError("You must set the mask_key trait before calling exec()")
+        if self.mask_key not in data:
+            msg = "The mask_key '{}' does not exist in the data".format(self.mask_key)
+            raise RuntimeError(msg)
+
+        mask_data = data[self.mask_key]
+        if not isinstance(mask_data, PixelData):
+            raise RuntimeError("The mask to scan must be a PixelData instance")
+        mask_dist = mask_data.distribution
+
+        for ob in data.obs:
+            # Get the detectors we are using for this observation
+            dets = ob.select_local_detectors(detectors)
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
+
+            # If our output detector data does not yet exist, create it with a default
+            # width of one byte per sample.
+            if self.det_flags not in ob:
+                ob.detdata.create(self.det_flags, dtype=np.uint8, detectors=dets)
+
+            for det in dets:
+                # The pixels and flags.
+                pix = ob.detdata[self.pixels][det]
+                dflags = ob.detdata[self.det_flags][det]
+
+                # Get local submap and pixels
+                local_sm, local_pix = mask_dist.global_pixel_to_submap(pix)
+
+                # We could move this to compiled code if it is too slow...
+                masked = mask_data[local_sm, local_pix, 0] & self.mask_bits
+                dflags[masked != 0] |= self.det_flags_value
+
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": [mask_key],
+            "shared": list(),
+            "detdata": [self.pixels, self.det_flags],
+        }
+        return req
+
+    def _provides(self):
+        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        return prov
+
+    def _accelerators(self):
+        return list()

@@ -121,7 +121,9 @@ class Operator(TraitConfig):
         return self._provides()
 
     def _accelerators(self):
-        raise NotImplementedError("Fell through to Operator base class")
+        # Do not force descendent classes to implement this.  If it is not
+        # implemented, then it is clear that the class does not support any
+        # accelerators
         return list()
 
     def accelerators(self):

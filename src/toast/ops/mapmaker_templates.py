@@ -65,6 +65,20 @@ class TemplateMatrix(Operator):
         super().__init__(**kwargs)
         self._initialized = False
 
+    def apply_precond(self, amps_in, amps_out):
+        """Apply the preconditioner from all templates to the amplitudes.
+
+        This can only be called after the operator has been used at least once so that
+        the templates are initialized.
+
+        """
+        if not self._initialized:
+            raise RuntimeError(
+                "You must call exec() once before applying preconditioners"
+            )
+        for tmpl in self.templates:
+            tmpl.apply_precond(amps_in, amps_out)
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()

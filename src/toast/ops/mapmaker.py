@@ -8,7 +8,7 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool, Instance
+from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
 
 from ..timing import function_timer
 
@@ -43,14 +43,14 @@ class MapMaker(Operator):
     .. math::
         Z = I - P (P^T N^{-1} P)^{-1} P^T N^{-1}
 
-    Where `P` is the pointing matrix.  This operator takes a "Projection" instance
-    as one of its traits, and that operator performs:
+    or in terms of the binning operation:
 
     .. math::
-        PROJ = M^T N^{-1} Z
+        Z = I - P B
 
-    This projection operator is then used to compute the right hand side of the
-    solver and for each calculation of the left hand side.
+    Where `P` is the pointing matrix.  This operator takes one operator for the
+    template matrix `M` and one operator for the binning, `B`.  It then
+    uses a conjugate gradient solver to solve for the amplitudes.
 
     After solving for the template amplitudes, a final map of the signal estimate is
     computed using a simple binning:
@@ -60,6 +60,10 @@ class MapMaker(Operator):
 
     Where the "prime" indicates that this final map might be computed using a different
     pointing matrix than the one used to solve for the template amplitudes.
+
+    The template-subtracted detector timestreams are saved either in the input
+    `det_data` key of each observation, or (if overwrite == False) in an obs.detdata
+    key that matches the name of this class instance.
 
     """
 
@@ -71,30 +75,31 @@ class MapMaker(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    projection = Instance(
+    convergence = Float(1.0e-12, help="Relative convergence limit")
+
+    iter_max = Int(100, help="Maximum number of iterations")
+
+    overwrite = Bool(
+        False, help="Overwrite the input detector data for use as scratch space"
+    )
+
+    binning = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a projection operator",
+        help="Binning operator used for solving template amplitudes",
+    )
+
+    template_matrix = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a template matrix operator",
     )
 
     map_binning = Instance(
         klass=Operator,
         allow_none=True,
-        help="Binning operator for final map making.  Default uses same operator as projection.",
+        help="Binning operator for final map making.  Default uses same operator as solver.",
     )
-
-    @traitlets.validate("projection")
-    def _check_projection(self, proposal):
-        proj = proposal["value"]
-        if proj is not None:
-            if not isinstance(bin, Operator):
-                raise traitlets.TraitError("binning should be an Operator instance")
-            # Check that this operator has the traits we expect
-            for trt in ["template_matrix", "det_data", "binning"]:
-                if not bin.has_trait(trt):
-                    msg = "binning operator should have a '{}' trait".format(trt)
-                    raise traitlets.TraitError(msg)
-        return bin
 
     @traitlets.validate("map_binning")
     def _check_binning(self, proposal):
@@ -120,111 +125,86 @@ class MapMaker(Operator):
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
 
-        # Check projection
-        if self.projection is None:
-            raise RuntimeError(
-                "You must set the projection trait before calling exec()"
-            )
-
         # Check map binning
         if self.map_binning is None:
             # Use the same binning as the projection operator used in the solver.
             self.map_binning = self.projection.binning
 
-        # Get the template matrix used in the projection
-        template_matrix = self.projection.template_matrix
+        # For computing the RHS and also for each iteration of the LHS we will need
+        # a full detector-data sized buffer for use as scratch space.  We can either
+        # destroy the input data to save memory (useful if this is the last operator
+        # processing the data) or we can create a temporary set of timestreams.
 
-        # Compute the RHS
+        copy_det = None
+        clear_temp = None
+        detdata_name = self.det_data
 
-        if template_matrix.amplitudes in data:
-            # Clear any existing amplitudes, so that it will be created.
-            del data[template_matrix.amplitudes]
+        if not self.overwrite:
+            # Use a temporary detdata named after this operator
+            detdata_name = self.name
+            # Copy the original data into place, and then use this copy destructively.
+            copy_det = Copy(
+                detdata=[
+                    (self.det_data, detdata_name),
+                ]
+            )
+            copy_det.apply(data, detectors=detectors)
 
-        self.projection.det_data = self.det_data
-        self.projection.apply(data)
+        # Compute the RHS.  Overwrite inputs, either the original or the copy.
 
-        # Copy structure of RHS and zero as starting point for the solver
+        self.template_matrix.amplitudes = "amplitudes_rhs"
+        rhs_calc = SolverRHS(
+            det_data=detdata_name,
+            overwrite=True,
+            binning=self.binning,
+            template_matrix=self.template_matrix,
+        )
+        rhs.apply(data, detectors=detectors)
 
-        # Solve for amplitudes
+        # Set up the LHS operator.  Use either the original timestreams or the copy
+        # as temp space.
+
+        self.template_matrix.amplitudes = "amplitudes"
+        lhs_calc = SolverLHS(
+            det_temp=detdata_name,
+            binning=self.binning,
+            template_matrix=self.template_matrix,
+        )
+
+        # Solve for amplitudes.
+        solve(
+            data,
+            detectors,
+            lhs_calc,
+            data["amplitudes_rhs"],
+            convergence=self.convergence,
+            n_iter_max=self.iter_max,
+        )
+
+        # Reset our timestreams to zero
+        for ob in data.obs:
+            ob.detdata[detdata_name][:] = 0.0
+
+        # Project our solved amplitudes into timestreams.  We output to either the
+        # input det_data or our temp space.
+
+        self.template_matrix.transpose = False
+        self.template_matrix.apply(data, detectors=detectors)
+
+        # Make a binned map of these template-subtracted timestreams
+
+        self.map_binning.det_data = detdata_name
+        self.map_binning.apply(data, detectors=detectors)
 
         return
-
-    @function_timer
-    def _solve(self):
-        """Standard issue PCG solution of A.x = b
-
-        Returns:
-            x : the least squares solution
-        """
-        log = Logger.get()
-        timer0 = Timer()
-        timer0.start()
-        timer = Timer()
-        timer.start()
-        # Initial guess is zero amplitudes
-        guess = self.templates.zero_amplitudes()
-        # print("guess:", guess)  # DEBUG
-        # print("RHS:", self.rhs)  # DEBUG
-        residual = self.rhs.copy()
-        # print("residual(1):", residual)  # DEBUG
-        residual -= self.apply_lhs(guess)
-        # print("residual(2):", residual)  # DEBUG
-        precond_residual = self.templates.apply_precond(residual)
-        proposal = precond_residual.copy()
-        sqsum = precond_residual.dot(residual)
-        init_sqsum, best_sqsum, last_best = sqsum, sqsum, sqsum
-        if self.rank == 0:
-            log.info("Initial residual: {}".format(init_sqsum))
-        # Iterate to convergence
-        for iiter in range(self.niter_max):
-            if not np.isfinite(sqsum):
-                raise RuntimeError("Residual is not finite")
-            alpha = sqsum
-            alpha /= proposal.dot(self.apply_lhs(proposal))
-            alpha_proposal = proposal.copy()
-            alpha_proposal *= alpha
-            guess += alpha_proposal
-            residual -= self.apply_lhs(alpha_proposal)
-            del alpha_proposal
-            # Prepare for next iteration
-            precond_residual = self.templates.apply_precond(residual)
-            beta = 1 / sqsum
-            # Check for convergence
-            sqsum = precond_residual.dot(residual)
-            if self.rank == 0:
-                timer.report_clear(
-                    "Iter = {:4} relative residual: {:12.4e}".format(
-                        iiter, sqsum / init_sqsum
-                    )
-                )
-            if sqsum < init_sqsum * self.convergence_limit or sqsum < 1e-30:
-                if self.rank == 0:
-                    timer0.report_clear(
-                        "PCG converged after {} iterations".format(iiter)
-                    )
-                break
-            best_sqsum = min(sqsum, best_sqsum)
-            if iiter % 10 == 0 and iiter >= self.niter_min:
-                if last_best < best_sqsum * 2:
-                    if self.rank == 0:
-                        timer0.report_clear(
-                            "PCG stalled after {} iterations".format(iiter)
-                        )
-                    break
-                last_best = best_sqsum
-            # Select the next direction
-            beta *= sqsum
-            proposal *= beta
-            proposal += precond_residual
-        # log.info("{} : Solution: {}".format(self.rank, guess))  # DEBUG
-        return guess
 
     def _finalize(self, data, **kwargs):
         return
 
     def _requires(self):
         # This operator require everything that its sub-operators needs.
-        req = self.projection.requires()
+        req = self.binning.requires()
+        req.update(self.template_matrix.requires())
         if self.map_binning is not None:
             req.update(self.map_binning.requires())
         req["detdata"].append(self.det_data)
@@ -235,7 +215,7 @@ class MapMaker(Operator):
         if self.map_binning is not None:
             prov["meta"] = [self.map_binning.binned]
         else:
-            prov["meta"] = [self.projection.binning.binned]
+            prov["meta"] = [self.binning.binned]
         return prov
 
     def _accelerators(self):

@@ -29,18 +29,14 @@ class SubHarmonic(Template):
     #    det_data         : The detector data key with the timestreams
     #    det_flags        : Optional detector flags
     #    det_flag_mask    : Bit mask for detector flags
-    #    shared_flags     : Optional detector flags
-    #    shared_flag_mask : Bit mask for detector flags
+    #    shared_flags     : Optional shared flags
+    #    shared_flag_mask : Bit mask for shared flags
     #
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    @traitlets.observe("data")
-    def _initialize(self, change):
-        # Derived classes should implement this method to do any set up (like
-        # computing the number of amplitudes) whenever the data changes.
-        newdata = change["data"]
+    def _initialize(self, new_data):
         return
 
     def _zeros(self):
