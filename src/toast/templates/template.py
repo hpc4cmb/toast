@@ -49,17 +49,11 @@ class Template(TraitConfig):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+    flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for solver flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
-
-    shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
-    )
-
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    flag_mask = Int(0, help="Bit mask value for solver flags")
 
     @traitlets.validate("data")
     def _check_data(self, proposal):
@@ -367,8 +361,7 @@ class Amplitudes(object):
 
         # Support flagging of template amplitudes.  This can be used to flag some
         # amplitudes if too many timestream samples contributing to the amplitude value
-        # are bad.  It can also be used when iteratively masking template amplitudes
-        # and sky pixels.  We will be passing these flags to compiled code, and there
+        # are bad.  We will be passing these flags to compiled code, and there
         # is no way easy way to do this using numpy bool and C++ bool.  So we waste
         # a bit of memory and use a whole byte per amplitude.
         self._raw_flags = AlignedU8.zeros(self._n_local)
@@ -487,7 +480,7 @@ class Amplitudes(object):
 
     @property
     def n_local_flagged(self):
-        """The number of locally amplitudes that are flagged."""
+        """The number of local amplitudes that are flagged."""
         return np.count_nonzero(self.local_flags)
 
     def _get_global_values(comm_offset, send_buffer):

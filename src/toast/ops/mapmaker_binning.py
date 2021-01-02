@@ -61,7 +61,13 @@ class BinMap(Operator):
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
     pointing = Instance(
         klass=Operator,

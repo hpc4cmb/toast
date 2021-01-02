@@ -36,10 +36,8 @@ class Offset(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
-    #    det_flags        : Optional detector flags
-    #    det_flag_mask    : Bit mask for detector flags
-    #    shared_flags     : Optional shared flags
-    #    shared_flag_mask : Bit mask for shared flags
+    #    flags            : Optional detector solver flags
+    #    flag_mask        : Bit mask for detector solver flags
     #
 
     step_time = Float(10000.0, help="Seconds per baseline step")

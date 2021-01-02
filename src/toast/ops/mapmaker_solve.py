@@ -321,9 +321,33 @@ class SolverLHS(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def _log_debug(comm, rank, msg, timer=None):
+        """Helper function to log a DEBUG level message from rank zero"""
+        log = Logger.get()
+        if comm is not None:
+            comm.barrier()
+        if timer is not None:
+            timer.stop()
+        if rank == 0:
+            if timer is None:
+                msg = "MapMaker   LHS {}".format(msg)
+            else:
+                msg = "MapMaker   LHS {} {:0.2f} s".format(msg, timer.seconds())
+            log.debug(msg)
+        if timer is not None:
+            timer.clear()
+            timer.start()
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        timer = Timer()
+
+        # The global communicator we are using (or None)
+        comm = data.comm.comm_world
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
 
         # Check that input traits are set
         if self.binning is None:
@@ -335,6 +359,8 @@ class SolverLHS(Operator):
 
         # Build a pipeline to project amplitudes into timestreams and make a binned
         # map.
+        timer.start()
+        self._log_debug(comm, rank, "begin project amplitudes and binning")
 
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
@@ -352,8 +378,12 @@ class SolverLHS(Operator):
 
         bin_pipe.apply(data, detectors=detectors)
 
-        # Build a pipeline for the projection and template matrix application.
+        self._log_debug(comm, rank, "projection and binning finished in", timer=timer)
+
+        # Build a pipeline for the map scanning and template matrix application.
         # First create the operators that we will use.
+
+        self._log_debug(comm, rank, "begin scan map and accumulate amplitudes")
 
         # Use the same pointing operator as the binning
         pointing = self.binning.pointing
@@ -428,6 +458,10 @@ class SolverLHS(Operator):
 
         proj_pipe.apply(data, detectors=detectors)
 
+        self._log_debug(
+            comm, rank, "map scan and amplitude accumulate finished in", timer=timer
+        )
+
         return
 
     def _finalize(self, data, **kwargs):
@@ -486,6 +520,9 @@ def solve(
 
     # The global communicator we are using (or None)
     comm = data.comm.comm_world
+    rank = 0
+    if comm is not None:
+        rank = comm.rank
 
     # Solving A * x = b ...
 
@@ -531,7 +568,7 @@ def solve(
     if comm is not None:
         comm.barrier()
     timer.stop()
-    if data.comm.world_rank == 0:
+    if rank == 0:
         msg = "MapMaker initial residual = {}, {:0.2f} s".format(sqsum, timer.seconds())
         log.info(msg)
     timer.clear()
@@ -568,7 +605,7 @@ def solve(
         if comm is not None:
             comm.barrier()
         timer.stop()
-        if data.comm.world_rank == 0:
+        if rank == 0:
             msg = "MapMaker iteration {:4d}, relative residual = {}, {:0.2f} s".format(
                 iter, sqsum, timer.seconds()
             )
@@ -588,7 +625,7 @@ def solve(
         if sqsum < init_sqsum * convergence or sqsum < 1e-30:
             timer.stop()
             timer_full.stop()
-            if data.comm.world_rank == 0:
+            if rank == 0:
                 msg = "MapMaker PCG converged after {:4d} iterations and {:0.2f} seconds".format(
                     iter, timer_full.seconds()
                 )
@@ -601,7 +638,7 @@ def solve(
             if last_best < best_sqsum * 2:
                 timer.stop()
                 timer_full.stop()
-                if data.comm.world_rank == 0:
+                if rank == 0:
                     msg = "MapMaker PCG stalled after {:4d} iterations and {:0.2f} seconds".format(
                         iter, timer_full.seconds()
                     )

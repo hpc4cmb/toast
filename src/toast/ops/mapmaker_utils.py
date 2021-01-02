@@ -66,7 +66,13 @@ class BuildHitMap(Operator):
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
@@ -226,7 +232,13 @@ class BuildInverseCovariance(Operator):
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
@@ -438,7 +450,13 @@ class BuildNoiseWeighted(Operator):
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
@@ -655,11 +673,21 @@ class CovarianceAndHits(Operator):
         help="The Data key where the inverse condition number should be stored",
     )
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
     pointing = Instance(
         klass=Operator,
@@ -780,6 +808,8 @@ class CovarianceAndHits(Operator):
             pixels=self.pointing.pixels,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
             sync_type=self.sync_type,
         )
 
@@ -795,6 +825,8 @@ class CovarianceAndHits(Operator):
             noise_model=self.noise_model,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
             sync_type=self.sync_type,
         )
 
