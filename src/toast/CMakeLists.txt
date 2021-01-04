@@ -45,6 +45,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/pixels.cpp
     _libtoast/todmap_mapmaker.cpp
     _libtoast/atm.cpp
+    _libtoast/template_offset.cpp
 )
 
 if(OpenMP_CXX_FOUND)

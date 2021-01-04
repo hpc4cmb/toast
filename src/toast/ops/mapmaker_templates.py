@@ -37,17 +37,11 @@ class TemplateMatrix(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+    flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for solver flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional flagging")
-
-    shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
-    )
-
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    flag_mask = Int(0, help="Bit mask value for solver flags")
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
@@ -98,10 +92,8 @@ class TemplateMatrix(Operator):
         if not self._initialized:
             for tmpl in self.templates:
                 tmpl.view = self.view
-                tmpl.det_flags = self.det_flags
-                tmpl.det_flag_mask = self.det_flag_mask
-                tmpl.shared_flags = self.shared_flags
-                tmpl.shared_flag_mask = self.shared_flag_mask
+                tmpl.flags = self.flags
+                tmpl.flag_mask = self.flag_mask
                 # This next line will trigger calculation of the number
                 # of amplitudes within each template.
                 tmpl.data = data

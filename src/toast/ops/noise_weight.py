@@ -31,7 +31,7 @@ class NoiseWeight(Operator):
     API = traitlets.Int(0, help="Internal interface version for this operator")
 
     noise_model = traitlets.Unicode(
-        "noise_model", help="The observation key for storing the noise model"
+        "noise_model", help="The observation key containing the noise model"
     )
 
     det_data = Unicode(

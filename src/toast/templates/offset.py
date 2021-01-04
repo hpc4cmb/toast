@@ -2,11 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections import OrderedDict
+
 import numpy as np
 
 import scipy
 
 from ..utils import Logger, rate_from_times
+
+from ..timing import function_timer
 
 from ..mpi import MPI
 
@@ -50,11 +54,17 @@ class Offset(Template):
         help="Observation key containing the optional noise model",
     )
 
+    good_fraction = Float(
+        0.5,
+        help="Fraction of unflagged samples needed to keep a given offset amplitude",
+    )
+
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _initialize(self, new_data):
         # Compute the step boundaries for every observation and the number of
         # amplitude values on this process.  Every process only stores amplitudes
@@ -77,15 +87,21 @@ class Offset(Template):
 
         for iob, ob in enumerate(new_data.obs):
             # Compute sample rate from timestamps
-            self._obs_rate[iob] = rate_from_times(ob.shared[self.times])
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared[self.times])
+            self._obs_rate[iob] = rate
 
             # The step length for this observation
-            step_length = self.step_time * self._obs_rate[iob]
+            step_length = int(self.step_time * self._obs_rate[iob])
 
             # Track number of offset amplitudes per view.
             self._obs_views[iob] = list()
             for view_slice in ob.view[self.view]:
-                slice_len = view_slice.stop - view_slice.start
+                slice_len = None
+                if view_slice.start is None:
+                    # This is a view of the whole obs
+                    slice_len = ob.n_local_samples
+                else:
+                    slice_len = view_slice.stop - view_slice.start
                 view_n_amp = slice_len // step_length
                 self._obs_views[iob].append(view_n_amp)
 
@@ -137,7 +153,7 @@ class Offset(Template):
                     ) = self._get_filter_and_precond(
                         self._freq[iob], offset_psd, ob.view[self.view]
                     )
-                offset += np.sum(self.obs_views[iob])
+                offset += np.sum(self._obs_views[iob])
 
         self._n_local = offset
         if new_data.comm.comm_world is None:
@@ -147,6 +163,42 @@ class Offset(Template):
                 self._n_local, op=MPI.SUM
             )
 
+        # Now that we know the number of amplitudes, we go through the solver flags
+        # and determine what amplitudes, if any, are poorly constrained.  These are
+        # stored internally as a bool array, and used when constructing a new
+        # Amplitudes object.
+
+        self._amp_flags = np.zeros(self._n_local, dtype=np.bool)
+        if self.flags is not None:
+            offset = 0
+            bad_frac = 1.0 - self.good_fraction
+            for det in self._all_dets:
+                for iob, ob in enumerate(new_data.obs):
+                    if det not in ob.local_detectors:
+                        continue
+
+                    # The step length for this observation
+                    step_length = int(self.step_time * self._obs_rate[iob])
+
+                    # Loop over views of flags
+                    views = ob.view[self.view]
+                    for ivw, vw in enumerate(views.detdata[self.flags]):
+                        n_amp_view = self._obs_views[iob][ivw]
+                        view_samples = len(vw[det])
+                        voff = 0
+                        for amp in range(n_amp_view):
+                            amplen = step_length
+                            if amp == n_amp_view - 1:
+                                amplen = view_samples - voff
+                            frac = (
+                                np.count_nonzero(
+                                    vw[det][voff : voff + amplen] & self.flag_mask
+                                )
+                                / amplen
+                            )
+                            self._amp_flags[offset + amp] = frac > bad_frac
+                            voff += step_length
+                        offset += n_amp_view
         return
 
     @function_timer
@@ -181,8 +233,8 @@ class Offset(Template):
             result[good] = (np.sin(arg) / arg) ** 2
             return result
 
-        tbase = self.step_length
-        fbase = 1 / tbase
+        tbase = self.step_time
+        fbase = 1.0 / tbase
         offset_psd = interpolate_psd(freq) * g(freq * tbase)
         for m in range(1, 2):
             offset_psd += interpolate_psd(freq + m * fbase) * g(freq * tbase + m)
@@ -192,72 +244,87 @@ class Offset(Template):
 
     @function_timer
     def _get_filter_and_precond(self, freq, offset_psd, view_slices):
-        logfreq = np.log(freq)
-        logpsd = np.log(offset_psd)
-        logfilter = np.log(1 / offset_psd)
+        # logfreq = np.log(freq)
+        # logpsd = np.log(offset_psd)
+        # logfilter = np.log(1 / offset_psd)
+        #
+        # def interpolate(x, psd):
+        #     result = np.zeros(x.size)
+        #     good = np.abs(x) > 1e-10
+        #     logx = np.log(np.abs(x[good]))
+        #     logresult = np.interp(logx, logfreq, psd)
+        #     result[good] = np.exp(logresult)
+        #     return result
+        #
+        # def truncate(noisefilter, lim=1e-4):
+        #     icenter = noisefilter.size // 2
+        #     ind = np.abs(noisefilter[:icenter]) > np.abs(noisefilter[0]) * lim
+        #     icut = np.argwhere(ind)[-1][0]
+        #     if icut % 2 == 0:
+        #         icut += 1
+        #     noisefilter = np.roll(noisefilter, icenter)
+        #     noisefilter = noisefilter[icenter - icut : icenter + icut + 1]
+        #     return noisefilter
+        #
+        # vw_filters = list()
+        # vw_precond = list()
+        # for offset_slice, sigmasqs in offset_slices:
+        #     nstep = offset_slice.stop - offset_slice.start
+        #     filterlen = nstep * 2 + 1
+        #     filterfreq = np.fft.rfftfreq(filterlen, self.step_length)
+        #     noisefilter = truncate(np.fft.irfft(interpolate(filterfreq, logfilter)))
+        #     noisefilters.append(noisefilter)
+        #     # Build the band-diagonal preconditioner
+        #     if self.precond_width <= 1:
+        #         # Compute C_a prior
+        #         preconditioner = truncate(np.fft.irfft(interpolate(filterfreq, logpsd)))
+        #     else:
+        #         # Compute Cholesky decomposition prior
+        #         wband = min(self.precond_width, noisefilter.size // 2)
+        #         precond_width = max(wband, min(self.precond_width, nstep))
+        #         icenter = noisefilter.size // 2
+        #         preconditioner = np.zeros([precond_width, nstep], dtype=np.float64)
+        #         preconditioner[0] = sigmasqs
+        #         preconditioner[:wband, :] += np.repeat(
+        #             noisefilter[icenter : icenter + wband, np.newaxis], nstep, 1
+        #         )
+        #         lower = True
+        #         scipy.linalg.cholesky_banded(
+        #             preconditioner, overwrite_ab=True, lower=lower, check_finite=True
+        #         )
+        #     preconditioners.append((preconditioner, lower))
+        # return noisefilters, preconditioners
+        return list(), list()
 
-        def interpolate(x, psd):
-            result = np.zeros(x.size)
-            good = np.abs(x) > 1e-10
-            logx = np.log(np.abs(x[good]))
-            logresult = np.interp(logx, logfreq, psd)
-            result[good] = np.exp(logresult)
-            return result
-
-        def truncate(noisefilter, lim=1e-4):
-            icenter = noisefilter.size // 2
-            ind = np.abs(noisefilter[:icenter]) > np.abs(noisefilter[0]) * lim
-            icut = np.argwhere(ind)[-1][0]
-            if icut % 2 == 0:
-                icut += 1
-            noisefilter = np.roll(noisefilter, icenter)
-            noisefilter = noisefilter[icenter - icut : icenter + icut + 1]
-            return noisefilter
-
-        vw_filters = list()
-        vw_precond = list()
-        for offset_slice, sigmasqs in offset_slices:
-            nstep = offset_slice.stop - offset_slice.start
-            filterlen = nstep * 2 + 1
-            filterfreq = np.fft.rfftfreq(filterlen, self.step_length)
-            noisefilter = truncate(np.fft.irfft(interpolate(filterfreq, logfilter)))
-            noisefilters.append(noisefilter)
-            # Build the band-diagonal preconditioner
-            if self.precond_width <= 1:
-                # Compute C_a prior
-                preconditioner = truncate(np.fft.irfft(interpolate(filterfreq, logpsd)))
-            else:
-                # Compute Cholesky decomposition prior
-                wband = min(self.precond_width, noisefilter.size // 2)
-                precond_width = max(wband, min(self.precond_width, nstep))
-                icenter = noisefilter.size // 2
-                preconditioner = np.zeros([precond_width, nstep], dtype=np.float64)
-                preconditioner[0] = sigmasqs
-                preconditioner[:wband, :] += np.repeat(
-                    noisefilter[icenter : icenter + wband, np.newaxis], nstep, 1
-                )
-                lower = True
-                scipy.linalg.cholesky_banded(
-                    preconditioner, overwrite_ab=True, lower=lower, check_finite=True
-                )
-            preconditioners.append((preconditioner, lower))
-        return noisefilters, preconditioners
+    def _detectors(self):
+        return self._all_dets
 
     def _zeros(self):
-        return Amplitudes(self.data.comm.comm_world, self._n_global, self._n_local)
+        z = Amplitudes(self.data.comm.comm_world, self._n_global, self._n_local)
+        z.local_flags[:] = np.where(self._amp_flags, 1, 0)
+        return z
 
     @function_timer
     def _add_to_signal(self, detector, amplitudes):
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if det not in ob.local_detectors:
+            if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = self.step_time * self._obs_rate[iob]
+            step_length = int(self.step_time * self._obs_rate[iob])
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
+                print(
+                    "calling add_to_signal:  ",
+                    step_length,
+                    amplitudes.local[offset : offset + n_amp_view],
+                    vw[detector],
+                    flush=True,
+                )
                 template_offset_add_to_signal(
-                    step_length, amplitudes.local[offset : offset + n_amp_view], vw
+                    step_length,
+                    amplitudes.local[offset : offset + n_amp_view],
+                    vw[detector],
                 )
                 offset += n_amp_view
 
@@ -265,33 +332,23 @@ class Offset(Template):
     def _project_signal(self, detector, amplitudes):
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if det not in ob.local_detectors:
+            if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = self.step_time * self._obs_rate[iob]
+            step_length = int(self.step_time * self._obs_rate[iob])
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
-                template_offset_project_signal(
-                    step_length, vw, amplitudes.local[offset : offset + n_amp_view]
-                )
-                offset += n_amp_view
-
-    @function_timer
-    def _project_flags(self, detector, amplitudes):
-        offset = self._det_start[detector]
-        for iob, ob in enumerate(self.data.obs):
-            if det not in ob.local_detectors:
-                continue
-            # The step length for this observation
-            step_length = self.step_time * self._obs_rate[iob]
-            obview = ob.view[self.view]
-            for ivw, vw_ in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][ivw]
-                flags = np.array()
-                template_offset_project_flags(
+                print(
+                    "calling project_signal:  ",
                     step_length,
-                    flags,
-                    amplitudes.local_flags[offset : offset + n_amp_view],
+                    vw[detector],
+                    amplitudes.local[offset : offset + n_amp_view],
+                    flush=True,
+                )
+                template_offset_project_signal(
+                    step_length,
+                    vw[detector],
+                    amplitudes.local[offset : offset + n_amp_view],
                 )
                 offset += n_amp_view
 

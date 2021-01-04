@@ -43,6 +43,8 @@ from . import ops_madam as test_ops_madam
 
 from . import covariance as test_covariance
 
+from . import template_offset as test_template_offset
+
 #
 # from . import cache as testcache
 #
@@ -154,6 +156,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
+
+        suite.addTest(loader.loadTestsFromModule(test_template_offset))
 
         #
         # suite.addTest(loader.loadTestsFromModule(testtod))

@@ -247,33 +247,6 @@ class PointingHealpix(Operator):
                 if not self.overwrite:
                     continue
 
-            # Get the flags if needed
-            flags = None
-            if self.shared_flags is not None:
-                flags = np.array(ob.shared[self.shared_flags])
-                flags &= self.shared_flag_mask
-
-            # HWP angle if needed
-            hwp_angle = None
-            if self.hwp_angle is not None:
-                hwp_angle = ob.shared[self.hwp_angle]
-
-            # Boresight pointing quaternions
-            in_boresight = ob.shared[self.boresight]
-
-            # Coordinate transform if needed
-            boresight = in_boresight
-            if coord_rot is not None:
-                boresight = qa.mult(coord_rot, in_boresight)
-
-            # Focalplane for this observation
-            focalplane = ob.telescope.focalplane
-
-            # Optional calibration
-            cal = None
-            if self.cal is not None:
-                cal = ob[self.cal]
-
             # Create output data for the pixels, weights and optionally the
             # detector quaternions.
 
@@ -306,81 +279,117 @@ class PointingHealpix(Operator):
                     detectors=dets,
                 )
 
-            for det in dets:
-                props = focalplane[det]
+            # Loop over views
+            views = ob.view[self.view]
+            for vw in range(len(views)):
+                # Get the flags if needed
+                flags = None
+                if self.shared_flags is not None:
+                    flags = np.array(views.shared[self.shared_flags][vw])
+                    flags &= self.shared_flag_mask
 
-                # Get the cross polar response from the focalplane
-                epsilon = 0.0
-                if "pol_leakage" in props:
-                    epsilon = props["pol_leakage"]
+                # HWP angle if needed
+                hwp_angle = None
+                if self.hwp_angle is not None:
+                    hwp_angle = views.shared[self.hwp_angle][vw]
 
-                # Detector quaternion offset from the boresight
-                detquat = props["quat"]
+                # Boresight pointing quaternions
+                in_boresight = views.shared[self.boresight][vw]
 
-                # Timestream of detector quaternions
-                quats = qa.mult(boresight, detquat)
-                if self.quats is not None:
-                    ob.detdata[self.quats][det, :] = quats
+                # Coordinate transform if needed
+                boresight = in_boresight
+                if coord_rot is not None:
+                    boresight = qa.mult(coord_rot, in_boresight)
 
-                # Cal for this detector
-                dcal = 1.0
-                if cal is not None:
-                    dcal = cal[det]
+                # Focalplane for this observation
+                focalplane = ob.telescope.focalplane
 
-                # Buffered pointing calculation
-                buf_off = 0
-                buf_n = tod_buffer_length
-                while buf_off < ob.n_local_samples:
-                    if buf_off + buf_n > ob.n_local_samples:
-                        buf_n = ob.n_local_samples - buf_off
-                    bslice = slice(buf_off, buf_off + buf_n)
+                # Optional calibration
+                cal = None
+                if self.cal is not None:
+                    cal = ob[self.cal]
 
-                    # This buffer of detector quaternions
-                    detp = quats[bslice, :].reshape(-1)
+                view_samples = len(boresight)
 
-                    # Buffer of HWP angle
-                    hslice = None
-                    if hwp_angle is not None:
-                        hslice = hwp_angle[bslice].reshape(-1)
+                for det in dets:
+                    props = focalplane[det]
 
-                    # Buffer of flags
-                    fslice = None
-                    if flags is not None:
-                        fslice = flags[bslice].reshape(-1)
+                    # Get the cross polar response from the focalplane
+                    epsilon = 0.0
+                    if "pol_leakage" in props:
+                        epsilon = props["pol_leakage"]
 
-                    # Pixel and weight buffers
-                    pxslice = ob.detdata[self.pixels][det, bslice].reshape(-1)
-                    wtslice = ob.detdata[self.weights][det, bslice].reshape(-1)
+                    # Detector quaternion offset from the boresight
+                    detquat = props["quat"]
 
-                    pbuf = pxslice
-                    wbuf = wtslice
-                    if self.single_precision:
-                        pbuf = np.zeros(len(pxslice), dtype=np.int64)
-                        wbuf = np.zeros(len(wtslice), dtype=np.float64)
+                    # Timestream of detector quaternions
+                    quats = qa.mult(boresight, detquat)
+                    if self.quats is not None:
+                        views.detdata[self.quats][vw][det, :] = quats
 
-                    pointing_matrix_healpix(
-                        self.hpix,
-                        self.nest,
-                        epsilon,
-                        dcal,
-                        self.mode,
-                        detp,
-                        hslice,
-                        fslice,
-                        pxslice,
-                        wtslice,
-                    )
+                    # Cal for this detector
+                    dcal = 1.0
+                    if cal is not None:
+                        dcal = cal[det]
 
-                    if self.single_precision:
-                        pxslice[:] = pbuf.astype(np.int32)
-                        wtslice[:] = wbuf.astype(np.float32)
+                    # Buffered pointing calculation
+                    buf_off = 0
+                    buf_n = tod_buffer_length
+                    while buf_off < view_samples:
+                        if buf_off + buf_n > view_samples:
+                            buf_n = view_samples - buf_off
+                        bslice = slice(buf_off, buf_off + buf_n)
 
-                    buf_off += buf_n
+                        # This buffer of detector quaternions
+                        detp = quats[bslice, :].reshape(-1)
 
-                if self.create_dist is not None:
-                    self._local_submaps[
-                        ob.detdata["pixels"][det] // self._n_pix_submap
-                    ] = True
+                        # Buffer of HWP angle
+                        hslice = None
+                        if hwp_angle is not None:
+                            hslice = hwp_angle[bslice].reshape(-1)
+
+                        # Buffer of flags
+                        fslice = None
+                        if flags is not None:
+                            fslice = flags[bslice].reshape(-1)
+
+                        # Pixel and weight buffers
+                        pxslice = views.detdata[self.pixels][vw][det, bslice].reshape(
+                            -1
+                        )
+                        wtslice = views.detdata[self.weights][vw][det, bslice].reshape(
+                            -1
+                        )
+
+                        pbuf = pxslice
+                        wbuf = wtslice
+                        if self.single_precision:
+                            pbuf = np.zeros(len(pxslice), dtype=np.int64)
+                            wbuf = np.zeros(len(wtslice), dtype=np.float64)
+
+                        pointing_matrix_healpix(
+                            self.hpix,
+                            self.nest,
+                            epsilon,
+                            dcal,
+                            self.mode,
+                            detp,
+                            hslice,
+                            fslice,
+                            pxslice,
+                            wtslice,
+                        )
+
+                        if self.single_precision:
+                            pxslice[:] = pbuf.astype(np.int32)
+                            wtslice[:] = wbuf.astype(np.float32)
+
+                        buf_off += buf_n
+
+                    if self.create_dist is not None:
+                        self._local_submaps[
+                            views.detdata[self.pixels][vw][det] // self._n_pix_submap
+                        ] = True
         return
 
     def _finalize(self, data, **kwargs):

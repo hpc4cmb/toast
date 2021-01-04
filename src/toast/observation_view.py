@@ -167,10 +167,10 @@ class ViewMgr(MutableMapping):
         raise RuntimeError("Cannot set views directly- simply access them.")
 
     def __iter__(self):
-        return iter(self._internal)
+        return iter(self.obj)
 
     def __len__(self):
-        return len(self._internal)
+        return len(self.obj)
 
     def clear(self):
         self.obj._views.clear()

@@ -414,5 +414,6 @@ void init_map_cov(py::module & m);
 void init_pixels(py::module & m);
 void init_todmap_mapmaker(py::module & m);
 void init_atm(py::module & m);
+void init_template_offset(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

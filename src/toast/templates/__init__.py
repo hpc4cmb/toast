@@ -5,3 +5,5 @@
 # Import Templates into our public API
 
 from .template import Template, Amplitudes
+
+from .offset import Offset

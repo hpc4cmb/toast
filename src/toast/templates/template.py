@@ -2,15 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 
-from ..utils import (
-    Logger,
-    AlignedU8,
-    AlignedF32,
-    AlignedF64,
-)
+import traitlets
 
-from ..traits import TraitConfig
+from ..utils import Logger, AlignedU8, AlignedF32, AlignedF64, dtype_to_aligned
+
+from ..traits import TraitConfig, Instance, Unicode, Int
 
 from ..data import Data
 
@@ -35,7 +33,6 @@ class Template(TraitConfig):
     # Note:  The TraitConfig base class defines a "name" attribute.
 
     data = Instance(
-        None,
         klass=Data,
         allow_none=True,
         help="This must be an instance of a Data class (or None)",
@@ -61,15 +58,11 @@ class Template(TraitConfig):
         if dat is not None:
             if not isinstance(dat, Data):
                 raise traitlets.TraitError("data should be a Data instance")
-            # Call the instance initialization.
-            self.initialize(dat)
         return dat
 
     @traitlets.observe("data")
     def initialize(self, change):
-        # Derived classes should implement this method to do any set up (like
-        # computing the number of amplitudes) whenever the data changes.
-        newdata = change["data"]
+        newdata = change["new"]
         self._initialize(newdata)
 
     def __init__(self, **kwargs):
@@ -79,6 +72,24 @@ class Template(TraitConfig):
         # Derived classes should implement this method to do any set up (like
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")
+
+    def _detectors(self):
+        # Derived classes should return the list of detectors they support.
+        raise NotImplementedError("Derived class must implement _detectors()")
+
+    def detectors(self):
+        """Return a list of detectors supported by the template.
+
+        This list will change whenever the `data` trait is set, which initializes
+        the template.
+
+        Returns:
+            (list):  The detectors with local amplitudes across all observations.
+
+        """
+        if self.data is None:
+            raise RuntimeError("You must set the data trait before calling detectors()")
+        return self._detectors()
 
     def _zeros(self):
         raise NotImplementedError("Derived class must implement _zeros()")
@@ -147,35 +158,6 @@ class Template(TraitConfig):
         if self.data is None:
             raise RuntimeError("You must set the data trait before using a template")
         self._project_signal(detector, amplitudes)
-
-    def _project_flags(self, detector, amplitudes):
-        raise NotImplementedError("Derived class must implement _project_flags()")
-
-    def project_flags(self, detector, amplitudes):
-        """Project timestream flags into template amplitude flags.
-
-        For some types of templates, excessive timestream flagging can corrupt some of
-        the template amplitudes (for example using the offset template with short
-        step lengths).  It is up to each template class to determine the impact of the
-        timestream flags on template amplitudes.
-
-        The flags of the input amplitudes are updated in place.
-
-        Args:
-            detector (str):  The detector name.
-            amplitudes (Amplitudes):  The Amplitude values for this template.
-
-        Returns:
-            None
-
-        """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        # Short circuit if there are no shared or detector flags specified.
-        if self.det_flags is None and self.shared_flags is None:
-            return
-        else:
-            self._project_flags(detector, amplitudes)
 
     def _add_prior(self, amplitudes_in, amplitudes_out):
         # Not all Templates implement the prior

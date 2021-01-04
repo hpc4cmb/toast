@@ -152,8 +152,14 @@ class MapMaker(Operator):
             # Check that this operator has the traits we expect
             for trt in [
                 "det_data",
+                "pixel_dist",
                 "pointing",
+                "binned",
                 "covariance",
+                "det_flags",
+                "det_flag_mask",
+                "shared_flags",
+                "shared_flag_mask",
                 "noise_model",
                 "save_pointing",
                 "sync_type",
@@ -235,7 +241,7 @@ class MapMaker(Operator):
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
-        # Then we will use the binning operator with our mapmaking flags.  These input
+        # Then we will use the binning operator with our solver flags.  These input
         # flags are combined to the first bit (== 1) of the solver flags.
 
         self._log_info(comm, rank, "begin building flags for solver")
@@ -247,31 +253,38 @@ class MapMaker(Operator):
         save_shared_flags = self.binning.shared_flags
         save_shared_flag_mask = self.binning.shared_flag_mask
 
+        # Use the same data view as the pointing operator in binning
+        solve_view = self.binning.pointing.view
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-
-            #
-            #
-            # USE A VIEW
-            #
-            #
-
-            starting_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
-            if save_shared_flags is not None:
-                starting_flags[:] = np.where(
-                    ob.shared[save_shared_flags] & save_shared_flag_mask > 0, 1, 0
-                )
+            # Create the new solver flags
             ob.detdata.create(flagname, dtype=np.uint8, detectors=detectors)
-            for d in dets:
-                ob.datadata[flagname][d, :] = starting_flags
-                if save_det_flags is not None:
-                    ob.datadata[flagname][d, :] |= np.where(
-                        ob.detdata[save_det_flags][d] & save_det_flag_mask > 0, 1, 0
+            # The data views
+            views = ob.view[solve_view]
+            # For each view...
+            for vw in range(len(views)):
+                view_samples = views[vw].stop - views[vw].start
+                starting_flags = np.zeros(view_samples, dtype=np.uint8)
+                if save_shared_flags is not None:
+                    starting_flags[:] = np.where(
+                        views.shared[save_shared_flags][vw] & save_shared_flag_mask > 0,
+                        1,
+                        0,
                     )
+                for d in dets:
+                    views.detdata[flagname][vw][d, :] = starting_flags
+                    if save_det_flags is not None:
+                        views.detdata[flagname][vw][d, :] |= np.where(
+                            views.detdata[save_det_flags][vw][d] & save_det_flag_mask
+                            > 0,
+                            1,
+                            0,
+                        )
 
         # Now scan any input mask to this same flag field.  We use the second bit (== 2)
         # for these mask flags.  For the input mask bit we check the first bit of the
@@ -359,7 +372,9 @@ class MapMaker(Operator):
         self.binning.det_flags = flagname
         self.binning.det_flag_mask = 255
 
-        self.template_matrix.amplitudes = "amplitudes_rhs"
+        rhs_amplitude_key = "{}_amplitudes_rhs".format(self.name)
+
+        self.template_matrix.amplitudes = rhs_amplitude_key
         rhs_calc = SolverRHS(
             det_data=detdata_name,
             overwrite=True,
@@ -375,7 +390,9 @@ class MapMaker(Operator):
 
         self._log_info(comm, rank, "begin PCG solver")
 
-        self.template_matrix.amplitudes = "{}_amplitudes".format(self.name)
+        amplitude_key = "{}_amplitudes".format(self.name)
+        self.template_matrix.amplitudes = amplitude_key
+
         lhs_calc = SolverLHS(
             det_temp=detdata_name,
             binning=self.binning,
