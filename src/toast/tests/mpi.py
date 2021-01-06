@@ -2,26 +2,27 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from ..mpi import MPI, use_mpi
+
 import sys
 import time
 
 import warnings
 
 from unittest.signals import registerResult
+
 from unittest import TestCase
 from unittest import TestResult
 
 
 class MPITestCase(TestCase):
-    """A simple wrapper around the standard TestCase which provides
-    one extra method to set the communicator.
-    """
+    """A simple wrapper around the standard TestCase which stores the communicator."""
 
     def __init__(self, *args, **kwargs):
-        super(MPITestCase, self).__init__(*args, **kwargs)
-
-    def setComm(self, comm):
-        self.comm = comm
+        super().__init__(*args, **kwargs)
+        self.comm = None
+        if use_mpi:
+            self.comm = MPI.COMM_WORLD
 
 
 class MPITestResult(TestResult):
@@ -29,17 +30,18 @@ class MPITestResult(TestResult):
 
     The actions needed are coordinated across all processes.
 
-    Used by MPITestRunner.
     """
 
     separator1 = "=" * 70
     separator2 = "-" * 70
 
-    def __init__(self, comm, stream=None, descriptions=None, verbosity=None, **kwargs):
-        super(MPITestResult, self).__init__(
+    def __init__(self, stream=None, descriptions=None, verbosity=None, **kwargs):
+        super().__init__(
             stream=stream, descriptions=descriptions, verbosity=verbosity, **kwargs
         )
-        self.comm = comm
+        self.comm = None
+        if use_mpi:
+            self.comm = MPI.COMM_WORLD
         self.stream = stream
         self.descriptions = descriptions
         self.buffer = False
@@ -53,8 +55,7 @@ class MPITestResult(TestResult):
             return str(test)
 
     def startTest(self, test):
-        if isinstance(test, MPITestCase):
-            test.setComm(self.comm)
+        super().startTest(test)
         self.stream.flush()
         if self.comm is not None:
             self.comm.barrier()
@@ -65,11 +66,10 @@ class MPITestResult(TestResult):
             self.stream.flush()
         if self.comm is not None:
             self.comm.barrier()
-        super(MPITestResult, self).startTest(test)
         return
 
     def addSuccess(self, test):
-        super(MPITestResult, self).addSuccess(test)
+        super().addSuccess(test)
         if self.comm is None:
             self.stream.write("ok ")
         else:
@@ -78,7 +78,7 @@ class MPITestResult(TestResult):
         return
 
     def addError(self, test, err):
-        super(MPITestResult, self).addError(test, err)
+        super().addError(test, err)
         if self.comm is None:
             self.stream.write("error ")
         else:
@@ -87,7 +87,7 @@ class MPITestResult(TestResult):
         return
 
     def addFailure(self, test, err):
-        super(MPITestResult, self).addFailure(test, err)
+        super().addFailure(test, err)
         if self.comm is None:
             self.stream.write("fail ")
         else:
@@ -96,7 +96,7 @@ class MPITestResult(TestResult):
         return
 
     def addSkip(self, test, reason):
-        super(MPITestResult, self).addSkip(test, reason)
+        super().addSkip(test, reason)
         if self.comm is None:
             self.stream.write("skipped({}) ".format(reason))
         else:
@@ -105,7 +105,7 @@ class MPITestResult(TestResult):
         return
 
     def addExpectedFailure(self, test, err):
-        super(MPITestResult, self).addExpectedFailure(test, err)
+        super().addExpectedFailure(test, err)
         if self.comm is None:
             self.stream.write("expected-fail ")
         else:
@@ -114,11 +114,11 @@ class MPITestResult(TestResult):
         return
 
     def addUnexpectedSuccess(self, test):
-        super(MPITestResult, self).addUnexpectedSuccess(test)
+        super().addUnexpectedSuccess(test)
         if self.comm is None:
-            self.stream.writeln("unexpected-success ")
+            self.stream.write("unexpected-success ")
         else:
-            self.stream.writeln("[{}]unexpected-success ".format(self.comm.rank))
+            self.stream.write("[{}]unexpected-success ".format(self.comm.rank))
         return
 
     def printErrorList(self, flavour, errors):
@@ -142,7 +142,6 @@ class MPITestResult(TestResult):
     def printErrors(self):
         if self.comm is None:
             self.stream.writeln()
-            self.stream.flush()
             self.printErrorList("ERROR", self.errors)
             self.printErrorList("FAIL", self.failures)
             self.stream.flush()
@@ -150,7 +149,6 @@ class MPITestResult(TestResult):
             self.comm.barrier()
             if self.comm.rank == 0:
                 self.stream.writeln()
-                self.stream.flush()
             for p in range(self.comm.size):
                 if p == self.comm.rank:
                     self.printErrorList("ERROR", self.errors)
@@ -203,15 +201,15 @@ class MPITestRunner(object):
 
     resultclass = MPITestResult
 
-    def __init__(
-        self, comm, stream=None, descriptions=True, verbosity=2, warnings=None
-    ):
+    def __init__(self, stream=None, descriptions=True, verbosity=2, warnings=None):
         """Construct a MPITestRunner.
 
         Subclasses should accept **kwargs to ensure compatibility as the
         interface changes.
         """
-        self.comm = comm
+        self.comm = None
+        if use_mpi:
+            self.comm = MPI.COMM_WORLD
         if stream is None:
             stream = sys.stderr
         self.stream = _WritelnDecorator(stream)
@@ -221,9 +219,7 @@ class MPITestRunner(object):
 
     def run(self, test):
         "Run the given test case or test suite."
-        result = MPITestResult(
-            self.comm, self.stream, self.descriptions, self.verbosity
-        )
+        result = MPITestResult(self.stream, self.descriptions, self.verbosity)
         registerResult(result)
         with warnings.catch_warnings():
             if self.warnings:

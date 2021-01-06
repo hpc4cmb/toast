@@ -9,10 +9,12 @@ import os
 import numpy as np
 import numpy.testing as nt
 
-from ..dist import distribute_uniform, distribute_discrete, Data
+from ..dist import distribute_uniform, distribute_discrete
+from ..data import Data
+from ..observation import Observation
 from ..mpi import Comm, MPI
 
-from ._helpers import create_outdir, create_distdata
+from ._helpers import create_outdir, create_distdata, create_comm, create_telescope
 
 
 class DataTest(MPITestCase):
@@ -151,13 +153,17 @@ class DataTest(MPITestCase):
         return
 
     def test_split(self):
-        data = Data(self.data.comm)
-        data.obs.append({"site": "Atacama", "season": 1})
-        data.obs.append({"site": "Atacama", "season": 2})
-        data.obs.append({"site": "Atacama", "season": 3})
-        data.obs.append({"site": "Pole", "season": 1})
-        data.obs.append({"site": "Pole", "season": 2})
-        data.obs.append({"site": "Pole", "season": 3})
+        toastcomm = create_comm(self.comm)
+        tele = create_telescope(toastcomm.group_size)
+        data = Data(toastcomm)
+        for season in range(3):
+            data.obs.append(Observation(tele, 10, comm=toastcomm.comm_group))
+            data.obs[-1]["site"] = "Atacama"
+            data.obs[-1]["season"] = season
+        for season in range(3):
+            data.obs.append(Observation(tele, 10, comm=toastcomm.comm_group))
+            data.obs[-1]["site"] = "Pole"
+            data.obs[-1]["season"] = season
 
         datasplit_site = data.split("site")
         datasplit_season = data.split("season")

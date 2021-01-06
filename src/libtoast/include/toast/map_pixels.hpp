@@ -22,22 +22,23 @@ void global_to_local(size_t nsamp,
     // memory buffers were aligned.  That could be ensured with care in the
     // calling code.  To be revisited if this code is ever the bottleneck.
 
-    #pragma omp parallel for default(shared) schedule(static, 64)
+    #pragma omp parallel for default(shared) schedule(static)
     for (size_t i = 0; i < nsamp; ++i) {
-        T pixel = global_pixels[i];
-        T submap = 0;
-        if (pixel < 0) {
-            pixel = -1;
+        if (global_pixels[i] < 0) {
+            local_submaps[i] = -1;
+            local_pixels[i] = -1;
         } else {
-            submap = static_cast <T> (
-                static_cast <double> (pixel) * npix_submap_inv
+            local_pixels[i] = global_pixels[i] % npix_submap;
+            local_submaps[i] = static_cast <T> (
+                global2local[
+                    static_cast <T> (
+                        static_cast <double> (global_pixels[i]) * npix_submap_inv
+                        )
+                ]
                 );
-            pixel -= submap * static_cast <T> (npix_submap);
         }
-        local_pixels[i] = pixel;
-        submap = static_cast <T> (global2local[submap]);
-        local_submaps[i] = submap;
     }
+
     return;
 }
 }

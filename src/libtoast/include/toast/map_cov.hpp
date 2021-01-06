@@ -25,7 +25,14 @@ void cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_submap,
                            int64_t const * indx_pix,
                            double const * weights,
-                           double scale, int64_t * hits, double * invnpp);
+                           double scale, double * invnpp);
+
+void cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nnz,
+                                int64_t nsamp,
+                                int64_t const * indx_submap,
+                                int64_t const * indx_pix,
+                                double const * weights,
+                                double scale, int64_t * hits, double * invnpp);
 
 void cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz, int64_t nsamp,
                     int64_t const * indx_submap, int64_t const * indx_pix,

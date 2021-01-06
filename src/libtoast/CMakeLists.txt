@@ -37,6 +37,7 @@ set(toast_SOURCES
     src/toast_atm.cpp
     src/toast_atm_sim.cpp
     src/toast_atm_observe.cpp
+    src/toast_template_offset.cpp
     tests/toast_test_runner.cpp
     tests/toast_test_env.cpp
     tests/toast_test_utils.cpp

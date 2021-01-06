@@ -8,34 +8,26 @@ install(FILES
     mpi.py
     env.py
     dist.py
-    timing.py
-    cache.py
+    intervals.py
     rng.py
     qarray.py
     fft.py
     healpix.py
-    tod.py
-    intervals.py
-    tod_satellite.py
-    ops_applygain.py
-    ops_simnoise.py
-    cov.py
-    ops_pmat.py
-    ops_dipole.py
-    ops_groundfilter.py
-    sim_focalplane.py
-    ops_polyfilter.py
-    ops_memorycounter.py
-    ops_gainscrambler.py
-    psd_math.py
-    ops_madam.py
+    config.py
+    observation.py
+    timing.py
+    pixels.py
+    ops_sim_satellite.py
+    ops_sim_tod_noise.py
+    ops_mapmaker_utils.py
+    ops_mapmaker_binning.py
     ops_mapmaker.py
-    map_satellite.py
-    map_ground.py
-    binned.py
-    ops_sim_pysm.py
-    tidas.py
-    ops_sim_atm.py
-    ops_sim_sss.py
+    covariance.py
+    ops_pointing_healpix.py
+    sim_focalplane.py
+    ops_memory_counter.py
+    ops_scan_map.py
+    ops_madam.py
+    template_offset.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

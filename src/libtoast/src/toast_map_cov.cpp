@@ -94,8 +94,63 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   int64_t const * indx_submap,
                                   int64_t const * indx_pix,
                                   double const * weights,
-                                  double scale, int64_t * hits,
+                                  double scale,
                                   double * invnpp) {
+    const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    #pragma omp parallel
+    {
+        #ifdef _OPENMP
+        int nthread = omp_get_num_threads();
+        int trank = omp_get_thread_num();
+        int64_t npix_thread = nsub * subsize / nthread + 1;
+        int64_t first_pix = trank * npix_thread;
+        int64_t last_pix = first_pix + npix_thread - 1;
+        #endif // ifdef _OPENMP
+
+        for (size_t i = 0; i < nsamp; ++i) {
+            const int64_t isubmap = indx_submap[i] * subsize;
+            const int64_t ipix = indx_pix[i];
+            if ((isubmap < 0) || (ipix < 0)) continue;
+
+            const int64_t hpx = isubmap + ipix;
+            #ifdef _OPENMP
+            if ((hpx < first_pix) || (hpx > last_pix)) continue;
+            #endif // ifdef _OPENMP
+            const int64_t ipx = hpx * block;
+
+            const double * wpointer = weights + i * nnz;
+            double * covpointer = invnpp + ipx;
+            for (size_t j = 0; j < nnz; ++j, ++wpointer) {
+                const double scaled_weight = *wpointer * scale;
+                const double * wpointer2 = wpointer;
+                for (size_t k = j; k < nnz; ++k, ++wpointer2, ++covpointer) {
+                    *covpointer += *wpointer2 * scaled_weight;
+                }
+            }
+
+            // std::cout << "Accum to local pixel " << hpx << " with scale " << scale <<
+            // ":" << std::endl;
+            // for (size_t j = 0; j < nnz; ++j) {
+            //     std::cout << " " << weights[i * nnz + j];
+            // }
+            // std::cout << std::endl;
+            // for (size_t j = 0; j < block; ++j) {
+            //     std::cout << " " << invnpp[ipx + j];
+            // }
+            // std::cout << std::endl;
+        }
+    }
+
+    return;
+}
+
+void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nnz,
+                                       int64_t nsamp,
+                                       int64_t const * indx_submap,
+                                       int64_t const * indx_pix,
+                                       double const * weights,
+                                       double scale, int64_t * hits,
+                                       double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
     #pragma omp parallel
     {
@@ -181,18 +236,31 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // shortcut for NNZ == 1
         if (!invert) {
             // Not much point in calling this!
-            for (int64_t i = 0; i < nsub; ++i) {
-                for (int64_t j = 0; j < subsize; ++j) {
-                    cond[i * subsize + j] = 1.0;
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        cond[i * subsize + j] = 1.0;
+                    }
                 }
             }
         } else {
-            for (int64_t i = 0; i < nsub; ++i) {
-                for (int64_t j = 0; j < subsize; ++j) {
-                    int64_t dpx = (i * subsize) + j;
-                    cond[dpx] = 1.0;
-                    if (data[dpx] != 0) {
-                        data[dpx] = 1.0 / data[dpx];
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        cond[dpx] = 1.0;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
                     }
                 }
             }
@@ -324,7 +392,9 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                         }
                     }
                 }
-                cond[i] = rcond;
+                if (cond != NULL) {
+                    cond[i] = rcond;
+                }
             }
         }
     }
