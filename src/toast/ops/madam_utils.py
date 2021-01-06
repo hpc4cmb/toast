@@ -179,7 +179,7 @@ def restore_local(
         if nnz == 1:
             ob.detdata.create(detdata_name, dtype=detdata_dtype)
         else:
-            ob.detdata.create(detdata_name, dtype=detdata_dtype, detshape=(nnz,))
+            ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
         print("Created detdata {} = {}".format(detdata_name, ob.detdata[detdata_name]))
         print("madam buffer has shape = ", madam_buffer.shape)
         for vw in ob.view[view].detdata[detdata_name]:

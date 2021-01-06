@@ -100,7 +100,7 @@ class ScanMap(Operator):
             maptod = maptod_raw.array()
 
             # If our output detector data does not yet exist, create it
-            if self.det_data not in ob:
+            if self.det_data not in ob.detdata:
                 ob.detdata.create(self.det_data, dtype=np.float64, detectors=dets)
 
             for det in dets:
@@ -246,7 +246,7 @@ class ScanMask(Operator):
 
             # If our output detector data does not yet exist, create it with a default
             # width of one byte per sample.
-            if self.det_flags not in ob:
+            if self.det_flags not in ob.detdata:
                 ob.detdata.create(self.det_flags, dtype=np.uint8, detectors=dets)
 
             for det in dets:

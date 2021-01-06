@@ -50,8 +50,8 @@ void init_template_offset(py::module & m) {
             int64_t n_data = info_data.size;
             double * raw_amplitudes = reinterpret_cast <double *> (info_amplitudes.ptr);
             double * raw_data = reinterpret_cast <double *> (info_data.ptr);
-            toast::template_offset_add_to_signal(step_length, n_data, raw_data,
-                                                 n_amp, raw_amplitudes);
+            toast::template_offset_project_signal(step_length, n_data, raw_data,
+                                                  n_amp, raw_amplitudes);
             return;
         }, py::arg("step_length"), py::arg("data"), py::arg(
             "amplitudes"), R"(

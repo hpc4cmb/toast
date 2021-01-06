@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections.abc import MutableMapping
+
 import numpy as np
 
 import traitlets
@@ -371,6 +373,12 @@ class Amplitudes(object):
     def __del__(self):
         self.clear()
 
+    def __repr__(self):
+        val = "<Amplitudes n_global={} n_local={} comm={}\n  {}\n  {}>".format(
+            self.n_global, self.n_local, self.comm, self.local, self.local_flags
+        )
+        return val
+
     def __eq__(self, value):
         if isinstance(value, Amplitudes):
             return self.local == value.local
@@ -383,27 +391,31 @@ class Amplitudes(object):
 
     def __iadd__(self, other):
         if isinstance(other, Amplitudes):
-            self.local += other.local
+            self.local[:] += other.local
         else:
-            self.local += other
+            self.local[:] += other
+        return self
 
     def __isub__(self, other):
         if isinstance(other, Amplitudes):
-            self.local -= other.local
+            self.local[:] -= other.local
         else:
-            self.local -= other
+            self.local[:] -= other
+        return self
 
     def __imul__(self, other):
         if isinstance(other, Amplitudes):
-            self.local *= other.local
+            self.local[:] *= other.local
         else:
-            self.local *= other
+            self.local[:] *= other
+        return self
 
     def __itruediv__(self, other):
         if isinstance(other, Amplitudes):
-            self.local /= other.local
+            self.local[:] /= other.local
         else:
-            self.local /= other
+            self.local[:] /= other
+        return self
 
     def __add__(self, other):
         result = self.duplicate()
@@ -448,7 +460,7 @@ class Amplitudes(object):
 
     @property
     def comm(self):
-        return _comm
+        return self._comm
 
     @property
     def n_global(self):
@@ -610,4 +622,173 @@ class Amplitudes(object):
                 # More complicated, since we need to reduce each amplitude only
                 # once.  Implement techniques from other existing code when needed.
                 raise NotImplementedError("dot of explicitly indexed amplitudes")
+        return result
+
+
+class AmplitudesMap(MutableMapping):
+    """Helper class to provide arithmetic operations on a collection of Amplitudes.
+
+    This simply provides syntactic sugar to reduce duplicated code when working with
+    a collection of Amplitudes in the map making.
+
+    """
+
+    def __init__(self):
+        self._internal = dict()
+
+    # Mapping methods
+
+    def __getitem__(self, key):
+        return self._internal[key]
+
+    def __delitem__(self, key):
+        del self._internal[key]
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, Amplitudes):
+            raise RuntimeError(
+                "Only Amplitudes objects may be assigned to an AmplitudesMap"
+            )
+        self._internal[key] = value
+
+    def __iter__(self):
+        return iter(self._internal)
+
+    def __len__(self):
+        return len(self._internal)
+
+    def __repr__(self):
+        val = "<AmplitudesMap"
+        for k, v in self._internal.items():
+            val += "\n  {} = {}".format(k, v)
+        val += "\n>"
+        return val
+
+    # Arithmetic.  These operations are done between corresponding Amplitude keys.
+
+    def _check_other(self, other):
+        log = Logger.get()
+        if sorted(self._internal.keys()) != sorted(other._internal.keys()):
+            msg = "Arithmetic between AmplitudesMap objects requires identical keys"
+            log.error(msg)
+            raise RuntimeError(msg)
+        for k, v in self._internal.items():
+            if v.n_global != other[k].n_global:
+                msg = "Number of global amplitudes not equal for key '{}'".format(k)
+                log.error(msg)
+                raise RuntimeError(msg)
+            if v.n_local != other[k].n_local:
+                msg = "Number of local amplitudes not equal for key '{}'".format(k)
+                log.error(msg)
+                raise RuntimeError(msg)
+
+    def __eq__(self, value):
+        if isinstance(value, AmplitudesMap):
+            self._check_other(value)
+            for k, v in self._internal.items():
+                if v != value[k]:
+                    return False
+            return True
+        else:
+            for k, v in self._internal.items():
+                if v != value:
+                    return False
+            return True
+
+    def __iadd__(self, other):
+        if isinstance(other, AmplitudesMap):
+            self._check_other(other)
+            for k, v in self._internal.items():
+                v += other[k]
+        else:
+            for k, v in self._internal.items():
+                v += other
+        return self
+
+    def __isub__(self, other):
+        if isinstance(other, AmplitudesMap):
+            self._check_other(other)
+            for k, v in self._internal.items():
+                v -= other[k]
+        else:
+            for k, v in self._internal.items():
+                v -= other
+        return self
+
+    def __imul__(self, other):
+        if isinstance(other, AmplitudesMap):
+            self._check_other(other)
+            for k, v in self._internal.items():
+                v *= other[k]
+        else:
+            for k, v in self._internal.items():
+                v *= other
+        return self
+
+    def __itruediv__(self, other):
+        if isinstance(other, AmplitudesMap):
+            self._check_other(other)
+            for k, v in self._internal.items():
+                v /= other[k]
+        else:
+            for k, v in self._internal.items():
+                v /= other
+        return self
+
+    def __add__(self, other):
+        result = self.duplicate()
+        result += other
+        return result
+
+    def __sub__(self, other):
+        result = self.duplicate()
+        result -= other
+        return result
+
+    def __mul__(self, other):
+        result = self.duplicate()
+        result *= other
+        return result
+
+    def __truediv__(self, other):
+        result = self.duplicate()
+        result /= other
+        return result
+
+    def reset(self):
+        """Set all amplitude values to zero."""
+        for k, v in self._internal.items():
+            v.reset()
+
+    def reset_flags(self):
+        """Set all flag values to zero."""
+        for k, v in self._internal.items():
+            v.reset_flags()
+
+    def duplicate(self):
+        """Return a copy of the data."""
+        ret = AmplitudesMap()
+        for k, v in self._internal.items():
+            ret[k] = v.duplicate()
+        return ret
+
+    def dot(self, other):
+        """Dot product of all corresponding Amplitudes.
+
+        Args:
+            other (AmplitudesMap):  The other instance.
+
+        Result:
+            (float):  The dot product.
+
+        """
+        log = Logger.get()
+        if not isinstance(other, AmplitudesMap):
+            msg = "dot product must be with another AmplitudesMap object"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._check_other(other)
+        result = 0.0
+        for k, v in self._internal.items():
+            result += v.dot(other[k])
         return result

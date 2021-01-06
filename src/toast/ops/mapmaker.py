@@ -10,7 +10,7 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
 
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 
 from ..pixels import PixelDistribution, PixelData
 
@@ -22,7 +22,11 @@ from .clear import Clear
 
 from .copy import Copy
 
-from .scan_map import ScanMap
+from .scan_map import ScanMap, ScanMask
+
+from .mapmaker_utils import CovarianceAndHits
+
+from .mapmaker_solve import solve, SolverRHS, SolverLHS
 
 
 @trait_docs
@@ -172,7 +176,7 @@ class MapMaker(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _log_info(comm, rank, msg, timer=None):
+    def _log_info(self, comm, rank, msg, timer=None):
         """Helper function to log an INFO level message from rank zero"""
         log = Logger.get()
         if comm is not None:
@@ -232,7 +236,7 @@ class MapMaker(Operator):
                 ]
             )
             copy_det.apply(data, detectors=detectors)
-            self._log_info(comm, rank, "data copy finished in", timer=timer)
+            self._log_info(comm, rank, "  data copy finished in", timer=timer)
 
         # Flagging.  We create a new set of data flags for the solver that includes:
         #   - one bit for a bitwise OR of all detector / shared flags
@@ -268,7 +272,12 @@ class MapMaker(Operator):
             views = ob.view[solve_view]
             # For each view...
             for vw in range(len(views)):
-                view_samples = views[vw].stop - views[vw].start
+                view_samples = None
+                if views[vw].start is None:
+                    # There is one view of the whole obs
+                    view_samples = ob.n_local_samples
+                else:
+                    view_samples = views[vw].stop - views[vw].start
                 starting_flags = np.zeros(view_samples, dtype=np.uint8)
                 if save_shared_flags is not None:
                     starting_flags[:] = np.where(
@@ -296,13 +305,14 @@ class MapMaker(Operator):
         # Set up operator for optional clearing of the pointing matrices
         clear_pointing = Clear(detdata=[scan_pointing.pixels, scan_pointing.weights])
 
-        scanner = ops.ScanMask(
+        scanner = ScanMask(
             det_flags=flagname,
-            det_flags_value=2,
-            pixels=pointing.pixels,
-            mask_key=self.mask,
+            pixels=scan_pointing.pixels,
             mask_bits=1,
         )
+
+        scanner.det_flags_value = 2
+        scanner.mask_key = self.mask
 
         scan_pipe = None
         if self.binning.save_pointing:
@@ -317,9 +327,11 @@ class MapMaker(Operator):
                 operators=[scan_pointing, scanner, clear_pointing],
             )
 
-        scan_pipe.apply(data, detectors=detectors)
+        if self.mask is not None:
+            # We actually have an input mask. Scan it.
+            scan_pipe.apply(data, detectors=detectors)
 
-        self._log_info(comm, rank, "finished flag building in", timer=timer)
+        self._log_info(comm, rank, "  finished flag building in", timer=timer)
 
         # Now construct the noise covariance, hits, and condition number mask
 
@@ -347,11 +359,11 @@ class MapMaker(Operator):
         solver_cov.apply(data, detectors=detectors)
 
         data[solver_rcond_mask_name] = PixelData(
-            self.binning.pixel_dist, dtype=np.uint8, n_value=1
+            data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
         )
-        data[solver_rcond_mask_name].raw[:] = np.where(
-            data[solver_rcond_name].raw.array() < self.solve_rcond_threshold, 1, 0
-        )
+        data[solver_rcond_mask_name].raw[
+            data[solver_rcond_name].raw.array() < self.solve_rcond_threshold
+        ] = 1
 
         # Re-use our mask scanning pipeline, setting third bit (== 4)
         scanner.det_flags_value = 4
@@ -359,7 +371,7 @@ class MapMaker(Operator):
         scan_pipe.apply(data, detectors=detectors)
 
         self._log_info(
-            comm, rank, "finished build of solver covariance in", timer=timer
+            comm, rank, "  finished build of solver covariance in", timer=timer
         )
 
         # Compute the RHS.  Overwrite inputs, either the original or the copy.
@@ -381,9 +393,9 @@ class MapMaker(Operator):
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
-        rhs.apply(data, detectors=detectors)
+        rhs_calc.apply(data, detectors=detectors)
 
-        self._log_info(comm, rank, "finished RHS calculation in", timer=timer)
+        self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
 
         # Set up the LHS operator.  Use either the original timestreams or the copy
         # as temp space.
@@ -404,12 +416,12 @@ class MapMaker(Operator):
             data,
             detectors,
             lhs_calc,
-            data["amplitudes_rhs"],
+            data[rhs_amplitude_key],
             convergence=self.convergence,
             n_iter_max=self.iter_max,
         )
 
-        self._log_info(comm, rank, "finished solver in", timer=timer)
+        self._log_info(comm, rank, "  finished solver in", timer=timer)
 
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
@@ -433,7 +445,7 @@ class MapMaker(Operator):
         self.template_matrix.transpose = False
         self.template_matrix.apply(data, detectors=detectors)
 
-        self._log_info(comm, rank, "finished amplitude projection in", timer=timer)
+        self._log_info(comm, rank, "  finished amplitude projection in", timer=timer)
 
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
@@ -462,7 +474,9 @@ class MapMaker(Operator):
 
         final_cov.apply(data, detectors=detectors)
 
-        self._log_info(comm, rank, "finished build of final covariance in", timer=timer)
+        self._log_info(
+            comm, rank, "  finished build of final covariance in", timer=timer
+        )
 
         # Make a binned map of these template-subtracted timestreams
 
@@ -471,7 +485,7 @@ class MapMaker(Operator):
         self.map_binning.det_data = detdata_name
         self.map_binning.apply(data, detectors=detectors)
 
-        self._log_info(comm, rank, "finished final binning in", timer=timer)
+        self._log_info(comm, rank, "  finished final binning in", timer=timer)
 
         return
 

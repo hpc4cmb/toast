@@ -4,6 +4,6 @@
 
 # Import Templates into our public API
 
-from .template import Template, Amplitudes
+from .template import Template, Amplitudes, AmplitudesMap
 
 from .offset import Offset

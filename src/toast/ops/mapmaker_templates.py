@@ -10,6 +10,8 @@ from ..traits import trait_docs, Int, Unicode, Bool, List
 
 from ..timing import function_timer
 
+from ..templates import Template, AmplitudesMap
+
 from .operator import Operator
 
 
@@ -65,13 +67,20 @@ class TemplateMatrix(Operator):
         This can only be called after the operator has been used at least once so that
         the templates are initialized.
 
+        Args:
+            amps_in (AmplitudesMap):  The input amplitudes.
+            amps_out (AmplitudesMap):  The output amplitudes, modified in place.
+
+        Returns:
+            None
+
         """
         if not self._initialized:
             raise RuntimeError(
                 "You must call exec() once before applying preconditioners"
             )
         for tmpl in self.templates:
-            tmpl.apply_precond(amps_in, amps_out)
+            tmpl.apply_precond(amps_in[tmpl.name], amps_out[tmpl.name])
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -107,7 +116,7 @@ class TemplateMatrix(Operator):
             if self.amplitudes not in data:
                 # The output template amplitudes do not yet exist.  Create these with
                 # all zero values.
-                data[self.amplitudes] = dict()
+                data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
             for ob in data.obs:
@@ -118,7 +127,7 @@ class TemplateMatrix(Operator):
                     continue
                 for d in dets:
                     for tmpl in self.templates:
-                        tmpl.project_signal(d, data[self.amplitudes[tmpl.name]])
+                        tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
         else:
             if self.amplitudes not in data:
                 msg = "Template amplitudes '{}' do not exist in data".format(
@@ -134,7 +143,7 @@ class TemplateMatrix(Operator):
                     continue
                 for d in dets:
                     for tmpl in self.templates:
-                        tmpl.add_to_signal(d, data[self.amplitudes[tmpl.name]])
+                        tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
     def _finalize(self, data, **kwargs):

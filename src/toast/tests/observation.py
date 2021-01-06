@@ -182,15 +182,19 @@ class ObservationTest(MPITestCase):
             pntg = np.ones((n_samp, 4), dtype=np.float32)
             flg = np.zeros((n_samp,), dtype=np.uint8)
 
-            obs.detdata.create("sig_A", detshape=(), dtype=signal.dtype, detectors=None)
+            obs.detdata.create(
+                "sig_A", sample_shape=(), dtype=signal.dtype, detectors=None
+            )
             obs.detdata["sig_A"][:] = np.tile(signal, n_det).reshape((n_det, -1))
 
             obs.detdata.create(
-                "pntg_A", detshape=(4,), dtype=pntg.dtype, detectors=None
+                "pntg_A", sample_shape=(4,), dtype=pntg.dtype, detectors=None
             )
             obs.detdata["pntg_A"][:] = np.tile(pntg, n_det).reshape((n_det, -1, 4))
 
-            obs.detdata.create("flg_A", detshape=None, dtype=flg.dtype, detectors=None)
+            obs.detdata.create(
+                "flg_A", sample_shape=None, dtype=flg.dtype, detectors=None
+            )
             obs.detdata["flg_A"][:] = np.tile(flg, n_det).reshape((n_det, -1))
 
             dsig = DetectorData(obs.local_detectors, (n_samp,), np.float64)
@@ -257,7 +261,7 @@ class ObservationTest(MPITestCase):
 
             # Allocate the default detector data and flags
             obs.detdata.create("signal", dtype=np.float64)
-            obs.detdata.create("flags", detshape=(), dtype=np.uint16)
+            obs.detdata.create("flags", sample_shape=(), dtype=np.uint16)
 
             # Allocate some other detector data
             obs.detdata["calibration"] = np.ones(

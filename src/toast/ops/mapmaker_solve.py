@@ -8,9 +8,9 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 
 from ..pixels import PixelDistribution, PixelData
 
@@ -23,6 +23,8 @@ from .clear import Clear
 from .copy import Copy
 
 from .scan_map import ScanMap
+
+from .noise_weight import NoiseWeight
 
 
 @trait_docs
@@ -204,6 +206,7 @@ class SolverRHS(Operator):
         else:
             # Process one detector at a time and clear pointing after each one.
             proj_pipe = Pipeline(detector_sets=["SINGLE"])
+            oplist = list()
             if not self.overwrite:
                 oplist.append(copy_det)
             oplist.extend(
@@ -321,7 +324,7 @@ class SolverLHS(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _log_debug(comm, rank, msg, timer=None):
+    def _log_debug(self, comm, rank, msg, timer=None):
         """Helper function to log a DEBUG level message from rank zero"""
         log = Logger.get()
         if comm is not None:
@@ -405,7 +408,7 @@ class SolverLHS(Operator):
             noise_model=self.binning.noise_model, det_data=self.det_temp
         )
 
-        # Same operator, but now we are applying the transpose.
+        # Same template matrix operator, but now we are applying the transpose.
         self.template_matrix.transpose = True
 
         # Create a pipeline that projects the binned map and applies noise
@@ -414,45 +417,31 @@ class SolverLHS(Operator):
         proj_pipe = None
         if self.binning.save_pointing:
             # Process all detectors at once
-            proj_pipe = Pipeline(detector_sets=["ALL"])
-            oplist = list()
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
+            proj_pipe = Pipeline(
+                detector_sets=["ALL"],
+                operators=[
                     pointing,
                     scan_map,
                     noise_weight,
                     self.template_matrix,
-                ]
+                ],
             )
-            if not self.overwrite:
-                oplist.append(clear_temp)
-            proj_pipe.operators = oplist
         else:
             # Process one detector at a time and clear pointing after each one.
-            proj_pipe = Pipeline(detector_sets=["SINGLE"])
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
+            proj_pipe = Pipeline(
+                detector_sets=["SINGLE"],
+                operators=[
                     pointing,
                     scan_map,
                     clear_pointing,
                     noise_weight,
                     self.template_matrix,
-                ]
+                ],
             )
-            if not self.overwrite:
-                oplist.append(clear_temp)
-            proj_pipe.operators = oplist
 
         # Zero out the amplitudes before accumulating the updated values
 
-        for ob in data.obs:
-            amplitudes = ob[self.amplitudes]
-            for ampname, ampvals in amplitudes.items():
-                ampvals.reset()
+        data[self.template_matrix.amplitudes].reset()
 
         # Run the projection pipeline.
 
@@ -532,6 +521,10 @@ def solve(
     # The starting guess
     if guess is None:
         # Copy structure of the RHS and set to zero
+        if lhs_amps in data:
+            msg = "LHS amplitudes '{}' already exists in data".format(lhs_amps)
+            log.error(msg)
+            raise RuntimeError(msg)
         data[lhs_amps] = rhs_amps.duplicate()
         data[lhs_amps].reset()
     else:
@@ -545,6 +538,10 @@ def solve(
     # r = b - q
     residual = rhs_amps.duplicate()
     residual -= data[lhs_amps]
+
+    print("RHS ", rhs_amps)
+    print("Guess", data[lhs_amps])
+    print(residual)
 
     # The preconditioned residual
     # s = M^-1 * r
@@ -579,7 +576,8 @@ def solve(
             raise RuntimeError("Residual is not finite")
 
         # Update LHS amplitude inputs
-        data[lhs_amps].local[:] = proposal.local
+        for k, v in data[lhs_amps].items():
+            v.local[:] = proposal[k].local
 
         # q = A * d (in place)
         lhs.apply(data, detectors=detectors)

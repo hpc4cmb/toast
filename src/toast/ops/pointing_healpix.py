@@ -252,21 +252,21 @@ class PointingHealpix(Operator):
 
             if self.single_precision:
                 ob.detdata.create(
-                    self.pixels, detshape=(), dtype=np.int32, detectors=dets
+                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
                 )
                 ob.detdata.create(
                     self.weights,
-                    detshape=(self._nnz,),
+                    sample_shape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
                 )
             else:
                 ob.detdata.create(
-                    self.pixels, detshape=(), dtype=np.int64, detectors=dets
+                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
                 ob.detdata.create(
                     self.weights,
-                    detshape=(self._nnz,),
+                    sample_shape=(self._nnz,),
                     dtype=np.float64,
                     detectors=dets,
                 )
@@ -274,7 +274,7 @@ class PointingHealpix(Operator):
             if self.quats is not None:
                 ob.detdata.create(
                     self.quats,
-                    detshape=(4,),
+                    sample_shape=(4,),
                     dtype=np.float64,
                     detectors=dets,
                 )

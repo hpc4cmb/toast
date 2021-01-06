@@ -74,7 +74,7 @@ class TemplateOffsetTest(MPITestCase):
         # Verify
         for ob in data.obs:
             # Get the step boundaries
-            rate = rate_from_times(ob.shared["times"])
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared["times"])
             step_samples = int(step_seconds * rate)
             n_step = ob.n_local_samples // step_samples
             slices = [
@@ -87,7 +87,9 @@ class TemplateOffsetTest(MPITestCase):
 
             for det in ob.local_detectors:
                 for slc, sz in zip(slices, sizes):
-                    np.testing.assert_equal(ob.detdata["signal"][det, slc], 1.0 * sz)
+                    np.testing.assert_equal(
+                        np.sum(ob.detdata["signal"][det, slc]), 1.0 * sz
+                    )
 
         del data
         return

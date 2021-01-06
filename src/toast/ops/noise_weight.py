@@ -62,7 +62,7 @@ class NoiseWeight(Operator):
 
             for d in dets:
                 # Get the detector weight from the noise model.
-                detweight = noise.detector_weight(det)
+                detweight = noise.detector_weight(d)
 
                 # Apply
                 ob.detdata[self.det_data][d] *= detweight

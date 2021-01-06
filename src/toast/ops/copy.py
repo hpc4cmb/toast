@@ -163,9 +163,13 @@ class Copy(Operator):
                             log.error(msg)
                             raise RuntimeError(msg)
                     else:
+                        sample_shape = None
+                        shp = ob.detdata[in_key].detector_shape
+                        if len(shp) > 1:
+                            sample_shape = shp[1:]
                         ob.detdata.create(
                             out_key,
-                            detshape=ob.detdata[in_key].detector_shape,
+                            sample_shape=sample_shape,
                             dtype=ob.detdata[in_key].dtype,
                             detectors=ob.detdata[in_key].detectors,
                         )

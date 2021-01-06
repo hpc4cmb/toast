@@ -12,9 +12,6 @@
 void toast::template_offset_add_to_signal(int64_t step_length, int64_t n_amp,
                                           double * amplitudes,
                                           int64_t n_data, double * data) {
-    std::cerr << "DBG add_to " << step_length << " " << n_amp << " " << amplitudes
-              << " " << n_data << " " << data << std::endl;
-
     // All but the last amplitude have the same number of samples.
     if (toast::is_aligned(amplitudes) && toast::is_aligned(data)) {
         #pragma omp simd
@@ -43,9 +40,6 @@ void toast::template_offset_add_to_signal(int64_t step_length, int64_t n_amp,
 void toast::template_offset_project_signal(int64_t step_length, int64_t n_data,
                                            double * data, int64_t n_amp,
                                            double * amplitudes) {
-    std::cerr << "DBG project " << step_length << " " << n_data << " " << data << " " <<
-        n_amp << " " << amplitudes << std::endl;
-
     // All but the last amplitude have the same number of samples.
     if (toast::is_aligned(amplitudes) && toast::is_aligned(data)) {
         #pragma omp simd

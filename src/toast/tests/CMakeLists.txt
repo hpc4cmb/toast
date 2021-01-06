@@ -21,6 +21,7 @@ install(FILES
     ops_sim_tod_noise.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
+    ops_mapmaker.py
     covariance.py
     ops_pointing_healpix.py
     sim_focalplane.py

@@ -278,7 +278,7 @@ class DetDataMgr(MutableMapping):
 
     New objects can be created several ways.  The "create()" method:
 
-        ob.detdata.create(name, detshape=None, dtype=None, detectors=None)
+        ob.detdata.create(name, sample_shape=None, dtype=None, detectors=None)
 
     gives full control over creating the named object and specifying the shape of
     each detector sample.  The detectors argument can be used to restrict the object
@@ -300,7 +300,7 @@ class DetDataMgr(MutableMapping):
 
     It is also possible to create a new object by assigning an array.  In that case
     the array must either have the full size of the DetectorData object
-    (n_det x n_sample x detshape) or must have dimensions (n_sample x detshape), in
+    (n_det x n_sample x sample_shape) or must have dimensions (n_sample x sample_shape), in
     which case the array is copied to all detectors.  For example:
 
         ob.detdata[name] = np.ones(
@@ -327,7 +327,7 @@ class DetDataMgr(MutableMapping):
         self.detectors = detectors
         self._internal = dict()
 
-    def create(self, name, detshape=None, dtype=np.float64, detectors=None):
+    def create(self, name, sample_shape=None, dtype=np.float64, detectors=None):
         """Create a local DetectorData buffer on this process.
 
         This method can be used to create arrays of detector data for storing signal,
@@ -335,7 +335,7 @@ class DetDataMgr(MutableMapping):
 
         Args:
             name (str): The name of the detector data (signal, flags, etc)
-            detshape (tuple): Use this shape for the data of each detector sample.
+            sample_shape (tuple): Use this shape for the data of each detector sample.
                 Use None or an empty tuple if you want one element per sample.
             dtype (np.dtype): Use this dtype for each element.
             detectors (list):  Only construct a data object for this set of detectors.
@@ -361,12 +361,12 @@ class DetDataMgr(MutableMapping):
                     raise ValueError(msg)
 
         data_shape = None
-        if detshape is None or len(detshape) == 0:
+        if sample_shape is None or len(sample_shape) == 0:
             data_shape = (self.samples,)
-        elif len(detshape) == 1 and detshape[0] == 1:
+        elif len(sample_shape) == 1 and sample_shape[0] == 1:
             data_shape = (self.samples,)
         else:
-            data_shape = (self.samples,) + detshape
+            data_shape = (self.samples,) + sample_shape
 
         # Create the data object
         self._internal[name] = DetectorData(detectors, data_shape, dtype)
@@ -399,7 +399,7 @@ class DetDataMgr(MutableMapping):
                 # Create it first
                 self.create(
                     key,
-                    detshape=value.detector_shape,
+                    sample_shape=value.detector_shape[1:],
                     dtype=value.dtype,
                     detectors=value.detectors,
                 )
@@ -411,7 +411,7 @@ class DetDataMgr(MutableMapping):
                 self._internal[key][d] = value[d]
         elif isinstance(value, Mapping):
             # This is a dictionary of detector arrays
-            detshape = None
+            sample_shape = None
             dtype = None
             for d, ddata in value.items():
                 if d not in self.detectors:
@@ -422,11 +422,11 @@ class DetDataMgr(MutableMapping):
                         d, ddata.shape[0], self.samples
                     )
                     raise ValueError(msg)
-                if detshape is None:
-                    detshape = ddata.shape[1:]
+                if sample_shape is None:
+                    sample_shape = ddata.shape[1:]
                     dtype = ddata.dtype
                 else:
-                    if detshape != ddata.shape[1:]:
+                    if sample_shape != ddata.shape[1:]:
                         msg = "All detector arrays must have the same shape"
                         raise ValueError(msg)
                     if dtype != ddata.dtype:
@@ -435,12 +435,12 @@ class DetDataMgr(MutableMapping):
             if key not in self._internal:
                 self.create(
                     key,
-                    detshape=detshape,
+                    sample_shape=sample_shape,
                     dtype=dtype,
                     detectors=sorted(value.keys()),
                 )
             else:
-                if (self.samples,) + detshape != self._internal[key].detector_shape:
+                if (self.samples,) + sample_shape != self._internal[key].detector_shape:
                     msg = "Assignment value has wrong detector shape"
                     raise ValueError(msg)
             for d, ddata in value.items():
@@ -450,20 +450,20 @@ class DetDataMgr(MutableMapping):
             shp = value.shape
             if shp[0] == self.samples:
                 # This is a single detector array, being assigned to all detectors
-                detshape = None
+                sample_shape = None
                 if len(shp) > 1:
-                    detshape = shp[1:]
+                    sample_shape = shp[1:]
                 if key not in self._internal:
                     self.create(
                         key,
-                        detshape=detshape,
+                        sample_shape=sample_shape,
                         dtype=value.dtype,
                         detectors=self.detectors,
                     )
                 else:
                     fullshape = (self.samples,)
-                    if detshape is not None:
-                        fullshape += detshape
+                    if sample_shape is not None:
+                        fullshape += sample_shape
                     if fullshape != self._internal[key].detector_shape:
                         msg = "Assignment value has wrong detector shape"
                         raise ValueError(msg)
@@ -474,20 +474,20 @@ class DetDataMgr(MutableMapping):
                 if shp[1] != self.samples:
                     msg = "Assignment value has wrong number of samples"
                     raise ValueError(msg)
-                detshape = None
+                sample_shape = None
                 if len(shp) > 2:
-                    detshape = shp[2:]
+                    sample_shape = shp[2:]
                 if key not in self._internal:
                     self.create(
                         key,
-                        detshape=detshape,
+                        sample_shape=sample_shape,
                         dtype=value.dtype,
                         detectors=self.detectors,
                     )
                 else:
                     fullshape = (self.samples,)
-                    if detshape is not None:
-                        fullshape += detshape
+                    if sample_shape is not None:
+                        fullshape += sample_shape
                     if fullshape != self._internal[key].detector_shape:
                         msg = "Assignment value has wrong detector shape"
                         raise ValueError(msg)
