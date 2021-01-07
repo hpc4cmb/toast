@@ -915,6 +915,8 @@ def attempt_scan_pole(
                 if success:
                     # Still the same scan
                     patch.hits -= 1
+                    patch.rising_hits -= 1
+                    patch.setting_hits -= 1
                 try:
                     t, subscan = add_scan(
                         args,
