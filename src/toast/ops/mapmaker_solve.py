@@ -18,9 +18,11 @@ from .operator import Operator
 
 from .pipeline import Pipeline
 
-from .clear import Clear
+from .delete import Delete
 
 from .copy import Copy
+
+from .reset import Reset
 
 from .scan_map import ScanMap
 
@@ -81,7 +83,7 @@ class SolverRHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned"]:
+            for trt in ["pointing", "det_data", "binned", "saved_pointing"]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -121,19 +123,10 @@ class SolverRHS(Operator):
                 "You must set the template_matrix trait before calling exec()"
             )
 
-        # Build a pipeline to make the binned map, optionally one detector at a time.
+        # Make a binned map
 
         self.binning.det_data = self.det_data
-
-        bin_pipe = None
-        if self.binning.save_pointing:
-            # Process all detectors at once
-            bin_pipe = Pipeline(detector_sets=["ALL"])
-        else:
-            # Process one detector at a time and clear pointing after each one.
-            bin_pipe = Pipeline(detector_sets=["SINGLE"])
-        bin_pipe.operators = [self.binning]
-        bin_pipe.apply(data, detectors=detectors)
+        self.binning.apply(data, detectors=detectors)
 
         # Build a pipeline for the projection and template matrix application.
         # First create the operators that we will use.
@@ -144,19 +137,14 @@ class SolverRHS(Operator):
         # Use the same pointing operator as the binning
         pointing = self.binning.pointing
 
-        # Set up operator for optional clearing of the pointing matrices
-        clear_pointing = Clear(detdata=[pointing.pixels, pointing.weights])
-
         # Optionally Copy data to a temporary location to avoid overwriting the input.
         copy_det = None
-        clear_temp = None
         if not self.overwrite:
             copy_det = Copy(
                 detdata=[
                     (self.det_data, det_temp),
                 ]
             )
-            clear_temp = Clear(detdata=[det_temp])
 
         # The detdata name we will use (either the original or the temp one)
         detdata_name = self.det_data
@@ -178,7 +166,6 @@ class SolverRHS(Operator):
         )
 
         # Set up template matrix operator.
-
         self.template_matrix.transpose = True
         self.template_matrix.det_data = detdata_name
 
@@ -186,25 +173,22 @@ class SolverRHS(Operator):
         # weights and templates.
 
         proj_pipe = None
-        if self.binning.save_pointing:
-            # Process all detectors at once
+        if self.binning.saved_pointing:
+            # Process all detectors at once, since we have the pointing already
             proj_pipe = Pipeline(detector_sets=["ALL"])
             oplist = list()
             if not self.overwrite:
                 oplist.append(copy_det)
             oplist.extend(
                 [
-                    pointing,
                     scan_map,
                     noise_weight,
                     self.template_matrix,
                 ]
             )
-            if not self.overwrite:
-                oplist.append(clear_temp)
             proj_pipe.operators = oplist
         else:
-            # Process one detector at a time and clear pointing after each one.
+            # Process one detector at a time.
             proj_pipe = Pipeline(detector_sets=["SINGLE"])
             oplist = list()
             if not self.overwrite:
@@ -213,18 +197,20 @@ class SolverRHS(Operator):
                 [
                     pointing,
                     scan_map,
-                    clear_pointing,
                     noise_weight,
                     self.template_matrix,
                 ]
             )
-            if not self.overwrite:
-                oplist.append(clear_temp)
             proj_pipe.operators = oplist
 
         # Run this projection pipeline.
 
         proj_pipe.apply(data, detectors=detectors)
+
+        if not self.overwrite:
+            # Clean up our temp buffer
+            delete_temp = Delete(detdata=[det_temp])
+            delete_temp.apply(data)
 
         return
 
@@ -298,7 +284,7 @@ class SolverLHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned"]:
+            for trt in ["pointing", "det_data", "binned", "saved_pointing"]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -360,26 +346,22 @@ class SolverLHS(Operator):
                 "You must set the template_matrix trait before calling exec()"
             )
 
-        # Build a pipeline to project amplitudes into timestreams and make a binned
-        # map.
+        # Project amplitudes into timestreams and make a binned map.
+
         timer.start()
         self._log_debug(comm, rank, "begin project amplitudes and binning")
 
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
+
         self.binning.det_data = self.det_temp
 
-        bin_pipe = None
-        if self.binning.save_pointing:
-            # Process all detectors at once
-            bin_pipe = Pipeline(detector_sets=["ALL"])
-        else:
-            # Process one detector at a time and clear pointing after each one.
-            bin_pipe = Pipeline(detector_sets=["SINGLE"])
+        self.binning.pre_process = self.template_matrix
+        self.binning.apply(data, detectors=detectors)
+        self.binning.pre_process = None
 
-        bin_pipe.operators = [self.template_matrix, self.binning]
-
-        bin_pipe.apply(data, detectors=detectors)
+        bd = data[self.binning.binned].data
+        print("lhs binned map = ", bd[bd != 0], flush=True)
 
         self._log_debug(comm, rank, "projection and binning finished in", timer=timer)
 
@@ -390,9 +372,6 @@ class SolverLHS(Operator):
 
         # Use the same pointing operator as the binning
         pointing = self.binning.pointing
-
-        # Set up operator for optional clearing of the pointing matrices
-        clear_pointing = Clear(detdata=[pointing.pixels, pointing.weights])
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -415,25 +394,23 @@ class SolverLHS(Operator):
         # weights and templates.
 
         proj_pipe = None
-        if self.binning.save_pointing:
+        if self.binning.saved_pointing:
             # Process all detectors at once
             proj_pipe = Pipeline(
                 detector_sets=["ALL"],
                 operators=[
-                    pointing,
                     scan_map,
                     noise_weight,
                     self.template_matrix,
                 ],
             )
         else:
-            # Process one detector at a time and clear pointing after each one.
+            # Process one detector at a time.
             proj_pipe = Pipeline(
                 detector_sets=["SINGLE"],
                 operators=[
                     pointing,
                     scan_map,
-                    clear_pointing,
                     noise_weight,
                     self.template_matrix,
                 ],
@@ -540,8 +517,8 @@ def solve(
     residual -= data[lhs_amps]
 
     print("RHS ", rhs_amps)
-    print("Guess", data[lhs_amps])
-    print(residual)
+    print("LHS", data[lhs_amps])
+    print("residual", residual)
 
     # The preconditioned residual
     # s = M^-1 * r
@@ -549,12 +526,17 @@ def solve(
     precond_residual.reset()
     lhs.template_matrix.apply_precond(residual, precond_residual)
 
+    print("precond_residual", precond_residual)
+
     # The proposal
     # d = s
     proposal = precond_residual.duplicate()
 
+    # print("proposal", proposal)
+
     # delta_new = r^T * d
     sqsum = precond_residual.dot(residual)
+    print("sqsum = ", sqsum)
 
     init_sqsum = sqsum
     best_sqsum = sqsum
@@ -579,26 +561,36 @@ def solve(
         for k, v in data[lhs_amps].items():
             v.local[:] = proposal[k].local
 
+        print("LHS input = ", data[lhs_amps], flush=True)
+
         # q = A * d (in place)
         lhs.apply(data, detectors=detectors)
+
+        print("LHS output", data[lhs_amps])
 
         # alpha = delta_new / (d^T * q)
         alpha = sqsum
         alpha /= proposal.dot(data[lhs_amps])
 
+        print("alpha = ", alpha)
+
         # r -= alpha * q
         data[lhs_amps] *= alpha
         residual -= data[lhs_amps]
+        # print("residual", residual)
 
         # The preconditioned residual
         # s = M^-1 * r
         lhs.template_matrix.apply_precond(residual, precond_residual)
+
+        # print("precond_residual", precond_residual)
 
         # delta_old = delta_new
         sqsum_last = sqsum
 
         # delta_new = r^T * s
         sqsum = precond_residual.dot(residual)
+        print("sqsum = ", sqsum)
 
         if comm is not None:
             comm.barrier()
@@ -619,6 +611,8 @@ def solve(
         proposal *= beta
         proposal += precond_residual
 
+        # print("proposal", proposal)
+
         # Check for convergence
         if sqsum < init_sqsum * convergence or sqsum < 1e-30:
             timer.stop()
@@ -631,6 +625,7 @@ def solve(
             break
 
         best_sqsum = min(sqsum, best_sqsum)
+        print("best_sqsum = ", best_sqsum)
 
         if iter % 10 == 0 and iter >= n_iter_min:
             if last_best < best_sqsum * 2:

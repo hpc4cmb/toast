@@ -20,6 +20,8 @@ from ..instrument_sim import fake_hexagon_focalplane
 
 from ..observation import DetectorData, Observation
 
+from ..pixels import PixelData
+
 from .. import ops as ops
 
 
@@ -91,6 +93,7 @@ def create_telescope(group_size, sample_rate=10.0 * u.Hz):
         n_pix=npix,
         sample_rate=sample_rate,
         f_min=1.0e-5 * u.Hz,
+        net=0.5,
         f_knee=(sample_rate / 2000.0),
     )
     return Telescope("test", focalplane=fp)
@@ -150,16 +153,40 @@ def create_satellite_data(
 
     tele = create_telescope(toastcomm.group_size, sample_rate=sample_rate)
 
+    # Scan fast enough to cover some sky in a short amount of time.  Reduce the
+    # angles to achieve a more compact hit map.
     sim_sat = ops.SimSatellite(
         name="sim_sat",
         num_observations=(toastcomm.ngroups * obs_per_group),
         telescope=tele,
         hwp_rpm=10.0,
         observation_time=obs_time,
+        spin_period=1.0 * u.minute,
+        spin_angle=2.0 * u.degree,
+        prec_period=5.0 * u.minute,
+        prec_angle=2.0 * u.degree,
     )
     sim_sat.apply(data)
 
     return data
+
+
+def create_fake_sky(data, dist_key, map_key):
+    np.random.seed(987654321)
+    dist = data[dist_key]
+    pix_data = PixelData(dist, np.float64, n_value=3)
+    # Just replicate the fake data across all local submaps
+    off = 0
+    for submap in range(dist.n_submap):
+        I_data = 100.0 * np.random.normal(size=dist.n_pix_submap)
+        Q_data = np.random.normal(size=dist.n_pix_submap)
+        U_data = np.random.normal(size=dist.n_pix_submap)
+        if submap in dist.local_submaps:
+            pix_data.data[off, :, 0] = I_data
+            pix_data.data[off, :, 1] = Q_data
+            pix_data.data[off, :, 2] = U_data
+            off += 1
+    data[map_key] = pix_data
 
 
 def uniform_chunks(samples, nchunk=100):

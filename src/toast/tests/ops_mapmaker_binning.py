@@ -23,6 +23,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits
 
+from ..covariance import covariance_apply
+
 from ._helpers import create_outdir, create_satellite_data
 
 
@@ -66,50 +68,26 @@ class MapmakerBinningTest(MPITestCase):
 
         binmap = data[binner.binned]
 
-        # # Manual check
-        #
-        # check_invnpp = PixelData(data["pixel_dist"], np.float64, n_value=6)
-        # check_invnpp_corr = PixelData(data["pixel_dist"], np.float64, n_value=6)
-        #
-        # for ob in data.obs:
-        #     noise = ob["noise_model"]
-        #     noise_corr = ob["noise_model_corr"]
-        #
-        #     for det in ob.local_detectors:
-        #         detweight = noise.detector_weight(det)
-        #         detweight_corr = noise_corr.detector_weight(det)
-        #
-        #         wt = ob.detdata["weights"][det]
-        #         local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-        #             ob.detdata["pixels"][det]
-        #         )
-        #         for i in range(ob.n_local_samples):
-        #             if local_pix[i] < 0:
-        #                 continue
-        #             off = 0
-        #             for j in range(3):
-        #                 for k in range(j, 3):
-        #                     check_invnpp.data[local_sm[i], local_pix[i], off] += (
-        #                         detweight * wt[i, j] * wt[i, k]
-        #                     )
-        #                     check_invnpp_corr.data[local_sm[i], local_pix[i], off] += (
-        #                         detweight_corr * wt[i, j] * wt[i, k]
-        #                     )
-        #                     off += 1
-        #
-        # check_invnpp.sync_allreduce()
-        # check_invnpp_corr.sync_allreduce()
-        #
-        # for sm in range(invnpp.distribution.n_local_submap):
-        #     for px in range(invnpp.distribution.n_pix_submap):
-        #         if invnpp.data[sm, px, 0] != 0:
-        #             nt.assert_almost_equal(
-        #                 invnpp.data[sm, px], check_invnpp.data[sm, px]
-        #             )
-        #         if invnpp_corr.data[sm, px, 0] != 0:
-        #             nt.assert_almost_equal(
-        #                 invnpp_corr.data[sm, px], check_invnpp_corr.data[sm, px]
-        #             )
+        # Manual check
+
+        pointing.apply(data)
+
+        noise_weight = ops.BuildNoiseWeighted(
+            pixel_dist="pixel_dist",
+            noise_model="noise_model",
+            pixels=pointing.pixels,
+            weights=pointing.weights,
+            det_data="noise",
+            zmap="zmap",
+        )
+        noise_weight.apply(data)
+
+        covariance_apply(data[cov_and_hits.covariance], data["zmap"])
+
+        for sm in range(binmap.distribution.n_local_submap):
+            for px in range(binmap.distribution.n_pix_submap):
+                nt.assert_almost_equal(binmap.data[sm, px], data["zmap"].data[sm, px])
+
         del data
         return
 

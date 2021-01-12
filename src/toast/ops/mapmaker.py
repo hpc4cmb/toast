@@ -8,6 +8,8 @@ import numpy as np
 
 from ..utils import Logger
 
+from ..mpi import MPI
+
 from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
 
 from ..timing import function_timer, Timer
@@ -18,9 +20,11 @@ from .operator import Operator
 
 from .pipeline import Pipeline
 
-from .clear import Clear
+from .delete import Delete
 
 from .copy import Copy
+
+from .arithmetic import Subtract
 
 from .scan_map import ScanMap, ScanMask
 
@@ -93,10 +97,6 @@ class MapMaker(Operator):
         help="For final map, minimum value for inverse pixel condition number cut.",
     )
 
-    overwrite = Bool(
-        False, help="Overwrite the input detector data for use as scratch space"
-    )
-
     mask = Unicode(
         None,
         allow_none=True,
@@ -121,6 +121,16 @@ class MapMaker(Operator):
         help="Binning operator for final map making.  Default is same as solver",
     )
 
+    mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
+
+    save_cleaned = Bool(
+        False, help="If True, save the template-subtracted detector timestreams"
+    )
+
+    overwrite_cleaned = Bool(
+        False, help="If True and save_cleaned is True, overwrite the input data"
+    )
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -139,7 +149,7 @@ class MapMaker(Operator):
                 "shared_flags",
                 "shared_flag_mask",
                 "noise_model",
-                "save_pointing",
+                "saved_pointing",
                 "sync_type",
             ]:
                 if not bin.has_trait(trt):
@@ -165,7 +175,7 @@ class MapMaker(Operator):
                 "shared_flags",
                 "shared_flag_mask",
                 "noise_model",
-                "save_pointing",
+                "saved_pointing",
                 "sync_type",
             ]:
                 if not bin.has_trait(trt):
@@ -213,166 +223,208 @@ class MapMaker(Operator):
             # Use the same binning used in the solver.
             self.map_binning = self.binning
 
-        # For computing the RHS and also for each iteration of the LHS we will need
-        # a full detector-data sized buffer for use as scratch space.  We can either
-        # destroy the input data to save memory (useful if this is the last operator
-        # processing the data) or we can create a temporary set of timestreams.
-
-        timer.start()
-
-        copy_det = None
-        clear_temp = None
-        detdata_name = self.det_data
-
-        if not self.overwrite:
-            self._log_info(comm, rank, "overwrite is False, making data copy")
-
-            # Use a temporary detdata named after this operator
-            detdata_name = "{}_signal".format(self.name)
-            # Copy the original data into place, and then use this copy destructively.
-            copy_det = Copy(
-                detdata=[
-                    (self.det_data, detdata_name),
-                ]
-            )
-            copy_det.apply(data, detectors=detectors)
-            self._log_info(comm, rank, "  data copy finished in", timer=timer)
-
-        # Flagging.  We create a new set of data flags for the solver that includes:
-        #   - one bit for a bitwise OR of all detector / shared flags
-        #   - one bit for any pixel mask, projected to TOD
-        #   - one bit for any poorly conditioned pixels, projected to TOD
+        # Binning parameters for the solver.
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
         # Then we will use the binning operator with our solver flags.  These input
         # flags are combined to the first bit (== 1) of the solver flags.
 
-        self._log_info(comm, rank, "begin building flags for solver")
-
-        flagname = "{}_flags".format(self.name)
-
         save_det_flags = self.binning.det_flags
         save_det_flag_mask = self.binning.det_flag_mask
         save_shared_flags = self.binning.shared_flags
         save_shared_flag_mask = self.binning.shared_flag_mask
 
-        # Use the same data view as the pointing operator in binning
-        solve_view = self.binning.pointing.view
+        # Also save the name of the user-requested output binned map.  During the
+        # solve we will output to a temporary map and then restore this name, in
+        # case we are using the same binning operator for the solve and the final
+        # output.
+        save_binned = self.binning.binned
 
-        for ob in data.obs:
-            # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-            # Create the new solver flags
-            ob.detdata.create(flagname, dtype=np.uint8, detectors=detectors)
-            # The data views
-            views = ob.view[solve_view]
-            # For each view...
-            for vw in range(len(views)):
-                view_samples = None
-                if views[vw].start is None:
-                    # There is one view of the whole obs
-                    view_samples = ob.n_local_samples
-                else:
-                    view_samples = views[vw].stop - views[vw].start
-                starting_flags = np.zeros(view_samples, dtype=np.uint8)
-                if save_shared_flags is not None:
-                    starting_flags[:] = np.where(
-                        views.shared[save_shared_flags][vw] & save_shared_flag_mask > 0,
-                        1,
-                        0,
-                    )
-                for d in dets:
-                    views.detdata[flagname][vw][d, :] = starting_flags
-                    if save_det_flags is not None:
-                        views.detdata[flagname][vw][d, :] |= np.where(
-                            views.detdata[save_det_flags][vw][d] & save_det_flag_mask
-                            > 0,
-                            1,
-                            0,
-                        )
-
-        # Now scan any input mask to this same flag field.  We use the second bit (== 2)
-        # for these mask flags.  For the input mask bit we check the first bit of the
-        # pixel values.  This is noted in the help string for the mask trait.
-
-        # Use the same pointing operator as the binning
-        scan_pointing = self.binning.pointing
-
-        # Set up operator for optional clearing of the pointing matrices
-        clear_pointing = Clear(detdata=[scan_pointing.pixels, scan_pointing.weights])
-
-        scanner = ScanMask(
-            det_flags=flagname,
-            pixels=scan_pointing.pixels,
-            mask_bits=1,
-        )
-
-        scanner.det_flags_value = 2
-        scanner.mask_key = self.mask
-
-        scan_pipe = None
-        if self.binning.save_pointing:
-            # Process all detectors at once
-            scan_pipe = Pipeline(
-                detector_sets=["ALL"], operators=[scan_pointing, scanner]
-            )
-        else:
-            # Process one detector at a time and clear pointing after each one.
-            scan_pipe = Pipeline(
-                detector_sets=["SINGLE"],
-                operators=[scan_pointing, scanner, clear_pointing],
-            )
-
-        if self.mask is not None:
-            # We actually have an input mask. Scan it.
-            scan_pipe.apply(data, detectors=detectors)
-
-        self._log_info(comm, rank, "  finished flag building in", timer=timer)
-
-        # Now construct the noise covariance, hits, and condition number mask
-
-        self._log_info(comm, rank, "begin build of solver covariance")
+        # Data products, prefixed with the name of the operator.
 
         solver_hits_name = "{}_solve_hits".format(self.name)
         solver_rcond_name = "{}_solve_rcond".format(self.name)
         solver_rcond_mask_name = "{}_solve_rcond_mask".format(self.name)
 
-        solver_cov = CovarianceAndHits(
-            pixel_dist=self.binning.pixel_dist,
-            covariance=self.binning.covariance,
-            hits=solver_hits_name,
-            rcond=solver_rcond_name,
-            view=self.binning.pointing.view,
-            det_flags=flagname,
-            det_flag_mask=255,
-            pointing=self.binning.pointing,
-            noise_model=self.binning.noise_model,
-            rcond_threshold=self.solve_rcond_threshold,
-            sync_type=self.binning.sync_type,
-            save_pointing=self.binning.save_pointing,
-        )
+        hits_name = "{}_hits".format(self.name)
+        rcond_name = "{}_rcond".format(self.name)
 
-        solver_cov.apply(data, detectors=detectors)
+        flagname = "{}_flags".format(self.name)
+        clean_name = "{}_cleaned".format(self.name)
 
-        data[solver_rcond_mask_name] = PixelData(
-            data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
-        )
-        data[solver_rcond_mask_name].raw[
-            data[solver_rcond_name].raw.array() < self.solve_rcond_threshold
-        ] = 1
+        timer.start()
 
-        # Re-use our mask scanning pipeline, setting third bit (== 4)
-        scanner.det_flags_value = 4
-        scanner.mask_key = solver_rcond_mask_name
-        scan_pipe.apply(data, detectors=detectors)
+        # Flagging.  We create a new set of data flags for the solver that includes:
+        #   - one bit for a bitwise OR of all detector / shared flags
+        #   - one bit for any pixel mask, projected to TOD
+        #   - one bit for any poorly conditioned pixels, projected to TOD
 
-        self._log_info(
-            comm, rank, "  finished build of solver covariance in", timer=timer
-        )
+        if self.mc_mode:
+            # Verify that our flags exist
+            for ob in data.obs:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
+                for d in dets:
+                    if d not in ob.detdata[flagname].detectors:
+                        msg = "In MC mode, flags missing for observation {}, det {}".format(
+                            ob.name, d
+                        )
+            self._log_info(comm, rank, "MC mode, reusing flags for solver")
+        else:
+            self._log_info(comm, rank, "begin building flags for solver")
+
+            # Use the same data view as the pointing operator in binning
+            solve_view = self.binning.pointing.view
+
+            for ob in data.obs:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
+                # Create the new solver flags
+                ob.detdata.ensure(flagname, dtype=np.uint8, detectors=detectors)
+                # The data views
+                views = ob.view[solve_view]
+                # For each view...
+                for vw in range(len(views)):
+                    view_samples = None
+                    if views[vw].start is None:
+                        # There is one view of the whole obs
+                        view_samples = ob.n_local_samples
+                    else:
+                        view_samples = views[vw].stop - views[vw].start
+                    starting_flags = np.zeros(view_samples, dtype=np.uint8)
+                    if save_shared_flags is not None:
+                        starting_flags[:] = np.where(
+                            views.shared[save_shared_flags][vw] & save_shared_flag_mask
+                            > 0,
+                            1,
+                            0,
+                        )
+                    for d in dets:
+                        views.detdata[flagname][vw][d, :] = starting_flags
+                        if save_det_flags is not None:
+                            views.detdata[flagname][vw][d, :] |= np.where(
+                                views.detdata[save_det_flags][vw][d]
+                                & save_det_flag_mask
+                                > 0,
+                                1,
+                                0,
+                            )
+
+            # Now scan any input mask to this same flag field.  We use the second bit
+            # (== 2) for these mask flags.  For the input mask bit we check the first
+            # bit of the pixel values.  This is noted in the help string for the mask
+            # trait.  Note that we explicitly expand the pointing once here and do not
+            # save it.  Even if we are eventually saving the pointing, we want to do
+            # that later when building the covariance and the pixel distribution.
+
+            # Use the same pointing operator as the binning
+            scan_pointing = self.binning.pointing
+
+            scanner = ScanMask(
+                det_flags=flagname,
+                pixels=scan_pointing.pixels,
+                mask_bits=1,
+            )
+
+            scanner.det_flags_value = 2
+            scanner.mask_key = self.mask
+
+            scan_pipe = Pipeline(
+                detector_sets=["SINGLE"], operators=[scan_pointing, scanner]
+            )
+
+            if self.mask is not None:
+                # We have a mask.  Scan it.
+                scan_pipe.apply(data, detectors=detectors)
+
+            self._log_info(comm, rank, "  finished flag building in", timer=timer)
+
+        # Now construct the noise covariance, hits, and condition number mask for
+        # the solver.
+
+        if self.mc_mode:
+            # Verify that our covariance and other products exist.
+            if self.binning.pixel_dist not in data:
+                msg = "MC mode, pixel distribution '{}' does not exist".format(
+                    self.binning.pixel_dist
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            if self.binning.covariance not in data:
+                msg = "MC mode, covariance '{}' does not exist".format(
+                    self.binning.covariance
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+
+            self._log_info(comm, rank, "MC mode, reusing covariance for solver")
+        else:
+            self._log_info(comm, rank, "begin build of solver covariance")
+
+            solver_cov = CovarianceAndHits(
+                pixel_dist=self.binning.pixel_dist,
+                covariance=self.binning.covariance,
+                hits=solver_hits_name,
+                rcond=solver_rcond_name,
+                view=self.binning.pointing.view,
+                det_flags=flagname,
+                det_flag_mask=255,
+                pointing=self.binning.pointing,
+                noise_model=self.binning.noise_model,
+                rcond_threshold=self.solve_rcond_threshold,
+                sync_type=self.binning.sync_type,
+                save_pointing=self.binning.saved_pointing,
+            )
+
+            solver_cov.apply(data, detectors=detectors)
+
+            data[solver_rcond_mask_name] = PixelData(
+                data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
+            )
+            data[solver_rcond_mask_name].raw[
+                data[solver_rcond_name].raw.array() < self.solve_rcond_threshold
+            ] = 1
+
+            # Re-use our mask scanning pipeline, setting third bit (== 4)
+            scanner.det_flags_value = 4
+            scanner.mask_key = solver_rcond_mask_name
+            scan_pipe.apply(data, detectors=detectors)
+
+            self._log_info(
+                comm, rank, "  finished build of solver covariance in", timer=timer
+            )
+
+            local_total = 0
+            local_cut = 0
+            for ob in data.obs:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
+                for vw in ob.view[solve_view].detdata[flagname]:
+                    for d in dets:
+                        local_total += len(vw[d])
+                        local_cut += np.count_nonzero(vw[d])
+            total = 0
+            cut = 0
+            if comm is None:
+                total = local_total
+                cut = local_cut
+            else:
+                total = comm.reduce(local_total, op=MPI.SUM, root=0)
+                cut = comm.reduce(local_cut, op=MPI.SUM, root=0)
+            msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
+                cut, total, 100.0 * (cut / total)
+            )
+            self._log_info(comm, rank, msg)
 
         # Compute the RHS.  Overwrite inputs, either the original or the copy.
 
@@ -384,16 +436,22 @@ class MapMaker(Operator):
         self.binning.det_flags = flagname
         self.binning.det_flag_mask = 255
 
+        # Set the binning operator to output to temporary map.  This will be
+        # overwritten on each iteration of the solver.
+        self.binning.binned = "{}_solve_bin".format(self.name)
+
         rhs_amplitude_key = "{}_amplitudes_rhs".format(self.name)
 
         self.template_matrix.amplitudes = rhs_amplitude_key
         rhs_calc = SolverRHS(
-            det_data=detdata_name,
-            overwrite=True,
+            det_data=self.det_data,
+            overwrite=False,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
         rhs_calc.apply(data, detectors=detectors)
+
+        print("RHS = ", data[rhs_amplitude_key], flush=True)
 
         self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
 
@@ -406,7 +464,6 @@ class MapMaker(Operator):
         self.template_matrix.amplitudes = amplitude_key
 
         lhs_calc = SolverLHS(
-            det_temp=detdata_name,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
@@ -430,60 +487,118 @@ class MapMaker(Operator):
         self.binning.det_flag_mask = save_det_flag_mask
         self.binning.shared_flags = save_shared_flags
         self.binning.shared_flag_mask = save_shared_flag_mask
-
-        self._log_info(
-            comm, rank, "begin projection of final amplitudes to timestreams"
-        )
-
-        # Reset our timestreams to zero
-        for ob in data.obs:
-            ob.detdata[detdata_name][:] = 0.0
-
-        # Project our solved amplitudes into timestreams.  We output to either the
-        # input det_data or our temp space.
-
-        self.template_matrix.transpose = False
-        self.template_matrix.apply(data, detectors=detectors)
-
-        self._log_info(comm, rank, "  finished amplitude projection in", timer=timer)
+        self.binning.binned = save_binned
 
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
 
-        self._log_info(comm, rank, "begin build of final binning covariance")
+        if self.mc_mode:
+            # Verify that our covariance and other products exist.
+            if self.map_binning.pixel_dist not in data:
+                msg = "MC mode, pixel distribution '{}' does not exist".format(
+                    self.map_binning.pixel_dist
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            if self.map_binning.covariance not in data:
+                msg = "MC mode, covariance '{}' does not exist".format(
+                    self.map_binning.covariance
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            self._log_info(comm, rank, "MC mode, reusing covariance for final binning")
+        else:
+            self._log_info(comm, rank, "begin build of final binning covariance")
 
-        hits_name = "{}_hits".format(self.name)
-        rcond_name = "{}_rcond".format(self.name)
+            final_cov = CovarianceAndHits(
+                pixel_dist=self.map_binning.pixel_dist,
+                covariance=self.map_binning.covariance,
+                hits=hits_name,
+                rcond=rcond_name,
+                view=self.map_binning.pointing.view,
+                det_flags=self.map_binning.det_flags,
+                det_flag_mask=self.map_binning.det_flag_mask,
+                shared_flags=self.map_binning.shared_flags,
+                shared_flag_mask=self.map_binning.shared_flag_mask,
+                pointing=self.map_binning.pointing,
+                noise_model=self.map_binning.noise_model,
+                rcond_threshold=self.map_rcond_threshold,
+                sync_type=self.map_binning.sync_type,
+                save_pointing=self.map_binning.saved_pointing,
+            )
 
-        final_cov = CovarianceAndHits(
-            pixel_dist=self.map_binning.pixel_dist,
-            covariance=self.map_binning.covariance,
-            hits=hits_name,
-            rcond=rcond_name,
-            view=self.map_binning.pointing.view,
-            det_flags=self.map_binning.det_flags,
-            det_flag_mask=self.map_binning.det_flag_mask,
-            shared_flags=self.map_binning.shared_flags,
-            shared_flag_mask=self.map_binning.shared_flag_mask,
-            pointing=self.map_binning.pointing,
-            noise_model=self.map_binning.noise_model,
-            rcond_threshold=self.map_rcond_threshold,
-            sync_type=self.map_binning.sync_type,
-            save_pointing=self.map_binning.save_pointing,
-        )
+            final_cov.apply(data, detectors=detectors)
 
-        final_cov.apply(data, detectors=detectors)
+            self._log_info(
+                comm, rank, "  finished build of final covariance in", timer=timer
+            )
 
-        self._log_info(
-            comm, rank, "  finished build of final covariance in", timer=timer
-        )
-
-        # Make a binned map of these template-subtracted timestreams
+        # Project the solved template amplitudes into timestreams and subtract
+        # from the original.  Then make a binned map of the result.
 
         self._log_info(comm, rank, "begin final map binning")
 
-        self.map_binning.det_data = detdata_name
+        temp_project = "{}_temp_project".format(self.name)
+
+        # Projecting amplitudes to a temp space
+        self.template_matrix.transpose = False
+        self.template_matrix.det_data = temp_project
+
+        if self.map_binning.binned == "binned":
+            # The user did not modify the default name of the output binned map.
+            # Set this to something more descriptive, named after our operator
+            # instance.
+            self.map_binning.binned = "{}_map".format(self.name)
+
+        # Binning the cleaned data
+        self.map_binning.det_data = clean_name
+
+        # Operator to copy the input data to the cleaned location
+        copy_input = Copy(detdata=[(self.det_data, clean_name)])
+
+        pre_pipe = None
+        if self.save_cleaned:
+            # We are going to be saving a full copy of the template-subtracted data
+            if self.overwrite_cleaned:
+                # We are going to modify the input data in place
+                sub_cleaned = Subtract(first=self.det_data, second=temp_project)
+                pre_pipe = Pipeline(
+                    detector_sets=["SINGLE"],
+                    operators=[
+                        self.template_matrix,
+                        sub_cleaned,
+                    ],
+                )
+            else:
+                # We need to create a new full set of timestreams.  Do this now
+                # all at once for all detectors.
+                copy_input.apply(data, detectors=detectors)
+                # Pipeline to project one detector at a time and subtract.
+                sub_cleaned = Subtract(first=clean_name, second=temp_project)
+                pre_pipe = Pipeline(
+                    detector_sets=["SINGLE"],
+                    operators=[
+                        self.template_matrix,
+                        sub_cleaned,
+                    ],
+                )
+        else:
+            # Not saving cleaned timestreams.  Use a preprocessing pipeline that
+            # just projects and subtracts data one detector at a time.
+            sub_cleaned = Subtract(first=clean_name, second=temp_project)
+            pre_pipe = Pipeline(
+                detector_sets=["SINGLE"],
+                operators=[
+                    self.template_matrix,
+                    copy_input,
+                    sub_cleaned,
+                ],
+            )
+
+        # Do the final binning
+        self.map_binning.pre_process = pre_pipe
         self.map_binning.apply(data, detectors=detectors)
+        self.map_binning.pre_process = None
 
         self._log_info(comm, rank, "  finished final binning in", timer=timer)
 

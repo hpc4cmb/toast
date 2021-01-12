@@ -75,35 +75,22 @@ class DetectorData(object):
     def __init__(self, detectors, shape, dtype, view_data=None):
         log = Logger.get()
 
-        self._detectors = detectors
-        if len(self._detectors) == 0:
-            msg = "You must specify a list of at least one detector name"
-            log.error(msg)
-            raise ValueError(msg)
+        self._set_detectors(detectors)
 
-        self._name2idx = {y: x for x, y in enumerate(self._detectors)}
+        (
+            self._storage_class,
+            self.itemsize,
+            self._dtype,
+            self._shape,
+            self._flatshape,
+        ) = self._data_props(detectors, shape, dtype)
 
-        # construct a new dtype in case the parameter given is shortcut string
-        self._dtype = np.dtype(dtype)
-        self._storage_class, self.itemsize = dtype_to_aligned(dtype)
+        self._fullsize = 0
+        self._memsize = 0
 
-        # Verify that our shape contains only integral values
-        self._flatshape = len(self._detectors)
-        for d in shape:
-            if not isinstance(d, (int, np.integer)):
-                msg = "input shape contains non-integer values"
-                log.error(msg)
-                raise ValueError(msg)
-            self._flatshape *= d
-        self._memsize = self.itemsize * self._flatshape
-
-        shp = [len(self._detectors)]
-        shp.extend(shape)
-        self._shape = tuple(shp)
         if view_data is None:
             # Allocate the data
-            self._raw = self._storage_class.zeros(self._flatshape)
-            self._data = self._raw.array().reshape(self._shape)
+            self._allocate()
             self._is_view = False
         else:
             # We are provided the data
@@ -117,6 +104,39 @@ class DetectorData(object):
                 raise RuntimeError(msg)
             self._data = view_data
             self._is_view = True
+
+    def _set_detectors(self, detectors):
+        self._detectors = detectors
+        if len(self._detectors) == 0:
+            msg = "You must specify a list of at least one detector name"
+            log.error(msg)
+            raise ValueError(msg)
+        self._name2idx = {y: x for x, y in enumerate(self._detectors)}
+
+    def _data_props(self, detectors, detshape, dtype):
+        dt = np.dtype(dtype)
+        storage_class, itemsize = dtype_to_aligned(dtype)
+
+        # Verify that our shape contains only integral values
+        flatshape = len(detectors)
+        for d in detshape:
+            if not isinstance(d, (int, np.integer)):
+                msg = "input shape contains non-integer values"
+                log.error(msg)
+                raise ValueError(msg)
+            flatshape *= d
+
+        shp = [len(detectors)]
+        shp.extend(detshape)
+        shp = tuple(shp)
+        return (storage_class, itemsize, dt, shp, flatshape)
+
+    def _allocate(self):
+        self._fullsize = self._flatshape
+        self._memsize = self.itemsize * self._fullsize
+        self._raw = self._storage_class.zeros(self._fullsize)
+        self._flatdata = self._raw.array()[: self._flatshape]
+        self._data = self._flatdata.reshape(self._shape)
 
     @property
     def detectors(self):
@@ -144,6 +164,57 @@ class DetectorData(object):
     def data(self):
         return self._data
 
+    @property
+    def flatdata(self):
+        return self._flatdata
+
+    def change_detectors(self, detectors):
+        """Modify the list of detectors.
+
+        This attempts to re-use the underlying memory and just change the detector
+        mapping to that memory.  This is useful if memory allocation is expensive.
+        If the new list of detectors is longer than the original, a new memory buffer
+        is allocated.  If the new list of detectors is shorter than the original, the
+        buffer is kept and only a subset is used.
+
+        Args:
+            detectors (list):  A list of detector names in exactly the order you wish.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if self._is_view:
+            msg = "Cannot resize a DetectorData view"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        if detectors == self._detectors:
+            # No-op
+            return
+
+        # Get the new data properties
+        (storage_class, itemsize, dt, shp, flatshape) = self._data_props(
+            detectors, self._shape[1:], self._dtype
+        )
+
+        self._set_detectors(detectors)
+
+        if flatshape > self._fullsize:
+            # We have to reallocate...
+            self.clear()
+            self._shape = shp
+            self._flatshape = flatshape
+            self._allocate()
+        else:
+            # We can re-use the existing memory
+            self._shape = shp
+            self._flatshape = flatshape
+            self._flatdata = self._raw.array()[: self._flatshape]
+            self._flatdata[:] = 0
+            self._data = self._flatdata.reshape(self._shape)
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -155,6 +226,8 @@ class DetectorData(object):
         if hasattr(self, "_data"):
             del self._data
         if not self._is_view:
+            if hasattr(self, "_flatdata"):
+                del self._flatdata
             if hasattr(self, "_raw"):
                 self._raw.clear()
                 del self._raw
@@ -300,8 +373,9 @@ class DetDataMgr(MutableMapping):
 
     It is also possible to create a new object by assigning an array.  In that case
     the array must either have the full size of the DetectorData object
-    (n_det x n_sample x sample_shape) or must have dimensions (n_sample x sample_shape), in
-    which case the array is copied to all detectors.  For example:
+    (n_det x n_sample x sample_shape) or must have dimensions
+    (n_sample x sample_shape), in which case the array is copied to all detectors.
+    For example:
 
         ob.detdata[name] = np.ones(
             (len(ob.local_detectors), ob.n_local_samples, 4), dtype=np.float32
@@ -327,11 +401,26 @@ class DetDataMgr(MutableMapping):
         self.detectors = detectors
         self._internal = dict()
 
+    def _data_shape(self, sample_shape):
+        dshape = None
+        if sample_shape is None or len(sample_shape) == 0:
+            dshape = (self.samples,)
+        elif len(sample_shape) == 1 and sample_shape[0] == 1:
+            dshape = (self.samples,)
+        else:
+            dshape = (self.samples,) + sample_shape
+        return dshape
+
     def create(self, name, sample_shape=None, dtype=np.float64, detectors=None):
         """Create a local DetectorData buffer on this process.
 
         This method can be used to create arrays of detector data for storing signal,
         flags, or other timestream products on each process.
+
+        If the named detector data already exists in an observation, then additional
+        checks are done that the sample_shape and dtype match the existing object.
+        If so, then the DetectorData.change_detectors() method is called to re-use
+        this existing memory buffer if possible.
 
         Args:
             name (str): The name of the detector data (signal, flags, etc)
@@ -347,10 +436,6 @@ class DetDataMgr(MutableMapping):
 
         """
         log = Logger.get()
-        if name in self._internal:
-            msg = "Detector data with name '{}' already exists.".format(name)
-            log.error(msg)
-            raise RuntimeError(msg)
 
         if detectors is None:
             detectors = self.detectors
@@ -360,18 +445,87 @@ class DetDataMgr(MutableMapping):
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
 
-        data_shape = None
-        if sample_shape is None or len(sample_shape) == 0:
-            data_shape = (self.samples,)
-        elif len(sample_shape) == 1 and sample_shape[0] == 1:
-            data_shape = (self.samples,)
-        else:
-            data_shape = (self.samples,) + sample_shape
+        data_shape = self._data_shape(sample_shape)
+
+        if name in self._internal:
+            msg = "detdata '{}' already exists".format(name)
+            log.error(msg)
+            raise RuntimeError(msg)
 
         # Create the data object
+        print("DetDataMgr[{}] allocate for {}".format(name, detectors), flush=True)
         self._internal[name] = DetectorData(detectors, data_shape, dtype)
 
         return
+
+    def ensure(self, name, sample_shape=None, dtype=np.float64, detectors=None):
+        """Ensure that the observation has the named detector data.
+
+        If the named detdata object does not exist, it is created.  If it does exist
+        and the sample shape and dtype are compatible, then it is checked whether the
+        specified detectors are already included.  If not, it calls the
+        DetectorData.change_detectors() method to re-use this existing memory buffer if
+        possible.
+
+        Args:
+            name (str): The name of the detector data (signal, flags, etc)
+            sample_shape (tuple): Use this shape for the data of each detector sample.
+                Use None or an empty tuple if you want one element per sample.
+            dtype (np.dtype): Use this dtype for each element.
+            detectors (list):  Ensure that these detectors exist in the object.
+
+        Returns:
+            None
+
+        """
+        if detectors is None:
+            detectors = self.detectors
+        else:
+            for d in detectors:
+                if d not in self.detectors:
+                    msg = "detector '{}' not in this observation".format(d)
+                    raise ValueError(msg)
+
+        data_shape = self._data_shape(sample_shape)
+
+        if name in self._internal:
+            # The object already exists.  Check properties.
+            dt = np.dtype(dtype)
+            if dt != self._internal[name].dtype:
+                msg = "Detector data '{}' already exists with dtype {}.".format(
+                    name, self._internal[name].dtype
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            if data_shape != self._internal[name].detector_shape:
+                msg = "Detector data '{}' already exists with det shape {}.".format(
+                    name, self._internal[name].detector_shape
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            # Ok, we can re-use this.  Are the detectors already included in the data?
+            change = False
+            for d in detectors:
+                if d not in self._internal[name].detectors:
+                    change = True
+            if change:
+                print(
+                    "DetDataMgr[{}] change detectors to {}".format(name, detectors),
+                    flush=True,
+                )
+                self._internal[name].change_detectors(detectors)
+            else:
+                print(
+                    "DetDataMgr[{}] detectors {} already included".format(
+                        name, detectors
+                    ),
+                    flush=True,
+                )
+        else:
+            # Create the data object
+            self.create(
+                name, sample_shape=sample_shape, dtype=dtype, detectors=detectors
+            )
 
     # Mapping methods
 
@@ -830,9 +984,11 @@ class IntervalMgr(MutableMapping):
         if key in self._del_callbacks:
             try:
                 self._del_callbacks[key](key)
+                del self._del_callbacks[key]
             except:
                 pass
-        del self._internal[key]
+        if key in self._internal:
+            del self._internal[key]
 
     def __setitem__(self, key, value):
         if not isinstance(value, IntervalList):

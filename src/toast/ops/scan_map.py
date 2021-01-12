@@ -100,8 +100,7 @@ class ScanMap(Operator):
             maptod = maptod_raw.array()
 
             # If our output detector data does not yet exist, create it
-            if self.det_data not in ob.detdata:
-                ob.detdata.create(self.det_data, dtype=np.float64, detectors=dets)
+            ob.detdata.ensure(self.det_data, detectors=dets)
 
             for det in dets:
                 # The pixels, weights, and data.
@@ -141,18 +140,27 @@ class ScanMap(Operator):
                         "Projection supports only float32 and float64 binned maps"
                     )
 
+                print("========= {} ==========".format(det))
+                print("Scanned map TOD = ", maptod)
+                print("Scanned original TOD = ", ddata)
+
                 # zero-out if needed
                 if self.zero:
                     ddata[:] = 0.0
+                    print("Scanned: zero-ing TOD = ", ddata)
 
                 # Add or subtract.  Note that the map scanned timestream will have
                 # zeros anywhere that the pointing is bad, but those samples (and
                 # any other detector flags) should be handled at other steps of the
                 # processing.
                 if self.subtract:
-                    ddata -= maptod
+                    print("Scanned: subtracting TOD")
+                    ddata[:] -= maptod
                 else:
-                    ddata += maptod
+                    print("Scanned: adding TOD")
+                    ddata[:] += maptod
+
+                print("Scanned final = ", ddata)
 
             del maptod
             maptod_raw.clear()

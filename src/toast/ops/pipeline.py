@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections import OrderedDict
+
 import traitlets
 
 from ..utils import Logger
@@ -137,6 +139,10 @@ class Pipeline(Operator):
                             "If using 'ALL' for a detector set, there should only be one set"
                         )
                     for op in self.operators:
+                        msg = "Pipeline calling operator '{}' exec() with ALL dets".format(
+                            op.name
+                        )
+                        log.verbose(msg)
                         op.exec(ds, detectors=detectors)
                 elif det_set == "SINGLE":
                     # If this is given, then there should be only one entry
@@ -147,13 +153,14 @@ class Pipeline(Operator):
 
                     # We are running one detector at a time.  We will loop over all
                     # detectors in the superset of detectors across all observations.
-                    all_local_dets = set()
+                    all_local_dets = OrderedDict()
                     for ob in ds.obs:
                         for det in ob.local_detectors:
-                            all_local_dets.add(det)
+                            all_local_dets[det] = None
+                    all_local_dets = list(all_local_dets.keys())
 
                     # If we were given a more restrictive list, prune the global list
-                    selected_dets = list(all_local_dets)
+                    selected_dets = all_local_dets
                     if detectors is not None:
                         selected_dets = list()
                         for det in all_local_dets:
@@ -161,7 +168,13 @@ class Pipeline(Operator):
                                 selected_dets.append(det)
 
                     for det in selected_dets:
+                        msg = "Pipeline SINGLE detector {}".format(det)
+                        log.verbose(msg)
                         for op in self.operators:
+                            msg = "Pipeline   calling operator '{}' exec()".format(
+                                op.name
+                            )
+                            log.verbose(msg)
                             op.exec(ds, detectors=[det])
                 else:
                     # We are running sets of detectors at once.  For this detector
@@ -172,7 +185,11 @@ class Pipeline(Operator):
                         for det in det_set:
                             if det in detectors:
                                 selected_set.append(det)
+                    msg = "Pipeline detector set {}".format(selected_set)
+                    log.verbose(msg)
                     for op in self.operators:
+                        msg = "Pipeline   calling operator '{}' exec()".format(op.name)
+                        log.verbose(msg)
                         op.exec(ds, detectors=selected_set)
 
         # Copy to / from accelerator...
@@ -180,9 +197,12 @@ class Pipeline(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        log = Logger.get()
         result = list()
         if self.operators is not None:
             for op in self.operators:
+                msg = "Pipeline calling operator '{}' finalize()".format(op.name)
+                log.verbose(msg)
                 result.append(op.finalize(data))
         return result
 

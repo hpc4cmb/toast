@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections import OrderedDict
+
 import traitlets
 
 from ..utils import Logger
@@ -112,6 +114,21 @@ class TemplateMatrix(Operator):
         for tmpl in self.templates:
             tmpl.det_data = self.det_data
 
+        # We loop over detectors.  Internally, each template loops over observations
+        # and ignores observations where the detector does not exist.
+
+        all_dets = None
+        if detectors is None:
+            # We don't have an explicit list of detectors- build our superset.
+            all_dets = OrderedDict()
+            for ob in data.obs:
+                for d in ob.local_detectors:
+                    if d not in all_dets:
+                        all_dets[d] = None
+            all_dets = list(all_dets.keys())
+        else:
+            all_dets = detectors
+
         if self.transpose:
             if self.amplitudes not in data:
                 # The output template amplitudes do not yet exist.  Create these with
@@ -119,15 +136,9 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
-            for ob in data.obs:
-                # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
-                for d in dets:
-                    for tmpl in self.templates:
-                        tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
+            for d in all_dets:
+                for tmpl in self.templates:
+                    tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
         else:
             if self.amplitudes not in data:
                 msg = "Template amplitudes '{}' do not exist in data".format(
@@ -135,15 +146,20 @@ class TemplateMatrix(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
+            # Ensure that our output detector data exists in each observation
             for ob in data.obs:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(detectors)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
+                ob.detdata.ensure(self.det_data, detectors=dets)
                 for d in dets:
-                    for tmpl in self.templates:
-                        tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
+                    ob.detdata[self.det_data][d, :] = 0
+
+            for d in all_dets:
+                for tmpl in self.templates:
+                    tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
     def _finalize(self, data, **kwargs):

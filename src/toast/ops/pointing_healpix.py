@@ -113,8 +113,6 @@ class PointingHealpix(Operator):
         help="The output boresight coordinate system ('C', 'E', 'G')",
     )
 
-    overwrite = Bool(False, help="If True, regenerate pointing even if it exists")
-
     @traitlets.validate("nside")
     def _check_nside(self, proposal):
         check = proposal["value"]
@@ -170,6 +168,13 @@ class PointingHealpix(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Check that healpix pixels are set up.  If the nside / mode are left as
+        # defaults, then the 'observe' function will not have been called yet.
+        if not hasattr(self, "_nnz"):
+            nnz = 1
+            if self.mode == "IQU":
+                nnz = 3
+            self._set_hpix(self.nside, self.nside_submap, nnz)
 
     @traitlets.observe("nside", "nside_submap", "mode")
     def _reset_hpix(self, change):
@@ -178,10 +183,9 @@ class PointingHealpix(Operator):
         nside = self.nside
         nside_submap = self.nside_submap
         mode = self.mode
-        self._nnz = 1
+        nnz = 1
         if mode == "IQU":
-            self._nnz = 3
-
+            nnz = 3
         # Update to the trait that changed
         if change["name"] == "nside":
             nside = change["new"]
@@ -189,13 +193,17 @@ class PointingHealpix(Operator):
             nside_submap = change["new"]
         if change["name"] == "mode":
             if change["new"] == "IQU":
-                self._nnz = 3
+                nnz = 3
             else:
-                self._nnz = 1
+                nnz = 1
+        self._set_hpix(nside, nside_submap, nnz)
+
+    def _set_hpix(self, nside, nside_submap, nnz):
         self.hpix = HealpixPixels(nside)
         self._n_pix = 12 * nside ** 2
         self._n_pix_submap = 12 * nside_submap ** 2
         self._n_submap = (nside // nside_submap) ** 2
+        self._nnz = nnz
         self._local_submaps = None
 
     @function_timer
@@ -242,29 +250,24 @@ class PointingHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
-            if self.pixels in ob.detdata and self.weight in ob.detdata:
-                # The pointing already exists!
-                if not self.overwrite:
-                    continue
-
-            # Create output data for the pixels, weights and optionally the
+            # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
 
             if self.single_precision:
-                ob.detdata.create(
+                ob.detdata.ensure(
                     self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
                 )
-                ob.detdata.create(
+                ob.detdata.ensure(
                     self.weights,
                     sample_shape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
                 )
             else:
-                ob.detdata.create(
+                ob.detdata.ensure(
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
-                ob.detdata.create(
+                ob.detdata.ensure(
                     self.weights,
                     sample_shape=(self._nnz,),
                     dtype=np.float64,
@@ -272,7 +275,7 @@ class PointingHealpix(Operator):
                 )
 
             if self.quats is not None:
-                ob.detdata.create(
+                ob.detdata.ensure(
                     self.quats,
                     sample_shape=(4,),
                     dtype=np.float64,

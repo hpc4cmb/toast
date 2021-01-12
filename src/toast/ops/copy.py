@@ -40,6 +40,12 @@ class Copy(Operator):
         None, allow_none=True, help="List of tuples of Observation shared keys to copy"
     )
 
+    intervals = List(
+        None,
+        allow_none=True,
+        help="List of tuples of Observation intervals keys to copy",
+    )
+
     @traitlets.validate("meta")
     def _check_meta(self, proposal):
         val = proposal["value"]
@@ -138,43 +144,58 @@ class Copy(Operator):
                         ob.shared[out_key]._flat[:] = ob.shared[in_key]._flat
 
             if self.detdata is not None:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
                 for in_key, out_key in self.detdata:
                     if out_key in ob.detdata:
-                        # The key exists- verify that dimensions match
-                        if (
-                            ob.detdata[out_key].detectors
-                            != ob.detdata[in_key].detectors
-                        ):
-                            msg = "Cannot copy to existing detdata key {} with different detectors".format(
-                                out_key
-                            )
-                            log.error(msg)
-                            raise RuntimeError(msg)
+                        # The key exists- verify that dimensions / dtype match
                         if ob.detdata[out_key].dtype != ob.detdata[in_key].dtype:
                             msg = "Cannot copy to existing detdata key {} with different dtype".format(
                                 out_key
                             )
                             log.error(msg)
                             raise RuntimeError(msg)
-                        if ob.detdata[out_key].shape != ob.detdata[in_key].shape:
-                            msg = "Cannot copy to existing detdata key {} with different shape".format(
+                        if (
+                            ob.detdata[out_key].detector_shape
+                            != ob.detdata[in_key].detector_shape
+                        ):
+                            msg = "Cannot copy to existing detdata key {} with different detector shape".format(
                                 out_key
                             )
                             log.error(msg)
                             raise RuntimeError(msg)
+                        if ob.detdata[out_key].detectors != dets:
+                            # The output has a different set of detectors.  Reallocate.
+                            print(
+                                "Copy:  reset detdata {} for dets {}".format(
+                                    out_key, dets
+                                ),
+                                flush=True,
+                            )
+                            ob.detdata[out_key].change_detectors(dets)
                     else:
                         sample_shape = None
                         shp = ob.detdata[in_key].detector_shape
                         if len(shp) > 1:
                             sample_shape = shp[1:]
+                        print(
+                            "Copy:  allocate detdata {} for dets {}".format(
+                                out_key, dets
+                            ),
+                            flush=True,
+                        )
                         ob.detdata.create(
                             out_key,
                             sample_shape=sample_shape,
                             dtype=ob.detdata[in_key].dtype,
-                            detectors=ob.detdata[in_key].detectors,
+                            detectors=dets,
                         )
-                    ob.detdata[out_key][:] = ob.detdata[in_key][:]
-
+                    # Copy detector data
+                    for d in dets:
+                        ob.detdata[out_key][d, :] = ob.detdata[in_key][d, :]
         return
 
     def _finalize(self, data, **kwargs):
@@ -188,16 +209,20 @@ class Copy(Operator):
             req["detdata"] = [x[0] for x in self.detdata]
         if self.shared is not None:
             req["shared"] = [x[0] for x in self.shared]
+        if self.intervals is not None:
+            req["intervals"] = [x[0] for x in self.intervals]
         return req
 
     def _provides(self):
         prov = dict()
         if self.meta is not None:
-            req["meta"] = [x[1] for x in self.meta]
+            prov["meta"] = [x[1] for x in self.meta]
         if self.detdata is not None:
-            req["detdata"] = [x[1] for x in self.detdata]
+            prov["detdata"] = [x[1] for x in self.detdata]
         if self.shared is not None:
-            req["shared"] = [x[1] for x in self.shared]
+            prov["shared"] = [x[1] for x in self.shared]
+        if self.intervals is not None:
+            prov["intervals"] = [x[1] for x in self.intervals]
         return prov
 
     def _accelerators(self):

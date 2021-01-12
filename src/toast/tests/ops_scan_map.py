@@ -15,7 +15,7 @@ from .. import ops as ops
 
 from ..pixels import PixelData
 
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, create_fake_sky
 
 
 class ScanMapTest(MPITestCase):
@@ -23,15 +23,6 @@ class ScanMapTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
-
-    def create_fake_sky(self, data, dist_key, map_key):
-        dist = data[dist_key]
-        pix_data = PixelData(dist, np.float64, n_value=3)
-        # Just replicate the fake data across all local submaps
-        pix_data.data[:, :, 0] = 100.0 * np.random.uniform(size=dist.n_pix_submap)
-        pix_data.data[:, :, 1] = np.random.uniform(size=dist.n_pix_submap)
-        pix_data.data[:, :, 2] = np.random.uniform(size=dist.n_pix_submap)
-        data[map_key] = pix_data
 
     def test_scan(self):
         # Create a fake satellite data set for testing
@@ -44,7 +35,7 @@ class ScanMapTest(MPITestCase):
         pointing.apply(data)
 
         # Create fake polarized sky pixel values locally
-        self.create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(data, "pixel_dist", "fake_map")
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
@@ -71,6 +62,62 @@ class ScanMapTest(MPITestCase):
                     for j in range(3):
                         val += wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
                     np.testing.assert_almost_equal(val, ob.detdata["signal"][det, i])
+
+        del data
+        return
+
+    def test_scan_add_subtract(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create some detector pointing matrices
+        pointing = ops.PointingHealpix(
+            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+        )
+        pointing.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        self.create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Scan map into timestreams twice, adding once and then subtracting.  Also test
+        # zero option.
+
+        scanner = ops.ScanMap(
+            det_data="signal",
+            pixels=pointing.pixels,
+            weights=pointing.weights,
+            map_key="fake_map",
+        )
+        scanner.apply(data)
+
+        rms = list()
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                rms.append(np.std(ob.detdata["signal"][det]))
+        rms = np.array(rms)
+
+        scanner.zero = True
+        scanner.apply(data)
+
+        trms = list()
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                trms.append(np.std(ob.detdata["signal"][det]))
+        trms = np.array(trms)
+
+        np.testing.assert_equal(trms, rms)
+
+        scanner.zero = False
+        scanner.subtract = True
+        scanner.apply(data)
+
+        trms = list()
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                trms.append(np.std(ob.detdata["signal"][det]))
+        trms = np.array(trms)
+
+        np.testing.assert_equal(trms, np.zeros_like(trms))
 
         del data
         return

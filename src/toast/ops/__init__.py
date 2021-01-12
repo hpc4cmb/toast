@@ -8,9 +8,13 @@ from .operator import Operator
 
 from .memory_counter import MemoryCounter
 
-from .clear import Clear
+from .delete import Delete
 
 from .copy import Copy
+
+from .reset import Reset
+
+from .arithmetic import Add, Subtract
 
 from .pipeline import Pipeline
 

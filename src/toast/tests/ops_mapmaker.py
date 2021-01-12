@@ -25,7 +25,7 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits
 
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, create_fake_sky
 
 
 class MapmakerTest(MPITestCase):
@@ -36,18 +36,42 @@ class MapmakerTest(MPITestCase):
 
     def test_offset(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
+        data = create_satellite_data(self.comm, obs_time=20.0 * u.minute)
+
+        # Create some sky signal timestreams.
+
+        pointing = ops.PointingHealpix(
+            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+        )
+        pointing.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Scan map into timestreams
+        scanner = ops.ScanMap(
+            det_data="signal",
+            pixels=pointing.pixels,
+            weights=pointing.weights,
+            map_key="fake_map",
+        )
+        scanner.apply(data)
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing.apply(data)
+        pointing.create_dist = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
-        # Simulate noise
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="noise")
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="signal")
         sim_noise.apply(data)
 
-        # Pointing operator for solver
-        pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
+        print(data.obs[0].detdata["signal"])
+        print("Done generating starting TOD", flush=True)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
@@ -72,7 +96,7 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
-            det_data="noise",
+            det_data="signal",
             binning=binner,
             template_matrix=tmatrix,
         )
@@ -80,8 +104,10 @@ class MapmakerTest(MPITestCase):
         # Make the map
         mapper.apply(data)
 
+        print(data)
+
         # Access the output
-        final_map = data[mapper.binning.binned]
+        # final_map = data[mapper.binning.binned]
 
         del data
         return

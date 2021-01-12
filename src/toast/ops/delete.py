@@ -12,10 +12,10 @@ from .operator import Operator
 
 
 @trait_docs
-class Clear(Operator):
+class Delete(Operator):
     """Class to purge data from observations.
 
-    This operator takes lists of shared, detdata, and meta keys to delete from
+    This operator takes lists of shared, detdata, intervals and meta keys to delete from
     observations.
 
     """
@@ -36,6 +36,12 @@ class Clear(Operator):
         None, allow_none=True, help="List of Observation shared keys to delete"
     )
 
+    intervals = List(
+        None,
+        allow_none=True,
+        help="List of tuples of Observation intervals keys to delete",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -50,6 +56,10 @@ class Clear(Operator):
                 for key in self.shared:
                     # This ignores non-existant keys
                     del ob.shared[key]
+            if self.intervals is not None:
+                for key in self.intervals:
+                    # This ignores non-existant keys
+                    del ob.intervals[key]
             if self.meta is not None:
                 for key in self.meta:
                     try:
@@ -72,6 +82,8 @@ class Clear(Operator):
             req["detdata"] = list(self.detdata)
         if self.shared is not None:
             req["shared"] = list(self.shared)
+        if self.intervals is not None:
+            req["intervals"] = list(self.intervals)
         return req
 
     def _provides(self):

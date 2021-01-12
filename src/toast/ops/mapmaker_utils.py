@@ -24,7 +24,7 @@ from .._libtoast import (
 
 from .operator import Operator
 
-from .clear import Clear
+from .delete import Delete
 
 from .pipeline import Pipeline
 
@@ -96,7 +96,6 @@ class BuildHitMap(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._hits = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -119,9 +118,26 @@ class BuildHitMap(Operator):
                 "Building hit map with pixel_distribution {}".format(self.pixel_dist)
             )
 
-        # On first call, get the pixel distribution and create our distributed hitmap
-        if self._hits is None:
-            self._hits = PixelData(dist, np.int64, n_value=1)
+        hits = None
+        if self.hits in data:
+            # We have an existing map from a previous call.  Verify
+            # the distribution and nnz.
+            if data[self.hits].distribution != dist:
+                msg = "Existing hits '{}' has different data distribution".format(
+                    self.hits
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            if data[self.hits].n_value != 1:
+                msg = "Existing hits '{}' has {} nnz, not 1".format(
+                    self.hits, data[self.hits].n_value
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            hits = data[self.hits]
+        else:
+            data[self.hits] = PixelData(dist, np.int64, n_value=1)
+            hits = data[self.hits]
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -157,17 +173,16 @@ class BuildHitMap(Operator):
                         1,
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
-                        self._hits.raw,
+                        hits.raw,
                     )
         return
 
     def _finalize(self, data, **kwargs):
-        if self._hits is not None:
+        if self.hits in data:
             if self.sync_type == "alltoallv":
-                self._hits.sync_alltoallv()
+                data[self.hits].sync_alltoallv()
             else:
-                self._hits.sync_allreduce()
-            data[self.hits] = self._hits
+                data[self.hits].sync_allreduce()
         return
 
     def _requires(self):
@@ -268,9 +283,6 @@ class BuildInverseCovariance(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._invcov = None
-        self._weight_nnz = None
-        self._cov_nnz = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -294,6 +306,10 @@ class BuildInverseCovariance(Operator):
                     self.pixel_dist
                 )
             )
+
+        invcov = None
+        weight_nnz = None
+        cov_nnz = None
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -325,25 +341,45 @@ class BuildInverseCovariance(Operator):
                     # non-zero elements for every detector and every observation.
                     # We check that here, and if this is the first observation and
                     # detector we have worked with we create the PixelData object.
-                    if self._invcov is None:
+                    if invcov is None:
                         # We will store the lower triangle of the covariance.
                         if len(wview.detector_shape) == 1:
-                            self._weight_nnz = 1
+                            weight_nnz = 1
                         else:
-                            self._weight_nnz = wview.detector_shape[1]
-                        self._cov_nnz = self._weight_nnz * (self._weight_nnz + 1) // 2
-                        self._invcov = PixelData(
-                            dist, np.float64, n_value=self._cov_nnz
-                        )
+                            weight_nnz = wview.detector_shape[1]
+                        cov_nnz = weight_nnz * (weight_nnz + 1) // 2
+                        if self.inverse_covariance in data:
+                            # We have an existing map from a previous call.  Verify
+                            # the distribution and nnz.
+                            if data[self.inverse_covariance].distribution != dist:
+                                msg = "Existing inv cov '{}' has different data distribution".format(
+                                    self.inverse_covariance
+                                )
+                                log.error(msg)
+                                raise RuntimeError(msg)
+                            if data[self.inverse_covariance].n_value != cov_nnz:
+                                msg = "Existing inv cov '{}' has {} nnz, but pointing implies {}".format(
+                                    self.inverse_covariance,
+                                    data[self.inverse_covariance].n_value,
+                                    cov_nnz,
+                                )
+                                log.error(msg)
+                                raise RuntimeError(msg)
+                            invcov = data[self.inverse_covariance]
+                        else:
+                            data[self.inverse_covariance] = PixelData(
+                                dist, np.float64, n_value=cov_nnz
+                            )
+                            invcov = data[self.inverse_covariance]
                     else:
                         check_nnz = None
                         if len(wview.detector_shape) == 1:
                             check_nnz = 1
                         else:
                             check_nnz = wview.detector_shape[1]
-                        if check_nnz != self._weight_nnz:
+                        if check_nnz != weight_nnz:
                             msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
-                                ob.name, det, self.weights, check_nnz, self._weight_nnz
+                                ob.name, det, self.weights, check_nnz, weight_nnz
                             )
                             raise RuntimeError(msg)
 
@@ -366,22 +402,21 @@ class BuildInverseCovariance(Operator):
                     cov_accum_diag_invnpp(
                         dist.n_local_submap,
                         dist.n_pix_submap,
-                        self._weight_nnz,
+                        weight_nnz,
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         wview[det].reshape(-1),
                         detweight,
-                        self._invcov.raw,
+                        invcov.raw,
                     )
         return
 
     def _finalize(self, data, **kwargs):
-        if self._invcov is not None:
+        if self.inverse_covariance in data:
             if self.sync_type == "alltoallv":
-                self._invcov.sync_alltoallv()
+                data[self.inverse_covariance].sync_alltoallv()
             else:
-                self._invcov.sync_allreduce()
-            data[self.inverse_covariance] = self._invcov
+                data[self.inverse_covariance].sync_allreduce()
         return
 
     def _requires(self):
@@ -486,8 +521,6 @@ class BuildNoiseWeighted(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._zmap = None
-        self._weight_nnz = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -515,6 +548,9 @@ class BuildNoiseWeighted(Operator):
                     self.pixel_dist
                 )
             )
+
+        zmap = None
+        weight_nnz = None
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -546,25 +582,58 @@ class BuildNoiseWeighted(Operator):
                     # Data for this detector
                     ddata = dview[det]
 
+                    print("Zmap det {} = {}".format(det, ddata), flush=True)
+
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
                     # We check that here, and if this is the first observation and
-                    # detector we have worked with we create the PixelData object.
-                    if self._zmap is None:
+                    # detector we have worked with we create the PixelData object
+                    # if needed.
+                    if zmap is None:
                         if len(wview.detector_shape) == 1:
-                            self._weight_nnz = 1
+                            weight_nnz = 1
                         else:
-                            self._weight_nnz = wview.detector_shape[1]
-                        self._zmap = PixelData(
-                            dist, np.float64, n_value=self._weight_nnz
-                        )
+                            weight_nnz = wview.detector_shape[1]
+                        if self.zmap in data:
+                            # We have an existing map from a previous call.  Verify
+                            # the distribution and nnz.
+                            if data[self.zmap].distribution != dist:
+                                msg = "Existing ZMap '{}' has different data distribution".format(
+                                    self.zmap
+                                )
+                                log.error(msg)
+                                raise RuntimeError(msg)
+                            if data[self.zmap].n_value != weight_nnz:
+                                msg = "Existing ZMap '{}' has {} nnz, but pointing has {}".format(
+                                    self.zmap, data[self.zmap].n_value, weight_nnz
+                                )
+                                log.error(msg)
+                                raise RuntimeError(msg)
+                            print(
+                                "Zmap found existing PixelData {}".format(self.zmap),
+                                flush=True,
+                            )
+                            zmap = data[self.zmap]
+                        else:
+                            print(
+                                "Zmap allocating PixelData {}".format(self.zmap),
+                                flush=True,
+                            )
+                            data[self.zmap] = PixelData(
+                                dist, np.float64, n_value=weight_nnz
+                            )
+                            zmap = data[self.zmap]
                     else:
+                        print(
+                            "Zmap PixelData {} already loaded".format(self.zmap),
+                            flush=True,
+                        )
                         check_nnz = None
                         if len(wview.detector_shape) == 1:
                             check_nnz = 1
                         else:
                             check_nnz = wview.detector_shape[1]
-                        if check_nnz != self._weight_nnz:
+                        if check_nnz != weight_nnz:
                             msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
                                 ob.name, det, self.weights
                             )
@@ -589,23 +658,26 @@ class BuildNoiseWeighted(Operator):
                     cov_accum_zmap(
                         dist.n_local_submap,
                         dist.n_pix_submap,
-                        self._zmap.n_value,
+                        zmap.n_value,
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         wview[det].reshape(-1),
                         detweight,
                         ddata,
-                        self._zmap.raw,
+                        zmap.raw,
                     )
+                    zm = zmap.raw.array()
+                    print("Zmap after det {} ".format(det), zm[zm != 0], flush=True)
         return
 
     def _finalize(self, data, **kwargs):
-        if self._zmap is not None:
+        if self.zmap in data:
+            # We have called exec() at least once
             if self.sync_type == "alltoallv":
-                self._zmap.sync_alltoallv()
+                data[self.zmap].sync_alltoallv()
             else:
-                self._zmap.sync_allreduce()
-            data[self.zmap] = self._zmap
+                data[self.zmap].sync_allreduce()
+            print("Zmap final sync of {}".format(self.zmap), flush=True)
         return
 
     def _requires(self):
@@ -740,7 +812,6 @@ class CovarianceAndHits(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._invcov = None
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -755,12 +826,10 @@ class CovarianceAndHits(Operator):
 
         self.pointing.create_dist = None
 
-        # Set up clearing of the pointing matrices
-
-        clear_pointing = Clear(detdata=[self.pointing.pixels, self.pointing.weights])
-
         # If we do not have a pixel distribution yet, we must make one pass through
         # the pointing to build this first.
+
+        pointing_done = False
 
         if self.pixel_dist not in data:
             if detectors is not None:
@@ -784,16 +853,13 @@ class CovarianceAndHits(Operator):
                 # We are keeping the pointing, which means we need to run all detectors
                 # at once so they all end up in the detdata for all observations.
                 pixel_dist_pipe = Pipeline(detector_sets=["ALL"])
-                pixel_dist_pipe.operators = [
-                    self.pointing,
-                ]
+                pointing_done = True
             else:
                 # Run one detector a at time and discard.
                 pixel_dist_pipe = Pipeline(detector_sets=["SINGLE"])
-                pixel_dist_pipe.operators = [
-                    self.pointing,
-                    clear_pointing,
-                ]
+            pixel_dist_pipe.operators = [
+                self.pointing,
+            ]
             pipe_out = pixel_dist_pipe.apply(data, detectors=detectors)
 
             # Turn pixel distribution creation off again
@@ -836,11 +902,15 @@ class CovarianceAndHits(Operator):
         if self.save_pointing:
             # Process all detectors at once
             accum = Pipeline(detector_sets=["ALL"])
-            accum.operators = [self.pointing, build_hits, build_invcov]
+            if pointing_done:
+                # We already computed the pointing once and saved it.
+                accum.operators = [build_hits, build_invcov]
+            else:
+                accum.operators = [self.pointing, build_hits, build_invcov]
         else:
-            # Process one detector at a time and clear pointing after each one.
+            # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-            accum.operators = [self.pointing, build_hits, build_invcov, clear_pointing]
+            accum.operators = [self.pointing, build_hits, build_invcov]
 
         pipe_out = accum.apply(data, detectors=detectors)
 

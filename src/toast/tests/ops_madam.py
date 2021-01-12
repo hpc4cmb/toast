@@ -19,7 +19,7 @@ from ..vis import set_matplotlib_backend
 
 from ..pixels import PixelDistribution, PixelData
 
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, create_fake_sky
 
 
 class MadamTest(MPITestCase):
@@ -27,15 +27,6 @@ class MadamTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
-
-    def create_fake_sky(self, data, dist_key, map_key):
-        dist = data[dist_key]
-        pix_data = PixelData(dist, np.float64, n_value=3)
-        # Just replicate the fake data across all local submaps
-        pix_data.data[:, :, 0] = 100.0
-        pix_data.data[:, :, 1] = 0.1
-        pix_data.data[:, :, 2] = 0.1
-        data[map_key] = pix_data
 
     def test_madam_det_out(self):
         if not ops.Madam.available:
@@ -52,7 +43,7 @@ class MadamTest(MPITestCase):
         pointing.apply(data)
 
         # Create fake polarized sky pixel values locally
-        self.create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(data, "pixel_dist", "fake_map")
 
         # Scan map into timestreams
         scanner = ops.ScanMap(

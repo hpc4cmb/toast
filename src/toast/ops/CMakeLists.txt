@@ -5,8 +5,10 @@ install(FILES
     __init__.py
     operator.py
     pipeline.py
-    clear.py
+    delete.py
     copy.py
+    reset.py
+    arithmetic.py
     memory_counter.py
     sim_hwp.py
     sim_tod_noise.py

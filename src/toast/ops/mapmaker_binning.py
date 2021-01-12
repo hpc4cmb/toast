@@ -20,7 +20,7 @@ from .operator import Operator
 
 from .pipeline import Pipeline
 
-from .clear import Clear
+from .delete import Delete
 
 from .mapmaker_utils import BuildHitMap, BuildNoiseWeighted, BuildInverseCovariance
 
@@ -75,6 +75,12 @@ class BinMap(Operator):
         help="This must be an instance of a pointing operator",
     )
 
+    pre_process = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Optional extra operator to run prior to binning",
+    )
+
     noise_model = Unicode(
         "noise_model", help="Observation key containing the noise model"
     )
@@ -83,9 +89,7 @@ class BinMap(Operator):
         "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    save_pointing = Bool(
-        False, help="If True, do not clear detector pointing matrices after use"
-    )
+    saved_pointing = Bool(False, help="If True, use previously computed pointing")
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -143,9 +147,17 @@ class BinMap(Operator):
 
         self.pointing.create_dist = None
 
-        # Set up clearing of the pointing matrices
+        # If the binned map already exists in the data, verify the distribution and
+        # reset to zero.
 
-        clear_pointing = Clear(detdata=[self.pointing.pixels, self.pointing.weights])
+        if self.binned in data:
+            if data[self.binned].distribution != data[self.pixel_dist]:
+                raise RuntimeError(
+                    "Pixel distribution '{}' does not match existing binned map '{}'".format(
+                        self.pixel_dist, self.binned
+                    )
+                )
+            data[self.binned].raw[:] = 0.0
 
         # Noise weighted map.  We output this to the final binned map location,
         # since we will multiply by the covariance in-place.
@@ -166,21 +178,24 @@ class BinMap(Operator):
         # Build a pipeline to expand pointing and accumulate
 
         accum = None
-        if self.save_pointing:
-            # Process all detectors at once
+        accum_ops = list()
+        if self.pre_process is not None:
+            accum_ops.append(self.pre_process)
+        if self.saved_pointing:
+            # Process all detectors at once, using existing pointing
             accum = Pipeline(detector_sets=["ALL"])
-            accum.operators = [self.pointing, build_zmap]
+            accum_ops.extend([build_zmap])
         else:
-            # Process one detector at a time and clear pointing after each one.
+            # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-            accum.operators = [self.pointing, build_zmap, clear_pointing]
-
+            accum_ops.extend([self.pointing, build_zmap])
+        accum.operators = accum_ops
         pipe_out = accum.apply(data, detectors=detectors)
 
         # Extract the results
         binned_map = data[self.binned]
 
-        # Apply the covariance
+        # Apply the covariance in place
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
 
         return
@@ -198,8 +213,6 @@ class BinMap(Operator):
 
     def _provides(self):
         prov = {"meta": [self.binned], "shared": list(), "detdata": list()}
-        if self.save_pointing:
-            prov["detdata"].extend([self.pointing.pixels, self.pointing.weights])
         return prov
 
     def _accelerators(self):

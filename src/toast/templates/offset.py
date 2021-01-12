@@ -227,6 +227,8 @@ class Offset(Template):
         # Compute the amplitude noise filter and preconditioner for each detector
         # and each view.
 
+        print("Offset sigmasq = ", self._sigmasq, flush=True)
+
         self._filters = dict()
         self._precond = dict()
 
@@ -400,12 +402,34 @@ class Offset(Template):
                 continue
             # The step length for this observation
             step_length = int(self.step_time * self._obs_rate[iob])
+            print(
+                "Offset input det {}, ob {} = ".format(detector, iob),
+                ob.view[self.view].detdata[self.det_data],
+                flush=True,
+            )
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
+                print(
+                    "Offset input det {}, ob {}, view {} = ".format(detector, iob, ivw),
+                    vw[detector],
+                    flush=True,
+                )
+                print(
+                    "Offset input amplitude range = {} - {}".format(
+                        offset, offset + n_amp_view - 1
+                    )
+                )
                 template_offset_add_to_signal(
                     step_length,
                     amplitudes.local[offset : offset + n_amp_view],
                     vw[detector],
+                )
+                print(
+                    "Offset output det {}, ob {}, view {} = ".format(
+                        detector, iob, ivw
+                    ),
+                    vw[detector],
+                    flush=True,
                 )
                 offset += n_amp_view
 

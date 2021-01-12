@@ -283,8 +283,8 @@ class SimNoise(Operator):
             # detectors within the observation.
 
             # Create output if it does not exist
-            if self.out not in ob.detdata:
-                ob.detdata.create(self.out, dtype=np.float64)
+            if (self.out not in ob.detdata) or (dets != ob.detdata[self.out].detectors):
+                ob.detdata.create(self.out, dtype=np.float64, detectors=dets)
 
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
                 ob.shared[self.times].data
