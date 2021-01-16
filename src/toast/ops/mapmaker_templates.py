@@ -63,6 +63,29 @@ class TemplateMatrix(Operator):
         super().__init__(**kwargs)
         self._initialized = False
 
+    def duplicate(self):
+        """Make a shallow copy which contains the same list of templates.
+
+        This is useful when we want to use both a template matrix and its transpose
+        in the same pipeline.
+
+        Returns:
+            (TemplateMatrix):  A new instance with the same templates.
+
+        """
+        ret = TemplateMatrix(
+            API=self.API,
+            templates=self.templates,
+            amplitudes=self.amplitudes,
+            transpose=self.transpose,
+            view=self.view,
+            det_data=self.det_data,
+            flags=self.flags,
+            flag_mask=self.flag_mask,
+        )
+        ret._initialized = self._initialized
+        return ret
+
     def apply_precond(self, amps_in, amps_out):
         """Apply the preconditioner from all templates to the amplitudes.
 
@@ -133,6 +156,12 @@ class TemplateMatrix(Operator):
             if self.amplitudes not in data:
                 # The output template amplitudes do not yet exist.  Create these with
                 # all zero values.
+                print(
+                    "template matrix transpose create amplitudes {}".format(
+                        self.amplitudes
+                    ),
+                    flush=True,
+                )
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
@@ -157,9 +186,20 @@ class TemplateMatrix(Operator):
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
 
+            # print("template matrix in = ", data[self.amplitudes], flush=True)
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
+                # print(
+                #     "template matrix out {} --> {}".format(
+                #         self.det_data, self.templates[0].det_data
+                #     )
+                # )
+                # print(
+                #     "template matrix out {} = ".format(d),
+                #     ob.detdata[self.det_data][d],
+                #     flush=True,
+                # )
         return
 
     def _finalize(self, data, **kwargs):

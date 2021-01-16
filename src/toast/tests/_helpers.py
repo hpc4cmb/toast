@@ -93,6 +93,7 @@ def create_telescope(group_size, sample_rate=10.0 * u.Hz):
         n_pix=npix,
         sample_rate=sample_rate,
         f_min=1.0e-5 * u.Hz,
+        # net=1.0,
         net=0.5,
         f_knee=(sample_rate / 2000.0),
     )
@@ -130,7 +131,7 @@ def create_distdata(mpicomm, obs_per_group=1, samples=10):
 
 
 def create_satellite_data(
-    mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=5.0 * u.minute
+    mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=10.0 * u.minute
 ):
     """Create a data object with a simple satellite sim.
 
@@ -161,10 +162,10 @@ def create_satellite_data(
         telescope=tele,
         hwp_rpm=10.0,
         observation_time=obs_time,
-        spin_period=1.0 * u.minute,
-        spin_angle=2.0 * u.degree,
-        prec_period=5.0 * u.minute,
-        prec_angle=2.0 * u.degree,
+        spin_period=2.0 * u.minute,
+        spin_angle=5.0 * u.degree,
+        prec_period=10.0 * u.minute,
+        prec_angle=10.0 * u.degree,
     )
     sim_sat.apply(data)
 

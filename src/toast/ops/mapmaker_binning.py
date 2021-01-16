@@ -195,8 +195,37 @@ class BinMap(Operator):
         # Extract the results
         binned_map = data[self.binned]
 
+        # dist = binned_map.distribution
+        # print("binned zmap = ")
+        # for ism, sm in enumerate(dist.local_submaps):
+        #     for spix in range(dist.n_pix_submap):
+        #         if binned_map.data[ism, spix, 0] != 0:
+        #             pix = sm * dist.n_pix_submap + spix
+        #             print(
+        #                 "{}   {:0.6e}  {:0.6e}  {:0.6e}".format(
+        #                     pix,
+        #                     binned_map.data[ism, spix, 0],
+        #                     binned_map.data[ism, spix, 1],
+        #                     binned_map.data[ism, spix, 2],
+        #                 )
+        #             )
+
         # Apply the covariance in place
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
+
+        # print("binned = ")
+        # for ism, sm in enumerate(dist.local_submaps):
+        #     for spix in range(dist.n_pix_submap):
+        #         if binned_map.data[ism, spix, 0] != 0:
+        #             pix = sm * dist.n_pix_submap + spix
+        #             print(
+        #                 "{}   {:0.6e}  {:0.6e}  {:0.6e}".format(
+        #                     pix,
+        #                     binned_map.data[ism, spix, 0],
+        #                     binned_map.data[ism, spix, 1],
+        #                     binned_map.data[ism, spix, 2],
+        #                 )
+        #             )
 
         return
 

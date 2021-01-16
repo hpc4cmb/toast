@@ -45,6 +45,9 @@ void toast::template_offset_project_signal(int64_t step_length, int64_t n_data,
         #pragma omp simd
         for (int64_t i = 0; i < n_amp - 1; ++i) {
             int64_t doff = i * step_length;
+
+            // std::cout << "DBG accum " << step_length << " samples to base " << i <<
+            //     std::endl;
             for (int64_t j = 0; j < step_length; ++j) {
                 amplitudes[i] += data[doff + j];
             }
@@ -59,6 +62,8 @@ void toast::template_offset_project_signal(int64_t step_length, int64_t n_data,
     }
 
     // Now handle the final amplitude.
+    // std::cout << "DBG accum " << n_data - (n_amp - 1) * step_length <<
+    //     " samples to base " << n_amp - 1 << std::endl;
     for (int64_t j = (n_amp - 1) * step_length; j < n_data; ++j) {
         amplitudes[n_amp - 1] += data[j];
     }

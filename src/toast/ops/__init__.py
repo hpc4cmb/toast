@@ -28,7 +28,7 @@ from .noise_weight import NoiseWeight
 
 from .pointing_healpix import PointingHealpix
 
-from .scan_map import ScanMap, ScanMask
+from .scan_map import ScanMap, ScanMask, ScanScale
 
 from .mapmaker_utils import (
     BuildHitMap,

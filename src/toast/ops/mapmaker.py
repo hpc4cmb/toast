@@ -234,6 +234,7 @@ class MapMaker(Operator):
         save_det_flag_mask = self.binning.det_flag_mask
         save_shared_flags = self.binning.shared_flags
         save_shared_flag_mask = self.binning.shared_flag_mask
+        save_covariance = self.binning.covariance
 
         # Also save the name of the user-requested output binned map.  During the
         # solve we will output to a temporary map and then restore this name, in
@@ -244,14 +245,21 @@ class MapMaker(Operator):
         # Data products, prefixed with the name of the operator.
 
         solver_hits_name = "{}_solve_hits".format(self.name)
+        solver_cov_name = "{}_solve_cov".format(self.name)
         solver_rcond_name = "{}_solve_rcond".format(self.name)
         solver_rcond_mask_name = "{}_solve_rcond_mask".format(self.name)
+        solver_result = "{}_solve_amplitudes".format(self.name)
+        solver_rhs = "{}_solve_rhs".format(self.name)
+        solver_bin = "{}_solve_bin".format(self.name)
 
         hits_name = "{}_hits".format(self.name)
+        cov_name = "{}_cov".format(self.name)
         rcond_name = "{}_rcond".format(self.name)
 
         flagname = "{}_flags".format(self.name)
         clean_name = "{}_cleaned".format(self.name)
+
+        self.binning.covariance = solver_cov_name
 
         timer.start()
 
@@ -438,12 +446,11 @@ class MapMaker(Operator):
 
         # Set the binning operator to output to temporary map.  This will be
         # overwritten on each iteration of the solver.
-        self.binning.binned = "{}_solve_bin".format(self.name)
+        self.binning.binned = solver_bin
 
-        rhs_amplitude_key = "{}_amplitudes_rhs".format(self.name)
-
-        self.template_matrix.amplitudes = rhs_amplitude_key
+        self.template_matrix.amplitudes = solver_rhs
         rhs_calc = SolverRHS(
+            name="{}_rhs".format(self.name),
             det_data=self.det_data,
             overwrite=False,
             binning=self.binning,
@@ -451,29 +458,31 @@ class MapMaker(Operator):
         )
         rhs_calc.apply(data, detectors=detectors)
 
-        print("RHS = ", data[rhs_amplitude_key], flush=True)
+        print("RHS = ", data[solver_rhs], flush=True)
 
         self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
 
-        # Set up the LHS operator.  Use either the original timestreams or the copy
-        # as temp space.
+        # Set up the LHS operator.
 
         self._log_info(comm, rank, "begin PCG solver")
 
-        amplitude_key = "{}_amplitudes".format(self.name)
-        self.template_matrix.amplitudes = amplitude_key
-
         lhs_calc = SolverLHS(
+            name="{}_lhs".format(self.name),
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
+
+        # If we eventually want to support an input starting guess of the
+        # amplitudes, we would need to ensure that data[amplitude_key] is set
+        # at this point...
 
         # Solve for amplitudes.
         solve(
             data,
             detectors,
             lhs_calc,
-            data[rhs_amplitude_key],
+            solver_rhs,
+            solver_result,
             convergence=self.convergence,
             n_iter_max=self.iter_max,
         )
@@ -488,9 +497,13 @@ class MapMaker(Operator):
         self.binning.shared_flags = save_shared_flags
         self.binning.shared_flag_mask = save_shared_flag_mask
         self.binning.binned = save_binned
+        self.binning.covariance = save_covariance
 
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
+
+        save_covariance = self.map_binning.covariance
+        self.map_binning.covariance = cov_name
 
         if self.mc_mode:
             # Verify that our covariance and other products exist.
@@ -543,6 +556,7 @@ class MapMaker(Operator):
         # Projecting amplitudes to a temp space
         self.template_matrix.transpose = False
         self.template_matrix.det_data = temp_project
+        self.template_matrix.amplitudes = solver_result
 
         if self.map_binning.binned == "binned":
             # The user did not modify the default name of the output binned map.
@@ -599,6 +613,8 @@ class MapMaker(Operator):
         self.map_binning.pre_process = pre_pipe
         self.map_binning.apply(data, detectors=detectors)
         self.map_binning.pre_process = None
+
+        self.map_binning.covariance = save_covariance
 
         self._log_info(comm, rank, "  finished final binning in", timer=timer)
 

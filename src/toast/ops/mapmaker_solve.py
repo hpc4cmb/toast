@@ -28,6 +28,8 @@ from .scan_map import ScanMap
 
 from .noise_weight import NoiseWeight
 
+from .mapmaker_templates import TemplateMatrix
+
 
 @trait_docs
 class SolverRHS(Operator):
@@ -277,6 +279,10 @@ class SolverLHS(Operator):
         help="This must be an instance of a template matrix operator",
     )
 
+    out = Unicode(
+        None, allow_none=True, help="Output Data key for resulting amplitudes"
+    )
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -338,6 +344,8 @@ class SolverLHS(Operator):
         if comm is not None:
             rank = comm.rank
 
+        print("\n\n==============================================\n\n", flush=True)
+
         # Check that input traits are set
         if self.binning is None:
             raise RuntimeError("You must set the binning trait before calling exec()")
@@ -345,6 +353,8 @@ class SolverLHS(Operator):
             raise RuntimeError(
                 "You must set the template_matrix trait before calling exec()"
             )
+        if self.out is None:
+            raise RuntimeError("You must set the 'out' trait before calling exec()")
 
         # Project amplitudes into timestreams and make a binned map.
 
@@ -359,9 +369,6 @@ class SolverLHS(Operator):
         self.binning.pre_process = self.template_matrix
         self.binning.apply(data, detectors=detectors)
         self.binning.pre_process = None
-
-        bd = data[self.binning.binned].data
-        print("lhs binned map = ", bd[bd != 0], flush=True)
 
         self._log_debug(comm, rank, "projection and binning finished in", timer=timer)
 
@@ -387,8 +394,14 @@ class SolverLHS(Operator):
             noise_model=self.binning.noise_model, det_data=self.det_temp
         )
 
-        # Same template matrix operator, but now we are applying the transpose.
-        self.template_matrix.transpose = True
+        # Make a copy of the template_matrix operator so that we can apply both the
+        # matrix and its transpose in a single pipeline
+
+        template_transpose = self.template_matrix.duplicate()
+        template_transpose.amplitudes = self.out
+        template_transpose.transpose = True
+
+        # print("project input amps = ", data[self.template_matrix.amplitudes])
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -399,9 +412,10 @@ class SolverLHS(Operator):
             proj_pipe = Pipeline(
                 detector_sets=["ALL"],
                 operators=[
+                    self.template_matrix,
                     scan_map,
                     noise_weight,
-                    self.template_matrix,
+                    template_transpose,
                 ],
             )
         else:
@@ -409,16 +423,18 @@ class SolverLHS(Operator):
             proj_pipe = Pipeline(
                 detector_sets=["SINGLE"],
                 operators=[
+                    self.template_matrix,
                     pointing,
                     scan_map,
                     noise_weight,
-                    self.template_matrix,
+                    template_transpose,
                 ],
             )
 
         # Zero out the amplitudes before accumulating the updated values
 
-        data[self.template_matrix.amplitudes].reset()
+        if self.out in data:
+            data[self.out].reset()
 
         # Run the projection pipeline.
 
@@ -437,11 +453,11 @@ class SolverLHS(Operator):
         # This operator require everything that its sub-operators needs.
         req = self.binning.requires()
         req.update(self.template_matrix.requires())
-        req["meta"].append(self.amplitudes)
         return req
 
     def _provides(self):
         prov = self.binning.provides()
+        prov["meta"].append(self.out)
         return prov
 
     def _accelerators(self):
@@ -451,9 +467,9 @@ class SolverLHS(Operator):
 def solve(
     data,
     detectors,
-    lhs,
-    rhs_amps,
-    guess=None,
+    lhs_op,
+    rhs_key,
+    result_key,
     convergence=1.0e-12,
     n_iter_max=100,
     n_iter_min=3,
@@ -462,20 +478,22 @@ def solve(
 
     This uses a standard preconditioned conjugate gradient technique (e.g. Shewchuk,
     1994) to solve for the template amplitudes.  The Right Hand Side amplitude values
-    are precomputed and passed to this function.  The starting guess of the solver
-    can be passed in or else zeros are used.
+    are precomputed and stored in the data.  The result key in the Data is either
+    created or used as the starting guess.
 
     Args:
         data (Data):  The distributed data object.
         detectors (list):  The subset of detectors used for the mapmaking.
-        lhs (Operator):  The LHS operator.
-        rhs_amps (Amplitudes):  The RHS value.
-        guess (Amplitudes):  The starting guess.  If None, use all zeros.
+        lhs_op (Operator):  The LHS operator.
+        rhs_key (str):  The Data key containing the RHS value.
+        result_key (str):  The Data key containing the output result and
+            optionally the starting guess.
         convergence (float):  The convergence limit.
         n_iter_max (int):  The maximum number of iterations.
+        n_iter_min (int):  The minimum number of iterations, for detecting a stall.
 
     Returns:
-        None
+        (Amplitudes):  The result.
 
     """
     log = Logger.get()
@@ -490,65 +508,123 @@ def solve(
     if comm is not None:
         rank = comm.rank
 
+    if rhs_key not in data:
+        msg = "rhs_key '{}' does not exist in data".format(rhs_key)
+        log.error(msg)
+        raise RuntimeError(msg)
+    rhs = data[rhs_key]
+
+    result = None
+    if result_key not in data:
+        # Copy structure of the RHS and set to zero
+        data[result_key] = rhs.duplicate()
+        data[result_key].reset()
+        result = data[result_key]
+    else:
+        result = data[result_key]
+        if not isinstance(result, Amplitudes):
+            raise RuntimeError("starting guess must be an Amplitudes instance")
+        if result.keys() != rhs.keys():
+            raise RuntimeError("starting guess must have same keys as RHS")
+        for k, v in result.items():
+            if v.n_global != rhs[k].n_global:
+                msg = (
+                    "starting guess['{}'] has different n_global than rhs['{}']".format(
+                        k, k
+                    )
+                )
+                raise RuntimeError(msg)
+            if v.n_local != rhs[k].n_local:
+                msg = (
+                    "starting guess['{}'] has different n_global than rhs['{}']".format(
+                        k, k
+                    )
+                )
+                raise RuntimeError(msg)
+
     # Solving A * x = b ...
 
-    # The name of the amplitudes which are updated in place by the LHS operator
-    lhs_amps = lhs.template_matrix.amplitudes
+    # Temporary variables.  We give things more descriptive names here, but to align
+    # with the notation in some literature, we note the mapping between variable
+    # names.  Duplicate the structure of the RHS for these when we first assign below.
 
-    # The starting guess
-    if guess is None:
-        # Copy structure of the RHS and set to zero
-        if lhs_amps in data:
-            msg = "LHS amplitudes '{}' already exists in data".format(lhs_amps)
-            log.error(msg)
-            raise RuntimeError(msg)
-        data[lhs_amps] = rhs_amps.duplicate()
-        data[lhs_amps].reset()
-    else:
-        # FIXME:  add a check that the structure of the guess matches the RHS.
-        data[lhs_amps] = guess
+    # The residual "r"
+    residual = None
 
-    # Compute q = A * x (in place)
-    lhs.apply(data, detectors=detectors)
+    # The result of the LHS operator "q"
+    lhs_out_key = "{}_out".format(lhs_op.name)
+    if lhs_out_key in data:
+        data[lhs_out_key].clear()
+        del data[lhs_out_key]
+    data[lhs_out_key] = rhs.duplicate()
+    lhs_out = data[lhs_out_key]
+
+    # The result of the preconditioner "s"
+    precond = None
+
+    # The new proposed direction "d"
+    proposal_key = "{}_in".format(lhs_op.name)
+    if proposal_key in data:
+        data[proposal_key].clear()
+        del data[proposal_key]
+    data[proposal_key] = rhs.duplicate()
+    data[proposal_key].reset()
+    proposal = data[proposal_key]
+
+    # One additional temp variable.  Allocate this now for use below
+    temp = rhs.duplicate()
+    temp.reset()
+
+    # Compute q = A * x
+
+    # Input is either the starting guess or zero
+    lhs_op.template_matrix.amplitudes = result_key
+    lhs_op.out = lhs_out_key
+    lhs_op.apply(data, detectors=detectors)
 
     # The initial residual
     # r = b - q
-    residual = rhs_amps.duplicate()
-    residual -= data[lhs_amps]
+    residual = rhs.duplicate()
+    residual -= lhs_out
 
-    print("RHS ", rhs_amps)
-    print("LHS", data[lhs_amps])
+    print("RHS ", rhs)
+    print("LHS ", lhs_out)
     print("residual", residual)
 
     # The preconditioned residual
     # s = M^-1 * r
-    precond_residual = residual.duplicate()
-    precond_residual.reset()
-    lhs.template_matrix.apply_precond(residual, precond_residual)
-
-    print("precond_residual", precond_residual)
+    precond = rhs.duplicate()
+    precond.reset()
+    lhs_op.template_matrix.apply_precond(residual, precond)
+    print("Start precond = ", precond)
 
     # The proposal
     # d = s
-    proposal = precond_residual.duplicate()
+    for k, v in proposal.items():
+        v.local[:] = precond[k].local
+    print("proposal", proposal)
 
-    # print("proposal", proposal)
+    # Set LHS amplitude inputs to this proposal
+    lhs_op.template_matrix.amplitudes = proposal_key
 
-    # delta_new = r^T * d
-    sqsum = precond_residual.dot(residual)
-    print("sqsum = ", sqsum)
-
-    init_sqsum = sqsum
-    best_sqsum = sqsum
+    # Epsilon_0 = r^T * r
+    sqsum = rhs.dot(rhs)
+    sqsum_init = sqsum
+    sqsum_best = sqsum
     last_best = sqsum
 
-    sqsum_last = None
+    # delta_new = delta_0 = r^T * d
+    delta = proposal.dot(residual)
+    print("delta = ", delta)
+    delta_init = delta
 
     if comm is not None:
         comm.barrier()
     timer.stop()
     if rank == 0:
-        msg = "MapMaker initial residual = {}, {:0.2f} s".format(sqsum, timer.seconds())
+        msg = "MapMaker initial residual = {}, {:0.2f} s".format(
+            sqsum_init, timer.seconds()
+        )
         log.info(msg)
     timer.clear()
     timer.start()
@@ -557,64 +633,51 @@ def solve(
         if not np.isfinite(sqsum):
             raise RuntimeError("Residual is not finite")
 
-        # Update LHS amplitude inputs
-        for k, v in data[lhs_amps].items():
-            v.local[:] = proposal[k].local
+        # q = A * d
+        lhs_op.apply(data, detectors=detectors)
 
-        print("LHS input = ", data[lhs_amps], flush=True)
-
-        # q = A * d (in place)
-        lhs.apply(data, detectors=detectors)
-
-        print("LHS output", data[lhs_amps])
+        print("LHS output", lhs_out)
 
         # alpha = delta_new / (d^T * q)
-        alpha = sqsum
-        alpha /= proposal.dot(data[lhs_amps])
+        print("alpha num = ", delta)
+        print("alpha den = ", proposal.dot(lhs_out))
+        alpha = delta / proposal.dot(lhs_out)
 
         print("alpha = ", alpha)
 
+        # Update the result
+        # x += alpha * d
+        temp.reset()
+        for k, v in temp.items():
+            v.local[:] = proposal[k].local
+        temp *= alpha
+        result += temp
+
+        # Update the residual
         # r -= alpha * q
-        data[lhs_amps] *= alpha
-        residual -= data[lhs_amps]
-        # print("residual", residual)
+        temp.reset()
+        for k, v in temp.items():
+            v.local[:] = lhs_out[k].local
+        temp *= alpha
+        residual -= temp
 
-        # The preconditioned residual
-        # s = M^-1 * r
-        lhs.template_matrix.apply_precond(residual, precond_residual)
-
-        # print("precond_residual", precond_residual)
-
-        # delta_old = delta_new
-        sqsum_last = sqsum
-
-        # delta_new = r^T * s
-        sqsum = precond_residual.dot(residual)
+        # Epsilon
+        sqsum = residual.dot(residual)
         print("sqsum = ", sqsum)
 
         if comm is not None:
             comm.barrier()
         timer.stop()
         if rank == 0:
-            msg = "MapMaker iteration {:4d}, relative residual = {}, {:0.2f} s".format(
-                iter, sqsum, timer.seconds()
+            msg = "MapMaker iteration {:4d}, relative residual = {:0.6e}, {:0.2f} s".format(
+                iter, sqsum / sqsum_init, timer.seconds()
             )
             log.info(msg)
         timer.clear()
         timer.start()
 
-        # beta = delta_new / delta_old
-        beta = sqsum / sqsum_last
-
-        # New proposal
-        # d = s + beta * d
-        proposal *= beta
-        proposal += precond_residual
-
-        # print("proposal", proposal)
-
         # Check for convergence
-        if sqsum < init_sqsum * convergence or sqsum < 1e-30:
+        if (sqsum / sqsum_init) < convergence or sqsum < 1e-30:
             timer.stop()
             timer_full.stop()
             if rank == 0:
@@ -624,11 +687,12 @@ def solve(
                 log.info(msg)
             break
 
-        best_sqsum = min(sqsum, best_sqsum)
-        print("best_sqsum = ", best_sqsum)
+        sqsum_best = min(sqsum, sqsum_best)
+        print("sqsum_best = ", sqsum_best)
 
+        # Check for stall / divergence
         if iter % 10 == 0 and iter >= n_iter_min:
-            if last_best < best_sqsum * 2:
+            if last_best < sqsum_best * 2:
                 timer.stop()
                 timer_full.stop()
                 if rank == 0:
@@ -637,4 +701,25 @@ def solve(
                     )
                     log.info(msg)
                 break
-            last_best = best_sqsum
+            last_best = sqsum_best
+
+        # The preconditioned residual
+        # s = M^-1 * r
+        lhs_op.template_matrix.apply_precond(residual, precond)
+
+        # delta_old = delta_new
+        delta_last = delta
+
+        # delta_new = r^T * s
+        delta = precond.dot(residual)
+
+        # beta = delta_new / delta_old
+        beta = delta / delta_last
+        print("beta = ", beta)
+
+        # New proposal
+        # d = s + beta * d
+        proposal *= beta
+        proposal += precond
+
+        print("proposal[{}]".format(iter), proposal, flush=True)

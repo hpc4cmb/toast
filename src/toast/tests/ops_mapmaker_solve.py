@@ -237,18 +237,20 @@ class MapmakerSolveTest(MPITestCase):
 
         tmatrix.amplitudes = "amplitudes"
         binner.binned = "lhs_binned"
+        out_amps = "out_amplitudes"
         lhs_calc = SolverLHS(
             det_temp="signal",
             binning=binner,
             template_matrix=tmatrix,
+            out=out_amps,
         )
         lhs_calc.apply(data)
 
-        print("amplitudes out = ", data["amplitudes"])
+        print("amplitudes out = ", data[out_amps])
 
         # Verify that the output amplitudes agree
         np.testing.assert_equal(
-            data["amplitudes"][tmpl.name].local,
+            data[out_amps][tmpl.name].local,
             data["amplitudes_check"][tmpl.name].local,
         )
 

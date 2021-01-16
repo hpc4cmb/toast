@@ -140,27 +140,27 @@ class ScanMap(Operator):
                         "Projection supports only float32 and float64 binned maps"
                     )
 
-                print("========= {} ==========".format(det))
-                print("Scanned map TOD = ", maptod)
-                print("Scanned original TOD = ", ddata)
+                # print("========= {} ==========".format(det))
+                # print("Scanned map TOD = ", maptod)
+                # print("Scanned original TOD = ", ddata)
 
                 # zero-out if needed
                 if self.zero:
                     ddata[:] = 0.0
-                    print("Scanned: zero-ing TOD = ", ddata)
+                    # print("Scanned: zero-ing TOD = ", ddata)
 
                 # Add or subtract.  Note that the map scanned timestream will have
                 # zeros anywhere that the pointing is bad, but those samples (and
                 # any other detector flags) should be handled at other steps of the
                 # processing.
                 if self.subtract:
-                    print("Scanned: subtracting TOD")
+                    # print("Scanned: subtracting TOD")
                     ddata[:] -= maptod
                 else:
-                    print("Scanned: adding TOD")
+                    # print("Scanned: adding TOD")
                     ddata[:] += maptod
 
-                print("Scanned final = ", ddata)
+                # print("Scanned final = ", ddata)
 
             del maptod
             maptod_raw.clear()
@@ -279,6 +279,144 @@ class ScanMask(Operator):
             "meta": [mask_key],
             "shared": list(),
             "detdata": [self.pixels, self.det_flags],
+        }
+        return req
+
+    def _provides(self):
+        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        return prov
+
+    def _accelerators(self):
+        return list()
+
+
+@trait_docs
+class ScanScale(Operator):
+    """Operator which uses the pointing matrix to apply pixel weights to timestreams.
+
+    The map must be a PixelData instance with either float32 or float64 values and
+    one value per pixel.  The timestream samples are multiplied by their corresponding
+    pixel values.
+
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
+
+    weights = Unicode("weights", help="Observation detdata key for Stokes weights")
+
+    map_key = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the weight map is located",
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        # Check that the detector data is set
+        if self.det_data is None:
+            raise RuntimeError("You must set the det_data trait before calling exec()")
+
+        # Check that the map is set
+        if self.map_key is None:
+            raise RuntimeError("You must set the map_key trait before calling exec()")
+        if self.map_key not in data:
+            msg = "The map_key '{}' does not exist in the data".format(self.map_key)
+            raise RuntimeError(msg)
+
+        map_data = data[self.map_key]
+        if not isinstance(map_data, PixelData):
+            raise RuntimeError("The map to scan must be a PixelData instance")
+        if map_data.n_value != 1:
+            raise RuntimeError("The map to scan must have one value per pixel")
+        map_dist = map_data.distribution
+
+        for ob in data.obs:
+            # Get the detectors we are using for this observation
+            dets = ob.select_local_detectors(detectors)
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
+
+            if self.det_data not in ob.detdata:
+                msg = "detector data '{}' does not exist in observation {}".format(
+                    self.det_data, ob.name
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+
+            # Temporary array, re-used for all detectors
+            maptod_raw = AlignedF64.zeros(ob.n_local_samples)
+            maptod = maptod_raw.array()
+
+            for det in dets:
+                # The pixels, weights, and data.
+                pix = ob.detdata[self.pixels][det]
+                ddata = ob.detdata[self.det_data][det]
+
+                # Get local submap and pixels
+                local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
+
+                # We support projecting from either float64 or float32 maps.  We
+                # use a shortcut here by passing the original timestream values
+                # as the pointing "weights", so that the output is equal to the
+                # pixel values times the original timestream.
+
+                maptod[:] = 0.0
+
+                if map_data.dtype.char == "d":
+                    scan_map_float64(
+                        map_data.distribution.n_pix_submap,
+                        1,
+                        local_sm.astype(np.int64),
+                        local_pix.astype(np.int64),
+                        map_data.raw,
+                        ddata.astype(np.float64).reshape(-1),
+                        maptod,
+                    )
+                elif map_data.dtype.char == "f":
+                    scan_map_float32(
+                        map_data.distribution.n_pix_submap,
+                        1,
+                        local_sm.astype(np.int64),
+                        local_pix.astype(np.int64),
+                        map_data.raw,
+                        ddata.astype(np.float64).reshape(-1),
+                        maptod,
+                    )
+                else:
+                    raise RuntimeError(
+                        "Projection supports only float32 and float64 binned maps"
+                    )
+
+                ddata[:] = maptod
+
+            del maptod
+            maptod_raw.clear()
+            del maptod_raw
+
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": [map_key],
+            "shared": list(),
+            "detdata": [self.pixels, self.weights, self.det_data],
         }
         return req
 

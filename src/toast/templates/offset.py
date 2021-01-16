@@ -7,6 +7,7 @@ from collections import OrderedDict
 import numpy as np
 
 import scipy
+import scipy.signal
 
 from ..utils import Logger, rate_from_times, AlignedF32
 
@@ -94,7 +95,7 @@ class Offset(Template):
             self._obs_rate[iob] = rate
 
             # The step length for this observation
-            step_length = int(self.step_time * self._obs_rate[iob])
+            step_length = self._step_length(self.step_time, self._obs_rate[iob])
 
             # Track number of offset amplitudes per view.
             self._obs_views[iob] = list()
@@ -106,6 +107,8 @@ class Offset(Template):
                 else:
                     slice_len = view_slice.stop - view_slice.start
                 view_n_amp = slice_len // step_length
+                if view_n_amp * step_length < slice_len:
+                    view_n_amp += 1
                 self._obs_views[iob].append(view_n_amp)
 
             # The noise model.
@@ -183,7 +186,7 @@ class Offset(Template):
                     detnoise = ob[self.noise_model].detector_weight(det)
 
                 # The step length for this observation
-                step_length = int(self.step_time * self._obs_rate[iob])
+                step_length = self._step_length(self.step_time, self._obs_rate[iob])
 
                 # Loop over views
                 views = ob.view[self.view]
@@ -194,7 +197,7 @@ class Offset(Template):
                         view_samples = ob.n_local_samples
                     else:
                         view_samples = vw.stop - vw.start
-                    n_amp_view = slice_len // step_length
+                    n_amp_view = self._obs_views[iob][ivw]
 
                     # Move this loop to compiled code if it is slow
                     if self.flags is None:
@@ -204,6 +207,7 @@ class Offset(Template):
                             if amp == n_amp_view - 1:
                                 amplen = view_samples - voff
                             self._sigmasq[offset + amp] = 1.0 / (detnoise * amplen)
+                            voff += step_length
                     else:
                         flags = views.detdata[self.flags][ivw]
                         voff = 0
@@ -227,7 +231,7 @@ class Offset(Template):
         # Compute the amplitude noise filter and preconditioner for each detector
         # and each view.
 
-        print("Offset sigmasq = ", self._sigmasq, flush=True)
+        # print("Offset sigmasq = ", self._sigmasq, flush=True)
 
         self._filters = dict()
         self._precond = dict()
@@ -249,7 +253,7 @@ class Offset(Template):
                         )
 
                         # Log version of offset PSD for interpolation
-                        logfreq = np.log(freq)
+                        logfreq = np.log(self._freq[iob])
                         logpsd = np.log(offset_psd)
                         logfilter = np.log(1 / offset_psd)
 
@@ -291,7 +295,7 @@ class Offset(Template):
                                 view_samples = ob.n_local_samples
                             else:
                                 view_samples = vw.stop - vw.start
-                            n_amp_view = self._obs_view[iob][ivw]
+                            n_amp_view = self._obs_views[iob][ivw]
                             sigmasq_slice = self._sigmasq[offset : offset + n_amp_view]
 
                             # nstep = offset_slice.stop - offset_slice.start
@@ -318,7 +322,7 @@ class Offset(Template):
                                 )
                                 icenter = noisefilter.size // 2
                                 preconditioner = np.zeros(
-                                    [precond_width, nstep], dtype=np.float64
+                                    [precond_width, n_amp_view], dtype=np.float64
                                 )
                                 preconditioner[0] = sigmasq_slice
                                 preconditioner[:wband, :] += np.repeat(
@@ -394,6 +398,9 @@ class Offset(Template):
         z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
+    def _step_length(self, stime, rate):
+        return int(stime * rate + 0.5)
+
     @function_timer
     def _add_to_signal(self, detector, amplitudes):
         offset = self._det_start[detector]
@@ -401,37 +408,35 @@ class Offset(Template):
             if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = int(self.step_time * self._obs_rate[iob])
-            print(
-                "Offset input det {}, ob {} = ".format(detector, iob),
-                ob.view[self.view].detdata[self.det_data],
-                flush=True,
-            )
+            step_length = self._step_length(self.step_time, self._obs_rate[iob])
+            # print(
+            #     "Offset input det {}, ob {} = ".format(detector, iob),
+            #     ob.view[self.view].detdata[self.det_data],
+            #     flush=True,
+            # )
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
-                print(
-                    "Offset input det {}, ob {}, view {} = ".format(detector, iob, ivw),
-                    vw[detector],
-                    flush=True,
-                )
-                print(
-                    "Offset input amplitude range = {} - {}".format(
-                        offset, offset + n_amp_view - 1
-                    )
-                )
+                # print(
+                #     "Offset input det {}, ob {}, view {} = ".format(detector, iob, ivw),
+                #     vw[detector],
+                #     flush=True,
+                # )
+                # print(
+                #     "Offset input amplitude range = {} - {}".format(
+                #         offset, offset + n_amp_view - 1
+                #     )
+                # )
                 template_offset_add_to_signal(
                     step_length,
                     amplitudes.local[offset : offset + n_amp_view],
                     vw[detector],
                 )
-                print(
-                    "Offset output det {}, ob {}, view {} = ".format(
-                        detector, iob, ivw
-                    ),
-                    vw[detector],
-                    flush=True,
-                )
                 offset += n_amp_view
+            # print(
+            #     "Offset output det {}, ob {} = ".format(detector, iob),
+            #     ob.detdata[self.det_data],
+            #     flush=True,
+            # )
 
     @function_timer
     def _project_signal(self, detector, amplitudes):
@@ -440,7 +445,7 @@ class Offset(Template):
             if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = int(self.step_time * self._obs_rate[iob])
+            step_length = self._step_length(self.step_time, self._obs_rate[iob])
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
                 template_offset_project_signal(
@@ -448,6 +453,20 @@ class Offset(Template):
                     vw[detector],
                     amplitudes.local[offset : offset + n_amp_view],
                 )
+                # amplitudes.local[offset : offset + n_amp_view] *= self._sigmasq[
+                #     offset : offset + n_amp_view
+                # ]
+                # print(
+                #     "offset project det {}, amps = ".format(detector),
+                #     flush=True,
+                # )
+                # for i in range(n_amp_view):
+                #     offset = self._det_start[detector]
+                #     print(
+                #         "base {} = {} sumsq = {}".format(
+                #             i, amplitudes.local[offset + i], self._sigmasq[offset + i]
+                #         )
+                #     )
                 offset += n_amp_view
 
     @function_timer
@@ -475,7 +494,7 @@ class Offset(Template):
             # C_a preconditioner
             for det in self._all_dets:
                 offset = self._det_start[det]
-                for iob, ob in enumerate(new_data.obs):
+                for iob, ob in enumerate(self.data.obs):
                     if det not in ob.local_detectors:
                         continue
                     # Loop over views
@@ -488,10 +507,10 @@ class Offset(Template):
                         else:
                             view_samples = vw.stop - vw.start
 
-                        n_amp_view = self._obs_view[iob][ivw]
+                        n_amp_view = self._obs_views[iob][ivw]
                         amp_slice = slice(offset, offset + n_amp_view, 1)
 
-                        amps_in = amplitudes_in[amp_slice]
+                        amps_in = amplitudes_in.local[amp_slice]
                         amps_out = None
                         if self.precond_width <= 1:
                             # Use C_a prior
@@ -508,9 +527,24 @@ class Offset(Template):
                                 overwrite_b=False,
                                 check_finite=True,
                             )
-                        amplitudes_out[amp_slice] = amps_out
+                        amplitudes_out.local[amp_slice] = amps_out
         else:
             # Diagonal preconditioner
+            # print("diagonal prec = ")
+            # ndetbase = amplitudes_in.n_local // 2
+            # print(
+            #     "ndetbase = {}, len(sigmasq) = {}".format(ndetbase, len(self._sigmasq))
+            # )
+            # for det in self._all_dets:
+            #     offset = self._det_start[det]
+            #     for i in range(ndetbase):
+            #         print(
+            #             "det {} base {} = {:0.6e}".format(
+            #                 det, i, self._sigmasq[offset + i]
+            #             ),
+            #             flush=True,
+            #         )
+            # print(self._sigmasq)
             amplitudes_out.local[:] = amplitudes_in.local
             amplitudes_out.local *= self._sigmasq
         return
